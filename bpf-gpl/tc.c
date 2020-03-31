@@ -690,6 +690,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	int rc = TC_ACT_UNSPEC;
 	bool fib;
 	struct ct_ctx ct_nat_ctx = {};
+	int ct_rc = ct_result_rc(state->ct_result.rc);
+	bool ct_related = ct_result_is_related(state->ct_result.rc);
 
 	uint32_t seen_mark;
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
@@ -700,23 +702,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		seen_mark = CALI_SKB_MARK_SEEN;
 	}
 
-
-	struct tcphdr *tcp_header = (void*)(ip_header+1);
-	struct udphdr *udp_header = (void*)(ip_header+1);
-
-	__u8 ihl = ip_header->ihl * 4;
-
-	size_t l4_csum_off = 0, l3_csum_off;
-	int res = 0;
-	bool encap_needed = false;
-	uint32_t fib_flags = 0;
-
 	/* XXX we cannot pass the related ICMP after NATing back yet, so we need
 	 * to act here, we know we are forwarding.
 	 */
+
+	/* XXX XXX XXX */
 	CALI_DEBUG("ip->ttl %d\n", ip_header->ttl);
 	if (ip_ttl_exceeded(ip_header)) {
-		switch (state->ct_result.rc){
+		switch (ct_rc){
 		case CALI_CT_NEW:
 			if (nat_dest) {
 				goto icmp_ttl_exceeded;
@@ -728,6 +721,37 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 	}
 
+	if (ct_related) {
+		if (ip_header->protocol == IPPROTO_ICMP) {
+			struct icmphdr *icmp;
+			if (!icmp_skb_get_hdr(skb, &icmp)) {
+				CALI_DEBUG("Ooops, we already passed one such a check!!!\n");
+				goto deny;
+			}
+			ip_header = (struct iphdr *)(icmp + 1); /* skip to inner ip */
+
+			/* flip the direction, we need to reverse the original packet */
+			switch (ct_rc) {
+			case CALI_CT_ESTABLISHED_SNAT:
+				ct_rc = CALI_CT_ESTABLISHED_DNAT;
+				break;
+			case CALI_CT_ESTABLISHED_DNAT:
+				ct_rc = CALI_CT_ESTABLISHED_SNAT;
+				break;
+			}
+		}
+	}
+
+	struct tcphdr *tcp_header = (void*)(ip_header+1);
+	struct udphdr *udp_header = (void*)(ip_header+1);
+
+	__u8 ihl = ip_header->ihl * 4;
+
+	size_t l4_csum_off = 0, l3_csum_off;
+	int res = 0;
+	bool encap_needed = false;
+	uint32_t fib_flags = 0;
+
 	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check);
 	switch (state->ip_proto) {
 	case IPPROTO_TCP:
@@ -738,7 +762,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		break;
 	}
 
-	switch (state->ct_result.rc){
+	switch (ct_rc){
 	case CALI_CT_NEW:
 		switch (state->pol_rc) {
 		case CALI_POL_NO_MATCH:
@@ -793,7 +817,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
-		if (state->ct_result.rc == CALI_CT_ESTABLISHED_DNAT) {
+		if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
 			if (CALI_F_FROM_HEP && state->nat_tun_src && !state->ct_result.tun_ret_ip) {
 				/* Packet is returning from a NAT tunnel,
 				 * already SNATed, just forward it.
@@ -827,7 +851,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		 * if we need encap or not. Must do before MTU check and before
 		 * we jump to do the encap.
 		 */
-		if (state->ct_result.rc == CALI_CT_NEW) {
+		if (ct_rc == CALI_CT_NEW) {
 			if (CALI_F_DSR && CALI_F_FROM_HEP &&
 					encap_needed && state->nat_tun_src == 0) {
 				ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;

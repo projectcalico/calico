@@ -332,6 +332,14 @@ enum calico_ct_result_type {
 	CALI_CT_INVALID,
 };
 
+#define CALI_CT_RELATED		(1 << 8)
+
+#define ct_result_rc(rc)		((rc) & 0xff)
+#define ct_result_flags(rc)		((rc) & ~0xff)
+#define ct_result_set_flag(val, flags)	((val) |= (flags))
+
+#define ct_result_is_related(rc)	((rc) & CALI_CT_RELATED)
+
 struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
@@ -583,7 +591,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			dst_to_src = &v->a_to_b;
 		}
 
-		if (ctx->proto == IPPROTO_ICMP) {
+		if (ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
 			break;
@@ -727,6 +735,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 
 	CALI_CT_DEBUG("result: %d.\n", result.rc);
+
+	if (related) {
+		ct_result_set_flag(result.rc, CALI_CT_RELATED);
+		CALI_CT_DEBUG("result: related\n");
+	}
+
 	return result;
 
 out_lookup_fail:

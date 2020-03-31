@@ -22,6 +22,7 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/proto"
 )
@@ -76,6 +77,81 @@ func TestICMPRelatedPlain(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		// echo is unrelated, must be denied
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	})
+}
+
+func TestICMPRelatedNATPodPod(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetBPFMaps()
+
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	var natPkt gopacket.Packet
+
+	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+	})
+
+	natIPv4L := natPkt.Layer(layers.LayerTypeIPv4)
+	Expect(natIPv4L).NotTo(BeNil())
+	natUDPL := natPkt.Layer(layers.LayerTypeUDP)
+	Expect(natUDPL).NotTo(BeNil())
+
+	icmpUNreachable := makeICMPError(natIPv4L.(*layers.IPv4), natUDPL.(*layers.UDP), 3, 1)
+
+	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(icmpUNreachable)
+		Expect(err).NotTo(HaveOccurred())
+		// we have a normal ct record, it is related, must be allowe
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		icmpPkt := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+
+		ipv4L := icmpPkt.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+
+		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.SrcIP.String()))
+
+		payloadL := icmpPkt.ApplicationLayer()
+		Expect(payloadL).NotTo(BeNil())
+		origPkt := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
+		Expect(origPkt).NotTo(BeNil())
+
+		ipv4L = origPkt.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R = ipv4L.(*layers.IPv4)
+
+		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.SrcIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.DstIP.String()))
 	})
 }
 
