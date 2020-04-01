@@ -46,15 +46,25 @@ func RulesAPIV2ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
 // - the namespace or global-ness of the policy that the EntityRule is part of
 // - endpoints for a namespaced policy being limited to the namespace (or to selected namespaces) as
 //   soon as _any_ of the selector fields are used, including NotSelector.
-func getSelector(er *apiv3.EntityRule, ns string, direction string) string {
+func GetEntityRuleSelector(er *apiv3.EntityRule, ns string, direction string) string {
+	saSelector := ""
+	if er.ServiceAccounts != nil {
+		// A service account selector was given - the rule applies to all serviceaccount
+		// which match this selector.
+		saSelector = parseServiceAccounts(er.ServiceAccounts)
+	}
+	return getEndpointSelector(er.NamespaceSelector, er.Selector, saSelector, er.NotSelector, ns, direction)
+}
+
+func getEndpointSelector(namespaceSelector, endpointSelector, serviceAccountSelector, notSelector, ns string, direction string) string {
 
 	var nsSelector, selector string
 
 	// Determine which namespaces are impacted by this entityRule.
-	if er.NamespaceSelector != "" {
+	if namespaceSelector != "" {
 		// A namespace selector was given - the rule applies to all namespaces
 		// which match this selector.
-		nsSelector = parseSelectorAttachPrefix(er.NamespaceSelector, conversion.NamespaceLabelPrefix)
+		nsSelector = parseSelectorAttachPrefix(namespaceSelector, conversion.NamespaceLabelPrefix)
 
 		// We treat "all()" as "select all namespaces". Since in the v1 data model "all()" will select
 		// all endpoints, translate this to an equivalent expression which means select any workload that
@@ -68,18 +78,12 @@ func getSelector(er *apiv3.EntityRule, ns string, direction string) string {
 
 	var selectors []string
 
-	// Determine which service account selector.
-	if er.ServiceAccounts != nil {
-		// A service account selector was given - the rule applies to all serviceaccount
-		// which match this selector.
-		saSelector := parseServiceAccounts(er.ServiceAccounts)
-		if saSelector != "" {
-			selectors = append(selectors, saSelector)
-		}
+	if serviceAccountSelector != "" {
+		selectors = append(selectors, serviceAccountSelector)
 	}
 
-	if er.Selector != "" {
-		selectors = append(selectors, er.Selector)
+	if endpointSelector != "" {
+		selectors = append(selectors, endpointSelector)
 	}
 
 	if len(selectors) > 0 {
@@ -98,12 +102,12 @@ func getSelector(er *apiv3.EntityRule, ns string, direction string) string {
 	// This occurs when the selector (and/or SA Selector), NotSelector, or NamespaceSelector
 	// is provided and either this is a namespaced NetworkPolicy object, or a
 	// NamespaceSelector was defined.
-	if nsSelector != "" && (selector != "" || er.NotSelector != "" || er.NamespaceSelector != "") {
+	if nsSelector != "" && (selector != "" || notSelector != "" || namespaceSelector != "") {
 		logCxt := log.WithFields(log.Fields{
 			"Namespace":         ns,
 			"Selector(s)":       selector,
 			"NamespaceSelector": nsSelector,
-			"NotSelector":       er.NotSelector,
+			"NotSelector":       notSelector,
 		})
 		logCxt.Debugf("Update %v Selector to include namespace", direction)
 		if selector != "" {
@@ -129,8 +133,8 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		notICMPType = ar.NotICMP.Type
 	}
 
-	sourceSelector := getSelector(&ar.Source, ns, "source")
-	destSelector := getSelector(&ar.Destination, ns, "destination")
+	sourceSelector := GetEntityRuleSelector(&ar.Source, ns, "source")
+	destSelector := GetEntityRuleSelector(&ar.Destination, ns, "destination")
 
 	var srcServiceAcctMatch, dstServiceAcctMatch apiv3.ServiceAccountMatch
 	if ar.Source.ServiceAccounts != nil {
