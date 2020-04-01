@@ -435,8 +435,40 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			BeforeEach(func() {
 				felixes, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
+				addWorkload := func(run bool, ii, wi, port int, labels map[string]string) {
+					if labels == nil {
+						labels = make(map[string]string)
+					}
+
+					wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+					wName := fmt.Sprintf("w%d%d", ii, wi)
+
+					if run {
+						w[ii][wi] = workload.Run(felixes[ii], wName, "default",
+							wIP, strconv.Itoa(port), testOpts.protocol)
+					} else {
+						w[ii][wi] = workload.New(felixes[ii], wName, "default",
+							wIP, strconv.Itoa(port), testOpts.protocol)
+					}
+
+					labels["name"] = w[ii][wi].Name
+
+					w[ii][wi].WorkloadEndpoint.Labels = labels
+					w[ii][wi].ConfigureInDatastore(infra)
+					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+						IP:       cnet.MustParseIP(wIP),
+						HandleID: &w[ii][wi].Name,
+						Attrs: map[string]string{
+							ipam.AttributeNode: felixes[ii].Hostname,
+						},
+						Hostname: felixes[ii].Hostname,
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
 				// Start a host networked workload on each host for connectivity checks.
-				for ii, felix := range felixes {
+				for ii := range felixes {
 					// We tell each host-networked workload to open:
 					// TODO: Copied from another test
 					// - its normal (uninteresting) port, 8055
@@ -444,47 +476,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// - port 22, which is an inbound failsafe port.
 					// This allows us to test the interaction between do-not-track policy and failsafe
 					// ports.
-					const portsToOpen = "8055"
 					hostW[ii] = workload.Run(
 						felixes[ii],
 						fmt.Sprintf("host%d", ii),
 						"default",
 						felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
-						portsToOpen,
+						"8055",
 						testOpts.protocol)
 
 					// Two workloads on each host so we can check the same host and other host cases.
-					iiStr := strconv.Itoa(ii)
-					wIP := "10.65." + iiStr + ".2"
-					w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", wIP, "8055", testOpts.protocol)
-					w[ii][0].WorkloadEndpoint.Labels = map[string]string{
-						"name": w[ii][0].Name,
-						"port": "8055",
-					}
-					w[ii][0].ConfigureInDatastore(infra)
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(wIP),
-						HandleID: &w[ii][0].Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: felixes[ii].Hostname,
-						},
-						Hostname: felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-					wIP = "10.65." + iiStr + ".3"
-					w[ii][1] = workload.Run(felix, "w"+iiStr+"1", "default", wIP, "8056", testOpts.protocol)
-					w[ii][1].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][1].Name}
-					w[ii][1].ConfigureInDatastore(infra)
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(wIP),
-						HandleID: &w[ii][1].Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: felixes[ii].Hostname,
-						},
-						Hostname: felixes[ii].Hostname,
-					})
+					addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
+					addWorkload(true, ii, 1, 8056, nil)
 				}
 
 				// We will use this container to model an external client trying to connect into
