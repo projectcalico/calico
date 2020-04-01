@@ -435,7 +435,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			BeforeEach(func() {
 				felixes, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
-				addWorkload := func(run bool, ii, wi, port int, labels map[string]string) {
+				addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
 					if labels == nil {
 						labels = make(map[string]string)
 					}
@@ -443,26 +443,28 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
 					wName := fmt.Sprintf("w%d%d", ii, wi)
 
-					w[ii][wi] = workload.New(felixes[ii], wName, "default",
+					w := workload.New(felixes[ii], wName, "default",
 						wIP, strconv.Itoa(port), testOpts.protocol)
 					if run {
-						w[ii][wi].Start()
+						w.Start()
 					}
 
-					labels["name"] = w[ii][wi].Name
+					labels["name"] = w.Name
 
-					w[ii][wi].WorkloadEndpoint.Labels = labels
-					w[ii][wi].ConfigureInDatastore(infra)
+					w.WorkloadEndpoint.Labels = labels
+					w.ConfigureInDatastore(infra)
 					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
 					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 						IP:       cnet.MustParseIP(wIP),
-						HandleID: &w[ii][wi].Name,
+						HandleID: &w.Name,
 						Attrs: map[string]string{
 							ipam.AttributeNode: felixes[ii].Hostname,
 						},
 						Hostname: felixes[ii].Hostname,
 					})
 					Expect(err).NotTo(HaveOccurred())
+
+					return w
 				}
 
 				// Start a host networked workload on each host for connectivity checks.
@@ -483,8 +485,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testOpts.protocol)
 
 					// Two workloads on each host so we can check the same host and other host cases.
-					addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
-					addWorkload(true, ii, 1, 8056, nil)
+					w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
+					w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
 				}
 
 				// We will use this container to model an external client trying to connect into
