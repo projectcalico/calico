@@ -847,6 +847,11 @@ func (c shimClient) ClusterInformation() client.ClusterInformationInterface {
 	return c.client.ClusterInformation()
 }
 
+// KubeControllersConfiguration returns an interface for managing the Kubernetes controllers configuration resource.
+func (c shimClient) KubeControllersConfiguration() client.KubeControllersConfigurationInterface {
+	return c.client.KubeControllersConfiguration()
+}
+
 func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	return nil
 }
