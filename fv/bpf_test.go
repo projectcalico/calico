@@ -443,12 +443,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
 					wName := fmt.Sprintf("w%d%d", ii, wi)
 
+					w[ii][wi] = workload.New(felixes[ii], wName, "default",
+						wIP, strconv.Itoa(port), testOpts.protocol)
 					if run {
-						w[ii][wi] = workload.Run(felixes[ii], wName, "default",
-							wIP, strconv.Itoa(port), testOpts.protocol)
-					} else {
-						w[ii][wi] = workload.New(felixes[ii], wName, "default",
-							wIP, strconv.Itoa(port), testOpts.protocol)
+						w[ii][wi].Start()
 					}
 
 					labels["name"] = w[ii][wi].Name
