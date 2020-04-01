@@ -246,6 +246,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20200303001954-8d098ee0dd61 h1:q9yf
 github.com/projectcalico/libcalico-go v0.0.0-20200303001954-8d098ee0dd61/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v0.0.0-20200325215000-9afaf4873979 h1:7x/ArOt2tUulV1fgFPu8yXOAsI29w9YTD7GPwGsgbaA=
 github.com/projectcalico/libcalico-go v0.0.0-20200325215000-9afaf4873979/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
+github.com/projectcalico/libcalico-go v0.0.0-20200331221808-0febf7aab4ad h1:ldSYfm+suwjdD4FCTHLcI64Axl0c/2j7ZD7u0wCK6vA=
+github.com/projectcalico/libcalico-go v0.0.0-20200331221808-0febf7aab4ad/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200311114621-dc8a242e181d h1:zIiPGYeAGdK7J/Y0n+rniNIAymA1ESn80amvGFt10r4=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200311114621-dc8a242e181d/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
