@@ -587,9 +587,9 @@ func NewRouteTrie() *RouteTrie {
 
 func (r *RouteTrie) UpdatePool(cidr ip.V4CIDR, poolType proto.IPPoolType, natOutgoing bool, crossSubnet bool) {
 	logrus.WithFields(logrus.Fields{
-		"cidr": cidr,
-		"poolType": poolType,
-		"nat": natOutgoing,
+		"cidr":        cidr,
+		"poolType":    poolType,
+		"nat":         natOutgoing,
 		"crossSubnet": crossSubnet,
 	}).Debug("IP pool update")
 	changed := r.updateCIDR(cidr, func(ri *RouteInfo) {

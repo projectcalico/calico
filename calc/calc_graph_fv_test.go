@@ -18,17 +18,16 @@
 package calc_test
 
 import (
+	"fmt"
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	. "github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/dataplane/mock"
-
-	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,10 +35,11 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
+
+	"github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/proto"
 )
 
 // Each entry in baseTests contains a series of states to move through (defined in
@@ -339,6 +339,23 @@ var baseTests = []StateList{
 		vxlanLocalBlockWithBorrowsCrossSubnetNodeRes,
 		vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes,
 		vxlanWithBlockNodeRes,
+	},
+	{
+		// Test corner case where the IP pool and block share a /32.
+		// Should be able to add or remove the block or pool in either order and get the same result.
+		vxlanSlash32,
+		vxlanSlash32NoBlock,
+		vxlanSlash32NoPool,
+		vxlanSlash32,
+		vxlanSlash32NoPool,
+		vxlanSlash32NoBlock,
+		vxlanSlash32,
+	},
+	{
+		// Corner case: host is inside an IP pool (used to influence NAT outgoing behaviour).
+		vxlanWithBlock,
+		hostInIPPool,
+		vxlanWithBlock,
 	},
 }
 

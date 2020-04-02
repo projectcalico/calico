@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/felix/proto"
@@ -893,6 +894,14 @@ var routeUpdateIPPoolVXLAN = proto.RouteUpdate{
 	NatOutgoing: ipPoolWithVXLAN.Masquerade,
 }
 
+// RouteUpdate expected for ipPoolWithVXLANSlash32.
+var routeUpdateIPPoolVXLANSlash32 = proto.RouteUpdate{
+	Type:        proto.RouteType_CIDR_INFO,
+	IpPoolType:  proto.IPPoolType_VXLAN,
+	Dst:         ipPoolWithVXLANSlash32.CIDR.String(),
+	NatOutgoing: ipPoolWithVXLANSlash32.Masquerade,
+}
+
 // RouteUpdate expected for ipPoolWithVXLANCrossSubnet.
 var routeUpdateIPPoolVXLANCrossSubnet = proto.RouteUpdate{
 	Type:        proto.RouteType_CIDR_INFO,
@@ -1320,6 +1329,104 @@ var vxlanHostIPDelete = vxlanWithBlock.withKVUpdates(
 var vxlanTunnelIPDelete = vxlanWithBlock.withKVUpdates(
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: nil},
 ).withName("VXLAN tunnel IP removed").withVTEPs()
+
+// Corner case: VXLAN set-up where the IP pool and block are both /32s.
+var vxlanSlash32 = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
+	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+).withName("VXLAN /32").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+).withRoutes(
+	// No CIDR_INFO route, it gets subsumed into the REMOTE_WORKLOAD one.
+	routeUpdateRemoteHost,
+	// Single route for the block.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.0.0/32",
+		DstNodeName: remoteHostname,
+		DstNodeIP:   remoteHostIP.String(),
+		NatOutgoing: true,
+	},
+)
+
+var vxlanSlash32NoBlock = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+).withName("VXLAN /32 no block").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+).withRoutes(
+	routeUpdateIPPoolVXLANSlash32,
+	routeUpdateRemoteHost,
+)
+
+var vxlanSlash32NoPool = empty.withKVUpdates(
+	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+).withName("VXLAN /32 no pool").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+).withRoutes(
+	routeUpdateRemoteHost,
+	// Single route for the block.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_NONE,
+		Dst:         "10.0.0.0/32",
+		DstNodeName: remoteHostname,
+		DstNodeIP:   remoteHostIP.String(),
+	},
+)
+
+// Corner case: host inside an IP pool.
+var hostInIPPool = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: hostCoveringIPPoolKey, Value: &hostCoveringIPPool},
+).withName("host in IP pool").withRoutes(
+	routeUpdateIPPoolVXLAN,
+	proto.RouteUpdate{
+		Type:        proto.RouteType_CIDR_INFO,
+		IpPoolType:  proto.IPPoolType_NO_ENCAP,
+		Dst:         hostCoveringIPPool.CIDR.String(),
+		NatOutgoing: true,
+	},
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_HOST,
+		IpPoolType:  proto.IPPoolType_NO_ENCAP, // Host now marked as inside the IP pool.
+		Dst:         remoteHostIP.String() + "/32",
+		DstNodeName: remoteHostname,
+		NatOutgoing: true,
+	},
+	// Single route for the block.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.1.0/29",
+		DstNodeName: remoteHostname,
+		DstNodeIP:   remoteHostIP.String(),
+		NatOutgoing: true,
+	},
+)
 
 type StateList []State
 
