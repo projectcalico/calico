@@ -105,14 +105,15 @@ func (t *TCPDump) MatchCount(name string) int {
 	return c
 }
 
-func (t *TCPDump) Start() {
+func (t *TCPDump) Start(expr ...string) {
 	args := []string{"exec", t.contName}
 	if t.netns != "" {
 		args = append(args, "ip", "netns", "exec", t.netns)
 	}
 	args = append(args, "tcpdump", "-nli", t.iface)
-	t.cmd = utils.Command("docker", args...)
+	args = append(args, expr...)
 
+	t.cmd = utils.Command("docker", args...)
 	var err error
 	t.out, err = t.cmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
