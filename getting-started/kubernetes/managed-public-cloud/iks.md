@@ -21,6 +21,6 @@ The geeky details of what you get:
 ### Above and beyond
 
 - [Controlling traffic with network policies for IKS](https://cloud.ibm.com/docs/containers?topic=containers-network_policies)
-- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/calicoctl/install)
+- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
 - [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)

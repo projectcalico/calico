@@ -83,5 +83,5 @@ The geeky details of what you get:
 ### Above and beyond
 
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on AWS' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)

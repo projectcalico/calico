@@ -1,7 +1,7 @@
 ---
 title: Configure calicoctl
 description: Configure calicoctl for datastore access.
-canonical_url: '/getting-started/calicoctl/configure/index'
+canonical_url: '/getting-started/clis/calicoctl/configure/index'
 ---
 
 ### About configuring calicoctl

@@ -137,7 +137,7 @@ or you can set environment variables for `sudo` commands like this:
 sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node run
 ```
 
-Also be aware that connection information can be specified as a config file rather than using environment variables.  See [Installing calicoctl](../getting-started/calicoctl/install)
+Also be aware that connection information can be specified as a config file rather than using environment variables.  See [Installing calicoctl](../getting-started/clis/calicoctl/install)
 for details.
 
 ### Error: {{site.nodecontainer}} is not ready: BIRD is not ready: BGP not established with 10.0.0.1
