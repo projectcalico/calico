@@ -190,7 +190,7 @@ func (t *TemplateResource) createStageFile() error {
 // overwriting the target config file. Finally, sync will run a reload command
 // if set to have the application or service pick up the changes.
 // It returns an error if any.
-func (t *TemplateResource) sync() error {
+func (t *TemplateResource) sync(key string) error {
 	staged := t.StageFile.Name()
 	if t.keepStageFile {
 		log.Info("Keeping staged file: " + staged)
@@ -257,7 +257,11 @@ func (t *TemplateResource) sync() error {
 				return err
 			}
 		}
-		log.Info("Target config " + t.Dest + " has been updated")
+		msg := "Target config " + t.Dest + " has been updated"
+		if key != "" {
+			msg += fmt.Sprintf(" due to change in key: %s", key)
+		}
+		log.Info(msg)
 	} else {
 		log.Debug("Target config " + t.Dest + " in sync")
 	}
@@ -310,8 +314,9 @@ func (t *TemplateResource) reload() error {
 // required to keep local configuration files in sync. First we gather vars
 // from the store, then we stage a candidate configuration file, and finally sync
 // things up.
+// It accepts an optional string representing the key that triggered this processing.
 // It returns an error if any.
-func (t *TemplateResource) process() error {
+func (t *TemplateResource) process(key string) error {
 	if err := t.setFileMode(); err != nil {
 		return err
 	}
@@ -321,7 +326,7 @@ func (t *TemplateResource) process() error {
 	if err := t.createStageFile(); err != nil {
 		return err
 	}
-	if err := t.sync(); err != nil {
+	if err := t.sync(key); err != nil {
 		return err
 	}
 	return nil

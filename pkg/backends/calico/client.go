@@ -782,12 +782,8 @@ func (c *client) OnUpdates(updates []api.Update) {
 
 	// Update our cache from each of the individual updates, and keep track of
 	// any of the prefixes that are impacted.
-	cacheUpdated := needUpdatePeersV1 || needsServiceAdvertismentUpdates
 	for _, u := range updates {
-		cacheUpdated = c.updateCache(u.UpdateType, &u.KVPair)
-	}
-	if cacheUpdated {
-		log.WithField("cacheRevision", c.cacheRevision).Info("Cache updated with new information")
+		c.updateCache(u.UpdateType, &u.KVPair)
 	}
 
 	// If configuration relevant to BGP peerings has changed, recalculate the set of v1
@@ -946,7 +942,7 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 // update, and if there is no update we wait on the conditional which is woken by the OnUpdates
 // thread after updating the cache.  If any of the watched revisions is greater than the waitIndex
 // then exit to render.
-func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, stopChan chan bool) error {
+func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, stopChan chan bool) (string, error) {
 	log.WithFields(log.Fields{"prefix": prefix, "keys": keys}).Debug("WatchPrefix entry")
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
@@ -955,7 +951,7 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 		// If this is the first iteration, we always exit to ensure we render with the initial
 		// synced settings.
 		log.Debug("First watch call for template - exiting to render template")
-		return nil
+		return "", nil
 	}
 
 	for {
@@ -970,7 +966,7 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 			log.Debugf("Found key prefix %s at rev %d", key, rev)
 			if rev > lastRevision {
 				log.Debug("Exiting to render template")
-				return nil
+				return key, nil
 			}
 		}
 

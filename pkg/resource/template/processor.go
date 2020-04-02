@@ -31,7 +31,7 @@ func Process(config Config) error {
 
 	var lastErr error
 	for _, t := range ts {
-		if err := t.process(); err != nil {
+		if err := t.process(""); err != nil {
 			log.Error(err.Error())
 			lastErr = err
 		}
@@ -101,7 +101,7 @@ func (p *watchProcessor) monitorPrefix(t *TemplateResource) {
 	for {
 		// Watch from the last revision that we updated the templates with.  This will exit it the
 		// data in the datastore for the requested prefixes has had updates since that revision.
-		err := t.storeClient.WatchPrefix(t.Prefix, t.ExpandedKeys, revision, p.stopChan)
+		key, err := t.storeClient.WatchPrefix(t.Prefix, t.ExpandedKeys, revision, p.stopChan)
 		if err != nil {
 			p.errChan <- err
 			// Prevent backend errors from consuming all resources.
@@ -115,7 +115,7 @@ func (p *watchProcessor) monitorPrefix(t *TemplateResource) {
 		retryInterval := initialProcessRetryInterval
 		for {
 			revision = t.storeClient.GetCurrentRevision()
-			if err = t.process(); err == nil {
+			if err = t.process(key); err == nil {
 				break
 			}
 
