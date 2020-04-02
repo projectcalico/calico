@@ -139,7 +139,7 @@ rules:
       # Used to discover Typhas.
       - get
 {{- end }}
-{{- if eq .Values.network "calico" }}
+{{- if or (eq .Values.network "calico") (eq .Values.network "flannel") }}
   # Pod CIDR auto-detection on kubeadm needs access to config maps.
   - apiGroups: [""]
     resources:
