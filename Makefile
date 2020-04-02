@@ -81,11 +81,17 @@ ifeq ($(BUILDARCH),amd64)
 	FV_TYPHAIMAGE=calico/typha:master
 endif
 
-# Total number of ginkgo batches to run.  The CI system sets this according to the number
-# of jobs that it divides the FVs into.
-FV_NUM_BATCHES?=3
+# Total number of batches to split the tests into.  In CI we set this to say 5 batches,
+# and run a single batch on each test VM.
+FV_NUM_BATCHES?=1
 # Space-delimited list of FV batches to run in parallel.  Defaults to running all batches
 # in parallel on this host.  The CI system runs a subset of batches in each parallel job.
+#
+# To run multiple batches in parallel in order to speed up local runs (on a powerful
+# developer machine), set FV_NUM_BATCHES to say 3, then this value will be automatically
+# calculated.  Note: the tests tend to flake more when run in parallel even though they
+# were designed to be isolated; if you hit a failure, try running the tests sequentially
+# (with FV_NUM_BATCHES=1) to check that it's not a flake.
 FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
 FV_SLOW_SPEC_THRESH=90
 
