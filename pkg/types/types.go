@@ -75,23 +75,24 @@ type NetConf struct {
 		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
 		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
 	} `json:"ipam,omitempty"`
-	Args                 Args              `json:"args"`
-	MTU                  int               `json:"mtu"`
-	Nodename             string            `json:"nodename"`
-	NodenameFileOptional bool              `json:"nodename_file_optional"`
-	DatastoreType        string            `json:"datastore_type"`
-	EtcdEndpoints        string            `json:"etcd_endpoints"`
-	EtcdDiscoverySrv     string            `json:"etcd_discovery_srv"`
-	LogLevel             string            `json:"log_level"`
-	Policy               Policy            `json:"policy"`
-	Kubernetes           Kubernetes        `json:"kubernetes"`
-	FeatureControl       FeatureControl    `json:"feature_control"`
-	EtcdScheme           string            `json:"etcd_scheme"`
-	EtcdKeyFile          string            `json:"etcd_key_file"`
-	EtcdCertFile         string            `json:"etcd_cert_file"`
-	EtcdCaCertFile       string            `json:"etcd_ca_cert_file"`
-	ContainerSettings    ContainerSettings `json:"container_settings,omitempty"`
-	IncludeDefaultRoutes bool              `json:"include_default_routes,omitempty"`
+	Args                 Args                   `json:"args"`
+	MTU                  int                    `json:"mtu"`
+	Nodename             string                 `json:"nodename"`
+	NodenameFileOptional bool                   `json:"nodename_file_optional"`
+	DatastoreType        string                 `json:"datastore_type"`
+	EtcdEndpoints        string                 `json:"etcd_endpoints"`
+	EtcdDiscoverySrv     string                 `json:"etcd_discovery_srv"`
+	LogLevel             string                 `json:"log_level"`
+	Policy               Policy                 `json:"policy"`
+	Kubernetes           Kubernetes             `json:"kubernetes"`
+	FeatureControl       FeatureControl         `json:"feature_control"`
+	EtcdScheme           string                 `json:"etcd_scheme"`
+	EtcdKeyFile          string                 `json:"etcd_key_file"`
+	EtcdCertFile         string                 `json:"etcd_cert_file"`
+	EtcdCaCertFile       string                 `json:"etcd_ca_cert_file"`
+	ContainerSettings    ContainerSettings      `json:"container_settings,omitempty"`
+	IncludeDefaultRoutes bool                   `json:"include_default_routes,omitempty"`
+	DataplaneOptions     map[string]interface{} `json:"dataplane_options,omitempty"`
 
 	// Options below here are deprecated.
 	EtcdAuthority string `json:"etcd_authority"`

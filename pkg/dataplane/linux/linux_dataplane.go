@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package utils
+
+package linux
 
 import (
 	"fmt"
@@ -26,61 +27,45 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/projectcalico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 
-var (
-	// IPv4AllNet represents the IPv4 all-addresses CIDR 0.0.0.0/0.
-	IPv4AllNet *net.IPNet
-	// IPv6AllNet represents the IPv6 all-addresses CIDR ::/0.
-	IPv6AllNet    *net.IPNet
-	DefaultRoutes []*net.IPNet
-)
+type linuxDataplane struct {
+	allowIPForwarding bool
+	mtu               int
+	logger            *logrus.Entry
+}
 
-func init() {
-	var err error
-	_, IPv4AllNet, err = net.ParseCIDR("0.0.0.0/0")
-	if err != nil {
-		panic(err)
-	}
-	_, IPv6AllNet, err = net.ParseCIDR("::/0")
-	if err != nil {
-		panic(err)
-	}
-	DefaultRoutes = []*net.IPNet{
-		IPv4AllNet,
-		IPv6AllNet, // Only used if we end up adding a v6 address.
+func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane {
+	return &linuxDataplane{
+		allowIPForwarding: conf.ContainerSettings.AllowIPForwarding,
+		mtu:               conf.MTU,
+		logger:            logger,
 	}
 }
 
-// DoNetworking performs the networking for the given config and IPAM result
-func DoNetworking(
+func (d *linuxDataplane) DoNetworking(
 	args *skel.CmdArgs,
-	conf types.NetConf,
 	result *current.Result,
-	logger *logrus.Entry,
 	desiredVethName string,
 	routes []*net.IPNet,
+	endpoint *api.WorkloadEndpoint,
+	annotations map[string]string,
 ) (hostVethName, contVethMAC string, err error) {
-	// Select the first 11 characters of the containerID for the host veth.
-	hostVethName = "cali" + args.ContainerID[:Min(11, len(args.ContainerID))]
+	hostVethName = desiredVethName
 	contVethName := args.IfName
 	var hasIPv4, hasIPv6 bool
 
-	// If a desired veth name was passed in, use that instead.
-	if desiredVethName != "" {
-		hostVethName = desiredVethName
-	}
-
-	logger.Infof("Setting the host side veth name to %s", hostVethName)
+	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
 
 	// Clean up if hostVeth exists.
 	if oldHostVeth, err := netlink.LinkByName(hostVethName); err == nil {
 		if err = netlink.LinkDel(oldHostVeth); err != nil {
 			return "", "", fmt.Errorf("failed to delete old hostVeth %v: %v", hostVethName, err)
 		}
-		logger.Infof("Cleaning old hostVeth: %v", hostVethName)
+		d.logger.Infof("Cleaning old hostVeth: %v", hostVethName)
 	}
 
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
@@ -88,13 +73,13 @@ func DoNetworking(
 			LinkAttrs: netlink.LinkAttrs{
 				Name:  contVethName,
 				Flags: net.FlagUp,
-				MTU:   conf.MTU,
+				MTU:   d.mtu,
 			},
 			PeerName: hostVethName,
 		}
 
 		if err := netlink.LinkAdd(veth); err != nil {
-			logger.Errorf("Error adding veth %+v: %s", veth, err)
+			d.logger.Errorf("Error adding veth %+v: %s", veth, err)
 			return err
 		}
 
@@ -105,12 +90,12 @@ func DoNetworking(
 		}
 
 		if mac, err := net.ParseMAC("EE:EE:EE:EE:EE:EE"); err != nil {
-			logger.Infof("failed to parse MAC Address: %v. Using kernel generated MAC.", err)
+			d.logger.Infof("failed to parse MAC Address: %v. Using kernel generated MAC.", err)
 		} else {
 			// Set the MAC address on the host side interface so the kernel does not
 			// have to generate a persistent address which fails some times.
 			if err = netlink.LinkSetHardwareAddr(hostVeth, mac); err != nil {
-				logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
+				d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
 			}
 		}
 
@@ -128,7 +113,7 @@ func DoNetworking(
 
 		// Fetch the MAC from the container Veth. This is needed by Calico.
 		contVethMAC = contVeth.Attrs().HardwareAddr.String()
-		logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
+		d.logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
 
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
 		// Both ends of the veth are still in the container's network namespace.
@@ -161,10 +146,10 @@ func DoNetworking(
 
 			for _, r := range routes {
 				if r.IP.To4() == nil {
-					logger.WithField("route", r).Debug("Skipping non-IPv4 route")
+					d.logger.WithField("route", r).Debug("Skipping non-IPv4 route")
 					continue
 				}
-				logger.WithField("route", r).Debug("Adding IPv4 route")
+				d.logger.WithField("route", r).Debug("Adding IPv4 route")
 				if err = ip.AddRoute(r, gw, contVeth); err != nil {
 					return fmt.Errorf("failed to add IPv4 route for %v via %v: %v", r, gw, err)
 				}
@@ -197,7 +182,7 @@ func DoNetworking(
 				// Just fetch the address of the host end of the veth and use it as the next hop.
 				addresses, err = netlink.AddrList(hostVeth, netlink.FAMILY_V6)
 				if err != nil {
-					logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
+					d.logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
 				}
 
 				if len(addresses) < 1 {
@@ -210,7 +195,7 @@ func DoNetworking(
 					break
 				}
 
-				logger.Infof("No IPv6 set on interface, retrying..")
+				d.logger.Infof("No IPv6 set on interface, retrying..")
 				time.Sleep(50 * time.Millisecond)
 			}
 
@@ -222,10 +207,10 @@ func DoNetworking(
 
 			for _, r := range routes {
 				if r.IP.To4() != nil {
-					logger.WithField("route", r).Debug("Skipping non-IPv6 route")
+					d.logger.WithField("route", r).Debug("Skipping non-IPv6 route")
 					continue
 				}
-				logger.WithField("route", r).Debug("Adding IPv6 route")
+				d.logger.WithField("route", r).Debug("Adding IPv6 route")
 				if err = ip.AddRoute(r, hostIPv6Addr, contVeth); err != nil {
 					return fmt.Errorf("failed to add IPv6 route for %v via %v: %v", r, hostIPv6Addr, err)
 				}
@@ -239,7 +224,7 @@ func DoNetworking(
 			}
 		}
 
-		if err = configureContainerSysctls(logger, conf.ContainerSettings, hasIPv4, hasIPv6); err != nil {
+		if err = d.configureContainerSysctls(hasIPv4, hasIPv6); err != nil {
 			return fmt.Errorf("error configuring sysctls for the container netns, error: %s", err)
 		}
 
@@ -253,7 +238,7 @@ func DoNetworking(
 	})
 
 	if err != nil {
-		logger.Errorf("Error creating veth: %s", err)
+		d.logger.Errorf("Error creating veth: %s", err)
 		return "", "", err
 	}
 
@@ -384,16 +369,16 @@ func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 }
 
 // configureContainerSysctls configures necessary sysctls required inside the container netns.
-func configureContainerSysctls(logger *logrus.Entry, settings types.ContainerSettings, hasIPv4, hasIPv6 bool) error {
+func (d *linuxDataplane) configureContainerSysctls(hasIPv4, hasIPv6 bool) error {
 	// If an IPv4 address is assigned, then configure IPv4 sysctls.
 	if hasIPv4 {
-		if settings.AllowIPForwarding {
-			logger.Info("Enabling IPv4 forwarding")
+		if d.allowIPForwarding {
+			d.logger.Info("Enabling IPv4 forwarding")
 			if err := writeProcSys("/proc/sys/net/ipv4/ip_forward", "1"); err != nil {
 				return err
 			}
 		} else {
-			logger.Info("Disabling IPv4 forwarding")
+			d.logger.Info("Disabling IPv4 forwarding")
 			if err := writeProcSys("/proc/sys/net/ipv4/ip_forward", "0"); err != nil {
 				return err
 			}
@@ -402,13 +387,13 @@ func configureContainerSysctls(logger *logrus.Entry, settings types.ContainerSet
 
 	// If an IPv6 address is assigned, then configure IPv6 sysctls.
 	if hasIPv6 {
-		if settings.AllowIPForwarding {
-			logger.Info("Enabling IPv6 forwarding")
+		if d.allowIPForwarding {
+			d.logger.Info("Enabling IPv6 forwarding")
 			if err := writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "1"); err != nil {
 				return err
 			}
 		} else {
-			logger.Info("Disabling IPv6 forwarding")
+			d.logger.Info("Disabling IPv6 forwarding")
 			if err := writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "0"); err != nil {
 				return err
 			}
@@ -433,11 +418,10 @@ func writeProcSys(path, value string) error {
 	return err
 }
 
-// CleanUpNamespace deletes the devices in the network namespace.
-func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
+func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	// Only try to delete the device if a namespace was passed in.
 	if args.Netns != "" {
-		logger.WithFields(logrus.Fields{
+		d.logger.WithFields(logrus.Fields{
 			"netns": args.Netns,
 			"iface": args.IfName,
 		}).Debug("Checking namespace & device exist.")
@@ -447,7 +431,7 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 		})
 
 		if devErr == nil {
-			logger.Infof("Calico CNI deleting device in netns %s", args.Netns)
+			d.logger.Infof("Calico CNI deleting device in netns %s", args.Netns)
 			// Deleting the veth has been seen to hang on some kernel version. Timeout the command if it takes too long.
 			ch := make(chan error, 1)
 
@@ -464,13 +448,13 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 				if err != nil {
 					return err
 				} else {
-					logger.Infof("Calico CNI deleted device in netns %s", args.Netns)
+					d.logger.Infof("Calico CNI deleted device in netns %s", args.Netns)
 				}
 			case <-time.After(5 * time.Second):
 				return fmt.Errorf("Calico CNI timed out deleting device in netns %s", args.Netns)
 			}
 		} else {
-			logger.WithField("ifName", args.IfName).Info("veth does not exist, no need to clean up.")
+			d.logger.WithField("ifName", args.IfName).Info("veth does not exist, no need to clean up.")
 		}
 	}
 

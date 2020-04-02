@@ -1,0 +1,63 @@
+syntax = "proto3";
+package cni;
+option go_package = "proto";
+
+service CniDataplane {
+    rpc Add (AddRequest) returns (AddReply) {}
+    rpc Del (DelRequest) returns (DelReply) {}
+}
+
+message AddRequest {
+    string interface_name = 1;
+    string netns = 2;
+    string desired_host_interface_name = 3;
+    ContainerSettings settings = 4;
+    repeated IPConfig container_ips = 5;
+    repeated string container_routes = 6;
+    WorkloadIDs workload = 7;
+}
+
+message ContainerSettings {
+    bool allow_ip_forwarding = 1;
+    int32 mtu = 2;
+}
+
+message IPConfig {
+    string address = 1;
+    string gateway = 2;
+}
+
+message WorkloadIDs {
+    string name = 1;
+    string namespace = 2;
+    map<string, string> labels = 3;
+    map<string, string> annotations = 4;
+    string endpoint = 5;
+    string node = 6;
+    string orchestrator = 7;
+    string pod = 8;
+    repeated Port ports = 9;
+}
+
+message Port {
+    string name = 1;
+    string protocol = 2;
+    uint32 port = 3;
+}
+
+message AddReply {
+    bool successful = 1;
+    string error_message = 2;
+    string host_interface_name = 3;
+    string container_mac = 4;
+}
+
+message DelRequest {
+    string interface_name = 1;
+    string netns = 2;
+}
+
+message DelReply {
+    bool successful = 1;
+    string error_message = 2;
+}

@@ -19,6 +19,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	grpc_dataplane "github.com/projectcalico/cni-plugin/pkg/dataplane/grpc"
+	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc/proto"
+	"github.com/projectcalico/cni-plugin/pkg/dataplane/linux"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/names"
@@ -312,6 +315,132 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 		})
+	})
+
+	Context("With an invalid dataplane type", func() {
+		netconf := fmt.Sprintf(`
+			{
+			  "cniVersion": "%s",
+			  "name": "net1",
+			  "type": "calico",
+			  "etcd_endpoints": "http://%s:2379",
+			  "log_level": "info",
+			  "nodename_file_optional": true,
+			  "datastore_type": "%s",
+			  "ipam": {
+			    "type": "host-local",
+			    "subnet": "10.0.0.0/8"
+			  },
+			  "dataplane_options": {
+			  	"type": "invalid-dataplane-type"
+			  }
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+		It("fails with an error", func() {
+			_, _, _, _, _, _, err := testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+			Expect(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("With a misconfigured gRPC dataplane", func() {
+		netconf := fmt.Sprintf(`
+			{
+			  "cniVersion": "%s",
+			  "name": "net1",
+			  "type": "calico",
+			  "etcd_endpoints": "http://%s:2379",
+			  "log_level": "info",
+			  "nodename_file_optional": true,
+			  "datastore_type": "%s",
+			  "ipam": {
+			    "type": "host-local",
+			    "subnet": "10.0.0.0/8"
+			  },
+			  "dataplane_options": {
+			  	"type": "grpc",
+			  	"socket": "unix:///tmp/xxxx-non-existent-dont-create-this-please.sock"
+			  }
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+		It("fails with an error", func() {
+			_, _, _, _, _, _, err := testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+			Expect(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("With a gRPC dataplane", func() {
+		It("communicates with the dataplane", func(done Done) {
+			var contNs ns.NetNS
+			var grpcBackend *grpc_dataplane.TestServer
+			var exitCode int
+			var err error
+			socket := fmt.Sprintf("/tmp/cni_grpc_dataplane_test%d.sock", rand.Uint32())
+			netconf := fmt.Sprintf(`
+				{
+					"cniVersion": "%s",
+					"name": "net1",
+					"type": "calico",
+					"etcd_endpoints": "http://%s:2379",
+					"log_level": "info",
+					"nodename_file_optional": true,
+					"datastore_type": "%s",
+					"ipam": {
+			    		"type": "host-local",
+			    		"subnet": "10.0.0.0/8"
+					},
+					"dataplane_options": {
+			  			"type": "grpc",
+			  			"socket": "unix://%s"
+					}
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), socket)
+
+			grpcBackend, err = grpc_dataplane.StartTestServer(socket, true, "00:11:22:33:44:55")
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(grpcBackend).ShouldNot(Equal(nil))
+
+			By("sending ADD requests to the gRPC backend")
+			_, _, _, _, _, contNs, err = testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+			Expect(err).ShouldNot(HaveOccurred())
+			message := <-grpcBackend.Received
+			addRequest, ok := message.(*proto.AddRequest)
+			Expect(ok).Should(BeTrue())
+			Expect(addRequest.Netns).Should(Equal(contNs.Path()))
+			Expect(len(addRequest.ContainerIps)).Should(BeNumerically(">=", 1))
+
+			By("erroring if the backend fails to cleanup an interface")
+			grpcBackend.SetResult(false)
+			exitCode, err = testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(exitCode).ShouldNot(Equal(0))
+			message = <-grpcBackend.Received
+			_, ok = message.(*proto.DelRequest)
+			Expect(ok).Should(BeTrue())
+
+			By("sending DEL requests to the gRPC backend")
+			grpcBackend.SetResult(true)
+			exitCode, err = testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(exitCode).Should(Equal(0))
+			message = <-grpcBackend.Received
+			delRequest, ok := message.(*proto.DelRequest)
+			Expect(ok).Should(BeTrue())
+			Expect(delRequest.Netns).Should(Equal(contNs.Path()))
+
+			By("erroring if the backend fails to configure an interface")
+			grpcBackend.SetResult(false)
+			_, _, _, _, _, _, err = testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+			Expect(err).Should(HaveOccurred())
+			message = <-grpcBackend.Received
+			_, ok = message.(*proto.AddRequest)
+			Expect(ok).Should(BeTrue())
+
+			grpcBackend.GracefulStop()
+			err = syscall.Unlink(socket)
+			if err != nil {
+				log.Printf("Failed to cleanup test socket %s: %v", socket, err)
+			}
+			close(done)
+		}, 30.0)
 	})
 
 	Context("deprecate hostname for nodename", func() {
@@ -725,7 +854,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				By("setting up the same route CNI plugin installed in the initial run for the hostVeth")
-				err = utils.SetupRoutes(hostVeth, result)
+				err = linux.SetupRoutes(hostVeth, result)
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
