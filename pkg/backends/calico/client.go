@@ -662,6 +662,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 
 	// Track whether these updates require BGP peerings to be recomputed.
 	needUpdatePeersV1 := false
+	needUpdatePeersReasons := []string{}
 
 	// Track whether these updates require service advertisement to be recomputed.
 	needsServiceAdvertismentUpdates := false
@@ -689,6 +690,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if cfgKey.Name == "as_num" {
 					log.Debugf("Global AS number update, need to recalculate peers")
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, "Global AS number changed")
 				}
 
 				if cfgKey.Name == "svc_external_ips" {
@@ -712,6 +714,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if cfgKey.Name == "as_num" {
 					log.WithField("node", cfgKey.Nodename).Debugf("Node AS number update, need to recalculate peers")
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, "Node AS number changed")
 				}
 			}
 			continue
@@ -734,10 +737,12 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if kvp.Value == nil {
 					if c.updateCache(api.UpdateTypeKVDeleted, kvp) {
 						needUpdatePeersV1 = true
+						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s deleted", kvp.Key.String()))
 					}
 				} else {
 					if c.updateCache(u.UpdateType, kvp) {
 						needUpdatePeersV1 = true
+						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s updated", kvp.Key.String()))
 					}
 				}
 			}
@@ -748,6 +753,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if _, ok := c.nodeLabels[v3key.Name]; ok {
 					delete(c.nodeLabels, v3key.Name)
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, v3key.Name+" deleted")
 				}
 			} else {
 				// This was a create or update - update node labels.
@@ -760,6 +766,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if !isSet || !reflect.DeepEqual(existingLabels, v3res.Labels) {
 					c.nodeLabels[v3key.Name] = v3res.Labels
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, v3key.Name+" updated")
 				}
 			}
 		}
@@ -777,6 +784,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 
 			// Note need to recompute equivalent v1 peerings.
 			needUpdatePeersV1 = true
+			needUpdatePeersReasons = append(needUpdatePeersReasons, "BGP peer updated or deleted")
 		}
 	}
 
@@ -789,7 +797,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 	// If configuration relevant to BGP peerings has changed, recalculate the set of v1
 	// peerings that should exist, and update the cache accordingly.
 	if needUpdatePeersV1 {
-		log.Info("Recompute BGP peerings")
+		log.Info("Recompute BGP peerings: " + strings.Join(needUpdatePeersReasons, "; "))
 		c.updatePeersV1()
 	}
 
