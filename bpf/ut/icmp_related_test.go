@@ -142,7 +142,8 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 		// we have a normal ct record, it is related, must be allowe
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
-		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP)
+		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
+			uint16(udp.SrcPort), uint16(udp.DstPort))
 	})
 }
 
@@ -169,7 +170,8 @@ func TestICMPRelatedFromHost(t *testing.T) {
 		// we have a normal ct record, it is related, must be allowed
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
-		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP)
+		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
+			uint16(udp.SrcPort), uint16(udp.DstPort))
 	})
 }
 
@@ -236,7 +238,8 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 		// we have a normal ct record, it is related, must be allowed
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
-		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP)
+		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
+			uint16(udp.SrcPort), uint16(udp.DstPort))
 	})
 }
 
@@ -260,7 +263,7 @@ func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType
 		SrcIP:    hostIP,
 		DstIP:    ipInner.SrcIP,
 		Protocol: layers.IPProtocolICMPv4,
-		Length:   uint16(20 + len(payload)),
+		Length:   uint16(20 + 8 + len(payload)),
 	}
 
 	icmp := &layers.ICMPv4{
@@ -275,7 +278,8 @@ func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType
 	return pkt.Bytes()
 }
 
-func checkICMP(bytes []byte, origSrc, innerSrc, innerDst net.IP) {
+func checkICMP(bytes []byte, origSrc, innerSrc, innerDst net.IP,
+	innerProto layers.IPProtocol, innerPortSrc, innerPortDst uint16) {
 
 	icmpPkt := gopacket.NewPacket(bytes, layers.LayerTypeEthernet, gopacket.Default)
 
@@ -296,4 +300,22 @@ func checkICMP(bytes []byte, origSrc, innerSrc, innerDst net.IP) {
 
 	Expect(ipv4R.SrcIP.String()).To(Equal(innerSrc.String()))
 	Expect(ipv4R.DstIP.String()).To(Equal(innerDst.String()))
+	Expect(ipv4R.Protocol).To(Equal(innerProto))
+
+	switch innerProto {
+	case layers.IPProtocolUDP:
+		udpL := origPkt.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+
+		Expect(uint16(udpR.SrcPort)).To(Equal(innerPortSrc))
+		Expect(uint16(udpR.DstPort)).To(Equal(innerPortDst))
+	case layers.IPProtocolTCP:
+		tcpL := origPkt.Layer(layers.LayerTypeTCP)
+		Expect(tcpL).NotTo(BeNil())
+		tcpR := tcpL.(*layers.TCP)
+
+		Expect(uint16(tcpR.SrcPort)).To(Equal(innerPortSrc))
+		Expect(uint16(tcpR.DstPort)).To(Equal(innerPortDst))
+	}
 }
