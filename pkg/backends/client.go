@@ -5,6 +5,6 @@ package backends
 type StoreClient interface {
 	SetPrefixes(keys []string) error
 	GetValues(keys []string) (map[string]string, error)
-	WatchPrefix(prefix string, keys []string, waitIndex uint64, stopChan chan bool) error
+	WatchPrefix(prefix string, keys []string, waitIndex uint64, stopChan chan bool) (string, error)
 	GetCurrentRevision() uint64
 }

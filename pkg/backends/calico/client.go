@@ -196,6 +196,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		// Create and start route generator, if configured to do so. This can either be through
 		// environment variable, or the data store via BGPConfiguration.
 		// We only turn it on if configured to do so, to avoid needing to watch services / endpoints.
+		log.Info("Starting route generator for service advertisement")
 		if c.rg, err = NewRouteGenerator(c); err != nil {
 			log.WithError(err).Error("Failed to start route generator, routes will not be advertised")
 			c.OnInSync(SourceRouteGenerator)
@@ -661,10 +662,12 @@ func (c *client) OnUpdates(updates []api.Update) {
 
 	// Track whether these updates require BGP peerings to be recomputed.
 	needUpdatePeersV1 := false
+	needUpdatePeersReasons := []string{}
 
 	// Track whether these updates require service advertisement to be recomputed.
 	needsServiceAdvertismentUpdates := false
 
+	log.WithField("cacheRevision", c.cacheRevision).Debug("Processing OnUpdates from syncer")
 	for _, u := range updates {
 		log.Debugf("Update: %#v", u)
 
@@ -685,8 +688,9 @@ func (c *client) OnUpdates(updates []api.Update) {
 			// peers when we receive AS number updates.
 			if cfgKey, ok := u.Key.(model.GlobalBGPConfigKey); ok {
 				if cfgKey.Name == "as_num" {
-					log.Debugf("Global AS number update, recalculate peers")
+					log.Debugf("Global AS number update, need to recalculate peers")
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, "Global AS number changed")
 				}
 
 				if cfgKey.Name == "svc_external_ips" {
@@ -708,8 +712,9 @@ func (c *client) OnUpdates(updates []api.Update) {
 
 			if cfgKey, ok := u.Key.(model.NodeBGPConfigKey); ok {
 				if cfgKey.Name == "as_num" {
-					log.WithField("node", cfgKey.Nodename).Debugf("Node AS number update, recalculate peers")
+					log.WithField("node", cfgKey.Nodename).Debugf("Node AS number update, need to recalculate peers")
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, "Node AS number changed")
 				}
 			}
 			continue
@@ -732,10 +737,12 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if kvp.Value == nil {
 					if c.updateCache(api.UpdateTypeKVDeleted, kvp) {
 						needUpdatePeersV1 = true
+						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s deleted", kvp.Key.String()))
 					}
 				} else {
 					if c.updateCache(u.UpdateType, kvp) {
 						needUpdatePeersV1 = true
+						needUpdatePeersReasons = append(needUpdatePeersReasons, fmt.Sprintf("%s updated", kvp.Key.String()))
 					}
 				}
 			}
@@ -746,6 +753,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if _, ok := c.nodeLabels[v3key.Name]; ok {
 					delete(c.nodeLabels, v3key.Name)
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, v3key.Name+" deleted")
 				}
 			} else {
 				// This was a create or update - update node labels.
@@ -758,6 +766,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if !isSet || !reflect.DeepEqual(existingLabels, v3res.Labels) {
 					c.nodeLabels[v3key.Name] = v3res.Labels
 					needUpdatePeersV1 = true
+					needUpdatePeersReasons = append(needUpdatePeersReasons, v3key.Name+" updated")
 				}
 			}
 		}
@@ -775,6 +784,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 
 			// Note need to recompute equivalent v1 peerings.
 			needUpdatePeersV1 = true
+			needUpdatePeersReasons = append(needUpdatePeersReasons, "BGP peer updated or deleted")
 		}
 	}
 
@@ -787,15 +797,16 @@ func (c *client) OnUpdates(updates []api.Update) {
 	// If configuration relevant to BGP peerings has changed, recalculate the set of v1
 	// peerings that should exist, and update the cache accordingly.
 	if needUpdatePeersV1 {
-		log.Debug("Recompute BGP peerings")
+		log.Info("Recompute BGP peerings: " + strings.Join(needUpdatePeersReasons, "; "))
 		c.updatePeersV1()
 	}
 
 	// If we need to update Service advertisement based on the updates, then do so.
 	if needsServiceAdvertismentUpdates {
-		log.Debug("Recompute service advertisement")
+		log.Info("Updates included service advertisment changes.")
 		if c.rg == nil {
 			// If this is the first time we've needed to start the route generator, then do so here.
+			log.Info("Starting route generator due to service advertisement update")
 			var err error
 			if c.rg, err = NewRouteGenerator(c); err != nil {
 				log.WithError(err).Error("Failed to start route generator, unable to advertise services")
@@ -826,6 +837,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 	}
 
 	// Notify watcher thread that we've received new updates.
+	log.WithField("cacheRevision", c.cacheRevision).Debug("Done processing OnUpdates from syncer, notify watchers")
 	c.onNewUpdates()
 }
 
@@ -938,7 +950,7 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 // update, and if there is no update we wait on the conditional which is woken by the OnUpdates
 // thread after updating the cache.  If any of the watched revisions is greater than the waitIndex
 // then exit to render.
-func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, stopChan chan bool) error {
+func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, stopChan chan bool) (string, error) {
 	log.WithFields(log.Fields{"prefix": prefix, "keys": keys}).Debug("WatchPrefix entry")
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
@@ -947,7 +959,7 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 		// If this is the first iteration, we always exit to ensure we render with the initial
 		// synced settings.
 		log.Debug("First watch call for template - exiting to render template")
-		return nil
+		return "", nil
 	}
 
 	for {
@@ -962,7 +974,7 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 			log.Debugf("Found key prefix %s at rev %d", key, rev)
 			if rev > lastRevision {
 				log.Debug("Exiting to render template")
-				return nil
+				return key, nil
 			}
 		}
 
