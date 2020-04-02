@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	validator "github.com/projectcalico/libcalico-go/lib/validator/v1"
+	v1v "github.com/projectcalico/libcalico-go/lib/validator/v1"
+	v3v "github.com/projectcalico/libcalico-go/lib/validator/v3"
 )
 
 func NewValidationFilter(sink api.SyncerCallbacks) *ValidationFilter {
@@ -48,12 +49,19 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 			"value": update.Value,
 		})
 		logCxt.Debug("Validating KV pair.")
+		validatorFunc := v1v.Validate
+		if _, isV3 := update.Key.(model.ResourceKey); isV3 {
+			logCxt.Debug("Use v3 validator")
+			validatorFunc = v3v.Validate
+		} else {
+			logCxt.Debug("Use v1 validator")
+		}
 		if update.Value != nil {
 			val := reflect.ValueOf(update.Value)
 			if val.Kind() == reflect.Ptr {
 				elem := val.Elem()
 				if elem.Kind() == reflect.Struct {
-					if err := validator.Validate(elem.Interface()); err != nil {
+					if err := validatorFunc(elem.Interface()); err != nil {
 						logCxt.WithError(err).Warn("Validation failed; treating as missing")
 						update.Value = nil
 					}
