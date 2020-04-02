@@ -519,8 +519,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		dport = ctx->dport;
 		tcp_header = ctx->tcp;
 
-		CALI_CT_DEBUG("CT-ICMP related lookup from %x:%d\n", be32_to_host(ip_src), sport);
-		CALI_CT_DEBUG("CT-ICMP related lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
+		CALI_CT_DEBUG("related lookup from %x:%d\n", be32_to_host(ip_src), sport);
+		CALI_CT_DEBUG("related lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
 
 		srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
 		k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
@@ -591,9 +591,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			dst_to_src = &v->a_to_b;
 		}
 
+		result.tun_ret_ip = v->tun_ip;
+		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
+
 		if (ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
+			result.nat_port = v->orig_port;
 			break;
 		}
 
@@ -623,14 +627,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			CALI_CT_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
-		result.tun_ret_ip = v->tun_ip;
-		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
 		break;
 
 	case CALI_CT_TYPE_NORMAL:
-		if (v->type == CALI_CT_TYPE_NORMAL) {
-			CALI_CT_DEBUG("Hit! NORMAL entry.\n");
-		}
+		CALI_CT_DEBUG("Hit! NORMAL entry.\n");
 		CALI_CT_VERB("Created: %llu.\n", v->created);
 		if (tcp_header) {
 			CALI_CT_VERB("Last seen: %llu.\n", v->last_seen);
@@ -734,7 +734,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		ct_tcp_entry_update(tcp_header, src_to_dst, dst_to_src);
 	}
 
-	CALI_CT_DEBUG("result: %d.\n", result.rc);
+	CALI_CT_DEBUG("result: %d\n", result.rc);
 
 	if (related) {
 		ct_result_set_flag(result.rc, CALI_CT_RELATED);

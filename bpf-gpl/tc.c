@@ -148,12 +148,14 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	int ret = 0;
 
 	if (ip_from != ip_to) {
-		CALI_DEBUG("L4 checksum update (csum is at %d) IP from %x to %x\n", off, ip_from, ip_to);
+		CALI_DEBUG("L4 checksum update (csum is at %d) IP from %x to %x\n", off,
+				be32_to_host(ip_from), be32_to_host(ip_to));
 		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, flags | BPF_F_PSEUDO_HDR | 4);
 		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
 	}
 	if (port_from != port_to) {
-		CALI_DEBUG("L4 checksum update (csum is at %d) port from %x to %x\n", off, port_from, port_to);
+		CALI_DEBUG("L4 checksum update (csum is at %d) port from %d to %d\n",
+				off, be16_to_host(port_from), be16_to_host(port_to));
 		int rc = bpf_l4_csum_replace(skb, off, port_from, port_to, flags | 2);
 		CALI_DEBUG("bpf_l4_csum_replace(port): %d\n", rc);
 		ret |= rc;
@@ -680,20 +682,25 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 							 struct calico_nat_dest *nat_dest)
 {
 	CALI_DEBUG("Entering calico_tc_skb_accepted\n");
-	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
-	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
-	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
-	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
-	CALI_DEBUG("sport=%d\n", state->sport);
-	CALI_DEBUG("flags=%x\n", state->flags);
+
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 	bool fib;
 	struct ct_ctx ct_nat_ctx = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
-
 	uint32_t seen_mark;
+	size_t csum_off_fixup = 0;
+
+	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
+	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
+	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
+	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
+	CALI_DEBUG("sport=%d\n", state->sport);
+	CALI_DEBUG("flags=%x\n", state->flags);
+	CALI_DEBUG("ct_rc=%d\n", ct_rc);
+	CALI_DEBUG("ct_related=%d\n", ct_related);
+
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
 		fib = false;
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
@@ -728,6 +735,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				CALI_DEBUG("Ooops, we already passed one such a check!!!\n");
 				goto deny;
 			}
+			csum_off_fixup = sizeof(*ip_header) + sizeof(*icmp);
 			ip_header = (struct iphdr *)(icmp + 1); /* skip to inner ip */
 
 			/* flip the direction, we need to reverse the original packet */
@@ -752,14 +760,19 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
 
-	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check);
-	switch (state->ip_proto) {
-	case IPPROTO_TCP:
-		l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
-		break;
-	case IPPROTO_UDP:
-		l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
-		break;
+	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check) + csum_off_fixup;
+
+	if (state->ip_proto == IPPROTO_ICMP && ct_related) {
+		/* do not fix up embedded L4 checksum for related ICMP */
+	} else {
+		switch (ip_header->protocol) {
+		case IPPROTO_TCP:
+			l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
+			break;
+		case IPPROTO_UDP:
+			l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
+			break;
+		}
 	}
 
 	switch (ct_rc){
@@ -873,7 +886,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		ip_header->daddr = state->post_nat_ip_dst;
 
-		switch (state->ip_proto) {
+		switch (ip_header->protocol) {
 		case IPPROTO_TCP:
 			tcp_header->dest = host_to_be16(state->post_nat_dport);
 			break;
@@ -888,7 +901,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
 					state->post_nat_ip_dst,	host_to_be16(state->dport),
 					host_to_be16(state->post_nat_dport),
-					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
+					ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_dst, state->post_nat_ip_dst, 4);
@@ -896,6 +909,29 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
 			goto deny;
+		}
+
+		/* Special case for ICMP error being returned by the host with
+		 * the backing workload into the tunnel back to the original host. It
+		 * is ICMP related and there is a return tunnel path. We need to
+		 * change both the source and destination at once.
+		 *
+		 * XXX the packet was routed to the original client as if it was
+		 * XXX DSR and we might not be on the right iface!!! Should we
+		 * XXX try to reinject it to fix the routing?
+		 *
+		 * N.B. we also assume that we can fit in the MTU. Since it is
+		 * ICMP and even though Linux sends up to min ipv4 MTU, it is
+		 * unlikely that we are anywhere to close the MTU limit. If we
+		 * are, we need to fail anyway.
+		 */
+		if (CALI_F_TO_HEP && !CALI_F_DSR &&
+				ct_related && state->ip_proto == IPPROTO_ICMP &&
+				state->ct_result.tun_ret_ip) {
+			CALI_DEBUG("Returning related ICMP from host to tunnel\n");
+			state->ip_src = cali_host_ip();
+			state->ip_dst = state->ct_result.tun_ret_ip;
+			goto nat_encap;
 		}
 
 		state->dport = state->post_nat_dport;
@@ -924,7 +960,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		// Actually do the NAT.
 		ip_header->saddr = state->ct_result.nat_ip;
 
-		switch (state->ip_proto) {
+		switch (ip_header->protocol) {
 		case IPPROTO_TCP:
 			tcp_header->source = host_to_be16(state->ct_result.nat_port);
 			break;
@@ -939,7 +975,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_src,
 					state->ct_result.nat_ip, host_to_be16(state->sport),
 					host_to_be16(state->ct_result.nat_port),
-					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
+					ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
