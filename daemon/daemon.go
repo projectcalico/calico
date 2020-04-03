@@ -305,7 +305,7 @@ configRetry:
 			log.Infof("Server Version: %#v\n", *serverVersion)
 			kubernetesVersion = serverVersion.GitVersion
 		} else {
-			log.Error("no Kubernetes client available")
+			log.Info("no Kubernetes client available")
 		}
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
