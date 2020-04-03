@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	rcache "github.com/projectcalico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -45,10 +46,11 @@ type namespaceController struct {
 	resourceCache rcache.ResourceCache
 	calicoClient  client.Interface
 	ctx           context.Context
+	cfg           config.GenericControllerConfig
 }
 
 // NewNamespaceController returns a controller which manages Namespace objects.
-func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
+func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
 	namespaceConverter := converter.NewNamespaceConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
@@ -141,11 +143,11 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 		},
 	}, cache.Indexers{})
 
-	return &namespaceController{informer, ccache, c, ctx}
+	return &namespaceController{informer, ccache, c, ctx, cfg}
 }
 
 // Run starts the controller.
-func (c *namespaceController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+func (c *namespaceController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
@@ -162,10 +164,10 @@ func (c *namespaceController) Run(threadiness int, reconcilerPeriod string, stop
 	log.Debug("Finished syncing with Kubernetes API (Namespaces)")
 
 	// Start Calico cache.
-	c.resourceCache.Run(reconcilerPeriod)
+	c.resourceCache.Run(c.cfg.ReconcilerPeriod.String())
 
 	// Start a number of worker threads to read from the queue.
-	for i := 0; i < threadiness; i++ {
+	for i := 0; i < c.cfg.NumberOfWorkers; i++ {
 		go c.runWorker()
 	}
 	log.Info("Namespace/Profile controller is now running")

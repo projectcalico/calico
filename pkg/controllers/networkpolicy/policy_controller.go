@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	rcache "github.com/projectcalico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 
 	"github.com/projectcalico/kube-controllers/pkg/converter"
@@ -48,10 +49,11 @@ type policyController struct {
 	resourceCache rcache.ResourceCache
 	calicoClient  client.Interface
 	ctx           context.Context
+	cfg           config.GenericControllerConfig
 }
 
 // NewPolicyController returns a controller which manages NetworkPolicy objects.
-func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c client.Interface) controller.Controller {
+func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
 	policyConverter := converter.NewPolicyConverter()
 
 	// Create a NetworkPolicy watcher.
@@ -131,11 +133,11 @@ func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c
 		},
 	}, cache.Indexers{})
 
-	return &policyController{informer, ccache, c, ctx}
+	return &policyController{informer, ccache, c, ctx, cfg}
 }
 
 // Run starts the controller.
-func (c *policyController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+func (c *policyController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
@@ -155,12 +157,12 @@ func (c *policyController) Run(threadiness int, reconcilerPeriod string, stopCh 
 
 	// Start the resource cache - this will trigger the queueing of any keys
 	// that are out of sync onto the resource cache event queue.
-	c.resourceCache.Run(reconcilerPeriod)
+	c.resourceCache.Run(c.cfg.ReconcilerPeriod.String())
 
 	// Start a number of worker threads to read from the queue. Each worker
 	// will pull keys off the resource cache event queue and sync them to the
 	// Calico datastore.
-	for i := 0; i < threadiness; i++ {
+	for i := 0; i < c.cfg.NumberOfWorkers; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 	log.Info("NetworkPolicy controller is now running")

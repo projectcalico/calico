@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018, 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	rcache "github.com/projectcalico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -45,10 +46,11 @@ type serviceAccountController struct {
 	resourceCache rcache.ResourceCache
 	calicoClient  client.Interface
 	ctx           context.Context
+	cfg           config.GenericControllerConfig
 }
 
 // NewServiceAccountController returns a controller which manages ServiceAccount objects.
-func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
+func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
 	serviceAccountConverter := converter.NewServiceAccountConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
@@ -135,11 +137,11 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 		},
 	}, cache.Indexers{})
 
-	return &serviceAccountController{informer, ccache, c, ctx}
+	return &serviceAccountController{informer, ccache, c, ctx, cfg}
 }
 
 // Run starts the controller.
-func (c *serviceAccountController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+func (c *serviceAccountController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
@@ -156,10 +158,10 @@ func (c *serviceAccountController) Run(threadiness int, reconcilerPeriod string,
 	log.Debug("Finished syncing with Kubernetes API (ServiceAccount)")
 
 	// Start Calico cache.
-	c.resourceCache.Run(reconcilerPeriod)
+	c.resourceCache.Run(c.cfg.ReconcilerPeriod.String())
 
 	// Start a number of worker threads to read from the queue.
-	for i := 0; i < threadiness; i++ {
+	for i := 0; i < c.cfg.NumberOfWorkers; i++ {
 		go c.runWorker()
 	}
 	log.Info("ServiceAccount/Profile controller is now running")

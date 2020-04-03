@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -146,8 +146,8 @@ func (c *flannelMigrationController) StopController(msg string) {
 }
 
 // Run starts the migration controller. It does start-of-day preparation
-// and then run entire migration process. We ignore reconcilerPeriod and threadiness.
-func (c *flannelMigrationController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+// and then run entire migration process.
+func (c *flannelMigrationController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	c.waitBeforeStart()

@@ -54,6 +54,27 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		os.Getenv("CONTAINER_NAME"))
 }
 
+func RunKubeControllerWithEnv(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile string, env map[string]string) *containers.Container {
+	args := []string{
+		"--privileged",
+	}
+
+	for k, v := range env {
+		args = append(args, "-e", k+"="+v)
+	}
+
+	args = append(args,
+		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
+		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
+		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
+		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
+		os.Getenv("CONTAINER_NAME"))
+
+	return containers.Run("calico-kube-controllers",
+		containers.RunOpts{AutoRemove: true},
+		args...)
+}
+
 func ExpectNodeLabels(c client.Interface, labels map[string]string, node string) error {
 	cn, err := c.Nodes().Get(context.Background(), node, options.GetOptions{})
 	if err != nil {
