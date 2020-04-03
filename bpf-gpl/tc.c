@@ -691,6 +691,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	uint32_t seen_mark;
 	size_t l4_csum_off = 0, l3_csum_off;
+	uint32_t fib_flags = 0;
 
 	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
 	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
@@ -733,9 +734,22 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	if (ct_related) {
 		if (ip_header->protocol == IPPROTO_ICMP) {
 			struct icmphdr *icmp;
+			bool outer_ip_snat;
 
-			/* if SNAT, fix the outer header IP first */
-			if (ct_rc == CALI_CT_ESTABLISHED_SNAT) {
+			/* if we do SNAT ... */
+			outer_ip_snat = ct_rc == CALI_CT_ESTABLISHED_SNAT;
+			/* ... there is a return path to the tunnel ... */
+			outer_ip_snat = outer_ip_snat && state->ct_result.tun_ret_ip;
+			/* ... and should do encap and it is not DSR or it is
+			 * it is leaving host and either DSR from WEP or
+			 * originated at host ... */
+			outer_ip_snat = outer_ip_snat &&
+				((dnat_return_should_encap() && !CALI_F_DSR) ||
+				 (CALI_F_TO_HEP &&
+				  ((CALI_F_DSR && skb_seen(skb)) || !skb_seen(skb))));
+
+			/* ... then fix the outer header IP first */
+			if (outer_ip_snat) {
 				ip_header->saddr = state->ct_result.nat_ip;
 				int res = bpf_l3_csum_replace(skb, l3_csum_off,
 						state->ip_src, state->ct_result.nat_ip, 4);
@@ -743,6 +757,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 					reason = CALI_REASON_CSUM_FAIL;
 					goto deny;
 				}
+				CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
+						be32_to_host(state->ct_result.nat_ip));
 			}
 
 			if (!icmp_skb_get_hdr(skb, &icmp)) {
@@ -756,6 +772,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			/* flip the direction, we need to reverse the original packet */
 			switch (ct_rc) {
 			case CALI_CT_ESTABLISHED_SNAT:
+				/* handle the DSR case, see CALI_CT_ESTABLISHED_SNAT where nat is done */
+				if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
+					if (CALI_F_DSR) {
+						/* SNAT will be done after routing, when leaving HEP */
+						CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
+						goto allow;
+					}
+				}
 				ct_rc = CALI_CT_ESTABLISHED_DNAT;
 				break;
 			case CALI_CT_ESTABLISHED_DNAT:
@@ -772,7 +796,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	int res = 0;
 	bool encap_needed = false;
-	uint32_t fib_flags = 0;
 
 	if (state->ip_proto == IPPROTO_ICMP && ct_related) {
 		/* do not fix up embedded L4 checksum for related ICMP */

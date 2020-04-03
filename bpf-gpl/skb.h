@@ -37,6 +37,8 @@
 
 #define skb_len_dir_access(skb) skb_tail_len(skb, skb_start_ptr(skb))
 
+#define skb_seen(skb) ((skb)->mark & CALI_SKB_MARK_SEEN)
+
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
 #define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
 

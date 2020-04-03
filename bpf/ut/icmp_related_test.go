@@ -142,7 +142,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 		// we have a normal ct record, it is related, must be allowed
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
-		checkICMP(res.dataOut, ipv4.DstIP, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
+		checkICMP(res.dataOut, hostIP, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP, ipv4.Protocol,
 			uint16(udp.SrcPort), uint16(udp.DstPort))
 	})
 }
