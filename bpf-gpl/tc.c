@@ -690,7 +690,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	uint32_t seen_mark;
-	size_t csum_off_fixup = 0;
+	size_t l4_csum_off = 0, l3_csum_off;
 
 	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
 	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
@@ -728,14 +728,29 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 	}
 
+	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check);
+
 	if (ct_related) {
 		if (ip_header->protocol == IPPROTO_ICMP) {
 			struct icmphdr *icmp;
+
+			/* if SNAT, fix the outer header IP first */
+			if (ct_rc == CALI_CT_ESTABLISHED_SNAT) {
+				ip_header->saddr = state->ct_result.nat_ip;
+				int res = bpf_l3_csum_replace(skb, l3_csum_off,
+						state->ip_src, state->ct_result.nat_ip, 4);
+				if (res) {
+					reason = CALI_REASON_CSUM_FAIL;
+					goto deny;
+				}
+			}
+
 			if (!icmp_skb_get_hdr(skb, &icmp)) {
 				CALI_DEBUG("Ooops, we already passed one such a check!!!\n");
 				goto deny;
 			}
-			csum_off_fixup = sizeof(*ip_header) + sizeof(*icmp);
+
+			l3_csum_off += sizeof(*ip_header) + sizeof(*icmp);
 			ip_header = (struct iphdr *)(icmp + 1); /* skip to inner ip */
 
 			/* flip the direction, we need to reverse the original packet */
@@ -755,12 +770,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	__u8 ihl = ip_header->ihl * 4;
 
-	size_t l4_csum_off = 0, l3_csum_off;
 	int res = 0;
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
-
-	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check) + csum_off_fixup;
 
 	if (state->ip_proto == IPPROTO_ICMP && ct_related) {
 		/* do not fix up embedded L4 checksum for related ICMP */
@@ -911,27 +923,36 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			goto deny;
 		}
 
-		/* Special case for ICMP error being returned by the host with
-		 * the backing workload into the tunnel back to the original host. It
-		 * is ICMP related and there is a return tunnel path. We need to
-		 * change both the source and destination at once.
+		/* Handle returning ICMP related to tunnel
 		 *
-		 * XXX the packet was routed to the original client as if it was
-		 * XXX DSR and we might not be on the right iface!!! Should we
-		 * XXX try to reinject it to fix the routing?
-		 *
-		 * N.B. we also assume that we can fit in the MTU. Since it is
-		 * ICMP and even though Linux sends up to min ipv4 MTU, it is
+		 * N.B. we assume that we can fit in the MTU. Since it is ICMP
+		 * and even though Linux sends up to min ipv4 MTU, it is
 		 * unlikely that we are anywhere to close the MTU limit. If we
 		 * are, we need to fail anyway.
 		 */
-		if (CALI_F_TO_HEP && !CALI_F_DSR &&
-				ct_related && state->ip_proto == IPPROTO_ICMP &&
-				state->ct_result.tun_ret_ip) {
-			CALI_DEBUG("Returning related ICMP from host to tunnel\n");
-			state->ip_src = cali_host_ip();
-			state->ip_dst = state->ct_result.tun_ret_ip;
-			goto nat_encap;
+		if (ct_related && state->ip_proto == IPPROTO_ICMP
+				&& state->ct_result.tun_ret_ip
+				&& !CALI_F_DSR) {
+			if (dnat_return_should_encap()) {
+				CALI_DEBUG("Returning related ICMP from workload to tunnel\n");
+				state->ip_dst = state->ct_result.tun_ret_ip;
+				seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
+				goto nat_encap;
+			} else if (CALI_F_TO_HEP) {
+				/* Special case for ICMP error being returned by the host with the
+				 * backing workload into the tunnel back to the original host. It is
+				 * ICMP related and there is a return tunnel path. We need to change
+				 * both the source and destination at once.
+				 *
+				 * XXX the packet was routed to the original client as if it was XXX
+				 * DSR and we might not be on the right iface!!! Should we XXX try
+				 * to reinject it to fix the routing?
+				 */
+				CALI_DEBUG("Returning related ICMP from host to tunnel\n");
+				state->ip_src = HOST_IP;
+				state->ip_dst = state->ct_result.tun_ret_ip;
+				goto nat_encap;
+			}
 		}
 
 		state->dport = state->post_nat_dport;

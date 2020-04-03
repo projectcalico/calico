@@ -43,6 +43,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	options2 "github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/felix/bpf"
@@ -138,6 +139,7 @@ func withUDPConnectedRecvMsg() bpfTestOpt {
 const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 FELIX_0/32: local host
@@ -148,6 +150,7 @@ const expectedRouteDumpIPIP = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.1/32: local host
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 FELIX_0/32: local host
@@ -184,6 +187,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			calicoClient   client.Interface
 			cc             *Checker
 			externalClient *containers.Container
+			deadWorkload   *workload.Workload
 			bpfLog         *containers.Container
 			options        infrastructure.TopologyOptions
 			numericProto   uint8
@@ -488,6 +492,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
 					w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
 				}
+
+				// Create a workload on node 0 that does not run, but we can use it to set up paths
+				deadWorkload = addWorkload(false, 0, 2, 8057, nil)
 
 				// We will use this container to model an external client trying to connect into
 				// workloads on a host.  Create a route in the container for the workload CIDR.
@@ -1155,6 +1162,126 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						nodePortsTest(true)
 					})
 				}
+
+				Context("with icmp blocked", func() {
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+					)
+
+					testSvcName := "test-service"
+
+					BeforeEach(func() {
+						icmpProto := numorstring.ProtocolFromString("icmp")
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{"0.0.0.0/0"},
+								},
+							},
+						}
+						pol.Spec.Egress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{"0.0.0.0/0"},
+								},
+							},
+							{
+								Action:   "Deny",
+								Protocol: &icmpProto,
+							},
+						}
+						pol = updatePolicy(pol)
+					})
+
+					var tgtPort int
+					var tgtWorkload *workload.Workload
+
+					JustBeforeEach(func() {
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+						testSvc = k8sService(testSvcName, "10.101.0.10",
+							tgtWorkload, 80, tgtPort, int32(npPort), testOpts.protocol)
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+
+						// sync with NAT table being applied
+						natFtKey := nat.NewNATKey(net.ParseIP(felixes[1].IP), npPort, numericProto)
+						Eventually(func() bool {
+							m := dumpNATMap(felixes[1])
+							v, ok := m[natFtKey]
+							return ok && v.Count() > 0
+						}, 5*time.Second).Should(BeTrue())
+
+						// Sync with policy
+						cc.ExpectSome(w[1][0], w[0][0])
+						cc.CheckConnectivity()
+					})
+
+					Describe("with dead workload", func() {
+						BeforeEach(func() {
+							tgtPort = 8057
+							tgtWorkload = deadWorkload
+						})
+
+						It("should get host unreachable from nodepot via node1->node0 fwd", func() {
+							if testOpts.connTimeEnabled {
+								Skip("FIXME externalClient also does conntime balancing")
+							}
+
+							err := felixes[0].ExecMayFail("ip", "route", "add", "unreachable", deadWorkload.IP)
+							Expect(err).NotTo(HaveOccurred())
+
+							tcpdump := externalClient.AttachTCPDump("any")
+							tcpdump.SetLogEnabled(true)
+							tcpdump.AddMatcher("ICMP", regexp.MustCompile(
+								fmt.Sprintf("IP %s > %s: ICMP host %s unreachable",
+									felixes[1].IP, externalClient.IP, felixes[1].IP)))
+							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
+							cc.CheckConnectivity()
+
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).Should(BeNumerically(">", 0))
+						})
+					})
+
+					Describe("with wrong target port", func() {
+						// TCP would send RST instead of ICMP, it is enough to test one wa of
+						// triggering the ICMP message
+						if testOpts.protocol != "udp" {
+							return
+						}
+
+						BeforeEach(func() {
+							tgtPort = 0xdead
+							tgtWorkload = w[0][0]
+						})
+
+						It("should get port unreachable via node1->node0 fwd", func() {
+							if testOpts.connTimeEnabled {
+								Skip("FIXME externalClient also does conntime balancing")
+							}
+
+							tcpdump := externalClient.AttachTCPDump("any")
+							tcpdump.SetLogEnabled(true)
+							tcpdump.AddMatcher("ICMP", regexp.MustCompile(
+								fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+									felixes[1].IP, externalClient.IP, felixes[1].IP, npPort)))
+							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(tgtPort), "or", "icmp")
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
+							cc.CheckConnectivity()
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).Should(BeNumerically(">", 0))
+						})
+					})
+				})
 			})
 		})
 	})
