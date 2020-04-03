@@ -513,22 +513,23 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			goto out_lookup_fail;
 		}
 
+		CALI_CT_DEBUG("related lookup from %x:%d\n", be32_to_host(ctx->src), ctx->sport);
+		CALI_CT_DEBUG("related lookup to   %x:%d\n", be32_to_host(ctx->dst), ctx->dport);
+
+		srcLTDest = src_lt_dest(ctx->src, ctx->dst, ctx->sport, ctx->dport);
+		k = ct_make_key(srcLTDest, ctx->proto, ctx->src, ctx->dst, ctx->sport, ctx->dport);
+		v = bpf_map_lookup_elem(&cali_v4_ct, &k);
+		if (!v) {
+			CALI_CT_DEBUG("Miss on ICMP related\n");
+			goto out_lookup_fail;
+		}
+
 		ip_src = ctx->src;
 		ip_dst = ctx->dst;
 		sport = ctx->sport;
 		dport = ctx->dport;
 		tcp_header = ctx->tcp;
 
-		CALI_CT_DEBUG("related lookup from %x:%d\n", be32_to_host(ip_src), sport);
-		CALI_CT_DEBUG("related lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
-
-		srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
-		k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
-		v = bpf_map_lookup_elem(&cali_v4_ct, &k);
-		if (!v) {
-			CALI_CT_DEBUG("Miss on ICMP related\n");
-			goto out_lookup_fail;
-		}
 		related = true;
 	}
 
