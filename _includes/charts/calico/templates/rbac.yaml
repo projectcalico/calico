@@ -129,14 +129,12 @@ rules:
       # Used to discover Typhas.
       - get
 {{- end }}
-{{- if eq .Values.network "calico" }}
   # Pod CIDR auto-detection on kubeadm needs access to config maps.
   - apiGroups: [""]
     resources:
       - configmaps
     verbs:
       - get
-{{- end }}
   - apiGroups: [""]
     resources:
       - nodes/status
