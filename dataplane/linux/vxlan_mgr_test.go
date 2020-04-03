@@ -156,7 +156,7 @@ var _ = Describe("VXLANManager", func() {
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/26",
 			DstNodeName: "node2",
-			DstNodeIP:   "172.8.8.8",
+			DstNodeIp:   "172.8.8.8",
 			SameSubnet:  true,
 		})
 
@@ -165,7 +165,7 @@ var _ = Describe("VXLANManager", func() {
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.2/26",
 			DstNodeName: "node2",
-			DstNodeIP:   "172.8.8.8",
+			DstNodeIp:   "172.8.8.8",
 		})
 
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
@@ -191,7 +191,7 @@ var _ = Describe("VXLANManager", func() {
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/26",
 			DstNodeName: "node2",
-			DstNodeIP:   "172.8.8.8",
+			DstNodeIp:   "172.8.8.8",
 			SameSubnet:  true,
 		})
 

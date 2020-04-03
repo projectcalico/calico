@@ -484,14 +484,14 @@ enum IPPoolType {
 
 message RouteUpdate {
   RouteType type = 1;
-  IPPoolType ipPoolType = 2;
+  IPPoolType ip_pool_type = 2;
   string dst = 3;
   // The name of the node holding this destination, if this route targets a calico node.
-  string dstNodeName = 4;
+  string dst_node_name = 4;
   // IP of the node holding this destination.
-  string dstNodeIP = 5;
-  bool sameSubnet = 7;
-  bool natOutgoing = 8;
+  string dst_node_ip = 5;
+  bool same_subnet = 7;
+  bool nat_outgoing = 8;
 }
 
 message RouteRemove {

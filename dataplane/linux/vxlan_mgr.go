@@ -275,7 +275,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 			}
 
 			if r.GetSameSubnet() {
-				if r.DstNodeIP == "" {
+				if r.DstNodeIp == "" {
 					logCtx.Debug("Can't program non-encap route since host IP is not known.")
 					continue
 				}
@@ -283,7 +283,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 				defaultRoute := routetable.Target{
 					Type: routetable.TargetTypeNoEncap,
 					CIDR: cidr,
-					GW:   ip.FromString(r.DstNodeIP),
+					GW:   ip.FromString(r.DstNodeIp),
 				}
 
 				noEncapRoutes = append(noEncapRoutes, defaultRoute)

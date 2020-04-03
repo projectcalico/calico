@@ -957,7 +957,7 @@ var vxlanWithBlock = empty.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.0/29",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
 )
@@ -1025,7 +1025,7 @@ var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.0/29",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
 	proto.RouteUpdate{
@@ -1033,7 +1033,7 @@ var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.2/32",
 		DstNodeName: remoteHostname2,
-		DstNodeIP:   remoteHost2IP.String(),
+		DstNodeIp:   remoteHost2IP.String(),
 		NatOutgoing: true,
 	},
 )
@@ -1076,7 +1076,7 @@ var vxlanWithBlockAndDifferentNodeIP = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.0/29",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHost2IP.String(),
+		DstNodeIp:   remoteHost2IP.String(),
 		NatOutgoing: true,
 	},
 )
@@ -1094,7 +1094,7 @@ var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.0/29",
 		DstNodeName: remoteHostname2,
-		DstNodeIP:   remoteHost2IP.String(),
+		DstNodeIp:   remoteHost2IP.String(),
 		NatOutgoing: true,
 	},
 	proto.RouteUpdate{
@@ -1102,7 +1102,7 @@ var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.2/32",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
 ).withName("VXLAN owner switch")
@@ -1146,7 +1146,7 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.0.0/29",
 		DstNodeName: localHostname,
-		DstNodeIP:   localHostIP.String(),
+		DstNodeIp:   localHostIP.String(),
 		NatOutgoing: true,
 	},
 	proto.RouteUpdate{
@@ -1154,7 +1154,7 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.0.2/32",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
 ).withName("VXLAN local with borrows")
@@ -1198,7 +1198,7 @@ var vxlanLocalBlockWithBorrowsCrossSubnetNodeRes = vxlanLocalBlockWithBorrowsNod
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.0.0/29",
 		DstNodeName: localHostname,
-		DstNodeIP:   localHostIP.String(),
+		DstNodeIp:   localHostIP.String(),
 		SameSubnet:  true, // cross subnet.
 	},
 	proto.RouteUpdate{
@@ -1206,7 +1206,7 @@ var vxlanLocalBlockWithBorrowsCrossSubnetNodeRes = vxlanLocalBlockWithBorrowsNod
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.0.2/32",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		SameSubnet:  true, // cross subnet.
 	},
 ).withName("VXLAN local with borrows cross subnet (node resources)")
@@ -1243,7 +1243,7 @@ var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrow
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.0.0/29",
 		DstNodeName: localHostname,
-		DstNodeIP:   localHostIP.String(),
+		DstNodeIp:   localHostIP.String(),
 		SameSubnet:  true, // cross subnet.
 	},
 	proto.RouteUpdate{
@@ -1251,7 +1251,7 @@ var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrow
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.0.2/32",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		SameSubnet:  false, // subnets don't match.
 	},
 ).withName("VXLAN cross subnet different subnet (node resources)")
@@ -1282,7 +1282,7 @@ var vxlanWithBlockAndBorrowsAndMissingFirstVTEP = vxlanWithBlockAndBorrows.withK
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.2/32",
 		DstNodeName: remoteHostname2,
-		DstNodeIP:   remoteHost2IP.String(),
+		DstNodeIp:   remoteHost2IP.String(),
 		NatOutgoing: true,
 	},
 )
@@ -1299,7 +1299,7 @@ var vxlanToIPIPSwitch = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_IPIP,
 		Dst:         "10.0.1.0/29",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 	},
 )
 
@@ -1321,7 +1321,7 @@ var vxlanHostIPDelete = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.0/29",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   "",
+		DstNodeIp:   "",
 		NatOutgoing: true,
 	},
 ).withVTEPs()
@@ -1353,7 +1353,7 @@ var vxlanSlash32 = empty.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.0.0/32",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
 )
@@ -1395,7 +1395,7 @@ var vxlanSlash32NoPool = empty.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_NONE,
 		Dst:         "10.0.0.0/32",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 	},
 )
 
@@ -1423,7 +1423,7 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_VXLAN,
 		Dst:         "10.0.1.0/29",
 		DstNodeName: remoteHostname,
-		DstNodeIP:   remoteHostIP.String(),
+		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
 )

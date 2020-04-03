@@ -466,7 +466,7 @@ func (c *L3RouteResolver) flush() {
 			}
 			if ri.Block.NodeName != "" {
 				rt.DstNodeName = ri.Block.NodeName
-				rt.DstNodeIP = c.nodeNameToIPAddr[rt.DstNodeName]
+				rt.DstNodeIp = c.nodeNameToIPAddr[rt.DstNodeName]
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local workload route.")
 					rt.Type = proto.RouteType_LOCAL_WORKLOAD
