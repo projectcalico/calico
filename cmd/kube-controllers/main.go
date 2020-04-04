@@ -116,8 +116,7 @@ func main() {
 	controllerCtrl := &controllerControl{
 		ctx:         ctx,
 		controllers: make(map[string]controller.Controller),
-		//config:           cfg,
-		stop: stop,
+		stop:        stop,
 	}
 
 	var runCfg config.RunConfig

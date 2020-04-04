@@ -59,7 +59,6 @@ var _ = Describe("KubeControllersConfiguration tests", func() {
 		var err error
 		kconfigFile, err = ioutil.TempFile("", "ginkgo-nodecontroller")
 		Expect(err).NotTo(HaveOccurred())
-		//defer os.Remove(kconfigFile.Name())
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
 		_, err = kconfigFile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())

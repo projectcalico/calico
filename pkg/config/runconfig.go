@@ -109,7 +109,7 @@ func (r *RunConfigController) ConfigChan() <-chan RunConfig {
 }
 
 // NewRunConfigController creates the RunConfigController.  The controller connects
-// to the datastore to get the KubeControllerConfiguration resource, merges it with
+// to the datastore to get the KubeControllersConfiguration resource, merges it with
 // the config from environment variables, and emits RunConfig objects over a channel
 // to push config out to the rest of the controllers.  It also handles setting the
 // KubeControllersConfiguration.Status with the current running configuration
@@ -222,6 +222,7 @@ MAINLOOP:
 					// Some non-default object got into the datastore --- calicoctl should
 					// prevent this, but an admin with datastore access might not know better.
 					// Ignore it
+					log.WithField("name", newKCC.Name).Warning("unexpected KubeControllersConfiguration object")
 					continue
 				}
 				snapshot = newKCC
