@@ -318,7 +318,7 @@ var _ = Describe("Config", func() {
 				}
 				Expect(update).To(BeFalse())
 				close(done)
-			})
+			}, 2)
 
 			It("should handle watch closed by remote", func(done Done) {
 				// initial config
