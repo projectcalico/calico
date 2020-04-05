@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -248,7 +248,7 @@ var _ = Describe("Test the NetworkPolicy update processor + conversion", func() 
 	DescribeTable("NetworkPolicy update processor + conversion tests",
 		func(np networkingv1.NetworkPolicy, expected []*model.KVPair) {
 			// First, convert the NetworkPolicy using the k8s conversion logic.
-			c := conversion.Converter{}
+			c := conversion.NewConverter()
 			kvp, err := c.K8sNetworkPolicyToCalico(&np)
 			Expect(err).NotTo(HaveOccurred())
 
