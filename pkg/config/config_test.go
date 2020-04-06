@@ -277,6 +277,9 @@ var _ = Describe("Config", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
+				// Wait for the watch
+				Eventually(func() int { return m.watchcount }).Should(Equal(1))
+
 				// send an update
 				knew := v3.NewKubeControllersConfiguration()
 				knew.Name = "default"
@@ -298,6 +301,9 @@ var _ = Describe("Config", func() {
 			It("should not send new update when Spec is unchanged", func(done Done) {
 				// initial config
 				<-ctrl.ConfigChan()
+
+				// Wait for the watch
+				Eventually(func() int { return m.watchcount }).Should(Equal(1))
 
 				// send an update, containing the same thing that was created
 				m.watchchan <- watch.Event{
@@ -324,6 +330,9 @@ var _ = Describe("Config", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
+				// Wait for the watch
+				Eventually(func() int { return m.watchcount }).Should(Equal(1))
+
 				// before terminating, update get to succeed the second time
 				// around
 				m.geterror = nil
@@ -347,6 +356,9 @@ var _ = Describe("Config", func() {
 					update = true
 				}
 				Expect(update).To(BeFalse())
+
+				// Wait for the second watch
+				Eventually(func() int { return m.watchcount }).Should(Equal(2))
 
 				// send an update on the new watch, with changed spec
 				knew := v3.NewKubeControllersConfiguration()
@@ -372,6 +384,9 @@ var _ = Describe("Config", func() {
 				// initial config
 				<-ctrl.ConfigChan()
 
+				// Wait for the watch
+				Eventually(func() int { return m.watchcount }).Should(Equal(1))
+
 				// before terminating, update get to succeed the second time
 				// around
 				m.geterror = nil
@@ -396,6 +411,9 @@ var _ = Describe("Config", func() {
 					update = true
 				}
 				Expect(update).To(BeFalse())
+
+				// Wait for the watch
+				Eventually(func() int { return m.watchcount }).Should(Equal(2))
 
 				// send an update on the new watch, with changed spec
 				knew := v3.NewKubeControllersConfiguration()
@@ -689,11 +707,12 @@ var _ = Describe("Config", func() {
 })
 
 type mockKCC struct {
-	get       *v3.KubeControllersConfiguration
-	geterror  error
-	update    *v3.KubeControllersConfiguration
-	create    *v3.KubeControllersConfiguration
-	watchchan chan watch.Event
+	get        *v3.KubeControllersConfiguration
+	geterror   error
+	update     *v3.KubeControllersConfiguration
+	create     *v3.KubeControllersConfiguration
+	watchchan  chan watch.Event
+	watchcount int
 }
 
 func (m *mockKCC) Create(ctx context.Context, res *v3.KubeControllersConfiguration, opts options.SetOptions) (*v3.KubeControllersConfiguration, error) {
@@ -720,6 +739,7 @@ func (m *mockKCC) List(ctx context.Context, opts options.ListOptions) (*v3.KubeC
 
 func (m *mockKCC) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	m.watchchan = make(chan watch.Event)
+	m.watchcount++
 	return &mockWatch{r: m.watchchan}, nil
 }
 
