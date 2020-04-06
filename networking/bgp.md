@@ -50,7 +50,7 @@ For a deeper look at common on-premises deployment models, see [Calico over IP F
 
 ### Before you begin...
 
-[calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install) must be installed and configured.
+[calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install) must be installed and configured.
 
 ### How to
 
