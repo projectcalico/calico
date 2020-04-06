@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,30 +81,29 @@ func main() {
 	log.AddHook(&logutils.ContextHook{})
 
 	// Attempt to load configuration.
-	config := new(config.Config)
-	if err := config.Parse(); err != nil {
+	cfg := new(config.Config)
+	if err := cfg.Parse(); err != nil {
 		log.WithError(err).Fatal("Failed to parse config")
 	}
-	log.WithField("config", config).Info("Loaded configuration from environment")
+	log.WithField("config", cfg).Info("Loaded configuration from environment")
 
 	// Set the log level based on the loaded configuration.
-	logLevel, err := log.ParseLevel(config.LogLevel)
+	logLevel, err := log.ParseLevel(cfg.LogLevel)
 	if err != nil {
 		logLevel = log.InfoLevel
 	}
 	log.SetLevel(logLevel)
 
 	// Build clients to be used by the controllers.
-	k8sClientset, calicoClient, err := getClients(config.Kubeconfig)
+	k8sClientset, calicoClient, err := getClients(cfg.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
 	}
 
 	stop := make(chan struct{})
-	defer close(stop)
 
 	// Create the context.
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 
 	log.Info("Ensuring Calico datastore is initialized")
 	initCtx, cancelInit := context.WithTimeout(ctx, 10*time.Second)
@@ -115,77 +114,71 @@ func main() {
 	}
 
 	controllerCtrl := &controllerControl{
-		ctx:              ctx,
-		controllerStates: make(map[string]*controllerState),
-		config:           config,
-		stop:             stop,
+		ctx:         ctx,
+		controllers: make(map[string]controller.Controller),
+		stop:        stop,
+	}
+
+	var runCfg config.RunConfig
+	// flannelmigration doesn't use the datastore config API
+	v, ok := os.LookupEnv(config.EnvEnabledControllers)
+	if ok && strings.Contains(v, "flannelmigration") {
+		if strings.Trim(v, " ,") != "flannelmigration" {
+			log.WithField(config.EnvEnabledControllers, v).Fatal("flannelmigration must be the only controller running")
+		}
+		// Attempt to load Flannel configuration.
+		flannelConfig := new(flannelmigration.Config)
+		if err := flannelConfig.Parse(); err != nil {
+			log.WithError(err).Fatal("Failed to parse Flannel config")
+		}
+		log.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
+
+		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, calicoClient, flannelConfig)
+		controllerCtrl.controllers["FlannelMigration"] = flannelMigrationController
+
+		// Set some global defaults for flannelmigration
+		// Note that we now ignore the HEALTH_ENABLED environment variable in the case of flannel migration
+		runCfg.HealthEnabled = true
+		runCfg.LogLevelScreen = logLevel
+
+		// this channel will never receive, and thus flannelmigration will never
+		// restart due to a config change.
+		controllerCtrl.restart = make(chan config.RunConfig)
+	} else {
+		log.Info("Getting initial config snapshot from datastore")
+		cCtrlr := config.NewRunConfigController(ctx, *cfg, calicoClient.KubeControllersConfiguration())
+		runCfg = <-cCtrlr.ConfigChan()
+		log.Info("Got initial config snapshot")
+
+		// any subsequent changes trigger a restart
+		controllerCtrl.restart = cCtrlr.ConfigChan()
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, calicoClient)
 	}
 
 	// Create the status file. We will only update it if we have healthchecks enabled.
 	s := status.New(status.DefaultStatusFile)
 
-	for _, controllerType := range strings.Split(config.EnabledControllers, ",") {
-		switch controllerType {
-		case "workloadendpoint":
-			podController := pod.NewPodController(ctx, k8sClientset, calicoClient)
-			controllerCtrl.controllerStates["Pod"] = &controllerState{
-				controller:  podController,
-				threadiness: config.WorkloadEndpointWorkers,
-			}
-		case "profile", "namespace":
-			namespaceController := namespace.NewNamespaceController(ctx, k8sClientset, calicoClient)
-			controllerCtrl.controllerStates["Namespace"] = &controllerState{
-				controller:  namespaceController,
-				threadiness: config.ProfileWorkers,
-			}
-		case "policy":
-			policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient)
-			controllerCtrl.controllerStates["NetworkPolicy"] = &controllerState{
-				controller:  policyController,
-				threadiness: config.PolicyWorkers,
-			}
-		case "node":
-			nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, config)
-			controllerCtrl.controllerStates["Node"] = &controllerState{
-				controller:  nodeController,
-				threadiness: config.NodeWorkers,
-			}
-		case "serviceaccount":
-			serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient)
-			controllerCtrl.controllerStates["ServiceAccount"] = &controllerState{
-				controller:  serviceAccountController,
-				threadiness: config.ProfileWorkers,
-			}
-		case "flannelmigration":
-			// Attempt to load Flannel configuration.
-			flannelConfig := new(flannelmigration.Config)
-			if err := flannelConfig.Parse(); err != nil {
-				log.WithError(err).Fatal("Failed to parse Flannel config")
-			}
-			log.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
-
-			flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, calicoClient, flannelConfig)
-			controllerCtrl.controllerStates["FlannelMigration"] = &controllerState{
-				controller: flannelMigrationController,
-			}
-		default:
-			log.Fatalf("Invalid controller '%s' provided.", controllerType)
-		}
-	}
-
-	if config.DatastoreType == "etcdv3" {
+	if cfg.DatastoreType == "etcdv3" {
 		// If configured to do so, start an etcdv3 compaction.
-		go startCompactor(ctx, config)
+		go startCompactor(ctx, runCfg.EtcdV3CompactionPeriod)
 	}
 
 	// Run the health checks on a separate goroutine.
-	if config.HealthEnabled {
+	if runCfg.HealthEnabled {
 		log.Info("Starting status report routine")
 		go runHealthChecks(ctx, s, k8sClientset, calicoClient)
 	}
 
-	// Run the controllers. This runs indefinitely.
+	// Run the controllers. This runs until a config change triggers a restart
 	controllerCtrl.RunControllers()
+
+	// Shut down compaction, healthChecks, and configController
+	cancel()
+
+	// TODO: it would be nice here to wait until everything shuts down cleanly
+	//       but many of our controllers are based on cache.ResourceCache which
+	//       runs forever once it is started.  It needs to be enhanced to respect
+	//       the stop channel passed to the controllers.
 }
 
 // Run the controller health checks.
@@ -193,8 +186,15 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 	s.SetReady("CalicoDatastore", false, "initialized to false")
 	s.SetReady("KubeAPIServer", false, "initialized to false")
 
-	// Loop forever and perform healthchecks.
+	// Loop until context expires and perform healthchecks.
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			// carry on
+		}
+
 		// skip healthchecks if configured
 		// Datastore HealthCheck
 		healthCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -246,11 +246,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 }
 
 // Starts an etcdv3 compaction goroutine with the given config.
-func startCompactor(ctx context.Context, config *config.Config) {
-	interval, err := time.ParseDuration(config.CompactionPeriod)
-	if err != nil {
-		log.WithError(err).Fatal("Invalid compact interval")
-	}
+func startCompactor(ctx context.Context, interval time.Duration) {
 
 	if interval.Nanoseconds() == 0 {
 		log.Info("Disabling periodic etcdv3 compaction")
@@ -259,6 +255,12 @@ func startCompactor(ctx context.Context, config *config.Config) {
 
 	// Kick off a periodic compaction of etcd, retry until success.
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			// carry on
+		}
 		etcdClient, err := newEtcdV3Client()
 		if err != nil {
 			log.WithError(err).Error("Failed to start etcd compaction routine, retry in 1m")
@@ -356,23 +358,50 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 
 // Object for keeping track of controller states and statuses.
 type controllerControl struct {
-	ctx              context.Context
-	controllerStates map[string]*controllerState
-	config           *config.Config
-	stop             chan struct{}
+	ctx         context.Context
+	controllers map[string]controller.Controller
+	stop        chan struct{}
+	restart     <-chan config.RunConfig
 }
 
-// Runs all the controllers and blocks indefinitely.
-func (cc *controllerControl) RunControllers() {
-	for controllerType, cs := range cc.controllerStates {
-		log.WithField("ControllerType", controllerType).Info("Starting controller")
-		go cs.controller.Run(cs.threadiness, cc.config.ReconcilerPeriod, cc.stop)
+func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {
+	if cfg.Controllers.WorkloadEndpoint != nil {
+		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint)
+		cc.controllers["Pod"] = podController
 	}
-	select {}
+
+	if cfg.Controllers.Namespace != nil {
+		namespaceController := namespace.NewNamespaceController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Namespace)
+		cc.controllers["Namespace"] = namespaceController
+	}
+	if cfg.Controllers.Policy != nil {
+		policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Policy)
+		cc.controllers["NetworkPolicy"] = policyController
+	}
+	if cfg.Controllers.Node != nil {
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node)
+		cc.controllers["Node"] = nodeController
+	}
+	if cfg.Controllers.ServiceAccount != nil {
+		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
+		cc.controllers["ServiceAccount"] = serviceAccountController
+	}
 }
 
-// Object for keeping track of Controller information.
-type controllerState struct {
-	controller  controller.Controller
-	threadiness int
+// Runs all the controllers and blocks until we get a restart.
+func (cc *controllerControl) RunControllers() {
+	for controllerType, c := range cc.controllers {
+		log.WithField("ControllerType", controllerType).Info("Starting controller")
+		go c.Run(cc.stop)
+	}
+
+	// Block until we are cancelled, or get a new configuration and need to restart
+	select {
+	case <-cc.ctx.Done():
+		log.Warn("context cancelled")
+	case <-cc.restart:
+		log.Warn("configuration changed; restarting")
+		// TODO: handle this more gracefully, like tearing down old controllers and starting new ones
+	}
+	close(cc.stop)
 }

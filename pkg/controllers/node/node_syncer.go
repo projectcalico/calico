@@ -63,7 +63,7 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 		case bapi.UpdateTypeKVUpdated:
 			n := upd.KVPair.Value.(*apiv3.Node)
 
-			if c.config.SyncNodeLabels && c.config.DatastoreType != "kubernetes" {
+			if c.config.SyncLabels {
 				if kn := getK8sNodeName(*n); kn != "" {
 					// Create a mapping from Kubernetes node -> Calico node.
 					logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
@@ -85,7 +85,7 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 				}
 			}
 
-			if c.config.AutoHostEndpoints == "enabled" {
+			if c.config.AutoHostEndpoints {
 				// Cache all updated nodes.
 				c.nodeCache[n.Name] = n
 
@@ -106,7 +106,7 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 			nodeName := upd.KVPair.Key.(model.ResourceKey).Name
 
 			// Try to perform unmapping based on resource name (calico node name).
-			if c.config.SyncNodeLabels && c.config.DatastoreType != "kubernetes" {
+			if c.config.SyncLabels {
 				for kn, cn := range c.nodemapper {
 					if cn == nodeName {
 						// Remove it from node map.
@@ -119,7 +119,7 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 				}
 			}
 
-			if c.config.AutoHostEndpoints == "enabled" && c.syncStatus == bapi.InSync {
+			if c.config.AutoHostEndpoints && c.syncStatus == bapi.InSync {
 				hepName := c.generateAutoHostendpointName(nodeName)
 				err := c.deleteHostendpointWithRetries(hepName)
 				if err != nil {

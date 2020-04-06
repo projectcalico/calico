@@ -62,13 +62,13 @@ type NodeController struct {
 	nodemapper   map[string]string
 	nodemapLock  sync.Mutex
 	syncer       bapi.Syncer
-	config       *config.Config
+	config       config.NodeControllerConfig
 	nodeCache    map[string]*api.Node
 	syncStatus   bapi.SyncStatus
 }
 
 // NewNodeController Constructor for NodeController
-func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, cfg *config.Config) controller.Controller {
+func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, cfg config.NodeControllerConfig) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
 		calicoClient: calicoClient,
@@ -95,8 +95,9 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 			kick(nc.schedule)
 		}}
 
-	// Determine if we should sync node labels.
-	if cfg.SyncNodeLabels && cfg.DatastoreType != "kubernetes" {
+	// Note that the configuration code has already handled disabling this if
+	// we are in KDD mode.
+	if cfg.SyncLabels {
 		// Add handlers for node add/update events from k8s.
 		handlers.AddFunc = func(obj interface{}) {
 			nc.syncNodeLabels(obj.(*v1.Node))
@@ -130,9 +131,8 @@ func getK8sNodeName(calicoNode api.Node) string {
 }
 
 // Run starts the node controller. It does start-of-day preparation
-// and then launches worker threads. We ignore reconcilerPeriod and threadiness
-// as this controller does not use a cache and runs only one worker thread.
-func (c *NodeController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+// and then launches worker threads.
+func (c *NodeController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	log.Info("Starting Node controller")
@@ -184,7 +184,7 @@ func (c *NodeController) syncDelete() error {
 	// even if this IPAM sync fails we shouldn't block cleaning up the node object. If we do encounter an error,
 	// we'll return it after we're done.
 	err := c.syncIPAMCleanup()
-	if c.config.DatastoreType != "kubernetes" {
+	if c.config.DeleteNodes {
 		// If we're running in etcd mode, then we also need to delete the node resource.
 		// We don't need this for KDD mode, since the Calico Node resource is backed
 		// directly by the Kubernetes Node resource, so their lifecycle is identical.

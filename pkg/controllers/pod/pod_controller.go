@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	rcache "github.com/projectcalico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
 
@@ -51,10 +52,11 @@ type podController struct {
 	calicoClient          client.Interface
 	workloadEndpointCache *WorkloadEndpointCache
 	ctx                   context.Context
+	cfg                   config.GenericControllerConfig
 }
 
 // NewPodController returns a controller which manages Pod objects.
-func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
+func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
 	podConverter := converter.NewPodConverter()
 
 	// Function returns map of key->WorkloadEndpointData from the Calico datastore.
@@ -182,11 +184,11 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 		},
 	}, cache.Indexers{})
 
-	return &podController{informer, resourceCache, c, &workloadEndpointCache, ctx}
+	return &podController{informer, resourceCache, c, &workloadEndpointCache, ctx, cfg}
 }
 
 // Run starts the controller.
-func (c *podController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+func (c *podController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
@@ -210,10 +212,10 @@ func (c *podController) Run(threadiness int, reconcilerPeriod string, stopCh cha
 	log.Debug("Finished syncing with Kubernetes API (Pods)")
 
 	// Start Calico cache.
-	c.resourceCache.Run(reconcilerPeriod)
+	c.resourceCache.Run(c.cfg.ReconcilerPeriod.String())
 
 	// Start a number of worker threads to read from the queue.
-	for i := 0; i < threadiness; i++ {
+	for i := 0; i < c.cfg.NumberOfWorkers; i++ {
 		go c.runWorker()
 	}
 	log.Info("Pod/WorkloadEndpoint controller is now running")

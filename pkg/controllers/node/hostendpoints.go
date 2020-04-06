@@ -35,7 +35,7 @@ func (c *NodeController) deleteAutoHostendpointsWithoutNodes(heps map[string]api
 	for _, hep := range heps {
 		_, hepNodeExists := c.nodeCache[hep.Spec.Node]
 
-		if !hepNodeExists || c.config.AutoHostEndpoints != "enabled" {
+		if !hepNodeExists || !c.config.AutoHostEndpoints {
 			err := c.deleteHostendpoint(hep.Name)
 			if err != nil {
 				log.WithError(err).Warnf("failed to delete hostendpoint %q", hep.Name)
@@ -78,7 +78,7 @@ func (c *NodeController) syncAllAutoHostendpoints() error {
 
 		// For every Calico node in our cache, create/update the auto hostendpoint
 		// for it.
-		if c.config.AutoHostEndpoints == "enabled" {
+		if c.config.AutoHostEndpoints {
 			if err := c.createUpdateAutohostendpoints(); err != nil {
 				log.WithError(err).Warn("failed to sync hostendpoint for nodes")
 				time.Sleep(retrySleepTime)
