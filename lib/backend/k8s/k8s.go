@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -378,6 +379,8 @@ func (c *KubeClient) Clean() error {
 	return nil
 }
 
+var addToSchemeOnce sync.Once
+
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
 func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	// Generate config using the base config.
@@ -394,47 +397,55 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 		return nil, err
 	}
 
-	// We also need to register resources.
-	schemeBuilder := runtime.NewSchemeBuilder(
-		func(scheme *runtime.Scheme) error {
-			scheme.AddKnownTypes(
-				*cfg.GroupVersion,
-				&apiv3.FelixConfiguration{},
-				&apiv3.FelixConfigurationList{},
-				&apiv3.IPPool{},
-				&apiv3.IPPoolList{},
-				&apiv3.BGPPeer{},
-				&apiv3.BGPPeerList{},
-				&apiv3.BGPConfiguration{},
-				&apiv3.BGPConfigurationList{},
-				&apiv3.ClusterInformation{},
-				&apiv3.ClusterInformationList{},
-				&apiv3.GlobalNetworkSet{},
-				&apiv3.GlobalNetworkSetList{},
-				&apiv3.GlobalNetworkPolicy{},
-				&apiv3.GlobalNetworkPolicyList{},
-				&apiv3.NetworkPolicy{},
-				&apiv3.NetworkPolicyList{},
-				&apiv3.NetworkSet{},
-				&apiv3.NetworkSetList{},
-				&apiv3.HostEndpoint{},
-				&apiv3.HostEndpointList{},
-				&apiv3.BlockAffinity{},
-				&apiv3.BlockAffinityList{},
-				&apiv3.IPAMBlock{},
-				&apiv3.IPAMBlockList{},
-				&apiv3.IPAMHandle{},
-				&apiv3.IPAMHandleList{},
-				&apiv3.IPAMConfig{},
-				&apiv3.IPAMConfigList{},
-				&apiv3.KubeControllersConfiguration{},
-				&apiv3.KubeControllersConfigurationList{},
-			)
-			return nil
-		})
+	// We're operating on the pkg level scheme.Scheme, so make sure that multiple
+	// calls to this function don't do this simultaneously, which can cause crashes
+	// due to concurrent access to underlying maps.  For good measure, use a once
+	// since this really only needs to happen one time.
+	addToSchemeOnce.Do(func() {
+		// We also need to register resources.
+		schemeBuilder := runtime.NewSchemeBuilder(
+			func(scheme *runtime.Scheme) error {
+				scheme.AddKnownTypes(
+					*cfg.GroupVersion,
+					&apiv3.FelixConfiguration{},
+					&apiv3.FelixConfigurationList{},
+					&apiv3.IPPool{},
+					&apiv3.IPPoolList{},
+					&apiv3.BGPPeer{},
+					&apiv3.BGPPeerList{},
+					&apiv3.BGPConfiguration{},
+					&apiv3.BGPConfigurationList{},
+					&apiv3.ClusterInformation{},
+					&apiv3.ClusterInformationList{},
+					&apiv3.GlobalNetworkSet{},
+					&apiv3.GlobalNetworkSetList{},
+					&apiv3.GlobalNetworkPolicy{},
+					&apiv3.GlobalNetworkPolicyList{},
+					&apiv3.NetworkPolicy{},
+					&apiv3.NetworkPolicyList{},
+					&apiv3.NetworkSet{},
+					&apiv3.NetworkSetList{},
+					&apiv3.HostEndpoint{},
+					&apiv3.HostEndpointList{},
+					&apiv3.BlockAffinity{},
+					&apiv3.BlockAffinityList{},
+					&apiv3.IPAMBlock{},
+					&apiv3.IPAMBlockList{},
+					&apiv3.IPAMHandle{},
+					&apiv3.IPAMHandleList{},
+					&apiv3.IPAMConfig{},
+					&apiv3.IPAMConfigList{},
+					&apiv3.KubeControllersConfiguration{},
+					&apiv3.KubeControllersConfigurationList{},
+				)
+				return nil
+			})
 
-	schemeBuilder.AddToScheme(scheme.Scheme)
-
+		err := schemeBuilder.AddToScheme(scheme.Scheme)
+		if err != nil {
+			log.WithError(err).Fatal("failed to add calico resources to scheme")
+		}
+	})
 	return cli, nil
 }
 
