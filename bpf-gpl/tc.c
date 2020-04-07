@@ -1032,7 +1032,7 @@ nat_encap:
 		goto  deny;
 	}
 
-	state->sport = state->dport = host_to_be16(CALI_VXLAN_PORT);
+	state->sport = state->dport = CALI_VXLAN_PORT;
 	state->ip_proto = IPPROTO_UDP;
 
 	if (CALI_F_INGRESS) {
