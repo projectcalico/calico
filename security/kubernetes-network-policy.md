@@ -174,7 +174,7 @@ metadata:
 spec:
   podSelector:
     matchLabels: {}
-  types:
+  policyTypes:
   - Ingress
   - Egress
 ```
