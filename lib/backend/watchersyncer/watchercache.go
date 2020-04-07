@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -240,12 +240,18 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 		w, err := wc.client.Watch(ctx, wc.resourceType.ListInterface, wc.currentWatchRevision)
 		if err != nil {
 			// Failed to create the watcher - we'll need to retry.
-			if _, ok := err.(cerrors.ErrorOperationNotSupported); ok {
-				// Watch is not supported on this resource type, so pause for the watch poll interval.
+			switch err.(type) {
+			case cerrors.ErrorOperationNotSupported, cerrors.ErrorResourceDoesNotExist:
+				// Watch is not supported on this resource type, either because the type fundamentally
+				// doesn't support it, or because there are no resources to watch yet (and Kubernetes won't
+				// let us watch if there are no resources yet). Pause for the watch poll interval.
 				// This loop effectively becomes a poll loop for this resource type.
 				wc.logger.Debug("Watch operation not supported")
 				select {
 				case <-time.After(WatchPollInterval):
+					// Make sure we force a re-list of the resource even if the watch previously succeeded
+					// but now cannot.
+					performFullResync = true
 					continue
 				case <-ctx.Done():
 					wc.logger.Debug("Context is done. Returning")
