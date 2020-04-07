@@ -35,23 +35,24 @@ func TestJumpMapCleanup(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
-	secName := tc.SectionName(tc.EpTypeWorkload, tc.ToEp)
-	prog := tc.ProgFilename(tc.EpTypeWorkload, tc.ToEp, false, true, true, "DEBUG")
+	ap := tc.AttachPoint{
+		Type:     tc.EpTypeWorkload,
+		ToOrFrom: tc.ToEp,
+		Hook:     tc.HookIngress,
+		DSR:      true,
+		LogLevel: "DEBUG",
+	}
 
-	t.Run(prog, func(t *testing.T) {
+	t.Run(ap.ProgramName(), func(t *testing.T) {
 		RegisterTestingT(t)
-		log.Debugf("Testing %v in %v", secName, prog)
 
 		vethName, veth := createVeth()
 		defer deleteLink(veth)
 
 		tc.EnsureQdisc(vethName)
-		ap := tc.AttachPoint{
-			Section:  secName,
-			Hook:     tc.HookIngress,
-			Iface:    vethName,
-			Filename: prog,
-		}
+		ap.Iface = vethName
+
+		log.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
 
 		// Start with a clean base state in case another test left something behind.
 		t.Log("Doing initial clean up")

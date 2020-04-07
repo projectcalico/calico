@@ -41,11 +41,15 @@ import (
 )
 
 type AttachPoint struct {
-	Section  string
-	Hook     Hook
-	Iface    string
-	Filename string
-	IP       net.IP
+	Type       EndpointType
+	ToOrFrom   ToOrFromEp
+	Hook       Hook
+	Iface      string
+	LogLevel   string
+	IP         net.IP
+	FIB        bool
+	ToHostDrop bool
+	DSR        bool
 }
 
 var tcLock sync.Mutex
@@ -86,8 +90,9 @@ func (ap AttachPoint) AttachProgram() error {
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	preCompiledBinary := path.Join(bpf.ObjectDir, ap.Filename)
-	tempBinary := path.Join(tempDir, ap.Filename)
+	filename := ap.FileName()
+	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
+	tempBinary := path.Join(tempDir, filename)
 
 	exeData, err := ioutil.ReadFile(preCompiledBinary)
 	if err != nil {
@@ -120,7 +125,7 @@ func (ap AttachPoint) AttachProgram() error {
 		"filter", "add", "dev", ap.Iface,
 		string(ap.Hook),
 		"bpf", "da", "obj", tempBinary,
-		"sec", ap.Section)
+		"sec", SectionName(ap.Type, ap.ToOrFrom))
 
 	out, err := tcCmd.Output()
 	if err != nil {
@@ -143,6 +148,16 @@ func (ap AttachPoint) AttachProgram() error {
 	}
 
 	return nil
+}
+
+// ProgramName returnt the name of the program associated with this AttachPoint
+func (ap AttachPoint) ProgramName() string {
+	return SectionName(ap.Type, ap.ToOrFrom)
+}
+
+// FileName returnthe file the AttachPoint will load the program from
+func (ap AttachPoint) FileName() string {
+	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel)
 }
 
 func repinJumpMaps() {

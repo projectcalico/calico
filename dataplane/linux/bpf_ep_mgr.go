@@ -548,9 +548,11 @@ func FindJumpMap(ap tc.AttachPoint) (bpf.MapFD, error) {
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to find TC filter for interface "+ap.Iface)
 	}
+
+	progName := ap.ProgramName()
 	for _, line := range bytes.Split(out, []byte("\n")) {
 		line := string(line)
-		if strings.Contains(line, ap.Section) {
+		if strings.Contains(line, progName) {
 			re := regexp.MustCompile(`id (\d+)`)
 			m := re.FindStringSubmatch(line)
 			if len(m) > 0 {
@@ -641,10 +643,13 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(endpointType tc.EndpointType
 		toOrFrom = tc.ToEp
 	}
 
-	ap.Section = tc.SectionName(endpointType, toOrFrom)
 	ap.Iface = ifaceName
-	ap.Filename = tc.ProgFilename(endpointType, toOrFrom, m.epToHostDrop, m.fibLookupEnabled,
-		m.dsrEnabled, m.bpfLogLevel)
+	ap.Type = endpointType
+	ap.ToOrFrom = toOrFrom
+	ap.ToHostDrop = m.epToHostDrop
+	ap.FIB = m.fibLookupEnabled
+	ap.DSR = m.dsrEnabled
+	ap.LogLevel = m.bpfLogLevel
 
 	return ap
 }
