@@ -60,7 +60,7 @@ func (e ErrAttachFailed) Error() string {
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func AttachProgram(attachPoint AttachPoint) error {
+func (ap AttachPoint) AttachProgram() error {
 	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
 	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
 	// point).
@@ -86,15 +86,15 @@ func AttachProgram(attachPoint AttachPoint) error {
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	preCompiledBinary := path.Join(bpf.ObjectDir, attachPoint.Filename)
-	tempBinary := path.Join(tempDir, attachPoint.Filename)
+	preCompiledBinary := path.Join(bpf.ObjectDir, ap.Filename)
+	tempBinary := path.Join(tempDir, ap.Filename)
 
 	exeData, err := ioutil.ReadFile(preCompiledBinary)
 	if err != nil {
 		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
 	}
 
-	ip := attachPoint.IP.To4()
+	ip := ap.IP.To4()
 	if len(ip) == 4 {
 		log.WithField("ip", ip).Debug("Patching in IP")
 		replacement := make([]byte, 6)
@@ -104,7 +104,7 @@ func AttachProgram(attachPoint AttachPoint) error {
 
 	// Patch in the log prefix; since this gets loaded as immediate values by the compiler, we know it'll be
 	// preceded by a 2-byte 0 offset so we include that in the match.
-	iface := []byte(attachPoint.Iface + "--------") // Pad on the right to make sure its long enough.
+	iface := []byte(ap.Iface + "--------") // Pad on the right to make sure its long enough.
 	logBytes := make([]byte, 6)
 	copy(logBytes[2:], iface)
 	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00CALI"), logBytes)
@@ -117,16 +117,16 @@ func AttachProgram(attachPoint AttachPoint) error {
 	}
 
 	tcCmd := exec.Command("tc",
-		"filter", "add", "dev", attachPoint.Iface,
-		string(attachPoint.Hook),
+		"filter", "add", "dev", ap.Iface,
+		string(ap.Hook),
 		"bpf", "da", "obj", tempBinary,
-		"sec", attachPoint.Section)
+		"sec", ap.Section)
 
 	out, err := tcCmd.Output()
 	if err != nil {
 		if strings.Contains(err.Error(), "Cannot find device") {
 			// Avoid a big, spammy log when the issue is that the interface isn't present.
-			log.WithField("iface", attachPoint.Iface).Info(
+			log.WithField("iface", ap.Iface).Info(
 				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
 			return nil
 		}

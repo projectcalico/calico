@@ -87,7 +87,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 									Filename: prog,
 								}
 								ap.IP = net.ParseIP("10.0.0.1")
-								err := tc.AttachProgram(ap)
+								err := ap.AttachProgram()
 								Expect(err).NotTo(HaveOccurred())
 							})
 						}

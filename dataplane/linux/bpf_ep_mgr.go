@@ -501,7 +501,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.IP = net.IPv4(169, 254, 1, 1)
-	err := tc.AttachProgram(ap)
+	err := ap.AttachProgram()
 	if err != nil {
 		return err
 	}
@@ -603,7 +603,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 	if len(iface.addrs) > 0 {
 		ap.IP = iface.addrs[0]
 	}
-	return tc.AttachProgram(ap)
+	return ap.AttachProgram()
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
