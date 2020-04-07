@@ -16,6 +16,7 @@ package calc
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -62,6 +63,7 @@ type L3RouteResolver struct {
 	nodeNameToNode         map[string]*apiv3.Node
 	blockToRoutes          map[string]set.Set
 	allPools               map[string]model.IPPool
+	workloadIDToCIDRs      map[model.WorkloadEndpointKey][]cnet.IPNet
 	useNodeResourceUpdates bool
 }
 
@@ -77,11 +79,12 @@ func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeRes
 		nodeNameToNode:         map[string]*apiv3.Node{},
 		blockToRoutes:          map[string]set.Set{},
 		allPools:               map[string]model.IPPool{},
+		workloadIDToCIDRs:      map[model.WorkloadEndpointKey][]cnet.IPNet{},
 		useNodeResourceUpdates: useNodeResourceUpdates,
 	}
 }
 
-func (c *L3RouteResolver) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
+func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispatcher.Dispatcher) {
 	if c.useNodeResourceUpdates {
 		logrus.Info("Registering L3 route resolver (node resources on)")
 		allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
@@ -92,6 +95,46 @@ func (c *L3RouteResolver) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) 
 
 	allUpdDispatcher.Register(model.BlockKey{}, c.OnBlockUpdate)
 	allUpdDispatcher.Register(model.IPPoolKey{}, c.OnPoolUpdate)
+
+	localDispatcher.Register(model.WorkloadEndpointKey{}, c.OnLocalWorkloadUpdate)
+}
+
+func (c *L3RouteResolver) OnLocalWorkloadUpdate(update api.Update) (_ bool) {
+	key := update.Key.(model.WorkloadEndpointKey)
+
+	// Look up the (possibly nil) old CIDRs.
+	oldCIDRs := c.workloadIDToCIDRs[key]
+
+	// Get the new CIDRs (again, may be nil if this is a deletion).
+	var newCIDRs []cnet.IPNet
+	if update.Value != nil {
+		newWorkload := update.Value.(*model.WorkloadEndpoint)
+		newCIDRs = newWorkload.IPv4Nets
+	}
+
+	if reflect.DeepEqual(oldCIDRs, newCIDRs) {
+		// No change, ignore.
+		return
+	}
+
+	// Incref the new CIDRs.
+	for _, newCIDR := range newCIDRs {
+		c.trie.AddLocalWEP(ip.CIDRFromCalicoNet(newCIDR).(ip.V4CIDR))
+	}
+
+	// Decref the old.
+	for _, oldCIDR := range oldCIDRs {
+		c.trie.RemoveLocalWEP(ip.CIDRFromCalicoNet(oldCIDR).(ip.V4CIDR))
+	}
+
+	if len(newCIDRs) > 0 {
+		// Only store an entry if there are some CIDRs.
+		c.workloadIDToCIDRs[key] = newCIDRs
+	} else {
+		delete(c.workloadIDToCIDRs, key)
+	}
+
+	return
 }
 
 func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
@@ -437,7 +480,7 @@ func (c *L3RouteResolver) flush() {
 
 		// Otherwise, check if the route is removed.
 		ri := buf[len(buf)-1].Data.(RouteInfo)
-		if ri.WasSent && ri.IsEmpty() {
+		if ri.WasSent && !ri.IsValidRoute() {
 			logCxt.Debug("CIDR was sent before but now needs to be removed.")
 			c.callbacks.OnRouteRemove(cidr.String())
 			c.trie.SetRouteSent(cidr, false)
@@ -484,6 +527,9 @@ func (c *L3RouteResolver) flush() {
 					logCxt.Debug("Remote host route.")
 					rt.Type = proto.RouteType_REMOTE_HOST
 				}
+			}
+			if ri.LocalWEP.RefCount > 0 {
+				rt.LocalWorkload = true
 			}
 		}
 
@@ -643,6 +689,21 @@ func (r *RouteTrie) RemoveHost(cidr ip.V4CIDR) {
 	})
 }
 
+func (r *RouteTrie) AddLocalWEP(cidr ip.V4CIDR) {
+	r.updateCIDR(cidr, func(ri *RouteInfo) {
+		ri.LocalWEP.RefCount++
+	})
+}
+
+func (r *RouteTrie) RemoveLocalWEP(cidr ip.V4CIDR) {
+	r.updateCIDR(cidr, func(ri *RouteInfo) {
+		ri.LocalWEP.RefCount--
+		if ri.LocalWEP.RefCount < 0 {
+			logrus.WithField("cidr", cidr).Panic("BUG: Asked to decref a local workload past 0.")
+		}
+	})
+}
+
 func (r *RouteTrie) SetRouteSent(cidr ip.V4CIDR, sent bool) {
 	r.updateCIDR(cidr, func(ri *RouteInfo) {
 		ri.WasSent = sent
@@ -666,8 +727,9 @@ func (r RouteTrie) updateCIDR(cidr ip.V4CIDR, updateFn func(info *RouteInfo)) bo
 	// Not a no-op; mark CIDR as dirty.
 	logrus.WithFields(logrus.Fields{"old": riCopy, "new": ri}).Debug("Route updated, marking dirty.")
 	r.MarkCIDRDirty(cidr)
-	if ri.IsZero() {
-		// No longer have anything to track about this CIDR, clean it up.
+	var zeroRI RouteInfo
+	if ri == zeroRI {
+		// No longer have *anything* to track about this CIDR, clean it up.
 		r.t.Delete(cidr)
 		return true
 	}
@@ -701,21 +763,25 @@ type RouteInfo struct {
 		NodeName string // set if this CIDR _is_ a node's own IP.
 	}
 
+	// LocalWEP contains information extracted from the local workload endpoints.
+	LocalWEP struct {
+		// Count of local WEPs that have this CIDR.  Normally, this will be 0 or 1 but Felix has to be tolerant
+		// to bad data (two local WEPs with the same CIDR) so we do ref counting.
+		RefCount int
+	}
+
 	// WasSent is set to true when the route is sent downstream.
 	WasSent bool
 }
 
-// IsEmpty returns true if the RouteInfo no longer has any useful information; I.e. the CIDR it represents
-// is not a pool, block route or host.
-func (r RouteInfo) IsEmpty() bool {
-	return r.Pool.Type == proto.IPPoolType_NONE &&
-		r.Block.NodeName == "" &&
-		r.Host.NodeName == "" &&
-		!r.Pool.NATOutgoing
-}
-
-// IsZero returns true if the RouteInfo no longer has any useful information; I.e. the CIDR it represents
-// is not a pool, block route or host.
-func (r RouteInfo) IsZero() bool {
-	return r == RouteInfo{}
+// IsValidRoute returns true if the RouteInfo contains some information about a CIDR, i.e. if this route
+// should be sent downstream.  This _excludes_ the WasSent flag, which we use to track whether a route with
+// this CIDR was previously sent.  If IsValidRoute() returns false but WasSent is true then we need to withdraw
+// the route.
+func (r RouteInfo) IsValidRoute() bool {
+	return r.Pool.Type != proto.IPPoolType_NONE ||
+		r.Block.NodeName != "" ||
+		r.Host.NodeName != "" ||
+		r.Pool.NATOutgoing ||
+		r.LocalWEP.RefCount > 0
 }

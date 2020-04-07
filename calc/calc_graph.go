@@ -311,7 +311,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 		//      <dataplane>
 		//
 		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
-		l3RR.RegisterWith(allUpdDispatcher)
+		l3RR.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 	}
 
 	// Calculate VXLAN routes.

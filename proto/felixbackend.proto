@@ -492,6 +492,7 @@ message RouteUpdate {
   string dst_node_ip = 5;
   bool same_subnet = 7;
   bool nat_outgoing = 8;
+  bool local_workload = 9;
 }
 
 message RouteRemove {
