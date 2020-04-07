@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,6 +72,7 @@ var (
 		Revision: "abcdef12345",
 	}
 	notSupported = cerrors.ErrorOperationNotSupported{}
+	notExists    = cerrors.ErrorResourceDoesNotExist{}
 	genError     = errors.New("Generic error")
 )
 
@@ -113,6 +114,24 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientWatchResponse(r1, notSupported)
 		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r1, notSupported)
+		rs.ExpectStatusUnchanged()
+	})
+
+	It("should not change status if watch returns multiple ErrorResourceDoesNotExist errors", func() {
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, notExists)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notExists)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notExists)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notExists)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notExists)
 		rs.ExpectStatusUnchanged()
 	})
 
