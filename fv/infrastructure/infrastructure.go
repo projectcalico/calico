@@ -60,8 +60,9 @@ type DatastoreInfra interface {
 	// returned.
 	AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error)
 	// AddDefaultAllow will ensure that the datastore is configured so that
-	// the default profile/namespace will allow traffic.
-	AddDefaultAllow()
+	// the default profile/namespace will allow traffic. Returns the name of the
+	// default profile.
+	AddDefaultAllow() string
 	// AddDefaultDeny will ensure that the datastore is configured so that
 	// the default profile/namespace will deny ingress traffic.
 	AddDefaultDeny() error

@@ -144,7 +144,7 @@ func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {
 	return err
 }
 
-func (eds *EtcdDatastoreInfra) AddDefaultAllow() {
+func (eds *EtcdDatastoreInfra) AddDefaultAllow() string {
 	defaultProfile := api.NewProfile()
 	defaultProfile.Name = "default"
 	defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
@@ -152,6 +152,7 @@ func (eds *EtcdDatastoreInfra) AddDefaultAllow() {
 	defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 	_, err := eds.GetCalicoClient().Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 	Expect(err).NotTo(HaveOccurred())
+	return defaultProfile.Name
 }
 
 func (eds *EtcdDatastoreInfra) AddDefaultDeny() error {

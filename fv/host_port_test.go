@@ -48,7 +48,7 @@ func MetricsPortReachable(felix *infrastructure.Felix) bool {
 }
 
 // Here we test reachability to a port number running on a Calico host itself, specifically Felix's
-// metrics port 9091, and how that is affected by policy, host endpoint and workload endpoint
+// metrics port 9091, and how that is affected by policy, host endpoint (eth0 or *) and workload endpoint
 // configuration.
 //
 // - When there is no policy or endpoint configuration, the port should be reachable.
@@ -56,13 +56,16 @@ func MetricsPortReachable(felix *infrastructure.Felix) bool {
 // - When there is a local workload endpoint, the port should be reachable.  (Existence of workload
 //   endpoints should make no difference to reachability to ports on the host itself.)
 //
-// - When a host endpoint is configured for the host's interface (eth0), but not yet any policy, the
-//   port should be unreachable.
+// - When a host endpoint is configured for the host's interface (eth0) or for
+//   all-interfaces, but not yet any policy, the port should be unreachable.
 //
-//   - When pre-DNAT policy is then configured, to allow ingress to that port, it should be
+//   - When pre-DNAT policy is then configured, to allow ingress to some other
+//     port, it should still be unreachable again.
+//
+//   - When pre-DNAT policy is then configured, to allow ingress to the metrics port, it should be
 //     reachable again.
-
-var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+//
+var _ = infrastructure.DatastoreDescribe("host-port tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra                infrastructure.DatastoreInfra
 		felix                *infrastructure.Felix
@@ -81,7 +84,6 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 	})
 
 	AfterEach(func() {
-
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 			felix.Exec("iptables-save", "-c")
@@ -104,35 +106,42 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue(), "With workload stopped, not reachable")
 	})
 
-	Context("with host endpoint defined", func() {
-
-		BeforeEach(func() {
-			err := infra.AddAllowToDatastore("host-endpoint=='true'")
-			Expect(err).NotTo(HaveOccurred())
-
-			hostEp := api.NewHostEndpoint()
-			hostEp.Name = "host-endpoint-1"
-			hostEp.Labels = map[string]string{"host-endpoint": "true"}
-			hostEp.Spec.Node = felix.Hostname
-			hostEp.Spec.InterfaceName = "eth0"
-			_, err = client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
+	describeMetricsPortTests := func() {
 		It("port should not be reachable", func() {
 			Eventually(metricsPortReachable, "10s", "1s").Should(BeFalse())
 		})
 
 		Context("with pre-DNAT policy defined", func() {
+			protocol := numorstring.ProtocolFromString("tcp")
 
 			BeforeEach(func() {
-				// Ensure the HostEndpoint has taken effect and is blocking traffic
-				Eventually(metricsPortReachable, "10s", "1s").Should(BeFalse())
 				policy := api.NewGlobalNetworkPolicy()
-				policy.Name = "pre-dnat-policy-1"
+				policy.Name = "prednat-deny-port-123"
 				policy.Spec.PreDNAT = true
 				policy.Spec.ApplyOnForward = true
-				protocol := numorstring.ProtocolFromString("tcp")
+				allowPortRule := api.Rule{
+					Action:   api.Allow,
+					Protocol: &protocol,
+					Destination: api.EntityRule{
+						Ports: []numorstring.Port{numorstring.SinglePort(uint16(1234))},
+					},
+				}
+				policy.Spec.Ingress = []api.Rule{allowPortRule}
+				policy.Spec.Selector = "host-endpoint=='true'"
+				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should not be able to reach the metrics port with an allow policy on another port", func() {
+				// Ensure the HostEndpoint has taken effect and is blocking traffic
+				Eventually(metricsPortReachable, "10s", "1s").Should(BeFalse())
+			})
+
+			It("should be able to reach the metrics port once a policy allows that port", func() {
+				policy := api.NewGlobalNetworkPolicy()
+				policy.Name = "prednat-allow-metrics-port"
+				policy.Spec.PreDNAT = true
+				policy.Spec.ApplyOnForward = true
 				allowMetricsPortRule := api.Rule{
 					Action:   api.Allow,
 					Protocol: &protocol,
@@ -144,11 +153,37 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 				policy.Spec.Selector = "host-endpoint=='true'"
 				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("port should be reachable", func() {
 				Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 			})
 		})
+	}
+
+	Context("with named host endpoint defined", func() {
+		BeforeEach(func() {
+			hostEp := api.NewHostEndpoint()
+			hostEp.Name = "host-endpoint-1"
+			hostEp.Labels = map[string]string{"host-endpoint": "true"}
+			hostEp.Spec.Node = felix.Hostname
+			hostEp.Spec.InterfaceName = "eth0"
+			_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		describeMetricsPortTests()
+	})
+
+	Context("with all-interfaces host endpoint defined", func() {
+		BeforeEach(func() {
+			hostEp := api.NewHostEndpoint()
+			hostEp.Name = "all-interfaces-hostendpoint"
+			hostEp.Labels = map[string]string{"host-endpoint": "true"}
+			hostEp.Spec.Node = felix.Hostname
+			hostEp.Spec.InterfaceName = "*"
+			_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		describeMetricsPortTests()
 	})
 })

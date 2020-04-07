@@ -601,7 +601,8 @@ func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
 	return err
 }
 
-func (kds *K8sDatastoreInfra) AddDefaultAllow() {
+func (kds *K8sDatastoreInfra) AddDefaultAllow() string {
+	return "kns.default"
 }
 
 func (kds *K8sDatastoreInfra) AddDefaultDeny() error {

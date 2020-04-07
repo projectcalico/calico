@@ -849,7 +849,6 @@ func (m *endpointManager) resolveHostEndpoints() {
 		bestHostEp = *hostEp
 	}
 
-	// We currently only implement pre-DNAT policy for the all-interfaces host endpoint.
 	if bestHostEpId.EndpointId != "" {
 		logCxt := log.WithField("bestHostEpId", bestHostEpId)
 		logCxt.Debug("Got all interfaces HostEp")
@@ -857,6 +856,9 @@ func (m *endpointManager) resolveHostEndpoints() {
 			logCxt.Debug("Endpoint has pre-DNAT policies.")
 			newPreDNATIfaceNameToHostEpID[allInterfaces] = bestHostEpId
 		}
+
+		newIfaceNameToHostEpID[allInterfaces] = bestHostEpId
+
 		// Record that this host endpoint is in use, for status reporting.
 		newHostEpIDToIfaceNames[bestHostEpId] = append(
 			newHostEpIDToIfaceNames[bestHostEpId], allInterfaces)
@@ -970,29 +972,37 @@ func (m *endpointManager) resolveHostEndpoints() {
 	if m.bpfEnabled {
 		return
 	}
+
 	// Rewrite the filter dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite filter dispatch chains?")
-	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, true)
+	defaultIfaceName := ""
+	if _, ok := newIfaceNameToHostEpID[allInterfaces]; ok {
+		// All-interfaces host endpoint is active.  Arrange for it to be the default,
+		// instead of trying to dispatch to it directly based on the non-existent interface
+		// name *.
+		defaultIfaceName = allInterfaces
+		delete(newIfaceNameToHostEpID, allInterfaces)
+	}
+	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, defaultIfaceName, true)
 	m.updateDispatchChains(m.activeHostFilterDispatchChains, newFilterDispatchChains, m.filterTable)
 	// Set flag to update endpoint mark chains.
 	m.needToCheckEndpointMarkChains = true
 
 	// Rewrite the mangle dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newPreDNATIfaceNameToHostEpID).Debug("Rewrite mangle dispatch chains?")
-	defaultChainName := ""
+	defaultIfaceName = ""
 	if _, ok := newPreDNATIfaceNameToHostEpID[allInterfaces]; ok {
-		// All-interfaces host endpoint is active.  Arrange for it to be the default,
-		// instead of trying to dispatch to it directly based on the non-existent interface
-		// name *.
-		defaultChainName = rules.EndpointChainName(rules.HostFromEndpointPfx, allInterfaces)
+		// All-interfaces host endpoint is active.  Arrange for it to be the
+		// default. This is handled the same as the filter dispatch chains above.
+		defaultIfaceName = allInterfaces
 		delete(newPreDNATIfaceNameToHostEpID, allInterfaces)
 	}
-	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, defaultChainName)
+	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, defaultIfaceName)
 	m.updateDispatchChains(m.activeHostMangleDispatchChains, newMangleDispatchChains, m.mangleTable)
 
 	// Rewrite the raw dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
-	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, false)
+	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, "", false)
 	m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
 
 	log.Debug("Done resolving host endpoints.")

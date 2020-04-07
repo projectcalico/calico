@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -95,17 +96,31 @@ var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes",
 		infra.Stop()
 	})
 
-	It("should have workload to workload/host connectivity", func() {
-		cc.ExpectSome(w[0], w[1])
-		cc.ExpectSome(w[1], w[0])
-		cc.ExpectSome(w[0], hostW[1])
-		cc.ExpectSome(w[1], hostW[0])
-		cc.CheckConnectivity()
-	})
+	itShouldHaveWorkloadToWorkloadAndHostConnectivity := func() {
+		It("should have workload to workload/host connectivity", func() {
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
+			cc.ExpectSome(w[0], hostW[1])
+			cc.ExpectSome(w[1], hostW[0])
+			cc.CheckConnectivity()
+		})
+	}
+
+	itShouldHaveWorkloadToWorkloadAndHostConnectivity()
+
+	addAllowAllToHostEndpoints := func() {
+		policy := api.NewGlobalNetworkPolicy()
+		policy.Name = "default-allow"
+		policy.Spec.Selector = "host-endpoint=='true'"
+		policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+		_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	// The following tests verify that a HostEndpoint does not block forwarded traffic
 	// when there is no applyOnForward policy that applies to that HostEndpoint.  We
-	// create a HostEndpoint for eth0 on two hosts (A and B) and then test two cases:
+	// create a HostEndpoint two hosts (A and B) and then test two cases:
 	//
 	// 1. Workload on host A -> Workload on host B.  In this case, the traffic is
 	// forwarded on both hosts.
@@ -124,48 +139,72 @@ var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes",
 			cancel context.CancelFunc
 		)
 
-		BeforeEach(func() {
-			// Add a default-allow policy for the following host endpoints.
-			policy := api.NewGlobalNetworkPolicy()
-			policy.Name = "default-allow"
-			policy.Spec.Selector = "host-endpoint=='true'"
-			policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
-			policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
-			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
+		Context("with named host endpoints on eth0", func() {
+			BeforeEach(func() {
+				addAllowAllToHostEndpoints()
 
-			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
 
-			for _, f := range felixes {
-				hep := api.NewHostEndpoint()
-				hep.Name = "eth0-" + f.Name
-				hep.Labels = map[string]string{
-					"name":          hep.Name,
-					"host-endpoint": "true",
-				}
-				hep.Spec.Node = f.Hostname
-				hep.Spec.ExpectedIPs = []string{f.IP}
-				_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				// Wait for felix to see and program that host endpoint.
-				hostEndpointProgrammed := func() bool {
-					out, err := f.ExecOutput("iptables-save", "-t", "filter")
+				for _, f := range felixes {
+					hep := api.NewHostEndpoint()
+					hep.Name = "eth0-" + f.Name
+					hep.Labels = map[string]string{
+						"name":          hep.Name,
+						"host-endpoint": "true",
+					}
+					hep.Spec.Node = f.Hostname
+					hep.Spec.ExpectedIPs = []string{f.IP}
+					_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
-					return (strings.Count(out, "cali-thfw-eth0") > 0)
+
+					// Wait for felix to see and program that host endpoint.
+					hostEndpointProgrammed := func() bool {
+						out, err := f.ExecOutput("iptables-save", "-t", "filter")
+						Expect(err).NotTo(HaveOccurred())
+						return (strings.Count(out, "cali-thfw-eth0") > 0)
+					}
+					Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
+						"Expected HostEndpoint iptables rules to appear")
 				}
-				Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
-					"Expected HostEndpoint iptables rules to appear")
-			}
+			})
+
+			itShouldHaveWorkloadToWorkloadAndHostConnectivity()
 		})
 
-		It("should have workload to workload/host connectivity", func() {
-			cc.ExpectSome(w[0], w[1])
-			cc.ExpectSome(w[1], w[0])
-			cc.ExpectSome(w[0], hostW[1])
-			cc.ExpectSome(w[1], hostW[0])
-			cc.CheckConnectivity()
+		Context("with all-interfaces host endpoints", func() {
+			BeforeEach(func() {
+				addAllowAllToHostEndpoints()
+
+				ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+
+				for _, f := range felixes {
+					hep := api.NewHostEndpoint()
+					hep.Name = "all-interfaces-" + f.Name
+					hep.Labels = map[string]string{
+						"name":          hep.Name,
+						"host-endpoint": "true",
+					}
+					hep.Spec.Node = f.Hostname
+					hep.Spec.InterfaceName = "*"
+					hep.Spec.ExpectedIPs = []string{f.IP}
+					_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Wait for felix to see and program that host endpoint.
+					hostEndpointProgrammed := func() bool {
+						out, err := f.ExecOutput("iptables-save", "-t", "filter")
+						Expect(err).NotTo(HaveOccurred())
+						expectedName := rules.EndpointChainName("cali-thfw-", "any-interface-at-all")
+						return (strings.Count(out, expectedName) > 0)
+					}
+					Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
+						"Expected HostEndpoint iptables rules to appear")
+				}
+			})
+
+			itShouldHaveWorkloadToWorkloadAndHostConnectivity()
 		})
 	})
 })

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -98,21 +98,22 @@ func (r *DefaultRuleRenderer) EndpointMarkDispatchChains(
 
 func (r *DefaultRuleRenderer) HostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
+	defaultIfaceName string,
 	applyOnForward bool,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, "", false, applyOnForward)
+	return r.hostDispatchChains(endpoints, defaultIfaceName, false, applyOnForward)
 }
 
 func (r *DefaultRuleRenderer) FromHostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
-	defaultChainName string,
+	defaultIfaceName string,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, defaultChainName, true, false)
+	return r.hostDispatchChains(endpoints, defaultIfaceName, true, false)
 }
 
 func (r *DefaultRuleRenderer) hostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
-	defaultFromChainName string,
+	defaultIfaceName string,
 	fromOnly bool,
 	applyOnForward bool,
 ) []*Chain {
@@ -123,19 +124,47 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 		names = append(names, ifaceName)
 	}
 
-	var fromEndRules, toEndRules []Rule
-	if defaultFromChainName != "" {
-		// Arrange to goto the specified default chain for any packets that don't match an
-		// interface in the `endpoints` map.  (Currently we only use this for pre-DNAT
-		// policy, so it's only needed for 'from' chain programming; but we will extend
-		// later to other kinds of policy, and then it will be wanted equally in 'to' chain
-		// programming.)
+	var fromEndRules, toEndRules, fromEndForwardRules, toEndForwardRules []Rule
+
+	if defaultIfaceName != "" {
+		// Arrange sets of rules to goto the specified default chain for any packets that don't match an
+		// interface in the `endpoints` map.
 		fromEndRules = []Rule{
 			Rule{
-				Action: GotoAction{Target: defaultFromChainName},
+				Action: GotoAction{Target: EndpointChainName(HostFromEndpointPfx, defaultIfaceName)},
+			},
+		}
+		fromEndForwardRules = []Rule{
+			Rule{
+				Action: GotoAction{Target: EndpointChainName(HostFromEndpointForwardPfx, defaultIfaceName)},
+			},
+		}
+
+		// For traffic from the host to a host endpoint, we only use the default chain -
+		// i.e. policy applying to the wildcard HEP - when we're egressing through a
+		// fabric-facing interface.  We never apply wildcard HEP normal policy for traffic
+		// going to a local workload.
+		if !applyOnForward {
+			for _, prefix := range r.WorkloadIfacePrefixes {
+				ifaceMatch := prefix + "+"
+				toEndRules = append(toEndRules, Rule{
+					Match:   Match().OutInterface(ifaceMatch),
+					Action:  ReturnAction{},
+					Comment: []string{"Skip egress WHEP policy for traffic to local workload"},
+				})
+			}
+		}
+
+		toEndRules = append(toEndRules, Rule{
+			Action: GotoAction{Target: EndpointChainName(HostToEndpointPfx, defaultIfaceName)},
+		})
+		toEndForwardRules = []Rule{
+			Rule{
+				Action: GotoAction{Target: EndpointChainName(HostToEndpointForwardPfx, defaultIfaceName)},
 			},
 		}
 	}
+
 	if fromOnly {
 		return r.interfaceNameDispatchChains(
 			names,
@@ -176,8 +205,8 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			HostToEndpointForwardPfx,
 			ChainDispatchFromHostEndPointForward,
 			ChainDispatchToHostEndpointForward,
-			fromEndRules,
-			toEndRules,
+			fromEndForwardRules,
+			toEndForwardRules,
 		)...,
 	)
 }

@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/felix/fv/utils"
 
 	"context"
 	"errors"
@@ -33,7 +34,6 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -182,11 +182,13 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 
+			// Create host endpoints for each node.
 			for _, f := range felixes {
 				hep := api.NewHostEndpoint()
 				hep.Name = "all-interfaces-" + f.Name
 				hep.Labels = map[string]string{
 					"host-endpoint": "true",
+					"hostname":      f.Hostname,
 				}
 				hep.Spec.Node = f.Hostname
 				hep.Spec.ExpectedIPs = []string{f.IP}
@@ -194,23 +196,56 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 				_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
-
-			policy := api.NewGlobalNetworkPolicy()
-			policy.Name = "allow-all-prednat"
-			order := float64(20)
-			policy.Spec.Order = &order
-			policy.Spec.PreDNAT = true
-			policy.Spec.ApplyOnForward = true
-			policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
-			policy.Spec.Selector = "has(host-endpoint)"
-			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should not block any traffic", func() {
-			// An all-interfaces host endpoint does not block any traffic by default.
+		It("should block host-to-host traffic in the absence of policy allowing it", func() {
+			cc.ExpectNone(felixes[0], hostW[1])
+			cc.ExpectNone(felixes[1], hostW[0])
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
+			cc.CheckConnectivity()
+		})
+
+		It("should allow host-to-own-pod traffic in the absence of policy allowing it but not host to other-pods", func() {
+			cc.ExpectSome(felixes[0], w[0])
+			cc.ExpectSome(felixes[1], w[1])
+			cc.ExpectNone(felixes[0], w[1])
+			cc.ExpectNone(felixes[1], w[0])
+			cc.CheckConnectivity()
+		})
+
+		It("should allow felixes[0] to reach felixes[1] if ingress and egress policies are in place", func() {
+			// Create a policy selecting felix[1] that allows egress.
+			policy := api.NewGlobalNetworkPolicy()
+			policy.Name = "f0-egress"
+			policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+			policy.Spec.Selector = fmt.Sprintf("hostname == '%s'", felixes[0].Hostname)
+			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			// But there is no policy allowing ingress into felix[1].
+			cc.ExpectNone(felixes[0], hostW[1])
+			cc.ExpectNone(felixes[1], hostW[0])
+
+			// Workload connectivity is unchanged.
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
+			cc.CheckConnectivity()
+			cc.ResetExpectations()
+
+			// Now add a policy selecting felix[1] that allows ingress.
+			policy = api.NewGlobalNetworkPolicy()
+			policy.Name = "f1-ingress"
+			policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+			policy.Spec.Selector = fmt.Sprintf("hostname == '%s'", felixes[1].Hostname)
+			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now felixes[0] can reach felixes[1].
 			cc.ExpectSome(felixes[0], hostW[1])
-			cc.ExpectSome(felixes[1], hostW[0])
+			cc.ExpectNone(felixes[1], hostW[0])
+
+			// Workload connectivity is unchanged.
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[1], w[0])
 			cc.CheckConnectivity()
