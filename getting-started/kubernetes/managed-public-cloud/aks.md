@@ -24,7 +24,7 @@ The geeky details of what you get:
 ### Above and beyond
 
 - [Video: Everything you need to know about Kubernetes networking on Azure](https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-azure/)
-- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/calicoctl/install)
+- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
 - [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)
 - [Enable default deny for Kubernetes pods]({{ site.baseurl }}/security/kubernetes-default-deny)
