@@ -94,31 +94,10 @@ func (ap AttachPoint) AttachProgram() error {
 	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
 	tempBinary := path.Join(tempDir, filename)
 
-	exeData, err := ioutil.ReadFile(preCompiledBinary)
+	err = ap.patchBinary(preCompiledBinary, tempBinary)
 	if err != nil {
-		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
-	}
-
-	ip := ap.IP.To4()
-	if len(ip) == 4 {
-		log.WithField("ip", ip).Debug("Patching in IP")
-		replacement := make([]byte, 6)
-		copy(replacement[2:], ip)
-		exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00HOST"), replacement)
-	}
-
-	// Patch in the log prefix; since this gets loaded as immediate values by the compiler, we know it'll be
-	// preceded by a 2-byte 0 offset so we include that in the match.
-	iface := []byte(ap.Iface + "--------") // Pad on the right to make sure its long enough.
-	logBytes := make([]byte, 6)
-	copy(logBytes[2:], iface)
-	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00CALI"), logBytes)
-	copy(logBytes[2:], iface[4:8])
-	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00COLO"), logBytes)
-
-	err = ioutil.WriteFile(tempBinary, exeData, 0600)
-	if err != nil {
-		return errors.Wrap(err, "failed to write patched BPF binary")
+		log.WithError(err).Error("Failed to patch binary")
+		return err
 	}
 
 	tcCmd := exec.Command("tc",
@@ -145,6 +124,28 @@ func (ap AttachPoint) AttachProgram() error {
 			}
 		}
 		return errors.Wrap(err, "failed to attach TC program")
+	}
+
+	return nil
+}
+
+func (ap AttachPoint) patchBinary(ifile, ofile string) error {
+	b, err := bpf.BinaryFromFile(ifile)
+	if err != nil {
+		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
+	}
+
+	log.WithField("ip", ap.IP).Debug("Patching in IP")
+	err = b.PatchIPv4(ap.IP)
+	if err != nil {
+		return errors.WithMessage(err, "patching in IPv4")
+	}
+
+	b.PatchLogPrefix(ap.Iface)
+
+	err = b.WriteToFile(ofile)
+	if err != nil {
+		return errors.Wrap(err, "failed to write patched BPF binary")
 	}
 
 	return nil
