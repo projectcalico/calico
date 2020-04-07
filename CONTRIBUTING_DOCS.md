@@ -11,9 +11,9 @@ The doc contribution process works as follows.
 1. Fork the [Project Calico repo](https://github.com/projectcalico/calico).
 1. Create a branch in your fork off of the master branch.
 1. Give your branch a short but descriptive name.
-1. Preview your changes to make sure they render as expected. You can either [build the site locally](#building-the-doc-site-locally) or go directly to the next step and submit a pull request to [build the site with the Project Calico CI/CD system](#previewing-the-changes-from-cicd).
+1. Preview your changes to make sure they render as expected. You can either [build the site locally](#building-the-doc-site-locally) or go directly to the "submit a pull request" to [build the site with the Project Calico CI/CD system](#previewing-the-changes-from-cicd).
+1. Check for broken links. You can either [check for broken links](#checking-for-broken-links) in your local environment or submit a pull request and use the output of the Semaphore job.
 1. Submit a pull request (PR) against the master branch of the [Project Calico repo](https://github.com/projectcalico/calico).
-1. [Check for broken links](#checking-for-broken-links).
 1. If you haven't already signed our contributer agreement, GitHub will prompt you to do so (required).
 1. Request a review from one or more Calico maintainers.
 1. After getting the approval of at least one Calico maintainer, we ask that you [backport the changes in the `master` folder to the folders of the last two releases](#how-to-quickly-apply-changes-in-master-to-a-previous-release), if appropriate.
@@ -41,6 +41,7 @@ Navigate into the root of the repo and issue the following command from a termin
 ```
 make serve
 ```
+
 
 Once the build completes, it returns a URL as the value of `Server address:`. Copy and paste this URL into your browser to view the site.
 
