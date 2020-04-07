@@ -45,6 +45,7 @@ type AttachPoint struct {
 	Hook     Hook
 	Iface    string
 	Filename string
+	IP       net.IP
 }
 
 var tcLock sync.Mutex
@@ -59,7 +60,7 @@ func (e ErrAttachFailed) Error() string {
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
+func AttachProgram(attachPoint AttachPoint) error {
 	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
 	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
 	// point).
@@ -93,11 +94,11 @@ func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
 	}
 
-	hostIP = hostIP.To4()
-	if len(hostIP) == 4 {
-		log.WithField("ip", hostIP).Debug("Patching in host IP")
+	ip := attachPoint.IP.To4()
+	if len(ip) == 4 {
+		log.WithField("ip", ip).Debug("Patching in IP")
 		replacement := make([]byte, 6)
-		copy(replacement[2:], hostIP)
+		copy(replacement[2:], ip)
 		exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00HOST"), replacement)
 	}
 

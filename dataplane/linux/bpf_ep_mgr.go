@@ -500,8 +500,8 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
 	// Host side of the veth is always configured as 169.254.1.1.
-	hostIP := net.IPv4(169, 254, 1, 1)
-	err := tc.AttachProgram(ap, hostIP)
+	ap.IP = net.IPv4(169, 254, 1, 1)
+	err := tc.AttachProgram(ap)
 	if err != nil {
 		return err
 	}
@@ -600,11 +600,10 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 	}
 	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
 	iface := m.ifaces[ifaceName]
-	var addr net.IP
 	if len(iface.addrs) > 0 {
-		addr = iface.addrs[0]
+		ap.IP = iface.addrs[0]
 	}
-	return tc.AttachProgram(ap, addr)
+	return tc.AttachProgram(ap)
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
