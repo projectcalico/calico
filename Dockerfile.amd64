@@ -93,7 +93,7 @@ RUN wget -P /tmp http://smarden.org/runit/runit-${RUNIT_VER}.tar.gz && \
     cd /tmp/admin/runit-${RUNIT_VER}/ && \
     package/install
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1-407
 ARG ARCH
 ARG GIT_VERSION
 ARG IPTABLES_VER
