@@ -179,4 +179,18 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
 
+#define CALI_CONFIGURABLE_DEFINE(name, pattern)							\
+static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
+{												\
+	__u32 ret;										\
+	asm("%0 = " #pattern ";" : "=r"(ret) /* output */ : /* no inputs */ : /* no clobber */);\
+	return ret;										\
+}
+
+#define CALI_CONFIGURABLE(name)	cali_configurable_##name()
+
+CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* 0x54534f48 = ASCII(HOST) */
+#define HOST_IP CALI_CONFIGURABLE(host_ip)
+
+
 #endif /* __CALI_BPF_H__ */
