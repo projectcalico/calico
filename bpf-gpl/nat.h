@@ -76,9 +76,6 @@
 
 static CALI_BPF_INLINE __be32 cali_host_ip()
 {
-#ifdef CALI_HOST_IP
-	return CALI_HOST_IP;
-#else
 	__u32 host_ip;
 	/* At program install time, we patch in the IP of the host. Use inline
 	 * assembler to make sure that the code we want to patch is
@@ -87,7 +84,6 @@ static CALI_BPF_INLINE __be32 cali_host_ip()
 	*/
 	asm("%0 = 0x54534f48;" : "=r"(host_ip) /* output */ : /* no inputs */ : /* no clobber */);
 	return host_ip;
-#endif
 }
 
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
