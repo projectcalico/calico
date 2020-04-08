@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017,2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -208,6 +208,10 @@ func CIDRFromString(cidrStr string) (CIDR, error) {
 
 func CIDRFromCalicoNet(ipNet calinet.IPNet) CIDR {
 	return CIDRFromIPNet(&ipNet.IPNet)
+}
+
+func FromCalicoIP(ip calinet.IP) Addr {
+	return FromNetIP(ip.IP)
 }
 
 func CIDRFromIPNet(ipNet *net.IPNet) CIDR {

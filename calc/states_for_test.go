@@ -924,6 +924,7 @@ var routeUpdateRemoteHost = proto.RouteUpdate{
 	IpPoolType:  proto.IPPoolType_NONE,
 	Dst:         remoteHostIP.String() + "/32",
 	DstNodeName: remoteHostname,
+	DstNodeIp:   remoteHostIP.String(),
 }
 
 // RouteUpdate expected for the second remote host.
@@ -932,6 +933,7 @@ var routeUpdateRemoteHost2 = proto.RouteUpdate{
 	IpPoolType:  proto.IPPoolType_NONE,
 	Dst:         remoteHost2IP.String() + "/32",
 	DstNodeName: remoteHostname2,
+	DstNodeIp:   remoteHost2IP.String(),
 }
 
 // Minimal VXLAN set-up, all the data needed for a remote VTEP, a pool and a block.
@@ -963,6 +965,34 @@ var vxlanWithBlock = empty.withKVUpdates(
 )
 var remoteNodeResKey = ResourceKey{Name: remoteHostname, Kind: apiv3.KindNode}
 var localNodeResKey = ResourceKey{Name: localHostname, Kind: apiv3.KindNode}
+
+// As vxlanWithBlock but with a host sharing the same IP.  No route update because we tie-break on host name.
+var vxlanWithBlockDupNodeIP = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHostIP},
+).withName("VXLAN with dup node IP")
+
+var vxlanWithDupNodeIPRemoved = vxlanWithBlockDupNodeIP.withKVUpdates(
+	KVPair{Key: remoteHostIPKey, Value: nil},
+).withName("VXLAN with dup node IP removed").withVTEPs().withRoutes(
+	routeUpdateIPPoolVXLAN,
+	// Remote host 2 but with remotehost's IP:
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_HOST,
+		IpPoolType:  proto.IPPoolType_NONE,
+		Dst:         remoteHostIP.String() + "/32",
+		DstNodeName: remoteHostname2,
+		DstNodeIp:   remoteHostIP.String(),
+	},
+	// Single route for the block.  No IP because the block belongs to remotehost and its IP was
+	// removed.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.1.0/29",
+		DstNodeName: remoteHostname,
+		NatOutgoing: true,
+	},
+)
 
 // As vxlanWithBlock but with node resources instead of host IPs.
 var vxlanWithBlockNodeRes = vxlanWithBlock.withKVUpdates(
@@ -1069,6 +1099,7 @@ var vxlanWithBlockAndDifferentNodeIP = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_NONE,
 		Dst:         remoteHost2IP.String() + "/32",
 		DstNodeName: remoteHostname,
+		DstNodeIp:   remoteHost2IP.String(),
 	},
 	// Single route for the block.
 	proto.RouteUpdate{
@@ -1139,6 +1170,7 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_NONE,
 		Dst:         localHostIP.String() + "/32",
 		DstNodeName: localHostname,
+		DstNodeIp:   localHostIP.String(),
 	},
 	// Single route for the block.
 	proto.RouteUpdate{
@@ -1191,6 +1223,7 @@ var vxlanLocalBlockWithBorrowsCrossSubnetNodeRes = vxlanLocalBlockWithBorrowsNod
 		IpPoolType:  proto.IPPoolType_NONE,
 		Dst:         localHostIP.String() + "/32",
 		DstNodeName: localHostname,
+		DstNodeIp:   localHostIP.String(),
 	},
 	// Single route for the block.
 	proto.RouteUpdate{
@@ -1236,6 +1269,7 @@ var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrow
 		IpPoolType:  proto.IPPoolType_NONE,
 		Dst:         localHostIP.String() + "/32",
 		DstNodeName: localHostname,
+		DstNodeIp:   localHostIP.String(),
 	},
 	// Single route for the block.
 	proto.RouteUpdate{
@@ -1415,6 +1449,7 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		IpPoolType:  proto.IPPoolType_NO_ENCAP, // Host now marked as inside the IP pool.
 		Dst:         remoteHostIP.String() + "/32",
 		DstNodeName: remoteHostname,
+		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
 	// Single route for the block.

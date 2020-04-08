@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 package ip_test
 
 import (
+	calinet "github.com/projectcalico/libcalico-go/lib/net"
+
 	. "github.com/projectcalico/felix/ip"
 
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -28,6 +30,9 @@ var _ = DescribeTable("IpAddr",
 		Expect(ip.String()).To(Equal(canonical))
 		Expect(int(ip.Version())).To(Equal(version))
 		Expect(MustParseCIDROrIP(inputIP).Addr().String()).To(Equal(canonical))
+
+		caliIP := calinet.ParseIP(inputIP)
+		Expect([]byte(FromCalicoIP(*caliIP).AsNetIP())).To(Equal(bytes))
 	},
 	Entry("IPv4", 4, "10.0.0.1", "10.0.0.1", []byte{0xa, 0, 0, 1}),
 	Entry("IPv6", 6, "dead::beef", "dead::beef", []byte{

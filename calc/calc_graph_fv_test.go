@@ -24,21 +24,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
-
-	. "github.com/projectcalico/felix/calc"
-	"github.com/projectcalico/felix/dataplane/mock"
-
+	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/set"
 
+	. "github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/felix/proto"
 )
 
@@ -357,6 +354,17 @@ var baseTests = []StateList{
 		hostInIPPool,
 		vxlanWithBlock,
 	},
+	{
+		// Corner case: hosts with duplicate IPs.
+		vxlanWithBlock,
+		vxlanWithBlockDupNodeIP,
+		vxlanWithBlock,
+	},
+	{
+		// Corner case: hosts with duplicate IPs.
+		vxlanWithBlockDupNodeIP,
+		vxlanWithDupNodeIPRemoved,
+	},
 }
 
 var logOnce sync.Once
@@ -534,6 +542,7 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
 		"Active VTEPs were incorrect after moving to state: %v",
 		state.Name)
+	// Comparing stringified versions of the routes here so that, on failure, we get much more readable output.
 	Expect(stringifyRoutes(mockDataplane.ActiveRoutes())).To(Equal(stringifyRoutes(state.ExpectedRoutes)),
 		"Active routes were incorrect after moving to state: %v",
 		state.Name)
