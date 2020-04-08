@@ -24,4 +24,5 @@ LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 RUN apt-get update && apt-get install -y \
     # Felix FV tests require these
     wget \
-    ethtool
+    ethtool \
+    tcpdump

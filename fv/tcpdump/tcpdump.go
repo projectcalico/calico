@@ -16,7 +16,6 @@ package tcpdump
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os/exec"
 
@@ -38,8 +37,7 @@ import (
 func Attach(c *containers.Container, iface string) *TCPDump {
 	t := &TCPDump{
 		logEnabled:       true,
-		containerID:      c.GetID(),
-		containerName:    c.Name,
+		c:                c,
 		iface:            iface,
 		matchers:         map[string]*tcpDumpMatcher{},
 		listeningStarted: make(chan struct{}),
@@ -60,8 +58,7 @@ type TCPDump struct {
 	lock sync.Mutex
 
 	logEnabled       bool
-	containerID      string
-	containerName    string
+	c                *containers.Container
 	iface            string
 	cmd              *exec.Cmd
 	out, err         io.ReadCloser
@@ -90,18 +87,15 @@ func (t *TCPDump) MatchCount(name string) int {
 	defer t.lock.Unlock()
 
 	c := t.matchers[name].count
-	logrus.Infof("[%s] Match count for %s is %v", t.containerName, name, c)
+	logrus.Infof("[%s] Match count for %s is %v", t.c.Name, name, c)
 	return c
 }
 
 func (t *TCPDump) Start() {
 	// docker run --rm --network=container:48b6c5f44d57 --privileged corfr/tcpdump -nli cali01
 
-	t.cmd = utils.Command("docker", "run",
-		"--rm",
-		fmt.Sprintf("--network=container:%s", t.containerID),
-		"--privileged",
-		"corfr/tcpdump", "-nli", t.iface,
+	t.cmd = utils.Command("docker", "exec", t.c.Name,
+		"tcpdump", "-nli", t.iface,
 	)
 	var err error
 	t.out, err = t.cmd.StdoutPipe()
@@ -141,7 +135,7 @@ func (t *TCPDump) readStdout() {
 		t.lock.Unlock()
 
 		if logEnabled {
-			logrus.Infof("[%s] %s", t.containerName, line)
+			logrus.Infof("[%s] %s", t.c.Name, line)
 		}
 		t.lock.Lock()
 		for _, m := range t.matchers {
@@ -166,7 +160,7 @@ func (t *TCPDump) readStderr() {
 	defer safeClose()
 	for s.Scan() {
 		line := s.Text()
-		logrus.Infof("[%s] ERR: %s", t.containerName, line)
+		logrus.Infof("[%s] ERR: %s", t.c.Name, line)
 		if strings.Contains(line, "listening") {
 			safeClose()
 		}
