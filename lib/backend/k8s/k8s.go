@@ -73,53 +73,10 @@ type KubeClient struct {
 }
 
 func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
-	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	configOverrides := &clientcmd.ConfigOverrides{}
-	var overridesMap = []struct {
-		variable *string
-		value    string
-	}{
-		{&configOverrides.ClusterInfo.Server, ca.K8sAPIEndpoint},
-		{&configOverrides.AuthInfo.ClientCertificate, ca.K8sCertFile},
-		{&configOverrides.AuthInfo.ClientKey, ca.K8sKeyFile},
-		{&configOverrides.ClusterInfo.CertificateAuthority, ca.K8sCAFile},
-		{&configOverrides.AuthInfo.Token, ca.K8sAPIToken},
-	}
-
-	// Set an explicit path to the kubeconfig if one
-	// was provided.
-	loadingRules := clientcmd.ClientConfigLoadingRules{}
-	if ca.Kubeconfig != "" {
-		loadingRules.ExplicitPath = ca.Kubeconfig
-	}
-
-	// Using the override map above, populate any non-empty values.
-	for _, override := range overridesMap {
-		if override.value != "" {
-			*override.variable = override.value
-		}
-	}
-	if ca.K8sInsecureSkipTLSVerify {
-		configOverrides.ClusterInfo.InsecureSkipTLSVerify = true
-	}
-
-	// A kubeconfig file was provided.  Use it to load a config, passing through
-	// any overrides.
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&loadingRules, configOverrides).ClientConfig()
+	config, cs, err := CreateKubernetesClientset(ca)
 	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, nil)
+		return nil, err
 	}
-
-	// Create the clientset. We increase the burst so that the IPAM code performs
-	// efficiently. The IPAM code can create bursts of requests to the API, so
-	// in order to keep pod creation times sensible we allow a higher request rate.
-	config.Burst = 100
-	cs, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, nil)
-	}
-	log.Debugf("Created k8s ClientSet: %+v", cs)
 
 	crdClientV1, err := buildCRDClientV1(*config)
 	if err != nil {
@@ -262,6 +219,56 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	return kubeClient, nil
 }
 
+func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config, *kubernetes.Clientset, error) {
+	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
+	configOverrides := &clientcmd.ConfigOverrides{}
+	var overridesMap = []struct {
+		variable *string
+		value    string
+	}{
+		{&configOverrides.ClusterInfo.Server, ca.K8sAPIEndpoint},
+		{&configOverrides.AuthInfo.ClientCertificate, ca.K8sCertFile},
+		{&configOverrides.AuthInfo.ClientKey, ca.K8sKeyFile},
+		{&configOverrides.ClusterInfo.CertificateAuthority, ca.K8sCAFile},
+		{&configOverrides.AuthInfo.Token, ca.K8sAPIToken},
+	}
+
+	// Set an explicit path to the kubeconfig if one
+	// was provided.
+	loadingRules := clientcmd.ClientConfigLoadingRules{}
+	if ca.Kubeconfig != "" {
+		loadingRules.ExplicitPath = ca.Kubeconfig
+	}
+
+	// Using the override map above, populate any non-empty values.
+	for _, override := range overridesMap {
+		if override.value != "" {
+			*override.variable = override.value
+		}
+	}
+	if ca.K8sInsecureSkipTLSVerify {
+		configOverrides.ClusterInfo.InsecureSkipTLSVerify = true
+	}
+
+	// A kubeconfig file was provided.  Use it to load a config, passing through
+	// any overrides.
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&loadingRules, configOverrides).ClientConfig()
+	if err != nil {
+		return nil, nil, resources.K8sErrorToCalico(err, nil)
+	}
+
+	// Create the clientset. We increase the burst so that the IPAM code performs
+	// efficiently. The IPAM code can create bursts of requests to the API, so
+	// in order to keep pod creation times sensible we allow a higher request rate.
+	config.Burst = 100
+	cs, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, nil, resources.K8sErrorToCalico(err, nil)
+	}
+	return config, cs, nil
+}
+
 // registerResourceClient registers a specific resource client with the associated
 // key and list types (and for v3 resources with the resource kind - since these share
 // a common key and list type).
@@ -320,8 +327,8 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindClusterInformation,
 		apiv3.KindFelixConfiguration,
 		apiv3.KindGlobalNetworkPolicy,
-		apiv3.KindGlobalNetworkSet,
 		apiv3.KindNetworkPolicy,
+		apiv3.KindGlobalNetworkSet,
 		apiv3.KindNetworkSet,
 		apiv3.KindIPPool,
 		apiv3.KindHostEndpoint,
@@ -376,6 +383,12 @@ func (c *KubeClient) Clean() error {
 	if _, err := c.Delete(ctx, model.IPAMConfigKey{}, ""); err != nil {
 		log.WithError(err).WithField("key", model.IPAMConfigGlobalName).Warning("Failed to delete global IPAM Config from KDD")
 	}
+	return nil
+}
+
+// Close the underlying client
+func (c *KubeClient) Close() error {
+	log.Debugf("Closing client - NOOP")
 	return nil
 }
 
