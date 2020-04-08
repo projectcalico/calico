@@ -18,7 +18,7 @@ The `{{page.imageNames["calico/kube-controllers"]}}` container includes the foll
 1. namespace controller: watches namespaces and programs {{site.prodname}} profiles.
 1. serviceaccount controller: watches service accounts and programs {{site.prodname}} profiles.
 1. workloadendpoint controller: watches for changes to pod labels and updates {{site.prodname}} workload endpoints.
-1. node controller: watches for the removal of Kubernetes nodes and removes corresponding data from {{site.prodname}}.
+1. node controller: watches for the removal of Kubernetes nodes and removes corresponding data from {{site.prodname}}, and watches for node updates to optionally create and sync host endpoints for each node.
 
 The {{site.prodname}} Kubernetes manifests run these controllers within a single pod in the `calico-kube-controllers` deployment.
 

@@ -20,6 +20,7 @@ This how-to guide uses the following {{site.prodname}} features:
 - **FelixConfiguration** resource with parameters:
   - **FailsafeInboundHostPorts**
   - **DefaultEndpointToHostAction**
+- **KubeControllersConfiguration**
 
 ### Concepts
 
@@ -64,6 +65,7 @@ If you are already running {{site.prodname}} for Kubernetes, you are good to go.
 - [Avoid accidentally cutting all host connectivity ](#avoid-accidentally-cutting-all-host-connectivity)
 - [Use policy to restrict host traffic](#use-policy-to-restrict-host-traffic)
 - [Control default behavior of workload endpoint to host traffic](#control-default-behavior-of-workload-endpoint-to-host-traffic)
+- [Automatically create host endpoints for Kubernetes nodes](#automatically-create-host-endpoints-for-kubernetes-nodes)
 
 #### Avoid accidentally cutting all host connectivity
 
@@ -181,6 +183,52 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
    ```bash
    calicoctl apply -f default-felix-config.yaml
    ```
+
+#### Automatically create host endpoints for Kubernetes nodes
+
+{{site.prodname}} can create and manage the lifecycle of host endpoints for your Kubernetes cluster. You can enable this behavior using **KubeControllersConfiguration**.
+
+> **Important**: Before enabling this feature, ensure that [failsafe ports](#avoid-accidentally-cutting-all-host-connectivity) have been reviewed
+> and that the appropriate global network policy is in place.
+>
+> If host endpoints are added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from the endpoints (except for traffic allowed by failsafe rules).
+{: .alert .alert-danger}
+
+1. Get a copy of the object to edit.
+
+   ```bash
+   calicoctl get kubecontrollersconfiguration default --export -o yaml > default-kube-config.yaml
+   ```
+1. Open the file in a text editor and add the parameter, **autoCreate** to **spec.controllers.node**. For example:
+
+   ```yaml
+   apiVersion: projectcalico.org/v3
+   kind: KubeControllersConfiguration
+   metadata:
+     name: default
+   spec:
+     logSeverityScreen: Info
+     healthChecks: Enabled
+     etcdv3CompactionPeriod: 10m
+     controllers:
+       node:
+         reconcilerPeriod: 5m
+         syncLabels: Enabled
+         hostEndpoint:
+           autoCreate: Enabled
+       policy:
+         reconcilerPeriod: 5m
+       workloadEndpoint:
+         reconcilerPeriod: 5m
+       serviceAccount:
+         reconcilerPeriod: 5m
+       namespace:
+         reconcilerPeriod: 5m
+   ```
+
+1. Update the KubeControllersConfiguration on the cluster.
+   ```bash
+   calicoctl apply -f default-felix-config.yaml
 
 ### Above and beyond
 
