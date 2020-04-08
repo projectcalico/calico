@@ -156,6 +156,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 	Expect(err).NotTo(HaveOccurred())
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
+	bin.PatchTunnelMTU(natTunnelMTU)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -363,6 +364,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 	Expect(err).NotTo(HaveOccurred())
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
+	bin.PatchTunnelMTU(natTunnelMTU)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())

@@ -189,8 +189,10 @@ static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
 
 #define CALI_CONFIGURABLE(name)	cali_configurable_##name()
 
-CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* 0x54534f48 = ASCII(HOST) */
-#define HOST_IP CALI_CONFIGURABLE(host_ip)
+CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* be 0x54534f48 = ASCII(HOST) */
+CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(HOST) */
 
+#define HOST_IP CALI_CONFIGURABLE(host_ip)
+#define TUNNEL_MTU CALI_CONFIGURABLE(tunnel_mtu)
 
 #endif /* __CALI_BPF_H__ */

@@ -50,6 +50,7 @@ type AttachPoint struct {
 	FIB        bool
 	ToHostDrop bool
 	DSR        bool
+	TunnelMTU  uint16
 }
 
 var tcLock sync.Mutex
@@ -142,6 +143,7 @@ func (ap AttachPoint) patchBinary(ifile, ofile string) error {
 	}
 
 	b.PatchLogPrefix(ap.Iface)
+	b.PatchTunnelMTU(ap.TunnelMTU)
 
 	err = b.WriteToFile(ofile)
 	if err != nil {

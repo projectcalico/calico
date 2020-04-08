@@ -68,7 +68,7 @@ type bpfEndpointManager struct {
 	dataIfaceRegex   *regexp.Regexp
 	ipSetIDAlloc     *idalloc.IDAllocator
 	epToHostDrop     bool
-	natTunnelMTU     int
+	vxlanMTU         int
 	dsrEnabled       bool
 
 	ipSetMap bpf.Map
@@ -81,7 +81,7 @@ func newBPFEndpointManager(
 	epToHostDrop bool,
 	dataIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
-	natTunnelMTU int,
+	vxlanMTU int,
 	dsrEnabled bool,
 	ipSetMap bpf.Map,
 	stateMap bpf.Map,
@@ -100,7 +100,7 @@ func newBPFEndpointManager(
 		dataIfaceRegex:      dataIfaceRegex,
 		ipSetIDAlloc:        ipSetIDAlloc,
 		epToHostDrop:        epToHostDrop,
-		natTunnelMTU:        natTunnelMTU,
+		vxlanMTU:            vxlanMTU,
 		dsrEnabled:          dsrEnabled,
 		ipSetMap:            ipSetMap,
 		stateMap:            stateMap,
@@ -501,6 +501,9 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.IP = net.IPv4(169, 254, 1, 1)
+	// vxlanMTU is the MTU of workload devices, we need to use another 50 less
+	// to fit in the final packet
+	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
 	err := ap.AttachProgram()
 	if err != nil {
 		return err
@@ -605,6 +608,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 	if len(iface.addrs) > 0 {
 		ap.IP = iface.addrs[0]
 	}
+	ap.TunnelMTU = uint16(m.vxlanMTU)
 	return ap.AttachProgram()
 }
 

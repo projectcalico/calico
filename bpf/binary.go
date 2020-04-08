@@ -18,6 +18,7 @@ package bpf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io/ioutil"
 	"net"
 
@@ -79,4 +80,11 @@ func (b *Binary) PatchLogPrefix(prefix string) {
 
 	b.replaceAllLoadImm32([]byte("CALI"), pfx[:4])
 	b.replaceAllLoadImm32([]byte("COLO"), pfx[4:8])
+}
+
+// PatchTunnelMTU replaces a place holder with the actual mtu
+func (b *Binary) PatchTunnelMTU(mtu uint16) {
+	bytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bytes, uint32(mtu))
+	b.replaceAllLoadImm32([]byte("TMTU"), bytes)
 }
