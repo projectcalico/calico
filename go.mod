@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
-	github.com/projectcalico/libcalico-go v0.0.0-20200406231814-fc5875725650
+	github.com/projectcalico/libcalico-go v0.0.0-20200407160940-acc2dca65ca6
 	github.com/prometheus/client_golang v0.9.1
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.0.0-20190416093430-c873fb1f9420 // indirect
