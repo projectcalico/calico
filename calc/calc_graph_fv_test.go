@@ -349,6 +349,13 @@ var baseTests = []StateList{
 		vxlanSlash32,
 	},
 	{
+		// Corner case where there's a remote workload and a local WEP with overlapping IPs.
+		vxlanLocalBlockWithBorrows,
+		vxlanLocalBlockWithBorrowsLocalWEP,
+		vxlanLocalBlockWithBorrows,
+		vxlanLocalBlockWithBorrowsLocalWEP,
+	},
+	{
 		// Corner case: host is inside an IP pool (used to influence NAT outgoing behaviour).
 		vxlanWithBlock,
 		hostInIPPool,

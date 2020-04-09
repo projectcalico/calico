@@ -90,6 +90,29 @@ var withNonALPPolicy = withPolicy.withTotalALPPolicies(
 	0,
 ).withName("with non-ALP policy")
 
+// Routes for local workloads.  Most of the tests pre-date route generation so they don't have a
+// local host resource; hence we get routes with no next hop.
+var routelocalWlTenDotOne = proto.RouteUpdate{
+	Type:          proto.RouteType_LOCAL_WORKLOAD,
+	Dst:           "10.0.0.1/32",
+	DstNodeName:   localHostname,
+	LocalWorkload: true,
+}
+
+var routelocalWlTenDotTwo = proto.RouteUpdate{
+	Type:          proto.RouteType_LOCAL_WORKLOAD,
+	Dst:           "10.0.0.2/32",
+	DstNodeName:   localHostname,
+	LocalWorkload: true,
+}
+
+var routelocalWlTenDotThree = proto.RouteUpdate{
+	Type:          proto.RouteType_LOCAL_WORKLOAD,
+	Dst:           "10.0.0.3/32",
+	DstNodeName:   localHostname,
+	LocalWorkload: true,
+}
+
 // localEp1WithPolicy adds a local endpoint to the mix.  It matches all and b=="b".
 var localEp1WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
@@ -114,6 +137,10 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	[]mock.TierInfo{
 		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
 ).withName("ep1 local, policy")
 
 // localEp1WithNamedPortPolicy as above but with named port in the policy.
@@ -155,6 +182,10 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 			IngressPolicyNames: []string{"pol-1"},
 		},
 	},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
 ).withName("ep1 local, negated named port policy")
 
 // As above but using the destination fields in the policy instead of source.
@@ -219,6 +250,10 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	[]mock.TierInfo{
 		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: nil},
 	},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
 ).withName("ep1 local, ingress-only policy")
 
 // localEp1WithNamedPortPolicy as above but with UDP named port in the policy.
@@ -437,6 +472,10 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 		[]mock.TierInfo{
 			{Name: "default", IngressPolicyNames: expectedOrder[:], EgressPolicyNames: expectedOrder[:]},
 		},
+	).withRoutes(
+		// Routes for the local WEPs.
+		routelocalWlTenDotOne,
+		routelocalWlTenDotTwo,
 	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedOrder[:]))
 	return state
 }
@@ -462,6 +501,10 @@ var localEp2WithPolicy = withPolicy.withKVUpdates(
 	[]mock.TierInfo{
 		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
 ).withName("ep2 local, policy")
 
 // localEpsWithPolicy contains both of the above endpoints, which have some
@@ -500,6 +543,11 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 	[]mock.TierInfo{
 		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
 ).withName("2 local, overlapping IPs & a policy")
 
 var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
@@ -564,6 +612,11 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 	proto.ProfileID{Name: "prof-2"},
 	proto.ProfileID{Name: "prof-3"},
 	proto.ProfileID{Name: "prof-missing"},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
 )
 
 // Building on the above, we add a policy to match on the inherited label, which should produce
@@ -664,7 +717,12 @@ var localEpsAndNamedPortPolicyBothEPsProfilesRemoved = localEpsAndNamedPortPolic
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1WithLabelsButNoProfiles},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	// Neither EP matches.
-}).withActiveProfiles().withName("2 local WEPs with no matches due to removing profiles from endpoints")
+}).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
+).withActiveProfiles().withName("2 local WEPs with no matches due to removing profiles from endpoints")
 
 // localEpsWithPolicyUpdatedIPs, when used with localEpsWithPolicy checks
 // correct handling of IP address updates.  We add and remove some IPs from
@@ -687,7 +745,23 @@ var localEpsWithPolicyUpdatedIPs = localEpsWithPolicy.withKVUpdates(
 	"fc00:fe12::1/128",
 	"11.0.0.2/32",
 	"fc00:fe12::2/128",
-})
+}).withRoutes(
+	// Routes for the local WEPs.
+	proto.RouteUpdate{
+		Type:          proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "11.0.0.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	proto.RouteUpdate{
+		Type:          proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "11.0.0.2/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
+).withName("2 local, non-overlapping IPs")
 
 // withProfile adds a profile to the initialised state.
 var withProfile = initialisedStore.withKVUpdates(
@@ -725,6 +799,11 @@ var localEpsWithProfile = withProfile.withKVUpdates(
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
 ).withName("2 local, overlapping IPs & a profile")
 
 // localEpsWithNonMatchingProfile contains a pair of overlapping IP endpoints and a profile
@@ -739,6 +818,11 @@ var localEpsWithNonMatchingProfile = withProfile.withKVUpdates(
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
 ).withName("2 local, overlapping IPs & a non-matching profile")
 
 // localEpsWithUpdatedProfile Follows on from localEpsWithProfile, changing the
@@ -796,6 +880,11 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 	localWlEp1Id, []mock.TierInfo{},
 ).withEndpoint(
 	localWlEp2Id, []mock.TierInfo{},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var withProfileTagOverriden = initialisedStore.withKVUpdates(
@@ -831,6 +920,11 @@ var localEpsWithTagOverriddenProfile = withProfileTagOverriden.withKVUpdates(
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{},
+).withRoutes(
+	// Routes for the local WEPs.
+	routelocalWlTenDotOne,
+	routelocalWlTenDotTwo,
+	routelocalWlTenDotThree,
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var hostEp1WithPolicyAndANetworkSet = hostEp1WithPolicy.withKVUpdates(
@@ -1189,7 +1283,59 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
-).withName("VXLAN local with borrows")
+)
+
+var localVXLANWep1Route1 = proto.RouteUpdate{
+	Type:          proto.RouteType_LOCAL_WORKLOAD,
+	IpPoolType:    proto.IPPoolType_VXLAN,
+	Dst:           "10.0.0.1/32",
+	DstNodeName:   localHostname,
+	DstNodeIp:     localHostIP.String(),
+	NatOutgoing:   true,
+	LocalWorkload: true,
+}
+
+var localVXLANWep1Route2 = proto.RouteUpdate{
+	Type:          proto.RouteType_LOCAL_WORKLOAD,
+	IpPoolType:    proto.IPPoolType_VXLAN,
+	Dst:           "10.0.0.2/32",
+	DstNodeName:   localHostname,
+	DstNodeIp:     localHostIP.String(),
+	NatOutgoing:   true,
+	LocalWorkload: true,
+}
+
+// As vxlanLocalBlockWithBorrows but with a local workload.  The local workload has an IP that overlaps with
+// the remote workload, we take that in preference to the remote route.
+var vxlanLocalBlockWithBorrowsLocalWEP = vxlanLocalBlockWithBorrows.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+).withRoutes(
+	routeUpdateIPPoolVXLAN,
+	routeUpdateRemoteHost,
+	proto.RouteUpdate{
+		Type:        proto.RouteType_LOCAL_HOST,
+		IpPoolType:  proto.IPPoolType_NONE,
+		Dst:         localHostIP.String() + "/32",
+		DstNodeName: localHostname,
+		DstNodeIp:   localHostIP.String(),
+	},
+	// Single route for the block.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_LOCAL_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.0.0/29",
+		DstNodeName: localHostname,
+		DstNodeIp:   localHostIP.String(),
+		NatOutgoing: true,
+	},
+	// Plus individual routes for the local WEPs.
+	localVXLANWep1Route1,
+	localVXLANWep1Route2,
+).withName("VXLAN local with borrows with local WEP override").withActiveProfiles(
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
+).withEndpoint("orch/wl1/ep1", []mock.TierInfo{})
 
 // As vxlanLocalBlockWithBorrows but using Node resources instead of host IPs.
 var vxlanLocalBlockWithBorrowsNodeRes = vxlanLocalBlockWithBorrows.withKVUpdates(
