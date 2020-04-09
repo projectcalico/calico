@@ -92,6 +92,11 @@ func (t *V4Trie) Get(cidr V4CIDR) interface{} {
 	return t.root.get(cidr)
 }
 
+// LookupPath looks up the given CIDR in the trie.  It returns a slice containing a V4TrieEntry for each
+// CIDR in the trie that encloses the given CIDR.  If buffer is non-nil, then it is used to store the entries;
+// if it is too short append() is used to extend it and the updated slice is returned.
+//
+// If the CIDR is not in the trie then an empty slice is returned.
 func (t *V4Trie) LookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
 	return t.root.lookupPath(buffer[:0], cidr)
 }
