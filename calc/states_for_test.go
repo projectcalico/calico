@@ -1189,7 +1189,55 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
-).withName("VXLAN local with borrows")
+)
+
+// As vxlanLocalBlockWithBorrows but with a local workload.  The local workload has an IP that overlaps with
+// the remote workload, we take that in preference to the remote route.
+var vxlanLocalBlockWithBorrowsLocalWEP = vxlanLocalBlockWithBorrows.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+).withRoutes(
+	routeUpdateIPPoolVXLAN,
+	routeUpdateRemoteHost,
+	proto.RouteUpdate{
+		Type:        proto.RouteType_LOCAL_HOST,
+		IpPoolType:  proto.IPPoolType_NONE,
+		Dst:         localHostIP.String() + "/32",
+		DstNodeName: localHostname,
+		DstNodeIp:   localHostIP.String(),
+	},
+	// Single route for the block.
+	proto.RouteUpdate{
+		Type:        proto.RouteType_LOCAL_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.0.0/29",
+		DstNodeName: localHostname,
+		DstNodeIp:   localHostIP.String(),
+		NatOutgoing: true,
+	},
+	// Plus individual routes for the local WEPs.
+	proto.RouteUpdate{
+		Type:          proto.RouteType_LOCAL_WORKLOAD,
+		IpPoolType:    proto.IPPoolType_VXLAN,
+		Dst:           "10.0.0.1/32",
+		DstNodeName:   localHostname,
+		DstNodeIp:     localHostIP.String(),
+		NatOutgoing:   true,
+		LocalWorkload: true,
+	},
+	proto.RouteUpdate{
+		Type:          proto.RouteType_LOCAL_WORKLOAD,
+		IpPoolType:    proto.IPPoolType_VXLAN,
+		Dst:           "10.0.0.2/32",
+		DstNodeName:   localHostname,
+		DstNodeIp:     localHostIP.String(),
+		NatOutgoing:   true,
+		LocalWorkload: true,
+	},
+).withName("VXLAN local with borrows with local WEP override").withActiveProfiles(
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
+).withEndpoint("orch/wl1/ep1", []mock.TierInfo{})
 
 // As vxlanLocalBlockWithBorrows but using Node resources instead of host IPs.
 var vxlanLocalBlockWithBorrowsNodeRes = vxlanLocalBlockWithBorrows.withKVUpdates(

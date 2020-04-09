@@ -107,6 +107,8 @@ func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispat
 }
 
 func (c *L3RouteResolver) OnLocalWorkloadUpdate(update api.Update) (_ bool) {
+	defer c.flush()
+
 	key := update.Key.(model.WorkloadEndpointKey)
 
 	// Look up the (possibly nil) old CIDRs.
@@ -117,10 +119,12 @@ func (c *L3RouteResolver) OnLocalWorkloadUpdate(update api.Update) (_ bool) {
 	if update.Value != nil {
 		newWorkload := update.Value.(*model.WorkloadEndpoint)
 		newCIDRs = newWorkload.IPv4Nets
+		logrus.WithField("workload", key).WithField("newCIDRs", newCIDRs).Debug("Workload update")
 	}
 
 	if reflect.DeepEqual(oldCIDRs, newCIDRs) {
 		// No change, ignore.
+		logrus.Debug("No change to CIDRs, ignore.")
 		return
 	}
 
@@ -522,6 +526,9 @@ func (c *L3RouteResolver) flush() {
 				}
 			}
 			if ri.LocalWEP.RefCount > 0 {
+				// We have a local WEP with this IP.
+				rt.DstNodeName = c.myNodeName
+				rt.Type = proto.RouteType_LOCAL_WORKLOAD
 				rt.LocalWorkload = true
 			}
 		}
@@ -713,6 +720,7 @@ func (r RouteTrie) updateCIDR(cidr ip.V4CIDR, updateFn func(info *RouteInfo)) bo
 	// Check if the update was a no-op.
 	if riCopy.Equals(ri) {
 		// Change was a no-op, ignore.
+		logrus.WithField("cidr", cidr).Debug("Ignoring no-op change")
 		return false
 	}
 
@@ -721,6 +729,7 @@ func (r RouteTrie) updateCIDR(cidr ip.V4CIDR, updateFn func(info *RouteInfo)) bo
 	r.MarkCIDRDirty(cidr)
 	if ri.IsZero() {
 		// No longer have *anything* to track about this CIDR, clean it up.
+		logrus.WithField("cidr", cidr).Debug("RouteInfo is zero, cleaning up.")
 		r.t.Delete(cidr)
 		return true
 	}
