@@ -252,8 +252,19 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 
 	// A kubeconfig file was provided.  Use it to load a config, passing through
 	// any overrides.
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&loadingRules, configOverrides).ClientConfig()
+	var config *rest.Config
+	var err error
+	if ca.KubeconfigInline != "" {
+		var clientConfig clientcmd.ClientConfig
+		clientConfig, err = clientcmd.NewClientConfigFromBytes([]byte(ca.KubeconfigInline))
+		if err != nil {
+			return nil, nil, resources.K8sErrorToCalico(err, nil)
+		}
+		config, err = clientConfig.ClientConfig()
+	} else {
+		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&loadingRules, configOverrides).ClientConfig()
+	}
 	if err != nil {
 		return nil, nil, resources.K8sErrorToCalico(err, nil)
 	}
