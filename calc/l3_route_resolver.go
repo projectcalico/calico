@@ -291,8 +291,8 @@ func (c *L3RouteResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 	return
 }
 
-// onNodeCIDRUpdate extracts the node's IP from its CIDR and adds it to the trie so that we emit
-// REMOTE_HOST routes for host IPs.  Passing newCIDR==nil cleans up the entry int he trie.
+// onNodeUpdate updates our cache of node information as well add adding/removing the node's CIDR from the trie.
+// Passing newCIDR==nil cleans up the entry in the trie.
 func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInfo) {
 	oldNodeInfo, nodeExisted := c.nodeNameToNodeInfo[nodeName]
 

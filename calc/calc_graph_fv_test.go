@@ -361,7 +361,8 @@ var baseTests = []StateList{
 		vxlanWithBlock,
 	},
 	{
-		// Corner case: hosts with duplicate IPs.
+		// Corner case: hosts with duplicate IPs; scenario where we add a host with a dup IP and then remove the
+		// original host.
 		vxlanWithBlockDupNodeIP,
 		vxlanWithDupNodeIPRemoved,
 	},
