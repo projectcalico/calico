@@ -32,34 +32,46 @@ import (
 )
 
 type bpfRouteManager struct {
-	myNodename string
+	myNodename      string
+	resyncScheduled bool
+	routeMap        bpf.Map
 
-	ipPools      map[string]bpfIPAMPool
-	ipPoolsDirty bool
+	// These fields contain our cache of the input data, indexed for efficient updates
+	// and lookups:
+	//
+	// - routes from the calculation graph
+	// - local interface names, IPs, and, indexes
+	// - local workloads and their IPs.
+	//
+	// From these fields we're able to calculate the BPF routes that should be in the dataplane.
 
-	// Tracking for local host IPs.
-	localHostIPs      map[string]set.Set
-	localHostRoutes   map[routes.Key]routes.Value
-	localHostIPsDirty bool
+	// cidrToRoute maps from CIDR to the calculation graph's routes.  These cover IP pools, local
+	// and remote workloads and hosts.  For local routes, we're missing some information that we
+	// need from the dataplane.
+	cidrToRoute map[ip.V4CIDR]proto.RouteUpdate
+	// cidrToLocalIfaces maps from (/32) CIDR to the set of interfaces that have that CIDR
+	cidrToLocalIfaces map[ip.V4CIDR]set.Set
+	localIfaceToCIDRs map[string]set.Set
+	// cidrToWEPIDs maps from (/32) CIDR to the set of local proto.WorkloadEndpointIDs that have that CIDR.
+	cidrToWEPIDs map[ip.V4CIDR]set.Set
+	// wepIDToWorklaod contains all the local workloads.
+	wepIDToWorklaod map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	// ifaceNameToIdx maps local interface name to interface ID.
+	ifaceNameToIdx map[string]int
+	// ifaceNameToWEPIDs maps local interface name to the set of local proto.WorkloadEndpointIDs that have that name.
+	// (Usually a single WEP).
+	ifaceNameToWEPIDs map[string]set.Set
+	// Set of CIDRs for which we need to update the BPF routes.
+	dirtyCIDRs set.Set
 
-	// Tracking for remote host IPs.
-	remoteHostIPs      map[string]string
-	remoteHostRoutes   map[routes.Key]routes.Value
-	remoteHostIPsDirty bool
-
-	// Tracking for local workload IPs.
-	localIfaceToIfIndex map[string]int
-	localWorkloads      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	localWorkloadRoutes map[routes.Key]routes.Value
-	localWorkloadsDirty bool
+	// These fields track the desired state of the dataplane and the set of inconsistencies
+	// between that and the real state of the dataplane.
 
 	// desiredRoutes contains the complete, desired state of the dataplane map.
 	desiredRoutes map[routes.Key]routes.Value
-	routeMap      bpf.Map
+	dirtyRoutes   set.Set
 
-	dirtyRoutes     set.Set
-	resyncScheduled bool
-
+	// Callbacks used to tell kube-proxy about the relevant routes.
 	cbLck           sync.RWMutex
 	hostIPsUpdateCB func([]net.IP)
 	routesUpdateCB  func(routes.Key, routes.Value)
@@ -68,16 +80,21 @@ type bpfRouteManager struct {
 
 func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
 	return &bpfRouteManager{
-		myNodename:          myNodename,
-		ipPools:             map[string]bpfIPAMPool{},
-		desiredRoutes:       map[routes.Key]routes.Value{},
-		localIfaceToIfIndex: map[string]int{},
-		localHostIPs:        map[string]set.Set{},
-		remoteHostIPs:       map[string]string{},
-		localWorkloads:      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		routeMap:            routes.Map(mc),
-		dirtyRoutes:         set.New(),
-		resyncScheduled:     true,
+		myNodename:        myNodename,
+		cidrToRoute:       map[ip.V4CIDR]proto.RouteUpdate{},
+		cidrToLocalIfaces: map[ip.V4CIDR]set.Set{},
+		localIfaceToCIDRs: map[string]set.Set{},
+		cidrToWEPIDs:      map[ip.V4CIDR]set.Set{},
+		wepIDToWorklaod:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		ifaceNameToIdx:    map[string]int{},
+		ifaceNameToWEPIDs: map[string]set.Set{},
+		dirtyCIDRs:        set.New(),
+
+		desiredRoutes: map[routes.Key]routes.Value{},
+		routeMap:      routes.Map(mc),
+
+		dirtyRoutes:     set.New(),
+		resyncScheduled: true,
 	}
 }
 
@@ -88,11 +105,6 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 		m.onIfaceUpdate(msg)
 	case *ifaceAddrsUpdate:
 		m.onIfaceAddrsUpdate(msg)
-
-	case *proto.IPAMPoolUpdate:
-		m.onIPAMPoolUpdate(msg)
-	case *proto.IPAMPoolRemove:
-		m.onIPAMPoolRemove(msg)
 
 	// Updates for remote IPAM blocks and remote workloads with borrowed IPs.  These tell us
 	// which host owns each IP block/IP.
@@ -106,115 +118,23 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 		m.onWorkloadEndpointUpdate(msg)
 	case *proto.WorkloadEndpointRemove:
 		m.onWorkloadEndpointRemove(msg)
-
-	// Updates for all Calico hosts giving us the host's node IP.
-	case *proto.HostMetadataUpdate:
-		m.onHostMetadataUpdate(msg)
-	case *proto.HostMetadataRemove:
-		m.onHostMetadataRemove(msg)
 	}
 }
 
 func (m *bpfRouteManager) CompleteDeferredWork() error {
-	var numAdds, numDels uint
 	startTime := time.Now()
 
-	err := m.routeMap.EnsureExists()
-	if err != nil {
-		log.WithError(err).Panic("Failed to create route map")
-	}
+	// Step 1: calculate any updates to the _desired_ state of the BPF map.
+	m.recalculateRoutesForDirtyCIDRs()
 
-	if m.ipPoolsDirty {
-		// TODO handle IPAM routes
-		// TODO insert routes for the IPAM pools themselves.
-		m.localWorkloadsDirty = true
-		m.localHostIPsDirty = true
-		m.remoteHostIPsDirty = true
-		m.ipPoolsDirty = false
-	}
-
-	if m.localWorkloadsDirty {
-		m.recalculateWorkloads()
-		m.localWorkloadsDirty = false
-	}
-
-	if m.localHostIPsDirty {
-		m.recalculateLocalHostIPs()
-		m.localHostIPsDirty = false
-	}
-
-	if m.remoteHostIPsDirty {
-		m.recalculateRemoteHostIPs()
-		m.remoteHostIPsDirty = false
-	}
-
-	debug := log.GetLevel() >= log.DebugLevel
+	// Step 2: if required, load the state of the map from the dataplane so we can do efficient deltas.
 	if m.resyncScheduled {
-		log.Info("Doing full resync of BPF IP sets map")
-
-		// Mark all desired routes as dirty.
-		m.dirtyRoutes.Clear()
-		for k := range m.desiredRoutes {
-			m.dirtyRoutes.Add(k)
-		}
-
-		// Scan the dataplane, discarding any routes that are already correct.
-		err := m.routeMap.Iter(func(k, v []byte) {
-			var key routes.Key
-			var value routes.Value
-			copy(key[:], k)
-			copy(value[:], v)
-
-			if desired, ok := m.desiredRoutes[key]; ok && desired == value {
-				// Route is already correct.
-				if debug {
-					log.WithField("k", key).Debug("Route already correct.")
-				}
-				m.dirtyRoutes.Discard(key)
-			} else if ok {
-				// Route is present but incorrect (and we'll have marked it dirty above).
-				if debug {
-					log.WithField("k", key).Debug("Route present but incorrect.")
-				}
-			} else {
-				// Route is not in the desired map so it needs to be deleted.
-				if debug {
-					log.WithField("k", key).Debug("Unexpected route in dataplane.")
-				}
-				m.dirtyRoutes.Add(key)
-			}
-		})
-		if err != nil {
-			log.WithError(err).Panic("Failed to scan BPF map.")
-		}
+		m.resyncWithDataplane()
 		m.resyncScheduled = false
 	}
 
-	m.dirtyRoutes.Iter(func(item interface{}) error {
-		key := item.(routes.Key)
-		value, present := m.desiredRoutes[key]
-		if !present {
-			// Delete the key.
-			numDels++
-			err := m.routeMap.Delete(key[:])
-			if err != nil {
-				log.WithFields(log.Fields{"key": key}).Error("Failed to delete from BPF map")
-				m.resyncScheduled = true
-				return nil
-			}
-			return set.RemoveItem
-		}
-
-		// If we get here, we're doing an update.
-		numAdds++
-		err := m.routeMap.Update(key[:], value[:])
-		if err != nil {
-			log.WithFields(log.Fields{"key": key}).Error("Failed to update BPF map")
-			m.resyncScheduled = true
-			return nil
-		}
-		return set.RemoveItem
-	})
+	// Step 3: apply dataplane updates.
+	numDels, numAdds := m.applyUpdates()
 
 	duration := time.Since(startTime)
 	if numDels > 0 || numAdds > 0 {
@@ -228,112 +148,311 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 	return nil
 }
 
+func (m *bpfRouteManager) ensureDataplaneInitialised() {
+	err := m.routeMap.EnsureExists()
+	if err != nil {
+		log.WithError(err).Panic("Failed to create route map")
+	}
+}
+
+func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {
+	m.dirtyCIDRs.Iter(func(item interface{}) error {
+		cidr := item.(ip.V4CIDR)
+
+		dataplaneKey := routes.NewKey(cidr)
+		newValue := m.calculateRoute(cidr)
+
+		oldValue, exists := m.desiredRoutes[dataplaneKey]
+		if newValue != nil {
+			if exists && oldValue == *newValue {
+				// Value is already correct.  We're done.
+				return set.RemoveItem
+			}
+			m.desiredRoutes[dataplaneKey] = *newValue
+			m.onRouteUpdateCB(dataplaneKey, *newValue)
+		} else {
+			if !exists {
+				// Value is already correct.  We're done.
+				return set.RemoveItem
+			}
+			delete(m.desiredRoutes, dataplaneKey)
+			m.onRouteDeleteCB(dataplaneKey)
+		}
+		m.dirtyRoutes.Add(dataplaneKey)
+		return set.RemoveItem
+	})
+}
+
+func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
+	// First check for a matching local host IP.  The calculation graph doesn't know about all of these
+	// so we might not get a CG route.
+	var flags routes.Flags
+
+	_, ok := m.cidrToLocalIfaces[cidr]
+	if ok {
+		flags |= routes.FlagsLocalHost
+	}
+
+	cgRoute, cgRouteExists := m.cidrToRoute[cidr]
+	if cgRouteExists {
+		// Collect flags that are shared by all route types.
+		if cgRoute.SameSubnet {
+			flags |= routes.FlagSameSubnet
+		}
+		if cgRoute.IpPoolType != proto.IPPoolType_NONE {
+			flags |= routes.FlagInIPAMPool
+		}
+		if cgRoute.NatOutgoing {
+			flags |= routes.FlagNATOutgoing
+		}
+	}
+
+	var route *routes.Value
+
+	switch cgRoute.Type {
+	case proto.RouteType_LOCAL_WORKLOAD:
+		if !cgRoute.LocalWorkload {
+			// Just the local IPAM block, not an actual workload.
+			return nil
+		}
+		if wepIDs, ok := m.cidrToWEPIDs[cidr]; ok {
+			bestWepScore := -1
+			var bestWepID proto.WorkloadEndpointID
+			if wepIDs.Len() > 1 {
+				log.WithField("cidr", cidr).Warn(
+					"Multiple local workloads with same IP but BPF dataplane only supports single route. " +
+						"Will choose one route.")
+			}
+			wepIDs.Iter(func(item interface{}) error {
+				wepScore := 0
+				wepID := item.(proto.WorkloadEndpointID)
+				// Route is a local workload look up its name and interface details.
+				wep := m.wepIDToWorklaod[wepID]
+				ifaceName := wep.Name
+				ifaceIdx, ok := m.ifaceNameToIdx[ifaceName]
+				if ok {
+					wepScore++
+				}
+				if wepScore > bestWepScore || wepScore == bestWepScore && wepID.String() > bestWepID.String(){
+					flags |= routes.FlagsLocalWorkload
+					routeVal := routes.NewValueWithIfIndex(flags, ifaceIdx)
+					route = &routeVal
+					bestWepID = wepID
+					bestWepScore = wepScore
+				}
+				return nil
+			})
+		}
+	case proto.RouteType_REMOTE_WORKLOAD:
+		flags |= routes.FlagsRemoteWorkload
+		if cgRoute.DstNodeIp == "" {
+			log.WithField("node", cgRoute.DstNodeName).Debug(
+				"Can't program route for remote workload, don't know its node's IP")
+			return nil
+		}
+		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
+		routeVal := routes.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP).(ip.V4Addr))
+		route = &routeVal
+	case proto.RouteType_REMOTE_HOST:
+		flags |= routes.FlagsRemoteHost
+		if cgRoute.DstNodeIp == "" {
+			log.WithField("node", cgRoute.DstNodeName).Panic(
+				"Remote host route is missing node's IP but its CIDR should equal its IP.")
+			return nil
+		}
+		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
+		routeVal := routes.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP).(ip.V4Addr))
+		route = &routeVal
+	default: // proto.RouteType_CIDR_INFO / LOCAL_HOST or no route at all
+		if flags != 0 {
+			// We have something to say about this route.
+			routeVal := routes.NewValue(flags)
+			route = &routeVal
+		}
+	}
+
+	return route
+}
+
+func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
+	m.ensureDataplaneInitialised()
+
+	debug := log.GetLevel() >= log.DebugLevel
+
+	m.dirtyRoutes.Iter(func(item interface{}) error {
+		key := item.(routes.Key)
+		value, present := m.desiredRoutes[key]
+		if !present {
+			// Delete the key.
+			numDels++
+			if debug {
+				log.WithField("k", key).Debug("Deleting route from dataplane")
+			}
+			err := m.routeMap.Delete(key[:])
+			if err != nil {
+				log.WithFields(log.Fields{"key": key}).Error("Failed to delete from BPF map")
+				m.resyncScheduled = true
+				return nil
+			}
+			return set.RemoveItem
+		}
+
+		// If we get here, we're doing an update.
+		numAdds++
+		if debug {
+			log.WithField("k", key).WithField("v", value).Debug("Adding/Updating route in dataplane")
+		}
+		err := m.routeMap.Update(key[:], value[:])
+		if err != nil {
+			log.WithFields(log.Fields{"key": key}).Error("Failed to update BPF map")
+			m.resyncScheduled = true
+			return nil
+		}
+		return set.RemoveItem
+	})
+
+	return
+}
+
+// resyncWithDataplane reads all routes from the dataplane and compares them against m.desiredRoutes.
+//
+// After this operation, m.dirtyRoutes only contains routes that are out-of-sync with the dataplane.
+// Already-correct routes are removed from the dirty set.  Missing, incorrect, and, superfluous routes are added.
+func (m *bpfRouteManager) resyncWithDataplane() {
+	debug := log.GetLevel() >= log.DebugLevel
+	log.Info("Doing full resync of BPF IP sets map")
+
+	// Mark all desired routes as dirty.
+	m.dirtyRoutes.Clear()
+	for k := range m.desiredRoutes {
+		m.dirtyRoutes.Add(k)
+	}
+
+	// Scan the dataplane, discarding any routes that are already correct.
+	err := m.routeMap.Iter(func(k, v []byte) {
+		var key routes.Key
+		var value routes.Value
+		copy(key[:], k)
+		copy(value[:], v)
+
+		if desired, ok := m.desiredRoutes[key]; ok && desired == value {
+			// Route is already correct.
+			if debug {
+				log.WithField("k", key).WithField("v", value).Debug("Route already correct.")
+			}
+			m.dirtyRoutes.Discard(key)
+		} else if ok {
+			// Route is present but incorrect (and we'll have marked it dirty above).
+			if debug {
+				log.WithField("k", key).Debug("Route present but incorrect.")
+			}
+		} else {
+			// Route is not in the desired map so it needs to be deleted.
+			if debug {
+				log.WithField("k", key).Debug("Unexpected route in dataplane.")
+			}
+			m.dirtyRoutes.Add(key)
+		}
+	})
+	if err != nil {
+		log.WithError(err).Panic("Failed to scan BPF map.")
+	}
+}
+
 func (m *bpfRouteManager) onIfaceUpdate(msg *ifaceUpdate) {
 	// We're interested in the mapping from interface name to interface index.
 	if msg.State == ifacemonitor.StateUp {
-		oldIdx, ok := m.localIfaceToIfIndex[msg.Name]
+		oldIdx, ok := m.ifaceNameToIdx[msg.Name]
 		if !ok || oldIdx != msg.Index {
-			m.localIfaceToIfIndex[msg.Name] = msg.Index
-			m.localWorkloadsDirty = true
+			m.ifaceNameToIdx[msg.Name] = msg.Index
+			m.onIfaceIdxChanged(msg.Name)
 		}
 	} else {
-		_, ok := m.localIfaceToIfIndex[msg.Name]
+		_, ok := m.ifaceNameToIdx[msg.Name]
 		if ok {
-			delete(m.localIfaceToIfIndex, msg.Name)
-			m.localWorkloadsDirty = true
+			delete(m.ifaceNameToIdx, msg.Name)
+			m.onIfaceIdxChanged(msg.Name)
 		}
 	}
+}
+
+func (m *bpfRouteManager) onIfaceIdxChanged(name string) {
+	wepIDs := m.ifaceNameToWEPIDs[name]
+	if wepIDs == nil {
+		return
+	}
+	wepIDs.Iter(func(item interface{}) error {
+		wepID := item.(proto.WorkloadEndpointID)
+		wep := m.wepIDToWorklaod[wepID]
+		cidrs := getV4WorkloadCIDRs(wep)
+		m.markCIDRsDirty(cidrs...)
+		return nil
+	})
 }
 
 func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
+	changed := false
+
+	var newCIDRs set.Set
 	if update.Addrs == nil {
-		delete(m.localHostIPs, update.Name)
+		newCIDRs = set.Empty()
 	} else {
-		ipsCopy := update.Addrs.Copy()
-		m.localHostIPs[update.Name] = ipsCopy
-	}
-	m.localHostIPsDirty = true
-}
-
-func (m *bpfRouteManager) recalculateLocalHostIPs() {
-	// Host IP updates are assumed to be rare and small so we recalculate the whole lot on any change.
-	// onIPSetUpdate will do the delta calculation so we won't churn the data in any case.
-	oldRoutes := m.localHostRoutes
-	newRoutes := map[routes.Key]routes.Value{}
-
-	netIPs := []net.IP{}
-
-	for iface, ips := range m.localHostIPs {
-		logCxt := log.WithField("iface", iface)
-		logCxt.Debug("Adding IPs from interface")
-		ips.Iter(func(item interface{}) error {
-			ipStr := item.(string)
-			cidr := ip.MustParseCIDROrIP(ipStr)
-			v4CIDR, ok := cidr.(ip.V4CIDR)
-			if !ok {
-				// FIXME IPv6
-				return nil
+		newCIDRs = set.New()
+		update.Addrs.Iter(func(item interface{}) error {
+			cidrStr := item.(string)
+			cidr := ip.MustParseCIDROrIP(cidrStr)
+			if v4CIDR, ok := cidr.(ip.V4CIDR); ok && cidr.Addr().AsNetIP().IsGlobalUnicast() {
+				newCIDRs.Add(v4CIDR)
 			}
-
-			netIP := cidr.Addr().AsNetIP()
-
-			if !netIP.IsGlobalUnicast() {
-				logCxt.WithField("addr", cidr).Debug("Address is not global unicast, ignore")
-				return nil
-			}
-			key := routes.NewKey(v4CIDR)
-			value := routes.NewValue(routes.FlagsLocalHost | m.flagsForCIDR(v4CIDR))
-			newRoutes[key] = value
-
-			netIPs = append(netIPs, netIP)
-
 			return nil
 		})
 	}
 
-	m.applyRoutesDelta(oldRoutes, newRoutes)
-	m.localHostRoutes = newRoutes
-
-	m.onHostIPsChange(netIPs)
-
-}
-
-type bpfIPAMPool struct {
-	CIDR       ip.CIDR
-	Masquerade bool
-}
-
-func (m *bpfRouteManager) onIPAMPoolUpdate(msg *proto.IPAMPoolUpdate) {
-	// TODO IPAM pools and IPAM blocks can share the same CIDR
-	pool := msg.GetPool()
-	cidr, err := ip.ParseCIDROrIP(pool.Cidr)
-	if err != nil {
-		log.WithError(err).Panic("Failed to parse IPAM pool CIDR")
+	cidrs := m.localIfaceToCIDRs[update.Name]
+	if cidrs != nil {
+		cidrs.Iter(func(item interface{}) error {
+			cidr := item.(ip.V4CIDR)
+			if newCIDRs.Contains(cidr) {
+				// No change for this address.
+				newCIDRs.Discard(cidr)
+				return nil
+			}
+			// Address deleted.
+			changed = true
+			m.cidrToLocalIfaces[cidr].Discard(update.Name)
+			if m.cidrToLocalIfaces[cidr].Len() == 0 {
+				delete(m.cidrToLocalIfaces, cidr)
+			}
+			m.markCIDRsDirty(cidr)
+			return set.RemoveItem
+		})
 	}
-	newPool := bpfIPAMPool{CIDR: cidr, Masquerade: pool.Masquerade}
-	log.WithField("pool", newPool).Debug("Pool updated")
-	oldPool, ok := m.ipPools[msg.Id]
-	if !ok || oldPool != newPool {
-		m.ipPools[msg.Id] = newPool
-		m.ipPoolsDirty = true
-	}
-}
 
-func (m *bpfRouteManager) onIPAMPoolRemove(msg *proto.IPAMPoolRemove) {
-	_, ok := m.ipPools[msg.Id]
-	if ok {
-		delete(m.ipPools, msg.Id)
-		m.ipPoolsDirty = true
-	}
-}
-
-func (m *bpfRouteManager) getContainingIPPool(cidr ip.V4CIDR) *bpfIPAMPool {
-	for _, p := range m.ipPools {
-		if poolCIDR, ok := p.CIDR.(ip.V4CIDR); ok && poolCIDR.ContainsV4(cidr.Addr().(ip.V4Addr)) {
-			return &p
+	newCIDRs.Iter(func(item interface{}) error {
+		changed = true
+		cidr := item.(ip.V4CIDR)
+		ifaceNames := m.cidrToLocalIfaces[cidr]
+		if ifaceNames == nil {
+			ifaceNames = set.New()
+			m.cidrToLocalIfaces[cidr] = ifaceNames
 		}
+		ifaceNames.Add(update.Name)
+		if cidrs == nil {
+			cidrs = set.New()
+			m.localIfaceToCIDRs[update.Name] = cidrs
+		}
+		m.markCIDRsDirty(cidr)
+		cidrs.Add(cidr)
+		return set.RemoveItem
+	})
+
+	if changed {
+		var newIPs []net.IP
+		for cidr := range m.cidrToLocalIfaces {
+			newIPs = append(newIPs, cidr.Addr().AsNetIP())
+		}
+		m.onHostIPsChange(newIPs)
 	}
-	return nil
 }
 
 func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
@@ -345,129 +464,21 @@ func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
 	log.Debugf("localHostIPs update %+v", newIPs)
 }
 
-func (m *bpfRouteManager) recalculateWorkloads() {
-	oldRoutes := m.localWorkloadRoutes
-	newRoutes := map[routes.Key]routes.Value{}
-
-	for wepID, wep := range m.localWorkloads {
-		log.WithField("wepID", wepID).Debug("Adding IPs from local workload")
-		for _, ipStr := range wep.Ipv4Nets { // FIXME IPv6
-			cidr := ip.MustParseCIDROrIP(ipStr)
-			v4CIDR, ok := cidr.(ip.V4CIDR)
-			if !ok {
-				// FIXME IPv6
-				continue
-			}
-			key := routes.NewKey(v4CIDR)
-			flags := routes.FlagsLocalWorkload
-			flags |= m.flagsForCIDR(v4CIDR)
-			value := routes.NewValueWithIfIndex(flags, m.localIfaceToIfIndex[wep.Name])
-			newRoutes[key] = value
-		}
-	}
-
-	m.applyRoutesDelta(oldRoutes, newRoutes)
-	m.localWorkloadRoutes = newRoutes
-}
-
-func (m *bpfRouteManager) flagsForCIDR(v4CIDR ip.V4CIDR) (flags routes.Flags) {
-	pool := m.getContainingIPPool(v4CIDR)
-	if pool != nil {
-		flags |= routes.FlagInIPAMPool
-		if pool.Masquerade {
-			flags |= routes.FlagNATOutgoing
-		}
-	}
-	return
-}
-
-func (m *bpfRouteManager) recalculateRemoteHostIPs() {
-	oldRoutes := m.remoteHostRoutes
-	newRoutes := map[routes.Key]routes.Value{}
-
-	for nodename, ipStr := range m.remoteHostIPs {
-		log.WithField("nodename", nodename).Debug("Adding IP from remote host")
-		cidr := ip.MustParseCIDROrIP(ipStr)
-		v4CIDR, ok := cidr.(ip.V4CIDR)
-		if !ok {
-			// FIXME IPv6
-			continue
-		}
-		key := routes.NewKey(v4CIDR)
-		value := routes.NewValue(routes.FlagsRemoteHost | m.flagsForCIDR(v4CIDR))
-		newRoutes[key] = value
-	}
-
-	m.applyRoutesDelta(oldRoutes, newRoutes)
-	m.remoteHostRoutes = newRoutes
-}
-
-func (m *bpfRouteManager) applyRoutesDelta(oldRoutes map[routes.Key]routes.Value, newRoutes map[routes.Key]routes.Value) {
-	// FIXME assumes that workload and host routes will never overlap.
-	for k, v := range oldRoutes {
-		if newV, ok := newRoutes[k]; ok && newV == v {
-			continue
-		}
-		delete(m.desiredRoutes, k)
-		m.dirtyRoutes.Add(k)
-		m.onRouteDeleteCB(k)
-	}
-	for k, v := range newRoutes {
-		if oldV, ok := oldRoutes[k]; ok && oldV == v {
-			continue
-		}
-		m.desiredRoutes[k] = v
-		m.dirtyRoutes.Add(k)
-		m.onRouteUpdateCB(k, v)
-	}
-}
 
 func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
-	// FIXME combine local veth info with route info.
-	if update.DstNodeName == m.myNodename {
-		// We learn about local endpoints from a different message.
-		log.Debug("Workload is on this host, ignoring route")
-		return
-	}
-
 	cidr := ip.MustParseCIDROrIP(update.Dst)
 	v4CIDR, ok := cidr.(ip.V4CIDR)
 	if !ok {
 		// FIXME IPv6
 		return
 	}
-	key := routes.NewKey(v4CIDR)
 
-	if update.DstNodeIp == "" {
-		// Calc graph doesn't know the node's IP yet or the IP has been removed, clean up
-		// the route.
-		m.removeRoute(v4CIDR)
+	if m.cidrToRoute[v4CIDR] == *update {
 		return
 	}
 
-	nextHop := ip.MustParseCIDROrIP(update.DstNodeIp)
-	v4NextHop, ok := nextHop.(ip.V4CIDR)
-	if !ok {
-		// FIXME IPv6
-		return
-	}
-
-	flags := routes.Flags(0)
-	if update.IpPoolType != proto.IPPoolType_NONE {
-		flags |= routes.FlagInIPAMPool
-	}
-	switch update.Type {
-	case proto.RouteType_REMOTE_WORKLOAD:
-		flags |= routes.FlagsRemoteWorkload
-	case proto.RouteType_REMOTE_HOST:
-		flags |= routes.FlagsRemoteHost
-	}
-
-	value := routes.NewValueWithNextHop(flags, v4NextHop.Addr().(ip.V4Addr))
-
-	m.desiredRoutes[key] = value
-	m.dirtyRoutes.Add(key)
-	m.onRouteUpdateCB(key, value)
+	m.cidrToRoute[v4CIDR] = *update
+	m.dirtyCIDRs.Add(v4CIDR)
 }
 
 func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
@@ -477,47 +488,69 @@ func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
 		// FIXME IPv6
 		return
 	}
-	m.removeRoute(v4CIDR)
-}
-
-func (m *bpfRouteManager) removeRoute(v4CIDR ip.V4CIDR) {
-	key := routes.NewKey(v4CIDR)
-	if _, ok := m.desiredRoutes[key]; ok {
-		delete(m.desiredRoutes, key)
-		m.dirtyRoutes.Add(key)
-		m.onRouteDeleteCB(key)
-	}
+	delete(m.cidrToRoute, v4CIDR)
+	m.dirtyCIDRs.Add(v4CIDR)
 }
 
 func (m *bpfRouteManager) onWorkloadEndpointUpdate(update *proto.WorkloadEndpointUpdate) {
-	m.localWorkloads[*update.Id] = update.Endpoint
-	m.localWorkloadsDirty = true
+	// Clean up the indexes for any old WEPs that had this ID.
+	m.removeWEP(update.Id)
+	// Update the indexes to add this WEP.
+	m.addWEP(update)
+}
+
+func (m *bpfRouteManager) addWEP(update *proto.WorkloadEndpointUpdate) {
+	m.wepIDToWorklaod[*update.Id] = update.Endpoint
+	newCIDRs := getV4WorkloadCIDRs(update.Endpoint)
+	for _, cidr := range newCIDRs {
+		wepIDs := m.cidrToWEPIDs[cidr]
+		if wepIDs == nil {
+			wepIDs = set.New()
+			m.cidrToWEPIDs[cidr] = wepIDs
+		}
+		wepIDs.Add(*update.Id)
+	}
+	m.markCIDRsDirty(newCIDRs...)
+	wepIDs := m.ifaceNameToWEPIDs[update.Endpoint.Name]
+	if wepIDs == nil {
+		wepIDs = set.New()
+		m.ifaceNameToWEPIDs[update.Endpoint.Name] = wepIDs
+	}
+	wepIDs.Add(*update.Id)
 }
 
 func (m *bpfRouteManager) onWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
-	delete(m.localWorkloads, *update.Id)
-	m.localWorkloadsDirty = true
+	m.removeWEP(update.Id)
 }
 
-func (m *bpfRouteManager) onHostMetadataUpdate(update *proto.HostMetadataUpdate) {
-	if update.Hostname == m.myNodename {
-		log.Debug("Ignoring host metadata update for this host")
+func (m *bpfRouteManager) removeWEP(id *proto.WorkloadEndpointID) {
+	oldWEP := m.wepIDToWorklaod[*id]
+	if oldWEP == nil {
 		return
 	}
-	if update.Ipv4Addr == m.remoteHostIPs[update.Hostname] {
-		return
+	delete(m.wepIDToWorklaod, *id)
+	oldCIDRs := getV4WorkloadCIDRs(oldWEP)
+	for _, cidr := range oldCIDRs {
+		m.cidrToWEPIDs[cidr].Discard(*id)
+		if m.cidrToWEPIDs[cidr].Len() == 0 {
+			delete(m.cidrToWEPIDs, cidr)
+		}
 	}
-	m.remoteHostIPs[update.Hostname] = update.Ipv4Addr
-	m.remoteHostIPsDirty = true
+	m.markCIDRsDirty(oldCIDRs...)
+	m.ifaceNameToWEPIDs[oldWEP.Name].Discard(*id)
+	if m.ifaceNameToWEPIDs[oldWEP.Name].Len() == 0 {
+		delete(m.ifaceNameToWEPIDs, oldWEP.Name)
+	}
 }
 
-func (m *bpfRouteManager) onHostMetadataRemove(remove *proto.HostMetadataRemove) {
-	if remove.Hostname == m.myNodename {
-		log.Debug("Ignoring host metadata remove for this host")
+func getV4WorkloadCIDRs(wep *proto.WorkloadEndpoint) (cidrs []ip.V4CIDR) {
+	if wep == nil {
 		return
 	}
-	delete(m.remoteHostIPs, remove.Hostname)
-	m.remoteHostIPsDirty = true
+	for _, addr := range wep.Ipv4Nets {
+		cidrs = append(cidrs, ip.MustParseCIDROrIP(addr).(ip.V4CIDR))
+	}
+	return
 }
 
 func (m *bpfRouteManager) setHostIPUpdatesCallBack(cb func([]net.IP)) {
@@ -549,4 +582,8 @@ func (m *bpfRouteManager) onRouteDeleteCB(k routes.Key) {
 	if m.routesDeleteCB != nil {
 		m.routesDeleteCB(k)
 	}
+}
+
+func (m *bpfRouteManager) markCIDRsDirty(cidrs ...ip.V4CIDR) {
+	m.dirtyCIDRs.AddAll(cidrs)
 }

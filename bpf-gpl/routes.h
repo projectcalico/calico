@@ -34,12 +34,13 @@ union cali_rt_lpm_key {
 };
 
 enum cali_rt_flags {
-	CALI_RT_UNKNOWN  = 0x00,
-	CALI_RT_IN_POOL  = 0x01,
-	CALI_RT_NAT_OUT  = 0x02,
-	CALI_RT_WORKLOAD = 0x04,
-	CALI_RT_LOCAL    = 0x08,
-	CALI_RT_HOST     = 0x10,
+	CALI_RT_UNKNOWN     = 0x00,
+	CALI_RT_IN_POOL     = 0x01,
+	CALI_RT_NAT_OUT     = 0x02,
+	CALI_RT_WORKLOAD    = 0x04,
+	CALI_RT_LOCAL       = 0x08,
+	CALI_RT_HOST        = 0x10,
+	CALI_RT_SAME_SUBNET = 0x20,
 };
 
 struct cali_rt {

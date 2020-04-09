@@ -135,19 +135,21 @@ func withUDPConnectedRecvMsg() bpfTestOpt {
 	}
 }
 
-const expectedRouteDump = `10.65.0.2/32: local workload in-pool nat-out idx -
+const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
-10.65.1.0/26: remote workload in-pool nh FELIX_1
-10.65.2.0/26: remote workload in-pool nh FELIX_2
+10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 FELIX_0/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
-const expectedRouteDumpIPIP = `10.65.0.1/32: local host in-pool nat-out
+const expectedRouteDumpIPIP = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.1/32: local host
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
-10.65.1.0/26: remote workload in-pool nh FELIX_1
-10.65.2.0/26: remote workload in-pool nh FELIX_2
+10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 FELIX_0/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
