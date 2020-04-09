@@ -311,6 +311,7 @@ func (m *bpfRouteManager) onIPAMPoolUpdate(msg *proto.IPAMPoolUpdate) {
 		log.WithError(err).Panic("Failed to parse IPAM pool CIDR")
 	}
 	newPool := bpfIPAMPool{CIDR: cidr, Masquerade: pool.Masquerade}
+	log.WithField("pool", newPool).Debug("Pool updated")
 	oldPool, ok := m.ipPools[msg.Id]
 	if !ok || oldPool != newPool {
 		m.ipPools[msg.Id] = newPool
@@ -422,12 +423,8 @@ func (m *bpfRouteManager) applyRoutesDelta(oldRoutes map[routes.Key]routes.Value
 }
 
 func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
-	if update.Type != proto.RouteType_WORKLOADS_NODE {
-		log.WithField("type", update.Type).Debug("Route type we're not interested in, ignoring")
-		return
-	}
-
-	if update.Node == m.myNodename {
+	// FIXME combine local veth info with route info.
+	if update.DstNodeName == m.myNodename {
 		// We learn about local endpoints from a different message.
 		log.Debug("Workload is on this host, ignoring route")
 		return
@@ -441,20 +438,31 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	}
 	key := routes.NewKey(v4CIDR)
 
-	nextHop := ip.MustParseCIDROrIP(update.Gw)
+	if update.DstNodeIp == "" {
+		// Calc graph doesn't know the node's IP yet or the IP has been removed, clean up
+		// the route.
+		m.removeRoute(v4CIDR)
+		return
+	}
+
+	nextHop := ip.MustParseCIDROrIP(update.DstNodeIp)
 	v4NextHop, ok := nextHop.(ip.V4CIDR)
 	if !ok {
 		// FIXME IPv6
 		return
 	}
 
-	// TODO: if we used flagsForCIDR() here, we'd have an order-dependency with IP pools.
-	// That would require us to recalculate these routes when the IP pools change.  Since we're not using
-	// the nat-outgoing bit for remote routes and we know that remote routes should be in an IP pool, just set
-	// FlagInIPAMPool for all of these routes.  If we do get that wrong and we've got an orphaned IP block, it
-	// won't do any harm since we know it's still on a Calico host, which is what we really care about for
-	// routing purposes.
-	flags := routes.FlagsRemoteWorkload | routes.FlagInIPAMPool
+	flags := routes.Flags(0)
+	if update.IpPoolType != proto.IPPoolType_NONE {
+		flags |= routes.FlagInIPAMPool
+	}
+	switch update.Type {
+	case proto.RouteType_REMOTE_WORKLOAD:
+		flags |= routes.FlagsRemoteWorkload
+	case proto.RouteType_REMOTE_HOST:
+		flags |= routes.FlagsRemoteHost
+	}
+
 	value := routes.NewValueWithNextHop(flags, v4NextHop.Addr().(ip.V4Addr))
 
 	m.desiredRoutes[key] = value
@@ -463,17 +471,16 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 }
 
 func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
-	if update.Type != proto.RouteType_WORKLOADS_NODE {
-		log.WithField("type", update.Type).Debug("Route type we're not interested in, ignoring")
-		return
-	}
-
 	cidr := ip.MustParseCIDROrIP(update.Dst)
 	v4CIDR, ok := cidr.(ip.V4CIDR)
 	if !ok {
 		// FIXME IPv6
 		return
 	}
+	m.removeRoute(v4CIDR)
+}
+
+func (m *bpfRouteManager) removeRoute(v4CIDR ip.V4CIDR) {
 	key := routes.NewKey(v4CIDR)
 	if _, ok := m.desiredRoutes[key]; ok {
 		delete(m.desiredRoutes, key)

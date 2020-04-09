@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -569,6 +569,9 @@ var localHostIP = mustParseIP("192.168.0.1")
 var remoteHostIP = mustParseIP("192.168.0.2")
 var remoteHost2IP = mustParseIP("192.168.0.3")
 
+var localHostIPWithPrefix = "192.168.0.1/24"
+var remoteHostIPWithPrefix = "192.168.0.2/24"
+
 var localHostVXLANTunnelConfigKey = HostConfigKey{
 	Hostname: localHostname,
 	Name:     "IPv4VXLANTunnelAddr",
@@ -591,18 +594,57 @@ var ipPoolKey = IPPoolKey{
 	CIDR: mustParseNet("10.0.0.0/16"),
 }
 
+var hostCoveringIPPoolKey = IPPoolKey{
+	CIDR: mustParseNet("192.168.0.0/24"),
+}
+
+var hostCoveringIPPool = IPPool{
+	CIDR:       mustParseNet("192.168.0.0/24"),
+	Disabled:   true,
+	Masquerade: true,
+}
+
 var ipPoolWithIPIP = IPPool{
 	CIDR:     mustParseNet("10.0.0.0/16"),
 	IPIPMode: encap.Always,
 }
 
+var v6IPPoolKey = IPPoolKey{
+	CIDR: mustParseNet("feed:beef::/64"),
+}
+
+var v6IPPool = IPPool{
+	CIDR: mustParseNet("feed:beef::/64"),
+}
+
 var ipPoolWithVXLAN = IPPool{
-	CIDR:      mustParseNet("10.0.0.0/16"),
-	VXLANMode: encap.Always,
+	CIDR:       mustParseNet("10.0.0.0/16"),
+	VXLANMode:  encap.Always,
+	Masquerade: true,
+}
+
+var ipPoolWithVXLANSlash32 = IPPool{
+	CIDR:       mustParseNet("10.0.0.0/32"),
+	VXLANMode:  encap.Always,
+	Masquerade: true,
+}
+
+var ipPoolWithVXLANCrossSubnet = IPPool{
+	CIDR:       mustParseNet("10.0.0.0/16"),
+	VXLANMode:  encap.CrossSubnet,
+	Masquerade: false, // For coverage, make this different to the Always version of the pool
 }
 
 var remoteIPAMBlockKey = BlockKey{
 	CIDR: mustParseNet("10.0.1.0/29"),
+}
+
+var remoteIPAMSlash32BlockKey = BlockKey{
+	CIDR: mustParseNet("10.0.0.0/32"),
+}
+
+var remotev6IPAMBlockKey = BlockKey{
+	CIDR: mustParseNet("feed:beef:0001::/96"),
 }
 
 var localIPAMBlockKey = BlockKey{
@@ -614,6 +656,18 @@ var remoteHostAffinity = "host:" + remoteHostname
 var remoteHost2Affinity = "host:" + remoteHostname2
 var remoteIPAMBlock = AllocationBlock{
 	CIDR:        mustParseNet("10.0.1.0/29"),
+	Affinity:    &remoteHostAffinity,
+	Allocations: make([]*int, 8),
+	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
+}
+var remoteIPAMBlockSlash32 = AllocationBlock{
+	CIDR:        mustParseNet("10.0.0.0/32"),
+	Affinity:    &remoteHostAffinity,
+	Allocations: make([]*int, 1),
+	Unallocated: []int{0},
+}
+var remotev6IPAMBlock = AllocationBlock{
+	CIDR:        mustParseNet("feed:beef:0001::/96"),
 	Affinity:    &remoteHostAffinity,
 	Allocations: make([]*int, 8),
 	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
