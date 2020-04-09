@@ -501,8 +501,11 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.IP = net.IPv4(169, 254, 1, 1)
-	// vxlanMTU is the MTU of workload devices, we need to use another 50 less
-	// to fit in the final packet
+	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
+	// * We also expect that to be the MTU used on veths.
+	// * We do encap on the veths, and there's a bogus kernel MTU check in the BPF helper
+	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
+	//   when we cannot encap the packet - non-GSO & too close to veth MTU
 	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
 	err := ap.AttachProgram()
 	if err != nil {
