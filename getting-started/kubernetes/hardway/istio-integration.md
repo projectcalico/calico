@@ -19,7 +19,7 @@ On each node in the cluster, execute the following commands to install the FlexV
 sudo mkdir -p /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
 sudo docker run --rm \
   -v /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds:/host/driver \
-  calico/pod2daemon-flexvol:v3.8.0
+  calico/pod2daemon-flexvol:v3.13.2
 ```
 
 Verify the `uds` binary is present
@@ -73,7 +73,7 @@ with Istio. This step modifies the injector configuration to add Dikastes, a
 Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
 
    ```bash
-   kubectl apply -f {{site.url}}/v3.8/manifests/alp/istio-inject-configmap-1.1.7.yaml
+   kubectl apply -f {{site.url}}/v3.13/manifests/alp/istio-inject-configmap-1.1.7.yaml
    ```
 
 ## Adding {{site.prodname}} authorization services to the mesh
@@ -81,7 +81,7 @@ Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
 Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions
 
 ```bash
-kubectl apply -f {{site.url}}/v3.8/manifests/alp/istio-app-layer-policy.yaml
+kubectl apply -f {{site.url}}/v3.13/manifests/alp/istio-app-layer-policy.yaml
 ```
 
 ## Adding namespace labels
