@@ -2722,3 +2722,60 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 })
+
+var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
+	var (
+		c *KubeClient
+	)
+
+	BeforeEach(func() {
+		inlineCfgSpec := apiconfig.CalicoAPIConfigSpec{
+			DatastoreType: apiconfig.Kubernetes,
+			KubeConfig: apiconfig.KubeConfig{
+				KubeconfigInline: fmt.Sprintf(`
+apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: %s
+  name: cluster-local
+contexts:
+- context:
+    cluster: cluster-local
+    user: ""
+  name: cluster-local
+current-context: cluster-local
+kind: Config
+preferences: {}
+`, cfg.Spec.KubeConfig.K8sAPIEndpoint),
+			},
+		}
+		// Create a client
+		client, err := NewKubeClient(&inlineCfgSpec)
+		Expect(err).NotTo(HaveOccurred())
+		c = client.(*KubeClient)
+	})
+
+	AfterEach(func() {
+		// Clean up all Calico resources.
+		err := c.Clean()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should handle creating and deleting a namespace", func() {
+		ns := k8sapi.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-inline-ns",
+			},
+		}
+
+		By("Creating a namespace", func() {
+			_, err := c.ClientSet.CoreV1().Namespaces().Create(&ns)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		By("Deleting the namespace", func() {
+			err := c.ClientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+})

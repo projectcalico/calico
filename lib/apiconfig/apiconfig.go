@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,6 +77,9 @@ type KubeConfig struct {
 	// K8sUsePodCIDR controls whether or not IPAM blocks are generated based on Node.Spec.PodCIDR. Set this
 	// to true when using host-local IPAM, and set to false when using calico-ipam.
 	K8sUsePodCIDR bool `json:"usePodCIDR" envconfig:"USE_POD_CIDR" default:""`
+	// This is an alternative to Kubeconfig and if specified overrides Kubeconfig.
+	// This contains the contents that would normally be in the file pointed at by Kubeconfig.
+	KubeconfigInline string `json:"kubeconfigInline" ignored:"true"`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the
