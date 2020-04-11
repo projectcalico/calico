@@ -179,6 +179,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20200406231814-fc5875725650 h1:q1X+
 github.com/projectcalico/libcalico-go v0.0.0-20200406231814-fc5875725650/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v0.0.0-20200407160940-acc2dca65ca6 h1:PN2VSKzSK2jtAqC71jaGks+G8tBP0fWkWk3V/XmXuAo=
 github.com/projectcalico/libcalico-go v0.0.0-20200407160940-acc2dca65ca6/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
+github.com/projectcalico/libcalico-go v0.0.0-20200409161636-cc3b33331a2a h1:wQ/jICavS5nXAvwpTzcodmJC9DetDDcoW8pY0+dB0gs=
+github.com/projectcalico/libcalico-go v0.0.0-20200409161636-cc3b33331a2a/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200331221808-0febf7aab4ad h1:jEoi80sYiwobsDoKvhaISG0Z3CteLxyAURSJ/+WWP5Q=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200331221808-0febf7aab4ad/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
@@ -191,6 +193,8 @@ github.com/projectcalico/typha v0.0.0-20200407041958-f205deccbe35 h1:bFBwWYVpi/9
 github.com/projectcalico/typha v0.0.0-20200407041958-f205deccbe35/go.mod h1:Vbew1gDIAwRlaNyq9AcQbPMdADW49WwuXQFLcjyIAnM=
 github.com/projectcalico/typha v0.0.0-20200408041039-2252f3bdc2d2 h1:7aIzAWiUJ+Axn6f/wwlNiQw4cH8892mVG50OnWZsiF4=
 github.com/projectcalico/typha v0.0.0-20200408041039-2252f3bdc2d2/go.mod h1:ozHjrvt/3KFvPPCwoY7UU2P4R0R7Mwrwrk6nQcrvETo=
+github.com/projectcalico/typha v0.0.0-20200410041044-3ab5d1ed2f63 h1:RkunKUTWvFv4iBia7lwVA/clbeMewuxxDWfzruvcKC8=
+github.com/projectcalico/typha v0.0.0-20200410041044-3ab5d1ed2f63/go.mod h1:uuntMqZs1e26M/u0+AB+HZ9IledqCFSkHmAn9nW9ENk=
 github.com/projectcalico/typha v3.8.8+incompatible h1:XRWR22IRQIRHeKezRHvhMZhqxMYj9fX9AuYQxEMxrJI=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
