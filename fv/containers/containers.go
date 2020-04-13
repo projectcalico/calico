@@ -30,10 +30,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/felix/fv/tcpdump"
+	"github.com/projectcalico/felix/fv/utils"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
-
-	"github.com/projectcalico/felix/fv/utils"
 )
 
 type Container struct {
@@ -597,4 +597,9 @@ func (c *Container) SourceIPs() []string {
 func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	c.EnsureBinary(connectivity.BinaryName)
 	return connectivity.Check(c.Name, "Connection test", ip, port, protocol, opts...)
+}
+
+// AttachTCPDump returns tcpdump attached to the container
+func (c *Container) AttachTCPDump(iface string) *tcpdump.TCPDump {
+	return tcpdump.Attach(c.Name, "", iface)
 }

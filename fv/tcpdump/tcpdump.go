@@ -30,18 +30,24 @@ import (
 
 	"github.com/onsi/ginkgo"
 
-	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 )
 
-func Attach(c *containers.Container, iface string) *TCPDump {
+func Attach(containerName, netns, iface string) *TCPDump {
 	t := &TCPDump{
 		logEnabled:       true,
-		c:                c,
+		contName:         containerName,
+		netns:            netns,
 		iface:            iface,
 		matchers:         map[string]*tcpDumpMatcher{},
 		listeningStarted: make(chan struct{}),
 	}
+
+	t.logString = containerName
+	if netns != "" {
+		t.logString += ":" + netns
+	}
+
 	return t
 }
 
@@ -58,8 +64,10 @@ type TCPDump struct {
 	lock sync.Mutex
 
 	logEnabled       bool
-	c                *containers.Container
+	contName         string
+	netns            string
 	iface            string
+	logString        string
 	cmd              *exec.Cmd
 	out, err         io.ReadCloser
 	listeningStarted chan struct{}
@@ -71,6 +79,12 @@ func (t *TCPDump) SetLogEnabled(logEnabled bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.logEnabled = logEnabled
+}
+
+func (t *TCPDump) SetLogString(str string) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.logString = str
 }
 
 func (t *TCPDump) AddMatcher(name string, s stringMatcher) {
@@ -87,16 +101,18 @@ func (t *TCPDump) MatchCount(name string) int {
 	defer t.lock.Unlock()
 
 	c := t.matchers[name].count
-	logrus.Infof("[%s] Match count for %s is %v", t.c.Name, name, c)
+	logrus.Infof("[%s] Match count for %s is %v", t.contName, name, c)
 	return c
 }
 
 func (t *TCPDump) Start() {
-	// docker run --rm --network=container:48b6c5f44d57 --privileged corfr/tcpdump -nli cali01
+	args := []string{"exec", t.contName}
+	if t.netns != "" {
+		args = append(args, "ip", "netns", "exec", t.netns)
+	}
+	args = append(args, "tcpdump", "-nli", t.iface)
+	t.cmd = utils.Command("docker", args...)
 
-	t.cmd = utils.Command("docker", "exec", t.c.Name,
-		"tcpdump", "-nli", t.iface,
-	)
 	var err error
 	t.out, err = t.cmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
@@ -135,7 +151,7 @@ func (t *TCPDump) readStdout() {
 		t.lock.Unlock()
 
 		if logEnabled {
-			logrus.Infof("[%s] %s", t.c.Name, line)
+			logrus.Infof("[%s] %s", t.contName, line)
 		}
 		t.lock.Lock()
 		for _, m := range t.matchers {
@@ -160,7 +176,7 @@ func (t *TCPDump) readStderr() {
 	defer safeClose()
 	for s.Scan() {
 		line := s.Text()
-		logrus.Infof("[%s] ERR: %s", t.c.Name, line)
+		logrus.Infof("[%s] ERR: %s", t.contName, line)
 		if strings.Contains(line, "listening") {
 			safeClose()
 		}

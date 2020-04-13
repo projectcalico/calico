@@ -30,7 +30,6 @@ import (
 
 	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/tcpdump"
 	"github.com/projectcalico/felix/fv/workload"
 )
 
@@ -120,13 +119,20 @@ func describeConnCheckTests(protocol string) bool {
 					})
 
 					It("with tcpdump", func() {
-						tcpd := tcpdump.Attach(felixes[0].Container, "eth0")
-						tcpd.SetLogEnabled(true)
-						tcpd.AddMatcher("UDP", regexp.MustCompile(`.*UDP.*`))
-						tcpd.Start()
+						tcpdF := felixes[0].AttachTCPDump("eth0")
+						tcpdF.SetLogEnabled(true)
+						tcpdF.AddMatcher("UDP", regexp.MustCompile(`.*UDP.*`))
+						tcpdF.Start()
+
+						tcpdW := hostW[1].AttachTCPDump()
+						tcpdW.SetLogEnabled(true)
+						tcpdW.AddMatcher("UDP", regexp.MustCompile(`.*UDP.*`))
+						tcpdW.Start()
+
 						cc.ExpectLoss(felixes[0], hostW[1], 2*time.Second, 20, -1)
 						cc.CheckConnectivityPacketLoss()
-						Eventually(func() int { return tcpd.MatchCount("UDP") }).Should(BeNumerically(">", 0))
+						Eventually(func() int { return tcpdF.MatchCount("UDP") }).Should(BeNumerically(">", 0))
+						Eventually(func() int { return tcpdW.MatchCount("UDP") }).Should(BeNumerically(">", 0))
 					})
 				})
 			}
