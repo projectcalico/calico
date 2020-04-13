@@ -161,7 +161,7 @@ EOF
                        (svc, ns)).strip()
 
     def assert_ecmp_routes(self, dst, via):
-        matchStr = dst + " proto bird metric 1024 "
+        matchStr = dst + " proto bird metric 1024 pref medium"
         # sort ips and construct match string for ECMP routes.
         for ip in sorted(via):
             matchStr += "\n\tnexthop via %s dev eth0 weight 1 " % ip

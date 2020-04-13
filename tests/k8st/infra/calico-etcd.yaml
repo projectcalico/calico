@@ -104,6 +104,19 @@ rules:
     verbs:
       - watch
       - list
+  # KubeControllersConfiguration is where it gets its config
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - kubecontrollersconfigurations
+    verbs:
+      # read its own config
+      - get
+      # create a default if none exists
+      - create
+      # update status
+      - update
+      # watch for changes
+      - watch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
