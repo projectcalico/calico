@@ -57,9 +57,11 @@ function build_master() {
 function build_archives() {
     grep -oP '^- \K(.*)' _data/archives.yml | while read branch; do
         if [[ "$branch" == legacy* ]]; then
-            build release-legacy
+            build release-legacy /archive
+            EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_manifests_only.yml build release-legacy /
         else
-            build release-${branch} /${branch}
+            build release-${branch} /archive/${branch}
+            EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_manifests_only.yml build release-${branch} /${branch}
         fi
     done
 }
