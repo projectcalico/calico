@@ -258,6 +258,22 @@ spec:
     kind: NetworkSet
     plural: networksets
     singular: networkset
+
+---
+
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: kubecontrollersconfigurations.crd.projectcalico.org
+spec:
+  scope: Cluster
+  group: crd.projectcalico.org
+  version: v1
+  names:
+    kind: KubeControllersConfiguration
+    plural: kubecontrollersconfigurations
+    singular: kubecontrollersconfiguration
+
 ---
 # Source: calico/templates/rbac.yaml
 
@@ -317,6 +333,19 @@ rules:
       - get
       - create
       - update
+  # KubeControllersConfiguration is where it gets its config
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - kubecontrollersconfigurations
+    verbs:
+      # read its own config
+      - get
+      # create a default if none exists
+      - create
+      # update status
+      - update
+      # watch for changes
+      - watch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
