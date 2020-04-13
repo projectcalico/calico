@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package containers
+package tcpdump
 
 import (
 	"bufio"
@@ -31,10 +31,11 @@ import (
 
 	"github.com/onsi/ginkgo"
 
+	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 )
 
-func AttachTCPDump(c *Container, iface string) *TCPDump {
+func Attach(c *containers.Container, iface string) *TCPDump {
 	t := &TCPDump{
 		logEnabled:       true,
 		containerID:      c.GetID(),
