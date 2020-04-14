@@ -92,7 +92,14 @@ steps below.
    has `"type": "calico-ipam"` then it should be modified to
    [disable IPv4 assignments and enable IPv6
    assigments](/reference/cni-plugin/configuration#ipam).
-1. Add the following environment variables to the calico-node Daemonset in
+1. Add the following environment variable to the calico-node DaemonSet in
+   the `calico.yaml` file.
+   
+   ```yaml
+   - name: IP6
+     value: "autodetect"
+   ```
+1. For clusters **not** provisioned with kubeadm (see note below), also add the following environment variable to the calico-node DaemonSet in
    the `calico.yaml` file. Be sure to set the value for `CALICO_IPV6POOL_CIDR`
    to the desired pool, it should match the `--cluster-cidr` passed to the
    kube-controller-manager and to kube-proxy.
@@ -100,13 +107,14 @@ steps below.
    ```yaml
    - name: CALICO_IPV6POOL_CIDR
      value: "fd20::0/112"
-   - name: IP6
-     value: "autodetect"
    ```
 
 1. Ensure in the `calico.yaml` file that the environment variable
-   `FELIX_IPV6SUPPORT` is set `true` on the calico-node Daemonset.
+   `FELIX_IPV6SUPPORT` is set `true` on the calico-node DaemonSet.
 1. Apply the `calico.yaml` manifest with `kubectl apply -f calico.yaml`.
+
+>**Note**: For clusters provisioned with kubeadm, {{site.prodname}} autodetects the IPv4 and IPv6 pod CIDRs and does not require configuration.
+{: .alert .alert-info}
 
 #### Using only IPv6
 
