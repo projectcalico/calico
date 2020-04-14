@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,10 @@ type DatastoreType int
 const (
 	DatastoreEtcdV3 DatastoreType = 1 << iota
 	DatastoreK8s
+	DatastoreK8sInline
 
-	DatastoreAll = DatastoreEtcdV3 | DatastoreK8s
+	DatastoreAll   = DatastoreEtcdV3 | DatastoreK8s
+	k8sAPIEndpoint = "http://localhost:8080"
 )
 
 // E2eDatastoreDescribe is a replacement for ginkgo.Describe which invokes Describe
@@ -60,7 +62,38 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 					Spec: apiconfig.CalicoAPIConfigSpec{
 						DatastoreType: apiconfig.Kubernetes,
 						KubeConfig: apiconfig.KubeConfig{
-							K8sAPIEndpoint: "http://localhost:8080",
+							K8sAPIEndpoint: k8sAPIEndpoint,
+						},
+					},
+				})
+			})
+	}
+
+	if datastores&DatastoreK8sInline != 0 {
+		Describe(fmt.Sprintf("%s [Datastore] (kubernetes inline backend)", description),
+			func() {
+				body(apiconfig.CalicoAPIConfig{
+					Spec: apiconfig.CalicoAPIConfigSpec{
+						DatastoreType: apiconfig.Kubernetes,
+						KubeConfig: apiconfig.KubeConfig{
+							KubeconfigInline: fmt.Sprintf(`
+apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: %s
+  name: cluster-local
+contexts:
+- context:
+    cluster: cluster-local
+    user: ""
+  name: cluster-local
+current-context: cluster-local
+kind: Config
+preferences: {}
+`,
+								k8sAPIEndpoint,
+							),
 						},
 					},
 				})
