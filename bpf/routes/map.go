@@ -63,6 +63,7 @@ const (
 	FlagWorkload    Flags = 0x04
 	FlagLocal       Flags = 0x08
 	FlagHost        Flags = 0x10
+	FlagSameSubnet  Flags = 0x20
 
 	FlagsUnknown        Flags = 0
 	FlagsRemoteWorkload       = FlagWorkload
@@ -126,6 +127,10 @@ func (v Value) String() string {
 
 	if typeFlags&FlagNATOutgoing != 0 {
 		parts = append(parts, "nat-out")
+	}
+
+	if typeFlags&FlagSameSubnet != 0 {
+		parts = append(parts, "same-subnet")
 	}
 
 	if typeFlags&FlagLocal != 0 && typeFlags&FlagWorkload != 0 {
