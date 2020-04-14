@@ -233,6 +233,9 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	}
 	bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
 
+	// Add in an orchestrator reference back to the Kubernetes node name.
+	calicoNode.Spec.OrchRefs = []apiv3.OrchRef{{NodeName: k8sNode.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
+
 	// If using host-local IPAM, assign an IPIP tunnel address statically.
 	if usePodCIDR && k8sNode.Spec.PodCIDR != "" {
 		// For back compatibility with v2.6.x, always generate a tunnel address if we have the pod CIDR.
