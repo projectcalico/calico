@@ -25,7 +25,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. [Default: `false`] | boolean |
 | CALICO_K8S_NODE_REF | The name of the corresponding node object in the Kubernetes API. When set, used for correlating this node with events from the Kubernetes API. | string |
 | CALICO_NETWORKING_BACKEND | The networking backend to use.  In `bird` mode, Calico will provide BGP networking using the BIRD BGP daemon; VXLAN networking can also be used.  In `vxlan` mode, only VXLAN networking is provided; BIRD and BGP are disabled.  If set to `none` (also known as policy-only mode), both BIRD and VXLAN are disabled. [Default: `bird`] | bird, vxlan, none |
-| CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `192.168.0.0/16`] | IPv4 CIDR |
+| CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: First not used in locally of (192.168.0.0/16, 172.16.0.0/16, .., 172.31.0.0/16) ] | IPv4 CIDR |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `<a randomly chosen /48 ULA>`] | IPv6 CIDR |
 | CALICO_IPV4POOL_BLOCK_SIZE | Block size to use for the IPv4 POOL created at startup.  Block size for IPv4 should be in the range 20-32 (inclusive) [Default: `26`] | int |
 | CALICO_IPV6POOL_BLOCK_SIZE | Block size to use for the IPv6 POOL created at startup.  Block size for IPv6 should be in the range 116-128 (inclusive) [Default: `122`] | int |
