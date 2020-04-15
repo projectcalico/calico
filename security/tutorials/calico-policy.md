@@ -4,11 +4,12 @@ description: Learn how to create more advanced Calico network policies (namespac
 canonical_url: "/security/tutorials/calico-policy-advanced"
 ---
 
-Calico Network Policies _extend_ the functionalities of Kubernetes Network Policies. To demonstrate this, this page will walk through the [Kubernetes Advanced NetworkPolicy](kubernetes-policy-advanced) tutorial but with everything implemented using Calico policies. This serves as a good example in highlighting the syntactical differences between the two type of policies while demonstrating Calico Network Policy's flexibility.
+Calico network policies __extend__ the functionalities of Kubernetes network policies. To demonstrate this, this tutorial takes the Kubernetes Advanced NetworkPolicy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policy.
 
 ### Requirements
 
 - Calico v2.6.1+ with Kubernetes 1.8+
+- calicoctl and kubectl
 - A working Kubernetes cluster and access to it using kubectl and calicoctl
 - Your Kubernetes nodes have connectivity to the public internet
 - You are familiar with [Kubernetes NetworkPolicy](kubernetes-policy-basic) or [Kubernetes NetworkPolicy Advanced](kubernetes-policy-advanced)
@@ -16,11 +17,11 @@ Calico Network Policies _extend_ the functionalities of Kubernetes Network Polic
 ### Tutorial flow
 
 1. Create the Namespace and Nginx Service
-1. Deny all ingress traffic
-1. Allow ingress traffic to Nginx
-1. Deny all egress traffic
-1. Allow egress traffic to kube-dns
-1. Cleanup Namespace
+1. Deny all Ingress traffic
+1. Allow Ingress traffic to Nginx
+1. Deny all Egress traffic
+1. Allow Egress traffic to kube-dns
+1. Clean up Namespace
 
 ### 1. Create the namespace and nginx service
 
@@ -40,7 +41,7 @@ Open up a second shell session which has `kubectl` connectivity to the Kubernete
 kubectl run --namespace=advanced-policy-demo access --rm -ti --image busybox /bin/sh
 ```
 
-This should open up a shell session inside the `access` pod, as shown below.
+This will open up a shell session inside the `access` pod, as shown below.
 
 ```
 Waiting for pod advanced-policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
@@ -57,7 +58,7 @@ Now from within the busybox "access" pod execute the following command to test a
 wget -q --timeout=5 nginx -O -
 ```
 
-It should return the HTML of the nginx welcome page.
+It returns the HTML of the nginx welcome page.
 
 Still within the busybox "access" pod, issue the following command to test access to google.com.
 
@@ -65,7 +66,7 @@ Still within the busybox "access" pod, issue the following command to test acces
 wget -q --timeout=5 google.com -O -
 ```
 
-It should return the HTML of the google.com home page.
+It returns the HTML of the google.com home page.
 
 ### 2. Deny all ingress traffic
 
@@ -95,7 +96,7 @@ We can see that this is the case by switching over to our "access" pod in the na
 wget -q --timeout=5 nginx -O -
 ```
 
-It should return:
+It will return:
 
 ```
 wget: download timed out
@@ -109,7 +110,7 @@ Next, try to access google.com.
 wget -q --timeout=5 google.com -O -
 ```
 
-It should return:
+It will return:
 
 ```
 <!doctype html><html itemscope="" item....
@@ -147,7 +148,7 @@ Now ingress traffic to nginx will be allowed. We can see that this is the case b
 wget -q --timeout=5 nginx -O -
 ```
 
-It should return:
+It will return:
 
 ```
 <!DOCTYPE html>
@@ -180,7 +181,7 @@ EOF
 
 #### Verify access - denied all egress
 
-Now any ingress or egress traffic which is not explicitly allowed by a policy will be denied.
+Now any ingress or egress traffic **that** is not explicitly allowed by a policy will be denied.
 
 We can see that this is the case by switching over to our "access" pod in the
 namespace and attempting to `nslookup` nginx or `wget` google.com.
@@ -189,7 +190,7 @@ namespace and attempting to `nslookup` nginx or `wget` google.com.
 nslookup nginx
 ```
 
-It should return something like the following.
+It will return something like the following.
 
 ```
 Server:    10.96.0.10
@@ -206,7 +207,7 @@ Next, try to access google.com.
 wget -q --timeout=5 google.com -O -
 ```
 
-It should return:
+It will return:
 
 ```
 wget: bad address 'google.com'
@@ -253,7 +254,7 @@ We can see that this is the case by switching over to our "access" pod in the na
 nslookup nginx
 ```
 
-It should return something like the following.
+It will return something like the following.
 
 ```
 Server:    10.0.0.10
@@ -268,7 +269,7 @@ Next, try to look up google.com.
 nslookup google.com
 ```
 
-It should return something like the following.
+It will return something like the following.
 
 ```
 Name:      google.com
@@ -278,7 +279,7 @@ Address 2: 216.58.195.78 sfo07s16-in-f14.1e100.net
 
 {: .no-select-button}
 
-Even though DNS egress traffic is now working, all other egress traffic from all pods in the advanced-policy-demo namespace is still blocked. Therefore the HTTP egress traffic from the `wget` calls will still fail.
+Therefore, even though DNS egress traffic is now working, all other egress traffic from all pods in the advanced-policy-demo namespace is still blocked. Therefore the HTTP egress traffic from the `wget` calls will still fail.
 
 ### 6. Allow egress traffic to nginx
 
@@ -309,7 +310,7 @@ namespace and attempting to access `nginx`.
 wget -q --timeout=5 nginx -O -
 ```
 
-It should return the HTML of the nginx welcome page.
+It will return the HTML of the nginx welcome page.
 
 ```
 <!DOCTYPE html>
@@ -326,7 +327,7 @@ Next, try to retrieve the home page of google.com.
 wget -q --timeout=5 google.com -O -
 ```
 
-It should return:
+It returns:
 
 ```
 wget: download timed out
@@ -334,7 +335,7 @@ wget: download timed out
 
 {: .no-select-button}
 
-Access to `google.com` times out because it can resolve DNS but has no egress access to anything other than pods with labels matching `run: nginx` in the `advanced-policy-demo` namespace.
+Access to `google.com` times out because it can resolve DNS, but has no egress access to anything other than pods with labels matching `run: nginx` in the `advanced-policy-demo` namespace.
 
 ## 7. Clean up namespace
 
