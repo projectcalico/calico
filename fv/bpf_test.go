@@ -1253,7 +1253,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					Describe("with wrong target port", func() {
-						// TCP would send RST instead of ICMP, it is enough to test one wa of
+						// TCP would send RST instead of ICMP, it is enough to test one way of
 						// triggering the ICMP message
 						if testOpts.protocol != "udp" {
 							return
@@ -1278,6 +1278,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							defer tcpdump.Stop()
 
 							cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
+							cc.CheckConnectivity()
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Should(BeNumerically(">", 0), matcher)
+						})
+
+						It("should get port unreachable workload to workload", func() {
+							tcpdump := w[1][1].AttachTCPDump()
+							tcpdump.SetLogEnabled(true)
+							matcher := fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+								tgtWorkload.IP, w[1][1].IP, tgtWorkload.IP, tgtPort)
+							tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(tgtPort), "or", "icmp")
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(w[1][1], TargetIP(tgtWorkload.IP), uint16(tgtPort))
 							cc.CheckConnectivity()
 							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
 								Should(BeNumerically(">", 0), matcher)
