@@ -139,6 +139,8 @@ struct bpf_map_def_extended {
 
 #define CALI_RES_REDIR_IFINDEX	(TC_ACT_VALUE_MAX + 100) /* packet should be sent back the same iface */
 
+#define FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
 #pragma clang diagnostic push

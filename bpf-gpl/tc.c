@@ -91,8 +91,6 @@ allow:
 
 #endif /* CALI_DEBUG_ALLOW_ALL */
 
-#define FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
-
 __attribute__((section("1/0")))
 int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 {
@@ -217,6 +215,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
+
 		struct iphdr *ip_header = skb_iphdr(skb);
 		struct bpf_fib_lookup fib_params = {
 			.family = 2, /* AF_INET */
@@ -328,6 +327,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	};
 	struct calico_nat_dest *nat_dest = NULL;
 
+	/* we assume we do FIB and from this point on, we only set it to false
+	 * if we decide not to do it.
+	 */
 	fwd_fib_set(&fwd, true);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
@@ -535,6 +537,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		state.flags |= CALI_ST_NAT_OUTGOING;
 	}
 
+	/* We are possibly past (D)NAT, but that is ok, we need to let the IP
+	 * stack do the RPF check on the source, dest is not importatnt.
+	 */
+	if (CALI_F_TO_HOST && ct_result_rpf_failed(state.ct_result.rc)) {
+		fwd_fib_set(&fwd, false);
+	}
+
+
 	/* skip policy if we get conntrack hit */
 	if (state.ct_result.rc != CALI_CT_NEW) {
 		goto skip_policy;
@@ -685,7 +695,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
-	bool fib;
+	bool fib = false;
 	struct ct_ctx ct_nat_ctx = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
@@ -703,10 +713,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	CALI_DEBUG("ct_related=%d\n", ct_related);
 
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
-		fib = false;
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
-		fib = true;
+		/* XXX we do it here again because doing it in one place only
+		 * XXX in calico_tc() irritates the verifier :'(
+		 */
+		if (!CALI_F_TO_HOST || !ct_result_rpf_failed(state->ct_result.rc)) {
+			fib = true;
+		}
 		seen_mark = CALI_SKB_MARK_SEEN;
 	}
 

@@ -31,7 +31,7 @@ import (
 //   uint16_t port_a, port_b; // HBO
 // };
 const conntrackKeySize = 16
-const conntrackValueSize = 56
+const conntrackValueSize = 64
 
 type Key [conntrackKeySize]byte
 
@@ -89,14 +89,14 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 //    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 //    struct {
 //      struct calico_ct_leg a_to_b; // 24
-//      struct calico_ct_leg b_to_a; // 32
+//      struct calico_ct_leg b_to_a; // 36
 //
 //      // CALI_CT_TYPE_NAT_REV only.
-//      __u32 orig_dst;                    // 40
-//      __u16 orig_port;                   // 44
-//      __u8 pad1[2];                      // 46
-//      __u32 tun_ip;                      // 48
-//      __u32 pad3;                        // 52
+//      __u32 orig_dst;                    // 44
+//      __u16 orig_port;                   // 48
+//      __u8 pad1[2];                      // 50
+//      __u32 tun_ip;                      // 52
+//      __u32 pad3;                        // 56
 //    };
 //
 //    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -150,6 +150,7 @@ type Leg struct {
 	RstSeen     bool
 	Whitelisted bool
 	Opener      bool
+	Ifindex     uint32
 }
 
 func (leg Leg) Flags() uint32 {
@@ -189,6 +190,7 @@ func readConntrackLeg(b []byte) Leg {
 		RstSeen:     bitSet(bits, 3),
 		Whitelisted: bitSet(bits, 4),
 		Opener:      bitSet(bits, 5),
+		Ifindex:     binary.LittleEndian.Uint32(b[8:12]),
 	}
 }
 
