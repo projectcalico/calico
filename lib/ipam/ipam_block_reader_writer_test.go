@@ -639,7 +639,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// was already taken by another host.
 			b := newBlock(*net)
 			b.Affinity = &affStrA
-			b.StrictAffinity = false
 			blockKVP := &model.KVPair{
 				Key:   model.BlockKey{CIDR: *net},
 				Value: b.AllocationBlock,
@@ -647,7 +646,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			b2 := newBlock(*net)
 			b2.Affinity = &affStrB
-			b2.StrictAffinity = false
 			blockKVP2 := &model.KVPair{
 				Key:   model.BlockKey{CIDR: *net},
 				Value: b2.AllocationBlock,

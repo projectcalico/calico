@@ -96,13 +96,12 @@ func (options BlockListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type AllocationBlock struct {
-	CIDR           net.IPNet             `json:"cidr"`
-	Affinity       *string               `json:"affinity"`
-	StrictAffinity bool                  `json:"strictAffinity"`
-	Allocations    []*int                `json:"allocations"`
-	Unallocated    []int                 `json:"unallocated"`
-	Attributes     []AllocationAttribute `json:"attributes"`
-	Deleted        bool                  `json:"deleted"`
+	CIDR        net.IPNet             `json:"cidr"`
+	Affinity    *string               `json:"affinity"`
+	Allocations []*int                `json:"allocations"`
+	Unallocated []int                 `json:"unallocated"`
+	Attributes  []AllocationAttribute `json:"attributes"`
+	Deleted     bool                  `json:"deleted"`
 
 	// HostAffinity is deprecated in favor of Affinity.
 	// This is only to keep compatibility with existing deployments.
