@@ -132,13 +132,13 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 	 *
 	 * we only call this function because of NodePort encap
 	 */
-	if (ip_orig.daddr != cali_host_ip()) {
-		CALI_DEBUG("ICMP v4 reply: ip_orig.daddr != cali_host_ip() 0x%x\n", ip_orig.daddr);
+	if (ip_orig.daddr != HOST_IP) {
+		CALI_DEBUG("ICMP v4 reply: ip_orig.daddr != HOST_IP 0x%x\n", ip_orig.daddr);
 	}
 #endif
 
 	/* use the host IP of the program that handles the packet */
-	ip->saddr = cali_host_ip();
+	ip->saddr = HOST_IP;
 	ip->daddr = ip_orig.saddr;
 
 	icmp = skb_ptr_after(skb, ip);

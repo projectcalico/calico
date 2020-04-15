@@ -43,10 +43,7 @@ func TestICMPTooBig(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		// The program is compiled and run as WEP and thus the expected MTU is
-		// 50 less due to the 50 byte difference between HEP and WEP mtu. See
-		// definition of TUNNEL_MTU in bpf-gpl/nat.h
-		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU-50)
+		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
 	})
 }
 

@@ -41,10 +41,16 @@ import (
 )
 
 type AttachPoint struct {
-	Section  string
-	Hook     Hook
-	Iface    string
-	Filename string
+	Type       EndpointType
+	ToOrFrom   ToOrFromEp
+	Hook       Hook
+	Iface      string
+	LogLevel   string
+	IP         net.IP
+	FIB        bool
+	ToHostDrop bool
+	DSR        bool
+	TunnelMTU  uint16
 }
 
 var tcLock sync.Mutex
@@ -59,7 +65,7 @@ func (e ErrAttachFailed) Error() string {
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
+func (ap AttachPoint) AttachProgram() error {
 	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
 	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
 	// point).
@@ -85,47 +91,27 @@ func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	preCompiledBinary := path.Join(bpf.ObjectDir, attachPoint.Filename)
-	tempBinary := path.Join(tempDir, attachPoint.Filename)
+	filename := ap.FileName()
+	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
+	tempBinary := path.Join(tempDir, filename)
 
-	exeData, err := ioutil.ReadFile(preCompiledBinary)
+	err = ap.patchBinary(preCompiledBinary, tempBinary)
 	if err != nil {
-		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
-	}
-
-	hostIP = hostIP.To4()
-	if len(hostIP) == 4 {
-		log.WithField("ip", hostIP).Debug("Patching in host IP")
-		replacement := make([]byte, 6)
-		copy(replacement[2:], hostIP)
-		exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00HOST"), replacement)
-	}
-
-	// Patch in the log prefix; since this gets loaded as immediate values by the compiler, we know it'll be
-	// preceded by a 2-byte 0 offset so we include that in the match.
-	iface := []byte(attachPoint.Iface + "--------") // Pad on the right to make sure its long enough.
-	logBytes := make([]byte, 6)
-	copy(logBytes[2:], iface)
-	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00CALI"), logBytes)
-	copy(logBytes[2:], iface[4:8])
-	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00COLO"), logBytes)
-
-	err = ioutil.WriteFile(tempBinary, exeData, 0600)
-	if err != nil {
-		return errors.Wrap(err, "failed to write patched BPF binary")
+		log.WithError(err).Error("Failed to patch binary")
+		return err
 	}
 
 	tcCmd := exec.Command("tc",
-		"filter", "add", "dev", attachPoint.Iface,
-		string(attachPoint.Hook),
+		"filter", "add", "dev", ap.Iface,
+		string(ap.Hook),
 		"bpf", "da", "obj", tempBinary,
-		"sec", attachPoint.Section)
+		"sec", SectionName(ap.Type, ap.ToOrFrom))
 
 	out, err := tcCmd.Output()
 	if err != nil {
 		if strings.Contains(err.Error(), "Cannot find device") {
 			// Avoid a big, spammy log when the issue is that the interface isn't present.
-			log.WithField("iface", attachPoint.Iface).Info(
+			log.WithField("iface", ap.Iface).Info(
 				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
 			return nil
 		}
@@ -142,6 +128,39 @@ func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 	}
 
 	return nil
+}
+
+func (ap AttachPoint) patchBinary(ifile, ofile string) error {
+	b, err := bpf.BinaryFromFile(ifile)
+	if err != nil {
+		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
+	}
+
+	log.WithField("ip", ap.IP).Debug("Patching in IP")
+	err = b.PatchIPv4(ap.IP)
+	if err != nil {
+		return errors.WithMessage(err, "patching in IPv4")
+	}
+
+	b.PatchLogPrefix(ap.Iface)
+	b.PatchTunnelMTU(ap.TunnelMTU)
+
+	err = b.WriteToFile(ofile)
+	if err != nil {
+		return errors.Wrap(err, "failed to write patched BPF binary")
+	}
+
+	return nil
+}
+
+// ProgramName returnt the name of the program associated with this AttachPoint
+func (ap AttachPoint) ProgramName() string {
+	return SectionName(ap.Type, ap.ToOrFrom)
+}
+
+// FileName returnthe file the AttachPoint will load the program from
+func (ap AttachPoint) FileName() string {
+	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel)
 }
 
 func repinJumpMaps() {

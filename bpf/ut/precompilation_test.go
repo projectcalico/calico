@@ -69,24 +69,28 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 								log.Debug("DST only affects from WEP and HEP")
 								continue
 							}
-							secName := tc.SectionName(epType, toOrFrom)
-							prog := tc.ProgFilename(epType, toOrFrom, epToHostDrop, fibEnabled, dsr, logLevel)
 
-							t.Run(prog, func(t *testing.T) {
+							ap := tc.AttachPoint{
+								Type:       epType,
+								ToOrFrom:   toOrFrom,
+								Hook:       tc.HookIngress,
+								ToHostDrop: epToHostDrop,
+								FIB:        fibEnabled,
+								DSR:        dsr,
+								LogLevel:   logLevel,
+								IP:         net.ParseIP("10.0.0.1"),
+							}
+
+							t.Run(ap.FileName(), func(t *testing.T) {
 								RegisterTestingT(t)
-								logCxt.Debugf("Testing %v in %v", secName, prog)
+								logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
 
 								vethName, veth := createVeth()
 								defer deleteLink(veth)
 
 								tc.EnsureQdisc(vethName)
-								ap := tc.AttachPoint{
-									Section:  secName,
-									Hook:     tc.HookIngress,
-									Iface:    vethName,
-									Filename: prog,
-								}
-								err := tc.AttachProgram(ap, net.ParseIP("10.0.0.1"))
+								ap.Iface = vethName
+								err := ap.AttachProgram()
 								Expect(err).NotTo(HaveOccurred())
 							})
 						}

@@ -35,23 +35,24 @@ func TestJumpMapCleanup(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
-	secName := tc.SectionName(tc.EpTypeWorkload, tc.ToEp)
-	prog := tc.ProgFilename(tc.EpTypeWorkload, tc.ToEp, false, true, true, "DEBUG")
+	ap := tc.AttachPoint{
+		Type:     tc.EpTypeWorkload,
+		ToOrFrom: tc.ToEp,
+		Hook:     tc.HookIngress,
+		DSR:      true,
+		LogLevel: "DEBUG",
+	}
 
-	t.Run(prog, func(t *testing.T) {
+	t.Run(ap.ProgramName(), func(t *testing.T) {
 		RegisterTestingT(t)
-		log.Debugf("Testing %v in %v", secName, prog)
 
 		vethName, veth := createVeth()
 		defer deleteLink(veth)
 
 		tc.EnsureQdisc(vethName)
-		ap := tc.AttachPoint{
-			Section:  secName,
-			Hook:     tc.HookIngress,
-			Iface:    vethName,
-			Filename: prog,
-		}
+		ap.Iface = vethName
+
+		log.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
 
 		// Start with a clean base state in case another test left something behind.
 		t.Log("Doing initial clean up")
@@ -60,14 +61,16 @@ func TestJumpMapCleanup(t *testing.T) {
 		t.Log("Adding program, should add one dir and one map.")
 		startingJumpMaps := countJumpMaps()
 		startingTCDirs := countTCDirs()
-		err := tc.AttachProgram(ap, net.ParseIP("10.0.0.1"))
+		ap.IP = net.ParseIP("10.0.0.1")
+		err := ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
 		Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
 
 		t.Log("Replacing program should add another map and dir.")
 		tc.EnsureQdisc(vethName)
-		err = tc.AttachProgram(ap, net.ParseIP("10.0.0.2"))
+		ap.IP = net.ParseIP("10.0.0.2")
+		err = ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+2), "unexpected number of jump maps after replacing program")
 		Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+2), "unexpected number of TC dirs after replacing program")

@@ -367,16 +367,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			ip_header = skb_iphdr(skb);
 			__be32 ip_src = ip_header->saddr;
 
-			if (ip_src == cali_host_ip()) {
+			if (ip_src == HOST_IP) {
 				CALI_DEBUG("src ip fixup not needed %x\n", be32_to_host(ip_src));
 				goto allow;
 			}
 
 			/* XXX do a proper CT lookup to find this */
-			ip_header->saddr = cali_host_ip();
+			ip_header->saddr = HOST_IP;
 			int l3_csum_off = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
 
-			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, cali_host_ip(), 4);
+			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
 				fwd.reason = CALI_REASON_CSUM_FAIL;
 				goto deny;
@@ -427,8 +427,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (dnat_should_decap() && is_vxlan_tunnel(ip_header)) {
 		struct udphdr *udp_header = (void*)(ip_header+1);
 		/* decap on host ep only if directly for the node */
-		CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ip_header->daddr, cali_host_ip());
-		if (ip_header->daddr == cali_host_ip() &&
+		CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ip_header->daddr, HOST_IP);
+		if (ip_header->daddr == HOST_IP &&
 				vxlan_udp_csum_ok(udp_header) &&
 				vxlan_size_ok(skb, udp_header) &&
 				vxlan_vni_is_valid(skb, udp_header) &&
@@ -840,7 +840,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				CALI_DEBUG("Request packet with DNF set is too big\n");
 				goto icmp_too_big;
 			}
-			state->ip_src = cali_host_ip();
+			state->ip_src = HOST_IP;
 			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;

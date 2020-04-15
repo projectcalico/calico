@@ -24,7 +24,7 @@
 
 
 emit_filename() {
-  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}_host${host_ip}${dsr}.o"
+  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}${dsr}.o"
 }
 
 log_level=debug
@@ -33,21 +33,19 @@ for ep_type in $ep_types; do
   directions="from to"
   for from_or_to in $directions; do
     for skb in "0x0" "0xca100000" "0xca130000" "0xca150000"; do
-      for host_ip in "0x00000000" "0x01000a0a" "0x02000a0a"; do
-        for dsr in "" "_dsr"; do
-          if [ "${dsr}" = "_dsr" ]; then
-            if [ "${ep_type}" = "hep" ]; then
-              emit_filename
-              continue
-            fi
-            if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
-              emit_filename
-              continue
-            fi
-          else
-	    emit_filename
+      for dsr in "" "_dsr"; do
+        if [ "${dsr}" = "_dsr" ]; then
+          if [ "${ep_type}" = "hep" ]; then
+            emit_filename
+            continue
           fi
-        done
+          if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
+            emit_filename
+            continue
+          fi
+        else
+          emit_filename
+        fi
       done
     done
   done

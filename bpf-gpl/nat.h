@@ -45,51 +45,6 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
-#define CALI_ENCAP_SIZE	VXLAN_ENCAP_SIZE
-
-
-#ifndef CALI_MTU
-#define CALI_MTU 1460
-#endif
-
-#ifndef CALI_NAT_TUNNEL_MTU
-#define CALI_NAT_TUNNEL_MTU	(CALI_MTU - CALI_ENCAP_SIZE) /* defaults to 1410 */
-#endif
-
-#ifndef CALI_NAT_TUNNEL_HEP_MTU
-#define CALI_NAT_TUNNEL_HEP_MTU	CALI_NAT_TUNNEL_MTU
-#endif
-
-#ifndef CALI_NAT_TUNNEL_WEP_MTU
-#define CALI_NAT_TUNNEL_WEP_MTU	(CALI_NAT_TUNNEL_MTU - 50) /* defaults to 1360 as cali ifaces' mtu
-							    * is 50 bytes smaller than the host
-							    * ifaces mtu in the anticipation of ipip
-							    * or vxlan overlay
-							    */
-#endif
-
-#if CALI_F_HEP
-#define TUNNEL_MTU	CALI_NAT_TUNNEL_HEP_MTU
-#elif CALI_F_WEP
-#define TUNNEL_MTU	CALI_NAT_TUNNEL_WEP_MTU
-#endif
-
-static CALI_BPF_INLINE __be32 cali_host_ip()
-{
-#ifdef CALI_HOST_IP
-	return CALI_HOST_IP;
-#else
-	__u32 host_ip;
-	/* At program install time, we patch in the IP of the host. Use inline
-	 * assembler to make sure that the code we want to patch is
-	 * recognisable.
-	* 0x54534f48 = ASCII(HOST).
-	*/
-	asm("%0 = 0x54534f48;" : "=r"(host_ip) /* output */ : /* no inputs */ : /* no clobber */);
-	return host_ip;
-#endif
-}
-
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
 
 struct calico_nat_v4_key {
