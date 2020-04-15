@@ -22,4 +22,4 @@ section:
   - title: Troubleshoot
     path: /maintenance/troubleshoot/troubleshooting
   - title: Component logs
-     path: /maintenance/troubleshoot/component-logs
+    path: /maintenance/troubleshoot/component-logs
