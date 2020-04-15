@@ -54,17 +54,19 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 				c.nodemapper[kn] = n.Name
 				c.nodemapLock.Unlock()
 
-				// It has a node reference - get that Kubernetes node, and if
-				// it exists perform a sync.
-				obj, ok, err := c.indexer.GetByKey(kn)
-				if !ok {
-					logrus.Debugf("No corresponding kubernetes node")
-					continue
-				} else if err != nil {
-					logrus.WithError(err).Warnf("Couldn't get node from indexer")
-					continue
+				if c.syncLabels {
+					// It has a node reference - get that Kubernetes node, and if
+					// it exists perform a sync.
+					obj, ok, err := c.indexer.GetByKey(kn)
+					if !ok {
+						logrus.Debugf("No corresponding kubernetes node")
+						continue
+					} else if err != nil {
+						logrus.WithError(err).Warnf("Couldn't get node from indexer")
+						continue
+					}
+					c.syncNodeLabels(obj.(*v1.Node))
 				}
-				c.syncNodeLabels(obj.(*v1.Node))
 			}
 		case bapi.UpdateTypeKVDeleted:
 			if upd.KVPair.Value != nil {

@@ -83,6 +83,22 @@ func RunK8sControllerManager(apiserverIp string) *containers.Container {
 	return c
 }
 
+func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile string) *containers.Container {
+	ctrls := "node"
+
+	return containers.Run("calico-kube-controllers",
+		containers.RunOpts{AutoRemove: true},
+		"--privileged",
+		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
+		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
+		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
+		"-e", "LOG_LEVEL=debug",
+		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
+		"-e", "RECONCILER_PERIOD=10s",
+		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
+		os.Getenv("CONTAINER_NAME"))
+}
+
 func RunEtcd() *containers.Container {
 	return containers.Run("etcd-fv",
 		containers.RunOpts{AutoRemove: true},

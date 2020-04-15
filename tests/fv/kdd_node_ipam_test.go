@@ -365,7 +365,7 @@ func assertIPsWithHandle(c ipam.Interface, handle string, num int) error {
 		}
 	}
 	if len(ips) != num {
-		return fmt.Errorf("Expected %d IPs with handle %s, found %d", len(ips), handle, ips)
+		return fmt.Errorf("Expected %d IPs with handle %s, found %d (%v)", num, handle, len(ips), ips)
 	}
 	return nil
 }

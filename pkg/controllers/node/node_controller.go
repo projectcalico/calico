@@ -59,6 +59,7 @@ type NodeController struct {
 	nodemapLock  sync.Mutex
 	syncer       bapi.Syncer
 	config       *config.Config
+	syncLabels   bool
 }
 
 // NewNodeController Constructor for NodeController
@@ -70,6 +71,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 		rl:           workqueue.DefaultControllerRateLimiter(),
 		nodemapper:   map[string]string{},
 		config:       cfg,
+		syncLabels:   cfg.SyncNodeLabels && cfg.DatastoreType != "kubernetes",
 	}
 
 	// channel used to kick the controller into scheduling a sync. It has length
@@ -88,10 +90,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 			kick(nc.schedule)
 		}}
 
-	// Determine if we should sync node labels.
-	syncLabels := cfg.SyncNodeLabels && cfg.DatastoreType != "kubernetes"
-
-	if syncLabels {
+	if nc.syncLabels {
 		// Add handlers for node add/update events from k8s.
 		handlers.AddFunc = func(obj interface{}) {
 			nc.syncNodeLabels(obj.(*v1.Node))
@@ -105,11 +104,9 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 	// also syncs up labels between k8s/calico node objects
 	nc.indexer, nc.informer = cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, handlers, cache.Indexers{})
 
-	if syncLabels {
-		// Start the syncer.
-		nc.initSyncer()
-		nc.syncer.Start()
-	}
+	// Start the syncer.
+	nc.initSyncer()
+	nc.syncer.Start()
 
 	return nc
 }

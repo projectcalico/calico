@@ -233,15 +233,13 @@ github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prY
 github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9/go.mod h1:YARuvh7BUWHNhzDq2OM5tzR2RiCcN2D7sapiKyCel/M=
 github.com/projectcalico/felix v0.0.0-20200215081554-bf27c8a4e8c0 h1:it+NXPyCAJ5TNDDoO8SzDx3Oi+/l/Gpm6PPYmxjyz1E=
 github.com/projectcalico/felix v0.0.0-20200215081554-bf27c8a4e8c0/go.mod h1:g5ASrfaCr1urORuG2NoYDDL/MWkyziwDlGihwMK8GCM=
-github.com/projectcalico/felix v3.8.6+incompatible h1:ncKg7TUD3SEVJjVIj5whMzZAw+6eUQB39b7SBP7Y8Ro=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
-github.com/projectcalico/libcalico-go v0.0.0-20200212165426-dd72e0b33683 h1:wLFLgI/WEezkSrIwyy0910qxvy1ucNULfXFQYQX5dHM=
 github.com/projectcalico/libcalico-go v0.0.0-20200212165426-dd72e0b33683/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
-github.com/projectcalico/libcalico-go v0.0.0-20200225165413-26809aa675f6 h1:vmJcsHMTATD3XffeoSWaT/wso6jSE8znbZ2id3BGIdM=
-github.com/projectcalico/libcalico-go v0.0.0-20200225165413-26809aa675f6/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
+github.com/projectcalico/libcalico-go v0.0.0-20200415195413-ddbe97145f70 h1:aq8Ys1Y5t/Cr72mXDSigTQF6u/8HeX6gcBEqPh+kTtY=
+github.com/projectcalico/libcalico-go v0.0.0-20200415195413-ddbe97145f70/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271/go.mod h1:uPOJFzjHy8fnFn4BcVk87fCKsuwafYnCtaz28Wb7yYk=
