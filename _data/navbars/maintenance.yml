@@ -1,4 +1,4 @@
-title: "Maintenance"
+title: "Operations"
 path: /maintenance/
 order: 4
 section:
@@ -9,11 +9,17 @@ section:
     path: /maintenance/kubernetes-upgrade
   - title: OpenStack
     path: /maintenance/openstack-upgrade
-- title: Decommission a node
+- title: Monitor
+  path: /maintenance/monitor
+  section: 
+  - title: Monitor component metrics
+    path: /maintenance/monitor-component-metrics  
+- title: Remove nodes from a cluster
   path: /maintenance/decommissioning-a-node
-- title: Monitor Calico component metrics
-  path: /maintenance/monitor-component-metrics  
-- title: Component logs
-  path: /maintenance/component-logs
-- title: Troubleshooting
-  path: /maintenance/troubleshooting
+- title: Troubleshoot
+  path: /maintenance/troubleshoot
+  section:
+  - title: Troubleshoot
+    path: /maintenance/troubleshoot/troubleshooting
+  - title: Component logs
+     path: /maintenance/component-logs
