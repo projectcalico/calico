@@ -250,6 +250,9 @@ var _ = Describe("Test Node conversion", func() {
 				ASNumber:                &asn,
 				RouteReflectorClusterID: "245.0.0.3",
 			},
+			OrchRefs: []apiv3.OrchRef{
+				{NodeName: k8sNode.Name, Orchestrator: "k8s"},
+			},
 		}
 
 		newK8sNode, err := mergeCalicoNodeIntoK8sNode(calicoNode, k8sNode)
@@ -302,6 +305,9 @@ var _ = Describe("Test Node conversion", func() {
 		calicoNode.Name = "TestNode"
 		calicoNode.ResourceVersion = "1234"
 		calicoNode.Labels = cl
+		calicoNode.Spec.OrchRefs = []apiv3.OrchRef{
+			{NodeName: k8sNode.Name, Orchestrator: "k8s"},
+		}
 
 		newK8sNode, err := mergeCalicoNodeIntoK8sNode(calicoNode, k8sNode)
 		Expect(err).NotTo(HaveOccurred())
