@@ -1,3 +1,2 @@
 /latest/* /:splat 301
-/v* /:splat 301
-/:version/manifests/* /:version/manifests/:splat 200
+/:version/* /:splat 301
