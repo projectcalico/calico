@@ -16,8 +16,6 @@ section:
             path: /security/network-policy-openstack
           - title: Calico Policy tutorial
             path: /security/tutorials/calico-policy
-          - title: Calico Advanced Policy tutorial
-            path: /security/tutorials/calico-policy-advanced
       - title: Kubernetes policy
         path: /security/kubernetes-policy
         section:
