@@ -4,7 +4,7 @@ description: Learn how to create more advanced Calico network policies (namespac
 canonical_url: "/security/tutorials/calico-policy-advanced"
 ---
 
-Calico network policies __extend__ the functionalities of Kubernetes network policies. To demonstrate this, this tutorial takes the Kubernetes Advanced NetworkPolicy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policy.
+Calico network policies **extend** the functionalities of Kubernetes network policies. To demonstrate this, this tutorial takes the Kubernetes Advanced NetworkPolicy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policy.
 
 ### Requirements
 
@@ -339,7 +339,7 @@ Access to `google.com` times out because it can resolve DNS, but has no egress a
 
 ## 7. Clean up namespace
 
-You can clean up after this tutorial by deleting the advanced policy demo namespace.
+Delete the advanced policy demo namespace to clean up this tutorial session.
 
 ```bash
 kubectl delete ns advanced-policy-demo
