@@ -72,7 +72,7 @@ RELEASE_IMAGES?=
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube-$(BUILDARCH):$(K8S_VERSION)
 FV_TYPHAIMAGE?=calico/typha:master-$(BUILDARCH)
-FV_FELIXIMAGE?=calico/felix:latest-$(BUILDARCH)
+FV_FELIXIMAGE?=$(BUILD_IMAGE)-test:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
@@ -231,11 +231,19 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
-	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
+	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE_NAME):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
  	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
 	fi
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
+endif
+
+image-test: image fv/Dockerfile.test.amd64
+	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE_NAME):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
+ 	  docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) docker-image; \
+	fi
+ifeq ($(ARCH),amd64)
+	docker tag $(BUILD_IMAGE)-test:latest-$(ARCH) $(BUILD_IMAGE)-test:latest
 endif
 
 ###############################################################################
@@ -372,7 +380,7 @@ fv/infrastructure/crds.yaml: go.mod go.sum
 #	 ...
 #	 $(MAKE) fv FV_BATCHES_TO_RUN="10" FV_NUM_BATCHES=10    # the tenth 1/10
 #	 etc.
-fv fv/latency.log: $(REMOTE_DEPS) $(BUILD_IMAGE) bin/iptables-locker bin/test-workload bin/test-connection bin/calico-bpf fv/fv.test
+fv fv/latency.log: $(REMOTE_DEPS) image-test bin/iptables-locker bin/test-workload bin/test-connection bin/calico-bpf fv/fv.test
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
@@ -420,7 +428,7 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 # e.g.
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
 #       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-k8sfv-test: $(BUILD_IMAGE) k8sfv-test-existing-felix
+k8sfv-test: image-test  k8sfv-test-existing-felix
 # Run k8sfv test with whatever is the existing 'calico/felix:latest'
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.

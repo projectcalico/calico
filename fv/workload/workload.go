@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/tcpdump"
 	"github.com/projectcalico/felix/fv/utils"
 )
 
@@ -497,9 +498,23 @@ func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 	}
 }
 
+const nsprefix = "/var/run/netns/"
+
+func (w *Workload) netns() string {
+	if strings.HasPrefix(w.namespacePath, nsprefix) {
+		return strings.TrimPrefix(w.namespacePath, nsprefix)
+	}
+
+	return ""
+}
+
 func (w *Workload) RunCmd(cmd string, args ...string) (string, error) {
-	netns := strings.TrimPrefix(w.namespacePath, "/var/run/netns/")
-	dockerArgs := []string{"exec", w.C.Name, "ip", "netns", "exec", netns, cmd}
+	netns := w.netns()
+	dockerArgs := []string{"exec", w.C.Name}
+	if netns != "" {
+		dockerArgs = append(dockerArgs, "ip", "netns", "exec", netns)
+	}
+	dockerArgs = append(dockerArgs, cmd)
 	dockerArgs = append(dockerArgs, args...)
 	dockerCmd := utils.Command("docker", dockerArgs...)
 	out, err := dockerCmd.CombinedOutput()
@@ -534,6 +549,14 @@ func (w *Workload) PathMTU(ip string) (int, error) {
 			return strconv.Atoi(m[1])
 		}
 	}
+}
+
+// AttachTCPDump returns tcpdump attached to the workload
+func (w *Workload) AttachTCPDump() *tcpdump.TCPDump {
+	netns := w.netns()
+	tcpd := tcpdump.Attach(w.C.Name, netns, "eth0")
+	tcpd.SetLogString(w.Name)
+	return tcpd
 }
 
 type SpoofedWorkload struct {
