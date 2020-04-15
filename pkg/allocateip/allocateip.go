@@ -13,7 +13,6 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/node/pkg/calicoclient"
@@ -27,16 +26,6 @@ import (
 // that is configured if it should no longer be.
 
 func Run() {
-	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
-	// fluentd's default configuration.
-	logrus.SetOutput(os.Stdout)
-
-	// Set log formatting.
-	logrus.SetFormatter(&logutils.Formatter{})
-
-	// Install a hook that adds file and line number information.
-	logrus.AddHook(&logutils.ContextHook{})
-
 	// This binary is only ever invoked _after_ the
 	// startup binary has been invoked and the modified environments have
 	// been sourced.  Therefore, the NODENAME environment will always be
