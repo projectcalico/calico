@@ -1,6 +1,6 @@
 ---
 title: Policy for Kubernetes services
-description: Apply policy to Kubernetes node ports, and to services that are exposed externally as cluster IPs.
+description: Apply Calico policy to Kubernetes node ports, and to services that are exposed externally as cluster IPs.
 show_read_time: false
 show_toc: false
 ---

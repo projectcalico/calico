@@ -1,6 +1,6 @@
 ---
 title: Advanced egress access controls
-description: Calico Enterprise provides fine-grained access control between a pod and external services using DNS.
+description: Use Calico Enterprise DNS-based policy for fine-grained access control between a pod and external services.
 calico_enterprise: true
 ---
 

@@ -4,7 +4,7 @@ description: Installation API reference
 layout: docwithnav
 ---
 
-The Kubernetes resources below configure {{site.prodname}} installation when using the operator (Currently, only on Openshift). Each resource is responsible for installing and configuring a different subsystem of {{site.prodname}} during installation. Most options can be modified on a running cluster using `kubectl`.
+The Kubernetes resources below configure {{site.prodname}} installation when using the operator (currently, only on Openshift). Each resource is responsible for installing and configuring a different subsystem of {{site.prodname}} during installation. Most options can be modified on a running cluster using `kubectl`.
 
 <p>Packages:</p>
 <ul>
@@ -22,8 +22,8 @@ Resource Types:
 </li></ul>
 <h3 id="operator.tigera.io/v1.Installation">Installation
 </h3>
-<p>Installation configures an installation of Calico or Calico Enterprise. At most one instance
-of this resource is supported. It must be named &ldquo;default&rdquo;. The Installation API installs core networking
+<p>Installation configures an installation of Calico or Calico Enterprise. Only one instance
+of this resource is supported, and it must be named, &ldquo;default&rdquo;. The Installation API installs core networking
 and network policy components, and provides general install-time configuration.</p>
 <table>
 <thead>
@@ -103,8 +103,8 @@ string
 <td>
 <em>(Optional)</em>
 <p>Registry is the default Docker registry used for component Docker images. If specified,
-all images will be pulled from this registry. If not specified then the default registries
-will be used.</p>
+all images will be pulled from this registry. If not specified, the default registries
+are used.</p>
 <p>Image format:
 <code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
 <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
@@ -119,9 +119,9 @@ string
 </td>
 <td>
 <em>(Optional)</em>
-<p>ImagePath allows for the path part of an image to be specified. If specified
-then the specified value will be used as the image path for each image. If not specified
-or empty, the default for each image will be used.</p>
+<p>ImagePath allows for the path part of an image to be specified. If specified,
+the specified value is used as the image path for each image. If not specified
+or empty, the default for each image is used.</p>
 <p>Image format:
 <code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>

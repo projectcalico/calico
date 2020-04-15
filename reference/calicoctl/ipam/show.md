@@ -118,4 +118,4 @@ Description:
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install)
+-  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)

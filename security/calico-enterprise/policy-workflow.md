@@ -1,6 +1,6 @@
 ---
 title: Policy workflow
-description: Implement workflow process for creating and enforcning network policies to reduce connectivity issues.
+description: Implement a workflow process for creating and enforcing network policies to reduce connectivity issues.
 calico_enterprise: true
 ---
 

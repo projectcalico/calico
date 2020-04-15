@@ -29,76 +29,76 @@ section:
             path: /security/tutorials/kubernetes-policy-advanced
       - title: Enable default deny
         path: /security/kubernetes-default-deny
-  - title: Policy rules
-    path: /security/policy-rules
-    section:
-      - title: Basic rules
-        path: /security/policy-rules-overview
-      - title: Namespace rules
-        path: /security/namespace-policy
-      - title: Service accounts rules
-        path: /security/service-accounts
-      - title: External IPs or networks rules
-        path: /security/external-ips-policy
-      - title: ICMP/ping rules
-        path: /security/icmp-ping
-  - title: Policy for hosts
-    path: /security/hosts
-    section:
-      - title: Protect hosts
-        path: /security/protect-hosts
-      - title: Protect host tutorial
-        path: /security/tutorials/protect-hosts
-      - title: Apply policy to host forwarded traffic
-        path: /security/host-forwarded-traffic
-  - title: Policy for services
-    path: /security/services
-    section:
-      - title: Apply policy to Kubernetes node ports
-        path: /security/kubernetes-node-ports
-      - title: Apply policy to services exposed externally as cluster IPs
-        path: /security/services-cluster-ips
-  - title: Policy for Istio
-    path: /security/istio
-    section:
-      - title: Enable network policy for Istio
-        path: /security/app-layer-policy
-      - title: Enforce network policy using Istio
-        path: /security/enforce-policy-istio
-      - title: Use HTTP methods and paths in policy rules
-        path: /security/http-methods
-      - title: Enforce network policy using Istio tutorial
-        path: /security/tutorials/app-layer-policy/enforce-policy-istio
-  - title: Policy for extreme traffic
-    path: /security/extreme-traffic
-    section:
-      - title: Enable extreme high-connection workloads
-        path: /security/high-connection-workloads
-      - title: Defend against DoS attacks
-        path: /security/defend-dos-attack
-  - title: Secure Calico component communications
-    path: /security/comms/
-    section:
-      - title: Configure encryption and authentication
-        path: /security/comms/crypto-auth
-      - title: Schedule to well-known nodes
-        path: /security/comms/reduce-nodes
-      - title: Secure Calico Prometheus endpoints
-        path: /security/comms/secure-metrics
-  - title: Calico Enterprise
-    path: /security/calico-enterprise/
-    section:
-      - title: Network visibility
-        path: /security/calico-enterprise/network-visibility
-      - title: Advanced egress access controls
-        path: /security/calico-enterprise/egress-access-controls
-      - title: Advanced compliance controls
-        path: /security/calico-enterprise/compliance
-      - title: Federation
-        path: /security/calico-enterprise/federation
-      - title: Threat defense
-        path: /security/calico-enterprise/threat-defense
-      - title: User console
-        path: /security/calico-enterprise/user-console
-      - title: Policy workflow
-        path: /security/calico-enterprise/policy-workflow
+- title: Policy rules
+  path: /security/policy-rules
+  section:
+  - title: Basic rules
+    path: /security/policy-rules-overview
+  - title: Namespace rules
+    path: /security/namespace-policy
+  - title: Service accounts rules
+    path: /security/service-accounts
+  - title: External IPs or networks rules
+    path: /security/external-ips-policy
+  - title: ICMP/ping rules
+    path: /security/icmp-ping
+- title: Policy for hosts
+  path: /security/hosts
+  section:
+  - title: Protect hosts
+    path: /security/protect-hosts
+  - title: Protect host tutorial
+    path: /security/tutorials/protect-hosts
+  - title: Apply policy to host forwarded traffic
+    path: /security/host-forwarded-traffic
+- title: Policy for services
+  path: /security/services
+  section:
+  - title: Apply policy to Kubernetes node ports
+    path: /security/kubernetes-node-ports
+  - title: Apply policy to services exposed externally as cluster IPs
+    path: /security/services-cluster-ips
+- title: Policy for Istio
+  path: /security/istio
+  section:
+  - title: Enable network policy for Istio
+    path: /security/app-layer-policy
+  - title: Enforce network policy using Istio
+    path: /security/enforce-policy-istio
+  - title: Use HTTP methods and paths in policy rules
+    path: /security/http-methods
+  - title: Enforce network policy using Istio tutorial
+    path: /security/tutorials/app-layer-policy/enforce-policy-istio
+- title: Policy for extreme traffic
+  path: /security/extreme-traffic
+  section:
+  - title: Enable extreme high-connection workloads
+    path: /security/high-connection-workloads
+  - title: Defend against DoS attacks
+    path: /security/defend-dos-attack
+- title: Secure Calico component communications
+  path: /security/comms/
+  section:
+  - title: Configure encryption and authentication
+    path: /security/comms/crypto-auth
+  - title: Schedule Typha for scaling to well-known nodes
+    path: /security/comms/reduce-nodes
+  - title: Secure Calico Prometheus endpoints
+    path: /security/comms/secure-metrics
+- title: Calico Enterprise
+  path: /security/calico-enterprise/
+  section:
+  - title: Network visibility
+    path: /security/calico-enterprise/network-visibility
+  - title: Advanced egress access controls 
+    path: /security/calico-enterprise/egress-access-controls
+  - title: Advanced compliance controls 
+    path: /security/calico-enterprise/compliance
+  - title: Federation
+    path: /security/calico-enterprise/federation
+  - title: Threat defense
+    path: /security/calico-enterprise/threat-defense
+  - title: User console
+    path: /security/calico-enterprise/user-console
+  - title: Policy workflow
+    path: /security/calico-enterprise/policy-workflow

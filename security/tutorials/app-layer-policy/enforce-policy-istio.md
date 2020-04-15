@@ -1,5 +1,5 @@
 ---
-title: Enforce network policy using Istio tutorial
+title: Enforce Calico network policy using Istio (tutorial)
 description: Learn how Calico integrates with Istio to provide fine-grained access control using Calico network policies enforced within the service mesh and network layer.
 canonical_url: '/security/tutorials/app-layer-policy/enforce-policy-istio'
 ---
@@ -12,9 +12,9 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 2. Install Calico on Kubernetes:
   - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/quickstart).
   - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/getting-started/kubernetes/installation/) (or a non-Calico CNI) and Calico network policy are installed. 
-3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/calicoctl/install).   
+3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install).   
   **Note**: Ensure calicoctl is configured to connect with your datastore.  
-4. [Enable application layer policy[Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).  
+4. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).  
   **Note**: Label the default namespace for the Istio sidecar injection (`istio-injection=enabled`).
   `kubectl label namespace default istio-injection=enabled`
 
@@ -296,4 +296,4 @@ account we disallow the connection.
  [etcd]: https://github.com/coreos/etcd
  [struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638
  [heartbleed]: http://heartbleed.com/
- [ingress host port]: https://istio.io/docs/tasks/traffic-management/ingress/#determining-the-ingress-ip-and-ports 
+ [ingress host port]: https://istio.io/docs/tasks/traffic-management/ingress/ingress-control/#determining-the-ingress-ip-and-ports

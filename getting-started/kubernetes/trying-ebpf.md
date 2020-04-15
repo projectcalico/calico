@@ -25,6 +25,8 @@ The new eBPF dataplane mode has several advantages over standard linux networkin
   
 Trying out the tech preview will give you a taste of these benefits and an opportunity to give feedback to the {{site.prodname}} team. 
 
+To learn more and see performance metrics from our test environment, see the blog, {% include open-new-window.html text='Introducing the Calico eBPF dataplane' url='https://www.projectcalico.org/introducing-the-calico-ebpf-dataplane/' %}.
+
 ### Features
 
 This how-to guide uses the following {{site.prodname}} features:
@@ -220,16 +222,6 @@ To re-enable BPF mode:
 > **Warning!** Switching between eBPF and standard linux networking can cause long-lived flows to be silently dropped since the two dataplane modes do not share connection-tracking state.
 {: .alert .alert-danger }
 
-### Next steps
+### Send us feedback
 
-**Tools**
-
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
-
-**Networking**
-
-- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.baseurl}}/networking/bgp) to get traffic flowing between pods.
-
-**Security**
-
-- [Secure pods with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
+We want to hear about your experience, so please don’t hesitate to connect with us via the {% include open-new-window.html text='Calico Users Slack' url='http://slack.projectcalico.org/' %} group.
