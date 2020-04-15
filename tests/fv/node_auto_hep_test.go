@@ -325,12 +325,11 @@ func calicoNode(c client.Interface, name string, k8sNodeName string, labels map[
 			IPv6Address:        "fe80::1",
 			IPv4IPIPTunnelAddr: "192.168.100.1",
 		},
-		OrchRefs: []api.OrchRef{
-			{
-				NodeName:     k8sNodeName,
-				Orchestrator: "k8s",
-			},
-		},
+	}
+
+	// Add in the orchRef if a k8s node was provided.
+	if k8sNodeName != "" {
+		node.Spec.OrchRefs = []api.OrchRef{{NodeName: k8sNodeName, Orchestrator: "k8s"}}
 	}
 	return node
 }

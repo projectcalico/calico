@@ -63,14 +63,14 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 		case bapi.UpdateTypeKVUpdated:
 			n := upd.KVPair.Value.(*apiv3.Node)
 
-			if c.config.SyncLabels {
-				if kn := getK8sNodeName(*n); kn != "" {
-					// Create a mapping from Kubernetes node -> Calico node.
-					logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
-					c.nodemapLock.Lock()
-					c.nodemapper[kn] = n.Name
-					c.nodemapLock.Unlock()
+			if kn := getK8sNodeName(*n); kn != "" {
+				// Create a mapping from Kubernetes node -> Calico node.
+				logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
+				c.nodemapLock.Lock()
+				c.nodemapper[kn] = n.Name
+				c.nodemapLock.Unlock()
 
+				if c.config.SyncLabels {
 					// It has a node reference - get that Kubernetes node, and if
 					// it exists perform a sync.
 					obj, ok, err := c.indexer.GetByKey(kn)
@@ -106,16 +106,14 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 			nodeName := upd.KVPair.Key.(model.ResourceKey).Name
 
 			// Try to perform unmapping based on resource name (calico node name).
-			if c.config.SyncLabels {
-				for kn, cn := range c.nodemapper {
-					if cn == nodeName {
-						// Remove it from node map.
-						logrus.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
-						c.nodemapLock.Lock()
-						delete(c.nodemapper, kn)
-						c.nodemapLock.Unlock()
-						break
-					}
+			for kn, cn := range c.nodemapper {
+				if cn == nodeName {
+					// Remove it from node map.
+					logrus.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
+					c.nodemapLock.Lock()
+					delete(c.nodemapper, kn)
+					c.nodemapLock.Unlock()
+					break
 				}
 			}
 
