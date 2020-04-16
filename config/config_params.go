@@ -103,6 +103,7 @@ type Config struct {
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
 	BPFEnabled                         bool           `config:"bool;false"`
+	BPFDisableUnprivileged             bool           `config:"bool;true"`
 	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;non-zero"`
 	BPFDataIfacePattern                *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$)"`
 	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true"`

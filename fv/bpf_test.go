@@ -59,7 +59,7 @@ import (
 // - Since the connection time program applies to the whole host, the different felix nodes actually share the
 //   connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
 //   should be programming the same NAT mappings.
-var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
 var _ = describeBPFTests(withProto("tcp"))
@@ -89,6 +89,7 @@ type bpfTestOptions struct {
 	tunnel          string
 	dsr             bool
 	udpConnRecvMsg  bool
+	nonProtoTests   bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -102,6 +103,12 @@ func withProto(proto string) bpfTestOpt {
 func withConnTimeLoadBalancingEnabled() bpfTestOpt {
 	return func(opts *bpfTestOptions) {
 		opts.connTimeEnabled = true
+	}
+}
+
+func withNonProtocolDependentTests() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.nonProtoTests = true
 	}
 }
 
@@ -420,6 +427,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(mapID).NotTo(BeNumerically("==", 0))
 						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
 					})
+				})
+			}
+
+			if testOpts.nonProtoTests {
+				// We can only test that felix _sets_ this because the flag is one-way and cannot be unset.
+				It("should enable the kernel.unprivileged_bpf_disabled sysctl", func() {
+					Eventually(func() string {
+						out, err := felixes[0].ExecOutput("sysctl", "kernel.unprivileged_bpf_disabled")
+						if err != nil {
+							log.WithError(err).Error("Failed to run sysctl")
+						}
+						return out
+					}).Should(ContainSubstring("kernel.unprivileged_bpf_disabled = 1"))
 				})
 			}
 		})
