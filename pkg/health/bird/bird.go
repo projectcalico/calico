@@ -39,6 +39,10 @@ func GRInProgress(ipv string) (bool, error) {
 	// Try connecting to the BIRD socket in `/var/run/calico/` first to get the data
 	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
 	if err != nil {
+		// If that fails and BIRD socket file exists, return the error message
+		if !isNotExistError(err) {
+			return false, fmt.Errorf("Error querying BIRD: connect to BIRDv%s socket: %v", ipv, err)
+		}
 		// If that fails, try connecting to BIRD socket in `/var/run/bird` (which is the
 		// default socket location for BIRD install) for non-containerized installs
 		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
@@ -112,6 +116,10 @@ func GRInProgress(ipv string) (bool, error) {
 	return false, scanner.Err()
 }
 
+func isNotExistError(err error) bool {
+	return strings.HasSuffix(err.Error(), "no such file or directory")
+}
+
 // bgpPeer is a structure containing details about a BGP peer.
 type bgpPeer struct {
 	PeerIP   string
@@ -132,6 +140,10 @@ func GetPeers(ipv string) ([]bgpPeer, error) {
 	// Try connecting to the BIRD socket in `/var/run/calico/` first to get the data
 	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
 	if err != nil {
+		// If that fails and BIRD socket file exists, return the error message
+		if !isNotExistError(err) {
+			return nil, fmt.Errorf("Error querying BIRD: connect to BIRDv%s socket: %v", ipv, err)
+		}
 		// If that fails, try connecting to BIRD socket in `/var/run/bird` (which is the
 		// default socket location for BIRD install) for non-containerized installs
 		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
