@@ -300,6 +300,11 @@ type FelixConfigurationSpec struct {
 	// embedded kube-proxy.  Lower values give reduced set-up latency.  Higher values reduce Felix CPU usage by
 	// batching up more work.  [Default: 1s]
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
+
+	// RouteSource configures where Felix gets its routing information.
+	// - WorkloadIPs: use workload endpoints to construct routes.
+	// - CalicoIPAM: the default - use IPAM data to contruct routes.
+	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
 }
 
 // ProtoPort is combination of protocol and port, both must be specified.
