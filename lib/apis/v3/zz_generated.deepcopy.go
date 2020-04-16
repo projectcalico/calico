@@ -821,6 +821,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFDisableUnprivileged != nil {
+		in, out := &in.BPFDisableUnprivileged, &out.BPFDisableUnprivileged
+		*out = new(bool)
+		**out = **in
+	}
 	if in.BPFConnectTimeLoadBalancingEnabled != nil {
 		in, out := &in.BPFConnectTimeLoadBalancingEnabled, &out.BPFConnectTimeLoadBalancingEnabled
 		*out = new(bool)
