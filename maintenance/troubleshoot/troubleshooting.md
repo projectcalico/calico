@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting
 description: View logs and diagnostics, common issues, and where to report issues in github.
-canonical_url: '/maintenance/troubleshooting'
+canonical_url: '/maintenance/troubleshoot/troubleshooting'
 ---
 
 * TOC
