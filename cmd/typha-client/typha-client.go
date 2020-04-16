@@ -15,6 +15,7 @@
 package main
 
 import (
+	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -43,10 +44,18 @@ Options:
   --version                    Print the version and exit.
   --server=<ADDR>              Set the server to connect to [default: localhost:5473].
   --type=<TYPE>                Use a particular syncer type.
+  --key-file=<FILE>            TLS: private key file.  Used to authenticate to the server.
+  --cert-file=<FILE>           TLS: certificate file.  Used to authenticate to the server.  
+                               Must be signed by the CA that the server accepts.
+  --ca-file=<FILE>             TLS: CA certificate file.  Used to authenticate the server's certificate.
+  --server-cn=<NAME>           TLS: expected server common name.  Used to authenticate the server's certificate.
+  --server-uri=<URI>           TLS: expected server URI SAN.  Used to authenticate the server's certificate.
+
 `
 
 type syncerCallbacks struct {
 	updateCount int
+	lastLogTime time.Time
 }
 
 func (s *syncerCallbacks) OnStatusUpdated(status api.SyncStatus) {
@@ -55,7 +64,11 @@ func (s *syncerCallbacks) OnStatusUpdated(status api.SyncStatus) {
 
 func (s *syncerCallbacks) OnUpdates(updates []api.Update) {
 	s.updateCount += len(updates)
+	if time.Since(s.lastLogTime) < time.Second {
+		return
+	}
 	log.WithField("numUpdates", len(updates)).WithField("total", s.updateCount).Info("Updates received")
+	s.lastLogTime = time.Now()
 }
 
 func main() {
@@ -84,7 +97,7 @@ func main() {
 		"gitCommit":  buildinfo.GitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
-	buildInfoLogCxt.Info("Typha starting up")
+	buildInfoLogCxt.Info("Typha client starting up")
 	log.Infof("Command line arguments: %v", arguments)
 
 	callbacks := &syncerCallbacks{}
@@ -95,8 +108,15 @@ func main() {
 	}
 	options := &syncclient.Options{
 		SyncerType: syncerType,
+		KeyFile: arguments["--key-file"].(string),
+		CertFile: arguments["--cert-file"].(string),
+		CAFile: arguments["--ca-file"].(string),
+		ServerCN: arguments["--server-cn"].(string),
+		ServerURISAN: arguments["--server-uri"].(string),
 	}
-	client := syncclient.New(addr, buildinfo.GitVersion, "test-host", "some info", callbacks, options)
+
+	hostname, _ := os.Hostname()
+	client := syncclient.New(addr, buildinfo.GitVersion, hostname, "typha command-line client", callbacks, options)
 	err = client.Start(context.Background())
 	if err != nil {
 		log.WithError(err).Panic("Client failed")
