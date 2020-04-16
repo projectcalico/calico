@@ -166,6 +166,8 @@ func (t *TCPDump) readStdout() {
 }
 
 func (t *TCPDump) readStderr() {
+	defer ginkgo.GinkgoRecover()
+
 	s := bufio.NewScanner(t.err)
 	closedChan := false
 	safeClose := func() {
@@ -174,11 +176,19 @@ func (t *TCPDump) readStderr() {
 			closedChan = true
 		}
 	}
-	defer safeClose()
+
+	listening := false
+
+	defer func() {
+		Expect(listening).To(BeTrue())
+		safeClose()
+	}()
+
 	for s.Scan() {
 		line := s.Text()
 		logrus.Infof("[%s] ERR: %s", t.contName, line)
 		if strings.Contains(line, "listening") {
+			listening = true
 			safeClose()
 		}
 	}
