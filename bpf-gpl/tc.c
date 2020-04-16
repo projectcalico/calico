@@ -710,11 +710,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		seen_mark = CALI_SKB_MARK_SEEN;
 	}
 
-	/* XXX we cannot pass the related ICMP after NATing back yet, so we need
-	 * to act here, we know we are forwarding.
+	/* We check the ttl here to avoid needing complicated handling of
+	 * related trafic back from the host if we let the host to handle it.
 	 */
-
-	/* XXX XXX XXX */
 	CALI_DEBUG("ip->ttl %d\n", ip_header->ttl);
 	if (ip_ttl_exceeded(ip_header)) {
 		switch (ct_rc){
