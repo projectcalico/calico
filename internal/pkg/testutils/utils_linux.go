@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -319,7 +319,7 @@ func CreateHostVeth(containerId, k8sName, k8sNamespace, nodename string) error {
 			return err
 		}
 
-		hostVethName = k8sconversion.VethNameForWorkload(k8sNamespace, workloadName)
+		hostVethName = k8sconversion.NewConverter().VethNameForWorkload(k8sNamespace, workloadName)
 	}
 
 	peerVethName := "calipeer"
