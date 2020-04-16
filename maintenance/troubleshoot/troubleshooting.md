@@ -31,8 +31,8 @@ To report a problem, please [open an issue in GitHub](https://github.com/project
 #### Check for mismatched node names
 
 If you notice that a workload has not received network connectivity, check
-that the node name for that host is properly configured. The name for the [node resource](../reference/resources/node) must match
-the node name in the [workload endpoint resources](../reference/resources/workloadendpoint) on that host. If the names are mismatched,
+that the node name for that host is properly configured. The name for the [node resource]({{ site.baseurl }}/reference/resources/node) must match
+the node name in the [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint) on that host. If the names are mismatched,
 it is likely that all workloads on that node will not receive networking.
 
 To check this, query one of the broken workload endpoints and check its node name:
@@ -75,7 +75,7 @@ kubectl uncordon mynode.internal.projectcalico.org
 
 To prevent this problem from occurring, we recommend always mounting the `/var/lib/calico` directory into the `{{site.nodecontainer}}`
 container when installing {{site.prodname}}. This allows all components to detect and use the same node name. See
-[node name determination](../reference/node/configuration#node-name-determination) for more information.
+[node name determination]({{ site.baseurl }}/reference/node/configuration#node-name-determination) for more information.
 
 #### Check BGP peer status
 
@@ -137,14 +137,14 @@ or you can set environment variables for `sudo` commands like this:
 sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node run
 ```
 
-Also be aware that connection information can be specified as a config file rather than using environment variables.  See [Installing calicoctl](../getting-started/clis/calicoctl/install)
+Also be aware that connection information can be specified as a config file rather than using environment variables.  See [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 for details.
 
 ### Error: {{site.nodecontainer}} is not ready: BIRD is not ready: BGP not established with 10.0.0.1
 
 In most cases, this "unready" status error in Kubernetes means that a particular peer is unreachable in the cluster. Check that BGP connectivity between the two peers is allowed in the environment.
 
-This error can also occur if inactive Node resources are configured for node-to-node mesh. To fix this, [decommission the stale nodes](../maintenance/decommissioning-a-node).
+This error can also occur if inactive Node resources are configured for node-to-node mesh. To fix this, [decommission the stale nodes]({{ site.baseurl }}/maintenance/decommissioning-a-node).
 
 This error can also occur when BGP connections to non-mesh peers go down. If this is a common occurrence in your BGP topology, you can disable BIRD readiness checks. See [node readiness]({{ site.baseurl }}/reference/node/configuration#node-readiness)
 for more information.
