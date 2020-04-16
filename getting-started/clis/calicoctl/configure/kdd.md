@@ -16,6 +16,7 @@ canonical_url: '/getting-started/clis/calicoctl/configure/kdd'
 | `k8sKeyFile`              | `K8S_KEY_FILE`       | Location of a client key for accessing the Kubernetes API, e.g., `/path/to/key`.                          | string
 | `k8sCAFile`               | `K8S_CA_FILE`        | Location of a CA for accessing the Kubernetes API, e.g., `/path/to/ca`.                                   | string
 | `k8sToken`                |                      | Token to be used for accessing the Kubernetes API.                                                        | string
+| `kubeconfigInline`        |                      | When using the Kubernetes datastore, the contents of the kubeconfig to use. If used, no other fields are honored for kubernetes configuration. | string
 
 
 > **Note**: All environment variables may also be prefixed with `"CALICO_"`, for
