@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,6 +45,21 @@ type ResourceList interface {
 // Function signature for conversion function to convert a K8s resouce to a
 // KVPair equivalent.
 type ConvertK8sResourceToKVPair func(Resource) (*model.KVPair, error)
+type ConvertK8sResourceToKVPairs func(Resource) ([]*model.KVPair, error)
+
+// ConvertK8sResourceOneToOneAdapter converts a ConvertK8sResourceToKVPair function to a ConvertK8sResourceToKVPairs function
+func ConvertK8sResourceOneToOneAdapter(oneToOne ConvertK8sResourceToKVPair) ConvertK8sResourceToKVPairs {
+	return func(r Resource) ([]*model.KVPair, error) {
+		kvp, err := oneToOne(r)
+		if err != nil {
+			return nil, err
+		} else if kvp != nil {
+			return []*model.KVPair{kvp}, nil
+		}
+
+		return nil, nil
+	}
+}
 
 // Store Calico Metadata in the k8s resource annotations for non-CRD backed resources.
 // Currently this just stores Annotations and Labels and drops all other metadata

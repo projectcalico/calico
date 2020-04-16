@@ -61,6 +61,7 @@ func NewNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 		namespaced:   true,
 	}
 	return &networkPolicyClient{
+		Converter: conversion.NewConverter(),
 		clientSet: c,
 		crdClient: crdClient,
 	}
@@ -365,6 +366,7 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 func newNetworkPolicyWatcher(ctx context.Context, k8sRev, crdRev string, k8sWatch, calicoWatch api.WatchInterface) api.WatchInterface {
 	ctx, cancel := context.WithCancel(ctx)
 	wc := &networkPolicyWatcher{
+		Converter:  conversion.NewConverter(),
 		k8sNPRev:   k8sRev,
 		crdNPRev:   crdRev,
 		k8sNPWatch: k8sWatch,

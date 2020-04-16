@@ -31,10 +31,19 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+func podToWorkloadEndpoint(c Converter, pod *kapiv1.Pod) (*model.KVPair, error) {
+	weps, err := c.PodToWorkloadEndpoints(pod)
+	if err != nil {
+		return nil, err
+	}
+
+	return weps[0], nil
+}
+
 var _ = Describe("Test parsing strings", func() {
 
 	// Use a single instance of the Converter for these tests.
-	c := Converter{}
+	c := NewConverter()
 
 	It("should parse WorkloadEndpoint name", func() {
 		wepName := "node-k8s-pod--name-eth0"
@@ -50,7 +59,7 @@ var _ = Describe("Test parsing strings", func() {
 		os.Setenv("FELIX_INTERFACEPREFIX", "eni,veth,foo")
 		defer os.Setenv("FELIX_INTERFACEPREFIX", "")
 
-		name := VethNameForWorkload("namespace", "podname")
+		name := c.VethNameForWorkload("namespace", "podname")
 		Expect(name).To(Equal("eni82111e10a96"))
 	})
 
@@ -97,7 +106,7 @@ var _ = Describe("Test selector conversion", func() {
 	DescribeTable("selector conversion table",
 		func(inSelector *metav1.LabelSelector, selectorType selectorType, expected string) {
 			// First, convert the NetworkPolicy using the k8s conversion logic.
-			c := Converter{}
+			c := converter{}
 
 			converted := c.k8sSelectorToCalico(inSelector, selectorType)
 
@@ -160,7 +169,7 @@ var _ = Describe("Test selector conversion", func() {
 var _ = Describe("Test Pod conversion", func() {
 
 	// Use a single instance of the Converter for these tests.
-	c := Converter{}
+	c := NewConverter()
 
 	It("should parse a Pod with an IP to a WorkloadEndpoint", func() {
 		pod := kapiv1.Pod{
@@ -222,7 +231,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure the type information is correct.
@@ -333,7 +342,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check both IPs were converted.
@@ -363,7 +372,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.HasIPAddress(&pod)).To(BeTrue())
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
@@ -391,7 +400,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.HasIPAddress(&pod)).To(BeTrue())
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32", "fd5f:8067::1/128"))
@@ -421,7 +430,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.HasIPAddress(&pod)).To(BeTrue())
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32", "fd5f:8067::1/128"))
@@ -449,7 +458,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.HasIPAddress(&pod)).To(BeTrue())
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
@@ -482,7 +491,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.HasIPAddress(&pod)).To(BeTrue())
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32", "fd5f:8067::1/128"))
@@ -511,7 +520,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		_, err := c.PodToWorkloadEndpoint(&pod)
+		_, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -531,7 +540,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		_, err := c.PodToWorkloadEndpoint(&pod)
+		_, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -548,7 +557,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		kvp, err := c.PodToWorkloadEndpoint(&pod)
+		kvp, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Value).NotTo(BeNil())
 	})
@@ -577,13 +586,13 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.2/32"))
 	})
 
-	DescribeTable("PodToWorkloadEndpoint reject/accept phase tests",
+	DescribeTable("PodToDefaultWorkloadEndpoint reject/accept phase tests",
 		func(podPhase kapiv1.PodPhase, expectedResult bool) {
 			pod := kapiv1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -603,7 +612,7 @@ var _ = Describe("Test Pod conversion", func() {
 					Phase: podPhase,
 				},
 			}
-			kvp, err := c.PodToWorkloadEndpoint(&pod)
+			kvp, err := podToWorkloadEndpoint(c, &pod)
 			Expect(err).NotTo(HaveOccurred())
 			if expectedResult {
 				Expect(kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(1))
@@ -642,7 +651,7 @@ var _ = Describe("Test Pod conversion", func() {
 		}
 
 		Expect(c.IsValidCalicoWorkloadEndpoint(&pod)).To(BeTrue())
-		_, err := c.PodToWorkloadEndpoint(&pod)
+		_, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(c.IsReadyCalicoPod(&pod)).To(BeFalse())
@@ -662,7 +671,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
@@ -699,7 +708,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		_, err := c.PodToWorkloadEndpoint(&pod)
+		_, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -748,7 +757,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure the type information is correct.
@@ -791,7 +800,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.PodToWorkloadEndpoint(&pod)
+		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure the GenerateName information is correct.
@@ -802,7 +811,7 @@ var _ = Describe("Test Pod conversion", func() {
 var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	// Use a single instance of the Converter for these tests.
-	c := Converter{}
+	c := NewConverter()
 
 	It("should parse a basic k8s NetworkPolicy to a NetworkPolicy", func() {
 		port80 := intstr.FromInt(80)
@@ -1904,7 +1913,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
@@ -1924,7 +1933,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
 
 		// Assert value fields are correct.
 		Expect(nets).To(BeNil())
@@ -1945,7 +1954,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
@@ -2031,7 +2040,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", func() {
 
 	// Use a single instance of the Converter for these tests.
-	c := Converter{}
+	c := NewConverter()
 
 	It("should parse a basic NetworkPolicy to a Policy", func() {
 		port80 := intstr.FromInt(80)
@@ -2409,7 +2418,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 var _ = Describe("Test Namespace conversion", func() {
 
 	// Use a single instance of the Converter for these tests.
-	c := Converter{}
+	c := NewConverter()
 
 	It("should parse a Namespace to a Profile", func() {
 		ns := kapiv1.Namespace{
@@ -2598,7 +2607,7 @@ var _ = Describe("Test Namespace conversion", func() {
 var _ = Describe("Test ServiceAccount conversion", func() {
 
 	// Use a single instance of the Converter for these tests.
-	c := Converter{}
+	c := NewConverter()
 
 	It("should parse a ServiceAccount in default namespace to a Profile", func() {
 		sa := kapiv1.ServiceAccount{

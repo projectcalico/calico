@@ -15,11 +15,7 @@
 package conversion
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -48,40 +44,47 @@ const (
 	SelectorPod
 )
 
-// TODO: make this private and expose a public conversion interface instead
-type Converter struct{}
+type Converter interface {
+	WorkloadEndpointConverter
+	ParseWorkloadEndpointName(workloadName string) (names.WorkloadEndpointIdentifiers, error)
+	NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, error)
+	IsValidCalicoWorkloadEndpoint(pod *kapiv1.Pod) bool
+	IsReadyCalicoPod(pod *kapiv1.Pod) bool
+	IsScheduled(pod *kapiv1.Pod) bool
+	IsHostNetworked(pod *kapiv1.Pod) bool
+	HasIPAddress(pod *kapiv1.Pod) bool
+	StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string
+	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
+	ProfileNameToNamespace(profileName string) (string, error)
+	JoinNetworkPolicyRevisions(crdNPRev, k8sNPRev string) string
+	SplitNetworkPolicyRevision(rev string) (crdNPRev string, k8sNPRev string, err error)
+	ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error)
+	ProfileNameToServiceAccount(profileName string) (ns, sa string, err error)
+	JoinProfileRevisions(nsRev, saRev string) string
+	SplitProfileRevision(rev string) (nsRev string, saRev string, err error)
+}
 
-// VethNameForWorkload returns a deterministic veth name
-// for the given Kubernetes workload (WEP) name and namespace.
-func VethNameForWorkload(namespace, podname string) string {
-	// A SHA1 is always 20 bytes long, and so is sufficient for generating the
-	// veth name and mac addr.
-	h := sha1.New()
-	h.Write([]byte(fmt.Sprintf("%s.%s", namespace, podname)))
-	prefix := os.Getenv("FELIX_INTERFACEPREFIX")
-	if prefix == "" {
-		// Prefix is not set. Default to "cali"
-		prefix = "cali"
-	} else {
-		// Prefix is set - use the first value in the list.
-		splits := strings.Split(prefix, ",")
-		prefix = splits[0]
+type converter struct {
+	WorkloadEndpointConverter
+}
+
+func NewConverter() Converter {
+	return &converter{
+		WorkloadEndpointConverter: NewWorkloadEndpointConverter(),
 	}
-	log.WithField("prefix", prefix).Debugf("Using prefix to create a WorkloadEndpoint veth name")
-	return fmt.Sprintf("%s%s", prefix, hex.EncodeToString(h.Sum(nil))[:11])
 }
 
 // ParseWorkloadName extracts the Node name, Orchestrator, Pod name and endpoint from the
 // given WorkloadEndpoint name.
 // The expected format for k8s is <node>-k8s-<pod>-<endpoint>
-func (c Converter) ParseWorkloadEndpointName(workloadName string) (names.WorkloadEndpointIdentifiers, error) {
+func (c converter) ParseWorkloadEndpointName(workloadName string) (names.WorkloadEndpointIdentifiers, error) {
 	return names.ParseWorkloadEndpointName(workloadName)
 }
 
 // NamespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
 // labels from the Namespace which are inherited by the WorkloadEndpoints within
 // the Profile. This Profile also has the default ingress and egress rules, which are both 'allow'.
-func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, error) {
+func (c converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, error) {
 	// Generate the labels to apply to the profile, using a special prefix
 	// to indicate that these are the labels from the parent Kubernetes Namespace.
 	labels := map[string]string{}
@@ -124,7 +127,7 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 // invalid Pods, it is important that pods can only transition from not-valid to valid and not
 // the other way.  If they transition from valid to invalid, we'll fail to emit a deletion
 // event in the watcher.
-func (c Converter) IsValidCalicoWorkloadEndpoint(pod *kapiv1.Pod) bool {
+func (c converter) IsValidCalicoWorkloadEndpoint(pod *kapiv1.Pod) bool {
 	if c.IsHostNetworked(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is host networked.")
 		return false
@@ -137,7 +140,7 @@ func (c Converter) IsValidCalicoWorkloadEndpoint(pod *kapiv1.Pod) bool {
 
 // IsReadyCalicoPod returns true if the pod is a valid Calico WorkloadEndpoint and has
 // an IP address assigned (i.e. it's ready for Calico networking).
-func (c Converter) IsReadyCalicoPod(pod *kapiv1.Pod) bool {
+func (c converter) IsReadyCalicoPod(pod *kapiv1.Pod) bool {
 	if !c.IsValidCalicoWorkloadEndpoint(pod) {
 		return false
 	} else if !c.HasIPAddress(pod) {
@@ -153,7 +156,7 @@ const (
 	podCompleted kapiv1.PodPhase = "Completed"
 )
 
-func (c Converter) IsFinished(pod *kapiv1.Pod) bool {
+func IsFinished(pod *kapiv1.Pod) bool {
 	switch pod.Status.Phase {
 	case kapiv1.PodFailed, kapiv1.PodSucceeded, podCompleted:
 		return true
@@ -161,15 +164,15 @@ func (c Converter) IsFinished(pod *kapiv1.Pod) bool {
 	return false
 }
 
-func (c Converter) IsScheduled(pod *kapiv1.Pod) bool {
+func (c converter) IsScheduled(pod *kapiv1.Pod) bool {
 	return pod.Spec.NodeName != ""
 }
 
-func (c Converter) IsHostNetworked(pod *kapiv1.Pod) bool {
+func (c converter) IsHostNetworked(pod *kapiv1.Pod) bool {
 	return pod.Spec.HostNetwork
 }
 
-func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
+func (c converter) HasIPAddress(pod *kapiv1.Pod) bool {
 	return pod.Status.PodIP != "" || pod.Annotations[AnnotationPodIP] != ""
 	// Note: we don't need to check PodIPs and AnnotationPodIPs here, because those cannot be
 	// non-empty if the corresponding singular field is empty.
@@ -178,7 +181,7 @@ func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
 // getPodIPs extracts the IP addresses from a Kubernetes Pod.  We support a single IPv4 address
 // and/or a single IPv6.  getPodIPs loads the IPs either from the PodIPs and PodIP field, if
 // present, or the calico podIP annotation.
-func (c Converter) getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
+func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 	var podIPs []string
 	if ips := pod.Status.PodIPs; len(ips) != 0 {
 		log.WithField("ips", ips).Debug("PodIPs field filled in")
@@ -210,185 +213,13 @@ func (c Converter) getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 	return podIPNets, nil
 }
 
-// PodToWorkloadEndpoint converts a Pod to a WorkloadEndpoint.  It assumes the calling code
-// has verified that the provided Pod is valid to convert to a WorkloadEndpoint.
-// PodToWorkloadEndpoint requires a Pods Name and Node Name to be populated. It will
-// fail to convert from a Pod to WorkloadEndpoint otherwise.
-func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
-	log.WithField("pod", pod).Debug("Converting pod to WorkloadEndpoint")
-	// Get all the profiles that apply
-	var profiles []string
-
-	// Pull out the Namespace based profile off the pod name and Namespace.
-	profiles = append(profiles, NamespaceProfileNamePrefix+pod.Namespace)
-
-	// Pull out the Serviceaccount based profile off the pod SA and namespace
-	if pod.Spec.ServiceAccountName != "" {
-		profiles = append(profiles, serviceAccountNameToProfileName(pod.Spec.ServiceAccountName, pod.Namespace))
-	}
-
-	wepids := names.WorkloadEndpointIdentifiers{
-		Node:         pod.Spec.NodeName,
-		Orchestrator: apiv3.OrchestratorKubernetes,
-		Endpoint:     "eth0",
-		Pod:          pod.Name,
-	}
-	wepName, err := wepids.CalculateWorkloadEndpointName(false)
-	if err != nil {
-		return nil, err
-	}
-
-	podIPNets, err := c.getPodIPs(pod)
-	if err != nil {
-		// IP address was present but malformed in some way, handle as an explicit failure.
-		return nil, err
-	}
-
-	if c.IsFinished(pod) {
-		// Pod is finished but not yet deleted.  In this state the IP will have been freed and returned to the pool
-		// so we need to make sure we don't let the caller believe it still belongs to this endpoint.
-		// Pods with no IPs will get filtered out before they get to Felix in the watcher syncer cache layer.
-		// We can't pretend the workload endpoint is deleted _here_ because that would confuse users of the
-		// native v3 Watch() API.
-		podIPNets = nil
-	}
-
-	ipNets := []string{}
-	for _, ipNet := range podIPNets {
-		ipNets = append(ipNets, ipNet.String())
-	}
-
-	// Generate the interface name based on workload.  This must match
-	// the host-side veth configured by the CNI plugin.
-	interfaceName := VethNameForWorkload(pod.Namespace, pod.Name)
-
-	// Build the labels map.  Start with the pod labels, and append two additional labels for
-	// namespace and orchestrator matches.
-	labels := pod.Labels
-	if labels == nil {
-		labels = make(map[string]string, 2)
-	}
-	labels[apiv3.LabelNamespace] = pod.Namespace
-	labels[apiv3.LabelOrchestrator] = apiv3.OrchestratorKubernetes
-
-	if pod.Spec.ServiceAccountName != "" {
-		labels[apiv3.LabelServiceAccount] = pod.Spec.ServiceAccountName
-	}
-
-	// Pull out floating IP annotation
-	var floatingIPs []apiv3.IPNAT
-	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(podIPNets) > 0 {
-
-		// Parse Annotation data
-		var ips []string
-		err := json.Unmarshal([]byte(annotation), &ips)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
-		}
-
-		// Get IPv4 and IPv6 targets for NAT
-		var podnetV4, podnetV6 *cnet.IPNet
-		for _, ipNet := range podIPNets {
-			if ipNet.IP.To4() != nil {
-				podnetV4 = ipNet
-				netmask, _ := podnetV4.Mask.Size()
-				if netmask != 32 {
-					return nil, fmt.Errorf("PodIP %v is not a valid IPv4: Mask size is %d, not 32", ipNet, netmask)
-				}
-			} else {
-				podnetV6 = ipNet
-				netmask, _ := podnetV6.Mask.Size()
-				if netmask != 128 {
-					return nil, fmt.Errorf("PodIP %v is not a valid IPv6: Mask size is %d, not 128", ipNet, netmask)
-				}
-			}
-		}
-
-		for _, ip := range ips {
-			if strings.Contains(ip, ":") {
-				if podnetV6 != nil {
-					floatingIPs = append(floatingIPs, apiv3.IPNAT{
-						InternalIP: podnetV6.IP.String(),
-						ExternalIP: ip,
-					})
-				}
-			} else {
-				if podnetV4 != nil {
-					floatingIPs = append(floatingIPs, apiv3.IPNAT{
-						InternalIP: podnetV4.IP.String(),
-						ExternalIP: ip,
-					})
-				}
-			}
-		}
-	}
-
-	// Map any named ports through.
-	var endpointPorts []apiv3.EndpointPort
-	for _, container := range pod.Spec.Containers {
-		for _, containerPort := range container.Ports {
-			if containerPort.Name != "" && containerPort.ContainerPort != 0 {
-				var modelProto numorstring.Protocol
-				switch containerPort.Protocol {
-				case kapiv1.ProtocolUDP:
-					modelProto = numorstring.ProtocolFromString("udp")
-				case kapiv1.ProtocolTCP, kapiv1.Protocol("") /* K8s default is TCP. */ :
-					modelProto = numorstring.ProtocolFromString("tcp")
-				default:
-					log.WithFields(log.Fields{
-						"protocol": containerPort.Protocol,
-						"pod":      pod,
-						"port":     containerPort,
-					}).Debug("Ignoring named port with unknown protocol")
-					continue
-				}
-
-				endpointPorts = append(endpointPorts, apiv3.EndpointPort{
-					Name:     containerPort.Name,
-					Protocol: modelProto,
-					Port:     uint16(containerPort.ContainerPort),
-				})
-			}
-		}
-	}
-
-	// Create the workload endpoint.
-	wep := apiv3.NewWorkloadEndpoint()
-	wep.ObjectMeta = metav1.ObjectMeta{
-		Name:              wepName,
-		Namespace:         pod.Namespace,
-		CreationTimestamp: pod.CreationTimestamp,
-		UID:               pod.UID,
-		Labels:            labels,
-		GenerateName:      pod.GenerateName,
-	}
-	wep.Spec = apiv3.WorkloadEndpointSpec{
-		Orchestrator:  "k8s",
-		Node:          pod.Spec.NodeName,
-		Pod:           pod.Name,
-		Endpoint:      "eth0",
-		InterfaceName: interfaceName,
-		Profiles:      profiles,
-		IPNetworks:    ipNets,
-		Ports:         endpointPorts,
-		IPNATs:        floatingIPs,
-	}
-
-	// Embed the workload endpoint into a KVPair.
-	kvp := model.KVPair{
-		Key: model.ResourceKey{
-			Name:      wepName,
-			Namespace: pod.Namespace,
-			Kind:      apiv3.KindWorkloadEndpoint,
-		},
-		Value:    wep,
-		Revision: pod.ResourceVersion,
-	}
-	return &kvp, nil
+// StagedKubernetesNetworkPolicyToStagedName converts a StagedKubernetesNetworkPolicy name into a StagedNetworkPolicy name
+func (c converter) StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string {
+	return fmt.Sprintf(K8sNetworkPolicyNamePrefix + stagedK8sName)
 }
 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
-func (c Converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error) {
+func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
 	policyName := fmt.Sprintf(K8sNetworkPolicyNamePrefix + np.Name)
 
@@ -480,7 +311,7 @@ func (c Converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
 // equivalent.
-func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) string {
+func (c converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) string {
 	// Only prefix pod selectors - this won't work for namespace selectors.
 	selectors := []string{}
 	if selectorType == SelectorPod {
@@ -530,7 +361,7 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType sel
 	return strings.Join(selectors, " && ")
 }
 
-func (c Converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPorts []networkingv1.NetworkPolicyPort, ns string, ingress bool) ([]apiv3.Rule, error) {
+func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPorts []networkingv1.NetworkPolicyPort, ns string, ingress bool) ([]apiv3.Rule, error) {
 	rules := []apiv3.Rule{}
 	peers := []*networkingv1.NetworkPolicyPeer{}
 	ports := []*networkingv1.NetworkPolicyPort{}
@@ -648,7 +479,7 @@ func (c Converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 	return rules, nil
 }
 
-func (c Converter) k8sPortToCalicoFields(port *networkingv1.NetworkPolicyPort) (protocol *numorstring.Protocol, dstPorts []numorstring.Port, err error) {
+func (c converter) k8sPortToCalicoFields(port *networkingv1.NetworkPolicyPort) (protocol *numorstring.Protocol, dstPorts []numorstring.Port, err error) {
 	// If no port info, return zero values for all fields (protocol, dstPorts).
 	if port == nil {
 		return
@@ -662,7 +493,7 @@ func (c Converter) k8sPortToCalicoFields(port *networkingv1.NetworkPolicyPort) (
 	return
 }
 
-func (c Converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
+func (c converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	if protocol != nil {
 		p := numorstring.ProtocolFromString(string(*protocol))
 		return &p
@@ -670,7 +501,7 @@ func (c Converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.P
 	return nil
 }
 
-func (c Converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer, ns string) (selector, nsSelector string, nets []string, notNets []string) {
+func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer, ns string) (selector, nsSelector string, nets []string, notNets []string) {
 	// If no peer, return zero values for all fields (selector, nets and !nets).
 	if peer == nil {
 		return
@@ -706,7 +537,7 @@ func (c Converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer, n
 	return
 }
 
-func (c Converter) k8sPortToCalico(port networkingv1.NetworkPolicyPort) ([]numorstring.Port, error) {
+func (c converter) k8sPortToCalico(port networkingv1.NetworkPolicyPort) ([]numorstring.Port, error) {
 	var portList []numorstring.Port
 	if port.Port != nil {
 		p, err := numorstring.PortFromString(port.Port.String())
@@ -721,7 +552,7 @@ func (c Converter) k8sPortToCalico(port networkingv1.NetworkPolicyPort) ([]numor
 }
 
 // ProfileNameToNamespace extracts the Namespace name from the given Profile name.
-func (c Converter) ProfileNameToNamespace(profileName string) (string, error) {
+func (c converter) ProfileNameToNamespace(profileName string) (string, error) {
 	// Profile objects backed by Namespaces have form "kns.<ns_name>"
 	if !strings.HasPrefix(profileName, NamespaceProfileNamePrefix) {
 		// This is not backed by a Kubernetes Namespace.
@@ -733,13 +564,13 @@ func (c Converter) ProfileNameToNamespace(profileName string) (string, error) {
 
 // JoinNetworkPolicyRevisions constructs the revision from the individual CRD and K8s NetworkPolicy
 // revisions.
-func (c Converter) JoinNetworkPolicyRevisions(crdNPRev, k8sNPRev string) string {
+func (c converter) JoinNetworkPolicyRevisions(crdNPRev, k8sNPRev string) string {
 	return crdNPRev + "/" + k8sNPRev
 }
 
 // SplitNetworkPolicyRevision extracts the CRD and K8s NetworkPolicy revisions from the combined
 // revision returned on the KDD NetworkPolicy client.
-func (c Converter) SplitNetworkPolicyRevision(rev string) (crdNPRev string, k8sNPRev string, err error) {
+func (c converter) SplitNetworkPolicyRevision(rev string) (crdNPRev string, k8sNPRev string, err error) {
 	if rev == "" {
 		return
 	}
@@ -769,7 +600,7 @@ func serviceAccountNameToProfileName(sa, namespace string) string {
 // ServiceAccountToProfile converts a ServiceAccount to a Calico Profile.  The Profile stores
 // labels from the ServiceAccount which are inherited by the WorkloadEndpoints within
 // the Profile.
-func (c Converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error) {
+func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error) {
 	// Generate the labels to apply to the profile, using a special prefix
 	// to indicate that these are the labels from the parent Kubernetes ServiceAccount.
 	labels := map[string]string{}
@@ -803,7 +634,7 @@ func (c Converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 }
 
 // ProfileNameToServiceAccount extracts the ServiceAccount name from the given Profile name.
-func (c Converter) ProfileNameToServiceAccount(profileName string) (ns, sa string, err error) {
+func (c converter) ProfileNameToServiceAccount(profileName string) (ns, sa string, err error) {
 
 	// Profile objects backed by ServiceAccounts have form "ksa.<namespace>.<sa_name>"
 	if !strings.HasPrefix(profileName, ServiceAccountProfileNamePrefix) {
@@ -826,14 +657,14 @@ func (c Converter) ProfileNameToServiceAccount(profileName string) (ns, sa strin
 // JoinProfileRevisions constructs the revision from the individual namespace and serviceaccount
 // revisions.
 // This is conditional on the feature flag for serviceaccount set or not.
-func (c Converter) JoinProfileRevisions(nsRev, saRev string) string {
+func (c converter) JoinProfileRevisions(nsRev, saRev string) string {
 	return nsRev + "/" + saRev
 }
 
 // SplitProfileRevision extracts the namespace and serviceaccount revisions from the combined
 // revision returned on the KDD service account based profile.
 // This is conditional on the feature flag for serviceaccount set or not.
-func (c Converter) SplitProfileRevision(rev string) (nsRev string, saRev string, err error) {
+func (c converter) SplitProfileRevision(rev string) (nsRev string, saRev string, err error) {
 	if rev == "" {
 		return
 	}
@@ -847,4 +678,16 @@ func (c Converter) SplitProfileRevision(rev string) (nsRev string, saRev string,
 	nsRev = revs[0]
 	saRev = revs[1]
 	return
+}
+
+func stringsToIPNets(ipStrings []string) ([]*cnet.IPNet, error) {
+	var podIPNets []*cnet.IPNet
+	for _, ip := range ipStrings {
+		_, ipNet, err := cnet.ParseCIDROrIP(ip)
+		if err != nil {
+			return nil, err
+		}
+		podIPNets = append(podIPNets, ipNet)
+	}
+	return podIPNets, nil
 }
