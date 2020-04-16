@@ -573,7 +573,7 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.Workl
 	wepid := names.WorkloadEndpointIdentifiers{
 		Node:         wep.Spec.Node,
 		Orchestrator: "k8s",
-		Endpoint:     wep.Spec.Endpoint,
+		Endpoint:     "eth0",
 		Pod:          wep.Spec.Workload,
 	}
 
