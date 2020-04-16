@@ -15,7 +15,7 @@ section:
     - title: Get started with Calico network policy for OpenStack
       path: /security/network-policy-openstack
     - title: Calico policy tutorial
-      path: /security/calico-policy-tutorial
+      path: /security/tutorials/calico-policy
   - title: Kubernetes policy
     path: /security/kubernetes-policy
     section:
