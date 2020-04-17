@@ -34,8 +34,9 @@ Host endpoints come in two types: `named` and `wildcard`. `Named` host endpoints
 In order to protect a Kubernetes node, a host endpoint has to be created for it. This is fine for a few cluster nodes but for larger clusters of hundreds or thousands of nodes, some automation is required.
 {{site.prodname}} can automatically create host endpoints for your Kubernetes nodes when they are created, and similarly tear down the host endpoints when the Kubernetes nodes leave the cluster.
 
-{{site.prodname}} will ensure these host endpoints it manages maintain the same labels and IP addresses as its node.
-This means that policy targetting these automatic host endpoints will function correctly with the policy selectors.
+{{site.prodname}} creates a `wildcard` host endpoint for each node, with the host endpoint containing the same labels and IP addresses as its corresponding node.
+{{site.prodname}} will ensure these managed host endpoints maintain the same labels and IP addresses as its node by periodic syncs.
+This means that policy targetting these automatic host endpoints will function correctly with the policy put in place to select those nodes, even if over time the node's IPs or labels change.
 
 Automatic host endpoints are differentiated from other host endpoints by the label `projectcalico.org/created-by: calico-kube-controllers`.
 
