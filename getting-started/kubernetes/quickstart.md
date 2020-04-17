@@ -24,7 +24,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
 
 - Ensure that {{site.prodname}} can manage `cali` and `tunl` interfaces on the host.
   If NetworkManager is present on the host, refer to
-  [Configure NetworkManager](../../maintenance/troubleshooting#configure-networkmanager).
+  [Configure NetworkManager](../../maintenance/troubleshoot/troubleshooting#configure-networkmanager).
 
 - {% include open-new-window.html text='Follow the Kubernetes instructions to install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}
 
