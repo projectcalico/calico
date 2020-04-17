@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,15 +39,18 @@ var _ = Describe("PodConverter", func() {
 			},
 		}
 
-		wepData, err := c.Convert(&pod)
+		wepDatas, err := c.Convert(&pod)
 		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		Expect(len(wepDatas)).Should(Equal(1))
+		wepData := wepDatas[0]
+
 		// Assert workloadID.
 		By("returning a WorkloadEndpointData with the correct key information", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).PodName).To(Equal("podA"))
-			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
+			Expect(wepData.PodName).To(Equal("podA"))
+			Expect(wepData.Namespace).To(Equal("default"))
 		})
 
 		// Assert labels.
@@ -56,7 +59,7 @@ var _ = Describe("PodConverter", func() {
 				"projectcalico.org/namespace":    "default",
 				"projectcalico.org/orchestrator": "k8s",
 			}
-			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(l))
+			Expect(wepData.Labels).To(Equal(l))
 		})
 	})
 
@@ -75,15 +78,19 @@ var _ = Describe("PodConverter", func() {
 			},
 		}
 
-		wepData, err := c.Convert(&pod)
+		wepDatas, err := c.Convert(&pod)
+
 		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		Expect(len(wepDatas)).Should(Equal(1))
+		wepData := wepDatas[0]
+
 		// Assert that the returned name / namespace is correct.
 		By("returning a WorkloadEndpointData with the correct key information", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).PodName).To(Equal("podA"))
-			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
+			Expect(wepData.PodName).To(Equal("podA"))
+			Expect(wepData.Namespace).To(Equal("default"))
 		})
 
 		// Assert that GetKey returns the right value.
@@ -101,7 +108,7 @@ var _ = Describe("PodConverter", func() {
 		}
 
 		By("returning a WorkloadEndpointData with the pod's labels", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(labels))
+			Expect(wepData.Labels).To(Equal(labels))
 		})
 	})
 
@@ -123,14 +130,17 @@ var _ = Describe("PodConverter", func() {
 			},
 		}
 
-		wepData, err := c.Convert(pod)
+		wepDatas, err := c.Convert(pod)
 		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		Expect(len(wepDatas)).Should(Equal(1))
+		wepData := wepDatas[0]
+
 		By("returning a WorkloadEndpointData with the correct name and namespace", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).PodName).To(Equal("podA"))
-			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
+			Expect(wepData.PodName).To(Equal("podA"))
+			Expect(wepData.Namespace).To(Equal("default"))
 		})
 	})
 

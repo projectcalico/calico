@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ func NewNamespaceConverter() Converter {
 	return &namespaceConverter{}
 }
 func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	var c conversion.Converter
+	c := conversion.NewConverter()
 	namespace, ok := k8sObj.(*v1.Namespace)
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
