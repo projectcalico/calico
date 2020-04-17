@@ -54,8 +54,8 @@ However, profiles can be used in conjunction with host endpoints to modify defau
 {{site.prodname}} provides a default profile resource named `projectcalico-allow-all` that consists of allow-all ingress and egress rules.
 Host endpoints with the `projectcalico-allow-all` profile attached will have "allow-all" semantics instead of "deny-all" in the absence of policy.
 
-+> Auto host endpoints have the `projectcalico-allow-all` profile attached and thus they allow all traffic in the absence of policy.
-+{: .alert .alert-info}
+> Auto host endpoints have the `projectcalico-allow-all` profile attached and thus they allow all traffic in the absence of policy.
+{: .alert .alert-info}
 
 ### Before you begin...
 
@@ -64,7 +64,7 @@ Have a running {{site.prodname}} cluster with calicoctl installed.
 ### How to
 
 - [Enable automatic host endpoints](#enable-automatic-host-endpoints)
-- [Restrict host egress only to specific IPs]
+- [Restrict host egress to whitelisted IPs](#restrict-host-egress-to-whitelisted-ips)
 
 #### Enable automatic host endpoints
 
@@ -93,7 +93,7 @@ ip-172-16-101-9.us-west-2.compute.internal-auto-hep     ip-172-16-101-9.us-west-
 ip-172-16-102-63.us-west-2.compute.internal-auto-hep    ip-172-16-102-63.us-west-2.compute.internal    *           172.16.102.63,192.168.108.192
 ```
 
-### Restrict host egress only to whitelisted IP ranges
+### Restrict host egress to whitelisted IPs
 
 In order to whitelist egress to certain destination IP ranges, you will need to gather the IP ranges that your Kubernetes nodes must be able to reach.
 
