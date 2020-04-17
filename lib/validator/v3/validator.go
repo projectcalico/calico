@@ -70,6 +70,7 @@ var (
 	bpfLogLevelRegex      = regexp.MustCompile("^(Debug|Info|Off)$")
 	bpfServiceModeRegex   = regexp.MustCompile("^(Tunnel|DSR)$")
 	datastoreType         = regexp.MustCompile("^(etcdv3|kubernetes)$")
+	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
 	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
 	reasonString          = "Reason: "
@@ -144,6 +145,7 @@ func init() {
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("regexp", validateRegexp)
+	registerFieldValidator("routeSource", validateRouteSource)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -236,6 +238,13 @@ func validateDatastoreType(fl validator.FieldLevel) bool {
 func validateRegexp(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate regexp: %s", s)
+	_, err := regexp.Compile(s)
+	return err == nil
+}
+
+func validateRouteSource(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate routeSource: %s", s)
 	_, err := regexp.Compile(s)
 	return err == nil
 }
