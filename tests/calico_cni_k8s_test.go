@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
 
 package main_test
 
@@ -235,7 +235,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			wrkload, err := ids.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
 
-			interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+			interfaceName := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, name)
 
 			// The endpoint is created
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -397,7 +397,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				}
 
 				wrkload, err := ids.CalculateWorkloadEndpointName(false)
-				interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+				interfaceName := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, name)
 				Expect(err).NotTo(HaveOccurred())
 
 				// The endpoint is created
@@ -1548,7 +1548,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			wrkload, err := ids.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
 
-			interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+			interfaceName := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, name)
 
 			// The endpoint is created
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -1746,7 +1746,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			wrkload, err := ids.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
 
-			interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+			interfaceName := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, name)
 
 			// Make sure WorkloadEndpoint is created and has the requested IP in the datastore.
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -1871,7 +1871,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			wrkload, err := ids.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
 
-			interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+			interfaceName := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, name)
 
 			// Make sure WorkloadEndpoint is created and has the requested IP in the datastore.
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -2636,7 +2636,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			wrkload, err := ids.CalculateWorkloadEndpointName(false)
-			interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+			interfaceName := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, name)
 			Expect(err).NotTo(HaveOccurred())
 
 			// The endpoint is created
@@ -2786,7 +2786,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mac := contVeth.Attrs().HardwareAddr
-			interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+			interfaceName := k8sconversion.NewConverter().VethNameForWorkload(testutils.K8S_TEST_NS, name)
 
 			// The endpoint is created
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
