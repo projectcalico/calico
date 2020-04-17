@@ -26,8 +26,8 @@ This how-to guide uses the following Calico features:
 Each host has one or more network interfaces that it uses to communicate externally. You can use {{site.prodname}} network policy to secure these interfaces (called host endpoints).
 {{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
 
-Host endpoints come in two types: `named` and `wildcard`. `Named` host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
-`Wildcard` host endpoints secure _all_ of the hosts interfaces non-workload interfaces.
+Host endpoints come in two types: _named_ and _wildcard_. Named host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
+Wildcard host endpoints secure _all_ of the hosts interfaces non-workload interfaces.
 
 ### Automatic host endpoints
 
@@ -44,11 +44,11 @@ Automatic host endpoints are differentiated from other host endpoints by the lab
 
 Profiles are similar to network policy in that you can specify ingress and egress rules. But they are very limited and are deprecated for specifying policy rules; namespaced and global network policy are more flexible than profiles.
 
-#### Default behavior of external traffic to/from host
+### Default behavior of external traffic to/from host
 
 If a host endpoint (named or wildcard) is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
-For `named` host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
-For `wildcard` host endpoints, {{site.prodname}} blocks traffic to/from _all_ non-workload interfaces on the host (except for traffic allowed by failsafe rules).
+For named host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
+For wildcard host endpoints, {{site.prodname}} blocks traffic to/from _all_ non-workload interfaces on the host (except for traffic allowed by failsafe rules).
 
 However, profiles can be used in conjunction with host endpoints to modify default behavior of external traffic to/from the host in the absence of network policy.
 {{site.prodname}} provides a default profile resource named `projectcalico-allow-all` that consists of allow-all ingress and egress rules.
