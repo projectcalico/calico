@@ -1297,6 +1297,31 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
 								Should(BeNumerically(">", 0), matcher)
 						})
+
+						It("should get port unreachable workload to workload through NP", func() {
+							tcpdump := w[1][1].AttachTCPDump()
+							tcpdump.SetLogEnabled(true)
+
+							var matcher string
+
+							if testOpts.connTimeEnabled {
+								matcher = fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+									tgtWorkload.IP, w[1][1].IP, w[0][0].IP, tgtPort)
+								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(tgtPort), "or", "icmp")
+							} else {
+								matcher = fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+									tgtWorkload.IP, w[1][1].IP, felixes[1].IP, npPort)
+								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+							}
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(w[1][1], TargetIP(felixes[1].IP), npPort)
+							cc.CheckConnectivity()
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Should(BeNumerically(">", 0), matcher)
+						})
 					})
 				})
 			})
