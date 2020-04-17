@@ -1,15 +1,15 @@
 ---
 title: Protect Kubernetes nodes
-description: Protect Kubernetes nodes with host endpoints.
+description: Protect Kubernetes nodes with host endpoints managed by {{site.prodname}}
 ---
 
 ### Big picture
 
-Secure Kubernetes nodes with automatically-created host endpoints and global network policy.
+Secure Kubernetes nodes with host endpoints managed by {{site.prodname}}.
 
 ### Value
 
-{{site.prodname}} can automatically create host endpoints for your Kubernetes nodes. The lifecycle of these host endpoints are managed by {{site.prodname}} in order to ensure policy selecting these host endpoints is enforced.
+{{site.prodname}} can automatically create host endpoints for your Kubernetes nodes. The lifecycle of these host endpoints are managed by {{site.prodname}} in response to an evolving cluster to ensure policy protecting your nodes is always enforced.
 
 ### Features
 
@@ -23,151 +23,45 @@ This how-to guide uses the following Calico features:
 
 ### Host endpoints
 
-Each host has one or more network interfaces that it uses to communicate externally. You can use {{site.prodname}} network policy to secure these interfaces (called host endpoints). {{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
+Each host has one or more network interfaces that it uses to communicate externally. You can use {{site.prodname}} network policy to secure these interfaces (called host endpoints).
+{{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
 
-Host endpoints come in two flavors: `named` and `wildcard`. `Named` host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
+Host endpoints come in two types: `named` and `wildcard`. `Named` host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
 `Wildcard` host endpoints secure _all_ of the hosts interfaces non-workload interfaces.
 
 ### Profiles
 
-Profiles are similar to network policy in that you can specify ingress and egress rules. But they are very limited and are deprecated for specifying policy rules; namespaced and global network policy are much more flexible. 
-However, profiles can be used in conjunction with host endpoints to modify default behavior of external traffic to/from the host in the absence of network policy.
+Profiles are similar to network policy in that you can specify ingress and egress rules. But they are very limited and are deprecated for specifying policy rules; namespaced and global network policy are more flexible than profiles.
 
 #### Default behavior of external traffic to/from host
 
-If a `named` host endpoint is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For `named` host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
+If a host endpoint (named or wildcard) is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
+For `named` host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
+For `wildcard` host endpoints, {{site.prodname}} blocks traffic to/from _all_ non-workload interfaces on the host (except for traffic allowed by failsafe rules).
 
-If a `wildcard` host endpoint is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from _all_ non-workload interfaces on the host (except for traffic allowed by failsafe rules).
+However, profiles can be used in conjunction with host endpoints to modify default behavior of external traffic to/from the host in the absence of network policy.
+{{site.prodname}} provides a default profile resource named `projectcalico-allow-all` that consists of allow-all ingress and egress rules.
+Host endpoints with the `projectcalico-allow-all` profile attached will have "allow-all" semantics instead of "deny-all" in the absence of policy.
 
-The default behavior of external traffic to/from host endpoints can be changed by adding a [profile]({{ site.baseurl }}/reference/resources/profile) to the host endpoints.
-{{site.prodname}} provides a profile named `projectcalico-allow-all` that contains ingress and egress rules that allow all traffic.
-By adding this profile to your host endpoint, the host endpoint will allow traffic to/from it in the absence of policy that selects it.
++> Auto host endpoints have the `projectcalico-allow-all` profile attached and thus they allow all traffic in the absence of policy.
++{: .alert .alert-info}
 
 ### Before you begin...
 
-Have a running {{site.prodname}} cluster and have calicoctl installed.
+Have a running {{site.prodname}} cluster with calicoctl installed.
 
 ### How to
 
 - [Enable automatic host endpoints](#enable-automatic-host-endpoints)
+- [Restrict host egress only to specific IPs]
 
 #### Enable automatic host endpoints
 
-Before beginning, we will first apply a network policy that will allow all traffic. Create a new file named `allow-all.yaml` and paste in the following manifest:
-
-```yaml
-apiVersion: projectcalico.org/v3
-kind: GlobalNetworkPolicy
-metadata:
-  name: allow-all-heps
-spec:
-  ingress:
-    - action: Allow
-  egress:
-    - action: Allow
-  selector: has(kubernetes.io/hostname)
-```
-
-(TODO: check whether this label is always there in a k8s cluster)
-
-Now apply the policy:
+In order to enable automatic host endpoints, we need to edit the `default` KubeControllersConfiguration instance.
+We will be setting `spec.controllers.node.hostEndpoint.autoCreate` to `true`.
 
 ```bash
-calicoctl apply -f - < allow-all.yaml
-```
-
-Now that this policy is in place, we can continue enabling automatic host endpoints.
-In order to enable automatic host endpoints, we need to edit the `default` KubeControllersConfiguration instance. First, get the running instance's yaml:
-
-```bash
-calicoctl get kubecontrollersconfiguration default --export -oyaml > kcc.yaml
-```
-
-If you view the manifest, you may see something like:
-
-```yaml
-apiVersion: projectcalico.org/v3
-kind: KubeControllersConfiguration
-metadata:
-  creationTimestamp: null
-  name: default
-spec:
-  controllers:
-    namespace:
-      reconcilerPeriod: 5m0s
-    node:
-      reconcilerPeriod: 5m0s
-      syncLabels: Enabled
-    policy:
-      reconcilerPeriod: 5m0s
-    serviceAccount:
-      reconcilerPeriod: 5m0s
-    workloadEndpoint:
-      reconcilerPeriod: 5m0s
-  etcdV3CompactionPeriod: 10m0s
-  healthChecks: Enabled
-  logSeverityScreen: Info
-status:
-  environmentVars:
-    DATASTORE_TYPE: kubernetes
-    ENABLED_CONTROLLERS: node
-  runningConfig:
-    controllers:
-      node:
-        hostEndpoint:
-          autoCreate: Disabled
-        syncLabels: Disabled
-    etcdV3CompactionPeriod: 10m0s
-    healthChecks: Enabled
-    logSeverityScreen: Info
-```
-
-Now edit the kubecontrollersconfiguration manifest. We will be setting `spec.controllers.node.hostEndpoint.autoCreate` to `true`.
-Open `kcc.yaml` in your editor and modify it so it looks like this:
-
-```yaml
-apiVersion: projectcalico.org/v3
-kind: KubeControllersConfiguration
-metadata:
-  creationTimestamp: null
-  name: default
-spec:
-  controllers:
-    namespace:
-      reconcilerPeriod: 5m0s
-    node:
-      reconcilerPeriod: 5m0s
-      syncLabels: Enabled
-        hostEndpoint:
-          autoCreate: Enabled
-    policy:
-      reconcilerPeriod: 5m0s
-    serviceAccount:
-      reconcilerPeriod: 5m0s
-    workloadEndpoint:
-      reconcilerPeriod: 5m0s
-  etcdV3CompactionPeriod: 10m0s
-  healthChecks: Enabled
-  logSeverityScreen: Info
-status:
-  environmentVars:
-    DATASTORE_TYPE: kubernetes
-    ENABLED_CONTROLLERS: node
-  runningConfig:
-    controllers:
-      node:
-        hostEndpoint:
-          autoCreate: Disabled
-        syncLabels: Disabled
-    etcdV3CompactionPeriod: 10m0s
-    healthChecks: Enabled
-    logSeverityScreen: Info
-```
-
-Now apply the updated `kcc.yaml` manifest to update the cluster's kubecontrollersconfiguration:
-
-```bash
-calicoctl apply -f - < kcc.yaml
+calicoctl patch kubecontrollersconfiguration default --patch='{"spec": {"controllers": {"node": {"hostEndpoint": {"autoCreate": "Enabled"}}}}}'
 ```
 
 If the apply was successful, we should see host endpoints created for each of your cluster's nodes:
@@ -188,6 +82,48 @@ ip-172-16-101-9.us-west-2.compute.internal-auto-hep     ip-172-16-101-9.us-west-
 ip-172-16-102-63.us-west-2.compute.internal-auto-hep    ip-172-16-102-63.us-west-2.compute.internal    *           172.16.102.63,192.168.108.192
 ```
 
+### Restrict host egress only to whitelisted IP ranges
+
+In order to whitelist egress to certain destination IP ranges, you will need to gather the IP ranges that your Kubernetes nodes must be able to reach.
+
+The list of whitelisted IPs may include:
+- the IP range used by your Kubernetes nodes. This is important especially so that each node's kubelet can reach the API server.
+- the IP range for your Docker image registry
+
+> Note: some Docker image registries do not maintain whitelists of IPs backing their registry DNS names.
+> In that case, you may need to ensure that images are prepulled or available in an airgapped environment.
+> Calico Enterprise provides extra network policy selectors such as a [domain name selector](https://docs.tigera.io/reference/resources/globalnetworkpolicy#exact-and-wildcard-domain-names)
+> that manages the potentially dynamic IPs serving a particular DNS name.
+{: .alert .alert-info}
+
+For this tutorial, we will assume the following:
+- Kubernetes nodes IP range is: 10.10.100.0/24
+- External MySQL database static IP: 54.54.11.11/32
+- Docker images are all available locally
+
+With a set of whitelisted egress IPs in hand, we can apply the policy:
+
+```
+calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: all-nodes-restrict-egress
+spec:
+  selector: projectcalico.org/created-by == 'calico-kube-controllers'
+  types:
+  - Egress
+  egress:
+  - action: Deny
+    destination:
+      notNets:
+      - 10.10.100.10/24
+      - 54.54.11.11/32
+  - action: Allow
+EOF
+```
+
+Note that this policy does not affect egress from pods on the hosts. Host endpoints only enforce policy that originate from or terminate at the host.
 
 ### Above and beyond
 
