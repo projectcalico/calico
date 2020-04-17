@@ -4,9 +4,6 @@ description: View logs and diagnostics, common issues, and where to report issue
 canonical_url: '/maintenance/troubleshoot/troubleshooting'
 ---
 
-* TOC
-{:toc}
-
 ### Logs and diagnostics
 
 To collect diagnostics use the `calicoctl` command line tool using superuser privileges. For example:
