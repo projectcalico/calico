@@ -29,6 +29,16 @@ Each host has one or more network interfaces that it uses to communicate externa
 Host endpoints come in two types: `named` and `wildcard`. `Named` host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
 `Wildcard` host endpoints secure _all_ of the hosts interfaces non-workload interfaces.
 
+### Automatic host endpoints
+
+In order to protect a Kubernetes node, a host endpoint has to be created for it. This is fine for a few cluster nodes but for larger clusters of hundreds or thousands of nodes, some automation is required.
+{{site.prodname}} can automatically create host endpoints for your Kubernetes nodes when they are created, and similarly tear down the host endpoints when the Kubernetes nodes leave the cluster.
+
+{{site.prodname}} will ensure these host endpoints it manages maintain the same labels and IP addresses as its node.
+This means that policy targetting these automatic host endpoints will function correctly with the policy selectors.
+
+Automatic host endpoints are differentiated from other host endpoints by the label `projectcalico.org/created-by: calico-kube-controllers`.
+
 ### Profiles
 
 Profiles are similar to network policy in that you can specify ingress and egress rules. But they are very limited and are deprecated for specifying policy rules; namespaced and global network policy are more flexible than profiles.
