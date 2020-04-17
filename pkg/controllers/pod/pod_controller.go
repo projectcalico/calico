@@ -72,9 +72,11 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 		for _, wep := range workloadEndpoints.Items {
 			// We only care about Kubernetes workload endpoints.
 			if wep.Spec.Orchestrator == api.OrchestratorKubernetes {
-				d := converter.BuildWorkloadEndpointData(wep)
-				key := podConverter.GetKey(d)
-				m[key] = d
+				wepDataList := converter.BuildWorkloadEndpointData(wep)
+				for _, wepData := range wepDataList {
+					key := podConverter.GetKey(wepData)
+					m[key] = wepData
+				}
 			}
 		}
 		log.Debugf("Found %d workload endpoints in Calico datastore:", len(m))
@@ -117,7 +119,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 				return
 			}
 
-			wepInterface, err := podConverter.Convert(obj)
+			wepDataList, err := podConverter.Convert(obj)
 			if err != nil {
 				log.WithError(err).Errorf("Error while converting %v to wep.", key)
 				return
@@ -125,9 +127,10 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 
 			// Prime the cache - we only need to make changes to the datastore when the controller
 			// receives an update, because initial state is written to the datastore by the CNI plugin.
-			wepData := wepInterface.(converter.WorkloadEndpointData)
-			k := podConverter.GetKey(wepData)
-			resourceCache.Prime(k, wepData)
+			for _, wepData := range wepDataList {
+				k := podConverter.GetKey(wepData)
+				resourceCache.Prime(k, wepData)
+			}
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
@@ -143,16 +146,18 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 				return
 			}
 
-			wepInterface, err := podConverter.Convert(newObj)
+			wepDataList, err := podConverter.Convert(newObj)
 			if err != nil {
 				log.WithError(err).Errorf("Error while converting %v to wep.", key)
 				return
 			}
 
 			// Update the cache.
-			wepData := wepInterface.(converter.WorkloadEndpointData)
-			k := podConverter.GetKey(wepData)
-			resourceCache.Set(k, wepData)
+			for _, wepData := range wepDataList {
+				k := podConverter.GetKey(wepData)
+				resourceCache.Set(k, wepData)
+			}
+
 		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
@@ -168,19 +173,21 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 				return
 			}
 
-			wepInterface, err := podConverter.Convert(obj)
+			wepDataList, err := podConverter.Convert(obj)
 			if err != nil {
 				log.WithError(err).Errorf("Error while converting %v to wep.", key)
 				return
 			}
 
 			// Clean up after the deleted workload endpoint.
-			wep := wepInterface.(converter.WorkloadEndpointData)
-			k := podConverter.GetKey(wep)
-			resourceCache.Clean(k)
-			workloadEndpointCache.Lock()
-			delete(workloadEndpointCache.m, k)
-			workloadEndpointCache.Unlock()
+			for _, wepData := range wepDataList {
+				k := podConverter.GetKey(wepData)
+				resourceCache.Clean(k)
+				workloadEndpointCache.Lock()
+				delete(workloadEndpointCache.m, k)
+				workloadEndpointCache.Unlock()
+			}
+
 		},
 	}, cache.Indexers{})
 
@@ -341,9 +348,11 @@ func (c *podController) populateWorkloadEndpointCache() error {
 	c.workloadEndpointCache.Lock()
 	for _, wep := range workloadEndpointList.Items {
 		if wep.Spec.Orchestrator == api.OrchestratorKubernetes {
-			wd := converter.BuildWorkloadEndpointData(wep)
-			k := converter.NewPodConverter().GetKey(wd)
-			c.workloadEndpointCache.m[k] = wep
+			wepDataList := converter.BuildWorkloadEndpointData(wep)
+			for _, wepData := range wepDataList {
+				k := converter.NewPodConverter().GetKey(wepData)
+				c.workloadEndpointCache.m[k] = wep
+			}
 		}
 	}
 	c.workloadEndpointCache.Unlock()

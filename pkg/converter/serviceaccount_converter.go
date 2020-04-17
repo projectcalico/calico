@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ func NewServiceAccountConverter() Converter {
 }
 
 func (nc *serviceAccountConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	var c conversion.Converter
+	c := conversion.NewConverter()
 	serviceAccount, ok := k8sObj.(*v1.ServiceAccount)
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 		}
 	}
 
-	var c conversion.Converter
+	c := conversion.NewConverter()
 	kvp, err := c.K8sNetworkPolicyToCalico(np)
 	if err != nil {
 		return nil, err

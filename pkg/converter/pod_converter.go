@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -35,17 +37,28 @@ type WorkloadEndpointData struct {
 	Labels    map[string]string
 }
 
-type podConverter struct {
+type PodConverter interface {
+	Convert(k8sObj interface{}) ([]WorkloadEndpointData, error)
+	GetKey(obj WorkloadEndpointData) string
+	DeleteArgsFromKey(key string) (string, string)
 }
 
+type podConverter struct{}
+
 // BuildWorkloadEndpointData generates the correct WorkloadEndpointData for the given
-// WorkloadEndpoint, extracting fields that the policy controller is responsible for syncing.
-func BuildWorkloadEndpointData(wep api.WorkloadEndpoint) WorkloadEndpointData {
-	return WorkloadEndpointData{
-		PodName:   wep.Spec.Pod,
-		Namespace: wep.Namespace,
-		Labels:    wep.Labels,
+// list of WorkloadEndpoints, extracting fields that the policy controller is responsible
+// for syncing.
+func BuildWorkloadEndpointData(weps ...api.WorkloadEndpoint) []WorkloadEndpointData {
+	var retWEPs []WorkloadEndpointData
+	for _, wep := range weps {
+		retWEPs = append(retWEPs, WorkloadEndpointData{
+			PodName:   wep.Spec.Pod,
+			Namespace: wep.Namespace,
+			Labels:    wep.Labels,
+		})
 	}
+
+	return retWEPs
 }
 
 // MergeWorkloadEndpointData applies the given WorkloadEndpointData to the provided
@@ -58,13 +71,13 @@ func MergeWorkloadEndpointData(wep *api.WorkloadEndpoint, upd WorkloadEndpointDa
 }
 
 // NewPodConverter Constructor for podConverter
-func NewPodConverter() Converter {
+func NewPodConverter() PodConverter {
 	return &podConverter{}
 }
 
-func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
+func (p *podConverter) Convert(k8sObj interface{}) ([]WorkloadEndpointData, error) {
 	// Convert Pod into a workload endpoint.
-	var c conversion.Converter
+	c := conversion.NewConverter()
 	pod, ok := k8sObj.(*v1.Pod)
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
@@ -83,21 +96,31 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 		pod.Spec.NodeName = "unknown.node"
 	}
 
-	kvp, err := c.PodToWorkloadEndpoint(pod)
+	kvps, err := c.PodToWorkloadEndpoints(pod)
 	if err != nil {
 		return nil, err
 	}
-	wep := kvp.Value.(*api.WorkloadEndpoint)
 
 	// Build and return a WorkloadEndpointData struct using the data.
-	return BuildWorkloadEndpointData(*wep), nil
+	return BuildWorkloadEndpointData(kvpsToWEPs(kvps)...), nil
+}
+
+func kvpsToWEPs(kvps []*model.KVPair) []api.WorkloadEndpoint {
+	var weps []api.WorkloadEndpoint
+	for _, kvp := range kvps {
+		wep := kvp.Value.(*api.WorkloadEndpoint)
+		if wep != nil {
+			weps = append(weps, *wep)
+		}
+	}
+
+	return weps
 }
 
 // GetKey takes a WorkloadEndpointData and returns the key which
 // identifies it - namespace/name
-func (p *podConverter) GetKey(obj interface{}) string {
-	e := obj.(WorkloadEndpointData)
-	return fmt.Sprintf("%s/%s", e.Namespace, e.PodName)
+func (p *podConverter) GetKey(obj WorkloadEndpointData) string {
+	return fmt.Sprintf("%s/%s", obj.Namespace, obj.PodName)
 }
 
 func (p *podConverter) DeleteArgsFromKey(key string) (string, string) {
