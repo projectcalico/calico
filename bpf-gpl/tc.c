@@ -781,6 +781,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				ct_rc = CALI_CT_ESTABLISHED_DNAT;
 				break;
 			case CALI_CT_ESTABLISHED_DNAT:
+				if (CALI_F_FROM_HEP && state->nat_tun_src && !state->ct_result.tun_ret_ip) {
+					/* Packet is returning from a NAT tunnel, just forward it. */
+					seen_mark = CALI_SKB_MARK_BYPASS_FWD;
+					CALI_DEBUG("ICMP related returned from NAT tunnel\n");
+					goto allow;
+				}
 				ct_rc = CALI_CT_ESTABLISHED_SNAT;
 				break;
 			}
