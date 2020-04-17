@@ -148,6 +148,7 @@ type Config struct {
 	ExternalNodesCidrs []string
 
 	BPFEnabled                         bool
+	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
 	BPFDataIfacePattern                *regexp.Regexp
@@ -1207,6 +1208,14 @@ func (d *InternalDataplane) configureKernel() {
 	mp := newModProbe(moduleConntrackSCTP, newRealCmd)
 	out, err := mp.Exec()
 	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleConntrackSCTP)
+
+	if d.config.BPFEnabled && d.config.BPFDisableUnprivileged {
+		log.Info("BPF enabled, disabling unprivileged BPF usage.")
+		err := writeProcSys("/proc/sys/kernel/unprivileged_bpf_disabled", "1")
+		if err != nil {
+			log.WithError(err).Error("Failed to set unprivileged_bpf_disabled sysctl")
+		}
+	}
 }
 
 func (d *InternalDataplane) recordMsgStat(msg interface{}) {
