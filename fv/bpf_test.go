@@ -637,6 +637,58 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity()
 				})
 
+				It("should not be able to spoof workloads IP by another workload", func() {
+					if testOpts.protocol != "udp" {
+						return
+					}
+
+					// sync with policy
+					cc.ExpectSome(w[1][0], w[0][0])
+					cc.ExpectSome(w[1][1], w[0][0])
+					cc.CheckConnectivity()
+
+					tcpdump := w[0][0].AttachTCPDump()
+					tcpdump.SetLogEnabled(true)
+					matcher := fmt.Sprintf("IP %s.30444 > %s.30444: UDP", w[1][0].IP, w[0][0].IP)
+					tcpdump.AddMatcher("UDP-30444", regexp.MustCompile(matcher))
+					tcpdump.Start(testOpts.protocol, "port", "30444", "or", "port", "30445")
+					defer tcpdump.Stop()
+
+					// send a packet from the correct workload to create a conntrac entry
+					_, err := w[1][0].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+						"--port-src", "30444", "--port-dst", "30444")
+					Expect(err).NotTo(HaveOccurred())
+
+					// We must eventually se the packet at the target
+					Eventually(func() int { return tcpdump.MatchCount("UDP-30444") }).
+						Should(BeNumerically("==", 1), matcher)
+
+					// Send a spoofed packet from a different pod. Since we hit the
+					// conntrack we would not do the WEP only RPF check.
+					_, err = w[1][1].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+						"--port-src", "30444", "--port-dst", "30444")
+					Expect(err).NotTo(HaveOccurred())
+
+					// Since the packet will get dropped, we would not see it at the dest.
+					// So we send another good packet from the spoofing workload, that we
+					// will see at the dest.
+					matcher2 := fmt.Sprintf("IP %s.30445 > %s.30445: UDP", w[1][1].IP, w[0][0].IP)
+					tcpdump.AddMatcher("UDP-30445", regexp.MustCompile(matcher2))
+
+					_, err = w[1][1].RunCmd("/pktgen", w[1][1].IP, w[0][0].IP, "udp",
+						"--port-src", "30445", "--port-dst", "30445")
+					Expect(err).NotTo(HaveOccurred())
+
+					// Wait for the good packet from the bad workload
+					Eventually(func() int { return tcpdump.MatchCount("UDP-30445") }).
+						Should(BeNumerically("==", 1), matcher2)
+
+					// Check that we have not seen the spoofed packet. If there was not
+					// packet reordering, which in out setup is guaranteed not to happen,
+					// we know that the spoofed packet was dropped.
+					Expect(tcpdump.MatchCount("UDP-30444")).To(BeNumerically("==", 1), matcher)
+				})
+
 				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
 					var (
 						testSvc          *v1.Service
