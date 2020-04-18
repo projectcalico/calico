@@ -27,14 +27,14 @@ Each host has one or more network interfaces that it uses to communicate externa
 {{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
 
 Host endpoints come in two types: *named* and *wildcard*. Named host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
-Wildcard host endpoints secure _all_ of the hosts interfaces non-workload interfaces.
+Wildcard host endpoints secure _all_ of the hosts interfaces non-workload interfaces. They are created by setting `interfaceName: "*"`.
 
 ### Automatic host endpoints
 
 In order to protect a Kubernetes node, a host endpoint has to be created for it. This is fine for a few cluster nodes but for larger clusters of hundreds or thousands of nodes, some automation is required.
 {{site.prodname}} can automatically create host endpoints for your Kubernetes nodes when they are created, and similarly tear down the host endpoints when the Kubernetes nodes leave the cluster.
 
-{{site.prodname}} creates a `wildcard` host endpoint for each node, with the host endpoint containing the same labels and IP addresses as its corresponding node.
+{{site.prodname}} creates a wildcard host endpoint for each node, with the host endpoint containing the same labels and IP addresses as its corresponding node.
 {{site.prodname}} will ensure these managed host endpoints maintain the same labels and IP addresses as its node by periodic syncs.
 This means that policy targetting these automatic host endpoints will function correctly with the policy put in place to select those nodes, even if over time the node's IPs or labels change.
 
@@ -69,7 +69,7 @@ Have a running {{site.prodname}} cluster with calicoctl installed.
 
 #### Enable automatic host endpoints
 
-In order to enable automatic host endpoints, we need to edit the `default` KubeControllersConfiguration instance.
+In order to enable automatic host endpoints, we need to edit the default KubeControllersConfiguration instance.
 We will be setting `spec.controllers.node.hostEndpoint.autoCreate` to `true`.
 
 ```bash
