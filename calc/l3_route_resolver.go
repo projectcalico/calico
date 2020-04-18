@@ -918,7 +918,7 @@ func (nr *nodeRoutes) Remove(r nodenameRoute) {
 }
 
 func (nr *nodeRoutes) visitRoutesForNode(nodename string, v func(nodenameRoute)) {
-	for cidr, _ := range nr.cache[nodename] {
+	for cidr := range nr.cache[nodename] {
 		v(nodenameRoute{nodeName: nodename, dst: cidr})
 	}
 }

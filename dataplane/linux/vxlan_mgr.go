@@ -214,8 +214,8 @@ func (m *vxlanManager) setNoEncapRouteTable(rt routeTable) {
 	m.noEncapRouteTable = rt
 }
 
-func (m *vxlanManager) GetRouteTables() []routeTable {
-	rts := []routeTable{m.routeTable}
+func (m *vxlanManager) GetRouteTableSyncers() []routeTableSyncer {
+	rts := []routeTableSyncer{m.routeTable}
 
 	noEncapRouteTable := m.getNoEncapRouteTable()
 	if noEncapRouteTable != nil {
