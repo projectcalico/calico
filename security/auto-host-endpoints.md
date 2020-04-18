@@ -26,7 +26,7 @@ This how-to guide uses the following Calico features:
 Each host has one or more network interfaces that it uses to communicate externally. You can use {{site.prodname}} network policy to secure these interfaces (called host endpoints).
 {{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
 
-Host endpoints come in two types: _named_ and _wildcard_. Named host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
+Host endpoints come in two types: *named* and *wildcard*. Named host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
 Wildcard host endpoints secure _all_ of the hosts interfaces non-workload interfaces.
 
 ### Automatic host endpoints
@@ -39,6 +39,7 @@ In order to protect a Kubernetes node, a host endpoint has to be created for it.
 This means that policy targetting these automatic host endpoints will function correctly with the policy put in place to select those nodes, even if over time the node's IPs or labels change.
 
 Automatic host endpoints are differentiated from other host endpoints by the label `projectcalico.org/created-by: calico-kube-controllers`.
+Enable or disable automatic host endpoints by configuring the default KubeControllersConfiguration resource.
 
 ### Profiles
 
@@ -93,16 +94,53 @@ ip-172-16-101-9.us-west-2.compute.internal-auto-hep     ip-172-16-101-9.us-west-
 ip-172-16-102-63.us-west-2.compute.internal-auto-hep    ip-172-16-102-63.us-west-2.compute.internal    *           172.16.102.63,192.168.108.192
 ```
 
-### Restrict host egress to whitelisted IPs
+#### Apply network policy to automatic host endpoints
+
+Automatic host endpoints share the common label `projectcalico.org/created-by: calico-kube-controllers`.
+To write policy that targets all Kubernetes nodes, use that label:
+
+```
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: all-nodes-policy
+spec:
+  selector: projectcalico.org/created-by == 'calico-kube-controllers'
+  <rest of the policy>
+```
+
+To select a specific set of host endpoints (and their corresponding Kubernetes nodes), use a policy selector that selects a label unique to that set of host endpoints.
+We can take advantage of the syncing of node labels to automatic host endpoints and label that set of nodes with a unique key/value pair.
+For example, if we want to add the label `environment=dev` to nodes named `node1` and `node2`:
+
+```bash
+kubectl label node node1 environment=dev
+kubectl label node node2 environment=dev
+```
+
+With the labels in place and automatic host endpoints enabled, hostendpoints for node1 and node2 will be updated with the `environment=dev` label.
+We can write policy to select that set of nodes with a combination of selectors:
+
+```
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: all-nodes-policy
+spec:
+  selector: projectcalico.org/created-by == 'calico-kube-controllers' && environment == 'dev'
+  <rest of the policy>
+```
+
+#### Restrict host egress to whitelisted IPs
 
 In order to whitelist egress to certain destination IP ranges, you will need to gather the IP ranges that your Kubernetes nodes must be able to reach.
 
 The list of whitelisted IPs may include:
-- the IP range used by your Kubernetes nodes. This is important especially so that each node's kubelet can reach the API server.
-- the IP range for your Docker image registry
+- the IP range used by your Kubernetes nodes. This is required so that each node's kubelet can reach the API server.
+- the IP range for your Docker image registries (including the {{site.prodname}} images)
 
 > Note: some Docker image registries do not maintain whitelists of IPs backing their registry DNS names.
-> In that case, you may need to ensure that images are prepulled or available in an airgapped environment.
+> In that case, you may need to ensure that images are available locally.
 > Calico Enterprise provides extra network policy selectors such as a [domain name selector](https://docs.tigera.io/reference/resources/globalnetworkpolicy#exact-and-wildcard-domain-names)
 > that manages the potentially dynamic IPs serving a particular DNS name.
 {: .alert .alert-info}
@@ -125,16 +163,17 @@ spec:
   types:
   - Egress
   egress:
-  - action: Deny
+  - action: Allow
     destination:
-      notNets:
+      nets:
       - 10.10.100.10/24
       - 54.54.11.11/32
-  - action: Allow
+  - action: Deny
 EOF
 ```
 
-Note that this policy does not affect egress from pods on the hosts. Host endpoints only enforce policy that originate from or terminate at the host.
+> Note: this policy does not affect egress from pods on the hosts. Host endpoints only enforce policy that originate from or terminate at the host.
+{: .alert .alert-info}
 
 ### Above and beyond
 

@@ -54,7 +54,7 @@ In terms of design consistency in {{site.prodname}}, you may wonder about the fo
 Yes. DefaultEndpointToHostAction controls whether or not workloads can acesss their local host.<br>
 
 **Does {{site.prodname}} protect a workload from the host it is running on?**<br>
-No. {{site.prodname}} allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local {{site.prodname}} policy. Be very cautious with the processes that you allow to run in the host's root network namespace.</br>
+No. {{site.prodname}} allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local {{site.prodname}} policy. Be very cautious with the processes that you allow to run in the host's root network namespace.
 
 ### Before you begin...
 
