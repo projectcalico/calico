@@ -36,8 +36,8 @@ In this tutorial we assume that you have completed all other introductory tutori
 ## How to
 
 This tutorial will go through the necessary steps to implement basic monitoring of {{site.prodname}} with Prometheus.
-1. This section will teach you how to configure {{site.prodname}} to export its own metrics.
-2. In this section you will learn to isolate the resources and create necessary permissions for future steps.
+1. This section will describe how to configure {{site.prodname}} to export its own metrics.
+2. In this section you will isolate the resources and create necessary permissions for future steps.
 3. In this section you will configure Prometheus and create its instance in the cluster.
 4. You will be able to visit Prometheus dashboard and create a simple graph.
 
@@ -103,7 +103,7 @@ You can enable Typha metrics to be consumed by Prometheus via [two ways](http://
 
 By using services you will be able to dynamically discover endpoints. Here you will create a service named `typha-metrics-svc` which will receive requests from port 9091 and forward it to port 9090 of pods that are participating in `kube-system` namespace and share `k8s-app: calico-typha` label.
 
-> **Note**: Typha uses **port 9091** TCP by default to publish its metrics. However, if {{site.prodname}} yaml is installed by using [Amazon yaml file](https://github.com/aws/amazon-vpc-cni-k8s/blob/b001dc6a8fff52926ed9a93ee6c4104f02d365ab/config/v1.5/calico.yaml#L535-L536) this port is set to 9093 via **TYPHA_PROMETHEUSMETRICSPORT** environment variable.
+> **Note**: Typha uses **port 9091** TCP by default to publish its metrics. However, if {{site.prodname}} is installed using [Amazon yaml file](https://github.com/aws/amazon-vpc-cni-k8s/blob/b001dc6a8fff52926ed9a93ee6c4104f02d365ab/config/v1.5/calico.yaml#L535-L536) this port will be 9093 as its set manually via **TYPHA_PROMETHEUSMETRICSPORT** environment variable.
    {: .alert .alert-warning}
 
 ``` bash
@@ -144,7 +144,7 @@ EOF
 
 ####  Service account creation
 
-You need to give Prometheus a serviceAccount with required permissions to collect information from {{site.prodname}}.
+You need to provide Prometheus a serviceAccount with required permissions to collect information from {{site.prodname}}.
 
 > **Note**: A comprehensive guide to user roles and authentication can be [found at this link](https://kubernetes.io/docs/reference/access-authn-authz/rbac/).
    {: .alert .alert-info}
@@ -297,14 +297,13 @@ Push the `Add Graph` button, You should be able to see the metric plotted on a G
 
 ## Cleanup
 
-By executing below commands, you will delete all the resources and services created by following this tutorial.
+By executing below commands, you will delete all the resource and services created by following this tutorial.
 
 ```bash
 kubectl delete service felix-metrics-svc -n kube-system
 kubectl delete service typha-metrics-svc -n kube-system
 kubectl delete namespace calico-monitoring
 kubectl delete ClusterRole calico-prometheus-user
-kubectl delete ServiceAccount calico-prometheus-user
 kubectl delete clusterrolebinding calico-prometheus-user
 ```
 
