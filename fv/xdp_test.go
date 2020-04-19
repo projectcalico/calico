@@ -80,8 +80,6 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 				"8055,8056,22,68",
 				protos[ii])
 
-			felix.Exec("apt-get", "install", "-y", "hping3")
-
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = fmt.Sprintf("host-endpoint-%d", ii)
 			hostEp.Labels = map[string]string{
