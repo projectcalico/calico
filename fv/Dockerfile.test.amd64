@@ -19,9 +19,8 @@
 FROM calico/felix:latest
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
-
-# Install remaining runtime deps required for felix from the global repository
-RUN apt-get update && apt-get install -y \
+# Install remaining runtime deps required for felix
+RUN microdnf install \
     # Felix FV tests require these
     wget \
     ethtool \
