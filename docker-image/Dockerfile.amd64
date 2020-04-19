@@ -112,6 +112,8 @@ LABEL name="Calico Felix" \
       description="Calico Felix is the per-host agent responsible for programming routes and security policy" \
       maintainer="maintainers@projectcalico.org"
 
+COPY licenses/ /licenses
+
 # Copy in runit binaries
 COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 
