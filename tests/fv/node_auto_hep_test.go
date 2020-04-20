@@ -50,6 +50,9 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 	const kNodeName = "k8snodename"
 	const cNodeName = "calinodename"
 
+	// The profiles we expect auto host endpoints to specify.
+	autoHepProfiles := []string{"projectcalico-default-allow"}
+
 	BeforeEach(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
@@ -127,8 +130,9 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		expectedIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
-		Eventually(func() error { return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Kubernetes node labels.
 		kn, err = k8sClient.CoreV1().Nodes().Get(kn.Name, metav1.GetOptions{})
@@ -144,8 +148,9 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 
 		// Expect the hostendpoint labels to sync.
 		expectedHepLabels["label1"] = "value2"
-		Eventually(func() error { return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Calico node with new IPs.
 		cn, err = c.Nodes().Get(context.Background(), cn.Name, options.GetOptions{})
@@ -158,8 +163,9 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 
 		// Expect the hostendpoint's expectedIPs to sync the new node IPs.
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1"}
-		Eventually(func() error { return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Delete the Kubernetes node.
 		err = k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
@@ -235,10 +241,11 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			time.Second*2, 500*time.Millisecond).Should(BeNil())
 
 		// Expect the user's own hostendpoint to still exist.
-		// When hostendpoint.Spec.ExpectedIPs is empty, the field is a nil slice
+		// (Empty values in the hostendpoint spec are nil slices)
 		var noExpectedIPs []string
+		var noProfiles []string
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, userHep.Name, map[string]string{"env": "staging"}, noExpectedIPs)
+			return testutils.ExpectHostendpoint(c, userHep.Name, map[string]string{"env": "staging"}, noExpectedIPs, noProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect an auto hostendpoint was created for the Calico node.
@@ -249,7 +256,7 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, autoHepName, expectedHepLabels, expectedIPs)
+			return testutils.ExpectHostendpoint(c, autoHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -297,8 +304,9 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			"calico-label":                 "calico-value",
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
-		Eventually(func() error { return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Restart the controller but with auto hostendpoints disabled.
 		nodeController.Stop()

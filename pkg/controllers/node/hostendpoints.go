@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/resources"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -253,6 +254,7 @@ func (c *NodeController) generateAutoHostendpointFromNode(node *api.Node) *api.H
 			Node:          node.Name,
 			InterfaceName: "*",
 			ExpectedIPs:   c.getAutoHostendpointExpectedIPs(node),
+			Profiles:      []string{resources.DefaultAllowProfileName},
 		},
 	}
 }
