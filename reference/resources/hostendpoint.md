@@ -36,13 +36,17 @@ Host endpoints with the `projectcalico-default-allow` profile attached will have
 
 Note: if you have custom iptables rules, using host endpoints with allow-all rules (with no policies) will accept all traffic bypassing those rules.
 
-> Auto host endpoints have the `projectcalico-default-allow` profile attached and thus they allow all traffic in the absence of policy.
+> Auto host endpoints specify the `projectcalico-default-allow` profile so they behave similary to pod workload endpoints.
 {: .alert .alert-info}
 
 > **Important**: When rendering security rules on other hosts, {{site.prodname}} uses the
 > `expectedIPs` field to resolve label selectors to IP addresses. If the `expectedIPs` field
 > is omitted then security rules that use labels will fail to match this endpoint.
 {: .alert .alert-danger}
+
+**Host to local workload traffic**
+
+Traffic from a host to its own workload is always allowed, despite any policy in place. This is to ensure kubelet liveness and readiness probes always work.
 
 ### Sample YAML
 
