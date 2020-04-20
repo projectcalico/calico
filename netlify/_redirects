@@ -1,3 +1,32 @@
+# redirect old docs to latest at root.
+# note that you can still access these old docs at https://docs.projectcalico.org/archive/*
+/latest/* /:splat 301
+/v3.13/* /:splat 301
+/v3.12/* /:splat 301
+/v3.11/* /:splat 301
+/v3.10/* /:splat 301
+/v3.9/* /:splat 301
+/v3.8/* /:splat 301
+/v3.7/* /:splat 301
+/v3.6/* /:splat 301
+/v3.5/* /:splat 301
+/v3.4/* /:splat 301
+/v3.3/* /:splat 301
+/v3.2/* /:splat 301
+/v3.1/* /:splat 301
+/v3.0/* /:splat 301
+/v2.6/* /:splat 301
+/v2.5/* /:splat 301
+/v2.4/* /:splat 301
+/v2.3/* /:splat 301
+/v2.2/* /:splat 301
+/v2.1/* /:splat 301
+/v2.0/* /:splat 301
+/v1.6/* /:splat 301
+/v1.5/* /:splat 301
+
+# explicit redirects for any old that does not exist at an identical path in the
+# latest docs.
 /getting-started/as-service /getting-started/bare-metal/installation/container 301
 /getting-started/bare-metal/bare-metal /getting-started/bare-metal/ 301
 /getting-started/bare-metal/bare-metal-install /getting-started/bare-metal/installation/container 301
@@ -268,27 +297,3 @@
 /usage/troubleshooting/faq-2 /reference/faq 301
 /usage/troubleshooting/logging /maintenance/component-logs 301
 
-/latest/* /:splat 301
-/v3.13/* /:splat 301
-/v3.12/* /:splat 301
-/v3.11/* /:splat 301
-/v3.10/* /:splat 301
-/v3.9/* /:splat 301
-/v3.8/* /:splat 301
-/v3.7/* /:splat 301
-/v3.6/* /:splat 301
-/v3.5/* /:splat 301
-/v3.4/* /:splat 301
-/v3.3/* /:splat 301
-/v3.2/* /:splat 301
-/v3.1/* /:splat 301
-/v3.0/* /:splat 301
-/v2.6/* /:splat 301
-/v2.5/* /:splat 301
-/v2.4/* /:splat 301
-/v2.3/* /:splat 301
-/v2.2/* /:splat 301
-/v2.1/* /:splat 301
-/v2.0/* /:splat 301
-/v1.6/* /:splat 301
-/v1.5/* /:splat 301

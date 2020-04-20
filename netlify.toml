@@ -6,6 +6,7 @@
   RUBY_VERSION = "2.5.4"
   CANDIDATE_RELEASE = ""
   CURRENT_RELEASE = "v3.13"
+  CUSTOM_ARCHIVE_PATH = "/archive"
 
 [[headers]]
   for = "/*.yaml"
