@@ -21,22 +21,28 @@ will use to apply
 [policy]({{ site.baseurl }}/reference/resources/networkpolicy)
 to the interface.
 
-**Default behavior of external traffic to/from host**
-
-If a host endpoint is added and network policies or profiles are not in place selecting that host endpoint, the {{ site.prodname }} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, {{ site.prodname }} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
-
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
+
+**Default behavior of external traffic to/from host**
+
+If a host endpoint is created and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
+For a named host endpoint (i.e. a host endpoint representing a specific interface), {{site.prodname}} blocks traffic only to/from the interface specified in the host endpoint. Traffic to/from other interfaces is ignored.
+For a wildcard host endpoint (i.e. a host endpoint representing all of a host's interfaces), {{site.prodname}} blocks traffic to/from _all_ interfaces on the host (except for traffic allowed by failsafe rules).
+
+However, profiles can be used in conjunction with host endpoints to modify default behavior of external traffic to/from the host in the absence of network policy.
+{{site.prodname}} provides a default profile resource named `projectcalico-default-allow` that consists of allow-all ingress and egress rules.
+Host endpoints with the `projectcalico-default-allow` profile attached will have "allow-all" semantics instead of "deny-all" in the absence of policy.
+
+Note: if you have custom iptables rules, using host endpoints with allow-all rules (with no policies) will accept all traffic bypassing those rules.
+
+> Auto host endpoints have the `projectcalico-default-allow` profile attached and thus they allow all traffic in the absence of policy.
+{: .alert .alert-info}
 
 > **Important**: When rendering security rules on other hosts, {{site.prodname}} uses the
 > `expectedIPs` field to resolve label selectors to IP addresses. If the `expectedIPs` field
 > is omitted then security rules that use labels will fail to match this endpoint.
 {: .alert .alert-danger}
-
-{{site.prodname}} provides a default profile named `projectcalico-allow-all` that may be added to a host endpoint to change the host endpoint's default behavior. This profile consists of ingress and egress rules that allow all traffic. When the `projectcalico-allow-all` profile is attached to a host endpoint, the default behavior of that host endpoint becomes an allow-all.
-
-> **Note**: If you have custom iptables rules, using host endpoints with allow-all rules (with no policies) will accept all traffic bypassing those rules.
-{: .alert .alert-info}
 
 ### Sample YAML
 
