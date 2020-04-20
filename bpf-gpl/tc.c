@@ -738,9 +738,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			outer_ip_snat = ct_rc == CALI_CT_ESTABLISHED_SNAT;
 			/* ... there is a return path to the tunnel ... */
 			outer_ip_snat = outer_ip_snat && state->ct_result.tun_ret_ip;
-			/* ... and should do encap and it is not DSR or it is
-			 * it is leaving host and either DSR from WEP or
-			 * originated at host ... */
+			/* ... and should do encap and it is not DSR or it is leaving host
+			 * and either DSR from WEP or originated at host ... */
 			outer_ip_snat = outer_ip_snat &&
 				((dnat_return_should_encap() && !CALI_F_DSR) ||
 				 (CALI_F_TO_HEP &&
