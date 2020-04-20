@@ -1,6 +1,6 @@
 ---
 title: Protect Kubernetes nodes
-description: Protect Kubernetes nodes with host endpoints managed by {{site.prodname}}
+description: Protect Kubernetes nodes with host endpoints managed by Calico
 ---
 
 ### Big picture
@@ -156,5 +156,6 @@ EOF
 
 ### Above and beyond
 
+- [Protect hosts tutorial]({{ site.baseurl }}/security/tutorials/protect-hosts)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) 
 - [Host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint)

@@ -45,6 +45,8 @@ section:
   section:
   - title: Protect hosts
     path: /security/protect-hosts
+  - title: Protect Kubernetes hosts
+    path: /security/auto-host-endpoints
   - title: Protect host tutorial
     path: /security/tutorials/protect-hosts
   - title: Apply policy to host forwarded traffic
