@@ -665,7 +665,7 @@ func (c converter) JoinProfileRevisions(nsRev, saRev string) string {
 // revision returned on the KDD service account based profile.
 // This is conditional on the feature flag for serviceaccount set or not.
 func (c converter) SplitProfileRevision(rev string) (nsRev string, saRev string, err error) {
-	if rev == "" {
+	if rev == "" || rev == "0" {
 		return
 	}
 
@@ -674,7 +674,6 @@ func (c converter) SplitProfileRevision(rev string) (nsRev string, saRev string,
 		err = fmt.Errorf("ResourceVersion is not valid: %s", rev)
 		return
 	}
-
 	nsRev = revs[0]
 	saRev = revs[1]
 	return

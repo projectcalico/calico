@@ -30,15 +30,23 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/resources"
 )
 
 var (
-	clientTimeout    = 10 * time.Second
-	keepaliveTime    = 30 * time.Second
-	keepaliveTimeout = 10 * time.Second
+	clientTimeout                  = 10 * time.Second
+	keepaliveTime                  = 30 * time.Second
+	keepaliveTimeout               = 10 * time.Second
+	defaultAllowProfileResourceKey = model.ResourceKey{Name: "projectcalico-default-allow", Kind: apiv3.KindProfile}
+)
+
+const (
+	profilesKey            = "/calico/resources/v3/projectcalico.org/profiles/"
+	defaultAllowProfileKey = "/calico/resources/v3/projectcalico.org/profiles/projectcalico-default-allow"
 )
 
 type etcdV3Client struct {
@@ -354,6 +362,12 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	}
 	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
+	// Handle the static default-allow profile. Always return the default profile.
+	if key == defaultAllowProfileKey {
+		logCxt.Debug("Returning default-allow profile for get")
+		return resources.DefaultAllowProfile(), nil
+	}
+
 	ops := []clientv3.OpOption{}
 	if len(revision) != 0 {
 		rev, err := parseRevision(revision)
@@ -410,6 +424,13 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 		if kv := convertListResponse(p, l); kv != nil {
 			list = append(list, kv)
 		}
+	}
+
+	// If we're listing profiles, we need to handle the statically defined
+	// default-allow profile in the resources package.
+	// We always include the default profile.
+	if key == profilesKey || key == defaultAllowProfileKey {
+		list = append(list, resources.DefaultAllowProfile())
 	}
 
 	return &model.KVPairList{

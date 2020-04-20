@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/resources"
 )
 
 func NewProfileClient(c *kubernetes.Clientset) K8sResourceClient {
@@ -128,6 +129,9 @@ func (c *profileClient) Get(ctx context.Context, key model.Key, revision string)
 	rk := key.(model.ResourceKey)
 	if rk.Name == "" {
 		return nil, fmt.Errorf("Profile key missing name: %+v", rk)
+	} else if rk.Name == resources.DefaultAllowProfileName {
+		// Always return the default-allow profile regardless of revision
+		return resources.DefaultAllowProfile(), nil
 	}
 
 	nsRev, saRev, err := c.SplitProfileRevision(revision)
@@ -153,6 +157,7 @@ func (c *profileClient) Get(ctx context.Context, key model.Key, revision string)
 func (c *profileClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	log.Debug("Received List request on Profile type")
 	nl := list.(model.ResourceListOptions)
+
 	kvps := []*model.KVPair{}
 
 	// If a name is specified, then do an exact lookup.
@@ -174,6 +179,9 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 			Revision: revision,
 		}, nil
 	}
+
+	// Always add the default-allow profile to the result.
+	kvps = []*model.KVPair{resources.DefaultAllowProfile()}
 
 	nsRev, saRev, err := c.SplitProfileRevision(revision)
 	if err != nil {
@@ -240,7 +248,15 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 	if len(rlo.Name) != 0 {
 		log.WithField("name", rlo.Name).Debug("Watching a single profile")
 		var err error
-		if strings.HasPrefix(rlo.Name, conversion.NamespaceProfileNamePrefix) {
+
+		// If we're watching the default-allow profile by name, then we exit
+		// with a new profileWatcher now and use fake watches in place
+		// of real ns and sa watchers. This profile watcher will never get any
+		// events because no events will occur for the static default-allow profile.
+		if rlo.Name == resources.DefaultAllowProfileName {
+			log.WithField("rv", revision).Debug("Creating a fake watch on default-allow profile")
+			return newProfileWatcher(ctx, api.NewFake(), api.NewFake()), nil
+		} else if strings.HasPrefix(rlo.Name, conversion.NamespaceProfileNamePrefix) {
 			watchSA = false
 			ns, err = c.ProfileNameToNamespace(rlo.Name)
 			if err != nil {
@@ -258,7 +274,6 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 			return nil, fmt.Errorf("Unsupported prefix for resource name: %s", rlo.Name)
 		}
 	}
-
 	nsRev, saRev, err := c.SplitProfileRevision(revision)
 	if err != nil {
 		return nil, err
