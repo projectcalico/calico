@@ -15,7 +15,6 @@ Secure Kubernetes nodes with host endpoints managed by {{site.prodname}}.
 
 This how-to guide uses the following Calico features:
 - **HostEndpoint**
-- **Profile**
 - **KubeControllersConfiguration**
 - **GlobalNetworkPolicy**
 
@@ -37,23 +36,6 @@ This means that policy targetting these automatic host endpoints will function c
 
 Automatic host endpoints are differentiated from other host endpoints by the label `projectcalico.org/created-by: calico-kube-controllers`.
 Enable or disable automatic host endpoints by configuring the default KubeControllersConfiguration resource.
-
-### Profiles
-
-Profiles are similar to network policy in that you can specify ingress and egress rules. But they are very limited and are deprecated for specifying policy rules; namespaced and global network policy are more flexible than profiles.
-
-### Default behavior of external traffic to/from host
-
-If a host endpoint (named or wildcard) is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
-For named host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
-For wildcard host endpoints, {{site.prodname}} blocks traffic to/from _all_ non-workload interfaces on the host (except for traffic allowed by failsafe rules).
-
-However, profiles can be used in conjunction with host endpoints to modify default behavior of external traffic to/from the host in the absence of network policy.
-{{site.prodname}} provides a default profile resource named `projectcalico-allow-all` that consists of allow-all ingress and egress rules.
-Host endpoints with the `projectcalico-allow-all` profile attached will have "allow-all" semantics instead of "deny-all" in the absence of policy.
-
-> Auto host endpoints have the `projectcalico-allow-all` profile attached and thus they allow all traffic in the absence of policy.
-{: .alert .alert-info}
 
 ### Before you begin...
 
