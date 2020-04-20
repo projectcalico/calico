@@ -550,6 +550,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		goto skip_policy;
 	}
 
+	/* Unlike from WEP where we can do RPF by comparing to calico routing
+	 * info, we must rely in Linux to do it for us when receiving packets
+	 * from outside of the host. We enforce RPF failed on every new flow.
+	 * This will make it to skip fib in calico_tc_skb_accepted()
+	 */
+	if (CALI_F_FROM_HEP) {
+		ct_result_set_flag(state.ct_result.rc, CALI_CT_RPF_FAILED);
+	}
+
 	/* No conntrack entry, check if we should do NAT */
 	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
 					 state.ip_proto, state.dport,
@@ -910,6 +919,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			CALI_DEBUG("rt found for 0x%x\n", be32_to_host(state->post_nat_ip_dst));
 
 			encap_needed = !cali_rt_is_local(rt);
+
+			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
+			fib = true;
 		}
 
 		/* We have not created the conntrack yet since we did not know
