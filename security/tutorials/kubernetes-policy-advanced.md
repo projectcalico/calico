@@ -31,7 +31,7 @@ We'll use a new namespace for this guide.  Run the following commands to create 
 
 ```bash
 kubectl create ns advanced-policy-demo
-kubectl run --namespace=advanced-policy-demo nginx --replicas=2 --image=nginx
+kubectl create deployment --namespace=advanced-policy-demo nginx --image=nginx
 kubectl expose --namespace=advanced-policy-demo deployment nginx --port=80
 ```
 
@@ -134,7 +134,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      run: nginx
+      app: nginx
   ingress:
     - from:
       - podSelector:
@@ -285,7 +285,7 @@ Even though DNS egress traffic is now working, all other egress traffic from all
 
 ### 6. Allow egress traffic to nginx
 
-Run the following to create a `NetworkPolicy` which allows egress traffic from any pods in the `advanced-policy-demo` namespace to pods with labels matching `run: nginx` in the same namespace.
+Run the following to create a `NetworkPolicy` which allows egress traffic from any pods in the `advanced-policy-demo` namespace to pods with labels matching `app: nginx` in the same namespace.
 
 ```bash
 kubectl create -f - <<EOF
@@ -303,7 +303,7 @@ spec:
   - to:
     - podSelector:
         matchLabels:
-          run: nginx
+          app: nginx
 EOF
 ```
 
@@ -339,7 +339,7 @@ wget: download timed out
 ```
 {: .no-select-button}
 
-Access to `google.com` times out because it can resolve DNS but has no egress access to anything other than pods with labels matching `run: nginx` in the `advanced-policy-demo` namespace.
+Access to `google.com` times out because it can resolve DNS but has no egress access to anything other than pods with labels matching `app: nginx` in the `advanced-policy-demo` namespace.
 
 ## 7. Clean up namespace
 

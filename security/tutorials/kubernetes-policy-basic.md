@@ -23,7 +23,7 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the namespace
 1. Create some nginx pods in the `policy-demo` namespace.
 
    ```bash
-   kubectl run --namespace=policy-demo nginx --replicas=2 --image=nginx
+   kubectl create deployment --namespace=policy-demo nginx --image=nginx
    ```
 
 1. Expose them through a service.
@@ -130,7 +130,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      run: nginx
+      app: nginx
   ingress:
     - from:
       - podSelector:
@@ -140,9 +140,9 @@ EOF
 ```
 
 > **Note**: The NetworkPolicy allows traffic from Pods with
-> the label `run: access` to Pods with the label `run: nginx`. These
-> are the labels automatically added to Pods started via `kubectl run`
-> based on the name of the `Deployment`.
+> the label `run: access` to Pods with the label `app: nginx`. The
+> labels are automatically added by kubectl and
+> are based on the name of the resource.
 {: .alert .alert-info}
 
 We should now be able to access the service from the `access` pod.
