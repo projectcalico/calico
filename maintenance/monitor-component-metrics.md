@@ -98,7 +98,7 @@ kube-system     calico-typha-56fccfcdc4-z27xj                         1/1     Ru
 kube-system     calico-typha-horizontal-autoscaler-74f77cd87c-6hx27   1/1     Running   0          28h
 ```
 
-You can enable Typha metrics to be consumed by Prometheus via [two ways](http://localhost:4000/reference/typha/configuration).
+You can enable Typha metrics to be consumed by Prometheus via [two ways]({{ site.baseurl }}/reference/typha/configuration).
 ##### **Creating a service to expose Typha metrics**
 
 By using services you will be able to dynamically discover endpoints. Here you will create a service named `typha-metrics-svc` which will receive requests from port 9091 and forward it to port 9090 of pods that are participating in `kube-system` namespace and share `k8s-app: calico-typha` label.
