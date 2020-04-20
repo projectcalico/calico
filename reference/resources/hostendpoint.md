@@ -34,7 +34,7 @@ However, profiles can be used in conjunction with host endpoints to modify defau
 {{site.prodname}} provides a default profile resource named `projectcalico-default-allow` that consists of allow-all ingress and egress rules.
 Host endpoints with the `projectcalico-default-allow` profile attached will have "allow-all" semantics instead of "deny-all" in the absence of policy.
 
-Note: if you have custom iptables rules, using host endpoints with allow-all rules (with no policies) will accept all traffic bypassing those rules.
+Note: If you have custom iptables rules, using host endpoints with allow-all rules (with no policies) will accept all traffic bypassing those rules.
 
 > Auto host endpoints specify the `projectcalico-default-allow` profile so they behave similary to pod workload endpoints.
 {: .alert .alert-info}
