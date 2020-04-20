@@ -23,16 +23,13 @@ This how-to guide uses the following Calico features:
 
 ### Host endpoints
 
-Each host has one or more network interfaces that it uses to communicate externally. You can use {{site.prodname}} network policy to secure these interfaces (called host endpoints).
+Each host has one or more network interfaces that it uses to communicate externally. You can represent these interfaces in Calico using host endpoints and then use network policy to secure them.
+
 {{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
 
-Host endpoints come in two types: *named* and *wildcard*. Named host endpoints secure a specific interface such as "eth0", and are created by setting `interfaceName: <name-of-that-interface>` -- for example, `interfaceName: eth0`.
-Wildcard host endpoints secure _all_ of the hosts interfaces non-workload interfaces. They are created by setting `interfaceName: "*"`.
+Automatic host endpoints secure _all_ of the hosts interfaces non-workload interfaces. They are created by setting `interfaceName: "*"`.
 
 ### Automatic host endpoints
-
-In order to protect a Kubernetes node, a host endpoint has to be created for it. This is fine for a few cluster nodes but for larger clusters of hundreds or thousands of nodes, some automation is required.
-{{site.prodname}} can automatically create host endpoints for your Kubernetes nodes when they are created, and similarly tear down the host endpoints when the Kubernetes nodes leave the cluster.
 
 {{site.prodname}} creates a wildcard host endpoint for each node, with the host endpoint containing the same labels and IP addresses as its corresponding node.
 {{site.prodname}} will ensure these managed host endpoints maintain the same labels and IP addresses as its node by periodic syncs.
