@@ -54,7 +54,7 @@ To enable automatic host endpoints, edit the default KubeControllersConfiguratio
 calicoctl patch kubecontrollersconfiguration default --patch='{"spec": {"controllers": {"node": {"hostEndpoint": {"autoCreate": "Enabled"}}}}}'
 ```
 
-If the apply was successful, we should see host endpoints created for each of your cluster's nodes:
+If successful, the host endpoints are created for each of your cluster's nodes:
 
 ```bash
 calicoctl get heps -owide
