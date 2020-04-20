@@ -46,7 +46,7 @@ Note: if you have custom iptables rules, using host endpoints with allow-all rul
 
 **Host to local workload traffic**
 
-Traffic from a host to its own workload is always allowed, despite any policy in place. This is to ensure kubelet liveness and readiness probes always work.
+Traffic from a host to its own workload is always allowed, despite any policy in place. This ensures that `kubelet` liveness and readiness probes always work.
 
 ### Sample YAML
 
