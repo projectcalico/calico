@@ -9,7 +9,7 @@ Secure Kubernetes nodes with host endpoints managed by {{site.prodname}}.
 
 ### Value
 
-{{site.prodname}} can automatically create host endpoints for your Kubernetes nodes. The lifecycle of these host endpoints are managed by {{site.prodname}} in response to an evolving cluster to ensure policy protecting your nodes is always enforced.
+{{site.prodname}} can automatically create host endpoints for your Kubernetes nodes. This means {{site.prodname}} can manage the lifecycle of host endpoints as your cluster evolves, ensuring nodes are always protected by policy.
 
 ### Features
 
@@ -32,14 +32,14 @@ Automatic host endpoints secure _all_ of the hosts interfaces non-workload inter
 
 {{site.prodname}} creates a wildcard host endpoint for each node, with the host endpoint containing the same labels and IP addresses as its corresponding node.
 {{site.prodname}} will ensure these managed host endpoints maintain the same labels and IP addresses as its node by periodic syncs.
-This means that policy targetting these automatic host endpoints will function correctly with the policy put in place to select those nodes, even if over time the node's IPs or labels change.
+This means that policy targeting these automatic host endpoints will function correctly with the policy put in place to select those nodes, even if over time the node's IPs or labels change.
 
 Automatic host endpoints are differentiated from other host endpoints by the label `projectcalico.org/created-by: calico-kube-controllers`.
 Enable or disable automatic host endpoints by configuring the default KubeControllersConfiguration resource.
 
 ### Before you begin...
 
-Have a running {{site.prodname}} cluster with calicoctl installed.
+Have a running {{site.prodname}} cluster with `calicoctl` installed.
 
 ### How to
 
@@ -48,8 +48,7 @@ Have a running {{site.prodname}} cluster with calicoctl installed.
 
 #### Enable automatic host endpoints
 
-In order to enable automatic host endpoints, we need to edit the default KubeControllersConfiguration instance.
-We will be setting `spec.controllers.node.hostEndpoint.autoCreate` to `true`.
+To enable automatic host endpoints, edit the default KubeControllersConfiguration instance, and set `spec.controllers.node.hostEndpoint.autoCreate` to `true`:
 
 ```bash
 calicoctl patch kubecontrollersconfiguration default --patch='{"spec": {"controllers": {"node": {"hostEndpoint": {"autoCreate": "Enabled"}}}}}'
@@ -118,7 +117,7 @@ The list of whitelisted IPs may include:
 - the IP range used by your Kubernetes nodes. This is required so that each node's kubelet can reach the API server.
 - the IP range for your Docker image registries (including the {{site.prodname}} images)
 
-> Note: some Docker image registries do not maintain whitelists of IPs backing their registry DNS names.
+> Note: Some Docker image registries do not maintain whitelists of IPs backing their registry DNS names.
 > In that case, you may need to ensure that images are available locally.
 > Calico Enterprise provides extra network policy selectors such as a [domain name selector](https://docs.tigera.io/reference/resources/globalnetworkpolicy#exact-and-wildcard-domain-names)
 > that manages the potentially dynamic IPs serving a particular DNS name.
@@ -151,7 +150,7 @@ spec:
 EOF
 ```
 
-> Note: this policy does not affect egress from pods on the hosts. Host endpoints only enforce policy that originate from or terminate at the host.
+> Note: This policy does not affect egress from pods on the hosts. Host endpoints only enforce policy that originate from or terminate at the host.
 {: .alert .alert-info}
 
 ### Above and beyond
