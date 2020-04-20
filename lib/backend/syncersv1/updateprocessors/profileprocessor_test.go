@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ var _ = Describe("Test the Profile update processor", func() {
 			Revision: "abcde",
 		})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(kvps).To(HaveLen(2))
+		Expect(kvps).To(HaveLen(3))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key:      model.ProfileLabelsKey{v1ProfileKey1},
 			Value:    map[string]string{"testLabel": "label"},
@@ -162,7 +162,7 @@ var _ = Describe("Test the Profile update processor", func() {
 
 		v1irule := updateprocessors.RuleAPIV2ToBackend(irule, "")
 		v1erule := updateprocessors.RuleAPIV2ToBackend(erule, "")
-		Expect(kvps).To(HaveLen(2))
+		Expect(kvps).To(HaveLen(3))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key:      model.ProfileLabelsKey{v1ProfileKey2},
 			Value:    map[string]string{"testLabel": "label2"},
@@ -190,6 +190,10 @@ var _ = Describe("Test the Profile update processor", func() {
 			},
 			{
 				Key:   model.ProfileRulesKey{v1ProfileKey1},
+				Value: nil,
+			},
+			{
+				Key:   v3ProfileKey1,
 				Value: nil,
 			},
 		}))
@@ -227,6 +231,11 @@ var _ = Describe("Test the Profile update processor", func() {
 			{
 				Key:   model.ProfileRulesKey{v1ProfileKey1},
 				Value: nil,
+			},
+			{
+				Key:      v3ProfileKey1,
+				Value:    nil,
+				Revision: "abcde",
 			},
 		}))
 
