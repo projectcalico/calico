@@ -1,7 +1,3 @@
-/latest/* /:splat 301
-/:version/* /:splat 301
-
-
 /getting-started/as-service /getting-started/bare-metal/installation/container 301
 /getting-started/bare-metal/bare-metal /getting-started/bare-metal/ 301
 /getting-started/bare-metal/bare-metal-install /getting-started/bare-metal/installation/container 301
@@ -271,3 +267,6 @@
 /usage/troubleshooting/faq /reference/faq 301
 /usage/troubleshooting/faq-2 /reference/faq 301
 /usage/troubleshooting/logging /maintenance/component-logs 301
+
+/latest/* /:splat 301
+/:version/* /:splat 301
