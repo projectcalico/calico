@@ -77,6 +77,12 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 		// Correct inbound rule
 		rulev1 := updateprocessors.RuleAPIV2ToBackend(irule, "namespace2")
+
+		// Assert we don't change the original protocol.
+		Expect(irule.Protocol.String()).To(Equal("TCP"))
+		Expect(irule.NotProtocol.String()).To(Equal("UDP"))
+
+		// Assert rule converted to v1 is correct
 		Expect(rulev1.Action).To(Equal("allow"))
 		Expect(rulev1.IPVersion).To(Equal(&v4))
 		Expect(rulev1.Protocol.StrVal).To(Equal("tcp"))

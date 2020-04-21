@@ -230,8 +230,9 @@ func parseServiceAccounts(sam *apiv3.ServiceAccountMatch) string {
 
 // convertV3ProtocolToV1 converts a v1 protocol string to a v3 protocol string
 func convertV3ProtocolToV1(p *numorstring.Protocol) *numorstring.Protocol {
-	if p != nil && p.Type == numorstring.NumOrStringString {
-		p.StrVal = strings.ToLower(p.String())
+	if p != nil {
+		v1P := p.ToV1()
+		return &v1P
 	}
 	return p
 }
