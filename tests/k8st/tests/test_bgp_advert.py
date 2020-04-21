@@ -110,8 +110,7 @@ class _TestBGPAdvert(TestBase):
         # Enable debug logging
         self.update_ds_env("calico-node",
                            "kube-system",
-                           "BGP_LOGSEVERITYSCREEN",
-                           "debug")
+                           {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Establish BGPPeer from cluster nodes to node-extra
         calicoctl("""apply -f - << EOF
