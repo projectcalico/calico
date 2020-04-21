@@ -54,6 +54,6 @@ var protoPortSliceToString = func(value interface{}) interface{} {
 }
 
 var routeTableRangeToString = func(value interface{}) interface{} {
-	r := value.(apiv3.Range)
+	r := value.(apiv3.RouteTableRange)
 	return fmt.Sprintf("%d-%d", r.Min, r.Max)
 }

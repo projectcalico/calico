@@ -146,7 +146,6 @@ func init() {
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("regexp", validateRegexp)
 	registerFieldValidator("routeSource", validateRouteSource)
-	registerFieldValidator("routeTableRange", validateRouteTableRange)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -180,6 +179,7 @@ func init() {
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
+	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -194,12 +194,6 @@ func reason(r string) string {
 func extractReason(e validator.FieldError) string {
 	if strings.HasPrefix(e.Tag(), reasonString) {
 		return strings.TrimPrefix(e.Tag(), reasonString)
-	}
-	switch e.Tag() {
-	case "routeTableRange":
-		return fmt.Sprintf("%s must be a range of route table indices within 1..250",
-			e.Field(),
-		)
 	}
 	return fmt.Sprintf("%sfailed to validate Field: %s because of Tag: %s ",
 		reasonString,
@@ -254,15 +248,6 @@ func validateRouteSource(fl validator.FieldLevel) bool {
 	log.Debugf("Validate routeSource: %s", s)
 	_, err := regexp.Compile(s)
 	return err == nil
-}
-
-func validateRouteTableRange(fl validator.FieldLevel) bool {
-	r := fl.Field().Interface().(*api.Range)
-	if r == nil {
-		log.Panic("Validation for nil routeTableRange should have been suppressed by omitempty")
-	}
-	log.Debugf("Validate routeTableRange: %v", *r)
-	return r.Min >= 1 && r.Max >= r.Min && r.Max <= 250
 }
 
 func validateName(fl validator.FieldLevel) bool {
@@ -1248,6 +1233,22 @@ func validateObjectMetaLabels(structLevel validator.StructLevel, labels map[stri
 func validateRuleMetadata(structLevel validator.StructLevel) {
 	ruleMeta := structLevel.Current().Interface().(api.RuleMetadata)
 	validateObjectMetaAnnotations(structLevel, ruleMeta.Annotations)
+}
+
+func validateRouteTableRange(structLevel validator.StructLevel) {
+	r := structLevel.Current().Interface().(api.RouteTableRange)
+	if r.Min >= 1 && r.Max >= r.Min && r.Max <= 250 {
+		log.Debugf("RouteTableRange is valid: %v", r)
+	} else {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("must be a range of route table indices within 1..250"),
+			"",
+		)
+	}
 }
 
 // ruleUsesAppLayerPolicy checks if a rule uses application layer policy, and

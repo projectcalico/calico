@@ -308,10 +308,10 @@ type FelixConfigurationSpec struct {
 
 	// Calico programs additional Linux route tables for various purposes.  RouteTableRange
 	// specifies the indices of the route tables that Calico should use.
-	RouteTableRange *Range `json:"routeTableRange,omitempty" validate:"omitempty,routeTableRange"`
+	RouteTableRange *RouteTableRange `json:"routeTableRange,omitempty" validate:"omitempty"`
 }
 
-type Range struct {
+type RouteTableRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
 }
