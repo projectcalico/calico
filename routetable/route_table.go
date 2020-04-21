@@ -551,6 +551,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool) error {
 	// deltas to fix any discrepancies with the expected configuration. If this errors, we still apply the deltas
 	// first because this allows us to tidy up configuration for interfaces that no longer have any routes associated
 	// with them.
+	updatesFailed := false
 	var routesToDelete []netlink.Route
 	var resyncErr error
 	if fullSync {
@@ -564,6 +565,18 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool) error {
 			// If we hit anything other than an interface-in-grace error, exit now.
 			r.logCxt.WithError(resyncErr).Info("Hit error doing kernel reconciliation")
 			return r.filterErrorByIfaceState(ifaceName, resyncErr, UpdateFailed)
+		}
+
+		// Ensure we have static ARP entries for all of our existing routes.
+		for _, target := range r.ifaceNameToTargets[ifaceName] {
+			if r.ipVersion == 4 && target.DestMAC != nil {
+				// TODO(smc) clean up/sync old ARP entries
+				err := r.addStaticARPEntry(target.CIDR, target.DestMAC, ifaceName)
+				if err != nil {
+					logCxt.WithError(err).Warn("Failed to set ARP entry")
+					updatesFailed = true
+				}
+			}
 		}
 	}
 
@@ -602,7 +615,6 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool) error {
 	}
 
 	// Delete the combined set of routes.
-	updatesFailed := false
 	for _, route := range routesToDelete {
 		if err := nl.RouteDel(&route); err != nil {
 			logCxt.WithError(err).Warn("Failed to delete route")
