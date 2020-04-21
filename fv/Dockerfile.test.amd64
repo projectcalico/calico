@@ -26,3 +26,5 @@ RUN apt-get update && apt-get install -y \
     wget \
     ethtool \
     tcpdump
+
+ADD test-connection test-workload pktgen  /
