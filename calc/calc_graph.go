@@ -310,7 +310,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 		//         |
 		//      <dataplane>
 		//
-		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
+		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates(), conf.RouteSource)
 		l3RR.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 	}
 

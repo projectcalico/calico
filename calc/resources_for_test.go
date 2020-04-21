@@ -57,10 +57,15 @@ var (
 // Canned workload endpoints.
 
 var localWlEpKey1 = WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
-var remoteWlEpKey1 = WorkloadEndpointKey{Hostname: remoteHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
 var localWlEp1Id = "orch/wl1/ep1"
 var localWlEpKey2 = WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl2", EndpointID: "ep2"}
 var localWlEp2Id = "orch/wl2/ep2"
+
+// A remote workload endpoint
+var remoteWlEpKey1 = WorkloadEndpointKey{Hostname: remoteHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+
+// Same as remoteWlEpKey1 but on a different host.
+var remoteWlEpKey2 = WorkloadEndpointKey{Hostname: remoteHostname2, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
 
 var localWlEp1 = WorkloadEndpoint{
 	State:      "active",
@@ -196,6 +201,17 @@ var localWlEp2NoProfiles = WorkloadEndpoint{
 		mustParseNet("10.0.0.3/32")},
 	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::2/128"),
 		mustParseNet("fc00:fe11::3/128")},
+}
+
+var remoteWlEp1 = WorkloadEndpoint{
+	State:      "active",
+	Name:       "remote-wep-1",
+	Mac:        mustParseMac("01:02:03:04:05:06"),
+	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
+	IPv4Nets:   []net.IPNet{mustParseNet("10.0.0.5/32")},
+	Labels: map[string]string{
+		"id": "rem-ep-1",
+	},
 }
 
 var hostEpWithName = HostEndpoint{
@@ -622,6 +638,8 @@ var ipPoolWithVXLAN = IPPool{
 	VXLANMode:  encap.Always,
 	Masquerade: true,
 }
+
+var workloadIPs = "WorkloadIPs"
 
 var ipPoolWithVXLANSlash32 = IPPool{
 	CIDR:       mustParseNet("10.0.0.0/32"),

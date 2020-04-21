@@ -338,6 +338,15 @@ var baseTests = []StateList{
 		vxlanWithBlockNodeRes,
 	},
 	{
+		// Test L3 route resolver in node resource mode using WorkloadIPs as the route source.
+		// This test starts with a single remote workload, then moves to two remote workloads with the same
+		// IP address on different nodes, and then back to a single workload.
+		vxlanWithWEPIPs,
+		vxlanWithWEPIPsAndWEP,
+		vxlanWithWEPIPsAndWEPDuplicate,
+		vxlanWithWEPIPsAndWEP,
+	},
+	{
 		// Test corner case where the IP pool and block share a /32.
 		// Should be able to add or remove the block or pool in either order and get the same result.
 		vxlanSlash32,
@@ -467,6 +476,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.VXLANEnabled = true
 					conf.BPFEnabled = true
 					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
+					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan interface{})
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
@@ -606,6 +616,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf.VXLANEnabled = true
 		conf.BPFEnabled = true
 		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
+		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent

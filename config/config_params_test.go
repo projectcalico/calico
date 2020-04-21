@@ -82,11 +82,6 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 	BeforeEach(func() {
 		fcFields = fieldsByName(v3.FelixConfigurationSpec{})
 
-		// TODO: Once https://github.com/projectcalico/felix/pull/2258 is merged
-		// delete this line. The field RouteSource is in FelixConfigSpec but not
-		// in felix config.
-		delete(fcFields, "RouteSource")
-
 		cpFields = fieldsByName(Config{})
 		for _, name := range cpFieldsToIgnore {
 			delete(cpFields, name)

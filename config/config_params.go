@@ -239,6 +239,11 @@ type Config struct {
 	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
 	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 
+	// Configure where Felix gets its routing information.
+	// - workloadIPs: use workload endpoints to construct routes.
+	// - calicoIPAM: use IPAM data to contruct routes.
+	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
+
 	// State tracking.
 
 	// nameToSource tracks where we loaded each config param from.
