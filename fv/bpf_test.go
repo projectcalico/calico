@@ -642,51 +642,150 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						return
 					}
 
-					// sync with policy
-					cc.ExpectSome(w[1][0], w[0][0])
-					cc.ExpectSome(w[1][1], w[0][0])
-					cc.CheckConnectivity()
+					By("allowing any traffic", func() {
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{
+										"0.0.0.0/0",
+									},
+								},
+							},
+						}
+						pol = updatePolicy(pol)
 
-					tcpdump := w[0][0].AttachTCPDump()
-					tcpdump.SetLogEnabled(true)
-					matcher := fmt.Sprintf("IP %s.30444 > %s.30444: UDP", w[1][0].IP, w[0][0].IP)
-					tcpdump.AddMatcher("UDP-30444", regexp.MustCompile(matcher))
-					tcpdump.Start(testOpts.protocol, "port", "30444", "or", "port", "30445")
-					defer tcpdump.Stop()
+						cc.ExpectSome(w[1][0], w[0][0])
+						cc.ExpectSome(w[1][1], w[0][0])
+						cc.CheckConnectivity()
+					})
 
-					// send a packet from the correct workload to create a conntrac entry
-					_, err := w[1][0].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
-						"--port-src", "30444", "--port-dst", "30444")
-					Expect(err).NotTo(HaveOccurred())
+					/* XXX temporary will be removed and replaced by enfocing it
+					 * XXX from felix in BPF
+					 */
+					By("setting strict RPF check", func() {
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=1")
+						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.default.rp_filter=1")
+					})
 
-					// We must eventually se the packet at the target
-					Eventually(func() int { return tcpdump.MatchCount("UDP-30444") }).
-						Should(BeNumerically("==", 1), matcher)
+					By("testing that packet sent by another workload is dropped", func() {
+						tcpdump := w[0][0].AttachTCPDump()
+						tcpdump.SetLogEnabled(true)
+						matcher := fmt.Sprintf("IP %s\\.30444 > %s\\.30444: UDP", w[1][0].IP, w[0][0].IP)
+						tcpdump.AddMatcher("UDP-30444", regexp.MustCompile(matcher))
+						tcpdump.Start(testOpts.protocol, "port", "30444", "or", "port", "30445")
+						defer tcpdump.Stop()
 
-					// Send a spoofed packet from a different pod. Since we hit the
-					// conntrack we would not do the WEP only RPF check.
-					_, err = w[1][1].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
-						"--port-src", "30444", "--port-dst", "30444")
-					Expect(err).NotTo(HaveOccurred())
+						// send a packet from the correct workload to create a conntrack entry
+						_, err := w[1][0].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444")
+						Expect(err).NotTo(HaveOccurred())
 
-					// Since the packet will get dropped, we would not see it at the dest.
-					// So we send another good packet from the spoofing workload, that we
-					// will see at the dest.
-					matcher2 := fmt.Sprintf("IP %s.30445 > %s.30445: UDP", w[1][1].IP, w[0][0].IP)
-					tcpdump.AddMatcher("UDP-30445", regexp.MustCompile(matcher2))
+						// We must eventually see the packet at the target
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30444") }).
+							Should(BeNumerically("==", 1), matcher)
 
-					_, err = w[1][1].RunCmd("/pktgen", w[1][1].IP, w[0][0].IP, "udp",
-						"--port-src", "30445", "--port-dst", "30445")
-					Expect(err).NotTo(HaveOccurred())
+						// Send a spoofed packet from a different pod. Since we hit the
+						// conntrack we would not do the WEP only RPF check.
+						_, err = w[1][1].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444")
+						Expect(err).NotTo(HaveOccurred())
 
-					// Wait for the good packet from the bad workload
-					Eventually(func() int { return tcpdump.MatchCount("UDP-30445") }).
-						Should(BeNumerically("==", 1), matcher2)
+						// Since the packet will get dropped, we would not see it at the dest.
+						// So we send another good packet from the spoofing workload, that we
+						// will see at the dest.
+						matcher2 := fmt.Sprintf("IP %s\\.30445 > %s\\.30445: UDP", w[1][1].IP, w[0][0].IP)
+						tcpdump.AddMatcher("UDP-30445", regexp.MustCompile(matcher2))
 
-					// Check that we have not seen the spoofed packet. If there was not
-					// packet reordering, which in out setup is guaranteed not to happen,
-					// we know that the spoofed packet was dropped.
-					Expect(tcpdump.MatchCount("UDP-30444")).To(BeNumerically("==", 1), matcher)
+						_, err = w[1][1].RunCmd("/pktgen", w[1][1].IP, w[0][0].IP, "udp",
+							"--port-src", "30445", "--port-dst", "30445")
+						Expect(err).NotTo(HaveOccurred())
+
+						// Wait for the good packet from the bad workload
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30445") }).
+							Should(BeNumerically("==", 1), matcher2)
+
+						// Check that we have not seen the spoofed packet. If there was not
+						// packet reordering, which in out setup is guaranteed not to happen,
+						// we know that the spoofed packet was dropped.
+						Expect(tcpdump.MatchCount("UDP-30444")).To(BeNumerically("==", 1), matcher)
+					})
+
+					var eth20, eth30 workload.Workload
+
+					fakeWorkloadIP := "10.65.15.15"
+
+					By("setting up node's fake external ifaces", func() {
+						eth20 = workload.Workload{
+							Name:          "eth20",
+							C:             felixes[1].Container,
+							IP:            "192.168.20.1",
+							Ports:         "57005", // 0xdead
+							Protocol:      testOpts.protocol,
+							InterfaceName: "eth20",
+						}
+
+						eth20.Start()
+						//defer eth20.Stop()
+						felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
+						felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
+						_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+						Expect(err).NotTo(HaveOccurred())
+						_, err = eth20.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.20")
+						Expect(err).NotTo(HaveOccurred())
+
+						eth30 = workload.Workload{
+							Name:          "eth30",
+							C:             felixes[1].Container,
+							IP:            "192.168.30.1",
+							Ports:         "57005", // 0xdead
+							Protocol:      testOpts.protocol,
+							InterfaceName: "eth30",
+						}
+
+						eth30.Start()
+						//defer eth30.Stop()
+						felixes[1].Exec("ip", "route", "add", "192.168.30.0/24", "dev", "eth30")
+						felixes[1].Exec("ip", "addr", "add", "10.0.0.30/32", "dev", "eth30")
+						_, err = eth30.RunCmd("ip", "route", "add", "10.0.0.30/32", "dev", "eth0")
+						Expect(err).NotTo(HaveOccurred())
+						_, err = eth30.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.30")
+						Expect(err).NotTo(HaveOccurred())
+
+						cc.ResetExpectations()
+						cc.ExpectSome(w[1][1], TargetIP(eth20.IP), 0xdead)
+						cc.ExpectSome(w[1][1], TargetIP(eth30.IP), 0xdead)
+						cc.CheckConnectivity()
+					})
+
+					By("testing that external traffic updates the RPF check if routing changes", func() {
+						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth20")
+
+						tcpdump := w[1][1].AttachTCPDump()
+						tcpdump.SetLogEnabled(true)
+						matcher := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w[1][1].IP)
+						tcpdump.AddMatcher("UDP-30446", regexp.MustCompile(matcher))
+						tcpdump.Start()
+						defer tcpdump.Stop()
+
+						_, err := eth20.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+							"--port-src", "30446", "--port-dst", "30446")
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
+							Should(BeNumerically("==", 1), matcher)
+
+						felixes[1].Exec("ip", "route", "del", fakeWorkloadIP+"/32", "dev", "eth20")
+						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth30")
+
+						_, err = eth30.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+							"--port-src", "30446", "--port-dst", "30446")
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
+							Should(BeNumerically("==", 2), matcher)
+
+					})
 				})
 
 				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
