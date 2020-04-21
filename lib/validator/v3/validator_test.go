@@ -610,6 +610,12 @@ func init() {
 		Entry("should reject an invalid BPFDataIfacePattern value '*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "*"}, false),
 		Entry("should accept a valid BPFDataIfacePattern value 'eth.*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "eth.*"}, true),
 
+		Entry("should accept valid route table range", api.FelixConfigurationSpec{RouteTableRange: &api.Range{Min: 1, Max: 250}}, true),
+		Entry("should reject route table range min too small", api.FelixConfigurationSpec{RouteTableRange: &api.Range{Min: 0, Max: 250}}, false),
+		Entry("should reject route table range min negative", api.FelixConfigurationSpec{RouteTableRange: &api.Range{Min: -5, Max: 250}}, false),
+		Entry("should reject route table range max < min", api.FelixConfigurationSpec{RouteTableRange: &api.Range{Min: 50, Max: 45}}, false),
+		Entry("should reject route table range max too large", api.FelixConfigurationSpec{RouteTableRange: &api.Range{Min: 1, Max: 253}}, false),
+
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),
 		Entry("should accept protocol UDP", protocolFromString("UDP"), true),

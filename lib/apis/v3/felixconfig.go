@@ -305,6 +305,15 @@ type FelixConfigurationSpec struct {
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to contruct routes.
 	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
+
+	// Calico programs additional Linux route tables for various purposes.  RouteTableRange
+	// specifies the indices of the route tables that Calico should use.
+	RouteTableRange *Range `json:"routeTableRange,omitempty" validate:"omitempty,routeTableRange"`
+}
+
+type Range struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
 }
 
 // ProtoPort is combination of protocol and port, both must be specified.
