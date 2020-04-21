@@ -21,16 +21,18 @@ var itype = 1
 var intype = 3
 var icode = 4
 var incode = 6
-var ProtocolTCP = numorstring.ProtocolFromString("tcp")
-var ProtocolUDP = numorstring.ProtocolFromString("udp")
+var ProtocolTCPV1 = numorstring.ProtocolFromStringV1("tcp")
+var ProtocolUDPV1 = numorstring.ProtocolFromStringV1("udp")
 var port80 = numorstring.SinglePort(uint16(80))
 var Port443 = numorstring.SinglePort(uint16(443))
+var ProtocolTCPv3 = numorstring.ProtocolFromString("TCP")
+var ProtocolUDPv3 = numorstring.ProtocolFromString("UDP")
 
 var v1TestIngressRule = model.Rule{
 	Action:      "allow",
 	IPVersion:   &v4,
-	Protocol:    &ProtocolTCP,
-	NotProtocol: &ProtocolUDP,
+	Protocol:    &ProtocolTCPV1,
+	NotProtocol: &ProtocolUDPV1,
 	ICMPType:    &itype,
 	ICMPCode:    &icode,
 	NotICMPType: &intype,
@@ -59,9 +61,9 @@ var v1TestIngressRule = model.Rule{
 var v3TestIngressRule = apiv3.Rule{
 	Action:      apiv3.Allow,
 	IPVersion:   &v4,
-	Protocol:    &ProtocolTCP,
+	Protocol:    &ProtocolTCPv3,
 	ICMP:        &apiv3.ICMPFields{Type: &itype, Code: &icode},
-	NotProtocol: &ProtocolUDP,
+	NotProtocol: &ProtocolUDPv3,
 	NotICMP:     &apiv3.ICMPFields{Type: &intype, Code: &incode},
 	Source: apiv3.EntityRule{
 		Nets:        []string{"10.100.10.1"},
