@@ -90,7 +90,7 @@ func Run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 	return w
 }
 
-func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w *Workload, err error) {
+func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string) *Workload {
 	workloadIdx++
 	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
 	interfaceName := conversion.NewConverter().VethNameForWorkload(profile, n)
@@ -99,14 +99,39 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 	}
 	// Build unique workload name and struct.
 	workloadIdx++
-	w = &Workload{
-		C:             c.Container,
-		Name:          n,
-		InterfaceName: interfaceName,
-		IP:            ip,
-		Ports:         ports,
-		Protocol:      protocol,
+
+	wep := api.NewWorkloadEndpoint()
+	wep.Labels = map[string]string{"name": n}
+	wep.Spec.Node = c.Hostname
+	wep.Spec.Orchestrator = "felixfv"
+	wep.Spec.Workload = n
+	wep.Spec.Endpoint = n
+	prefixLen := "32"
+	if strings.Contains(ip, ":") {
+		prefixLen = "128"
 	}
+	wep.Spec.IPNetworks = []string{ip + "/" + prefixLen}
+	wep.Spec.InterfaceName = interfaceName
+	wep.Spec.Profiles = []string{profile}
+
+	return &Workload{
+		C:                c.Container,
+		Name:             n,
+		InterfaceName:    interfaceName,
+		IP:               ip,
+		Ports:            ports,
+		Protocol:         protocol,
+		WorkloadEndpoint: wep,
+	}
+}
+
+func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w *Workload, err error) {
+	w = New(c, name, profile, ip, ports, protocol)
+	return w, w.Start()
+}
+
+func (w *Workload) Start() error {
+	var err error
 
 	// Ensure that the host has the 'test-workload' binary.
 	w.C.EnsureBinary("test-workload")
@@ -114,9 +139,9 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
 	var protoArg string
-	if protocol == "udp" {
+	if w.Protocol == "udp" {
 		protoArg = "--udp"
-	} else if protocol == "sctp" {
+	} else if w.Protocol == "sctp" {
 		protoArg = "--sctp"
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
@@ -129,15 +154,15 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 			w.Ports))
 	w.outPipe, err = w.runCmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("Getting StdoutPipe failed: %v", err)
+		return fmt.Errorf("Getting StdoutPipe failed: %v", err)
 	}
 	w.errPipe, err = w.runCmd.StderrPipe()
 	if err != nil {
-		return nil, fmt.Errorf("Getting StderrPipe failed: %v", err)
+		return fmt.Errorf("Getting StderrPipe failed: %v", err)
 	}
 	err = w.runCmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("runCmd Start failed: %v", err)
+		return fmt.Errorf("runCmd Start failed: %v", err)
 	}
 
 	// Read the workload's namespace path, which it writes to its standard output.
@@ -154,7 +179,7 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 				log.WithError(err).Info("End of workload stderr")
 				return
 			}
-			log.Infof("Workload %s stderr: %s", n, strings.TrimSpace(string(line)))
+			log.Infof("Workload %s stderr: %s", w.Name, strings.TrimSpace(string(line)))
 		}
 	}()
 
@@ -163,7 +188,7 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 		// (Only) if we fail here, wait for the stderr to be output before returning.
 		defer errDone.Wait()
 		if err != nil {
-			return nil, fmt.Errorf("Reading from stdout failed: %v", err)
+			return fmt.Errorf("Reading from stdout failed: %v", err)
 		}
 	}
 
@@ -176,28 +201,13 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 				log.WithError(err).Info("End of workload stdout")
 				return
 			}
-			log.Infof("Workload %s stdout: %s", name, strings.TrimSpace(string(line)))
+			log.Infof("Workload %s stdout: %s", w.Name, strings.TrimSpace(string(line)))
 		}
 	}()
 
 	log.WithField("workload", w).Info("Workload now running")
 
-	wep := api.NewWorkloadEndpoint()
-	wep.Labels = map[string]string{"name": w.Name}
-	wep.Spec.Node = w.C.Hostname
-	wep.Spec.Orchestrator = "felixfv"
-	wep.Spec.Workload = w.Name
-	wep.Spec.Endpoint = w.Name
-	prefixLen := "32"
-	if strings.Contains(w.IP, ":") {
-		prefixLen = "128"
-	}
-	wep.Spec.IPNetworks = []string{w.IP + "/" + prefixLen}
-	wep.Spec.InterfaceName = w.InterfaceName
-	wep.Spec.Profiles = []string{profile}
-	w.WorkloadEndpoint = wep
-
-	return w, nil
+	return nil
 }
 
 func (w *Workload) IPNet() string {

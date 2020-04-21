@@ -601,5 +601,5 @@ func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity
 
 // AttachTCPDump returns tcpdump attached to the container
 func (c *Container) AttachTCPDump(iface string) *tcpdump.TCPDump {
-	return tcpdump.Attach(c.Name, "", iface)
+	return tcpdump.AttachUnavailable(c.Name, c.GetID(), iface)
 }

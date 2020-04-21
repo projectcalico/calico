@@ -193,4 +193,44 @@ static CALI_BPF_INLINE int icmp_v4_ttl_exceeded(struct __sk_buff *skb)
 	return icmp_v4_reply(skb, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
 }
 
+static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
+{
+	switch (type) {
+	case ICMP_DEST_UNREACH:
+	case ICMP_SOURCE_QUENCH:
+	case ICMP_REDIRECT:
+	case ICMP_TIME_EXCEEDED:
+	case ICMP_PARAMETERPROB:
+		return true;
+	}
+
+	return false;
+}
+
+static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct __sk_buff *skb, struct icmphdr **icmp)
+{
+	struct iphdr *ip;
+	long ip_off;
+	int minsz;
+
+	ip_off = skb_iphdr_offset(skb);
+	minsz = ip_off + sizeof(struct iphdr) + sizeof(struct icmphdr) + sizeof(struct iphdr) + 8;
+
+	if (skb_shorter(skb, minsz)) {
+		CALI_DEBUG("ICMP: %d shorter than %d\n", skb_len_dir_access(skb), minsz);
+		return false;
+	}
+
+	ip = skb_iphdr(skb);
+
+	if (ip->ihl != 5) {
+		CALI_INFO("ICMP: ip options unsupported\n");
+		return false;
+	}
+
+	*icmp = (struct icmphdr *)(ip + 1);
+
+	return true;
+}
+
 #endif /* __CALI_ICMP_H__ */
