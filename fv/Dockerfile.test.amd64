@@ -19,10 +19,11 @@
 FROM calico/felix:latest
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
-
-# Install remaining runtime deps required for felix from the global repository
-RUN apt-get update && apt-get install -y \
-    # Felix FV tests require these
+# Install remaining runtime deps required for felix FV tests.
+# Need to install EPEL for hping3.
+RUN rpm -i https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    microdnf install \
+    hping3 \
     wget \
     ethtool \
     tcpdump
