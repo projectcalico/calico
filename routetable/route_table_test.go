@@ -404,6 +404,62 @@ var _ = Describe("RouteTable", func() {
 					Scope:     netlink.SCOPE_LINK,
 				}))
 			})
+			It("Should add multiple routes with a protocol", func() {
+				// Route that needs to be added
+				addLink := dataplane.AddIface(6, "cali6", true, true)
+				rt.SetRoutes(addLink.LinkAttrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.7"), DestMAC: mac1},
+				})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute["254-6-10.0.0.6/32"]).To(Equal(netlink.Route{
+					LinkIndex: addLink.LinkAttrs.Index,
+					Dst:       mustParseCIDR("10.0.0.6/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  deviceRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+				}))
+				Expect(dataplane.RouteKeyToRoute["254-6-10.0.0.7/32"]).To(Equal(netlink.Route{
+					LinkIndex: addLink.LinkAttrs.Index,
+					Dst:       mustParseCIDR("10.0.0.7/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  deviceRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+				}))
+			})
+			It("Should add multiple routes with a protocol after persistent failures", func() {
+				// Route that needs to be added
+				addLink := dataplane.AddIface(6, "cali6", true, true)
+				rt.SetRoutes(addLink.LinkAttrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.7"), DestMAC: mac1},
+				})
+				// Persist failures, this will apply the deltas to the cache but will be out of sync with the dataplane.
+				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd
+				dataplane.PersistFailures = true
+				err := rt.Apply()
+				Expect(err).To(HaveOccurred())
+
+				// Retry - this will now succeed and fix everything.
+				dataplane.FailuresToSimulate = mocknetlink.FailNone
+				dataplane.PersistFailures = false
+				err = rt.Apply()
+				Expect(dataplane.RouteKeyToRoute["254-6-10.0.0.6/32"]).To(Equal(netlink.Route{
+					LinkIndex: addLink.LinkAttrs.Index,
+					Dst:       mustParseCIDR("10.0.0.6/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  deviceRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+				}))
+				Expect(dataplane.RouteKeyToRoute["254-6-10.0.0.7/32"]).To(Equal(netlink.Route{
+					LinkIndex: addLink.LinkAttrs.Index,
+					Dst:       mustParseCIDR("10.0.0.7/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  deviceRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+				}))
+			})
 			It("Should not remove routes with a protocol", func() {
 				// Route that should be left alone
 				noopLink := dataplane.AddIface(4, "cali4", true, true)
