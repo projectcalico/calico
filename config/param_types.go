@@ -515,7 +515,7 @@ type RouteTableRangeParam struct {
 
 func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error) {
 	err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
-	m := regexp.MustCompile("^(\\d+)-(\\d+)$").FindStringSubmatch(raw)
+	m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
 	if m == nil {
 		return
 	}
