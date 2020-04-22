@@ -24,11 +24,15 @@ import (
 
 var _ = Describe("RouteTableManager", func() {
 
-	It("provides mainline function as expected", func() {
+	var r *RouteTableManager
 
+	BeforeEach(func() {
 		By("constructing RouteTableManager")
-		r := NewRouteTableManager(v3.RouteTableRange{Min: 43, Max: 47})
+		r = NewRouteTableManager(v3.RouteTableRange{Min: 43, Max: 47})
 		Expect(r).NotTo(BeNil())
+	})
+
+	It("provides mainline function as expected", func() {
 
 		By("allocating the first index")
 		idx, err := r.GrabIndex()
@@ -51,5 +55,21 @@ var _ = Describe("RouteTableManager", func() {
 		idx, err = r.GrabIndex()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(idx).To(Equal(45))
+	})
+
+	It("GrabAllRemainingIndices works", func() {
+
+		By("allocating the first index")
+		idx, err := r.GrabIndex()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx).To(Equal(43))
+
+		By("grabbing all remaining indices")
+		remaining := r.GrabAllRemainingIndices()
+		Expect(remaining.Len()).To(BeNumerically("==", 4))
+
+		By("allocating when no more indices are available")
+		_, err = r.GrabIndex()
+		Expect(err).To(HaveOccurred())
 	})
 })

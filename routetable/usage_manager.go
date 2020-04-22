@@ -19,6 +19,7 @@ import (
 
 	"github.com/golang-collections/collections/stack"
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type RouteTableManager struct {
@@ -45,4 +46,14 @@ func (r *RouteTableManager) GrabIndex() (int, error) {
 
 func (r *RouteTableManager) ReleaseIndex(index int) {
 	r.tableIndexStack.Push(index)
+}
+
+func (r *RouteTableManager) GrabAllRemainingIndices() set.Set {
+	remainingIndices := set.New()
+	idx, err := r.GrabIndex()
+	for err == nil {
+		remainingIndices.Add(idx)
+		idx, err = r.GrabIndex()
+	}
+	return remainingIndices
 }
