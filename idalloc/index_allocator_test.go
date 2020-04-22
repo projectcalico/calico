@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package routetable_test
+package idalloc_test
 
 import (
-	. "github.com/projectcalico/felix/routetable"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	. "github.com/projectcalico/felix/idalloc"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("RouteTableManager", func() {
+var _ = Describe("IndexAllocator", func() {
 
-	var r *RouteTableManager
+	var r *IndexAllocator
 
 	BeforeEach(func() {
-		By("constructing RouteTableManager")
-		r = NewRouteTableManager(v3.RouteTableRange{Min: 43, Max: 47})
+		By("constructing IndexAllocator")
+		r = NewIndexAllocator(IndexRange{Min: 43, Max: 47})
 		Expect(r).NotTo(BeNil())
 	})
 

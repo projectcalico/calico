@@ -12,43 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package routetable
+package idalloc
 
 import (
 	"errors"
 
 	"github.com/golang-collections/collections/stack"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type RouteTableManager struct {
-	tableIndexStack *stack.Stack
+type IndexRange struct {
+	Min, Max int
 }
 
-func NewRouteTableManager(routeTableRange v3.RouteTableRange) *RouteTableManager {
-	r := &RouteTableManager{
-		tableIndexStack: stack.New(),
+type IndexAllocator struct {
+	indexStack *stack.Stack
+}
+
+func NewIndexAllocator(indexRange IndexRange) *IndexAllocator {
+	r := &IndexAllocator{
+		indexStack: stack.New(),
 	}
 	// Push in reverse order so that the lowest index will come out first.
-	for i := routeTableRange.Max; i >= routeTableRange.Min; i-- {
-		r.tableIndexStack.Push(i)
+	for i := indexRange.Max; i >= indexRange.Min; i-- {
+		r.indexStack.Push(i)
 	}
 	return r
 }
 
-func (r *RouteTableManager) GrabIndex() (int, error) {
-	if r.tableIndexStack.Len() == 0 {
-		return 0, errors.New("No more routing tables available")
+func (r *IndexAllocator) GrabIndex() (int, error) {
+	if r.indexStack.Len() == 0 {
+		return 0, errors.New("No more indices available")
 	}
-	return r.tableIndexStack.Pop().(int), nil
+	return r.indexStack.Pop().(int), nil
 }
 
-func (r *RouteTableManager) ReleaseIndex(index int) {
-	r.tableIndexStack.Push(index)
+func (r *IndexAllocator) ReleaseIndex(index int) {
+	r.indexStack.Push(index)
 }
 
-func (r *RouteTableManager) GrabAllRemainingIndices() set.Set {
+func (r *IndexAllocator) GrabAllRemainingIndices() set.Set {
 	remainingIndices := set.New()
 	idx, err := r.GrabIndex()
 	for err == nil {

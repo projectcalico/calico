@@ -31,9 +31,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/kardianos/osext"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/idalloc"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -528,7 +528,7 @@ func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error)
 		return
 	}
 	if min >= 1 && max >= min && max <= 250 {
-		result = v3.RouteTableRange{Min: min, Max: max}
+		result = idalloc.IndexRange{Min: min, Max: max}
 		err = nil
 	}
 	return

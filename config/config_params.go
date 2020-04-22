@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -245,7 +245,7 @@ type Config struct {
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
 
-	RouteTableRange v3.RouteTableRange `config:"route-table-range;1-250;die-on-fail"`
+	RouteTableRange idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
 
 	// State tracking.
 
