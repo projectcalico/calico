@@ -43,7 +43,7 @@ This tutorial will go through the necessary steps to implement basic monitoring 
 
 
 #### 1. Configure Calico to enable metrics reporting
-##### Felix configuration
+##### **Felix configuration**
 Felix prometheus metrics are **disabled** by default. You have to manually change your Felix configuration (**prometheusMetricsEnabled**) via calicoctl in order to use this feature.
 
 > **Note**: A comprehensive list of configuration values can be [found at this link]({{ site.baseurl }}/reference/felix/configuration).
@@ -57,7 +57,7 @@ You should see an output like below:
 Successfully patched 1 'FelixConfiguration' resource
 ```
 
-###### **Creating a service to expose Felix metrics**
+##### **Creating a service to expose Felix metrics**
 Promethues uses Kubernetes services to dynamically discover endpoints. Here you will create a service named `felix-metrics-svc` which Prometheus will use to discover all the Felix metrics endpoints.
 
 > **Note**: Felix by default uses port 9091 TCP to publish its metrics.
@@ -79,7 +79,7 @@ spec:
 EOF
 ```
 
-##### Typha Configuration
+##### **Typha Configuration**
 > **Note** Typha implementation is optional, if you don't have Typha in your cluster you should skip [Typha configuration]({{ site.baseurl }}/maintenance/monitor-component-metrics#typha-configuration) section.
    {: .alert .alert-danger}
 
@@ -99,7 +99,7 @@ kube-system     calico-typha-horizontal-autoscaler-74f77cd87c-6hx27   1/1     Ru
 ```
 
 You can enable Typha metrics to be consumed by Prometheus via [two ways]({{ site.baseurl }}/reference/typha/configuration).
-###### **Creating a service to expose Typha metrics**
+##### **Creating a service to expose Typha metrics**
 
 > **Note**: Typha uses **port 9091** TCP by default to publish its metrics. However, if {{site.prodname}} is installed using [Amazon yaml file](https://github.com/aws/amazon-vpc-cni-k8s/blob/b001dc6a8fff52926ed9a93ee6c4104f02d365ab/config/v1.5/calico.yaml#L535-L536) this port will be 9093 as its set manually via **TYPHA_PROMETHEUSMETRICSPORT** environment variable.
    {: .alert .alert-warning}
@@ -122,7 +122,7 @@ EOF
 
 #### 2. Cluster preparation
 
-##### Namespace creation
+##### **Namespace creation**
 
 `Namespace` isolates resources in your cluster. Here you will create a Namespace called `calico-monitoring` to hold your monitoring resources.
 > **Note**: Kubernetes namespaces guide can be [found at this link](https://kubernetes.io/docs/tasks/administer-cluster/namespaces/).
@@ -140,7 +140,7 @@ metadata:
 EOF
 ```
 
-#####  Service account creation
+##### **Service account creation**
 
 You need to provide Prometheus a serviceAccount with required permissions to collect information from {{site.prodname}}.
 
@@ -184,7 +184,7 @@ subjects:
 EOF
 ```
 #### 3. Install prometheus
-##### Creating prometheus config file
+##### **Create prometheus config file**
 
 We can configure Prometheus using a ConfigMap to persistently store the desired settings. 
 
@@ -231,7 +231,7 @@ data:
         action: keep
 EOF
 ```
-##### Creating Prometheus pod
+##### **Create Prometheus pod**
 
 Now that you have a `serviceaccount` with permissions to gather metrics and have a valid config file for your Prometheus, it's time to create the Prometheus pod.
 
