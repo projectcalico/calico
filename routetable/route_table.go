@@ -329,7 +329,7 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 			// Entry has either been modified or been created. If modified then we'll keep the delete followed by a
 			// create.
 			log.Debugf("New target for CIDR: %v", target.CIDR)
-			deltas[target.CIDR] = &target
+			deltas[target.CIDR] = safeTargetPointer(target)
 		}
 	}
 
@@ -861,7 +861,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 		// the route.
 		if pendingTarget, ok := pendingDeltaTargets[cidr]; !ok {
 			logCxt.Info("No pending target update, adding back in as an update")
-			pendingDeltaTargets[cidr] = &target
+			pendingDeltaTargets[cidr] = safeTargetPointer(target)
 		} else if pendingTarget == nil {
 			logCxt.Info("Pending target deletion, removing delete update")
 			delete(pendingDeltaTargets, cidr)
@@ -1116,4 +1116,9 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 		return nil, filteredErr
 	}
 	return link.Attrs(), nil
+}
+
+// safeTargetPointer returns a pointer to a Target safely ensuring the pointer is unique.
+func safeTargetPointer(target Target) *Target {
+	return &target
 }
