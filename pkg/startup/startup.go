@@ -790,14 +790,14 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	} else {
 		ipv4BlockSize = DEFAULT_IPV4_POOL_BLOCK_SIZE
 	}
-	validateBlockSize(ipv4BlockSize, 4)
+	validateBlockSize(4, ipv4BlockSize)
 	ipv6BlockSizeEnvVar := os.Getenv("CALICO_IPV6POOL_BLOCK_SIZE")
 	if ipv6BlockSizeEnvVar != "" {
 		ipv6BlockSize = parseBlockSizeEnvironment(ipv6BlockSizeEnvVar)
 	} else {
 		ipv6BlockSize = DEFAULT_IPV6_POOL_BLOCK_SIZE
 	}
-	validateBlockSize(ipv6BlockSize, 6)
+	validateBlockSize(6, ipv6BlockSize)
 	ipv4NodeSelector := os.Getenv("CALICO_IPV4POOL_NODE_SELECTOR")
 	validateNodeSelector(4, ipv4NodeSelector)
 	ipv6NodeSelector := os.Getenv("CALICO_IPV6POOL_NODE_SELECTOR")
