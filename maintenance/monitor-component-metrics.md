@@ -25,7 +25,7 @@ The Prometheus monitoring tool scrapes metrics from instrumented jobs and displa
 
 ### About {{site.prodname}} Felix and Typha components
 
-**Felix** is a daemon that runs on every machine that provides endpoints ({{site.prodname}} nodes). Felix is the brains of {{site.prodname}}. Typha is an optional daemon that extends Felix to scale traffic between {{site.prodname}} nodes and the datastore. **Typha** is used to avoid bottlenecks and performance issues in the datastore when you have over 50 {{site.prodname}} nodes. 
+**Felix** is a daemon that runs on every machine that provides endpoints ({{site.prodname}} nodes). Felix is the brains of {{site.prodname}}. Typha is an optional set of pods that extends Felix to scale traffic between {{site.prodname}} nodes and the datastore. 
 
 You can configure Felix and/or Typha to provide metrics to Prometheus.
 
@@ -36,10 +36,10 @@ In this tutorial we assume that you have completed all other introductory tutori
 ## How to
 
 This tutorial will go through the necessary steps to implement basic monitoring of {{site.prodname}} with Prometheus.
-1. This section will describe how to configure {{site.prodname}} to export its own metrics.
-2. In this section you will isolate the resources and create necessary permissions for future steps.
-3. In this section you will configure Prometheus and create its instance in the cluster.
-4. You will be able to visit Prometheus dashboard and create a simple graph.
+1. Configure {{site.prodname}} to enable the metrics reporting.
+2. Create the namespace and service account that Promethues will need.
+3. Deploy and configure Prometheus.
+4. View the metrics in the Prometheus dashboard and create a simple graph.
 
 
 ### 1. Configure Calico to enable metrics reporting
@@ -58,7 +58,7 @@ Successfully patched 1 'FelixConfiguration' resource
 ```
 
 ##### **Creating a service to expose Felix metrics**
-By using services you will be able to dynamically discover endpoints. Here you will create a service named `felix-metrics-svc` which will receive requests from port 9091 and forward it to port 9090 of pods that are participating in `kube-system` namespace and share `k8s-app: calico-node` label.
+Promethues uses Kubernetes services to dynamically discover endpoints. Here you will create a service named `felix-metrics-svc` which Prometheus will use to discover all the Felix metrics endpoints.
 
 > **Note**: Felix by default uses port 9091 TCP to publish its metrics.
    {: .alert .alert-info}
@@ -83,7 +83,7 @@ EOF
 > **Note** Typha implementation is optional, if you don't have Typha in your cluster you should skip [Typha configuration]({{ site.baseurl }}/maintenance/monitor-component-metrics#typha-configuration) section.
    {: .alert .alert-danger}
 
-If you are uncertain about `Typha` in your cluster execute the following code:
+If you are uncertain whether you have `Typha` in your cluster execute the following code:
 
 ```bash
 kubectl get pods -A | grep typha
@@ -100,8 +100,6 @@ kube-system     calico-typha-horizontal-autoscaler-74f77cd87c-6hx27   1/1     Ru
 
 You can enable Typha metrics to be consumed by Prometheus via [two ways]({{ site.baseurl }}/reference/typha/configuration).
 ##### **Creating a service to expose Typha metrics**
-
-By using services you will be able to dynamically discover endpoints. Here you will create a service named `typha-metrics-svc` which will receive requests from port 9091 and forward it to port 9090 of pods that are participating in `kube-system` namespace and share `k8s-app: calico-typha` label.
 
 > **Note**: Typha uses **port 9091** TCP by default to publish its metrics. However, if {{site.prodname}} is installed using [Amazon yaml file](https://github.com/aws/amazon-vpc-cni-k8s/blob/b001dc6a8fff52926ed9a93ee6c4104f02d365ab/config/v1.5/calico.yaml#L535-L536) this port will be 9093 as its set manually via **TYPHA_PROMETHEUSMETRICSPORT** environment variable.
    {: .alert .alert-warning}
@@ -188,7 +186,7 @@ EOF
 ### 3. Install prometheus
 #### Creating prometheus config file
 
-Since containers are ephemeral, it is best to store configuration file to a permanent storage solution and link it to your pod. 
+We can configure Prometheus using a ConfigMap to persistently store the desired settings. 
 
 > **Note**: A comprehensive guide about configuration file can be [found at this link](https://prometheus.io/docs/prometheus/latest/configuration/configuration/).
    {: .alert .alert-info}
@@ -235,7 +233,7 @@ EOF
 ```
 #### Creating Prometheus pod
 
-Now that you have a `serviceaccount` with permissions to gather metrics and have a valid config file for your Prometheus, it's time to create the pod.
+Now that you have a `serviceaccount` with permissions to gather metrics and have a valid config file for your Prometheus, it's time to create the Prometheus pod.
 
 ```bash
 kubectl apply -f - <<EOF
