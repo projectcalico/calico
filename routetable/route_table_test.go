@@ -445,6 +445,7 @@ var _ = Describe("RouteTable", func() {
 				dataplane.FailuresToSimulate = mocknetlink.FailNone
 				dataplane.PersistFailures = false
 				err = rt.Apply()
+				Expect(err).NotTo(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute["254-6-10.0.0.6/32"]).To(Equal(netlink.Route{
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
