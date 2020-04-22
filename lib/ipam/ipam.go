@@ -527,10 +527,10 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		logCtx.Info("Looking for blocks with free IP addresses")
 		for _, p := range pools {
 			logCtx.Debugf("Assigning from non-affine blocks in pool %s", p.Spec.CIDR)
-			newBlock := randomBlockGenerator(p, host)
+			newBlockCIDR := randomBlockGenerator(p, host)
 			for rem > 0 {
 				// Grab a new random block.
-				blockCIDR := newBlock()
+				blockCIDR := newBlockCIDR()
 				if blockCIDR == nil {
 					logCtx.Warningf("All addresses exhausted in pool %s", p.Spec.CIDR)
 					break
