@@ -874,10 +874,23 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		t.SetRuleInsertions("INPUT", inputRules)
 		t.SetRuleInsertions("FORWARD", fwdRules)
 	}
+
 	for _, t := range d.iptablesNATTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion))
 		t.SetRuleInsertions("POSTROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainNATPostrouting},
+		}})
+	}
+
+	for _, t := range d.iptablesRawTables {
+		rawChains := []*iptables.Chain{{
+			Name: rules.ChainRawPrerouting,
+			Rules: rules.RPFilter(t.IPVersion, 0xca100000, 0xfff00000,
+				d.config.RulesConfig.OpenStackSpecialCasesEnabled, true),
+		}}
+		t.UpdateChains(rawChains)
+		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
+			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
 	}
 }

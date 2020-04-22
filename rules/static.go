@@ -832,7 +832,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	// usually spoof but privileged containers and VMs can.
 	//
 	rules = append(rules,
-		RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled)...)
+		RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, false)...)
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.
@@ -852,7 +852,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 }
 
 // RPFilter returns rules that implement RPF
-func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled bool) []Rule {
+func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled, acceptLocal bool) []Rule {
 	rules := make([]Rule, 0, 2)
 
 	// For OpenStack, allow DHCP v4 packets with source 0.0.0.0.  These must be allowed before
@@ -888,7 +888,7 @@ func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled b
 	}
 
 	rules = append(rules, Rule{
-		Match:  Match().MarkMatchesWithMask(mark, mask).RPFCheckFailed(),
+		Match:  Match().MarkMatchesWithMask(mark, mask).RPFCheckFailed(acceptLocal),
 		Action: DropAction{},
 	})
 

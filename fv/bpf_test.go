@@ -660,14 +660,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					/* XXX temporary will be removed and replaced by enfocing it
-					 * XXX from felix in BPF
-					 */
-					By("setting strict RPF check", func() {
-						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=1")
-						felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.default.rp_filter=1")
-					})
-
 					By("testing that packet sent by another workload is dropped", func() {
 						tcpdump := w[0][0].AttachTCPDump()
 						tcpdump.SetLogEnabled(true)
