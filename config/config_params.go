@@ -27,6 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -243,6 +244,8 @@ type Config struct {
 	// - workloadIPs: use workload endpoints to construct routes.
 	// - calicoIPAM: use IPAM data to contruct routes.
 	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
+
+	RouteTableRange idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
 
 	// State tracking.
 
@@ -626,6 +629,8 @@ func loadParams() {
 				Msg: "invalid string"}
 		case "cidr-list":
 			param = &CIDRListParam{}
+		case "route-table-range":
+			param = &RouteTableRangeParam{}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 		}

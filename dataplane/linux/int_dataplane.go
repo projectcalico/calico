@@ -142,6 +142,7 @@ type Config struct {
 
 	PostInSyncCallback func()
 	HealthAggregator   *health.HealthAggregator
+	RouteTableManager  *idalloc.IndexAllocator
 
 	DebugSimulateDataplaneHangAfter time.Duration
 
