@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 		map[string]ConfigFieldValueToV1ModelValue{
 			"FailsafeInboundHostPorts":  protoPortSliceToString,
 			"FailsafeOutboundHostPorts": protoPortSliceToString,
+			"RouteTableRange":           routeTableRangeToString,
 		},
 	)
 }
@@ -50,4 +51,9 @@ var protoPortSliceToString = func(value interface{}) interface{} {
 		parts[i] = fmt.Sprintf("%s:%d", strings.ToLower(pp.Protocol), pp.Port)
 	}
 	return strings.Join(parts, ",")
+}
+
+var routeTableRangeToString = func(value interface{}) interface{} {
+	r := value.(apiv3.RouteTableRange)
+	return fmt.Sprintf("%d-%d", r.Min, r.Max)
 }

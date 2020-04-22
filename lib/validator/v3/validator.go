@@ -179,6 +179,7 @@ func init() {
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
+	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -1232,6 +1233,22 @@ func validateObjectMetaLabels(structLevel validator.StructLevel, labels map[stri
 func validateRuleMetadata(structLevel validator.StructLevel) {
 	ruleMeta := structLevel.Current().Interface().(api.RuleMetadata)
 	validateObjectMetaAnnotations(structLevel, ruleMeta.Annotations)
+}
+
+func validateRouteTableRange(structLevel validator.StructLevel) {
+	r := structLevel.Current().Interface().(api.RouteTableRange)
+	if r.Min >= 1 && r.Max >= r.Min && r.Max <= 250 {
+		log.Debugf("RouteTableRange is valid: %v", r)
+	} else {
+		log.Warningf("RouteTableRange is invalid: %v", r)
+		structLevel.ReportError(
+			reflect.ValueOf(r),
+			"RouteTableRange",
+			"",
+			reason("must be a range of route table indices within 1..250"),
+			"",
+		)
+	}
 }
 
 // ruleUsesAppLayerPolicy checks if a rule uses application layer policy, and
