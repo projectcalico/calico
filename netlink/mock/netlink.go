@@ -21,17 +21,12 @@ import (
 )
 
 func NewMockNetlinkDataplane() *MockNetlinkDataplane {
-	return &MockNetlinkDataplane{
-		nameToLink:       map[string]*MockLink{},
-		AddedLinks:       set.New(),
-		DeletedLinks:     set.New(),
-		AddedAddrs:       set.New(),
-		DeletedAddrs:     set.New(),
-		RouteKeyToRoute:  map[string]netlink.Route{},
-		AddedRouteKeys:   set.New(),
-		DeletedRouteKeys: set.New(),
-		UpdatedRouteKeys: set.New(),
+	dp := &MockNetlinkDataplane{
+		nameToLink:      map[string]*MockLink{},
+		RouteKeyToRoute: map[string]netlink.Route{},
 	}
+	dp.ResetDeltas()
+	return dp
 }
 
 // Validate the mock netlink adheres to the netlink interface.
@@ -166,6 +161,8 @@ type MockNetlinkDataplane struct {
 	PersistFailures    bool
 	FailuresToSimulate FailFlags
 
+	addedArpEntries set.Set
+
 	mutex                   sync.Mutex
 	deletedConntrackEntries []net.IP
 	ConntrackSleep          time.Duration
@@ -179,6 +176,7 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.AddedRouteKeys = set.New()
 	d.DeletedRouteKeys = set.New()
 	d.UpdatedRouteKeys = set.New()
+	d.addedArpEntries = set.New()
 }
 
 func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running bool) *MockLink {
@@ -531,7 +529,12 @@ func (d *MockNetlinkDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.Hardw
 		"destMac":   destMAC,
 		"ifaceName": ifaceName,
 	}).Info("Mock dataplane: adding ARP entry")
+	d.addedArpEntries.Add(getArpKey(cidr, destMAC, ifaceName))
 	return nil
+}
+
+func (d *MockNetlinkDataplane) HasStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) bool {
+	return d.addedArpEntries.Contains(getArpKey(cidr, destMAC, ifaceName))
 }
 
 func (d *MockNetlinkDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
@@ -576,4 +579,8 @@ func (l *MockLink) Attrs() *netlink.LinkAttrs {
 
 func (l *MockLink) Type() string {
 	return l.LinkType
+}
+
+func getArpKey(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) string {
+	return cidr.String() + ":" + destMAC.String() + ":" + ifaceName
 }

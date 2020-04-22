@@ -287,6 +287,7 @@ var _ = Describe("RouteTable", func() {
 					Scope:     netlink.SCOPE_LINK,
 					Src:       deviceRouteSourceAddress,
 				}))
+				Expect(dataplane.HasStaticArpEntry(ip.MustParseCIDROrIP("10.0.0.6/32"), mac1, "cali6")).To(BeTrue())
 			})
 			It("Should not remove routes with a source address", func() {
 				// Route that should be left alone
@@ -308,6 +309,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.DeletedRouteKeys).ToNot(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
 				Expect(dataplane.UpdatedRouteKeys).ToNot(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
+				Expect(dataplane.HasStaticArpEntry(ip.CIDRFromIPNet(noopRoute.Dst), mac1, noopLink.Attrs().Name)).To(BeTrue())
 			})
 			It("Should update source addresses from nil to a given source", func() {
 				// Route that needs to be updated
@@ -331,6 +333,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.UpdatedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&updateRoute)))
 				Expect(dataplane.RouteKeyToRoute[mocknetlink.KeyForRoute(&updateRoute)]).To(Equal(fixedRoute))
+				Expect(dataplane.HasStaticArpEntry(ip.MustParseCIDROrIP("10.0.0.5/32"), mac1, "cali5")).To(BeTrue())
 			})
 
 			It("Should update source addresses from an old source to a new one", func() {
@@ -356,6 +359,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.UpdatedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&updateRoute)))
 				Expect(dataplane.RouteKeyToRoute[mocknetlink.KeyForRoute(&updateRoute)]).To(Equal(fixedRoute))
+				Expect(dataplane.HasStaticArpEntry(ip.MustParseCIDROrIP("10.0.0.5/32"), mac1, "cali5")).To(BeTrue())
 			})
 		})
 
