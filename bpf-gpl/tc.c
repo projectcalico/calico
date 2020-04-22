@@ -297,7 +297,7 @@ skip_fib:
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,
 		 * which trips up the validator.
 		 */
-		skb->mark = fwd->mark;
+		skb->mark = fwd->mark | CALI_SKB_MARK_SEEN; /* make sure that each pkt has SEEN mark */
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
