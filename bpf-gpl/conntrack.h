@@ -124,16 +124,10 @@ struct ct_ctx {
 	__u8 flags;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ct = {
-	.type = BPF_MAP_TYPE_HASH,
-	.key_size = sizeof(struct calico_ct_key),
-	.value_size = sizeof(struct calico_ct_value),
-	.map_flags = BPF_F_NO_PREALLOC,
-	.max_entries = 512000, // arbitrary
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2, /* global namespace */
-#endif
-};
+CALI_MAP(cali_v4_ct, 2,
+		BPF_MAP_TYPE_HASH,
+		struct calico_ct_key, struct calico_ct_value,
+		512000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k)
 {
@@ -171,7 +165,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 				"from another endpoint, doing lookup\n");
 		bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
 		*k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
-		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&cali_v4_ct, k);
+		struct calico_ct_value *ct_value = cali_v4_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!\n");
 			goto create;
@@ -266,7 +260,7 @@ create:
 		dst_to_src->whitelisted = 1;
 		CALI_DEBUG("CT-ALL Whitelisted dest side\n");
 	}
-	int err = bpf_map_update_elem(&cali_v4_ct, k, &ct_value, 0);
+	int err = cali_v4_ct_update_elem(k, &ct_value, 0);
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
 	return err;
 }
@@ -307,7 +301,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_ctx *ctx,
 
 	dump_ct_key(&k);
 	ct_value.nat_rev_key = *rk;
-	int err = bpf_map_update_elem(&cali_v4_ct, &k, &ct_value, 0);
+	int err = cali_v4_ct_update_elem(&k, &ct_value, 0);
 	CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 	return err;
 }
@@ -412,7 +406,7 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
 	struct calico_ct_key k = ct_make_key(srcLTDest, IPPROTO_TCP, ip_src, ip_dst, sport, dport);
 
-	int rc = bpf_map_delete_elem(&cali_v4_ct, &k);
+	int rc = cali_v4_ct_delete_elem(&k);
 	CALI_DEBUG("CT-TCP delete result: %d\n", rc);
 }
 
@@ -510,7 +504,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
 	struct calico_ct_key k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
 
-	struct calico_ct_value *v = bpf_map_lookup_elem(&cali_v4_ct, &k);
+	struct calico_ct_value *v = cali_v4_ct_lookup_elem(&k);
 	if (!v) {
 		if (ctx->proto != IPPROTO_ICMP) {
 			CALI_CT_DEBUG("Miss.\n");
@@ -526,7 +520,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 
 		srcLTDest = src_lt_dest(ctx->src, ctx->dst, ctx->sport, ctx->dport);
 		k = ct_make_key(srcLTDest, ctx->proto, ctx->src, ctx->dst, ctx->sport, ctx->dport);
-		v = bpf_map_lookup_elem(&cali_v4_ct, &k);
+		v = cali_v4_ct_lookup_elem(&k);
 		if (!v) {
 			CALI_CT_DEBUG("Miss on ICMP related\n");
 			goto out_lookup_fail;
@@ -554,7 +548,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		// This is a forward NAT entry; since we do the bookkeeping on the
 		// reverse entry, we need to do a second lookup.
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.\n");
-		tracking_v = bpf_map_lookup_elem(&cali_v4_ct, &v->nat_rev_key);
+		tracking_v = cali_v4_ct_lookup_elem(&v->nat_rev_key);
 		if (!tracking_v) {
 			CALI_CT_DEBUG("Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;

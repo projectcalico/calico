@@ -398,6 +398,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
+
+				mapPath := conntrack.Map(&bpf.MapContext{}).Path()
+
 				Describe("with map repinning enabled", func() {
 					BeforeEach(func() {
 						options.ExtraEnvVars["FELIX_DebugBPFMapRepinEnabled"] = "true"
@@ -405,14 +408,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					It("should repin maps", func() {
 						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(felixes[0], "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						mapID := mustGetMapIDByPath(felixes[0], mapPath)
 
 						// Now, start a completely independent felix, which will get its own bpffs.  It should re-pin the
 						// maps, picking up the ones from the first felix.
 						extraFelix, _ := infrastructure.StartSingleNodeTopology(options, infra)
 						defer extraFelix.Stop()
 
-						secondMapID := mustGetMapIDByPath(extraFelix, "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						secondMapID := mustGetMapIDByPath(extraFelix, mapPath)
 						Expect(mapID).NotTo(BeNumerically("==", 0))
 						Expect(mapID).To(BeNumerically("==", secondMapID))
 					})
@@ -421,14 +424,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Describe("with map repinning disabled", func() {
 					It("should repin maps", func() {
 						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(felixes[0], "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						mapID := mustGetMapIDByPath(felixes[0], mapPath)
 
 						// Now, start a completely independent felix, which will get its own bpffs.  It should make its own
 						// maps.
 						extraFelix, _ := infrastructure.StartSingleNodeTopology(options, infra)
 						defer extraFelix.Stop()
 
-						secondMapID := mustGetMapIDByPath(extraFelix, "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						secondMapID := mustGetMapIDByPath(extraFelix, mapPath)
 						Expect(mapID).NotTo(BeNumerically("==", 0))
 						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
 					})
