@@ -19,6 +19,7 @@
 
 - {{site.prodname}} must be able to manage `cali*` interfaces on the host. When IPIP is
   enabled (the default), {{site.prodname}} also needs to be able to manage `tunl*` interfaces.
+  When VXLAN is enabled, {{site.prodname}} also needs to be able to manage the `vxlan.calico` interface.
 
   > **Note**: Many Linux distributions, such as most of the above, include NetworkManager.
   > By default, NetworkManager does not allow {{site.prodname}} to manage interfaces.
