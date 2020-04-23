@@ -14,6 +14,18 @@ global_job_config:
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
       - git fetch --unshallow
 
+promotions:
+- name: Auto-update and commit dependency pins
+  pipeline_file: update-pins.yml
+  auto_promote:
+    # Auto-update pins only if the build passed and only for master.
+    when: "result = 'passed' and branch = 'master'"
+- name: Push images
+  pipeline_file: push-images.yml
+  auto_promote:
+    # Push images only if build passed and only for branches, not PRs.
+    when: "result = 'passed' and branch =~ '.+'"
+
 blocks:
 
 # Run the full set of tests. Each job can potentially be run in parallel,
@@ -33,24 +45,3 @@ blocks:
       commands:
       - make k8s-test
 
-# If tests passed, then build and push images.
-# We'll only do this on non-PR builds, where we have credentials to do so.
-- name: "Push images"
-  dependencies: ["Tests"]
-  task:
-    jobs:
-    - name: "make cd"
-      commands:
-      - if [ -z SEMAPHORE_GIT_PR_NUMBER ]; then make image cd; fi
-
-# If tests have passed, then update pins and try to commit them.
-# We'll only do this on scheduled builds, where we have credentials to do so.
-- name: "Commit pin updates"
-  dependencies: ["Tests"]
-  run:
-    when: "branch = 'master'"
-  task:
-    jobs:
-    - name: "make commit-pin-updates"
-      commands:
-      - if [ "$SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE" = "true" ]; then make commit-pin-updates; fi

@@ -1,0 +1,26 @@
+version: v1.0
+name: node
+agent:
+  machine:
+    type: e1-standard-4
+    os_image: ubuntu1804
+execution_time_limit:
+  minutes: 120
+global_job_config:
+  prologue:
+    commands:
+    - checkout
+    # Semaphore is doing shallow clone on a commit without tags.
+    # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
+    - git fetch --unshallow
+
+blocks:
+
+# If tests passed, then build and push images.
+# We'll only do this on non-PR builds, where we have credentials to do so.
+- name: "Push images (non-PR builds only)"
+  task:
+    jobs:
+    - name: "make cd"
+      commands:
+      - if [ -z SEMAPHORE_GIT_PR_NUMBER ]; then make image cd; fi
