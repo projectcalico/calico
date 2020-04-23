@@ -827,6 +827,34 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
+	// Apply strict RPF check to packets from workload interfaces.  This prevents
+	// workloads from spoofing their IPs.  Note: non-privileged containers can't
+	// usually spoof but privileged containers and VMs can.
+	//
+	rules = append(rules,
+		RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, false)...)
+
+	rules = append(rules,
+		// Send non-workload traffic to the untracked policy chains.
+		Rule{Match: Match().MarkClear(markFromWorkload),
+			Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+		// Then, if the packet was marked as allowed, accept it.  Packets also return here
+		// without the mark bit set if the interface wasn't one that we're policing.  We
+		// let those packets fall through to the user's policy.
+		Rule{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
+			Action: AcceptAction{}},
+	)
+
+	return &Chain{
+		Name:  ChainRawPrerouting,
+		Rules: rules,
+	}
+}
+
+// RPFilter returns rules that implement RPF
+func RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled, acceptLocal bool) []Rule {
+	rules := make([]Rule, 0, 2)
+
 	// For OpenStack, allow DHCP v4 packets with source 0.0.0.0.  These must be allowed before
 	// checking against the iptables rp_filter module, because the rp_filter module in some
 	// kernel versions does not allow for DHCP with source 0.0.0.0 (whereas the rp_filter sysctl
@@ -845,7 +873,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	// the current raw table, but don't mark it (with our Accept bit) as automatically accepted
 	// for later tables.  Hence - for the policy level - we still have an OpenStack DHCP special
 	// case again in filterWorkloadToHostChain.
-	if r.OpenStackSpecialCasesEnabled && ipVersion == 4 {
+	if openStackSpecialCasesEnabled && ipVersion == 4 {
 		log.Info("Add OpenStack special-case rule for DHCP with source 0.0.0.0")
 		rules = append(rules,
 			Rule{
@@ -859,30 +887,12 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		)
 	}
 
-	// Apply strict RPF check to packets from workload interfaces.  This prevents
-	// workloads from spoofing their IPs.  Note: non-privileged containers can't
-	// usually spoof but privileged containers and VMs can.
-	//
 	rules = append(rules, Rule{
-		Match:  Match().MarkSingleBitSet(markFromWorkload).RPFCheckFailed(),
+		Match:  Match().MarkMatchesWithMask(mark, mask).RPFCheckFailed(acceptLocal),
 		Action: DropAction{},
 	})
 
-	rules = append(rules,
-		// Send non-workload traffic to the untracked policy chains.
-		Rule{Match: Match().MarkClear(markFromWorkload),
-			Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
-		// Then, if the packet was marked as allowed, accept it.  Packets also return here
-		// without the mark bit set if the interface wasn't one that we're policing.  We
-		// let those packets fall through to the user's policy.
-		Rule{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
-			Action: AcceptAction{}},
-	)
-
-	return &Chain{
-		Name:  ChainRawPrerouting,
-		Rules: rules,
-	}
+	return rules
 }
 
 func (r *DefaultRuleRenderer) allCalicoMarkBits() uint32 {

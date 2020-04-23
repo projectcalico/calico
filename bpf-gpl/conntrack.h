@@ -72,8 +72,11 @@ struct calico_ct_leg {
 	__u32 whitelisted:1;
 
 	__u32 opener:1;
+
+	__u32 ifindex; /* where the packet entered the system from */
 };
 
+#define CT_INVALID_IFINDEX	0
 struct calico_ct_value {
 	__u64 created;
 	__u64 last_seen; // 8
@@ -89,14 +92,14 @@ struct calico_ct_value {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
 			struct calico_ct_leg a_to_b; // 24
-			struct calico_ct_leg b_to_a; // 32
+			struct calico_ct_leg b_to_a; // 36
 
 			// CALI_CT_TYPE_NAT_REV
-			__u32 orig_ip;                     // 40
-			__u16 orig_port;                   // 44
-			__u8 pad1[2];                      // 46
-			__u32 tun_ip;                      // 48
-			__u32 pad3;                        // 52
+			__u32 orig_ip;                     // 44
+			__u16 orig_port;                   // 48
+			__u8 pad1[2];                      // 50
+			__u32 tun_ip;                      // 52
+			__u32 pad3;                        // 56
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -245,6 +248,9 @@ create:
 	src_to_dst->seqno = seq;
 	src_to_dst->syn_seen = syn;
 	src_to_dst->opener = 1;
+	src_to_dst->ifindex = ctx->skb->ingress_ifindex;
+	CALI_DEBUG("NEW src_to_dst->ifindex %d\n", src_to_dst->ifindex);
+	dst_to_src->ifindex = CT_INVALID_IFINDEX;
 
 	int src_wl;
 
@@ -333,12 +339,14 @@ enum calico_ct_result_type {
 };
 
 #define CALI_CT_RELATED		(1 << 8)
+#define CALI_CT_RPF_FAILED	(1 << 9)
 
 #define ct_result_rc(rc)		((rc) & 0xff)
 #define ct_result_flags(rc)		((rc) & ~0xff)
 #define ct_result_set_flag(val, flags)	((val) |= (flags))
 
 #define ct_result_is_related(rc)	((rc) & CALI_CT_RELATED)
+#define ct_result_rpf_failed(rc)	((rc) & CALI_CT_RPF_FAILED)
 
 struct calico_ct_result {
 	__s16 rc;
@@ -580,6 +588,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		} else {
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
+
 		break;
 	case CALI_CT_TYPE_NAT_REV:
 		if (srcLTDest) {
@@ -733,6 +742,29 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			src_to_dst = tmp;
 		}
 		ct_tcp_entry_update(tcp_header, src_to_dst, dst_to_src);
+	}
+
+	if (src_to_dst->ifindex != ctx->skb->ingress_ifindex) {
+		if (CALI_F_TO_HOST) {
+			if (src_to_dst->ifindex == CT_INVALID_IFINDEX) {
+				/* we have not recorded the path for the opposite
+				 * direction yet, do it now.
+				 */
+				src_to_dst->ifindex = ctx->skb->ingress_ifindex;
+				CALI_DEBUG("REV src_to_dst->ifindex %d\n", src_to_dst->ifindex);
+			} else {
+				CALI_CT_DEBUG("RPF expected %d to equal %d\n",
+						src_to_dst->ifindex, ctx->skb->ingress_ifindex);
+				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
+			}
+		} else {
+			/* if the devices do not match, we got here without bypassing the
+			 * host IP stack and RPF check allowed it, so update our records.
+			 */
+			CALI_CT_DEBUG("Updating ifindex from %d to %d\n",
+					src_to_dst->ifindex, ctx->skb->ingress_ifindex);
+			src_to_dst->ifindex = ctx->skb->ingress_ifindex;
+		}
 	}
 
 	CALI_CT_DEBUG("result: %d\n", result.rc);

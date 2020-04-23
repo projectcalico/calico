@@ -238,9 +238,9 @@ ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 
-image-test: image fv/Dockerfile.test.amd64
+image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection
 	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE_NAME):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
- 	  docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) docker-image; \
+ 	  docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) bin; \
 	fi
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE)-test:latest-$(ARCH) $(BUILD_IMAGE)-test:latest
@@ -482,6 +482,12 @@ bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
+
+bin/pktgen: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+	@echo Building pktgen...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/pktgen"'
 
 bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...

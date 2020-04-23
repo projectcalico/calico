@@ -98,12 +98,20 @@ func (m MatchCriteria) OutInterface(ifaceMatch string) MatchCriteria {
 	return append(m, fmt.Sprintf("--out-interface %s", ifaceMatch))
 }
 
-func (m MatchCriteria) RPFCheckPassed() MatchCriteria {
-	return append(m, "-m rpfilter")
+func (m MatchCriteria) RPFCheckPassed(acceptLocal bool) MatchCriteria {
+	ret := append(m, "-m rpfilter")
+	if acceptLocal {
+		ret = append(ret, "--accept-local")
+	}
+	return ret
 }
 
-func (m MatchCriteria) RPFCheckFailed() MatchCriteria {
-	return append(m, "-m rpfilter --invert")
+func (m MatchCriteria) RPFCheckFailed(acceptLocal bool) MatchCriteria {
+	ret := append(m, "-m rpfilter --invert")
+	if acceptLocal {
+		ret = append(ret, "--accept-local")
+	}
+	return ret
 }
 
 func (m MatchCriteria) IPVSConnection() MatchCriteria {
