@@ -65,7 +65,7 @@ func tcpEntry(created time.Duration, lastSeen time.Duration, legA conntrack.Leg,
 	binary.LittleEndian.PutUint64(e[:8], uint64(created))
 	binary.LittleEndian.PutUint64(e[8:16], uint64(lastSeen))
 	binary.LittleEndian.PutUint32(e[28:32], legA.Flags())
-	binary.LittleEndian.PutUint32(e[36:40], legB.Flags())
+	binary.LittleEndian.PutUint32(e[40:44], legB.Flags())
 	return e
 }
 

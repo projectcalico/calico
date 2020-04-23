@@ -47,6 +47,7 @@ import (
 	options2 "github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
 	. "github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/containers"
@@ -637,7 +638,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity()
 				})
 
-				It("should not be able to spoof workloads IP by another workload", func() {
+				It("should not be able to spoof IP", func() {
 					if testOpts.protocol != "udp" {
 						return
 					}
@@ -703,12 +704,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(tcpdump.MatchCount("UDP-30444")).To(BeNumerically("==", 1), matcher)
 					})
 
-					var eth20, eth30 workload.Workload
+					var eth20, eth30 *workload.Workload
+
+					defer func() {
+						if eth20 != nil {
+							eth20.Stop()
+						}
+						if eth30 != nil {
+							eth30.Stop()
+						}
+					}()
 
 					fakeWorkloadIP := "10.65.15.15"
 
 					By("setting up node's fake external ifaces", func() {
-						eth20 = workload.Workload{
+						// We name the ifaces ethXY since such ifaces are
+						// treated by felix as external to the node
+						//
+						// Using a test-workload creates the namespaces and the
+						// interfaces to emulate the host NICs
+
+						eth20 = &workload.Workload{
 							Name:          "eth20",
 							C:             felixes[1].Container,
 							IP:            "192.168.20.1",
@@ -716,17 +732,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							Protocol:      testOpts.protocol,
 							InterfaceName: "eth20",
 						}
-
 						eth20.Start()
-						//defer eth20.Stop()
+
+						// assign address to eth20 and add route to the .20 network
 						felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
 						felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
 						_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
 						Expect(err).NotTo(HaveOccurred())
+						// Add a route to the test workload to the fake external
+						// client emulated by the test-workload
 						_, err = eth20.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.20")
 						Expect(err).NotTo(HaveOccurred())
 
-						eth30 = workload.Workload{
+						eth30 = &workload.Workload{
 							Name:          "eth30",
 							C:             felixes[1].Container,
 							IP:            "192.168.30.1",
@@ -734,16 +752,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							Protocol:      testOpts.protocol,
 							InterfaceName: "eth30",
 						}
-
 						eth30.Start()
-						//defer eth30.Stop()
+
+						// assign address to eth30 and add route to the .30 network
 						felixes[1].Exec("ip", "route", "add", "192.168.30.0/24", "dev", "eth30")
 						felixes[1].Exec("ip", "addr", "add", "10.0.0.30/32", "dev", "eth30")
 						_, err = eth30.RunCmd("ip", "route", "add", "10.0.0.30/32", "dev", "eth0")
 						Expect(err).NotTo(HaveOccurred())
+						// Add a route to the test workload to the fake external
+						// client emulated by the test-workload
 						_, err = eth30.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.30")
 						Expect(err).NotTo(HaveOccurred())
 
+						// Make sure that networking with the .20 and .30 networks works
 						cc.ResetExpectations()
 						cc.ExpectSome(w[1][1], TargetIP(eth20.IP), 0xdead)
 						cc.ExpectSome(w[1][1], TargetIP(eth30.IP), 0xdead)
@@ -751,6 +772,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					By("testing that external traffic updates the RPF check if routing changes", func() {
+						// set the route to the fake workload to .20 network
 						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth20")
 
 						tcpdump := w[1][1].AttachTCPDump()
@@ -764,9 +786,24 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							"--port-src", "30446", "--port-dst", "30446")
 						Expect(err).NotTo(HaveOccurred())
 
+						// Expect to receive the packet from the .20 as the routing is correct
 						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
 							Should(BeNumerically("==", 1), matcher)
 
+						ctBefore := dumpCTMap(felixes[1])
+
+						k := conntrack.NewKey(17, net.ParseIP(w[1][1].IP).To4(), 30446,
+							net.ParseIP(fakeWorkloadIP).To4(), 30446)
+						Expect(ctBefore).To(HaveKey(k))
+
+						// XXX Since the same code is used to do the drop of spoofed
+						// packet between pods, we do not repeat it here as it is not 100%
+						// bulletproof.
+						//
+						// We should perhaps compare the iptables counter and see if the
+						// packet was dropped by the RPF check.
+
+						// Change the routing to be from the .30
 						felixes[1].Exec("ip", "route", "del", fakeWorkloadIP+"/32", "dev", "eth20")
 						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth30")
 
@@ -774,9 +811,20 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							"--port-src", "30446", "--port-dst", "30446")
 						Expect(err).NotTo(HaveOccurred())
 
+						// Expect the packet from the .30 to make it through as RPF will
+						// allow it and we will update the expected interface
 						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
 							Should(BeNumerically("==", 2), matcher)
 
+						ctAfter := dumpCTMap(felixes[1])
+						Expect(ctAfter).To(HaveKey(k))
+
+						// Ifindex must have changed
+						// B2A because of IPA > IPB - deterministic
+						Expect(ctBefore[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
+						Expect(ctAfter[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
+						Expect(ctBefore[k].Data().B2A.Ifindex).
+							NotTo(BeNumerically("==", ctAfter[k].Data().B2A.Ifindex))
 					})
 				})
 
@@ -1549,6 +1597,13 @@ func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
 	bm := nat.AffinityMap(&bpf.MapContext{})
 	m := make(nat.AffinityMapMem)
 	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
+	return m
+}
+
+func dumpCTMap(felix *infrastructure.Felix) conntrack.MapMem {
+	bm := conntrack.Map(&bpf.MapContext{})
+	m := make(conntrack.MapMem)
+	dumpBPFMap(felix, bm, conntrack.MapMemIter(m))
 	return m
 }
 

@@ -219,13 +219,13 @@ func (data EntryData) FINsSeenDSR() bool {
 }
 
 func (e Value) Data() EntryData {
-	ip := e[40:44]
-	tip := e[48:52]
+	ip := e[48:52]
+	tip := e[56:60]
 	return EntryData{
-		A2B:      readConntrackLeg(e[24:32]),
-		B2A:      readConntrackLeg(e[32:40]),
+		A2B:      readConntrackLeg(e[24:36]),
+		B2A:      readConntrackLeg(e[36:48]),
 		OrigDst:  net.IPv4(ip[0], ip[1], ip[2], ip[3]),
-		OrigPort: binary.LittleEndian.Uint16(e[44:46]),
+		OrigPort: binary.LittleEndian.Uint16(e[52:54]),
 		TunIP:    net.IPv4(tip[0], tip[1], tip[2], tip[3]),
 	}
 }
@@ -323,4 +323,20 @@ func LoadMapMem(m bpf.Map) (MapMem, error) {
 	})
 
 	return ret, err
+}
+
+// MapMemIter returns bpf.MapIter that loads the provided MapMem
+func MapMemIter(m MapMem) bpf.MapIter {
+	ks := len(Key{})
+	vs := len(Value{})
+
+	return func(k, v []byte) {
+		var key Key
+		copy(key[:ks], k[:ks])
+
+		var val Value
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+	}
 }
