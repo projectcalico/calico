@@ -22,5 +22,4 @@ blocks:
     jobs:
     - name: "make commit-pin-updates"
       commands:
-      # To save cycles, only run if triggered manually or by the nightly build.
-      - if ! $SEMAPHORE_WORKFLOW_TRIGGERED_BY_HOOK; then make commit-pin-updates; fi
+      - make commit-pin-updates
