@@ -55,7 +55,7 @@ kns.kube-system      kns.kube-system
 We recommend setting an alias as follows.
 
 ```
-alias calicoctl="kubectl exec -i -n kube-system calicoctl /calicoctl -- "
+alias calicoctl="kubectl exec -i -n kube-system calicoctl -- /calicoctl "
 ```
 
    > **Note**: In order to use the `calicoctl` alias
