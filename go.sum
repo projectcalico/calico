@@ -191,6 +191,7 @@ github.com/gogo/protobuf v1.1.1/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7a
 github.com/gogo/protobuf v1.2.1/go.mod h1:hp+jE20tsWTFYpLwKvXlhS1hjn+gTNwPg2I6zVXpSg4=
 github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d h1:3PaI8p3seN09VjbTYC/QWlUZdZ1qS1zGjy7LH2Wt07I=
 github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d/go.mod h1:SlYgWuQ5SjCEi6WLHjHCa1yvBfUnHcTbrrZtXPKa29o=
+github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3/go.mod h1:nPpo7qLxd6XL3hWJG/O60sR8ZKfMCiIoNap5GvD12KU=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b h1:VKtxabqXZkF25pY9ekfRL6a582T4P37/31XEstQ5p58=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903/go.mod h1:cIg4eruTrX1D+g88fzRXU5OdNfaM+9IcxsU14FzY7Hc=
@@ -390,6 +391,8 @@ github.com/projectcalico/felix v0.0.0-20200417134406-330676be56ec h1:cCBVg1eqn6G
 github.com/projectcalico/felix v0.0.0-20200417134406-330676be56ec/go.mod h1:3k8+i2TmWsErJyKABaq2sjMxg5PaIMtY7Ossvvfm79M=
 github.com/projectcalico/felix v0.0.0-20200422145100-9c55444b5469 h1:eyLvysRToSppK3G8Grn9XueP5dTfhhi9lYZGHb3idMA=
 github.com/projectcalico/felix v0.0.0-20200422145100-9c55444b5469/go.mod h1:beGDhzXMDqCIYRNRjbwrGS2v4bJuhbm7aWnm+CqWgVM=
+github.com/projectcalico/felix v0.0.0-20200422215452-01dded1efca6 h1:6Rr+Zl+bVJCbpj1mlZS7gu6Nxc1RZPFfjSl8E7q0wyM=
+github.com/projectcalico/felix v0.0.0-20200422215452-01dded1efca6/go.mod h1:K2GnIrw49Nf9gjbeoxvtqb29A5uHEiqAvaWEabBMKso=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
@@ -402,6 +405,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200421015013-07b4e117bf26 h1:Bo
 github.com/projectcalico/libcalico-go v1.7.2-0.20200421015013-07b4e117bf26/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200422105817-ed83b788c514 h1:5j5p8l0Wduth0srxethTBGdU0H+wC48qRIZO8B2xluQ=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200422105817-ed83b788c514/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200422172230-8da3b2ff043f h1:bWqKC5c5DftMgDDi0G3x3GcvJEWhJdDZ8m2UdGKTxVY=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200422172230-8da3b2ff043f/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271/go.mod h1:uPOJFzjHy8fnFn4BcVk87fCKsuwafYnCtaz28Wb7yYk=
