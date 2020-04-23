@@ -89,6 +89,10 @@ Edit `calico-config ConfigMap` to set the MTU tunnel values in FelixConfiguratio
 veth_mtu: "1440" 
 ```
 
+#### eBPF mode
+
+Implementation of NodePorts uses VXLAN tunnel to hand off packets from one node to another, therefore VXLAN MTU setting is used to set the MTUs of workloads (veths) and should be “physical network MTU size minus 50” (see above).
+
 #### View current tunnel MTU values
 
 To view the current tunnel size, use the following command: 
