@@ -60,6 +60,15 @@ class MultiHostMainline(TestBase):
         # Get the original profiles:
         output = host1.calicoctl("get profile -o yaml")
         self.original_profiles = yaml.safe_load(output)['items']
+
+        # Filter out the default-allow profile
+        temp = []
+        for profile in self.original_profiles:
+            if profile['metadata']['name'] != "projectcalico-default-allow":
+                temp.append(profile)
+                    
+        self.original_profiles = temp   
+
         # Make a copy of the profiles to mess about with.
         self.new_profiles = copy.deepcopy(self.original_profiles)
 
