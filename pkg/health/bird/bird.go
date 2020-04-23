@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -37,19 +38,16 @@ func GRInProgress(ipv string) (bool, error) {
 	}
 
 	// Try connecting to the BIRD socket in `/var/run/calico/` first to get the data
-	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
-	if err != nil {
-		// If that fails and BIRD socket file exists, return the error message
-		if !isNotExistError(err) {
-			return false, fmt.Errorf("Error querying BIRD: connect to BIRDv%s socket: %v", ipv, err)
-		}
+	birdSocket := fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix)
+	if !socketFileExists(birdSocket) {
 		// If that fails, try connecting to BIRD socket in `/var/run/bird` (which is the
 		// default socket location for BIRD install) for non-containerized installs
-		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
-		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
-		if err != nil {
-			return false, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
-		}
+		log.Debugln("Failed to connect to BIRD socket in /var/run/calico file not exists, trying /var/run/bird")
+		birdSocket = fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix)
+	}
+	c, err := net.Dial("unix", birdSocket)
+	if err != nil {
+		return false, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
 	}
 	defer c.Close() // nolint: errcheck
 
@@ -116,8 +114,12 @@ func GRInProgress(ipv string) (bool, error) {
 	return false, scanner.Err()
 }
 
-func isNotExistError(err error) bool {
-	return strings.HasSuffix(err.Error(), "no such file or directory")
+func socketFileExists(file string) bool {
+	stat, err := os.Stat(file)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !stat.IsDir()
 }
 
 // bgpPeer is a structure containing details about a BGP peer.
@@ -138,19 +140,16 @@ func GetPeers(ipv string) ([]bgpPeer, error) {
 	}
 
 	// Try connecting to the BIRD socket in `/var/run/calico/` first to get the data
-	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
-	if err != nil {
-		// If that fails and BIRD socket file exists, return the error message
-		if !isNotExistError(err) {
-			return nil, fmt.Errorf("Error querying BIRD: connect to BIRDv%s socket: %v", ipv, err)
-		}
+	birdSocket := fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix)
+	if !socketFileExists(birdSocket) {
 		// If that fails, try connecting to BIRD socket in `/var/run/bird` (which is the
 		// default socket location for BIRD install) for non-containerized installs
-		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
-		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
-		if err != nil {
-			return nil, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
-		}
+		log.Debugln("Failed to connect to BIRD socket in /var/run/calico file not exists, trying /var/run/bird")
+		birdSocket = fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix)
+	}
+	c, err := net.Dial("unix", birdSocket)
+	if err != nil {
+		return nil, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
 	}
 	defer c.Close() // nolint: errcheck
 
