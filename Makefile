@@ -231,17 +231,13 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
-	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE_NAME):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
- 	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
-	fi
+	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 
 image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection
-	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE_NAME):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
- 	  docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) bin; \
-	fi
+	docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) bin;
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE)-test:latest-$(ARCH) $(BUILD_IMAGE)-test:latest
 endif
