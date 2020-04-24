@@ -120,7 +120,7 @@
 /getting-started/mesos/tutorials/unified /archive/v2.1/getting-started/mesos/tutorials/unified 301
 /getting-started/mesos/upgrade /archive/v1.6/getting-started/mesos/upgrade 301
 /getting-started/mesos/vagrant/ /archive/v2.3/getting-started/mesos/vagrant/ 301
-/getting-started/openshift/dedicated-etcd  301
+/getting-started/openshift/dedicated-etcd  /archive/getting-started/openshift 301
 /getting-started/openstack/connectivity /networking/openstack/connectivity 301
 /getting-started/openstack/installation/chef /getting-started/openstack/installation/ 301
 /getting-started/openstack/installation/fuel /getting-started/openstack/installation/ 301
@@ -166,7 +166,7 @@
 /reference/advanced/etcd-rbac/kubernetes-advanced /v3.5/reference/advanced/etcd-rbac/kubernetes 301
 /reference/advanced/etcd-rbac/users-and-roles /reference/etcd-rbac/users-and-roles 301
 /reference/advanced/etcd-secure /security/comms/crypto-auth 301
-/reference/advanced/overlap-ips link to 1.6 archived page (no useful equivalent of this in newer docs) 301
+/reference/advanced/overlap-ips /archive/v1.6/reference/advanced/overlap-ips 301
 /reference/architecture/components /reference/architecture/overview 301
 /reference/calicoctl/bgp /reference/resources/bgppeer 301
 /reference/calicoctl/checksystem /reference/calicoctl/node/checksystem 301
