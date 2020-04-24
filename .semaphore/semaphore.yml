@@ -17,9 +17,7 @@ global_job_config:
 promotions:
 - name: Auto-update and commit dependency pins
   pipeline_file: update-pins.yml
-  auto_promote:
-    # Auto-update pins only if the build passed and only for master.
-    when: "result = 'passed' and branch = 'master'"
+  # No auto-promotion, update-pins.yml gets run directly by the scheduler.
 - name: Push images
   pipeline_file: push-images.yml
   auto_promote:
