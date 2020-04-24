@@ -24,7 +24,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200423215051-ff990268245e
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
-	github.com/projectcalico/typha v0.7.3-0.20200417143203-303330aea7f1
+	github.com/projectcalico/typha v0.7.3-0.20200424145113-15dafd25b67b
 	github.com/prometheus/client_golang v0.9.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -68,5 +68,3 @@ replace (
 	k8s.io/metrics => k8s.io/metrics v0.0.0-20191016113814-3b1a734dba6e
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20191016112829-06bb3c9d77c9
 )
-
-replace github.com/projectcalico/libcalico-go => github.com/neiljerram/libcalico-go v1.0.0-beta-rc3.0.20200421140851-c5e5c36b1d56
