@@ -66,7 +66,7 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, uint8_t pro
 		 */
 	};
 
-	if (bpf_map_update_elem(&cali_v4_srmsg, &key, &val, 0)) {
+	if (cali_v4_srmsg_update_elem(&key, &val, 0)) {
 		/* if this happens things are really bad! report */
 		CALI_INFO("Failed to update map\n");
 		goto out;
@@ -148,7 +148,7 @@ int cali_ctlb_recvmsg_v4(struct bpf_sock_addr *ctx)
 		.cookie	= cookie,
 	};
 
-	struct sendrecv4_val *revnat = bpf_map_lookup_elem(&cali_v4_srmsg, &key);
+	struct sendrecv4_val *revnat = cali_v4_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
 		CALI_DEBUG("revnat miss for %x:%d\n",

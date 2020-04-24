@@ -68,7 +68,7 @@ v4:
 		.cookie	= bpf_get_socket_cookie(ctx),
 	};
 
-	struct sendrecv4_val *revnat = bpf_map_lookup_elem(&cali_v4_srmsg, &key);
+	struct sendrecv4_val *revnat = cali_v4_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
 		CALI_DEBUG("revnat miss for %x:%d\n",

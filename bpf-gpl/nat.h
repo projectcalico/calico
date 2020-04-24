@@ -61,16 +61,10 @@ struct calico_nat_v4_value {
 	uint32_t affinity_timeo;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_fe = {
-	.type = BPF_MAP_TYPE_HASH,
-	.key_size = sizeof(struct calico_nat_v4_key),
-	.value_size = sizeof(struct calico_nat_v4_value),
-	.map_flags = BPF_F_NO_PREALLOC,
-	.max_entries = 511000, // arbitrary
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2 /* global namespace */,
-#endif
-};
+CALI_MAP_V1(cali_v4_nat_fe,
+		BPF_MAP_TYPE_HASH,
+		struct calico_nat_v4_key, struct calico_nat_v4_value,
+		511000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 // Map: NAT level two.  ID and ordinal -> new dest and port.
 
@@ -85,16 +79,10 @@ struct calico_nat_dest {
 	uint8_t pad[2];
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_be = {
-	.type = BPF_MAP_TYPE_HASH,
-	.key_size = sizeof(struct calico_nat_secondary_v4_key),
-	.value_size = sizeof(struct calico_nat_dest),
-	.map_flags = BPF_F_NO_PREALLOC,
-	.max_entries = 510000, // arbitrary
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2 /* global namespace */,
-#endif
-};
+CALI_MAP_V1(cali_v4_nat_be,
+		BPF_MAP_TYPE_HASH,
+		struct calico_nat_secondary_v4_key, struct calico_nat_dest,
+		510000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 struct calico_nat_v4_affinity_key {
 	struct calico_nat_v4_key nat_key;
@@ -107,15 +95,10 @@ struct calico_nat_v4_affinity_val {
 	uint64_t ts;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_aff = {
-	.type = BPF_MAP_TYPE_LRU_HASH,
-	.key_size = sizeof(struct calico_nat_v4_affinity_key),
-	.value_size = sizeof(struct calico_nat_v4_affinity_val),
-	.max_entries = 510000, // arbitrary
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2 /* global namespace */,
-#endif
-};
+CALI_MAP_V1(cali_v4_nat_aff,
+		BPF_MAP_TYPE_LRU_HASH,
+		struct calico_nat_v4_affinity_key, struct calico_nat_v4_affinity_val,
+		510000, 0, MAP_PIN_GLOBAL)
 
 /* fast hash by Bob Jenkins suitable for modulo
  * http://burtleburtle.net/bob/hash/integer.html
@@ -153,7 +136,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		return NULL;
 	}
 
-	nat_lv1_val = bpf_map_lookup_elem(&cali_v4_nat_fe, &nat_key);
+	nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
 	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
 		(int)be32_to_host(nat_key.addr), (int)dport,
 		(int)(nat_key.protocol));
@@ -186,7 +169,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		}
 
 		nat_key.addr = 0xffffffff;
-		nat_lv1_val = bpf_map_lookup_elem(&cali_v4_nat_fe, &nat_key);
+		nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
 		if (!nat_lv1_val) {
 			CALI_DEBUG("NAT: nodeport miss\n");
 			return NULL;
@@ -215,7 +198,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 	struct calico_nat_v4_affinity_val *affval;
 
 	now = bpf_ktime_get_ns();
-	affval = bpf_map_lookup_elem(&cali_v4_nat_aff, &affkey);
+	affval = cali_v4_nat_aff_lookup_elem(&affkey);
 	if (affval && now - affval->ts <= nat_lv1_val->affinity_timeo * 1000000000ULL) {
 		CALI_DEBUG("NAT: using affinity backend %x:%d\n",
 				be32_to_host(affval->nat_dest.addr), affval->nat_dest.port);
@@ -247,7 +230,7 @@ skip_affinity:
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
 
-	if (!(nat_lv2_val = bpf_map_lookup_elem(&cali_v4_nat_be, &nat_lv2_key))) {
+	if (!(nat_lv2_val = cali_v4_nat_be_lookup_elem(&nat_lv2_key))) {
 		CALI_DEBUG("NAT: backend miss\n");
 		return NULL;
 	}
@@ -262,7 +245,7 @@ skip_affinity:
 		};
 
 		CALI_DEBUG("NAT: updating affinity for client %x\n", be32_to_host(ip_src));
-		if ((err = bpf_map_update_elem(&cali_v4_nat_aff, &affkey, &val, BPF_ANY))) {
+		if ((err = cali_v4_nat_aff_update_elem(&affkey, &val, BPF_ANY))) {
 			CALI_INFO("NAT: failed to update affinity table: %d\n", err);
 			/* we do carry on, we have a good nat_lv2_val */
 		}

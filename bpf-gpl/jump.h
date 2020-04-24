@@ -43,15 +43,11 @@ enum cali_state_flags {
 	CALI_ST_NAT_OUTGOING = 1,
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_state = {
-	.type           = BPF_MAP_TYPE_PERCPU_ARRAY,
-	.key_size       = sizeof(uint32_t),
-	.value_size     = sizeof(struct cali_tc_state),
-	.max_entries    = 1,
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2 /* global namespace */,
-#endif
-};
+CALI_MAP_V1(cali_v4_state,
+		BPF_MAP_TYPE_PERCPU_ARRAY,
+		uint32_t, struct cali_tc_state,
+		1, 0, MAP_PIN_GLOBAL)
+
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
