@@ -13,6 +13,9 @@ global_job_config:
     # Semaphore is doing shallow clone on a commit without tags.
     # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
     - git fetch --unshallow
+  secrets:
+    - name: quay-robot-semaphore_v2
+
 
 blocks:
 
@@ -23,4 +26,4 @@ blocks:
     jobs:
     - name: "make cd"
       commands:
-      - if [ -z SEMAPHORE_GIT_PR_NUMBER ]; then make image cd; fi
+      - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image cd; fi
