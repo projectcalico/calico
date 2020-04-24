@@ -8,6 +8,11 @@
   CURRENT_RELEASE = "v3.13"
 
 [[headers]]
+  for = "/archive/*"
+  [headers.values]
+    foo = "bar"
+
+[[headers]]
   for = "/*.yaml"
   [headers.values]
     content-type = "text/yaml"
