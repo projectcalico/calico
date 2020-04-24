@@ -429,6 +429,10 @@ var _ = Describe("FV tests against a real etcd", func() {
 			[]EnvItem{{"CALICO_IPV4POOL_NODE_SELECTOR", "all(nothing)"}}),
 		Entry("bad IPv6 node selector",
 			[]EnvItem{{"CALICO_IPV6POOL_NODE_SELECTOR", "all(nothing)"}}),
+		Entry("CALICO_IPV4POOL_BLOCK_SIZE set too small (19)", []EnvItem{{"CALICO_IPV4POOL_BLOCK_SIZE", "19"}}),
+		Entry("CALICO_IPV4POOL_BLOCK_SIZE set too large (33)", []EnvItem{{"CALICO_IPV4POOL_BLOCK_SIZE", "33"}}),
+		Entry("CALICO_IPV6POOL_BLOCK_SIZE set too small (115)", []EnvItem{{"CALICO_IPV6POOL_BLOCK_SIZE", "115"}}),
+		Entry("CALICO_IPV6POOL_BLOCK_SIZE set too large (129)", []EnvItem{{"CALICO_IPV6POOL_BLOCK_SIZE", "129"}}),
 	)
 
 	Describe("Test we properly wait for the etcd datastore", func() {

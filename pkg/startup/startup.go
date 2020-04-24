@@ -579,6 +579,9 @@ func validateBlockSize(version int, blockSize int) {
 			log.Errorf("Invalid blocksize %d for version %d", blockSize, version)
 			terminate()
 		}
+	} else {
+		log.Errorf("Invalid ip version specified (%d) when validating blocksize", version)
+		terminate()
 	}
 }
 
