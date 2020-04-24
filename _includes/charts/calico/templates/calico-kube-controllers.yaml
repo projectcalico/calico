@@ -1,4 +1,3 @@
-{{- if or (eq .Values.datastore "etcd") (eq .Values.network "calico") }}
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: apps/v1
 kind: Deployment
@@ -88,7 +87,7 @@ spec:
           secret:
             secretName: calico-etcd-secrets
             defaultMode: 0400
-{{- else if eq .Values.network "calico" }}
+{{- else }}
       containers:
         - name: calico-kube-controllers
           image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
@@ -112,4 +111,3 @@ kind: ServiceAccount
 metadata:
   name: calico-kube-controllers
   namespace: kube-system
-{{- end -}}
