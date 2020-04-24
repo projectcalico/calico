@@ -394,6 +394,8 @@ github.com/projectcalico/felix v0.0.0-20200422145100-9c55444b5469 h1:eyLvysRToSp
 github.com/projectcalico/felix v0.0.0-20200422145100-9c55444b5469/go.mod h1:beGDhzXMDqCIYRNRjbwrGS2v4bJuhbm7aWnm+CqWgVM=
 github.com/projectcalico/felix v0.0.0-20200422215452-01dded1efca6 h1:6Rr+Zl+bVJCbpj1mlZS7gu6Nxc1RZPFfjSl8E7q0wyM=
 github.com/projectcalico/felix v0.0.0-20200422215452-01dded1efca6/go.mod h1:K2GnIrw49Nf9gjbeoxvtqb29A5uHEiqAvaWEabBMKso=
+github.com/projectcalico/felix v0.0.0-20200423100030-de927b0ea4ef h1:KSTF+JLvy//UIAQL656FqIg+Dbuz11f7wQdcOHwPaxQ=
+github.com/projectcalico/felix v0.0.0-20200423100030-de927b0ea4ef/go.mod h1:eCE40KLkfs2mcyNjayfwAWut1dsI4uKgySE7uLgMmBY=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
@@ -408,6 +410,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200422105817-ed83b788c514 h1:5j
 github.com/projectcalico/libcalico-go v1.7.2-0.20200422105817-ed83b788c514/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200422172230-8da3b2ff043f h1:bWqKC5c5DftMgDDi0G3x3GcvJEWhJdDZ8m2UdGKTxVY=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200422172230-8da3b2ff043f/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200423215051-ff990268245e h1:Y7JhMxjJrGFS8rMYPQwu6ZA3Kca2O9tTYkjP5D0QyeU=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200423215051-ff990268245e/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271/go.mod h1:uPOJFzjHy8fnFn4BcVk87fCKsuwafYnCtaz28Wb7yYk=
