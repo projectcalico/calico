@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,9 +29,10 @@ func IPAM(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl ipam <command> [<args>...]
 
-    release      Release a Calico assigned IP address.
-    show         Show details of a Calico assigned IP address,
-                 or of overall IP usage.
+    release          Release a Calico assigned IP address.
+    show             Show details of a Calico configuration,
+                     assigned IP address, or of overall IP usage.
+    configure        Configure IPAM        
 
 Options:
   -h --help      Show this screen.
@@ -57,6 +58,8 @@ Description:
 		return ipam.Release(args)
 	case "show":
 		return ipam.Show(args)
+	case "configure":
+		return ipam.Configure(args)
 	default:
 		fmt.Println(doc)
 	}
