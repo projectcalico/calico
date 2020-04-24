@@ -46,7 +46,6 @@ func newBlock(cidr cnet.IPNet) allocationBlock {
 	b := model.AllocationBlock{}
 	b.Allocations = make([]*int, numAddresses)
 	b.Unallocated = make([]int, numAddresses)
-	b.StrictAffinity = false
 	b.CIDR = cidr
 
 	// Initialize unallocated ordinals.
@@ -61,14 +60,13 @@ func (b *allocationBlock) autoAssign(
 	num int, handleID *string, host string, attrs map[string]string, affinityCheck bool) ([]cnet.IPNet, error) {
 
 	// Determine if we need to check for affinity.
-	checkAffinity := b.StrictAffinity || affinityCheck
-	if checkAffinity && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
+	if affinityCheck && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
 		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s)", *b.Affinity, host)
 		return nil, errors.New(s)
 	} else if b.Affinity == nil {
 		log.Warnf("Attempting to assign IPs from block with no affinity: %v", b)
-		if checkAffinity {
+		if affinityCheck {
 			// If we're checking strict affinity, we can't assign from a block with no affinity.
 			return nil, fmt.Errorf("Attempt to assign from block %v with no affinity", b.CIDR)
 		}
@@ -96,13 +94,13 @@ func (b *allocationBlock) autoAssign(
 	return ips, nil
 }
 
-func (b *allocationBlock) assign(address cnet.IP, handleID *string, attrs map[string]string, host string) error {
-	if b.StrictAffinity && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
+func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *string, attrs map[string]string, host string) error {
+	if affinityCheck && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
 		return errors.New("Block host affinity does not match")
 	} else if b.Affinity == nil {
 		log.Warnf("Attempting to assign IP from block with no affinity: %v", b)
-		if b.StrictAffinity {
+		if affinityCheck {
 			// If we're checking strict affinity, we can't assign from a block with no affinity.
 			return fmt.Errorf("Attempt to assign from block %v with no affinity", b.CIDR)
 		}

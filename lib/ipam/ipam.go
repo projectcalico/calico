@@ -590,6 +590,12 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		return errors.New("The provided IP address is not in a configured pool\n")
 	}
 
+	cfg, err := c.GetIPAMConfig(ctx)
+	if err != nil {
+		log.Errorf("Error getting IPAM Config: %v", err)
+		return err
+	}
+
 	blockCIDR := getBlockCIDRForAddress(args.IP, pool)
 	log.Debugf("IP %s is in block '%s'", args.IP.String(), blockCIDR.String())
 	for i := 0; i < datastoreRetries; i++ {
@@ -601,7 +607,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 			}
 
 			log.Debugf("Block for IP %s does not yet exist, creating", args.IP)
-			cfg, err := c.GetIPAMConfig(ctx)
+			cfg, err = c.GetIPAMConfig(ctx)
 			if err != nil {
 				log.Errorf("Error getting IPAM Config: %v", err)
 				return err
@@ -632,7 +638,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		}
 
 		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
-		err = block.assign(args.IP, args.HandleID, args.Attrs, hostname)
+		err = block.assign(cfg.StrictAffinity, args.IP, args.HandleID, args.Attrs, hostname)
 		if err != nil {
 			log.Errorf("Failed to assign address %v: %v", args.IP, err)
 			return err
@@ -1414,12 +1420,13 @@ func (c ipamClient) SetIPAMConfig(ctx context.Context, cfg IPAMConfig) error {
 		return errors.New("Cannot disable 'StrictAffinity' and 'AutoAllocateBlocks' at the same time")
 	}
 
-	allObjs, err := c.client.List(ctx, model.BlockListOptions{}, "")
+	// Get revision if resource already exists
+	old, err := c.client.Get(ctx, model.IPAMConfigKey{}, "")
 	if err != nil {
-		return err
-	}
-	if len(allObjs.KVPairs) != 0 {
-		return errors.New("Cannot change IPAM config while allocations exist")
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			log.Errorf("Error querying IPAMConfig %v", err)
+			return err
+		}
 	}
 
 	// Write to datastore.
@@ -1427,11 +1434,15 @@ func (c ipamClient) SetIPAMConfig(ctx context.Context, cfg IPAMConfig) error {
 		Key:   model.IPAMConfigKey{},
 		Value: c.convertIPAMConfigToBackend(&cfg),
 	}
+	if old != nil {
+		obj.Revision = old.Revision
+	}
 	_, err = c.client.Apply(ctx, &obj)
 	if err != nil {
 		log.Errorf("Error applying IPAMConfig: %v", err)
 		return err
 	}
+
 	return nil
 }
 

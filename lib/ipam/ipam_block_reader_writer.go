@@ -172,7 +172,6 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 	affinityKeyStr := "host:" + host
 	block := newBlock(subnet)
 	block.Affinity = &affinityKeyStr
-	block.StrictAffinity = config.StrictAffinity
 
 	// Create the new block in the datastore.
 	o := model.KVPair{
