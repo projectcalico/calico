@@ -9,6 +9,7 @@ execution_time_limit:
 global_job_config:
   prologue:
     commands:
+    - chmod 0600 ~/.keys/*
     - ssh-add ~/.keys/*
     - checkout
     # Semaphore is doing shallow clone on a commit without tags.
