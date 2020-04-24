@@ -180,6 +180,32 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			time.Second*2, 500*time.Millisecond).Should(BeNil())
 	})
 
+	It("should create a host endpoint for a Calico node if it can't find a k8s node", func() {
+		// Run controller with auto HEP enabled
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), true)
+
+		labels := map[string]string{"calico-label": "calico-value", "calico-label2": "value2"}
+
+		// Create a Calico node with a reference to an non-existent k8s node.
+		cn := calicoNode(c, cNodeName, kNodeName, labels)
+		_, err := c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the node label to sync.
+		Eventually(func() error { return testutils.ExpectNodeLabels(c, labels, cNodeName) },
+			time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		expectedHepName := cn.Name + "-auto-hep"
+
+		// Expect a wildcard hostendpoint to be created.
+		expectedHepLabels := labels
+		expectedHepLabels["projectcalico.org/created-by"] = "calico-kube-controllers"
+		expectedIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+	})
+
 	It("should clean up dangling hostendpoints and create hostendpoints for nodes without them", func() {
 		// Create a wildcard HEP that matches what might have been created
 		// automatically by kube-controllers. But we won't have a corresponding

@@ -47,6 +47,7 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
 		"-e", fmt.Sprintf("AUTO_HOST_ENDPOINTS=%s", autoHep),
+		"-e", "SYNC_NODE_LABELS=true",
 		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "RECONCILER_PERIOD=10s",
