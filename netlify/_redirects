@@ -1,1 +1,8 @@
 /latest/* /:splat 301
+
+/v2.0/getting-started/kubernetes/ /getting-started/kubernetes/ 301
+/v2.0/getting-started/kubernetes/installation/ /getting-started/kubernetes/installation/ 301
+/v2.0/getting-started/kubernetes/tutorials/advanced-policy /getting-started/kubernetes/tutorials/advanced-policy 301
+/v2.0/getting-started/kubernetes/installation/hosted/ /getting-started/kubernetes/installation/hosted/ 301
+/v2.0/getting-started/kubernetes/installation/hosted/ /getting-started/kubernetes/installation/hosted/
+/getting-started/kubernetes/installation/hosted/ /getting-started/kubernetes/

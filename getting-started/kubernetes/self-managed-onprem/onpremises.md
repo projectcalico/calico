@@ -127,7 +127,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
 
 **Tools**
 
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 
 **Networking**
 

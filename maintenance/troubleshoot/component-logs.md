@@ -1,7 +1,7 @@
 ---
 title: Component logs
-description: Where to find logs on Calico components. 
-canonical_url: '/maintenance/component-logs'
+description: Where to find component logs. 
+canonical_url: '/maintenance/troubleshoot/component-logs'
 ---
 
 ## The {{site.nodecontainer}} container

@@ -63,8 +63,8 @@ procedure varies by datastore type.
    ```
    {: .no-select-button}
 
-1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/calicoctl/install)
-   and [configure it to connect to your datastore](../getting-started/calicoctl/configure/overview).
+1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/clis/calicoctl/install)
+   and [configure it to connect to your datastore](../getting-started/clis/calicoctl/configure/overview).
 
 1. Use the following command to check the {{site.prodname}} version number.
 
@@ -126,8 +126,8 @@ procedure varies by datastore type.
    {: .alert .alert-success}
 
 
-1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/calicoctl/install)
-   and [configure it to connect to your datastore](../getting-started/calicoctl/configure/overview).
+1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/clis/calicoctl/install)
+   and [configure it to connect to your datastore](../getting-started/clis/calicoctl/configure/overview).
 
 1. Use the following command to check the {{site.prodname}} version number.
 
