@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"regexp"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/projectcalico/felix/bpf/state"
@@ -388,13 +387,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
-		// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
-		log.Info("Checking if we need to clean up the VXLAN device")
-		if link, err := netlink.LinkByName("vxlan.calico"); err != nil && err != syscall.ENODEV {
-			log.WithError(err).Warnf("Failed to query VXLAN device")
-		} else if err = netlink.LinkDel(link); err != nil {
-			log.WithError(err).Error("Failed to delete unwanted VXLAN device")
-		}
+		cleanUpVXLANDevice()
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -696,6 +689,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	return dp
+}
+
+func cleanUpVXLANDevice() {
+	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
+	log.Debug("Checking if we need to clean up the VXLAN device")
+	link, err := netlink.LinkByName("vxlan.calico")
+	if err != nil {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			log.Debug("VXLAN disabled and no VXLAN device found")
+			return
+		}
+		log.WithError(err).Warnf("VXLAN disabled and failed to query VXLAN device.  Ignoring.")
+		return
+	}
+	if err = netlink.LinkDel(link); err != nil {
+		log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device. Ignoring.")
+	}
 }
 
 type Manager interface {
