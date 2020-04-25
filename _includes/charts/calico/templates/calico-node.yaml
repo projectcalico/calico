@@ -284,6 +284,12 @@ spec:
                 configMapKeyRef:
                   name: {{include "variant_name" . | lower}}-config
                   key: veth_mtu
+            # Set MTU for the VXLAN tunnel device.
+            - name: FELIX_VXLANMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include "variant_name" . | lower}}-config
+                  key: veth_mtu
 {{- else if eq .Values.network "flannel" }}
             # Don't enable BGP.
             - name: CALICO_NETWORKING_BACKEND
