@@ -26,4 +26,4 @@ blocks:
     jobs:
     - name: "make cd"
       commands:
-      - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image cd; fi
+      - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image cd CONFIRM=true; fi
