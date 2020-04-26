@@ -7,7 +7,7 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/errors v0.8.1
-	github.com/projectcalico/felix v0.0.0-20200424155620-5223abff5e1b
+	github.com/projectcalico/felix v0.0.0-20200425081658-469e44aa6398
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200424184458-61873ceeb07a
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
@@ -20,7 +20,7 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200424081241-2ee08cc11c04
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200425081022-372db2404de8
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
 	k8s.io/api v0.0.0 => k8s.io/api v0.0.0-20191016110408-35e52d86657a
