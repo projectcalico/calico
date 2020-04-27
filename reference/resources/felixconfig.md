@@ -83,6 +83,7 @@ spec:
 | reportingInterval                  | Interval at which Felix reports its status into the datastore, or 0 to disable.  Must be non-zero in OpenStack deployments. | `5s`, `10s`, `1m` etc. | duration | `30s` |
 | reportingTTL                       | Time-to-live setting for process-wide status reports. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | routeRefreshInterval               | Period at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
+| routeTableRange                    | Calico programs additional Linux route tables for various purposes.  `RouteTableRange` specifies the indices of the route tables that Calico should use. |  | [RouteTableRange](#routetablerange) | `{Min: 1, Max: 250}` |
 | sidecarAccelerationEnabled         | Enable experimental acceleration between application and proxy sidecar when using [application layer policy]({{ site.baseurl }}/security/app-layer-policy). [Default: `false`] | boolean | boolean | `false` |
 | usageReportingEnabled              | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. | boolean | boolean | `true` |
 | usageReportingInitialDelay         | Minimum initial delay before first usage report. | `5s`, `10s`, `1m` etc. | duration | `300s` |
@@ -109,6 +110,13 @@ spec:
 |----------|----------------------|-------------------|--------|
 | port     | The exact port match | 0-65535           | int    |
 | protocol | The protocol match   | tcp, udp, sctp    | string |
+
+#### RouteTableRange
+
+| Field    | Description          | Accepted Values   | Schema |
+|----------|----------------------|-------------------|--------|
+| min      | Minimum index to use | 1-250             | int    |
+| max      | Maximum index to use | 1-250             | int    |
 
 ### Supported operations
 
