@@ -15,7 +15,7 @@ global_job_config:
     - git fetch --unshallow
   secrets:
     - name: quay-robot-semaphore_v2
-
+    - name: docker
 
 blocks:
 
