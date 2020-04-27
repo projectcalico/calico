@@ -97,7 +97,7 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 	CALI_DEBUG("Entering normal policy tail call\n");
 
 	__u32 key = 0;
-	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
+	struct cali_tc_state *state = cali_v4_state_lookup_elem(&key);
 	if (!state) {
 	        CALI_DEBUG("State map lookup failed: DROP\n");
 	        goto deny;
@@ -614,7 +614,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	// Set up an entry in the state map and then jump to the normal policy program.
 	int key = 0;
-	struct cali_tc_state *map_state = bpf_map_lookup_elem(&cali_v4_state, &key);
+	struct cali_tc_state *map_state = cali_v4_state_lookup_elem(&key);
 	if (!map_state) {
 		// Shouldn't be possible; the map is pre-allocated.
 		CALI_INFO("State map lookup failed: DROP\n");
