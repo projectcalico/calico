@@ -61,6 +61,7 @@ type L3RouteResolver struct {
 	// block that contributed them.
 	nodeNameToNodeInfo     map[string]l3rrNodeInfo
 	blockToRoutes          map[string]set.Set
+	nodeRoutes             nodeRoutes
 	allPools               map[string]model.IPPool
 	workloadIDToCIDRs      map[model.WorkloadEndpointKey][]cnet.IPNet
 	useNodeResourceUpdates bool
@@ -90,6 +91,7 @@ func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeRes
 		workloadIDToCIDRs:      map[model.WorkloadEndpointKey][]cnet.IPNet{},
 		useNodeResourceUpdates: useNodeResourceUpdates,
 		routeSource:            routeSource,
+		nodeRoutes:             newNodeRoutes(),
 	}
 }
 
@@ -141,12 +143,16 @@ func (c *L3RouteResolver) OnWorkloadUpdate(update api.Update) (_ bool) {
 
 	// Incref the new CIDRs.
 	for _, newCIDR := range newCIDRs {
-		c.trie.AddWEP(ip.CIDRFromCalicoNet(newCIDR).(ip.V4CIDR), key.Hostname)
+		cidr := ip.CIDRFromCalicoNet(newCIDR).(ip.V4CIDR)
+		c.trie.AddWEP(cidr, key.Hostname)
+		c.nodeRoutes.Add(nodenameRoute{key.Hostname, cidr})
 	}
 
 	// Decref the old.
 	for _, oldCIDR := range oldCIDRs {
-		c.trie.RemoveWEP(ip.CIDRFromCalicoNet(oldCIDR).(ip.V4CIDR), key.Hostname)
+		cidr := ip.CIDRFromCalicoNet(oldCIDR).(ip.V4CIDR)
+		c.trie.RemoveWEP(cidr, key.Hostname)
+		c.nodeRoutes.Remove(nodenameRoute{key.Hostname, cidr})
 	}
 
 	if len(newCIDRs) > 0 {
@@ -219,11 +225,13 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		deletes.Iter(func(item interface{}) error {
 			nr := item.(nodenameRoute)
 			c.trie.RemoveBlockRoute(nr.dst)
+			c.nodeRoutes.Remove(nr)
 			return nil
 		})
 		adds.Iter(func(item interface{}) error {
 			nr := item.(nodenameRoute)
 			c.trie.UpdateBlockRoute(nr.dst, nr.nodeName)
+			c.nodeRoutes.Add(nr)
 			return nil
 		})
 	} else {
@@ -358,11 +366,7 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 }
 
 func (c *L3RouteResolver) markAllNodeRoutesDirty(nodeName string) {
-	// TODO: Remove need to iterate all routes here.
-	c.visitAllRoutes(func(route nodenameRoute) {
-		if route.nodeName != nodeName {
-			return
-		}
+	c.nodeRoutes.visitRoutesForNode(nodeName, func(route nodenameRoute) {
 		c.trie.MarkCIDRDirty(route.dst)
 	})
 }
@@ -875,4 +879,46 @@ func (r RouteInfo) IsZero() bool {
 
 func (r RouteInfo) Equals(other RouteInfo) bool {
 	return reflect.DeepEqual(r, other)
+}
+
+// nodeRoutes is used for efficiently looking up routes associated with a node.
+// It uses a reference counter so that we can properly handle intermediate cases where
+// the same CIDR might appear twice.
+type nodeRoutes struct {
+	cache map[string]map[ip.V4CIDR]int
+}
+
+func newNodeRoutes() nodeRoutes {
+	return nodeRoutes{
+		cache: map[string]map[ip.V4CIDR]int{},
+	}
+}
+
+func (nr *nodeRoutes) Add(r nodenameRoute) {
+	if _, ok := nr.cache[r.nodeName]; !ok {
+		nr.cache[r.nodeName] = map[ip.V4CIDR]int{r.dst: 0}
+	}
+	nr.cache[r.nodeName][r.dst]++
+}
+
+func (nr *nodeRoutes) Remove(r nodenameRoute) {
+	_, ok := nr.cache[r.nodeName]
+	if !ok {
+		logrus.WithField("route", r).Panic("BUG: Asked to decref for node that doesn't exist")
+	}
+	nr.cache[r.nodeName][r.dst]--
+	if nr.cache[r.nodeName][r.dst] == 0 {
+		delete(nr.cache[r.nodeName], r.dst)
+	} else if nr.cache[r.nodeName][r.dst] < 0 {
+		logrus.WithField("route", r).Panic("BUG: Asked to decref a route past 0.")
+	}
+	if len(nr.cache[r.nodeName]) == 0 {
+		delete(nr.cache, r.nodeName)
+	}
+}
+
+func (nr *nodeRoutes) visitRoutesForNode(nodename string, v func(nodenameRoute)) {
+	for cidr, _ := range nr.cache[nodename] {
+		v(nodenameRoute{nodeName: nodename, dst: cidr})
+	}
 }
