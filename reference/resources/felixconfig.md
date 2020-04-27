@@ -88,7 +88,7 @@ spec:
 | usageReportingInitialDelay         | Minimum initial delay before first usage report. | `5s`, `10s`, `1m` etc. | duration | `300s` |
 | usageReportingInterval             | The interval at which Felix does usage reports.  The default is 1 day.  | `5s`, `10s`, `1m` etc. | duration | `24h` |
 | vxlanEnabled                       | Automatically set when needed, you shouldn't need to change this setting: whether Felix should create the VXLAN tunnel device for VXLAN networking. | boolean | boolean | `false` |
-| vxlanMTU                           | MTU to use for the VXLAN tunnel device. | int | int | `1410` |
+| vxlanMTU                           | MTU to use for the VXLAN tunnel device. Also controls NodePort MTU when eBPF enabled. | int | int | `1410` |
 | vxlanPort                          | Port to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4789` |
 | vxlanVNI                           | Virtual network ID to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4096` |
 | xdpRefreshInterval                 | Period at which Felix re-checks the XDP state in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable XDP refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
