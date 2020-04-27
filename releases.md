@@ -12,7 +12,7 @@ layout: docwithnav
 - [{{ v }}](/{{ v }}){: data-proofer-ignore=""}
     {%- endfor -%}
 {%- else -%}
-- [{{ version }}](/{{ version }})
+- [{{ version }}](/archive/{{ version }})
 {% endif -%}
 {%- endfor -%}
 {% endif %}
