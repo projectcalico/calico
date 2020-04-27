@@ -40,7 +40,7 @@ subjects:
   name: calico-kube-controllers
   namespace: kube-system
 ---
-{{- else if eq .Values.network "calico" }}
+{{- else }}
 # Include a clusterrole for the kube-controllers component,
 # and bind it to the calico-kube-controllers serviceaccount.
 kind: ClusterRole
