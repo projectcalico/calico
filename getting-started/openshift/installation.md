@@ -99,6 +99,8 @@ To include [Calico resources]({{site.baseurl}}/reference/resources) during insta
 >   --from-file=<resource-directory> --dry-run -o yaml \
 >   > manifests/02-configmap-calico-resources.yaml
 > ```
+> With recent versions of kubectl it is necessary to have a kubeconfig configured or add `--server='127.0.0.1:443'`
+> even though it is not used.
 
 #### Create the cluster
 
