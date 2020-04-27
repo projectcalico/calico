@@ -235,6 +235,9 @@ func KeyFromDefaultPath(path string) Key {
 	} else if m := matchHostIp.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a host ID: %v", path)
 		return HostIPKey{Hostname: m[1]}
+	} else if m := matchWireguard.FindStringSubmatch(path); m != nil {
+		log.Debugf("Path is a node name: %v", path)
+		return WireguardKey{NodeName: m[1]}
 	} else if m := matchIPPool.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a pool: %v", path)
 		mungedCIDR := m[1]

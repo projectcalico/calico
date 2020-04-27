@@ -38,8 +38,9 @@ const (
 	isGlobalBgpConfig
 	isNodeBgpConfig
 
-	hostIPMarker = "*HOSTIP*"
-	nodeMarker   = "*NODEMARKER*"
+	hostIPMarker    = "*HOSTIP*"
+	nodeMarker      = "*NODEMARKER*"
+	wireguardMarker = "*WIREGUARDMARKER*"
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
@@ -72,7 +73,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		Kind: apiv3.KindBGPConfiguration,
 		Name: "node.bgpnode1",
 	}
-	numFelixConfigs := 79
+	numFelixConfigs := 84
 	numClusterConfigs := 4
 	numNodeClusterConfigs := 3
 	numBgpConfigs := 5
@@ -665,6 +666,10 @@ func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, e
 				node := kt.Name
 				Expect(node).To(Equal("mynode"))
 				name = nodeMarker
+			case model.WireguardKey:
+				node := kt.NodeName
+				Expect(node).To(Equal("mynode"))
+				name = wireguardMarker
 			default:
 				Expect(kvp.Key).To(BeAssignableToTypeOf(model.HostConfigKey{}))
 			}

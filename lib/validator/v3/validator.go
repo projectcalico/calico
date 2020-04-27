@@ -26,6 +26,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
+	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -146,6 +148,7 @@ func init() {
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("regexp", validateRegexp)
 	registerFieldValidator("routeSource", validateRouteSource)
+	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -247,6 +250,13 @@ func validateRouteSource(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate routeSource: %s", s)
 	_, err := regexp.Compile(s)
+	return err == nil
+}
+
+func validateWireguardPublicKey(fl validator.FieldLevel) bool {
+	k := fl.Field().String()
+	log.Debugf("Validate Wireguard public-key %s", k)
+	_, err := wireguard.ParseKey(k)
 	return err == nil
 }
 
