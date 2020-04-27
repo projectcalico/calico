@@ -221,6 +221,21 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     }
 }
 
+#tigera-navbar .free-training {
+  color: white;
+  background-color: #ff9e16;
+  padding: 6px 10px !important;
+  margin: -6px 8px 0px 0px;
+}
+
+.panel-heading.free-training {
+  background-color: #ff9e16;
+}
+
+.panel-heading.free-training span {
+  color: white;
+}
+
 #enterprise-header .request-demo-button {
   border: none;
   color: white;
@@ -234,13 +249,6 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   font-size: 18px;
   font-family: 'Poppins',Helvetica,Arial,Lucida,sans-serif !important;
   font-weight: 700 !important;
-}
-
-#tigera-navbar .free-training {
-  color: white;
-  background-color: #ff9e16;
-  padding: 6px 10px !important;
-  margin: -6px 8px 0px 0px;
 }
 
 #enterprise-header .calico-enterprise-img {
