@@ -244,17 +244,17 @@ func showConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 // IPAM takes keyword with an IP address then calls the subcommands.
 func Show(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl ipam show [--ip=<IP> | --show-blocks | --show-borrowed | --configuration] [--config=<CONFIG>]
+  calicoctl ipam show [--ip=<IP> | --show-blocks | --show-borrowed | --show-configuration] [--config=<CONFIG>]
 
 Options:
-  -h --help             Show this screen.
-     --ip=<IP>          Report whether this specific IP address is in use.
-     --show-blocks      Show detailed information for IP blocks as well as pools.
-     --show-borrowed    Show detailed information for "borrowed" IP addresses.
-     --configuration    Show current Calico IPAM configuration
-  -c --config=<CONFIG>  Path to the file containing connection configuration in
-                        YAML or JSON format.
-                        [default: ` + constants.DefaultConfigPath + `]
+  -h --help                Show this screen.
+     --ip=<IP>             Report whether this specific IP address is in use.
+     --show-blocks         Show detailed information for IP blocks as well as pools.
+     --show-borrowed       Show detailed information for "borrowed" IP addresses.
+     --show-configuration  Show current Calico IPAM configuration.
+  -c --config=<CONFIG>     Path to the file containing connection configuration in
+                           YAML or JSON format.
+                           [default: ` + constants.DefaultConfigPath + `]
 
 Description:
   The ipam show command prints information about a given IP address, or about
@@ -290,7 +290,7 @@ Description:
 	passedIP := parsedArgs["--ip"]
 	showBlocks := parsedArgs["--show-blocks"].(bool)
 	showBorrowed := parsedArgs["--show-borrowed"].(bool)
-	configuration := parsedArgs["--configuration"].(bool)
+	configuration := parsedArgs["--show-configuration"].(bool)
 
 	if passedIP != nil {
 		return showIP(ctx, ipamClient, passedIP)
