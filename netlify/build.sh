@@ -67,7 +67,7 @@ function build_archives() {
             if [ -z "$CUSTOM_ARCHIVE_PATH" ]; then
                 build release-${branch} /${branch}
             else
-                build release-${branch} /$CUSTOM_ARCHIVE_PATH/${branch}
+                build release-${branch} $CUSTOM_ARCHIVE_PATH/${branch}
                 EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_manifests_only.yml build release-${branch} /${branch}
             fi
         fi
