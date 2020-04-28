@@ -86,6 +86,8 @@ var (
 	_                            = stateOffDstPort
 	stateOffPostNATDstPort int16 = 24
 	stateOffIPProto        int16 = 26
+	stateOffICMPType       int16 = 22
+	stateOffICMPCode       int16 = 23
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -302,6 +304,29 @@ func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
 		p.writePortsMatch(true, legDest, rule.NotDstPorts, rule.NotDstNamedPortIpSetIds)
 	}
 
+	if rule.IpVersion == 4 {
+		if rule.Icmp != nil {
+			log.WithField("icmpv4", rule.Icmp).Debugf("ICMP type/code match")
+			switch icmp := rule.Icmp.(type) {
+			case *proto.Rule_IcmpTypeCode:
+				p.writeICMPTypeMatch(false, uint8(icmp.IcmpTypeCode.Type))
+				p.writeICMPCodeMatch(false, uint8(icmp.IcmpTypeCode.Code))
+			case *proto.Rule_IcmpType:
+				p.writeICMPTypeMatch(false, uint8(icmp.IcmpType))
+			}
+		}
+		if rule.NotIcmp != nil {
+			log.WithField("icmpv4", rule.Icmp).Debugf("Not ICMP type/code match")
+			switch icmp := rule.NotIcmp.(type) {
+			case *proto.Rule_NotIcmpTypeCode:
+				p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpTypeCode.Type))
+				p.writeICMPCodeMatch(true, uint8(icmp.NotIcmpTypeCode.Code))
+			case *proto.Rule_NotIcmpType:
+				p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpType))
+			}
+		}
+	}
+
 	// TODO ICMP
 
 	p.writeEndOfRule(rule, passLabel)
@@ -335,6 +360,23 @@ func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 	}
 }
 
+func (p *Builder) writeICMPTypeMatch (negate bool,icmpType uint8) {
+	p.b.Load8(R1,R9, stateOffICMPType)
+	if negate {
+		p.b.JumpEqImm64(R1, int32(icmpType), p.endOfRuleLabel())
+	} else {
+		p.b.JumpNEImm64(R1, int32(icmpType), p.endOfRuleLabel())
+	}
+}
+
+func (p *Builder) writeICMPCodeMatch (negate bool,icmpCode uint8) {
+	p.b.Load8(R1,R9, stateOffICMPCode)
+	if negate {
+		p.b.JumpEqImm64(R1, int32(icmpCode), p.endOfRuleLabel())
+	} else {
+		p.b.JumpNEImm64(R1, int32(icmpCode), p.endOfRuleLabel())
+	}
+}
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 	var offset int16
 	if leg == legSource {

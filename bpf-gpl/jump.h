@@ -23,6 +23,17 @@
 
 // struct cali_tc_state holds state that is passed between the BPF programs.
 // WARNING: must be kept in sync with the definitions in bpf/polprog/pol_prog_builder.go.
+struct cali_tc_state_dst
+{
+	union
+	{
+		__u16 port;
+		struct {
+			__u8 type;
+			__u8 code;
+		} icmp;
+	}u;
+};
 struct cali_tc_state {
 	__be32 ip_src;
 	__be32 ip_dst;
@@ -30,7 +41,7 @@ struct cali_tc_state {
 	__be32 nat_tun_src;
 	__s32 pol_rc;
 	__u16 sport;
-	__u16 dport;
+	struct cali_tc_state_dst dst;
 	__u16 post_nat_dport;
 	__u8 ip_proto;
 	__u8 flags;

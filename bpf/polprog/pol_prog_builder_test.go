@@ -22,7 +22,6 @@ import (
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/proto"
 )
-
 func TestPolicySanityCheck(t *testing.T) {
 	// Just a basic sanity check with a kitchen sink policy.  The policy behaviour is tested "for real" in the
 	// bpf/ut package.
@@ -44,7 +43,7 @@ func TestPolicySanityCheck(t *testing.T) {
 		DstNet:                  []string{"11.0.0.0/8"},
 		DstPorts:                []*proto.PortRange{{First: 3000, Last: 3001}},
 		DstNamedPortIpSetIds:    []string{setID("n:foo1234567890")},
-		Icmp:                    nil,
+		Icmp:                    &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}},
 		SrcIpSetIds:             []string{setID("s:sbcdef1234567890")},
 		DstIpSetIds:             []string{setID("s:dbcdef1234567890")},
 		NotProtocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "UDP"}},
@@ -52,7 +51,7 @@ func TestPolicySanityCheck(t *testing.T) {
 		NotSrcPorts:             []*proto.PortRange{{First: 5000, Last: 5000}},
 		NotDstNet:               []string{"13.0.0.0/8"},
 		NotDstPorts:             []*proto.PortRange{{First: 4000, Last: 4000}},
-		NotIcmp:                 nil,
+		NotIcmp:                 &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}},
 		NotSrcIpSetIds:          []string{setID("s:abcdef1234567890")},
 		NotDstIpSetIds:          []string{setID("s:abcdef123456789l")},
 		NotSrcNamedPortIpSetIds: []string{setID("n:0bcdef1234567890")},
@@ -64,5 +63,5 @@ func TestPolicySanityCheck(t *testing.T) {
 		t.Log(i, ": ", in)
 	}
 
-	Expect(insns).To(HaveLen(221))
+	Expect(insns).To(HaveLen(229))
 }
