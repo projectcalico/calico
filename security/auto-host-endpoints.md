@@ -45,7 +45,6 @@ Have a running {{site.prodname}} cluster with `calicoctl` installed.
 
 - [Enable automatic host endpoints](#enable-automatic-host-endpoints)
 - [Apply network policy to automatic host endpoints](#apply-network-policy-to-automatic-host-endpoints)
-- [Restrict Kubernetes node ingress](#restrict-kubernetes-node-ingress)
 
 #### Enable automatic host endpoints
 
@@ -117,7 +116,7 @@ spec:
   <rest of the policy>
 ```
 
-#### Restrict Kubernetes node ingress
+### Tutorial
 
 This tutorial will lock down Kubernetes node ingress to only allow SSH and required ports for Kubernetes to function.
 
