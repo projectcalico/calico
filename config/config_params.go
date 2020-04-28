@@ -103,6 +103,13 @@ type Config struct {
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
+	// Wireguard configuration
+	WireguardEnabled             bool   `config:"bool;false"`
+	WireguardListeningPort       int    `config:"int;51820"`
+	WireguardRoutingRulePriority int    `config:"int;99"`
+	WireguardInterfaceName       string `config:"iface-param;wireguard.cali;non-zero"`
+	WireguardMTU                 int    `config:"int;1420;non-zero"`
+
 	BPFEnabled                         bool           `config:"bool;false"`
 	BPFDisableUnprivileged             bool           `config:"bool;true"`
 	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;non-zero"`

@@ -42,6 +42,7 @@ func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
 func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
 	dispatcher.Register(model.IPPoolKey{}, h.OnUpdate)
+	dispatcher.Register(model.WireguardKey{}, h.OnUpdate)
 }
 
 func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
@@ -74,6 +75,15 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			log.WithField("update", update).Debug("Passing-through IPPool update")
 			pool := update.Value.(*model.IPPool)
 			h.callbacks.OnIPPoolUpdate(key, pool)
+		}
+	case model.WireguardKey:
+		if update.Value == nil {
+			log.WithField("update", update).Debug("Passing-through Wireguard deletion")
+			h.callbacks.OnWireguardRemove(key.NodeName)
+		} else {
+			log.WithField("update", update).Debug("Passing-through Wireguard update")
+			wg := update.Value.(*model.Wireguard)
+			h.callbacks.OnWireguardUpdate(key.NodeName, wg)
 		}
 	}
 	return

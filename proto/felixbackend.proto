@@ -111,6 +111,11 @@ message ToDataplane {
     VXLANTunnelEndpointUpdate vtep_update = 25;
     // VXLANTunnelEndpointRemove is send when a route is deleted.
     VXLANTunnelEndpointRemove vtep_remove = 26;
+
+    // WireguardEndpointUpdate is sent to setup wireguard on the host.
+    WireguardEndpointUpdate wireguard_endpoint_update = 27;
+    // WireguardEndpointRemove is sent to undo wireguard on the host.
+    WireguardEndpointRemove wireguard_endpoint_remove = 28;
   }
 }
 
@@ -133,6 +138,10 @@ message FromDataplane {
     // WorkloadEndpointStatusRemove is sent when an endpoint is removed to
     // clean up its oper status entry.
     WorkloadEndpointStatusRemove workload_endpoint_status_remove = 7;
+
+    // WireguardStatusUpdate is sent when the wireguard is available with the
+    // crypto primitives set up.
+    WireguardStatusUpdate wireguard_status_update = 9;
   }
 }
 
@@ -414,6 +423,11 @@ message WorkloadEndpointStatusRemove {
   WorkloadEndpointID id = 1;
 }
 
+message WireguardStatusUpdate {
+  // Wireguard public-key set on the interface.
+  string public_key = 1;
+}
+
 message HostMetadataUpdate {
   string hostname = 1;
   string ipv4_addr = 2;
@@ -508,4 +522,20 @@ message VXLANTunnelEndpointUpdate {
 
 message VXLANTunnelEndpointRemove {
   string node = 1;
+}
+
+message WireguardEndpointUpdate {
+  // The name of the wireguard host.
+  string hostname = 1;
+
+  // The public key for this endpoint.
+  string public_key = 2;
+
+  // The IP address of the wireguard interface.
+  string interface_addr = 3;
+}
+
+message WireguardEndpointRemove {
+  // The name of the wireguard host.
+  string hostname = 1;
 }

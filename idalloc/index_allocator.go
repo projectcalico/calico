@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	"github.com/golang-collections/collections/stack"
+
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 

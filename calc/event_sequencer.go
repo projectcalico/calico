@@ -71,6 +71,8 @@ type EventSequencer struct {
 	pendingRouteDeletes          set.Set
 	pendingVTEPUpdates           map[string]*proto.VXLANTunnelEndpointUpdate
 	pendingVTEPDeletes           set.Set
+	pendingWireguardUpdates      map[string]*model.Wireguard
+	pendingWireguardDeletes      set.Set
 
 	// Sets to record what we've sent downstream.  Updated whenever we flush.
 	sentIPSets          set.Set
@@ -83,6 +85,7 @@ type EventSequencer struct {
 	sentNamespaces      set.Set
 	sentRoutes          set.Set
 	sentVTEPs           set.Set
+	sentWireguard       set.Set
 
 	Callback EventHandler
 }
@@ -124,6 +127,8 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingRouteDeletes:          set.New(),
 		pendingVTEPUpdates:           map[string]*proto.VXLANTunnelEndpointUpdate{},
 		pendingVTEPDeletes:           set.New(),
+		pendingWireguardUpdates:      map[string]*model.Wireguard{},
+		pendingWireguardDeletes:      set.New(),
 
 		// Sets to record what we've sent downstream.  Updated whenever we flush.
 		sentIPSets:          set.New(),
@@ -136,6 +141,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		sentNamespaces:      set.New(),
 		sentRoutes:          set.New(),
 		sentVTEPs:           set.New(),
+		sentWireguard:       set.New(),
 	}
 	return buf
 }
@@ -509,6 +515,22 @@ func (buf *EventSequencer) flushIPPoolUpdates() {
 	}
 }
 
+func (buf *EventSequencer) flushHostWireguardUpdates() {
+	for nodename, wg := range buf.pendingWireguardUpdates {
+		var ipstr string
+		if wg.InterfaceIPv4Addr != nil {
+			ipstr = wg.InterfaceIPv4Addr.String()
+		}
+		buf.Callback(&proto.WireguardEndpointUpdate{
+			Hostname:      nodename,
+			PublicKey:     wg.PublicKey,
+			InterfaceAddr: ipstr,
+		})
+		buf.sentWireguard.Add(nodename)
+		delete(buf.pendingWireguardUpdates, nodename)
+	}
+}
+
 func (buf *EventSequencer) OnIPPoolRemove(key model.IPPoolKey) {
 	log.WithField("key", key).Debug("IPPool removed")
 	cidr := ip.CIDRFromCalicoNet(key.CIDR)
@@ -525,6 +547,19 @@ func (buf *EventSequencer) flushIPPoolDeletes() {
 			Id: cidrToIPPoolID(key),
 		})
 		buf.sentIPPools.Discard(key)
+		return set.RemoveItem
+	})
+}
+
+func (buf *EventSequencer) flushHostWireguardDeletes() {
+	buf.pendingWireguardDeletes.Iter(func(item interface{}) error {
+		key := item.(string)
+		if buf.sentWireguard.Contains(key) {
+			buf.Callback(&proto.WireguardEndpointRemove{
+				Hostname: key,
+			})
+			buf.sentWireguard.Discard(key)
+		}
 		return set.RemoveItem
 	})
 }
@@ -597,6 +632,8 @@ func (buf *EventSequencer) Flush() {
 
 	// Flush (rare) cluster-wide updates.  There's no particular ordering to these so we might
 	// as well do deletions first to minimise occupancy.
+	buf.flushHostWireguardDeletes()
+	buf.flushHostWireguardUpdates()
 	buf.flushHostIPDeletes()
 	buf.flushHostIPUpdates()
 	buf.flushIPPoolDeletes()
@@ -704,6 +741,22 @@ func (buf *EventSequencer) OnNamespaceRemove(id proto.NamespaceID) {
 	if buf.sentNamespaces.Contains(id) {
 		buf.pendingNamespaceDeletes.Add(id)
 	}
+}
+
+func (buf *EventSequencer) OnWireguardUpdate(nodename string, wg *model.Wireguard) {
+	log.WithFields(log.Fields{
+		"nodename": nodename,
+	}).Debug("Wireguard updated")
+	buf.pendingWireguardDeletes.Discard(nodename)
+	buf.pendingWireguardUpdates[nodename] = wg
+}
+
+func (buf *EventSequencer) OnWireguardRemove(nodename string) {
+	log.WithFields(log.Fields{
+		"nodename": nodename,
+	}).Debug("Wireguard removed")
+	delete(buf.pendingWireguardUpdates, nodename)
+	buf.pendingWireguardDeletes.Add(nodename)
 }
 
 func (buf *EventSequencer) flushNamespaces() {
