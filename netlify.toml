@@ -9,11 +9,6 @@
   CUSTOM_ARCHIVE_PATH = "/archive"
 
 [[headers]]
-  for = "/archive/*"
-  [headers.values]
-    x-robots-tag = "noindex"
-
-[[headers]]
   for = "/*.yaml"
   [headers.values]
     content-type = "text/yaml"
