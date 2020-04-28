@@ -20,6 +20,7 @@ Usage:
     release      Release a Calico assigned IP address.
     show         Show details of a Calico assigned IP address,
                  or of overall IP usage.
+    configure    Configure IPAM
 
 Options:
   -h --help      Show this screen.
@@ -38,3 +39,4 @@ organized by sub command.
 
 -  [calicoctl ipam release]({{ site.baseurl }}/reference/calicoctl/ipam/release)
 -  [calicoctl ipam show]({{ site.baseurl }}/reference/calicoctl/ipam/show)
+-  [calicoctl ipam configure]({{ site.baseurl }}/reference/calicoctl/ipam/configure)

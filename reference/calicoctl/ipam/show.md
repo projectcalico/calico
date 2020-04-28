@@ -18,12 +18,14 @@ Usage:
   calicoctl ipam show [--ip=<IP> | --show-blocks] [--config=<CONFIG>]
 
 Options:
-  -h --help             Show this screen.
-     --ip=<IP>          Report whether this specific IP address is in use.
-     --show-blocks      Show detailed information for IP blocks as well as pools.
-  -c --config=<CONFIG>  Path to the file containing connection
-                        configuration in YAML or JSON format.
-                        [default: /etc/calico/calicoctl.cfg]
+  -h --help                Show this screen.
+     --ip=<IP>             Report whether this specific IP address is in use.
+     --show-blocks         Show detailed information for IP blocks as well as pools.
+     --show-borrowed       Show detailed information for "borrowed" IP addresses.
+     --show-configuration  Show current Calico IPAM configuration.
+  -c --config=<CONFIG>     Path to the file containing connection
+                           configuration in YAML or JSON format.
+                           [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam show command prints information about a given IP address, or about
@@ -99,11 +101,47 @@ Description:
    +----------+-------------------------------------------+------------+------------+-------------------+
    ```
 
+1. Print more detailed information about borrowed IP addresses.
+
+   ```bash
+   calicoctl ipam show --show-borrowed
+   ```
+
+   Table shows which IP addresses have been borrowed by which node out of which block and the entity consuming it:
+
+   ```
++------------+-----------------+---------------+---------------+------+------------------------------------+
+|     IP     | BORROWING-NODE  |     BLOCK     |  BLOCK OWNER  | TYPE |            ALLOCATED-TO            |
++------------+-----------------+---------------+---------------+------+------------------------------------+
+| 172.16.0.1 | worker-node-1   | 172.16.0.0/29 | worker-node-2 | pod  | external-ns/nginx-6db489d4b7-gln7h |
+| 172.16.0.2 | worker-node-3   | 172.16.0.0/29 | worker-node-2 | pod  | external-ns/nginx-6db489d4b7-kzkbv |
++------------+-----------------+---------------+---------------+------+------------------------------------+
+   ```
+
+1. Print current IPAM configuration.
+
+   ```bash
+   calicoctl ipam show --show-configuration
+   ```
+
+   Table shows current IPAM configuration:
+
+   ```
++--------------------+-------+
+|      PROPERTY      | VALUE |
++--------------------+-------+
+| StrictAffinity     | false |
+| AutoAllocateBlocks | true  |
++--------------------+-------+
+   ``` 
+
 ### Options
 
 ```
---ip=<IP>          Specific IP address to show.
---show-blocks      Show detailed information for IP blocks as well as pools.
+--ip=<IP>             Specific IP address to show.
+--show-blocks         Show detailed information for IP blocks as well as pools.
+--show-borrowed       Show detailed information for "borrowed" IP addresses.
+--show-configuration  Show current Calico IPAM configuration
 ```
 {: .no-select-button}
 
