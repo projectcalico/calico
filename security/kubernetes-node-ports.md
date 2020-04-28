@@ -87,8 +87,8 @@ spec:
 #### Update host endpoints labels
 
 In this example, we assume that you have already enabled automatic host endpoints.
-All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host label**.
-To add the **kubernetes-host** label to our automatic host endpoints we add the label to all of the Kubernetes nodes. (The example below uses an empty value but any valid value can be substituted.)
+All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host** label.
+To add the **kubernetes-host** label to our automatic host endpoints we add the label to all Kubernetes nodes. (The example below uses an empty value but any valid value can be substituted.)
 
 ``bash
 kubectl label nodes --all kubernetes-host=
