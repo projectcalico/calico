@@ -1,6 +1,6 @@
 ---
 title: Protect Kubernetes nodes
-description: Protect Kubernetes nodes with host endpoints managed by Calico
+Description: Protect Kubernetes nodes with host endpoints managed by Calico
 ---
 
 ### Big picture
@@ -54,7 +54,7 @@ To enable automatic host endpoints, edit the default KubeControllersConfiguratio
 calicoctl patch kubecontrollersconfiguration default --patch='{"spec": {"controllers": {"node": {"hostEndpoint": {"autoCreate": "Enabled"}}}}}'
 ```
 
-If successful, the host endpoints are created for each of your cluster's nodes:
+If successful, host endpoints are created for each of your cluster's nodes:
 
 ```bash
 calicoctl get heps -owide
@@ -65,11 +65,11 @@ The output may look similar to this:
 ```
 $ calicoctl get heps -owide
 NAME                                                    NODE                                           INTERFACE   IPS                              PROFILES
-ip-172-16-101-147.us-west-2.compute.internal-auto-hep   ip-172-16-101-147.us-west-2.compute.internal   *           172.16.101.147,192.168.228.128
-ip-172-16-101-54.us-west-2.compute.internal-auto-hep    ip-172-16-101-54.us-west-2.compute.internal    *           172.16.101.54,192.168.107.128
-ip-172-16-101-79.us-west-2.compute.internal-auto-hep    ip-172-16-101-79.us-west-2.compute.internal    *           172.16.101.79,192.168.91.64
-ip-172-16-101-9.us-west-2.compute.internal-auto-hep     ip-172-16-101-9.us-west-2.compute.internal     *           172.16.101.9,192.168.71.192
-ip-172-16-102-63.us-west-2.compute.internal-auto-hep    ip-172-16-102-63.us-west-2.compute.internal    *           172.16.102.63,192.168.108.192
+ip-172-16-101-147.us-west-2.compute.internal-auto-hep   ip-172-16-101-147.us-west-2.compute.internal   *           172.16.101.147,192.168.228.128   projectcalico-default-allow
+ip-172-16-101-54.us-west-2.compute.internal-auto-hep    ip-172-16-101-54.us-west-2.compute.internal    *           172.16.101.54,192.168.107.128    projectcalico-default-allow
+ip-172-16-101-79.us-west-2.compute.internal-auto-hep    ip-172-16-101-79.us-west-2.compute.internal    *           172.16.101.79,192.168.91.64      projectcalico-default-allow
+ip-172-16-101-9.us-west-2.compute.internal-auto-hep     ip-172-16-101-9.us-west-2.compute.internal     *           172.16.101.9,192.168.71.192      projectcalico-default-allow
+ip-172-16-102-63.us-west-2.compute.internal-auto-hep    ip-172-16-102-63.us-west-2.compute.internal    *           172.16.102.63,192.168.108.192    projectcalico-default-allow
 ```
 
 #### Apply network policy to automatic host endpoints
@@ -109,52 +109,154 @@ spec:
   <rest of the policy>
 ```
 
-#### Restrict host egress to whitelisted IPs
+#### Restrict host ingress
 
-In order to whitelist egress to certain destination IP ranges, you will need to gather the IP ranges that your Kubernetes nodes must be able to reach.
+This tutorial will lock down Kubernetes node ingress to only allow SSH and required ports for Kubernetes to function.
 
-The list of whitelisted IPs may include:
-- the IP range used by your Kubernetes nodes. This is required so that each node's kubelet can reach the API server.
-- the IP range for your Docker image registries (including the {{site.prodname}} images)
+> Note: Do not run this tutorial on a cluster that is important. This tutorial may disrupt traffic in your cluster.
+> Only run this tutorial on a sandbox cluster.
+{: .alert .alert-danger }
 
-> Note: Some Docker image registries do not maintain whitelists of IPs backing their registry DNS names.
-> In that case, you may need to ensure that images are available locally.
-> Calico Enterprise provides extra network policy selectors such as a [domain name selector](https://docs.tigera.io/reference/resources/globalnetworkpolicy#exact-and-wildcard-domain-names)
-> that manages the potentially dynamic IPs serving a particular DNS name.
-{: .alert .alert-info}
+First, let's restrict ingress traffic to the master nodes from outside the cluster only to the Kubernetes API server and Kubelet API ports.
+If you have not modified the failsafe ports, we should still have access to SSH to the nodes after applying this policy.
 
-For this tutorial, we will assume the following:
-- Kubernetes nodes IP range is: 10.10.100.0/24
-- External MySQL database static IP: 54.54.11.11/32
-- Docker images are all available locally
-
-With a set of whitelisted egress IPs in hand, we can apply the policy:
-
-```
+```bash
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: all-nodes-restrict-egress
+  name: allow-all-to-masters
 spec:
-  selector: projectcalico.org/created-by == 'calico-kube-controllers'
-  types:
-  - Egress
+  selector: has(node-role.kubernetes.io/master)
+  order: 100
+  ingress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      ports:
+      # kubelet API
+      - 10250
+      # kube API server
+      - 6443
+  - action: Allow
+    protocol: UDP
+    destination:
+      ports: [53]
   egress:
   - action: Allow
-    destination:
-      nets:
-      - 10.10.100.10/24
-      - 54.54.11.11/32
-  - action: Deny
 EOF
 ```
 
-> Note: This policy does not affect egress from pods on the hosts. Host endpoints only enforce policy that originate from or terminate at the host.
-{: .alert .alert-info}
+Note that the above policy selects the standard Kubernetes label *node-role.kubernetes.io/master* attached to master nodes.
 
-### Above and beyond
+Next apply policy that allows ingress traffic between the masters on certain ports.
+In addition to allowing the Kubernetes API server and Kubelet API ports, we also allow the 
+master nodes to access the etcd server client API and the other Kubernetes control plane processes.
+
+```bash
+calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-master-to-master
+spec:
+  selector: has(node-role.kubernetes.io/master)
+  order: 200
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: has(node-role.kubernetes.io/master)
+    destination:
+      ports:
+      # kubelet API
+      - 10250
+      # kube API server
+      - 6443
+      # etcd server client API
+      - "2379:2381"
+      # kube-scheduler
+      - 10251
+      - 10259
+      # kube-controller-manager
+      - 10252
+      - 10257
+  egress:
+  - action: Allow
+EOF
+```
+
+Now apply a policy similar to the above that allows traffic coming into the loopback device at 127.0.0.1.
+This allows the masters to reach local Kubernetes control plane processes. 
+
+```bash
+calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-master-to-master-local
+spec:
+  selector: has(node-role.kubernetes.io/master)
+  order: 200
+  ingress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      nets:
+      - 127.0.0.1/32
+      ports:
+      # kubelet API
+      - 10250
+      # kube API server
+      - 6443
+      # etcd server client API
+      - "2379:2381"
+      # kube-scheduler
+      - 10251
+      - 10259
+      # kube-controller-manager
+      - 10252
+      - 10257
+      # calico/node health check
+      - 9099
+  egress:
+  - action: Allow
+EOF
+```
+
+Lastly, we need to allow all Kubernetes nodes access to their own Kubelet API.
+Before adding the policy we will add a label to all of our nodes, which then gets added to its automatic host endpoint.
+For this example we will use *kubernetes-host*:
+
+``bash
+kubectl label nodes --all kubernetes-host=
+```
+
+Finally we can apply policy that selects all Kubernetes nodes:
+
+```
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-nodes-to-kublet
+spec:
+  selector: has(kubernetes-host)
+  order: 200
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: has(kubernetes-host)
+    destination:
+      ports:
+      # kubelet API
+      - 10250
+  egress:
+  - action: Allow
+EOF
+```
 
 - [Protect hosts tutorial]({{ site.baseurl }}/security/tutorials/protect-hosts)
+- [Apply policy to Kubernetes node ports]({{ site.baseurl }}/security/kubernetes-node-ports)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) 
-- [Host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint)
+- [Host [[endpoints]]]({{ site.baseurl }}/reference/resources/hostendpoint)
