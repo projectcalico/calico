@@ -166,7 +166,7 @@ When using the {{site.prodname}} CNI plugin with Kubernetes, the plugin must be 
 }
 ```
 
-As a convenience, the API location location can also be configured directly, e.g.
+As a convenience, the API location can also be configured directly, e.g.
 
 ```json
 {
