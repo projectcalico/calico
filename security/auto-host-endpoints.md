@@ -121,7 +121,7 @@ This tutorial will lock down Kubernetes node ingress to only allow SSH and requi
 First, let's restrict ingress traffic to the master nodes from outside the cluster only to the Kubernetes API server and Kubelet API ports.
 If you have not modified the failsafe ports, we should still have access to SSH to the nodes after applying this policy.
 
-```bash
+```
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
@@ -154,7 +154,7 @@ Next apply policy that allows ingress traffic between the masters on certain por
 In addition to allowing the Kubernetes API server and Kubelet API ports, we also allow the 
 master nodes to access the etcd server client API and the other Kubernetes control plane processes.
 
-```bash
+```
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
@@ -190,7 +190,7 @@ EOF
 Now apply a policy similar to the above that allows traffic coming into the loopback device at 127.0.0.1.
 This allows the masters to reach local Kubernetes control plane processes. 
 
-```bash
+```
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
@@ -198,7 +198,7 @@ metadata:
   name: allow-master-to-master-local
 spec:
   selector: has(node-role.kubernetes.io/master)
-  order: 200
+  order: 250
   ingress:
   - action: Allow
     protocol: TCP
@@ -236,13 +236,14 @@ kubectl label nodes --all kubernetes-host=
 Finally we can apply policy that selects all Kubernetes nodes:
 
 ```
+calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: allow-nodes-to-kublet
+  name: allow-nodes-to-kubelet
 spec:
   selector: has(kubernetes-host)
-  order: 200
+  order: 300
   ingress:
   - action: Allow
     protocol: TCP
