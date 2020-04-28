@@ -245,7 +245,7 @@ func configureNodeRef(node *api.Node) {
 		return
 	}
 
-	node.Spec.OrchRefs = []api.OrchRef{api.OrchRef{NodeName: nodeRef, Orchestrator: orchestrator}}
+	node.Spec.OrchRefs = []api.OrchRef{{NodeName: nodeRef, Orchestrator: orchestrator}}
 }
 
 // CreateOrUpdate creates the Node if ResourceVersion is not specified,

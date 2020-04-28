@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/node)](https://goreportcard.com/report/github.com/projectcalico/node)
+
 # calico/node
 <img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
 

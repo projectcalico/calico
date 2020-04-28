@@ -522,7 +522,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should be emtpy", func() {
+			It("should be empty", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(Equal(""))
 			})
 
