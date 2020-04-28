@@ -75,8 +75,16 @@ ip-172-16-102-63.us-west-2.compute.internal-auto-hep    ip-172-16-102-63.us-west
 
 #### Apply network policy to automatic host endpoints
 
-Automatic host endpoints share the common label `projectcalico.org/created-by: calico-kube-controllers`.
-To write policy that targets all Kubernetes nodes, use that label:
+To apply policy that targets all Kubernetes nodes, first add a label to the nodes.
+The label will be synced to their automatic host endpoints.
+
+For example, to add the label **kubernetes-host** to all nodes and their host endpoints:
+
+```bash
+kubectl label nodes --all kubernetes-host=
+```
+
+And an example policy snippet:
 
 ```
 apiVersion: projectcalico.org/v3
@@ -84,29 +92,28 @@ kind: GlobalNetworkPolicy
 metadata:
   name: all-nodes-policy
 spec:
-  selector: projectcalico.org/created-by == 'calico-kube-controllers'
+  selector: has(kubernetes-host)
   <rest of the policy>
 ```
 
 To select a specific set of host endpoints (and their corresponding Kubernetes nodes), use a policy selector that selects a label unique to that set of host endpoints.
-We can take advantage of the syncing of node labels to automatic host endpoints and label that set of nodes with a unique key/value pair.
-For example, if we want to add the label `environment=dev` to nodes named `node1` and `node2`:
+For example, if we want to add the label **environment=dev** to nodes named node1 and node2:
 
 ```bash
 kubectl label node node1 environment=dev
 kubectl label node node2 environment=dev
 ```
 
-With the labels in place and automatic host endpoints enabled, hostendpoints for node1 and node2 will be updated with the `environment=dev` label.
+With the labels in place and automatic host endpoints enabled, host endpoints for node1 and node2 will be updated with the **environment=dev** label.
 We can write policy to select that set of nodes with a combination of selectors:
 
 ```
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: all-nodes-policy
+  name: some-nodes-policy
 spec:
-  selector: projectcalico.org/created-by == 'calico-kube-controllers' && environment == 'dev'
+  selector: has(kubernetes-host) && environment == 'dev'
   <rest of the policy>
 ```
 
@@ -148,7 +155,7 @@ spec:
 EOF
 ```
 
-Note that the above policy selects the standard Kubernetes label *node-role.kubernetes.io/master* attached to master nodes.
+Note that the above policy selects the standard Kubernetes label **node-role.kubernetes.io/master** attached to master nodes.
 
 Next apply policy that allows ingress traffic between the masters on certain ports.
 In addition to allowing the Kubernetes API server and Kubelet API ports, we also allow the 
@@ -227,7 +234,7 @@ EOF
 
 Lastly, we need to allow all Kubernetes nodes access to their own Kubelet API.
 Before adding the policy we will add a label to all of our nodes, which then gets added to its automatic host endpoint.
-For this example we will use *kubernetes-host*:
+For this example we will use **kubernetes-host**:
 
 ``bash
 kubectl label nodes --all kubernetes-host=
