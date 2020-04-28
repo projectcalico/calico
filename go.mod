@@ -11,6 +11,7 @@ require (
 	github.com/projectcalico/typha v0.0.0-20200424145113-15dafd25b67b
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go v1.1.7 // indirect
+	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf // indirect
 
 	// k8s.io/api v1.16.3 is at 16d7abae0d2a
 	k8s.io/api v0.0.0-20191114100352-16d7abae0d2a
