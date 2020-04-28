@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
-	github.com/projectcalico/libcalico-go v0.0.0-20200424184458-61873ceeb07a
+	github.com/projectcalico/libcalico-go v0.0.0-20200427180741-f197f7370140
 	github.com/safchain/ethtool v0.0.0-20170622225139-7ff1ba29eca2 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -22,7 +22,7 @@ require (
 	github.com/ugorji/go v0.0.0-20171019201919-bdcc60b419d1 // indirect
 	github.com/vishvananda/netlink v0.0.0-20170630184320-6e453822d85e
 	github.com/vishvananda/netns v0.0.0-20170219233438-54f0e4339ce7 // indirect
-	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
+	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	google.golang.org/grpc v1.19.0
 
 	// k8s.io/api v1.16.3 is at 16d7abae0d2a
