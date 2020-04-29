@@ -104,7 +104,7 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 	}
 
 	state->pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src,
-					    state->ip_dst, state->sport, state->dst.u.port);
+					    state->ip_dst, state->sport, state->dport);
 
 	bpf_tail_call(skb, &cali_jump, 1);
 	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
@@ -223,7 +223,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			.ifindex = skb->ingress_ifindex,
 			.l4_protocol = state->ip_proto,
 			.sport = host_to_be16(state->sport),
-			.dport = host_to_be16(state->dst.u.port),
+			.dport = host_to_be16(state->dport),
 		};
 
 		/* set the ipv4 here, otherwise the ipv4/6 unions do not get
@@ -470,13 +470,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			goto deny;
 		}
 		state.sport = be16_to_host(tcp_header->source);
-		state.dst.u.port = be16_to_host(tcp_header->dest);
-		CALI_DEBUG("TCP; ports: s=%d d=%d\n", state.sport, state.dst.u.port);
+		state.dport = be16_to_host(tcp_header->dest);
+		CALI_DEBUG("TCP; ports: s=%d d=%d\n", state.sport, state.dport);
 		break;
 	case IPPROTO_UDP:
 		state.sport = be16_to_host(udp_header->source);
-		state.dst.u.port = be16_to_host(udp_header->dest);
-		CALI_DEBUG("UDP; ports: s=%d d=%d\n", state.sport, state.dst.u.port);
+		state.dport = be16_to_host(udp_header->dest);
+		CALI_DEBUG("UDP; ports: s=%d d=%d\n", state.sport, state.dport);
 		break;
 	case IPPROTO_ICMP:
 		icmp_header = (void*)(ip_header+1);
@@ -517,7 +517,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		.src	= state.ip_src,
 		.sport	= state.sport,
 		.dst	= state.ip_dst,
-		.dport	= state.dst.u.port,
+		.dport	= state.dport,
 		.nat_tun_src = state.nat_tun_src,
 	};
 
@@ -561,7 +561,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* No conntrack entry, check if we should do NAT */
 	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
-					 state.ip_proto, state.dst.u.port,
+					 state.ip_proto, state.dport,
 					 state.nat_tun_src != 0);
 
 	if (nat_dest != NULL) {
@@ -569,7 +569,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		state.post_nat_dport = nat_dest->port;
 	} else {
 		state.post_nat_ip_dst = state.ip_dst;
-		state.post_nat_dport = state.dst.u.port;
+		state.post_nat_dport = state.dport;
 	}
 
 	if (CALI_F_TO_WEP &&
@@ -611,12 +611,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 		}
 	}
-
 	if (state.ip_proto == IPPROTO_ICMP)
 	{
-		state.dst.u.icmp.type = icmp_header->type;
-		state.dst.u.icmp.code = icmp_header->code;
+		state.icmp_type = icmp_header->type;
+        	state.icmp_code = icmp_header->code;
 	}
+
+
 	// Set up an entry in the state map and then jump to the normal policy program.
 	int key = 0;
 	struct cali_tc_state *map_state = cali_v4_state_lookup_elem(&key);
@@ -891,7 +892,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 
 		ct_nat_ctx.orig_dst = state->ip_dst;
-		ct_nat_ctx.orig_dport = state->dst.u.port;
+		ct_nat_ctx.orig_dport = state->dport;
 		/* fall through as DNAT is now established */
 
 	case CALI_CT_ESTABLISHED_DNAT:
@@ -968,7 +969,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (l4_csum_off) {
 			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
-					state->post_nat_ip_dst,	host_to_be16(state->dst.u.port),
+					state->post_nat_ip_dst,	host_to_be16(state->dport),
 					host_to_be16(state->post_nat_dport),
 					ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
@@ -1013,7 +1014,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 
 		state->dport = state->post_nat_dport;
->>>>>>> master
 		state->ip_dst = state->post_nat_ip_dst;
 
 		goto allow;
@@ -1159,7 +1159,7 @@ icmp_allow:
 	}
 	ip_header = skb_iphdr(skb);
 	tc_state_fill_from_iphdr(state, ip_header);
-	state->sport = state->dst.u.port = 0;
+	state->sport = state->dport = 0;
 
 	/* packet was created because of approved traffic, treat it as related */
 	seen_mark = CALI_SKB_MARK_BYPASS_FWD;
@@ -1172,7 +1172,7 @@ nat_encap:
 		goto  deny;
 	}
 
-	state->sport = state->dst.u.port = CALI_VXLAN_PORT;
+	state->sport = state->dport = CALI_VXLAN_PORT;
 	state->ip_proto = IPPROTO_UDP;
 
 	if (CALI_F_INGRESS) {

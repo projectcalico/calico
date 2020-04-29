@@ -83,11 +83,11 @@ var (
 	stateOffPolResult      int16 = 16
 	stateOffSrcPort        int16 = 20
 	stateOffDstPort        int16 = 22
+	stateOffICMPType       int16 = 22
+	stateOffICMPCode       int16 = 23
 	_                            = stateOffDstPort
 	stateOffPostNATDstPort int16 = 24
 	stateOffIPProto        int16 = 26
-	stateOffICMPType       int16 = 22
-	stateOffICMPCode       int16 = 23
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -239,6 +239,11 @@ const (
 
 func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
 	// TODO IP version
+	if rule.IpVersion != 0 && rule.IpVersion != 4 {
+		log.Debugf ("Skipping rule it is for a different IP version.")
+		return
+	}
+
 	p.writeStartOfRule()
 
 	if rule.Protocol != nil {
@@ -304,26 +309,24 @@ func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
 		p.writePortsMatch(true, legDest, rule.NotDstPorts, rule.NotDstNamedPortIpSetIds)
 	}
 
-	if rule.IpVersion == 4 {
-		if rule.Icmp != nil {
-			log.WithField("icmpv4", rule.Icmp).Debugf("ICMP type/code match")
-			switch icmp := rule.Icmp.(type) {
-			case *proto.Rule_IcmpTypeCode:
-				p.writeICMPTypeMatch(false, uint8(icmp.IcmpTypeCode.Type))
-				p.writeICMPCodeMatch(false, uint8(icmp.IcmpTypeCode.Code))
-			case *proto.Rule_IcmpType:
-				p.writeICMPTypeMatch(false, uint8(icmp.IcmpType))
-			}
+	if rule.Icmp != nil {
+		log.WithField("icmpv4", rule.Icmp).Debugf("ICMP type/code match")
+		switch icmp := rule.Icmp.(type) {
+		case *proto.Rule_IcmpTypeCode:
+			p.writeICMPTypeMatch(false, uint8(icmp.IcmpTypeCode.Type))
+			p.writeICMPCodeMatch(false, uint8(icmp.IcmpTypeCode.Code))
+		case *proto.Rule_IcmpType:
+			p.writeICMPTypeMatch(false, uint8(icmp.IcmpType))
 		}
-		if rule.NotIcmp != nil {
-			log.WithField("icmpv4", rule.Icmp).Debugf("Not ICMP type/code match")
-			switch icmp := rule.NotIcmp.(type) {
-			case *proto.Rule_NotIcmpTypeCode:
-				p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpTypeCode.Type))
-				p.writeICMPCodeMatch(true, uint8(icmp.NotIcmpTypeCode.Code))
-			case *proto.Rule_NotIcmpType:
-				p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpType))
-			}
+	}
+	if rule.NotIcmp != nil {
+		log.WithField("icmpv4", rule.Icmp).Debugf("Not ICMP type/code match")
+		switch icmp := rule.NotIcmp.(type) {
+		case *proto.Rule_NotIcmpTypeCode:
+			p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpTypeCode.Type))
+			p.writeICMPCodeMatch(true, uint8(icmp.NotIcmpTypeCode.Code))
+		case *proto.Rule_NotIcmpType:
+			p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpType))
 		}
 	}
 
