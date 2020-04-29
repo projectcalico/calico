@@ -683,7 +683,7 @@ func (r *RouteTable) applyRouteDeltas(ifaceName string) (targetsToCreate, target
 	deltaTargets := r.pendingIfaceNameToDeltaTargets[ifaceName]
 	for cidr, target := range deltaTargets {
 		if current, ok := cidrsToTarget[cidr]; ok {
-			// Previous entry exists, so need to delete it. Note that the SetRoute, RouteAdd and RouteRemove will not
+			// Previous entry exists, so need to delete it. Note that the SetRoutes, RouteUpdate and RouteRemove will not
 			// add deltas for unchanged targets, so we don't need to check for target equivalency here.
 			log.Debugf("Deleted or updated CIDR: %v", cidr)
 			targetsToDelete = append(targetsToDelete, current)

@@ -17,6 +17,8 @@ package routerule
 import (
 	"net"
 
+	"github.com/projectcalico/felix/ip"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -43,13 +45,17 @@ func (r *Rule) NetLinkRule() *netlink.Rule {
 }
 
 func (r *Rule) LogCxt() *log.Entry {
+	var src interface{}
+	if r.nlRule.Src != nil {
+		src = r.nlRule.Src
+	}
 	return log.WithFields(log.Fields{
 		"ipFamily": r.nlRule.Family,
 		"priority": r.nlRule.Priority,
 		"invert":   r.nlRule.Invert,
 		"Mark":     r.nlRule.Mark,
 		"Mask":     r.nlRule.Mask,
-		"src":      r.nlRule.Src.String(),
+		"src":      src,
 		"Table":    r.nlRule.Table,
 	})
 }
@@ -73,6 +79,10 @@ func (r *Rule) markMatchesWithMask(mark, mask uint32) *Rule {
 
 func (r *Rule) MatchFWMark(fwmark uint32) *Rule {
 	return r.markMatchesWithMask(fwmark, fwmark)
+}
+
+func (r *Rule) MatchFWMarkWithMask(fwmark, mask uint32) *Rule {
+	return r.markMatchesWithMask(fwmark, mask)
 }
 
 func (r *Rule) MatchSrcAddress(ip net.IPNet) *Rule {
@@ -104,7 +114,7 @@ func RulesMatchSrcFWMark(r, p *Rule) bool {
 		(r.nlRule.Invert == p.nlRule.Invert) &&
 		(r.nlRule.Mark == p.nlRule.Mark) &&
 		(r.nlRule.Mask == p.nlRule.Mask) &&
-		(r.nlRule.Src.String() == p.nlRule.Src.String())
+		ip.IPNetsEqual(r.nlRule.Src, p.nlRule.Src)
 }
 
 func RulesMatchSrcFWMarkTable(r, p *Rule) bool {
