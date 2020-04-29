@@ -942,7 +942,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			}
 			state->ip_src = HOST_IP;
 			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
-			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
 
 			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
 			fib = true;

@@ -67,6 +67,7 @@ const (
 var (
 	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
 	node1ip           = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2          = net.IPv4(10, 10, 2, 1).To4()
 	node2ip           = net.IPv4(10, 10, 0, 2).To4()
 )
 
