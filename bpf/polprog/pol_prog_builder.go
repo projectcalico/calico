@@ -29,6 +29,7 @@ import (
 	. "github.com/projectcalico/felix/bpf/asm"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/rules"
 )
 
 type Builder struct {
@@ -207,6 +208,30 @@ func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset, ipOffset, portOffset 
 	p.b.StoreStack32(R1, keyOffset+ipsKeyID+4)
 }
 
+func validateNet (rule *proto.Rule) (*proto.Rule) {
+	ruleCopy := rule
+	var filteredAll bool
+	ruleCopy.SrcNet, filteredAll = rules.FilterNets(rule.SrcNet, uint8(rule.IpVersion))
+	if filteredAll {
+		return nil
+	}
+        ruleCopy.NotSrcNet, filteredAll = rules.FilterNets(rule.NotSrcNet, uint8(rule.IpVersion))
+        if filteredAll {
+                return nil
+        }
+
+        ruleCopy.DstNet, filteredAll = rules.FilterNets(rule.DstNet, uint8(rule.IpVersion))
+        if filteredAll {
+                return nil
+        }
+
+        ruleCopy.NotDstNet, filteredAll = rules.FilterNets(rule.NotDstNet, uint8(rule.IpVersion))
+        if filteredAll {
+                return nil
+        }
+	return ruleCopy
+}
+
 func (p *Builder) writeRules(rules [][][]*proto.Rule) {
 	for polOrProfIdx, polsOrProfs := range rules {
 		endOfTierLabel := fmt.Sprint("end_of_tier_", polOrProfIdx)
@@ -215,9 +240,12 @@ func (p *Builder) writeRules(rules [][][]*proto.Rule) {
 		for polIdx, pol := range polsOrProfs {
 			log.Debugf("Start of policy/profile %d", polIdx)
 			for ruleIdx, rule := range pol {
-				log.Debugf("Start of rule %d", ruleIdx)
-				p.writeRule(rule, endOfTierLabel)
-				log.Debugf("End of rule %d", ruleIdx)
+				rule = validateNet (rule)
+				if rule != nil {
+					log.Debugf("Start of rule %d", ruleIdx)
+					p.writeRule(rule, endOfTierLabel)
+					log.Debugf("End of rule %d", ruleIdx)
+				}
 			}
 			log.Debugf("End of policy/profile %d", polIdx)
 		}
@@ -238,7 +266,6 @@ const (
 )
 
 func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
-	// TODO IP version
 	if rule.IpVersion != 0 && rule.IpVersion != 4 {
 		log.Debugf ("Skipping rule it is for a different IP version.")
 		return
@@ -329,8 +356,6 @@ func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
 			p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpType))
 		}
 	}
-
-	// TODO ICMP
 
 	p.writeEndOfRule(rule, passLabel)
 	p.ruleID++

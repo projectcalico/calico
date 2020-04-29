@@ -61,7 +61,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule
 	return rules
 }
 
-func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filteredAll bool) {
+func FilterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filteredAll bool) {
 	if len(mixedCIDRs) == 0 {
 		return nil, false
 	}
@@ -95,19 +95,19 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	// and only for IPv6, where there's no obvious meaning to the rule.
 	ruleCopy := *pRule
 	var filteredAll bool
-	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion)
+	ruleCopy.SrcNet, filteredAll = FilterNets(pRule.SrcNet, ipVersion)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.NotSrcNet, filteredAll = filterNets(pRule.NotSrcNet, ipVersion)
+	ruleCopy.NotSrcNet, filteredAll = FilterNets(pRule.NotSrcNet, ipVersion)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.DstNet, filteredAll = filterNets(pRule.DstNet, ipVersion)
+	ruleCopy.DstNet, filteredAll = FilterNets(pRule.DstNet, ipVersion)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.NotDstNet, filteredAll = filterNets(pRule.NotDstNet, ipVersion)
+	ruleCopy.NotDstNet, filteredAll = FilterNets(pRule.NotDstNet, ipVersion)
 	if filteredAll {
 		return nil
 	}
