@@ -234,7 +234,7 @@ Lastly, we need to allow all Kubernetes nodes access to their own Kubelet API.
 Before adding the policy we will add a label to all of our nodes, which then gets added to its automatic host endpoint.
 For this example we will use **kubernetes-host**:
 
-``bash
+```bash
 kubectl label nodes --all kubernetes-host=
 ```
 
