@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,6 +81,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 
 	BeforeEach(func() {
 		fcFields = fieldsByName(v3.FelixConfigurationSpec{})
+
 		cpFields = fieldsByName(Config{})
 		for _, name := range cpFieldsToIgnore {
 			delete(cpFields, name)
@@ -578,6 +579,15 @@ var _ = DescribeTable("Config validation",
 	}, false),
 	Entry("OpenstackRegion too long", map[string]string{
 		"OpenstackRegion": "my-region-has-a-very-long-and-extremely-interesting-name",
+	}, false),
+	Entry("valid RouteTableRange", map[string]string{
+		"RouteTableRange": "1-250",
+	}, true),
+	Entry("invalid RouteTableRange", map[string]string{
+		"RouteTableRange": "1-255",
+	}, false),
+	Entry("invalid RouteTableRange", map[string]string{
+		"RouteTableRange": "abcde",
 	}, false),
 )
 

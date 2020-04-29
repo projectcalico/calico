@@ -53,23 +53,17 @@ struct cali_rt {
 	};
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_routes = {
-	.type           = BPF_MAP_TYPE_LPM_TRIE,
-	.key_size       = sizeof(union cali_rt_lpm_key),
-	.value_size     = sizeof(struct cali_rt),
-	.max_entries    = 1024*1024,
-	.map_flags      = BPF_F_NO_PREALLOC,
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy        = 2 /* global namespace */,
-#endif
-};
+CALI_MAP_V1(cali_v4_routes,
+		BPF_MAP_TYPE_LPM_TRIE,
+		union cali_rt_lpm_key, struct cali_rt,
+		1024*1024, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 static CALI_BPF_INLINE struct cali_rt *cali_rt_lookup(__be32 addr)
 {
 	union cali_rt_lpm_key k;
 	k.key.prefixlen = 32;
 	k.key.addr = addr;
-	return bpf_map_lookup_elem(&cali_v4_routes, &k);
+	return cali_v4_routes_lookup_elem(&k);
 }
 
 static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(__be32 addr)

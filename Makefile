@@ -28,7 +28,7 @@
 #
 ###############################################################################
 PACKAGE_NAME?=github.com/projectcalico/felix
-GO_BUILD_VER?=v0.37
+GO_BUILD_VER?=v0.38
 
 ###############################################################################
 # Download and include Makefile.common
@@ -231,17 +231,13 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
-	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE_NAME):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
- 	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
-	fi
+	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 
-image-test: image fv/Dockerfile.test.amd64
-	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE_NAME):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
- 	  docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) docker-image; \
-	fi
+image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection
+	docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) bin;
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE)-test:latest-$(ARCH) $(BUILD_IMAGE)-test:latest
 endif
@@ -482,6 +478,12 @@ bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
+
+bin/pktgen: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+	@echo Building pktgen...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/pktgen"'
 
 bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...

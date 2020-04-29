@@ -27,6 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -103,6 +104,7 @@ type Config struct {
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
 	BPFEnabled                         bool           `config:"bool;false"`
+	BPFDisableUnprivileged             bool           `config:"bool;true"`
 	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;non-zero"`
 	BPFDataIfacePattern                *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$)"`
 	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true"`
@@ -237,6 +239,13 @@ type Config struct {
 	DebugDisableLogDropping         bool          `config:"bool;false"`
 	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
 	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
+
+	// Configure where Felix gets its routing information.
+	// - workloadIPs: use workload endpoints to construct routes.
+	// - calicoIPAM: use IPAM data to contruct routes.
+	RouteSource string `config:"oneof(WorkloadIPs,CalicoIPAM);CalicoIPAM"`
+
+	RouteTableRange idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
 
 	// State tracking.
 
@@ -620,6 +629,8 @@ func loadParams() {
 				Msg: "invalid string"}
 		case "cidr-list":
 			param = &CIDRListParam{}
+		case "route-table-range":
+			param = &RouteTableRangeParam{}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 		}

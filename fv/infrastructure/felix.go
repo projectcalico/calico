@@ -24,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/tcpdump"
 	"github.com/projectcalico/felix/fv/utils"
 )
 
@@ -166,4 +167,9 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Signal(syscall.SIGHUP)
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+}
+
+// AttachTCPDump returns tcpdump attached to the container
+func (f *Felix) AttachTCPDump(iface string) *tcpdump.TCPDump {
+	return tcpdump.Attach(f.Container.Name, "", iface)
 }

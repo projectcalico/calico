@@ -233,7 +233,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
 				if ok {
 					wepScore++
 				}
-				if wepScore > bestWepScore || wepScore == bestWepScore && wepID.String() > bestWepID.String(){
+				if wepScore > bestWepScore || wepScore == bestWepScore && wepID.String() > bestWepID.String() {
 					flags |= routes.FlagsLocalWorkload
 					routeVal := routes.NewValueWithIfIndex(flags, ifaceIdx)
 					route = &routeVal
@@ -463,7 +463,6 @@ func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
 	}
 	log.Debugf("localHostIPs update %+v", newIPs)
 }
-
 
 func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	cidr := ip.MustParseCIDROrIP(update.Dst)

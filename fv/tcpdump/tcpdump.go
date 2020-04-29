@@ -16,6 +16,7 @@ package tcpdump
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os/exec"
 
@@ -33,20 +34,39 @@ import (
 	"github.com/projectcalico/felix/fv/utils"
 )
 
+// Attach use if tcpdump is available in the container
 func Attach(containerName, netns, iface string) *TCPDump {
 	t := &TCPDump{
+		exe:              "docker",
 		logEnabled:       true,
 		contName:         containerName,
-		netns:            netns,
-		iface:            iface,
 		matchers:         map[string]*tcpDumpMatcher{},
 		listeningStarted: make(chan struct{}),
 	}
+
+	t.args = []string{"exec", t.contName}
+	if netns != "" {
+		t.args = append(t.args, "ip", "netns", "exec", netns)
+	}
+	t.args = append(t.args, "tcpdump", "-nli", iface)
 
 	t.logString = containerName
 	if netns != "" {
 		t.logString += ":" + netns
 	}
+
+	return t
+}
+
+// AttachUnavailable use if tcpdump is not available in the container
+func AttachUnavailable(containerName, containerID, iface string) *TCPDump {
+	t := Attach(containerName, "", iface)
+
+	t.args = []string{"run",
+		"--rm",
+		fmt.Sprintf("--network=container:%s", containerID),
+		"--privileged",
+		"corfr/tcpdump", "-nli", iface}
 
 	return t
 }
@@ -65,8 +85,8 @@ type TCPDump struct {
 
 	logEnabled       bool
 	contName         string
-	netns            string
-	iface            string
+	exe              string
+	args             []string
 	logString        string
 	cmd              *exec.Cmd
 	out, err         io.ReadCloser
@@ -106,14 +126,8 @@ func (t *TCPDump) MatchCount(name string) int {
 }
 
 func (t *TCPDump) Start(expr ...string) {
-	args := []string{"exec", t.contName}
-	if t.netns != "" {
-		args = append(args, "ip", "netns", "exec", t.netns)
-	}
-	args = append(args, "tcpdump", "-nli", t.iface)
-	args = append(args, expr...)
-
-	t.cmd = utils.Command("docker", args...)
+	args := append(t.args, expr...)
+	t.cmd = utils.Command(t.exe, args...)
 	var err error
 	t.out, err = t.cmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
@@ -166,6 +180,8 @@ func (t *TCPDump) readStdout() {
 }
 
 func (t *TCPDump) readStderr() {
+	defer ginkgo.GinkgoRecover()
+
 	s := bufio.NewScanner(t.err)
 	closedChan := false
 	safeClose := func() {
@@ -174,11 +190,19 @@ func (t *TCPDump) readStderr() {
 			closedChan = true
 		}
 	}
-	defer safeClose()
+
+	listening := false
+
+	defer func() {
+		Expect(listening).To(BeTrue())
+		safeClose()
+	}()
+
 	for s.Scan() {
 		line := s.Text()
 		logrus.Infof("[%s] ERR: %s", t.contName, line)
 		if strings.Contains(line, "listening") {
+			listening = true
 			safeClose()
 		}
 	}

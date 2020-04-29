@@ -14,15 +14,10 @@ struct sendrecv4_val {
 	uint32_t port; /* because bpf_sock_addr uses 32bit and we would need padding */
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_srmsg = {
-	.type = BPF_MAP_TYPE_LRU_HASH,
-	.key_size = sizeof(struct sendrecv4_key),
-	.value_size = sizeof(struct sendrecv4_val),
-	.max_entries = 510000, // arbitrary
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2 /* global namespace */,
-#endif
-};
+CALI_MAP_V1(cali_v4_srmsg,
+		BPF_MAP_TYPE_LRU_HASH,
+		struct sendrecv4_key, struct sendrecv4_val,
+		510000, 0, MAP_PIN_GLOBAL)
 
 static CALI_BPF_INLINE uint16_t ctx_port_to_host(__u32 port)
 {

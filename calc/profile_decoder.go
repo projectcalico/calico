@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ type ProfileDecoder struct {
 }
 
 func NewProfileDecoder(callbacks passthruCallbacks) *ProfileDecoder {
-	return &ProfileDecoder{callbacks: callbacks, converter: conversion.Converter{}}
+	return &ProfileDecoder{callbacks: callbacks, converter: conversion.NewConverter()}
 }
 
 func (p *ProfileDecoder) RegisterWith(d *dispatcher.Dispatcher) {

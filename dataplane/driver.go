@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/felix/config"
 	extdataplane "github.com/projectcalico/felix/dataplane/external"
 	intdataplane "github.com/projectcalico/felix/dataplane/linux"
+	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
@@ -185,6 +186,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			ExternalNodesCidrs:                 configParams.ExternalNodesCIDRList,
 			SidecarAccelerationEnabled:         configParams.SidecarAccelerationEnabled,
 			BPFEnabled:                         configParams.BPFEnabled,
+			BPFDisableUnprivileged:             configParams.BPFDisableUnprivileged,
 			BPFConnTimeLBEnabled:               configParams.BPFConnectTimeLoadBalancingEnabled,
 			BPFKubeProxyIptablesCleanupEnabled: configParams.BPFKubeProxyIptablesCleanupEnabled,
 			BPFLogLevel:                        configParams.BPFLogLevel,
@@ -195,6 +197,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
 			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
+			RouteTableManager:                  idalloc.NewIndexAllocator(configParams.RouteTableRange),
 
 			KubeClientSet: k8sClientSet,
 		}

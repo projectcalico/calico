@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 	if host.isLocal {
 		// Create the cali interface, so that Felix does dataplane programming for the local
 		// endpoint.
-		interfaceName := conversion.VethNameForWorkload(nsName, name)
+		interfaceName := conversion.NewConverter().VethNameForWorkload(nsName, name)
 		log.WithField("interfaceName", interfaceName).Info("Prepare interface")
 
 		// Create a namespace.

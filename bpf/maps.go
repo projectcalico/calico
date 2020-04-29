@@ -53,6 +53,23 @@ type MapParameters struct {
 	MaxEntries int
 	Name       string
 	Flags      int
+	Version    int
+}
+
+func versionedStr(ver int, str string) string {
+	if ver <= 1 {
+		return str
+	}
+
+	return fmt.Sprintf("%s%d", str, ver)
+}
+
+func (mp *MapParameters) versionedName() string {
+	return versionedStr(mp.Version, mp.Name)
+}
+
+func (mp *MapParameters) versionedFilename() string {
+	return versionedStr(mp.Version, mp.Filename)
 }
 
 type MapContext struct {
@@ -60,7 +77,7 @@ type MapContext struct {
 }
 
 func (c *MapContext) NewPinnedMap(params MapParameters) Map {
-	if len(params.Name) >= unix.BPF_OBJ_NAME_LEN {
+	if len(params.versionedName()) >= unix.BPF_OBJ_NAME_LEN {
 		logrus.WithField("name", params.Name).Panic("Bug: BPF map name too long")
 	}
 	m := &PinnedMap{
@@ -81,7 +98,7 @@ type PinnedMap struct {
 }
 
 func (b *PinnedMap) GetName() string {
-	return b.Name
+	return b.versionedName()
 }
 
 func (b *PinnedMap) MapFD() MapFD {
@@ -92,7 +109,7 @@ func (b *PinnedMap) MapFD() MapFD {
 }
 
 func (b *PinnedMap) Path() string {
-	return b.Filename
+	return b.versionedFilename()
 }
 
 func (b *PinnedMap) Close() error {
@@ -119,7 +136,7 @@ func DumpMapCmd(m Map) ([]string, error) {
 			"map",
 			"dump",
 			"pinned",
-			pm.Filename,
+			pm.versionedFilename(),
 		}, nil
 	}
 
@@ -161,11 +178,11 @@ func (b *PinnedMap) Iter(f MapIter) error {
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
-		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.Filename, err, output)
+		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.versionedFilename(), err, output)
 	}
 
 	if err := IterMapCmdOutput(output, f); err != nil {
-		return errors.WithMessagef(err, "map %s", b.Filename)
+		return errors.WithMessagef(err, "map %s", b.versionedFilename())
 	}
 
 	return nil
@@ -198,7 +215,7 @@ func (b *PinnedMap) Delete(k []byte) error {
 	logrus.WithField("key", k).Debug("Deleting map entry")
 	args := make([]string, 0, 10+len(k))
 	args = append(args, "map", "delete",
-		"pinned", b.Filename,
+		"pinned", b.versionedFilename(),
 		"key")
 	args = appendBytes(args, k)
 
@@ -227,7 +244,7 @@ func (b *PinnedMap) EnsureExists() error {
 		return err
 	}
 
-	_, err = os.Stat(b.Filename)
+	_, err = os.Stat(b.versionedFilename())
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -235,7 +252,7 @@ func (b *PinnedMap) EnsureExists() error {
 		logrus.Debug("Map file didn't exist")
 		if b.context.RepinningEnabled {
 			logrus.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			err = RepinMap(b.Name, b.Filename)
+			err = RepinMap(b.versionedName(), b.versionedFilename())
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
@@ -244,21 +261,22 @@ func (b *PinnedMap) EnsureExists() error {
 
 	if err == nil {
 		logrus.Debug("Map file already exists, trying to open it")
-		b.fd, err = GetMapFDByPin(b.Filename)
+		b.fd, err = GetMapFDByPin(b.versionedFilename())
 		if err == nil {
 			b.fdLoaded = true
-			logrus.WithField("fd", b.fd).WithField("name", b.Filename).Info("Loaded map file descriptor.")
+			logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
+				Info("Loaded map file descriptor.")
 		}
 		return err
 	}
 
 	logrus.Debug("Map didn't exist, creating it")
-	cmd := exec.Command("bpftool", "map", "create", b.Filename,
+	cmd := exec.Command("bpftool", "map", "create", b.versionedFilename(),
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),
 		"value", fmt.Sprint(b.ValueSize),
 		"entries", fmt.Sprint(b.MaxEntries),
-		"name", b.Name,
+		"name", b.versionedName(),
 		"flags", fmt.Sprint(b.Flags),
 	)
 	out, err := cmd.CombinedOutput()
@@ -266,10 +284,11 @@ func (b *PinnedMap) EnsureExists() error {
 		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
 		return err
 	}
-	b.fd, err = GetMapFDByPin(b.Filename)
+	b.fd, err = GetMapFDByPin(b.versionedFilename())
 	if err == nil {
 		b.fdLoaded = true
-		logrus.WithField("fd", b.fd).WithField("name", b.Filename).Info("Loaded map file descriptor.")
+		logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
+			Info("Loaded map file descriptor.")
 	}
 	return err
 }

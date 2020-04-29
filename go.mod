@@ -8,6 +8,7 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/go-ini/ini v1.44.0
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
+	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
 	github.com/golang/protobuf v1.3.2
 	github.com/google/gopacket v1.1.17
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
@@ -21,9 +22,9 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/errors v0.8.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200325215000-9afaf4873979
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200424184458-61873ceeb07a
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
-	github.com/projectcalico/typha v0.7.3-0.20200327230615-99d223e5f7bd
+	github.com/projectcalico/typha v0.7.3-0.20200424145113-15dafd25b67b
 	github.com/prometheus/client_golang v0.9.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2

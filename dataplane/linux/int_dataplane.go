@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"regexp"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/projectcalico/felix/bpf/state"
@@ -142,12 +141,14 @@ type Config struct {
 
 	PostInSyncCallback func()
 	HealthAggregator   *health.HealthAggregator
+	RouteTableManager  *idalloc.IndexAllocator
 
 	DebugSimulateDataplaneHangAfter time.Duration
 
 	ExternalNodesCidrs []string
 
 	BPFEnabled                         bool
+	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
 	BPFDataIfacePattern                *regexp.Regexp
@@ -374,8 +375,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
 	if config.RulesConfig.VXLANEnabled {
-		routeTableVXLAN := routetable.New([]string{"vxlan.calico"}, 4, true, config.NetlinkTimeout, config.DeviceRouteSourceAddress,
-			config.DeviceRouteProtocol, true)
+		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0)
 
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
@@ -386,13 +387,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
-		// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
-		log.Info("Checking if we need to clean up the VXLAN device")
-		if link, err := netlink.LinkByName("vxlan.calico"); err != nil && err != syscall.ENODEV {
-			log.WithError(err).Warnf("Failed to query VXLAN device")
-		} else if err = netlink.LinkDel(link); err != nil {
-			log.WithError(err).Error("Failed to delete unwanted VXLAN device")
-		}
+		cleanUpVXLANDevice()
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -571,8 +566,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout,
-		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
+	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
+	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
+		interfaceRegexes[i] = "^" + r + ".*"
+	}
+	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
+		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0)
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -638,7 +637,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
-		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout, config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
+		routeTableV6 := routetable.New(
+			interfaceRegexes, 6, false, config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0)
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
@@ -688,6 +689,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	return dp
+}
+
+func cleanUpVXLANDevice() {
+	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
+	log.Debug("Checking if we need to clean up the VXLAN device")
+	link, err := netlink.LinkByName("vxlan.calico")
+	if err != nil {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			log.Debug("VXLAN disabled and no VXLAN device found")
+			return
+		}
+		log.WithError(err).Warnf("VXLAN disabled and failed to query VXLAN device.  Ignoring.")
+		return
+	}
+	if err = netlink.LinkDel(link); err != nil {
+		log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device. Ignoring.")
+	}
 }
 
 type Manager interface {
@@ -866,10 +884,23 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		t.SetRuleInsertions("INPUT", inputRules)
 		t.SetRuleInsertions("FORWARD", fwdRules)
 	}
+
 	for _, t := range d.iptablesNATTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion))
 		t.SetRuleInsertions("POSTROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainNATPostrouting},
+		}})
+	}
+
+	for _, t := range d.iptablesRawTables {
+		rawChains := []*iptables.Chain{{
+			Name: rules.ChainRawPrerouting,
+			Rules: rules.RPFilter(t.IPVersion, 0xca100000, 0xfff00000,
+				d.config.RulesConfig.OpenStackSpecialCasesEnabled, true),
+		}}
+		t.UpdateChains(rawChains)
+		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
+			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
 	}
 }
@@ -1207,6 +1238,14 @@ func (d *InternalDataplane) configureKernel() {
 	mp := newModProbe(moduleConntrackSCTP, newRealCmd)
 	out, err := mp.Exec()
 	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleConntrackSCTP)
+
+	if d.config.BPFEnabled && d.config.BPFDisableUnprivileged {
+		log.Info("BPF enabled, disabling unprivileged BPF usage.")
+		err := writeProcSys("/proc/sys/kernel/unprivileged_bpf_disabled", "1")
+		if err != nil {
+			log.WithError(err).Error("Failed to set unprivileged_bpf_disabled sysctl")
+		}
+	}
 }
 
 func (d *InternalDataplane) recordMsgStat(msg interface{}) {

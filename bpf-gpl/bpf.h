@@ -139,6 +139,8 @@ struct bpf_map_def_extended {
 
 #define CALI_RES_REDIR_IFINDEX	(TC_ACT_VALUE_MAX + 100) /* packet should be sent back the same iface */
 
+#define FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
 #pragma clang diagnostic push
@@ -149,7 +151,8 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 		!!(CALI_COMPILE_FLAGS & CALI_CGROUP) !=
 		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_TUNNEL | CALI_TC_DSR))
 	);
-	COMPILE_TIME_ASSERT(!CALI_F_DSR || (CALI_F_DSR && CALI_F_FROM_WEP) || (CALI_F_DSR && CALI_F_HEP))
+	COMPILE_TIME_ASSERT(!CALI_F_DSR || (CALI_F_DSR && CALI_F_FROM_WEP) || (CALI_F_DSR && CALI_F_HEP));
+	COMPILE_TIME_ASSERT(CALI_F_TO_HOST || CALI_F_FROM_HOST);
 #pragma clang diagnostic pop
 }
 
@@ -194,5 +197,51 @@ CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(TMTU) 
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
+
+#define MAP_PIN_GLOBAL	2
+
+#ifndef __BPFTOOL_LOADER__
+#define CALI_MAP_TC_EXT_PIN(pin)	.pinning_strategy = pin,
+#else
+#define CALI_MAP_TC_EXT_PIN(pin)
+#endif
+
+#define map_symbol(name, ver) name##ver
+
+#define MAP_LOOKUP_FN(name, ver) \
+static CALI_BPF_INLINE void * name##_lookup_elem(const void* key)	\
+{									\
+	return bpf_map_lookup_elem(&map_symbol(name, ver), key);	\
+}
+
+#define MAP_UPDATE_FN(name, ver) \
+static CALI_BPF_INLINE int name##_update_elem(const void* key, const void* value, __u64 flags)\
+{										\
+	return bpf_map_update_elem(&map_symbol(name, ver), key, value, flags);	\
+}
+
+#define MAP_DELETE_FN(name, ver) \
+static CALI_BPF_INLINE int name##_delete_elem(const void* key)	\
+{									\
+	return bpf_map_delete_elem(&map_symbol(name, ver), key);	\
+}
+
+#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin) 		\
+struct bpf_map_def_extended __attribute__((section("maps"))) map_symbol(name, ver) = {	\
+	.type = map_type,								\
+	.key_size = sizeof(key_type),							\
+	.value_size = sizeof(val_type),							\
+	.map_flags = flags,								\
+	.max_entries = size,								\
+	CALI_MAP_TC_EXT_PIN(pin)							\
+};											\
+											\
+	MAP_LOOKUP_FN(name, ver)							\
+	MAP_UPDATE_FN(name, ver)							\
+	MAP_DELETE_FN(name, ver)
+
+#define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags, pin) 	\
+		CALI_MAP(name,, map_type, key_type, val_type, size, flags, pin)
+
 
 #endif /* __CALI_BPF_H__ */

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 	"github.com/kardianos/osext"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/idalloc"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -506,4 +507,29 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 		return
 	}
 	return raw, nil
+}
+
+type RouteTableRangeParam struct {
+	Metadata
+}
+
+func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error) {
+	err = p.parseFailed(raw, "must be a range of route table indices within 1-250")
+	m := regexp.MustCompile(`^(\d+)-(\d+)$`).FindStringSubmatch(raw)
+	if m == nil {
+		return
+	}
+	min, serr := strconv.Atoi(m[1])
+	if serr != nil {
+		return
+	}
+	max, serr := strconv.Atoi(m[2])
+	if serr != nil {
+		return
+	}
+	if min >= 1 && max >= min && max <= 250 {
+		result = idalloc.IndexRange{Min: min, Max: max}
+		err = nil
+	}
+	return
 }

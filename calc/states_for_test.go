@@ -1030,7 +1030,76 @@ var routeUpdateRemoteHost2 = proto.RouteUpdate{
 	DstNodeIp:   remoteHost2IP.String(),
 }
 
-// Minimal VXLAN set-up, all the data needed for a remote VTEP, a pool and a block.
+// Minimal VXLAN set-up using WorkloadIPs for routing information rather than using
+// IPAM blocks. Includes remoteHost2
+var vxlanWithWEPIPs = empty.withKVUpdates(
+	KVPair{Key: GlobalConfigKey{Name: "RouteSource"}, Value: &workloadIPs},
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
+).withName("VXLAN using WorkloadIPs").withVTEPs(
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname2,
+		Mac:            "66:40:18:59:1f:16",
+		Ipv4Addr:       remoteHost2VXLANTunnelIP,
+		ParentDeviceIp: remoteHost2IP.String(),
+	},
+).withRoutes(
+	routeUpdateIPPoolVXLAN,
+	routeUpdateRemoteHost2,
+)
+
+// Adds in an workload on remoteHost2 and expected route.
+var vxlanWithWEPIPsAndWEP = vxlanWithWEPIPs.withKVUpdates(
+	KVPair{Key: remoteWlEpKey2, Value: &remoteWlEp1},
+).withName("VXLAN using WorkloadIPs and a WEP").withRoutes(
+	routeUpdateIPPoolVXLAN,
+	routeUpdateRemoteHost2,
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.0.5/32",
+		DstNodeName: remoteHostname2,
+		DstNodeIp:   remoteHost2IP.String(),
+		NatOutgoing: true,
+	},
+)
+
+// Add in another workload with the same IP, but on a different node - remoteHost1.
+// Since this new host sorts lower than the original, its should mask the route of the
+// WEP on the other node.
+var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+	KVPair{Key: remoteWlEpKey1, Value: &remoteWlEp1},
+).withName("VXLAN using WorkloadIPs and overlapping WEPs").withVTEPs(
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname2,
+		Mac:            "66:40:18:59:1f:16",
+		Ipv4Addr:       remoteHost2VXLANTunnelIP,
+		ParentDeviceIp: remoteHost2IP.String(),
+	},
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+).withRoutes(
+	routeUpdateIPPoolVXLAN,
+	routeUpdateRemoteHost,
+	routeUpdateRemoteHost2,
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_WORKLOAD,
+		IpPoolType:  proto.IPPoolType_VXLAN,
+		Dst:         "10.0.0.5/32",
+		DstNodeName: remoteHostname,
+		DstNodeIp:   remoteHostIP.String(),
+		NatOutgoing: true,
+	},
+)
+
+// Minimal VXLAN set-up using Calico IPAM, all the data needed for a remote VTEP, a pool and a block.
 var vxlanWithBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
@@ -1630,6 +1699,22 @@ func (l StateList) UsesNodeResources() bool {
 		}
 	}
 	return false
+}
+
+// RouteSource returns the route source to use for the test, based on the states in the test.
+// If the states include a Felix configuration update to set the route source, then it is used.
+// Otherwise, default to CalicoIPAM
+func (l StateList) RouteSource() string {
+	for _, s := range l {
+		for _, kv := range s.DatastoreState {
+			if resourceKey, ok := kv.Key.(GlobalConfigKey); ok && resourceKey.Name == "RouteSource" {
+				if kv.Value != nil {
+					return *kv.Value.(*string)
+				}
+			}
+		}
+	}
+	return "CalicoIPAM"
 }
 
 // identity is a test expander that returns the test unaltered.

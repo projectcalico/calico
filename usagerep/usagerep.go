@@ -97,7 +97,8 @@ func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
 
 	doReport := func() {
 		alpEnabled := (config["PolicySyncPathPrefix"] != "")
-		u.reportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], alpEnabled, stats)
+		bpfEnabled := (config["BPFEnabled"] == "true")
+		u.reportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], alpEnabled, bpfEnabled, stats)
 	}
 
 	var ticker *jitter.Ticker
@@ -149,8 +150,8 @@ func (u *UsageReporter) calculateInitialDelay(numHosts int) time.Duration {
 	return initialDelay
 }
 
-func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion string, alpEnabled bool, stats calc.StatsUpdate) {
-	fullURL := u.calculateURL(clusterGUID, clusterType, calicoVersion, alpEnabled, stats)
+func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion string, alpEnabled bool, bpfEnabled bool, stats calc.StatsUpdate) {
+	fullURL := u.calculateURL(clusterGUID, clusterType, calicoVersion, alpEnabled, bpfEnabled, stats)
 	resp, err := u.httpClient.Get(fullURL)
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
@@ -172,7 +173,7 @@ func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion stri
 	}
 }
 
-func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion string, alpEnabled bool, stats calc.StatsUpdate) string {
+func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion string, alpEnabled bool, bpfEnabled bool, stats calc.StatsUpdate) string {
 	var kubernetesVersion string
 
 	if clusterType == "" {
@@ -188,6 +189,9 @@ func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion str
 	}
 	if clusterGUID == "" {
 		clusterGUID = "baddecaf"
+	}
+	if bpfEnabled {
+		clusterType = clusterType + ",bpf"
 	}
 	log.WithFields(log.Fields{
 		"clusterGUID":       clusterGUID,

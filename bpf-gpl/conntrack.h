@@ -21,6 +21,7 @@
 #include <linux/in.h>
 #include "nat.h"
 #include "bpf.h"
+#include "icmp.h"
 
 // Connection tracking.
 
@@ -29,6 +30,23 @@ struct calico_ct_key {
 	__be32 addr_a, addr_b; // NBO
 	uint16_t port_a, port_b; // HBO
 };
+
+#define src_lt_dest(ip_src, ip_dst, sport, dport) \
+	((ip_src) < (ip_dst)) || (((ip_src) == (ip_dst)) && (sport) < (dport))
+
+#define __ct_make_key(proto, ipa, ipb, porta, portb) 		\
+		(struct calico_ct_key) {			\
+			.protocol = proto,			\
+			.addr_a = ipa, .port_a = porta,		\
+			.addr_b = ipb, .port_b = portb,		\
+		}
+
+#define ct_make_key(sltd, p, ipa, ipb, pta, ptb) ({						\
+	struct calico_ct_key k;									\
+	k = sltd ? __ct_make_key(p, ipa, ipb, pta, ptb) : __ct_make_key(p, ipb, ipa, ptb, pta);	\
+	dump_ct_key(&k);									\
+	k;											\
+})
 
 enum cali_ct_type {
 	CALI_CT_TYPE_NORMAL	= 0x00, /* Non-NATted entry. */
@@ -54,8 +72,11 @@ struct calico_ct_leg {
 	__u32 whitelisted:1;
 
 	__u32 opener:1;
+
+	__u32 ifindex; /* where the packet entered the system from */
 };
 
+#define CT_INVALID_IFINDEX	0
 struct calico_ct_value {
 	__u64 created;
 	__u64 last_seen; // 8
@@ -71,14 +92,14 @@ struct calico_ct_value {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
 			struct calico_ct_leg a_to_b; // 24
-			struct calico_ct_leg b_to_a; // 32
+			struct calico_ct_leg b_to_a; // 36
 
 			// CALI_CT_TYPE_NAT_REV
-			__u32 orig_ip;                     // 40
-			__u16 orig_port;                   // 44
-			__u8 pad1[2];                      // 46
-			__u32 tun_ip;                      // 48
-			__u32 pad3;                        // 52
+			__u32 orig_ip;                     // 44
+			__u16 orig_port;                   // 48
+			__u8 pad1[2];                      // 50
+			__u32 tun_ip;                      // 52
+			__u32 pad3;                        // 56
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -103,16 +124,10 @@ struct ct_ctx {
 	__u8 flags;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ct = {
-	.type = BPF_MAP_TYPE_HASH,
-	.key_size = sizeof(struct calico_ct_key),
-	.value_size = sizeof(struct calico_ct_value),
-	.map_flags = BPF_F_NO_PREALLOC,
-	.max_entries = 512000, // arbitrary
-#ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2, /* global namespace */
-#endif
-};
+CALI_MAP(cali_v4_ct, 2,
+		BPF_MAP_TYPE_HASH,
+		struct calico_ct_key, struct calico_ct_value,
+		512000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k)
 {
@@ -148,22 +163,9 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 		 */
 		CALI_DEBUG("CT-ALL Asked to create entry but packet is marked as "
 				"from another endpoint, doing lookup\n");
-		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
-		if (srcLTDest) {
-			*k = (struct calico_ct_key) {
-				.protocol = ctx->proto,
-				.addr_a = ip_src, .port_a = sport,
-				.addr_b = ip_dst, .port_b = dport,
-			};
-		} else  {
-			*k = (struct calico_ct_key) {
-				.protocol = ctx->proto,
-				.addr_a = ip_dst, .port_a = dport,
-				.addr_b = ip_src, .port_b = sport,
-			};
-		}
-		dump_ct_key(k);
-		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&cali_v4_ct, k);
+		bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+		*k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
+		struct calico_ct_value *ct_value = cali_v4_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!\n");
 			goto create;
@@ -240,6 +242,9 @@ create:
 	src_to_dst->seqno = seq;
 	src_to_dst->syn_seen = syn;
 	src_to_dst->opener = 1;
+	src_to_dst->ifindex = ctx->skb->ingress_ifindex;
+	CALI_DEBUG("NEW src_to_dst->ifindex %d\n", src_to_dst->ifindex);
+	dst_to_src->ifindex = CT_INVALID_IFINDEX;
 
 	int src_wl;
 
@@ -255,7 +260,7 @@ create:
 		dst_to_src->whitelisted = 1;
 		CALI_DEBUG("CT-ALL Whitelisted dest side\n");
 	}
-	int err = bpf_map_update_elem(&cali_v4_ct, k, &ct_value, 0);
+	int err = cali_v4_ct_update_elem(k, &ct_value, 0);
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
 	return err;
 }
@@ -296,7 +301,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_ctx *ctx,
 
 	dump_ct_key(&k);
 	ct_value.nat_rev_key = *rk;
-	int err = bpf_map_update_elem(&cali_v4_ct, &k, &ct_value, 0);
+	int err = cali_v4_ct_update_elem(&k, &ct_value, 0);
 	CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 	return err;
 }
@@ -327,6 +332,16 @@ enum calico_ct_result_type {
 	CALI_CT_INVALID,
 };
 
+#define CALI_CT_RELATED		(1 << 8)
+#define CALI_CT_RPF_FAILED	(1 << 9)
+
+#define ct_result_rc(rc)		((rc) & 0xff)
+#define ct_result_flags(rc)		((rc) & ~0xff)
+#define ct_result_set_flag(val, flags)	((val) |= (flags))
+
+#define ct_result_is_related(rc)	((rc) & CALI_CT_RELATED)
+#define ct_result_rpf_failed(rc)	((rc) & CALI_CT_RPF_FAILED)
+
 struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
@@ -335,36 +350,68 @@ struct calico_ct_result {
 	__be32 tun_ret_ip;
 };
 
+/* skb_is_icmp_err_unpack fills in ctx, but only what needs to be changed. For instance, keeps the
+ * cxt->skb or ctx->nat_tun_src. It returns true if the original packet is an icmp error and all
+ * checks went well.
+ */
+static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct __sk_buff *skb, struct ct_ctx *ctx)
+{
+	struct iphdr *ip;
+	struct icmphdr *icmp;
+
+	if (!icmp_skb_get_hdr(skb, &icmp)) {
+		CALI_DEBUG("CT-ICMP: failed to get inner IP\n");
+		return false;
+	}
+
+	if (!icmp_type_is_err(icmp->type)) {
+		CALI_DEBUG("CT-ICMP: type %d not an error\n", icmp->type);
+		return false;
+	}
+
+	ip = (struct iphdr *)(icmp + 1); /* skip to inner ip */
+	CALI_DEBUG("CT-ICMP: proto %d\n", ip->protocol);
+
+	ctx->proto = ip->protocol;
+	ctx->src = ip->saddr;
+	ctx->dst = ip->daddr;
+
+	switch (ip->protocol) {
+	case IPPROTO_TCP:
+		{
+			struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
+			ctx->sport = be16_to_host(tcp->source);
+			ctx->dport = be16_to_host(tcp->dest);
+			ctx->tcp = tcp;
+		}
+		break;
+	case IPPROTO_UDP:
+		{
+			struct udphdr *udp = (struct udphdr *)(ip + 1);
+			ctx->sport = be16_to_host(udp->source);
+			ctx->dport = be16_to_host(udp->dest);
+		}
+		break;
+	};
+
+	return true;
+}
+
 static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport)
 {
 	CALI_DEBUG("CT-TCP delete from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_DEBUG("CT-TCP delete to   %x:%d\n", be32_to_host(ip_dst), dport);
 
-	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
-	struct calico_ct_key k;
-	if (srcLTDest) {
-		k = (struct calico_ct_key) {
-			.protocol = IPPROTO_TCP,
-			.addr_a = ip_src, .port_a = sport,
-			.addr_b = ip_dst, .port_b = dport,
-		};
-	} else  {
-		k = (struct calico_ct_key) {
-			.protocol = IPPROTO_TCP,
-			.addr_a = ip_dst, .port_a = dport,
-			.addr_b = ip_src, .port_b = sport,
-		};
-	}
+	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	struct calico_ct_key k = ct_make_key(srcLTDest, IPPROTO_TCP, ip_src, ip_dst, sport, dport);
 
-	dump_ct_key(&k);
-
-	int rc = bpf_map_delete_elem(&cali_v4_ct, &k);
+	int rc = cali_v4_ct_delete_elem(&k);
 	CALI_DEBUG("CT-TCP delete result: %d\n", rc);
 }
 
 #define CALI_CT_LOG(level, fmt, ...) \
-	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT-%d "fmt, proto, ## __VA_ARGS__)
+	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT-%d "fmt, proto_orig, ## __VA_ARGS__)
 #define CALI_CT_DEBUG(fmt, ...) \
 	CALI_CT_LOG(CALI_LOG_LEVEL_DEBUG, fmt, ## __VA_ARGS__)
 #define CALI_CT_VERB(fmt, ...) \
@@ -376,7 +423,7 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 						struct calico_ct_leg *src_to_dst,
 						struct calico_ct_leg *dst_to_src)
 {
-	__u8 proto = IPPROTO_TCP; /* used by logging */
+	__u8 proto_orig = IPPROTO_TCP; /* used by logging */
 
 	if (tcp_header->rst) {
 		CALI_CT_DEBUG("RST seen, marking CT entry.\n");
@@ -425,15 +472,15 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 	}
 }
 
-
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx *ctx)
 {
-	__u8 proto = ctx->proto;
+	__u8 proto_orig = ctx->proto;
 	__be32 ip_src = ctx->src;
 	__be32 ip_dst = ctx->dst;
 	__u16 sport = ctx->sport;
 	__u16 dport = ctx->dport;
 	struct tcphdr *tcp_header = ctx->tcp;
+	bool related = false;
 
 	CALI_CT_DEBUG("lookup from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_CT_DEBUG("lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
@@ -454,27 +501,38 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		goto out_lookup_fail;
 	}
 
-	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
-	struct calico_ct_key k;
-	if (srcLTDest) {
-		k = (struct calico_ct_key) {
-			.protocol = proto,
-			.addr_a = ip_src, .port_a = sport,
-			.addr_b = ip_dst, .port_b = dport,
-		};
-	} else  {
-		k = (struct calico_ct_key) {
-			.protocol = proto,
-			.addr_a = ip_dst, .port_a = dport,
-			.addr_b = ip_src, .port_b = sport,
-		};
-	}
-	dump_ct_key(&k);
+	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	struct calico_ct_key k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
 
-	struct calico_ct_value *v = bpf_map_lookup_elem(&cali_v4_ct, &k);
+	struct calico_ct_value *v = cali_v4_ct_lookup_elem(&k);
 	if (!v) {
-		CALI_CT_DEBUG("Miss.\n");
-		goto out_lookup_fail;
+		if (ctx->proto != IPPROTO_ICMP) {
+			CALI_CT_DEBUG("Miss.\n");
+			goto out_lookup_fail;
+		}
+		if (!skb_is_icmp_err_unpack(ctx->skb, ctx)) {
+			CALI_CT_DEBUG("unrelated icmp\n");
+			goto out_lookup_fail;
+		}
+
+		CALI_CT_DEBUG("related lookup from %x:%d\n", be32_to_host(ctx->src), ctx->sport);
+		CALI_CT_DEBUG("related lookup to   %x:%d\n", be32_to_host(ctx->dst), ctx->dport);
+
+		srcLTDest = src_lt_dest(ctx->src, ctx->dst, ctx->sport, ctx->dport);
+		k = ct_make_key(srcLTDest, ctx->proto, ctx->src, ctx->dst, ctx->sport, ctx->dport);
+		v = cali_v4_ct_lookup_elem(&k);
+		if (!v) {
+			CALI_CT_DEBUG("Miss on ICMP related\n");
+			goto out_lookup_fail;
+		}
+
+		ip_src = ctx->src;
+		ip_dst = ctx->dst;
+		sport = ctx->sport;
+		dport = ctx->dport;
+		tcp_header = ctx->tcp;
+
+		related = true;
 	}
 
 	__u64 now = bpf_ktime_get_ns();
@@ -490,7 +548,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		// This is a forward NAT entry; since we do the bookkeeping on the
 		// reverse entry, we need to do a second lookup.
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.\n");
-		tracking_v = bpf_map_lookup_elem(&cali_v4_ct, &v->nat_rev_key);
+		tracking_v = cali_v4_ct_lookup_elem(&v->nat_rev_key);
 		if (!tracking_v) {
 			CALI_CT_DEBUG("Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;
@@ -514,7 +572,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		result.tun_ret_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", be32_to_host(tracking_v->tun_ip));
 
-		if (proto == IPPROTO_ICMP) {
+		if (ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 			result.nat_ip = tracking_v->orig_ip;
 		} else if (CALI_F_TO_HOST) {
@@ -524,6 +582,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		} else {
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
+
 		break;
 	case CALI_CT_TYPE_NAT_REV:
 		if (srcLTDest) {
@@ -536,9 +595,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			dst_to_src = &v->a_to_b;
 		}
 
-		if (proto == IPPROTO_ICMP) {
+		result.tun_ret_ip = v->tun_ip;
+		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
+
+		if (ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
+			result.nat_port = v->orig_port;
 			break;
 		}
 
@@ -568,14 +631,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			CALI_CT_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
-		result.tun_ret_ip = v->tun_ip;
-		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
 		break;
 
 	case CALI_CT_TYPE_NORMAL:
-		if (v->type == CALI_CT_TYPE_NORMAL) {
-			CALI_CT_DEBUG("Hit! NORMAL entry.\n");
-		}
+		CALI_CT_DEBUG("Hit! NORMAL entry.\n");
 		CALI_CT_VERB("Created: %llu.\n", v->created);
 		if (tcp_header) {
 			CALI_CT_VERB("Last seen: %llu.\n", v->last_seen);
@@ -621,6 +680,19 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 				src_to_dst->whitelisted &&
 				!result.tun_ret_ip;
 
+	if (related) {
+		if (proto_orig == IPPROTO_ICMP) {
+			/* flip src/dst as ICMP related carries the original ip/l4 headers in
+			 * opposite direction - it is a reaction on the original packet.
+			 */
+			struct calico_ct_leg *tmp;
+
+			tmp = src_to_dst;
+			src_to_dst = dst_to_src;
+			dst_to_src = tmp;
+		}
+	}
+
 	if (CALI_F_TO_HOST && !ctx->nat_tun_src) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
@@ -652,7 +724,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 	}
 
-	if (tcp_header) {
+	if (tcp_header && !related) {
 		if (ret_from_tun) {
 			/* we returned from tunnel, we are after SNAT, unlike
 			 * with NAT on workload, we hit FWD entry in both
@@ -666,7 +738,36 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		ct_tcp_entry_update(tcp_header, src_to_dst, dst_to_src);
 	}
 
-	CALI_CT_DEBUG("result: %d.\n", result.rc);
+	if (src_to_dst->ifindex != ctx->skb->ingress_ifindex) {
+		if (CALI_F_TO_HOST) {
+			if (src_to_dst->ifindex == CT_INVALID_IFINDEX) {
+				/* we have not recorded the path for the opposite
+				 * direction yet, do it now.
+				 */
+				src_to_dst->ifindex = ctx->skb->ingress_ifindex;
+				CALI_DEBUG("REV src_to_dst->ifindex %d\n", src_to_dst->ifindex);
+			} else {
+				CALI_CT_DEBUG("RPF expected %d to equal %d\n",
+						src_to_dst->ifindex, ctx->skb->ingress_ifindex);
+				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
+			}
+		} else {
+			/* if the devices do not match, we got here without bypassing the
+			 * host IP stack and RPF check allowed it, so update our records.
+			 */
+			CALI_CT_DEBUG("Updating ifindex from %d to %d\n",
+					src_to_dst->ifindex, ctx->skb->ingress_ifindex);
+			src_to_dst->ifindex = ctx->skb->ingress_ifindex;
+		}
+	}
+
+	CALI_CT_DEBUG("result: %d\n", result.rc);
+
+	if (related) {
+		ct_result_set_flag(result.rc, CALI_CT_RELATED);
+		CALI_CT_DEBUG("result: related\n");
+	}
+
 	return result;
 
 out_lookup_fail:

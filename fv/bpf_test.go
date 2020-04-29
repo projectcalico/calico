@@ -43,9 +43,11 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	options2 "github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
 	. "github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/containers"
@@ -59,7 +61,7 @@ import (
 // - Since the connection time program applies to the whole host, the different felix nodes actually share the
 //   connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
 //   should be programming the same NAT mappings.
-var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
 var _ = describeBPFTests(withProto("tcp"))
@@ -89,6 +91,7 @@ type bpfTestOptions struct {
 	tunnel          string
 	dsr             bool
 	udpConnRecvMsg  bool
+	nonProtoTests   bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -102,6 +105,12 @@ func withProto(proto string) bpfTestOpt {
 func withConnTimeLoadBalancingEnabled() bpfTestOpt {
 	return func(opts *bpfTestOptions) {
 		opts.connTimeEnabled = true
+	}
+}
+
+func withNonProtocolDependentTests() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.nonProtoTests = true
 	}
 }
 
@@ -138,6 +147,7 @@ func withUDPConnectedRecvMsg() bpfTestOpt {
 const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 FELIX_0/32: local host
@@ -148,6 +158,7 @@ const expectedRouteDumpIPIP = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.1/32: local host
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
 FELIX_0/32: local host
@@ -184,6 +195,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			calicoClient   client.Interface
 			cc             *Checker
 			externalClient *containers.Container
+			deadWorkload   *workload.Workload
 			bpfLog         *containers.Container
 			options        infrastructure.TopologyOptions
 			numericProto   uint8
@@ -386,6 +398,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
+
+				mapPath := conntrack.Map(&bpf.MapContext{}).Path()
+
 				Describe("with map repinning enabled", func() {
 					BeforeEach(func() {
 						options.ExtraEnvVars["FELIX_DebugBPFMapRepinEnabled"] = "true"
@@ -393,14 +408,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					It("should repin maps", func() {
 						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(felixes[0], "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						mapID := mustGetMapIDByPath(felixes[0], mapPath)
 
 						// Now, start a completely independent felix, which will get its own bpffs.  It should re-pin the
 						// maps, picking up the ones from the first felix.
 						extraFelix, _ := infrastructure.StartSingleNodeTopology(options, infra)
 						defer extraFelix.Stop()
 
-						secondMapID := mustGetMapIDByPath(extraFelix, "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						secondMapID := mustGetMapIDByPath(extraFelix, mapPath)
 						Expect(mapID).NotTo(BeNumerically("==", 0))
 						Expect(mapID).To(BeNumerically("==", secondMapID))
 					})
@@ -409,17 +424,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Describe("with map repinning disabled", func() {
 					It("should repin maps", func() {
 						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(felixes[0], "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						mapID := mustGetMapIDByPath(felixes[0], mapPath)
 
 						// Now, start a completely independent felix, which will get its own bpffs.  It should make its own
 						// maps.
 						extraFelix, _ := infrastructure.StartSingleNodeTopology(options, infra)
 						defer extraFelix.Stop()
 
-						secondMapID := mustGetMapIDByPath(extraFelix, "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						secondMapID := mustGetMapIDByPath(extraFelix, mapPath)
 						Expect(mapID).NotTo(BeNumerically("==", 0))
 						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
 					})
+				})
+			}
+
+			if testOpts.nonProtoTests {
+				// We can only test that felix _sets_ this because the flag is one-way and cannot be unset.
+				It("should enable the kernel.unprivileged_bpf_disabled sysctl", func() {
+					Eventually(func() string {
+						out, err := felixes[0].ExecOutput("sysctl", "kernel.unprivileged_bpf_disabled")
+						if err != nil {
+							log.WithError(err).Error("Failed to run sysctl")
+						}
+						return out
+					}).Should(ContainSubstring("kernel.unprivileged_bpf_disabled = 1"))
 				})
 			}
 		})
@@ -435,8 +463,40 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			BeforeEach(func() {
 				felixes, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
+				addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
+					if labels == nil {
+						labels = make(map[string]string)
+					}
+
+					wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+					wName := fmt.Sprintf("w%d%d", ii, wi)
+
+					w := workload.New(felixes[ii], wName, "default",
+						wIP, strconv.Itoa(port), testOpts.protocol)
+					if run {
+						w.Start()
+					}
+
+					labels["name"] = w.Name
+
+					w.WorkloadEndpoint.Labels = labels
+					w.ConfigureInDatastore(infra)
+					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+						IP:       cnet.MustParseIP(wIP),
+						HandleID: &w.Name,
+						Attrs: map[string]string{
+							ipam.AttributeNode: felixes[ii].Hostname,
+						},
+						Hostname: felixes[ii].Hostname,
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					return w
+				}
+
 				// Start a host networked workload on each host for connectivity checks.
-				for ii, felix := range felixes {
+				for ii := range felixes {
 					// We tell each host-networked workload to open:
 					// TODO: Copied from another test
 					// - its normal (uninteresting) port, 8055
@@ -444,48 +504,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// - port 22, which is an inbound failsafe port.
 					// This allows us to test the interaction between do-not-track policy and failsafe
 					// ports.
-					const portsToOpen = "8055"
 					hostW[ii] = workload.Run(
 						felixes[ii],
 						fmt.Sprintf("host%d", ii),
 						"default",
 						felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
-						portsToOpen,
+						"8055",
 						testOpts.protocol)
 
 					// Two workloads on each host so we can check the same host and other host cases.
-					iiStr := strconv.Itoa(ii)
-					wIP := "10.65." + iiStr + ".2"
-					w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", wIP, "8055", testOpts.protocol)
-					w[ii][0].WorkloadEndpoint.Labels = map[string]string{
-						"name": w[ii][0].Name,
-						"port": "8055",
-					}
-					w[ii][0].ConfigureInDatastore(infra)
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(wIP),
-						HandleID: &w[ii][0].Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: felixes[ii].Hostname,
-						},
-						Hostname: felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-					wIP = "10.65." + iiStr + ".3"
-					w[ii][1] = workload.Run(felix, "w"+iiStr+"1", "default", wIP, "8056", testOpts.protocol)
-					w[ii][1].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][1].Name}
-					w[ii][1].ConfigureInDatastore(infra)
-					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-					err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       cnet.MustParseIP(wIP),
-						HandleID: &w[ii][1].Name,
-						Attrs: map[string]string{
-							ipam.AttributeNode: felixes[ii].Hostname,
-						},
-						Hostname: felixes[ii].Hostname,
-					})
+					w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
+					w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
 				}
+
+				// Create a workload on node 0 that does not run, but we can use it to set up paths
+				deadWorkload = addWorkload(false, 0, 2, 8057, nil)
 
 				// We will use this container to model an external client trying to connect into
 				// workloads on a host.  Create a route in the container for the workload CIDR.
@@ -606,6 +639,196 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1][0], w[0][0])
 					cc.ExpectSome(w[1][1], w[0][0])
 					cc.CheckConnectivity()
+				})
+
+				It("should not be able to spoof IP", func() {
+					if testOpts.protocol != "udp" {
+						return
+					}
+
+					By("allowing any traffic", func() {
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{
+										"0.0.0.0/0",
+									},
+								},
+							},
+						}
+						pol = updatePolicy(pol)
+
+						cc.ExpectSome(w[1][0], w[0][0])
+						cc.ExpectSome(w[1][1], w[0][0])
+						cc.CheckConnectivity()
+					})
+
+					By("testing that packet sent by another workload is dropped", func() {
+						tcpdump := w[0][0].AttachTCPDump()
+						tcpdump.SetLogEnabled(true)
+						matcher := fmt.Sprintf("IP %s\\.30444 > %s\\.30444: UDP", w[1][0].IP, w[0][0].IP)
+						tcpdump.AddMatcher("UDP-30444", regexp.MustCompile(matcher))
+						tcpdump.Start(testOpts.protocol, "port", "30444", "or", "port", "30445")
+						defer tcpdump.Stop()
+
+						// send a packet from the correct workload to create a conntrack entry
+						_, err := w[1][0].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444")
+						Expect(err).NotTo(HaveOccurred())
+
+						// We must eventually see the packet at the target
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30444") }).
+							Should(BeNumerically("==", 1), matcher)
+
+						// Send a spoofed packet from a different pod. Since we hit the
+						// conntrack we would not do the WEP only RPF check.
+						_, err = w[1][1].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444")
+						Expect(err).NotTo(HaveOccurred())
+
+						// Since the packet will get dropped, we would not see it at the dest.
+						// So we send another good packet from the spoofing workload, that we
+						// will see at the dest.
+						matcher2 := fmt.Sprintf("IP %s\\.30445 > %s\\.30445: UDP", w[1][1].IP, w[0][0].IP)
+						tcpdump.AddMatcher("UDP-30445", regexp.MustCompile(matcher2))
+
+						_, err = w[1][1].RunCmd("/pktgen", w[1][1].IP, w[0][0].IP, "udp",
+							"--port-src", "30445", "--port-dst", "30445")
+						Expect(err).NotTo(HaveOccurred())
+
+						// Wait for the good packet from the bad workload
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30445") }).
+							Should(BeNumerically("==", 1), matcher2)
+
+						// Check that we have not seen the spoofed packet. If there was not
+						// packet reordering, which in out setup is guaranteed not to happen,
+						// we know that the spoofed packet was dropped.
+						Expect(tcpdump.MatchCount("UDP-30444")).To(BeNumerically("==", 1), matcher)
+					})
+
+					var eth20, eth30 *workload.Workload
+
+					defer func() {
+						if eth20 != nil {
+							eth20.Stop()
+						}
+						if eth30 != nil {
+							eth30.Stop()
+						}
+					}()
+
+					fakeWorkloadIP := "10.65.15.15"
+
+					By("setting up node's fake external ifaces", func() {
+						// We name the ifaces ethXY since such ifaces are
+						// treated by felix as external to the node
+						//
+						// Using a test-workload creates the namespaces and the
+						// interfaces to emulate the host NICs
+
+						eth20 = &workload.Workload{
+							Name:          "eth20",
+							C:             felixes[1].Container,
+							IP:            "192.168.20.1",
+							Ports:         "57005", // 0xdead
+							Protocol:      testOpts.protocol,
+							InterfaceName: "eth20",
+						}
+						eth20.Start()
+
+						// assign address to eth20 and add route to the .20 network
+						felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
+						felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
+						_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+						Expect(err).NotTo(HaveOccurred())
+						// Add a route to the test workload to the fake external
+						// client emulated by the test-workload
+						_, err = eth20.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.20")
+						Expect(err).NotTo(HaveOccurred())
+
+						eth30 = &workload.Workload{
+							Name:          "eth30",
+							C:             felixes[1].Container,
+							IP:            "192.168.30.1",
+							Ports:         "57005", // 0xdead
+							Protocol:      testOpts.protocol,
+							InterfaceName: "eth30",
+						}
+						eth30.Start()
+
+						// assign address to eth30 and add route to the .30 network
+						felixes[1].Exec("ip", "route", "add", "192.168.30.0/24", "dev", "eth30")
+						felixes[1].Exec("ip", "addr", "add", "10.0.0.30/32", "dev", "eth30")
+						_, err = eth30.RunCmd("ip", "route", "add", "10.0.0.30/32", "dev", "eth0")
+						Expect(err).NotTo(HaveOccurred())
+						// Add a route to the test workload to the fake external
+						// client emulated by the test-workload
+						_, err = eth30.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.30")
+						Expect(err).NotTo(HaveOccurred())
+
+						// Make sure that networking with the .20 and .30 networks works
+						cc.ResetExpectations()
+						cc.ExpectSome(w[1][1], TargetIP(eth20.IP), 0xdead)
+						cc.ExpectSome(w[1][1], TargetIP(eth30.IP), 0xdead)
+						cc.CheckConnectivity()
+					})
+
+					By("testing that external traffic updates the RPF check if routing changes", func() {
+						// set the route to the fake workload to .20 network
+						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth20")
+
+						tcpdump := w[1][1].AttachTCPDump()
+						tcpdump.SetLogEnabled(true)
+						matcher := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w[1][1].IP)
+						tcpdump.AddMatcher("UDP-30446", regexp.MustCompile(matcher))
+						tcpdump.Start()
+						defer tcpdump.Stop()
+
+						_, err := eth20.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+							"--port-src", "30446", "--port-dst", "30446")
+						Expect(err).NotTo(HaveOccurred())
+
+						// Expect to receive the packet from the .20 as the routing is correct
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
+							Should(BeNumerically("==", 1), matcher)
+
+						ctBefore := dumpCTMap(felixes[1])
+
+						k := conntrack.NewKey(17, net.ParseIP(w[1][1].IP).To4(), 30446,
+							net.ParseIP(fakeWorkloadIP).To4(), 30446)
+						Expect(ctBefore).To(HaveKey(k))
+
+						// XXX Since the same code is used to do the drop of spoofed
+						// packet between pods, we do not repeat it here as it is not 100%
+						// bulletproof.
+						//
+						// We should perhaps compare the iptables counter and see if the
+						// packet was dropped by the RPF check.
+
+						// Change the routing to be from the .30
+						felixes[1].Exec("ip", "route", "del", fakeWorkloadIP+"/32", "dev", "eth20")
+						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth30")
+
+						_, err = eth30.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+							"--port-src", "30446", "--port-dst", "30446")
+						Expect(err).NotTo(HaveOccurred())
+
+						// Expect the packet from the .30 to make it through as RPF will
+						// allow it and we will update the expected interface
+						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
+							Should(BeNumerically("==", 2), matcher)
+
+						ctAfter := dumpCTMap(felixes[1])
+						Expect(ctAfter).To(HaveKey(k))
+
+						// Ifindex must have changed
+						// B2A because of IPA > IPB - deterministic
+						Expect(ctBefore[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
+						Expect(ctAfter[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
+						Expect(ctBefore[k].Data().B2A.Ifindex).
+							NotTo(BeNumerically("==", ctAfter[k].Data().B2A.Ifindex))
+					})
 				})
 
 				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
@@ -1153,6 +1376,168 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						nodePortsTest(true)
 					})
 				}
+
+				Context("with icmp blocked from workloads, external client", func() {
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+					)
+
+					testSvcName := "test-service"
+
+					BeforeEach(func() {
+						icmpProto := numorstring.ProtocolFromString("icmp")
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{"0.0.0.0/0"},
+								},
+							},
+						}
+						pol.Spec.Egress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{"0.0.0.0/0"},
+								},
+							},
+							{
+								Action:   "Deny",
+								Protocol: &icmpProto,
+							},
+						}
+						pol = updatePolicy(pol)
+					})
+
+					var tgtPort int
+					var tgtWorkload *workload.Workload
+
+					JustBeforeEach(func() {
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+						testSvc = k8sService(testSvcName, "10.101.0.10",
+							tgtWorkload, 80, tgtPort, int32(npPort), testOpts.protocol)
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+
+						// sync with NAT table being applied
+						natFtKey := nat.NewNATKey(net.ParseIP(felixes[1].IP), npPort, numericProto)
+						Eventually(func() bool {
+							m := dumpNATMap(felixes[1])
+							v, ok := m[natFtKey]
+							return ok && v.Count() > 0
+						}, 5*time.Second).Should(BeTrue())
+
+						// Sync with policy
+						cc.ExpectSome(w[1][0], w[0][0])
+						cc.CheckConnectivity()
+					})
+
+					Describe("with dead workload", func() {
+						BeforeEach(func() {
+							tgtPort = 8057
+							tgtWorkload = deadWorkload
+						})
+
+						It("should get host unreachable from nodeport via node1->node0 fwd", func() {
+							if testOpts.connTimeEnabled {
+								Skip("FIXME externalClient also does conntime balancing")
+							}
+
+							err := felixes[0].ExecMayFail("ip", "route", "add", "unreachable", deadWorkload.IP)
+							Expect(err).NotTo(HaveOccurred())
+
+							tcpdump := externalClient.AttachTCPDump("any")
+							tcpdump.SetLogEnabled(true)
+							matcher := fmt.Sprintf("IP %s > %s: ICMP host %s unreachable",
+								felixes[1].IP, externalClient.IP, felixes[1].IP)
+							tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
+							cc.CheckConnectivity()
+
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Should(BeNumerically(">", 0), matcher)
+						})
+					})
+
+					Describe("with wrong target port", func() {
+						// TCP would send RST instead of ICMP, it is enough to test one way of
+						// triggering the ICMP message
+						if testOpts.protocol != "udp" {
+							return
+						}
+
+						BeforeEach(func() {
+							tgtPort = 0xdead
+							tgtWorkload = w[0][0]
+						})
+
+						It("should get port unreachable via node1->node0 fwd", func() {
+							if testOpts.connTimeEnabled {
+								Skip("FIXME externalClient also does conntime balancing")
+							}
+
+							tcpdump := externalClient.AttachTCPDump("any")
+							tcpdump.SetLogEnabled(true)
+							matcher := fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+								felixes[1].IP, externalClient.IP, felixes[1].IP, npPort)
+							tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
+							cc.CheckConnectivity()
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Should(BeNumerically(">", 0), matcher)
+						})
+
+						It("should get port unreachable workload to workload", func() {
+							tcpdump := w[1][1].AttachTCPDump()
+							tcpdump.SetLogEnabled(true)
+							matcher := fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+								tgtWorkload.IP, w[1][1].IP, tgtWorkload.IP, tgtPort)
+							tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(tgtPort), "or", "icmp")
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(w[1][1], TargetIP(tgtWorkload.IP), uint16(tgtPort))
+							cc.CheckConnectivity()
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Should(BeNumerically(">", 0), matcher)
+						})
+
+						It("should get port unreachable workload to workload through NP", func() {
+							tcpdump := w[1][1].AttachTCPDump()
+							tcpdump.SetLogEnabled(true)
+
+							var matcher string
+
+							if testOpts.connTimeEnabled {
+								matcher = fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+									tgtWorkload.IP, w[1][1].IP, w[0][0].IP, tgtPort)
+								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(tgtPort), "or", "icmp")
+							} else {
+								matcher = fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+									tgtWorkload.IP, w[1][1].IP, felixes[1].IP, npPort)
+								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+							}
+							defer tcpdump.Stop()
+
+							cc.ExpectNone(w[1][1], TargetIP(felixes[1].IP), npPort)
+							cc.CheckConnectivity()
+							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+								Should(BeNumerically(">", 0), matcher)
+						})
+					})
+				})
 			})
 		})
 	})
@@ -1215,6 +1600,13 @@ func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
 	bm := nat.AffinityMap(&bpf.MapContext{})
 	m := make(nat.AffinityMapMem)
 	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
+	return m
+}
+
+func dumpCTMap(felix *infrastructure.Felix) conntrack.MapMem {
+	bm := conntrack.Map(&bpf.MapContext{})
+	m := make(conntrack.MapMem)
+	dumpBPFMap(felix, bm, conntrack.MapMemIter(m))
 	return m
 }
 
