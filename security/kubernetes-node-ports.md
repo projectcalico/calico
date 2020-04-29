@@ -32,7 +32,7 @@ In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and I
 ### Before you begin...
 
 - For services that you want to expose to external clients, configure Kubernetes services with type **NodePort**. 
-- [Enable automatic host endpoints]{{ site.baseurl }}/security/auto-host-endpoints#enable-automatic-host-endpoints)
+- [Enable automatic host endpoints]{{ site.baseurl }}/security/kubernetes-nodes#enable-automatic-host-endpoints)
 
 ### How to
 
