@@ -4,6 +4,8 @@
 # Make our URLs look nice. We're not a blog with dated posts, we just want the title.
 permalink:     /:title.html
 
+noindex: true
+
 plugins:
   # disable the jekyll redirect plugin so we instead rely on netlify http redirects
   # - jekyll-redirect-from
