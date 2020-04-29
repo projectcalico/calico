@@ -157,7 +157,7 @@ The code is a little roundabout for a few reasons:
                         aria-controls="{{ navbar_id }}"
                       >
                         <h4 class="panel-title">
-                            <a href="{{site.baseurl}}{{navbar.path}}" class="{% if navbar.section %}navbar-title--not-clickable{% endif %}">
+                            <a href="{{site.baseurl}}{{navbar.path}}" class="navbar-title--{% if navbar.section %}not-clickable{% else %}clickable{% endif %}">
                               <span>{{ navbar.title }}</span>
                             </a>
                         </h4>
@@ -176,7 +176,7 @@ The code is a little roundabout for a few reasons:
                   <div class="panel panel-default">
                     <div class="panel-heading free-training" role="button" aria-controls="navbar-free-training">
                       <h4 class="panel-title">
-                        <a href="https://www.projectcalico.org/events" target="_blank">
+                        <a href="https://www.projectcalico.org/events" target="_blank" class="navbar-title--clickable">
                           <span>Free training</span>
                         </a>
                       </h4>
