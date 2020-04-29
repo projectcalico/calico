@@ -532,7 +532,7 @@ message WireguardEndpointUpdate {
   string public_key = 2;
 
   // The IP address of the wireguard interface.
-  string interface_addr = 3;
+  string interface_ipv4_addr = 3;
 }
 
 message WireguardEndpointRemove {
