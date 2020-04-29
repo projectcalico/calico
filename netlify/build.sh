@@ -56,6 +56,7 @@ function build_master() {
 # Newer archive versions are built into its own directory for that version.
 function build_archives() {
     grep -oP '^- \K(.*)' _data/archives.yml | while read branch; do
+        EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_config_noindex.yml
         if [[ "$branch" == legacy* ]]; then
             if [ -z "$CUSTOM_ARCHIVE_PATH" ]; then
                 build release-legacy
