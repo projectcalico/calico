@@ -72,8 +72,9 @@ var (
 
 // Globals that we use to configure the next test run.
 var (
-	hostIP  = node1ip
-	skbMark uint32
+	hostIP       = node1ip
+	skbMark      uint32
+	bpfIfaceName string
 )
 
 const (
@@ -135,10 +136,14 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		obj += "to_"
 	}
 
+	progLog := ""
+
 	if strings.Contains(section, "host") {
 		obj += "hep_"
+		progLog = "HEP"
 	} else {
 		obj += "wep_"
+		progLog = "WEP"
 	}
 
 	log.WithField("hostIP", hostIP).Info("Host IP")
@@ -154,6 +159,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 
 	bin, err := bpf.BinaryFromFile(obj)
 	Expect(err).NotTo(HaveOccurred())
+	bin.PatchLogPrefix(progLog + "-" + bpfIfaceName)
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
