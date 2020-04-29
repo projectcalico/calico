@@ -202,28 +202,53 @@ var _ = Describe("RouteRules", func() {
 			Expect(dataplane.ruleKeyToRule).To(ConsistOf(cali1Rule, nonCaliRule))
 			Expect(dataplane.deletedRuleKeys.Contains("10.0.0.2/32-0x200")).To(BeTrue())
 		})
-		It("should add rule with correct table index", func() {
-			rule := NewRule(4, 100).
-				MatchSrcAddress(*mustParseCIDR("10.0.0.3/32")).
-				MatchFWMark(0x400).
-				GoToTable(250)
-			rrs.SetRule(rule)
-			netlinkRule := netlink.Rule{
-				Priority:          100,
-				Family:            unix.AF_INET,
-				Src:               mustParseCIDR("10.0.0.3/32"),
-				Mark:              0x400,
-				Mask:              0x400,
-				Table:             250,
-				Goto:              -1,
-				Flow:              -1,
-				SuppressIfgroup:   -1,
-				SuppressPrefixlen: -1,
-			}
-			err := rrs.Apply()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(dataplane.ruleKeyToRule).To(ConsistOf(cali1Rule, netlinkRule, nonCaliRule))
-			Expect(dataplane.addedRuleKeys.Contains("10.0.0.3/32-0x400")).To(BeTrue())
+
+		Describe("set rule with specific table idx and fwmark", func() {
+			var netlinkRule netlink.Rule
+			BeforeEach(func() {
+				rule := NewRule(4, 100).
+					MatchSrcAddress(*mustParseCIDR("10.0.0.3/32")).
+					MatchFWMark(0x400).
+					GoToTable(250)
+				rrs.SetRule(rule)
+				netlinkRule = netlink.Rule{
+					Priority:          100,
+					Family:            unix.AF_INET,
+					Src:               mustParseCIDR("10.0.0.3/32"),
+					Mark:              0x400,
+					Mask:              0x400,
+					Table:             250,
+					Goto:              -1,
+					Flow:              -1,
+					SuppressIfgroup:   -1,
+					SuppressPrefixlen: -1,
+				}
+				err := rrs.Apply()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should add the correct rule", func() {
+				Expect(dataplane.ruleKeyToRule).To(ConsistOf(cali1Rule, netlinkRule, nonCaliRule))
+				Expect(dataplane.addedRuleKeys.Contains("10.0.0.3/32-0x400")).To(BeTrue())
+			})
+
+			It("should re-add the rule on resync if deleted out-of-band", func() {
+				dataplane.addedRuleKeys = set.New()
+				dataplane.removeMockRule(&netlinkRule)
+
+				// Next apply should be a no-op.
+				err := rrs.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.ruleKeyToRule).To(ConsistOf(cali1Rule, nonCaliRule))
+				Expect(dataplane.addedRuleKeys.Len()).To(BeZero())
+
+				// Resync will spot the missing rule and re-add it.
+				rrs.QueueResync()
+				err = rrs.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.ruleKeyToRule).To(ConsistOf(cali1Rule, netlinkRule, nonCaliRule))
+				Expect(dataplane.addedRuleKeys.Contains("10.0.0.3/32-0x400")).To(BeTrue())
+			})
 		})
 		It("should update rule with updated table index", func() {
 			rule := NewRule(4, 100).
@@ -358,6 +383,7 @@ var _ = Describe("RouteRules", func() {
 var _ = Describe("Tests to verify netlink interface", func() {
 	It("Should give expected error for missing interface", func() {
 		_, err := netlink.LinkByName("dsfhjakdhfjk")
+		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("not found"))
 	})
 })
