@@ -128,7 +128,11 @@ The first rule allows access to the API server port from anywhere. The second ru
 control plane from localhost. These control plane processes includes the etcd server client API, the scheduler, and the controller-manager. This rule
 also whitelists localhost access to the kubelet API and calico/node health checks.
 
-If you have not modified the failsafe ports, we should still have access to SSH to the nodes after applying this policy.
+If you have not modified the failsafe ports, you should still have SSH access to the nodes after applying this policy.
+
+> Note: This tutorial was tested on a cluster created using kubeadm on AWS. If your Kubernetes cluster is on a different platform
+> or if its running a variant of Kubernetes, please review the required ports for the master and worker nodes and adjust the policies in this tutorial as needed.
+{: .alert .alert-info }
 
 ```
 calicoctl apply -f - << EOF

@@ -185,7 +185,7 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 ### Above and beyond
 
 - [Apply policy to Kubernetes node ports]({{ site.baseurl }}/security/kubernetes-node-ports)
-- [Protect Kubernetes nodes with host endpoints managed by {{site.prodname}}]({{ site.baseurl }}/security/auto-host-endpoints)
+- [Protect Kubernetes nodes with host endpoints managed by {{site.prodname}}]({{ site.baseurl }}/security/kubernetes-nodes)
 - [Defend against DoS attacks]({{ site.baseurl }}/security/defend-dos-attack)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - [Host endpoint]({{ site.baseurl }}/reference/resources/hostendpoint)
