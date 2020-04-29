@@ -5,6 +5,7 @@
 permalink:     /:title.html
 
 archive: false
+noindex: false
 
 plugins:
   - jekyll-redirect-from
