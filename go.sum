@@ -400,6 +400,8 @@ github.com/pquerna/ffjson v0.0.0-20180717144149-af8b230fcd20/go.mod h1:YARuvh7BU
 github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9/go.mod h1:YARuvh7BUWHNhzDq2OM5tzR2RiCcN2D7sapiKyCel/M=
 github.com/projectcalico/confd v1.0.1-0.20200428081053-22240475ca34 h1:1ub3F9RyOXxHBVTpUTpvApuDGrWUm+DvEZTrvwhlxu8=
 github.com/projectcalico/confd v1.0.1-0.20200428081053-22240475ca34/go.mod h1:CD9bM/7htxbU7y4T1/jL6394XcKys29s99wLpkRv1vI=
+github.com/projectcalico/confd v1.0.1-0.20200428231736-cfe598d9268d h1:T24TdlZejRu9cWi4e9/aTyZWcMUq8JUt/A2a1Ek0XY8=
+github.com/projectcalico/confd v1.0.1-0.20200428231736-cfe598d9268d/go.mod h1:IbJ/a0qxtnGr0eFVLnchUpzXBNnIY5H+MGV1TNugN40=
 github.com/projectcalico/felix v0.0.0-20200428221733-4a6b7c494172 h1:4cdvOb9Ao5XBAtAeE0XyNPbMT5VcQpGhrFkiOSs2FHM=
 github.com/projectcalico/felix v0.0.0-20200428221733-4a6b7c494172/go.mod h1:4Pdj4o1jIjxjzSqDT0N1Iv6qSYVDlSPQlFMfySnEz9I=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
