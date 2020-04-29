@@ -99,6 +99,12 @@ To include [Calico resources]({{site.baseurl}}/reference/resources) during insta
 >   --from-file=<resource-directory> --dry-run -o yaml \
 >   > manifests/02-configmap-calico-resources.yaml
 > ```
+> With recent versions of kubectl it is necessary to have a kubeconfig configured or add `--server='127.0.0.1:443'`
+> even though it is not used.
+
+> **Note**: If you have provided a `calico-resources` configmap and the tigera-operator pod fails to come up with `Init:CrashLoopBackOff`,
+> check the output of the init-container with `kubectl logs -n tigera-operator -l k8s-app=tigera-operator -c create-initial-resources`.
+{: .alert .alert-info}
 
 #### Create the cluster
 
