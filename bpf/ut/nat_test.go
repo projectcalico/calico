@@ -77,11 +77,8 @@ func TestNATPodPodXNode(t *testing.T) {
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(rtKey, rtVal)
-	defer func() {
-		err := rtMap.Delete(rtKey)
-		Expect(err).NotTo(HaveOccurred())
-	}()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Leaving workload
@@ -308,6 +305,7 @@ func TestNATNodePort(t *testing.T) {
 	// Setup routing
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
+	defer resetRTMap(rtMap)
 	Expect(err).NotTo(HaveOccurred())
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
@@ -673,6 +671,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
 	// backend it is a local workload
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&wCIDR).(ip.V4CIDR)).AsBytes(),
@@ -862,6 +861,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
@@ -933,11 +933,8 @@ func TestNATAffinity(t *testing.T) {
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(rtKey, rtVal)
-	defer func() {
-		err := rtMap.Delete(rtKey)
-		Expect(err).NotTo(HaveOccurred())
-	}()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Check the no affinity entry exists if no affinity is set
@@ -1107,13 +1104,13 @@ func TestNATNodePortIngressDSR(t *testing.T) {
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 	dumpRTMap(rtMap)
-	defer resetRTMap(rtMap)
 
 	// Arriving at node 1
 	runBpfTest(t, "calico_from_host_ep_dsr", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
