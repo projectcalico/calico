@@ -37,7 +37,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	bpfIfaceName = "NAT1"
 	defer func() { bpfIfaceName = "" }()
 
-	eth, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	eth, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -253,7 +253,7 @@ func TestNATNodePort(t *testing.T) {
 	bpfIfaceName = "NP-1"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}
@@ -340,7 +340,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -421,7 +421,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -461,7 +461,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -590,7 +590,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -624,7 +624,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	bpfIfaceName = "NPlo"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}

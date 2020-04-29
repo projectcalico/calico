@@ -600,6 +600,17 @@ func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []b
 	return testPacket(nil, nil, nil, nil)
 }
 
+func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+	if destIP == nil {
+		return testPacketUDPDefault()
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = destIP
+
+	return testPacket(nil, &ip, nil, nil)
+}
+
 func resetBPFMaps() {
 	resetCTMap(ctMap)
 	resetRTMap(rtMap)
