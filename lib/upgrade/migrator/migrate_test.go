@@ -210,7 +210,7 @@ var _ = testutils.E2eDatastoreDescribe("Migration tests", testutils.DatastoreEtc
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			// Create the dummy v1 client, if necesary including the v1 cluster version.
+			// Create the dummy v1 client, if necessary including the v1 cluster version.
 			By("Configuring a cluster version in the v1 datastore")
 			v1Client := fakeClientV1{}
 			if v1Version != nil {

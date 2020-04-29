@@ -376,7 +376,7 @@ func (c *ModelAdaptor) listNodes(ctx context.Context, l model.NodeListOptions) (
 }
 
 // listBlock returns list of KVPairs for Block, includes making sure
-// backwards compatiblity. See getBlock for more details.
+// backwards compatibility. See getBlock for more details.
 func (c *ModelAdaptor) listBlock(ctx context.Context, l model.BlockListOptions) (*model.KVPairList, error) {
 
 	// Get a list of block KVPairs.

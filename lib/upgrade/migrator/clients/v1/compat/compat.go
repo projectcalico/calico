@@ -192,7 +192,7 @@ func (c *ModelAdaptor) listNodes(l model.NodeListOptions) ([]*model.KVPair, erro
 }
 
 // listBlock returns list of KVPairs for Block, includes making sure
-// backwards compatiblity. See getBlock for more details.
+// backwards compatibility. See getBlock for more details.
 func (c *ModelAdaptor) listBlock(l model.BlockListOptions) ([]*model.KVPair, error) {
 
 	// Get a list of block KVPairs.
@@ -353,7 +353,7 @@ func toDatastoreGlobalBGPConfigKey(key model.GlobalBGPConfigKey) model.GlobalBGP
 }
 
 // toDatastoreGlobalBGPConfigList modifies the Global BGP Config List interface to the one required by
-// the datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+// the datastore (for back-compatibility with what is expected in the etcdv2 datastore driver).
 func toDatastoreGlobalBGPConfigList(l model.GlobalBGPConfigListOptions) model.GlobalBGPConfigListOptions {
 	switch l.Name {
 	case "AsNumber":
@@ -367,7 +367,7 @@ func toDatastoreGlobalBGPConfigList(l model.GlobalBGPConfigListOptions) model.Gl
 }
 
 // fromDatastoreGlobalBGPKey modifies the Global BGP Config key from the one required by
-// the datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+// the datastore (for back-compatibility with what is expected in the etcdv2 datastore driver).
 func fromDatastoreGlobalBGPKey(key model.GlobalBGPConfigKey) model.GlobalBGPConfigKey {
 	switch key.Name {
 	case "as_num":
@@ -381,7 +381,7 @@ func fromDatastoreGlobalBGPKey(key model.GlobalBGPConfigKey) model.GlobalBGPConf
 }
 
 // fromDatastoreGlobalBGPConfig modifies the Global BGP Config KVPair from the format required in the
-// datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+// datastore (for back-compatibility with what is expected in the etcdv2 datastore driver).
 func fromDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
 	modifiedKey := fromDatastoreGlobalBGPKey(d.Key.(model.GlobalBGPConfigKey))
 	d.Key = modifiedKey

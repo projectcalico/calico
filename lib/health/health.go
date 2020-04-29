@@ -204,12 +204,12 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 const (
 	// The HTTP status that we use for 'ready' or 'live'.  204 means "No Content: The server
 	// successfully processed the request and is not returning any content."  (Kubernetes
-	// interpets any 200<=status<400 as 'good'.)
+	// interprets any 200<=status<400 as 'good'.)
 	StatusGood = 204
 
 	// The HTTP status that we use for 'not ready' or 'not live'.  503 means "Service
 	// Unavailable: The server is currently unavailable (because it is overloaded or down for
-	// maintenance). Generally, this is a temporary state."  (Kubernetes interpets any
+	// maintenance). Generally, this is a temporary state."  (Kubernetes interprets any
 	// status>=400 as 'bad'.)
 	StatusBad = 503
 )

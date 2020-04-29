@@ -135,7 +135,7 @@ func (e ErrorResourceUpdateConflict) Error() string {
 
 // Error indicating that the operation may have partially succeeded, then
 // failed, without rolling back. A common example is when a function failed
-// in an acceptable way after it succesfully wrote some data to the datastore.
+// in an acceptable way after it successfully wrote some data to the datastore.
 type ErrorPartialFailure struct {
 	Err error
 }

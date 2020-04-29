@@ -475,7 +475,7 @@ All of these properties are optional but some have dependencies (such as
 requiring the protocol to be specified):
 
 `protocol`: if present, restricts the rule to only apply to traffic of a
-specific IP protocol. Required if `*_ports` is used (becuase ports
+specific IP protocol. Required if `*_ports` is used (because ports
 only apply to certain protocols).
 
     Must be one of these string values: `"tcp"`, `"udp"`, `"icmp"`,

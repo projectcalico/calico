@@ -79,9 +79,9 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 	}
 
 	// Create the etcd client
-	// If Etcd Certificate and Key are provided inline through command line agrument,
+	// If Etcd Certificate and Key are provided inline through command line argument,
 	// then the inline values take precedence over the ones in the config file.
-	// All the three parametes, Certificate, key and CA certificate are to be provided inline for processing.
+	// All the three parameters, Certificate, key and CA certificate are to be provided inline for processing.
 	var tls *tls.Config
 	var err error
 

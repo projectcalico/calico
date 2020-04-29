@@ -1012,7 +1012,7 @@ func (m *migrationHelper) storeV3Resources(data *MigrationData) error {
 	m.statusBullet("Storing resources in v3 format")
 	for n, r := range data.Resources {
 		// Convert the resource to a KVPair and access the backend datastore directly.
-		// This is slightly more efficient, and cuts out some of the unneccessary additional
+		// This is slightly more efficient, and cuts out some of the unnecessary additional
 		// processing. Since we are applying directly to the backend we need to set the UUID
 		// and creation timestamp which is normally handled by clientv3.
 		r = toStorage(r)

@@ -188,7 +188,7 @@ kind: notCalicoApiConfig
 		},
 	}
 
-	// Environments to test ETCD SRV paramater
+	// Environments to test ETCD SRV parameter
 	env5 := map[string]string{
 		"APIV1_ETCD_DISCOVERY_SRV": "example.com",
 	}
