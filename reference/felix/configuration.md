@@ -66,7 +66,7 @@ The full list of parameters which can be set is as follows.
 | `UsageReportingInitialDelaySecs`  | `FELIX_USAGEREPORTINGINITIALDELAYSECS`  | Minimum delay before first usage report, in seconds. [Default: `300`] | int |
 | `UsageReportingIntervalSecs`      | `FELIX_USAGEREPORTINGINTERVALSECS`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | int |
 | `VXLANEnabled`                    | `FELIX_VXLANENABLED`                    | Automatically set when needed, you shouldn't need to change this setting: whether Felix should create the VXLAN tunnel device for VXLAN networking. [Default: `false`] | boolean |
-| `VXLANMTU`                        | `FELIX_VXLANMTU`                        | The MTU to set on the VXLAN tunnel device. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) [Default: `1410`] | int |
+| `VXLANMTU`                        | `FELIX_VXLANMTU`                        | The MTU to set on the VXLAN tunnel device. Also controls NodePort MTU when eBPF enabled. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) [Default: `1410`] | int |
 | `VXLANPort`                       | `FELIX_VXLANPORT`                       | The UDP port to use for VXLAN. [Default: `4789`] | int |
 | `VXLANTunnelMACAddr`              |                                         | MAC address of the VXLAN tunnel. This is system configured and should not be updated manually. | string |
 | `VXLANVNI`                        | `FELIX_VXLANVNI`                        | The virtual network ID to use for VXLAN. [Default: `4096`] | int |
