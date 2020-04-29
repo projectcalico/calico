@@ -920,9 +920,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 					be32_to_host(state->post_nat_ip_dst), !!cali_rt_is_local(rt));
 
 			encap_needed = !cali_rt_is_local(rt);
-
-			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
-			fib = true;
 		}
 
 		/* We have not created the conntrack yet since we did not know
@@ -946,6 +943,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			state->ip_src = HOST_IP;
 			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
+
+			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
+			fib = true;
+
 			goto nat_encap;
 		}
 
