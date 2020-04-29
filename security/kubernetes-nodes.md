@@ -123,7 +123,11 @@ This tutorial will lock down Kubernetes node ingress to only allow SSH and requi
 > Note: Run this tutorial only on a sandbox cluster; using it on a real cluster can disrupt traffic.
 {: .alert .alert-danger }
 
-First, let's restrict ingress traffic to the master nodes from outside the cluster only to the Kubernetes API server and Kubelet API ports.
+First, let's restrict ingress traffic to the master nodes. The ingress policy below contains two rules.
+The first rule allows access to the API server port from anywhere. The second rule allows access to the Kubernetes
+control plane from localhost. These control plane processes includes the etcd server client API, the scheduler, and the controller-manager. This rule
+also whitelists localhost access to the kubelet API and calico/node health checks.
+
 If you have not modified the failsafe ports, we should still have access to SSH to the nodes after applying this policy.
 
 ```
@@ -131,90 +135,25 @@ calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: allow-all-to-masters
+  name: ingress-k8s-masters
 spec:
   selector: has(node-role.kubernetes.io/master)
-  order: 100
+  # This rule allows ingress to the Kubernetes API server.
   ingress:
   - action: Allow
     protocol: TCP
     destination:
       ports:
-      # kubelet API
-      - 10250
       # kube API server
       - 6443
-  - action: Allow
-    protocol: UDP
-    destination:
-      ports: [53]
-  egress:
-  - action: Allow
-EOF
-```
-
-Note that the above policy selects the standard Kubernetes label **node-role.kubernetes.io/master** attached to master nodes.
-
-Next, apply policy that allows ingress traffic between the masters on certain ports.
-In addition to allowing the Kubernetes API server and Kubelet API ports, we also allow the 
-master nodes to access the etcd server client API and the other Kubernetes control plane processes.
-
-```
-calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v3
-kind: GlobalNetworkPolicy
-metadata:
-  name: allow-master-to-master
-spec:
-  selector: has(node-role.kubernetes.io/master)
-  order: 200
-  ingress:
-  - action: Allow
-    protocol: TCP
-    source:
-      selector: has(node-role.kubernetes.io/master)
-    destination:
-      ports:
-      # kubelet API
-      - 10250
-      # kube API server
-      - 6443
-      # etcd server client API
-      - "2379:2381"
-      # kube-scheduler
-      - 10251
-      - 10259
-      # kube-controller-manager
-      - 10252
-      - 10257
-  egress:
-  - action: Allow
-EOF
-```
-
-Now apply a policy similar to the above that allows traffic coming into the loopback device at 127.0.0.1.
-This allows the masters to reach local Kubernetes control plane processes. 
-
-```
-calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v3
-kind: GlobalNetworkPolicy
-metadata:
-  name: allow-master-to-master-local
-spec:
-  selector: has(node-role.kubernetes.io/master)
-  order: 250
-  ingress:
+  # This rule allows traffic to Kubernetes control plane ports
+  # from localhost. The health check port for calico/node is also whitelisted
   - action: Allow
     protocol: TCP
     destination:
       nets:
       - 127.0.0.1/32
       ports:
-      # kubelet API
-      - 10250
-      # kube API server
-      - 6443
       # etcd server client API
       - "2379:2381"
       # kube-scheduler
@@ -223,14 +162,16 @@ spec:
       # kube-controller-manager
       - 10252
       - 10257
+      # kubelet API
+      - 10250
       # calico/node health check
       - 9099
-  egress:
-  - action: Allow
 EOF
 ```
 
-Lastly, we need to allow all Kubernetes nodes access to their own Kubelet API.
+Note that the above policy selects the standard Kubernetes label **node-role.kubernetes.io/master** attached to master nodes.
+
+Lastly, we need to allow all Kubernetes nodes access to their own Kubelet API and calico/node health check.
 Before adding the policy we will add a label to all of our nodes, which then gets added to its automatic host endpoint.
 For this example we will use **kubernetes-host**:
 
@@ -245,21 +186,21 @@ calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: allow-nodes-to-kubelet
+  name: ingress-k8s-nodes
 spec:
   selector: has(kubernetes-host)
   order: 300
   ingress:
   - action: Allow
     protocol: TCP
-    source:
-      selector: has(kubernetes-host)
     destination:
+      nets:
+      - 127.0.0.1/32
       ports:
       # kubelet API
       - 10250
-  egress:
-  - action: Allow
+      # calico/node health check
+      - 9099
 EOF
 ```
 
