@@ -260,7 +260,6 @@ Description:
   The ipam show command prints information about a given IP address, or about
   overall IP usage.
 `
-	fmt.Println(args)
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
@@ -268,7 +267,6 @@ Description:
 	if len(parsedArgs) == 0 {
 		return nil
 	}
-	fmt.Println(parsedArgs)
 	ctx := context.Background()
 
 	// Create a new backend client from env vars.
