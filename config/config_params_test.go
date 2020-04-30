@@ -59,6 +59,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 
 		"loadClientConfigFromEnvironment",
 		"useNodeResourceUpdates",
+		"internalOverrides",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",
@@ -123,6 +124,44 @@ func fieldsByName(example interface{}) map[string]reflect.StructField {
 	}
 	return fields
 }
+
+var _ = Describe("Config override empty", func() {
+	var cp *Config
+	BeforeEach(func() {
+		cp = New()
+	})
+
+	It("should allow config override", func() {
+		changed, err := cp.OverrideParam("BPFEnabled", "true")
+		Expect(changed).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cp.BPFEnabled).To(BeTrue())
+	})
+
+	Describe("with a param set", func() {
+		BeforeEach(func() {
+			_, err := cp.UpdateFrom(map[string]string{"BPFEnabled": "true"}, DatastorePerHost)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should allow config override", func() {
+			By("Having correct initial value")
+			Expect(cp.BPFEnabled).To(BeTrue())
+
+			By("Having correct value after override")
+			changed, err := cp.OverrideParam("BPFEnabled", "false")
+			Expect(changed).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cp.BPFEnabled).To(BeFalse())
+
+			By("Ignoring a lower-priority config update")
+			changed, err = cp.UpdateFrom(map[string]string{"BPFEnabled": "true"}, EnvironmentVariable)
+			Expect(changed).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cp.BPFEnabled).To(BeFalse())
+		})
+	})
+})
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {

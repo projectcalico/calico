@@ -94,6 +94,9 @@ var (
 	// v4Dot20Dot0 is the first kernel version that has all the
 	// required features we use for sidecar acceleration
 	v4Dot20Dot0 = versionparse.MustParseVersion("4.20.0")
+	// v5Dot3Dot0 is the first kernel version that has all the
+	// required features we use for BPF dataplane mode
+	v5Dot3Dot0 = versionparse.MustParseVersion("5.3.0")
 )
 
 func (m XDPMode) String() string {
@@ -2177,6 +2180,19 @@ func isAtLeastKernel(v *version.Version) error {
 
 func SupportsSockmap() error {
 	if err := isAtLeastKernel(v4Dot20Dot0); err != nil {
+		return err
+	}
+
+	// Test endianness
+	if nativeEndian != binary.LittleEndian {
+		return fmt.Errorf("this bpf library only supports little endian architectures")
+	}
+
+	return nil
+}
+
+func SupportsBPFDataplane() error {
+	if err := isAtLeastKernel(v5Dot3Dot0); err != nil {
 		return err
 	}
 
