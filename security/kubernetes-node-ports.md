@@ -32,7 +32,7 @@ In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and I
 ### Before you begin...
 
 - For services that you want to expose to external clients, configure Kubernetes services with type **NodePort**. 
-- [Enable automatic host endpoints]{{ site.baseurl }}/security/kubernetes-nodes#enable-automatic-host-endpoints)
+- [Enable automatic host endpoints]({{ site.baseurl }}/security/kubernetes-nodes#enable-automatic-host-endpoints)
 
 ### How to
 
@@ -90,13 +90,13 @@ In this example, we assume that you have already enabled automatic host endpoint
 All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host** label.
 To add the **kubernetes-host** label to our automatic host endpoints we add the label to all Kubernetes nodes. (The example below uses an empty value but any valid value can be substituted.)
 
-``bash
+```bash
 kubectl label nodes --all kubernetes-host=
 ```
 
 After a few moments, we can verify that the host endpoints also contain the above label. For example:
 
-```bash
+```
 calicoctl get hep -oyaml | grep kubernetes-host
       kubernetes-host: ""
       kubernetes-host: ""
