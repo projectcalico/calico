@@ -170,6 +170,15 @@ spec:
       - 10250
       # calico/node health check
       - 9099
+  # This rule is required in multi-master clusters where etcd pods are colocated with the masters.
+  # Allow the etcd pods on the masters to communicate with each other. 2380 is the etcd peer port.
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: has(node-role.kubernetes.io/master)
+    destination:
+      ports:
+      - 2380
 EOF
 ```
 
@@ -206,6 +215,43 @@ spec:
       # calico/node health check
       - 9099
 EOF
+```
+
+The final step is to update the **FailsafeInboundHostPorts** and remove unnecessary failsafe ports.
+Without this step, the control plane is still accessible on ports 2379 and 2380.
+First, get the current **FelixConfiguration**:
+
+```bash
+calicoctl get felixconfiguration default -oyaml --export > felixconfig.yaml
+```
+
+Next, edit the default FelixConfiguration so it only has the inbound failsafe ports tcp:22, udp:68, and tcp:179,
+removing the etcd-related ports from the failsafes. For example, the configuration may look as follows:
+
+```
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  creationTimestamp: null
+  name: default
+spec:
+  bpfLogLevel: ""
+  ipipEnabled: true
+  logSeverityScreen: Info
+  reportingInterval: 0s
+  failsafeInboundHostPorts:
+  - protocol: tcp
+    port: 22
+  - protocol: udp
+    port: 68
+  - protocol: tcp
+    port: 179
+```
+
+Finally, apply the updated configuration:
+
+```
+calicoctl apply -f - < felixconfig.yaml
 ```
 
 ### Above and beyond
