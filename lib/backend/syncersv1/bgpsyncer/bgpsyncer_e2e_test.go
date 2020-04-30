@@ -59,7 +59,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			// Create a SyncerTester to receive the BGP syncer callback events and to allow us
 			// to assert state.
 			syncTester := testutils.NewSyncerTester()
-			syncer := bgpsyncer.New(be, syncTester, "127.0.0.1")
+			syncer := bgpsyncer.New(be, syncTester, "127.0.0.1", config.Spec)
 			syncer.Start()
 			expectedCacheSize := 0
 
@@ -285,7 +285,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			// We need to create a new syncTester and syncer.
 			current := syncTester.GetCacheEntries()
 			syncTester = testutils.NewSyncerTester()
-			syncer = bgpsyncer.New(be, syncTester, "127.0.0.1")
+			syncer = bgpsyncer.New(be, syncTester, "127.0.0.1", config.Spec)
 			syncer.Start()
 
 			// Verify the data is the same as the data from the previous cache.  We got the cache in the previous

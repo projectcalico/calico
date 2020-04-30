@@ -30,13 +30,18 @@ import (
 
 // Create a new SyncerUpdateProcessor to sync Node data in v1 format for
 // consumption by Felix.
-func NewFelixNodeUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return &FelixNodeUpdateProcessor{}
+func NewFelixNodeUpdateProcessor(usePodCIDR bool) watchersyncer.SyncerUpdateProcessor {
+	return &FelixNodeUpdateProcessor{
+		usePodCIDR:      usePodCIDR,
+		nodeCIDRTracker: newNodeCIDRTracker(),
+	}
 }
 
 // FelixNodeUpdateProcessor implements the SyncerUpdateProcessor interface.
 // This converts the v3 node configuration into the v1 data types consumed by confd.
 type FelixNodeUpdateProcessor struct {
+	usePodCIDR      bool
+	nodeCIDRTracker nodeCIDRTracker
 }
 
 func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
@@ -137,6 +142,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 				err = fmt.Errorf("failed to parse PublicKey as Wireguard public-key")
 			}
 		}
+
 		// If either of interface address or public-key is set, set the WireguardKey value.
 		// If we failed to parse both the values, leave the WireguardKey value empty.
 		if wgIfaceIpv4Addr != nil || wgPubKey != "" {
@@ -144,8 +150,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 	}
 
-	// Return the add/delete updates and any errors.
-	return []*model.KVPair{
+	kvps := []*model.KVPair{
 		{
 			Key: model.HostIPKey{
 				Hostname: name,
@@ -192,7 +197,52 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 			Value:    wgConfig,
 			Revision: kvp.Revision,
 		},
-	}, err
+	}
+
+	if c.usePodCIDR {
+		// If we're using host-local IPAM based off the Kubernetes node PodCIDR, then
+		// we need to send Blocks based on the CIDRs to felix.
+		log.Info("Using pod cidr")
+		var currentPodCIDRs []string
+		if node != nil {
+			currentPodCIDRs = node.Status.PodCIDRs
+		}
+		toRemove := c.nodeCIDRTracker.SetNodeCIDRs(name, currentPodCIDRs)
+		log.Infof("Current CIDRS: %s", currentPodCIDRs)
+		log.Infof("Old CIDRS: %s", toRemove)
+
+		// Send deletes for any CIDRs which are no longer present.
+		for _, c := range toRemove {
+			_, cidr, err := cnet.ParseCIDR(c)
+			if err != nil {
+				log.WithError(err).WithField("CIDR", c).Warn("Failed to parse Node PodCIDR")
+				continue
+			}
+			kvps = append(kvps, &model.KVPair{
+				Key:      model.BlockKey{CIDR: *cidr},
+				Value:    nil,
+				Revision: kvp.Revision,
+			})
+		}
+
+		// Send updates for any CIDRs which are still present.
+		for _, c := range currentPodCIDRs {
+			_, cidr, err := cnet.ParseCIDR(c)
+			if err != nil {
+				log.WithError(err).WithField("CIDR", c).Warn("Failed to parse Node PodCIDR")
+				continue
+			}
+
+			aff := fmt.Sprintf("host:%s", name)
+			kvps = append(kvps, &model.KVPair{
+				Key:      model.BlockKey{CIDR: *cidr},
+				Value:    &model.AllocationBlock{CIDR: *cidr, Affinity: &aff},
+				Revision: kvp.Revision,
+			})
+		}
+	}
+
+	return kvps, err
 }
 
 // Sync is restarting - nothing to do for this processor.

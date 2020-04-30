@@ -61,6 +61,9 @@ type NodeStatus struct {
 	// WireguardPublicKey is the Wireguard public-key for this node.
 	// wireguardPublicKey validates if the string is a valid base64 encoded key.
 	WireguardPublicKey string `json:"wireguardPublicKey,omitempty" validate:"omitempty,wireguardPublicKey"`
+
+	// PodCIDR is a reflection of the Kubernetes node's spec.PodCIDRs field.
+	PodCIDRs []string `json:"podCIDRs,omitempty" validate:"omitempty"`
 }
 
 // OrchRef is used to correlate a Calico node to its corresponding representation in a given orchestrator
