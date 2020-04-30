@@ -173,6 +173,17 @@ MAINLOOP:
 			continue MAINLOOP
 		}
 
+		// With the snapshot updated, get a list of
+		// kubecontrollersconfigurations so we can watch on its resource
+		// version.
+		kccList, err := client.List(ctx, options.ListOptions{Name: "default"})
+		if err != nil {
+			log.WithError(err).Warn("unable to list KubeControllersConfiguration(default)")
+			snapshot = nil
+			time.Sleep(datastoreBackoff)
+			continue MAINLOOP
+		}
+
 		// Is this new running config different than our current?
 		if !currentSet || !reflect.DeepEqual(new, current) {
 			out <- new
@@ -184,10 +195,10 @@ MAINLOOP:
 		if w != nil {
 			w.Stop()
 		}
-		w, err = client.Watch(ctx, options.ListOptions{ResourceVersion: snapshot.ResourceVersion})
+		w, err = client.Watch(ctx, options.ListOptions{ResourceVersion: kccList.ResourceVersion})
 		if err != nil {
 			// Watch failed
-			log.WithError(err).Warn("unable to watch KubeControllersConfiguration(default)")
+			log.WithError(err).Warn("unable to watch KubeControllersConfigurations")
 			snapshot = nil
 			time.Sleep(datastoreBackoff)
 			continue MAINLOOP
