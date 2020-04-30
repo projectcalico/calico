@@ -34,8 +34,6 @@ section:
       path: /reference/calicoctl/ipam/release
     - title: show
       path: /reference/calicoctl/ipam/show
-    - title: configure
-      path: /reference/calicoctl/ipam/configure
   - title: node
     path: /reference/calicoctl/node/
     section:
@@ -113,6 +111,8 @@ section:
     path: /reference/typha/overview
   - title: Configuration
     path: /reference/typha/configuration
+  - title: Prometheus statistics
+    path: /reference/typha/prometheus
 - title: Dikastes
   path: /reference/dikastes/configuration
 - title: Calico CNI plugins
