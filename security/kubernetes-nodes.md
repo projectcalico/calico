@@ -130,8 +130,9 @@ also whitelists localhost access to the kubelet API and calico/node health check
 
 If you have not modified the failsafe ports, you should still have SSH access to the nodes after applying this policy.
 
-> Note: This tutorial was tested on a cluster created using kubeadm on AWS. If your Kubernetes cluster is on a different platform
-> or if its running a variant of Kubernetes, please review the required ports for the master and worker nodes and adjust the policies in this tutorial as needed.
+> Note: This tutorial was tested on a cluster created with kubeadm v1.18.2 on AWS, using a "stacked etcd" [topology](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/). Stacked etcd topology means the etcd pods are running on the masters. kubeadm uses stacked etcd by default.
+> If your Kubernetes cluster is on a different platform, is running a variant of Kubernetes, or is running a topology with an external etcd cluster,
+> please review the required ports for the master and worker nodes and adjust the policies in this tutorial as needed.
 {: .alert .alert-info }
 
 ```
@@ -184,7 +185,7 @@ EOF
 
 Note that the above policy selects the standard Kubernetes label **node-role.kubernetes.io/master** attached to master nodes.
 
-Lastly, we need to allow all Kubernetes nodes access to their own Kubelet API and calico/node health check.
+Next, we need to allow all Kubernetes nodes access to their own Kubelet API and calico/node health check.
 Before adding the policy we will add a label to all of our nodes, which then gets added to its automatic host endpoint.
 For this example we will use **kubernetes-host**:
 
@@ -192,7 +193,7 @@ For this example we will use **kubernetes-host**:
 kubectl label nodes --all kubernetes-host=
 ```
 
-Finally we can apply policy that selects all Kubernetes nodes:
+Then we can apply policy that selects all Kubernetes nodes:
 
 ```
 calicoctl apply -f - << EOF
@@ -217,7 +218,7 @@ spec:
 EOF
 ```
 
-The final step is to update the **FailsafeInboundHostPorts** and remove unnecessary failsafe ports.
+The final task is to update the **FailsafeInboundHostPorts** and remove unnecessary failsafe ports.
 Without this step, the control plane is still accessible on ports 2379 and 2380.
 First, get the current **FelixConfiguration**:
 
@@ -225,8 +226,8 @@ First, get the current **FelixConfiguration**:
 calicoctl get felixconfiguration default -oyaml --export > felixconfig.yaml
 ```
 
-Next, edit the default FelixConfiguration so it only has the inbound failsafe ports tcp:22, udp:68, and tcp:179,
-removing the etcd-related ports from the failsafes. For example, the configuration may look as follows:
+Next, edit the default FelixConfiguration failsafe inbound ports so it only has ports: tcp:22, udp:68, and tcp:179.
+This removes the etcd-related ports from the failsafes. For example, the configuration may look as follows:
 
 ```
 apiVersion: projectcalico.org/v3
@@ -259,4 +260,4 @@ calicoctl apply -f - < felixconfig.yaml
 - [Protect hosts tutorial]({{ site.baseurl }}/security/tutorials/protect-hosts)
 - [Apply policy to Kubernetes node ports]({{ site.baseurl }}/security/kubernetes-node-ports)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) 
-- [Host [[endpoints]]]({{ site.baseurl }}/reference/resources/hostendpoint)
+- [Host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint)
