@@ -49,6 +49,8 @@ function build() {
 # build_master builds skip the git clone and build the site in the current tree
 function build_master() {
     jekyll build --config $JEKYLL_CONFIG --baseurl /master --destination _site/master
+    ./make_bundle.sh
+    mv manifests.tar _site/master
 }
 
 # build_archives builds the archives. The release-legacy branch is special

@@ -72,6 +72,9 @@ _site build: bin/helm
 	-v $(IMAGES_FILE):/config_images.yml \
 	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
 
+	./make_bundle.sh
+	mv manifests.tar _site
+
 ## Clean enough that a new release build will be clean
 clean:
 	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
