@@ -14,7 +14,10 @@
 
 package iptables
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 type Action interface {
 	ToFragment(features *Features) string
@@ -153,7 +156,7 @@ type MasqAction struct {
 
 func (g MasqAction) ToFragment(features *Features) string {
 	fullyRand := ""
-	if features.MASQFullyRandom {
+	if features.MASQFullyRandom && os.Getenv("FELIX_DISABLE_RANDOM_FULLY") != "true" {
 		fullyRand = " --random-fully"
 	}
 	if g.ToPorts != "" {
