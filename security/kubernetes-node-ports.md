@@ -45,7 +45,7 @@ To securely expose a Kubernetes service to external clients, you must implement 
 
 #### Allow cluster ingress traffic but deny general ingress traffic
 
-In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes’ IP addresses (**1.2.3.4/16**), and for pod IP addresses assigned by Kubernetes (**100.100.100.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster. 
+In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes’ IP addresses (for example, **1.2.0.0/16**), and for pod IP addresses assigned by Kubernetes (for example, **100.100.0.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster.
 
 In this example, we use the **selector: has(kubernetes-host)** -- so the policy is applicable to any endpoint with a **kubernetes-host** label (but you can easily specify particular nodes). 
 
@@ -63,7 +63,9 @@ spec:
   ingress:
     - action: Allow
       source:
-        nets: [1.2.3.4/16, 100.100.100.0/16]
+        nets:
+        - 1.2.0.0/16
+        - 100.100.0.0/16
     - action: Deny
   selector: has(kubernetes-host)
 ```
