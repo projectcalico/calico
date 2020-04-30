@@ -55,7 +55,7 @@ function build_master() {
 # and is built into _site directly (the legacy docs were a version per dir).
 # Newer archive versions are built into its own directory for that version.
 function build_archives() {
-    grep -oP '^- \K(.*)' _data/archives.yml | while read branch; do
+    (echo "$CURRENT_RELEASE" && grep -oP '^- \K(.*)' _data/archives.yml) | while read branch; do
         EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_config_noindex.yml
         if [[ "$branch" == legacy* ]]; then
             if [ -z "$CUSTOM_ARCHIVE_PATH" ]; then
@@ -85,9 +85,6 @@ mv _site/sitemap.xml _site/release-legacy-sitemap.xml
 echo "[INFO] building current release"
 EXTRA_CONFIG=$(pwd)/netlify/_config_latest.yml build release-$CURRENT_RELEASE
 mv _site/sitemap.xml _site/latest-sitemap.xml
-
-echo "[INFO] building permalink for current release"
-EXTRA_CONFIG=$(pwd)/netlify/_config_latest.yml build release-$CURRENT_RELEASE /$CURRENT_RELEASE
 
 if [ ! -z "$CANDIDATE_RELEASE" ]; then
     echo "[INFO] building candidate release"
