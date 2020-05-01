@@ -272,3 +272,15 @@ func ParseCIDROrIP(s string) (CIDR, error) {
 	}
 	return CIDRFromIPNet(netCIDR), nil
 }
+
+func IPNetsEqual(net1, net2 *net.IPNet) bool {
+	if net1 == nil && net2 == nil {
+		// Both are nil, therefore equal.
+		return true
+	}
+	if net1 == nil || net2 == nil {
+		// Only one is nil, therefore not equal.
+		return false
+	}
+	return CIDRFromIPNet(net1) == CIDRFromIPNet(net2)
+}
