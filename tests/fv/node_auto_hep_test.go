@@ -158,11 +158,21 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		cn.Spec.BGP.IPv4Address = "172.100.2.3"
 		cn.Spec.BGP.IPv4IPIPTunnelAddr = ""
 		cn.Spec.IPv4VXLANTunnelAddr = "10.10.20.1"
-		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect the hostendpoint's expectedIPs to sync the new node IPs.
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1"}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		cn.Spec.Wireguard = &api.NodeWireguardSpec{
+			InterfaceIPv4Address: "192.168.100.1",
+		}
+		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "192.168.100.1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
