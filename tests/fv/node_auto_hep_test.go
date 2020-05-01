@@ -170,7 +170,8 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		cn.Spec.Wireguard = &api.NodeWireguardSpec{
 			InterfaceIPv4Address: "192.168.100.1",
 		}
-		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "192.168.100.1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
