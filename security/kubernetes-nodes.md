@@ -135,6 +135,8 @@ If you have not modified the failsafe ports, you should still have SSH access to
 > please review the required ports for the master and worker nodes and adjust the policies in this tutorial as needed.
 {: .alert .alert-info }
 
+Now apply the ingress policy for the Kubernetes masters:
+
 ```
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -185,25 +187,25 @@ EOF
 
 Note that the above policy selects the standard Kubernetes label **node-role.kubernetes.io/master** attached to master nodes.
 
-Next, we need to allow all Kubernetes nodes access to their own Kubelet API and calico/node health check.
-Before adding the policy we will add a label to all of our nodes, which then gets added to its automatic host endpoint.
-For this example we will use **kubernetes-host**:
+Next, we need to apply policy to restrict ingress to the Kubernetes workers.
+We need to allow the workers access to their own Kubelet API and calico/node health check, as well as Kubelet API access from the masters.
+Before adding the policy we will add a label to all of our worker nodes, which then gets added to its automatic host endpoint.
+For this example we will use **kubernetes-worker**:
 
 ```bash
-kubectl label nodes --all kubernetes-host=
+kubectl get node -l '!node-role.kubernetes.io/master' -o custom-columns=NAME:.metadata.name | tail -n +2 | xargs -I{} kubectl label node {} kubernetes-worker=
 ```
 
-Then we can apply policy that selects all Kubernetes nodes:
+Then we can apply policy that selects all Kubernetes workers:
 
 ```
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: ingress-k8s-nodes
+  name: ingress-k8s-workers
 spec:
-  selector: has(kubernetes-host)
-  order: 300
+  selector: has(kubernetes-worker)
   ingress:
   - action: Allow
     protocol: TCP
@@ -215,6 +217,15 @@ spec:
       - 10250
       # calico/node health check
       - 9099
+  # Allow the masters access to the nodes Kubelet API
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: has(node-role.kubernetes.io/master)
+    destination:
+      # kubelet API
+      ports:
+      - 10250
 EOF
 ```
 
