@@ -16,7 +16,6 @@ Exposing services to external clients using node ports is a standard Kubernetes 
 This how-to guide uses the following Calico features:
 - **GlobalNetworkPolicy** with a preDNAT field
 - **HostEndpoint**
-- **KubeControllersConfiguration**
 
 ### Concepts
 
@@ -31,8 +30,7 @@ In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and I
 
 ### Before you begin...
 
-- For services that you want to expose to external clients, configure Kubernetes services with type **NodePort**. 
-- [Enable automatic host endpoints]({{ site.baseurl }}/security/kubernetes-nodes#enable-automatic-host-endpoints)
+For services that you want to expose to external clients, configure Kubernetes services with type **NodePort**. 
 
 ### How to
 
@@ -40,12 +38,12 @@ To securely expose a Kubernetes service to external clients, you must implement 
 
 - [Allow cluster ingress traffic, but deny general ingress traffic](#allow-cluster-ingress-traffic-but-deny-general-ingress-traffic)
 - [Allow local host egress traffic](#allow-local-host-egress-traffic)
-- [Update host endpoints labels](#update-host-endpoints-labels)
+- [Create host endpoints with appropriate network policy](#create-host-endpoints-with-appropriate-network-policy)
 - [Allow ingress traffic to specific node ports](#allow-ingress-traffic-to-specific-node-ports)
 
 #### Allow cluster ingress traffic but deny general ingress traffic
 
-In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes’ IP addresses (for example, **1.2.0.0/16**), and for pod IP addresses assigned by Kubernetes (for example, **100.100.0.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster.
+In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes’ IP addresses (**1.2.3.4/16**), and for pod IP addresses assigned by Kubernetes (**100.100.100.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster. 
 
 In this example, we use the **selector: has(kubernetes-host)** -- so the policy is applicable to any endpoint with a **kubernetes-host** label (but you can easily specify particular nodes). 
 
@@ -63,9 +61,7 @@ spec:
   ingress:
     - action: Allow
       source:
-        nets:
-        - 1.2.0.0/16
-        - 100.100.0.0/16
+        nets: [1.2.3.4/16, 100.100.100.0/16]
     - action: Deny
   selector: has(kubernetes-host)
 ```
@@ -86,25 +82,22 @@ spec:
   selector: has(kubernetes-host)
 ```
 
-#### Update host endpoints labels
+#### Create host endpoints with appropriate network policy
 
-In this example, we assume that you have already enabled automatic host endpoints.
-All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host** label.
-To add the **kubernetes-host** label to our automatic host endpoints we add the label to all Kubernetes nodes. (The example below uses an empty value but any valid value can be substituted.)
+In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn’t want a host endpoint with a “default deny all traffic to/from this host” network policy because that is counter to the goal of allowing/denying specific traffic.) For help, see [host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint).
 
-```bash
-kubectl label nodes --all kubernetes-host=
-```
+All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host label**; so we will include that label in our definitions. For example, for **eth0** on **node1**.
 
-After a few moments, we can verify that the host endpoints also contain the above label. For example:
-
-```
-calicoctl get hep -oyaml | grep kubernetes-host
-      kubernetes-host: ""
-      kubernetes-host: ""
-      kubernetes-host: ""
-      kubernetes-host: ""
-      kubernetes-host: ""
+```yaml
+apiVersion: projectcalico.org/v3
+kind: HostEndpoint
+metadata:
+  name: node1-eth0
+  labels:
+    kubernetes-host: ingress
+spec:
+  interfaceName: eth0
+  node: node1
 ```
 
 #### Allow ingress traffic to specific node ports
@@ -129,17 +122,16 @@ spec:
   selector: has(kubernetes-host)
   ```
 
-To make the NodePort accessible only through particular nodes, give the nodes a particular label.
-For example (after replacing <node-name> with the name of the node to allow NodePort access):
+To make the NodePort accessible only through particular nodes, give the nodes a particular label. For example:
 
 ```yaml
-kubectl label nodes <node-name> nodeport-external-ingress: true
+nodeport-external-ingress: true
 ```
 
 Then, use **nodeport-external-ingress: true** as the selector of the **allow-nodeport** policy, instead of **has(kubernetes-host)**.
 
+
 ### Above and beyond
 
-- [Apply policy to Kubernetes node ports]({{ site.baseurl }}/security/kubernetes-node-ports)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) 
 - [Host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint)
