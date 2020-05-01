@@ -50,6 +50,9 @@ RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node a
 # Versions and location of dependencies used in the build.
 BIRD_VERSION=v0.3.3-151-g767b5389
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
+BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
+FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
+INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
 # Versions and locations of dependencies used in tests.
 CALICOCTL_VER?=master
@@ -99,6 +102,7 @@ clean:
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
+	rm -rf filesystem/included-source
 	rm -rf dist
 	rm -rf filesystem/etc/calico/confd/conf.d filesystem/etc/calico/confd/config filesystem/etc/calico/confd/templates
 	rm -f crds.yaml
@@ -163,7 +167,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(BUILD_IMAGE): $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) remote-deps
+$(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
 ifeq ($(LOCAL_BUILD),true)
 	# If doing a local build, copy in local confd templates in case there are changes.
 	rm -rf filesystem/etc/calico/confd/templates
@@ -178,6 +182,17 @@ endif
 	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	touch $@
 
+# download BIRD source to include in image.
+$(BIRD_SOURCE): go.mod
+	mkdir -p filesystem/included-source/
+	wget -O $@ https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+
+# download any GPL felix code to include in the image.
+$(FELIX_GPL_SOURCE): go.mod
+	mkdir -p filesystem/included-source/
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
+		tar cf $@ `go list -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl;'
+	
 ###############################################################################
 # FV Tests
 ###############################################################################
