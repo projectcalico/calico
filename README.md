@@ -12,7 +12,7 @@ Note that the documentation in this repo is targeted at Calico contributors.
 </blockquote>
 -->
 
-This repository contains the source code for Project Calico's optional Typha daemon.  An instance of Typha sits 
+This repository contains the source code for Project Calico's optional Typha daemon.  An instance of Typha sits
 between the datastore (such as the Kubernetes API server) and many instances of Felix.
 
 ![A small cluster of Typha nodes fan out updates to many Felix instances](docs/fan-out.png "A small cluster of Typha nodes fan out updates to many Felix instances  ")
@@ -37,7 +37,7 @@ Typha is generally not required for Calico deployments using an etcdv3 datastore
 
 ## How can I start using Typha?
 
-Follow the "more than 50 nodes" section in the 
+Follow the "more than 50 nodes" section in the
 [Calico for Kubernetes getting started guide](https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises).
 
 ## How can I get support for contributing to Project Calico?
@@ -66,7 +66,7 @@ your contribution.
 ## How do I build Typha?
 
 Typha mostly uses Docker for builds.  We develop on Ubuntu 16.04 but other
-Linux distributions should work (there are known Makefile that prevent building on OS X).  
+Linux distributions should work (there are known Makefile that prevent building on OS X).
 To build Typha, you will need:
 
 - A suitable linux box.
@@ -79,7 +79,7 @@ Then, as a one-off, run
 make update-tools
 ```
 which will install a couple more go tools that we haven't yet containerised.
- 
+
 Then, to build the calico-typha binary:
 ```
 make bin/calico-typha
@@ -105,7 +105,7 @@ To get coverage stats:
 ```
 make cover-report
 ```
-or 
+or
 ```
 make cover-browser
 ```
@@ -134,7 +134,13 @@ Ginkgo will re-run tests as files are modified and saved.
 
 ### Docker
 
-After building the docker image (see above), you can run Typha and log to screen 
+After building the docker image (see above), you can run Typha and log to screen
 with, for example:
 `docker run --privileged --net=host -e TYPHA_LOGSEVERITYSCREEN=INFO calico/typha`
 
+## License
+
+Calico binaries are licensed under the [Apache v2.0 license](LICENSE), with the exception of some [GPL licensed eBPF programs](https://github.com/projectcalico/felix/tree/master/bpf-gpl).
+
+Calico imports packages with a number of apache-compatible licenses. For more information, see [filesystem/licenses](./filesystem/licenses). In addition, the base container image contains
+pre-packaged software with a variety of licenses.
