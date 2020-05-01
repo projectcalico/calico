@@ -37,7 +37,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	bpfIfaceName = "NAT1"
 	defer func() { bpfIfaceName = "" }()
 
-	eth, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	eth, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -77,11 +77,8 @@ func TestNATPodPodXNode(t *testing.T) {
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(rtKey, rtVal)
-	defer func() {
-		err := rtMap.Delete(rtKey)
-		Expect(err).NotTo(HaveOccurred())
-	}()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Leaving workload
@@ -256,7 +253,7 @@ func TestNATNodePort(t *testing.T) {
 	bpfIfaceName = "NP-1"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}
@@ -308,6 +305,7 @@ func TestNATNodePort(t *testing.T) {
 	// Setup routing
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
+	defer resetRTMap(rtMap)
 	Expect(err).NotTo(HaveOccurred())
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
@@ -342,7 +340,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -360,7 +358,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca100000 | 0x30000 // CALI_SKB_MARK_BYPASS_FWD
+	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
 	// Leaving node 1
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(encapedPkt)
@@ -423,7 +421,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -463,7 +461,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -592,7 +590,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
-			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+			ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
 
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
@@ -609,8 +607,6 @@ func TestNATNodePort(t *testing.T) {
 	})
 
 	dumpCTMap(ctMap)
-	// clean up
-	resetCTMap(ctMap)
 
 	/*
 	 * TEST that unknown VNI is passed through
@@ -626,7 +622,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	bpfIfaceName = "NPlo"
 	defer func() { bpfIfaceName = "" }()
 
-	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 	mc := &bpf.MapContext{}
@@ -673,6 +669,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
 	// backend it is a local workload
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&wCIDR).(ip.V4CIDR)).AsBytes(),
@@ -770,6 +767,212 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	dumpCTMap(ctMap)
 }
 
+func TestNATNodePortMultiNIC(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "NPM1"
+	defer func() { bpfIfaceName = "" }()
+
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefaultNP(node1ip2)
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+	mc := &bpf.MapContext{}
+	natMap := nat.FrontendMap(mc)
+	err = natMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	natBEMap := nat.BackendMap(mc)
+	err = natBEMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	// NP for node1ip
+	err = natMap.Update(
+		nat.NewNATKey(node1ip, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// NP for node1ip2
+	err = natMap.Update(
+		nat.NewNATKey(node1ip2, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	node2wCIDR := net.IPNet{
+		IP:   natIP,
+		Mask: net.IPv4Mask(255, 255, 255, 0),
+	}
+
+	ctMap := conntrack.Map(mc)
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+
+	var encapedPkt []byte
+
+	hostIP = node1ip2
+	skbMark = 0
+
+	// Setup routing
+	rtMap := routes.Map(mc)
+	err = rtMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	dumpRTMap(rtMap)
+
+	// Arriving at node 1 through 10.10.2.x
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(node2ip.String()))
+
+		checkVxlanEncap(pktR, false, ipv4, udp, payload)
+
+		encapedPkt = res.dataOut
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+
+		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
+			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+		Expect(ct).Should(HaveKey(ctKey))
+		ctr := ct[ctKey]
+		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
+
+		ctKey = ctr.ReverseNATKey()
+		Expect(ct).Should(HaveKey(ctKey))
+		ctr = ct[ctKey]
+		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
+
+		// Whitelisted for both sides due to forwarding through the tunnel
+		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
+		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+	})
+
+	dumpCTMap(ctMap)
+
+	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
+
+	hostIP = node1ip
+	var encapedGoPkt gopacket.Packet
+
+	// Leaving node 1 through 10.10.0.x
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(encapedPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(node2ip.String()))
+
+		checkVxlanEncap(pktR, false, ipv4, udp, payload)
+
+		encapedGoPkt = pktR
+	})
+
+	dumpCTMap(ctMap)
+
+	// craft response packet - short-circuit the remote node side, tested in
+	// TestNATNodePort()
+	respPkt := encapedResponse(encapedGoPkt)
+
+	var recvPkt []byte
+
+	// Response arriving at node 1 through 10.10.0.x
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.SrcIP.String()))
+		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.DstIP.String()))
+
+		udpL := pktR.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+		Expect(udpR.SrcPort).To(Equal(udp.DstPort))
+		Expect(udpR.DstPort).To(Equal(udp.SrcPort))
+
+		payloadL := pktR.ApplicationLayer()
+		Expect(payloadL).NotTo(BeNil())
+		Expect(payload).To(Equal(payloadL.Payload()))
+
+		recvPkt = res.dataOut
+	})
+
+	dumpCTMap(ctMap)
+
+	skbMark = 0xca100000 | 0x30000 // CALI_SKB_MARK_BYPASS_FWD
+
+	// Response leaving to original source
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(recvPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+
+		ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
+			ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+		Expect(ct).Should(HaveKey(ctKey))
+		ctr := ct[ctKey]
+		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
+
+		ctKey = ctr.ReverseNATKey()
+		Expect(ct).Should(HaveKey(ctKey))
+		ctr = ct[ctKey]
+		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
+
+		// Whitelisted for both sides due to forwarding through the tunnel
+		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
+		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
+	})
+
+	dumpCTMap(ctMap)
+}
+
 func testUnrelatedVXLAN(t *testing.T, nodeIP net.IP, vni uint32) {
 	vxlanTest := func(fillUDPCsum bool, validVNI bool) {
 		eth := ethDefault
@@ -862,6 +1065,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
@@ -933,11 +1137,8 @@ func TestNATAffinity(t *testing.T) {
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(rtKey, rtVal)
-	defer func() {
-		err := rtMap.Delete(rtKey)
-		Expect(err).NotTo(HaveOccurred())
-	}()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Check the no affinity entry exists if no affinity is set
@@ -1107,13 +1308,13 @@ func TestNATNodePortIngressDSR(t *testing.T) {
 	rtMap := routes.Map(mc)
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 	dumpRTMap(rtMap)
-	defer resetRTMap(rtMap)
 
 	// Arriving at node 1
 	runBpfTest(t, "calico_from_host_ep_dsr", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
