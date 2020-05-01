@@ -734,7 +734,13 @@ func (m *mockKCC) Get(ctx context.Context, name string, opts options.GetOptions)
 }
 
 func (m *mockKCC) List(ctx context.Context, opts options.ListOptions) (*v3.KubeControllersConfigurationList, error) {
-	panic("implement me")
+	kccs := []v3.KubeControllersConfiguration{}
+	if m.get != nil {
+		kccs = append(kccs, *m.get)
+	}
+	return &v3.KubeControllersConfigurationList{
+		Items: kccs,
+	}, nil
 }
 
 func (m *mockKCC) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
