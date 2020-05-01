@@ -522,9 +522,9 @@ func (buf *EventSequencer) flushHostWireguardUpdates() {
 			ipstr = wg.InterfaceIPv4Addr.String()
 		}
 		buf.Callback(&proto.WireguardEndpointUpdate{
-			Hostname:      nodename,
-			PublicKey:     wg.PublicKey,
-			InterfaceAddr: ipstr,
+			Hostname:          nodename,
+			PublicKey:         wg.PublicKey,
+			InterfaceIpv4Addr: ipstr,
 		})
 		buf.sentWireguard.Add(nodename)
 		delete(buf.pendingWireguardUpdates, nodename)

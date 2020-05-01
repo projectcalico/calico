@@ -26,6 +26,13 @@ trap 'echo "SIGHUP received, passing on to calico-felix"; kill -HUP $pid' SIGHUP
 rc=unknown
 
 while true; do
+  if [ "$DELAY_FELIX_START" == "true" ]; then
+    while [ ! -e /start-trigger ]; do
+      echo "Delaying starting felix..."
+      sleep 1
+    done
+  fi
+
   echo "Starting calico-felix"
   calico-felix &
   pid=$!
