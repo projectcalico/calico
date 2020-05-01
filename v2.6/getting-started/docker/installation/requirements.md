@@ -10,6 +10,10 @@ in order for Calico to function properly with Docker.
 
 As with all Calico clusters, all hosts should have IP connectivity between them.
 
+### iptables
+
+Note that on some systems, iptables runs in nftables compatibility mode by default. Calico v2.6 is not compatible with this and it will likely result in network connectivity issues. To fix this, run the following command to configure iptables to run in legacy mode: `sudo update-alternatives --set iptables /usr/sbin/iptables-legacy`. You will need to reboot for the change to take effect.
+
 ### etcd
 
 You will also need an etcd cluster accessible from each host which Calico
