@@ -109,16 +109,16 @@ func StartDataplaneDriver(configParams *config.Config,
 		// to simplify table tidy-up.
 		routeTableIndexAllocator := idalloc.NewIndexAllocator(configParams.RouteTableRange)
 
+		// Always allocate the wireguard table index (even when not enabled). This ensures we can tidy up entries
+		// if wireguard is disabled after being previously enabled.
 		var wireguardEnabled bool
 		var wireguardTableIndex int
-		if configParams.WireguardEnabled {
-			if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
-				log.Debugf("Assigned wireguard table index: %d", idx)
-				wireguardEnabled = true
-				wireguardTableIndex = idx
-			} else {
-				log.WithError(err).Warning("Unable to assign table index for wireguard - disabling wireguard on this node")
-			}
+		if idx, err := routeTableIndexAllocator.GrabIndex(); err == nil {
+			log.Debugf("Assigned wireguard table index: %d", idx)
+			wireguardEnabled = configParams.WireguardEnabled
+			wireguardTableIndex = idx
+		} else {
+			log.WithError(err).Warning("Unable to assign table index for wireguard")
 		}
 
 		dpConfig := intdataplane.Config{
