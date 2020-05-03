@@ -58,7 +58,7 @@ spec:
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           env:
 {{- if .Values.bpf }}
-            # Overrides for kubernetes API server host/port.  Needed in BPF mode.
+            # Overrides for kubernetes API server host/port. Needed in BPF mode.
             - name: KUBERNETES_SERVICE_HOST
               valueFrom:
                 configMapKeyRef:
@@ -94,7 +94,7 @@ spec:
           command: ["/install-cni.sh"]
           env:
 {{- if .Values.bpf }}
-            # Overrides for kubernetes API server host/port.  Needed in BPF mode.
+            # Overrides for kubernetes API server host/port. Needed in BPF mode.
             - name: KUBERNETES_SERVICE_HOST
               valueFrom:
                 configMapKeyRef:
@@ -184,14 +184,14 @@ spec:
           securityContext:
             privileged: true
       containers:
-        # Runs {{ include "nodeName" . }} container on each Kubernetes node.  This
+        # Runs {{ include "nodeName" . }} container on each Kubernetes node. This
         # container programs network policy and routes on each
         # host.
         - name: calico-node
           image: {{.Values.node.image}}:{{.Values.node.tag}}
           env:
 {{- if .Values.bpf }}
-            # Overrides for kubernetes API server host/port.  Needed in BPF mode.
+            # Overrides for kubernetes API server host/port. Needed in BPF mode.
             - name: KUBERNETES_SERVICE_HOST
               valueFrom:
                 configMapKeyRef:
