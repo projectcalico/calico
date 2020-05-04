@@ -48,6 +48,10 @@ function require_version {
 	: ${REPO_NAME:=master}
 	: ${NETWORKING_CALICO_CHECKOUT:=master}
 	: ${FELIX_CHECKOUT:=master}
+    elif [[ $VERSION =~ ^release-v ]]; then
+	: ${REPO_NAME:=testing}
+	: ${NETWORKING_CALICO_CHECKOUT:=${VERSION}}
+	: ${FELIX_CHECKOUT:=${VERSION}}
     elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
 	MAJOR=${BASH_REMATCH[1]}
 	MINOR=${BASH_REMATCH[2]}
