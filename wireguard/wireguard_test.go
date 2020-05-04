@@ -60,16 +60,17 @@ var (
 	ipv4_peer3 = ip.FromString("10.10.20.20")
 	ipv4_peer4 = ip.FromString("10.10.20.30")
 
-	cidr_local = ip.MustParseCIDROrIP("192.180.0.0/30")
-	cidr_1     = ip.MustParseCIDROrIP("192.168.1.0/24")
-	cidr_2     = ip.MustParseCIDROrIP("192.168.2.0/24")
-	cidr_3     = ip.MustParseCIDROrIP("192.168.3.0/24")
-	cidr_4     = ip.MustParseCIDROrIP("192.168.4.0/26")
-	cidr_5     = ip.MustParseCIDROrIP("192.168.5.0/26")
-	ipnet_1    = cidr_1.ToIPNet()
-	ipnet_2    = cidr_2.ToIPNet()
-	ipnet_3    = cidr_3.ToIPNet()
-	ipnet_4    = cidr_4.ToIPNet()
+	cidr_local                = ip.MustParseCIDROrIP("192.180.0.0/30")
+	cidr_1                    = ip.MustParseCIDROrIP("192.168.1.0/24")
+	cidr_2                    = ip.MustParseCIDROrIP("192.168.2.0/24")
+	cidr_3                    = ip.MustParseCIDROrIP("192.168.3.0/24")
+	cidr_4                    = ip.MustParseCIDROrIP("192.168.4.0/26")
+	cidr_5                    = ip.MustParseCIDROrIP("192.168.5.0/26")
+	ipnet_1                   = cidr_1.ToIPNet()
+	ipnet_2                   = cidr_2.ToIPNet()
+	ipnet_3                   = cidr_3.ToIPNet()
+	ipnet_4                   = cidr_4.ToIPNet()
+	routekey_cidr_local_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_local)
 	//routekey_1_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_1)
 	//routekey_2_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_2)
 	routekey_3_throw = fmt.Sprintf("%d-%d-%s", tableIndex, 0, cidr_3)
@@ -463,7 +464,7 @@ var _ = Describe("Enable wireguard", func() {
 				})
 			})
 
-			Describe("create two wireguard peers with different public keys", func() {
+			Describe("create two wireguard nodes with different public keys", func() {
 				var key_peer1, key_peer2 wgtypes.Key
 				var link *mocknetlink.MockLink
 				BeforeEach(func() {
@@ -486,7 +487,7 @@ var _ = Describe("Enable wireguard", func() {
 					Expect(rrDataplane.NumRuleAddCalls).To(Equal(1))
 				})
 
-				It("should have both peers configured", func() {
+				It("should have both nodes configured", func() {
 					Expect(link.WireguardPeers).To(HaveLen(2))
 					Expect(link.WireguardPeers).To(HaveKey(key_peer1))
 					Expect(link.WireguardPeers).To(HaveKey(key_peer2))
@@ -564,7 +565,14 @@ var _ = Describe("Enable wireguard", func() {
 					Expect(s.numCallbacks).To(Equal(2))
 				})
 
-				Describe("public key updated to conflict on two peers", func() {
+				It("should contain a throw route for the local CIDR", func() {
+					Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+					Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_cidr_local_throw))
+					Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
+					Expect(rtDataplane.DeletedRouteKeys).To(BeEmpty())
+				})
+
+				Describe("public key updated to conflict on two nodes", func() {
 					var wgPeers map[wgtypes.Key]wgtypes.Peer
 
 					BeforeEach(func() {
@@ -577,11 +585,12 @@ var _ = Describe("Enable wireguard", func() {
 						}
 
 						wg.EndpointWireguardUpdate(peer2, key_peer1, nil)
+						rtDataplane.ResetDeltas()
 						err := wg.Apply()
 						Expect(err).NotTo(HaveOccurred())
 					})
 
-					It("should remove both peers", func() {
+					It("should remove both nodes", func() {
 						Expect(link.WireguardPeers).To(HaveLen(0))
 					})
 
@@ -599,7 +608,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(link.WireguardPeers).To(HaveLen(0))
 					})
 
-					It("should add both peers when conflicting public keys updated to no longer conflict", func() {
+					It("should add both nodes when conflicting public keys updated to no longer conflict", func() {
 						wg.EndpointWireguardUpdate(peer2, key_peer2, nil)
 						err := wg.Apply()
 						Expect(err).NotTo(HaveOccurred())
@@ -620,15 +629,17 @@ var _ = Describe("Enable wireguard", func() {
 							},
 						}))
 					})
-				})
 
-				It("should contain no routes", func() {
-					Expect(rtDataplane.AddedRouteKeys).To(BeEmpty())
+					It("should contain no more route updates", func() {
+						Expect(rtDataplane.AddedRouteKeys).To(BeEmpty())
+						Expect(rtDataplane.DeletedRouteKeys).To(BeEmpty())
+					})
 				})
 
 				Describe("create a non-wireguard peer", func() {
 					BeforeEach(func() {
 						wg.EndpointUpdate(peer3, ipv4_peer3)
+						rtDataplane.ResetDeltas()
 						err := wg.Apply()
 						Expect(err).NotTo(HaveOccurred())
 					})
@@ -639,8 +650,9 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(link.WireguardPeers).To(HaveKey(key_peer2))
 					})
 
-					It("should contain no routes", func() {
+					It("should contain no more route updates", func() {
 						Expect(rtDataplane.AddedRouteKeys).To(BeEmpty())
+						Expect(rtDataplane.DeletedRouteKeys).To(BeEmpty())
 					})
 
 					Describe("create destinations on each peer", func() {
@@ -780,7 +792,7 @@ var _ = Describe("Enable wireguard", func() {
 							Expect(wgDataplane.WireguardConfigUpdated).To(BeFalse())
 						})
 
-						It("should handle deletion of peers 2 and 3", func() {
+						It("should handle deletion of nodes 2 and 3", func() {
 							wgDataplane.ResetDeltas()
 							rtDataplane.ResetDeltas()
 							wg.EndpointRemove(peer3)
@@ -857,7 +869,7 @@ var _ = Describe("Enable wireguard", func() {
 								Expect(err).NotTo(HaveOccurred())
 							})
 
-							It("should have wireguard routes for all peers", func() {
+							It("should have wireguard routes for all nodes", func() {
 								Expect(link.WireguardPeers).To(HaveKey(key_peer1))
 								Expect(link.WireguardPeers).To(HaveKey(key_peer2))
 								Expect(link.WireguardPeers).To(HaveKey(key_peer3))
@@ -1072,14 +1084,17 @@ var _ = Describe("Enable wireguard", func() {
 				Expect(link.WireguardPeers).To(HaveKey(key_peer1))
 				Expect(link.WireguardPeers[key_peer1].AllowedIPs).To(ConsistOf(cidr_1.ToIPNet(), cidr_2.ToIPNet()))
 
-				Expect(rtDataplane.AddedRouteKeys).To(HaveLen(2))
+				Expect(rtDataplane.AddedRouteKeys).To(HaveLen(3))
 				Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
 				Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_1))
 				Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_2))
+				Expect(rtDataplane.AddedRouteKeys).To(HaveKey(routekey_cidr_local_throw))
 
 				// All of these failures will trigger an attempt to get a either a new netlink or wireguard client.
 				if failFlags&(mocknetlink.FailNextNewWireguard|mocknetlink.FailNextWireguardConfigureDevice|mocknetlink.FailNextWireguardDeviceByName) != 0 {
 					Expect(wgDataplane.NumNewWireguardCalls).To(Equal(2))
+				} else if failFlags&(mocknetlink.FailNextRuleList|mocknetlink.FailNextRuleAdd) != 0 {
+					Expect(rrDataplane.NumNewNetlinkCalls).To(Equal(2))
 				} else {
 					Expect(wgDataplane.NumNewNetlinkCalls).To(Equal(2))
 				}
