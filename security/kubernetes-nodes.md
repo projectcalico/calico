@@ -119,22 +119,24 @@ spec:
 ### Tutorial
 
 This tutorial will lock down Kubernetes node ingress to only allow SSH and required ports for Kubernetes to function.
+We will apply two policies: one for the master nodes. and one for the worker nodes.
 
 > Note: Run this tutorial only on a sandbox cluster; using it on a real cluster can disrupt traffic.
 {: .alert .alert-danger }
 
-First, let's restrict ingress traffic to the master nodes. The ingress policy below contains two rules.
-The first rule allows access to the API server port from anywhere. The second rule allows access to the Kubernetes
-control plane from localhost. These control plane processes includes the etcd server client API, the scheduler, and the controller-manager. This rule
-also whitelists localhost access to the kubelet API and calico/node health checks.
-
-If you have not modified the failsafe ports, you should still have SSH access to the nodes after applying this policy.
-
 > Note: This tutorial was tested on a cluster created with kubeadm v1.18.2 on AWS, using a "stacked etcd" [topology](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/). Stacked etcd topology means the etcd pods are running on the masters. kubeadm uses stacked etcd by default.
+>
 > If your Kubernetes cluster is on a different platform, is running a variant of Kubernetes, or is running a topology with an external etcd cluster,
-> please review the required ports for the master and worker nodes and adjust the policies in this tutorial as needed.
+> please review the required ports for master and worker nodes in your cluster and adjust the policies in this tutorial as needed.
 {: .alert .alert-info }
 
+First, let's restrict ingress traffic to the master nodes. The ingress policy below contains three rules.
+The first rule allows access to the API server port from anywhere. The second rule allows access to the Kubernetes
+control plane from localhost. These control plane processes includes the etcd server client API, the scheduler, and the controller-manager. This rule
+also whitelists localhost access to the kubelet API and calico/node health checks. And the final rule allows the etcd pods
+to peer with each other.
+
+If you have not modified the failsafe ports, you should still have SSH access to the nodes after applying this policy.
 Now apply the ingress policy for the Kubernetes masters:
 
 ```
@@ -188,22 +190,22 @@ EOF
 Note that the above policy selects the standard Kubernetes label **node-role.kubernetes.io/master** attached to master nodes.
 
 Next, we need to apply policy to restrict ingress to the Kubernetes workers.
-We need to allow the workers access to their own Kubelet API and calico/node health check, as well as Kubelet API access from the masters.
 Before adding the policy we will add a label to all of our worker nodes, which then gets added to its automatic host endpoint.
-For this example we will use **kubernetes-worker**:
+For this tutorial we will use **kubernetes-worker**. An example command to add the label to worker nodes:
 
 ```bash
 kubectl get node -l '!node-role.kubernetes.io/master' -o custom-columns=NAME:.metadata.name | tail -n +2 | xargs -I{} kubectl label node {} kubernetes-worker=
 ```
 
-Then we can apply policy that selects all Kubernetes workers:
+The workers' ingress policy consists of three rules as well. As with the masters, the worker nodes need to access their Kubelet API and calico/node healthcheck.
+The remaining two rules allow the workers and masters access to the workers' Kubelet API. Now, we can apply the policy:
 
 ```
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: ingress-k8s-workers
+  name: workers
 spec:
   selector: has(kubernetes-worker)
   ingress:
@@ -217,19 +219,28 @@ spec:
       - 10250
       # calico/node health check
       - 9099
-  # Allow the masters access to the nodes Kubelet API
+  # Allow Kubelet API access from the CRI. A random port
+  # is used by the CRI for commands like 'kubectl exec' to a pod on a worker node.
+  # Note: This rule's port range will differ based on your system's ephemeral port range.
+  - action: Allow
+    protocol: TCP
+    destination:
+      nets:
+      - 127.0.0.1/32
+      ports:
+      - "32768:60999"
+  # Allow the masters access to the nodes Kubelet API.
   - action: Allow
     protocol: TCP
     source:
       selector: has(node-role.kubernetes.io/master)
     destination:
-      # kubelet API
       ports:
       - 10250
 EOF
 ```
 
-The final task is to update the **FailsafeInboundHostPorts** and remove unnecessary failsafe ports.
+Now that the policies are in place, the final task is to update the **FailsafeInboundHostPorts** and remove unnecessary failsafe ports.
 Without this step, the control plane is still accessible on ports 2379 and 2380.
 First, get the current **FelixConfiguration**:
 
