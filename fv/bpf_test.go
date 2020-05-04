@@ -1289,6 +1289,91 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.CheckConnectivity()
 							})
 
+							It("should have connectivity from external to w[0] via node1IP2 -> nodeIP1 -> node0 fwd", func() {
+								// 192.168.20.1              +----------|---------+
+								//      |                    |          |         |
+								//      v                    |          |         V
+								//    eth20                 eth0        |       eth0
+								//  10.0.0.20:30333 --> felixes[1].IP   |   felixes[0].IP
+								//                                      |        |
+								//                                      |        V
+								//                                      |     caliXYZ
+								//                                      |    w[0][0].IP:8055
+								//                                      |
+								//                node1                 |      node0
+
+								if testOpts.dsr {
+									return
+									// When DSR is enabled, we need to have away how to pass the
+									// original traffic back.
+									//
+									// felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "via", felixes[1].IP)
+									//
+									// This does not work since the other node would treat it as
+									// DNAT due to the existing CT entries and NodePort traffix
+									// otherwise :-/
+								}
+
+								if testOpts.connTimeEnabled {
+									Skip("FIXME externalClient also does conntime balancing")
+								}
+
+								var eth20 *workload.Workload
+
+								defer func() {
+									if eth20 != nil {
+										eth20.Stop()
+									}
+								}()
+
+								By("setting up node's fake external iface", func() {
+									// We name the iface eth20 since such ifaces are
+									// treated by felix as external to the node
+									//
+									// Using a test-workload creates the namespaces and the
+									// interfaces to emulate the host NICs
+
+									eth20 = &workload.Workload{
+										Name:          "eth20",
+										C:             felixes[1].Container,
+										IP:            "192.168.20.1",
+										Ports:         "57005", // 0xdead
+										Protocol:      testOpts.protocol,
+										InterfaceName: "eth20",
+									}
+									eth20.Start()
+
+									// assign address to eth20 and add route to the .20 network
+									felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
+									felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
+									_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+									Expect(err).NotTo(HaveOccurred())
+									// Add a route to felix[1] to be able to reach the nodeport
+									_, err = eth20.RunCmd("ip", "route", "add", felixes[1].IP+"/32", "via", "10.0.0.20")
+									Expect(err).NotTo(HaveOccurred())
+								})
+
+								By("Allowing traffic from the eth20 network", func() {
+									pol.Spec.Ingress = []api.Rule{
+										{
+											Action: "Allow",
+											Source: api.EntityRule{
+												Nets: []string{
+													eth20.IP + "/32",
+												},
+											},
+										},
+									}
+									pol = updatePolicy(pol)
+								})
+
+								By("Checking that there is connectivity from eth20 network", func() {
+
+									cc.ExpectSome(eth20, TargetIP(felixes[1].IP), npPort)
+									cc.CheckConnectivity()
+								})
+							})
+
 							if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled {
 
 								const (

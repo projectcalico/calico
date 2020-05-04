@@ -112,6 +112,41 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 	return gopacket.NewPacket(ethL.LayerPayload(), layers.LayerTypeIPv4, gopacket.Default)
 }
 
+func encapedResponse(pktR gopacket.Packet) []byte {
+	ethL := pktR.Layer(layers.LayerTypeEthernet)
+	Expect(ethL).NotTo(BeNil())
+	ethR := ethL.(*layers.Ethernet)
+
+	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+	Expect(ipv4L).NotTo(BeNil())
+	ipv4R := ipv4L.(*layers.IPv4)
+
+	ipv4R.SrcIP, ipv4R.DstIP = ipv4R.DstIP, ipv4R.SrcIP
+
+	udpL := pktR.Layer(layers.LayerTypeUDP)
+	Expect(udpL).NotTo(BeNil())
+	udpR := udpL.(*layers.UDP)
+	udpR.Checksum = 0
+
+	payloadL := pktR.ApplicationLayer()
+	Expect(payloadL).NotTo(BeNil())
+	vxlanP := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeVXLAN, gopacket.Default)
+	Expect(vxlanP).NotTo(BeNil())
+	vxlanL := vxlanP.Layer(layers.LayerTypeVXLAN)
+	Expect(vxlanL).NotTo(BeNil())
+	vxlanR := vxlanL.(*layers.VXLAN)
+
+	inner := gopacket.NewPacket(vxlanR.LayerPayload(), layers.LayerTypeEthernet, gopacket.Default)
+	resp := udpResposeRaw(inner.Data())
+
+	pkt := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: false},
+		ethR, ipv4R, udpR, vxlanR, gopacket.Payload(resp))
+	Expect(err).NotTo(HaveOccurred())
+
+	return pkt.Bytes()
+}
+
 func getVxlanVNI(pktR gopacket.Packet) uint32 {
 	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())

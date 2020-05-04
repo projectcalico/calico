@@ -67,6 +67,7 @@ const (
 var (
 	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
 	node1ip           = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2          = net.IPv4(10, 10, 2, 1).To4()
 	node2ip           = net.IPv4(10, 10, 0, 2).To4()
 )
 
@@ -598,6 +599,17 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.La
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
 	return testPacket(nil, nil, nil, nil)
+}
+
+func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+	if destIP == nil {
+		return testPacketUDPDefault()
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = destIP
+
+	return testPacket(nil, &ip, nil, nil)
 }
 
 func resetBPFMaps() {
