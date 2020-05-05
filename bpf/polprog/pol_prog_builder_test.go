@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/proto"
 )
+
 func TestPolicySanityCheck(t *testing.T) {
 	// Just a basic sanity check with a kitchen sink policy.  The policy behaviour is tested "for real" in the
 	// bpf/ut package.

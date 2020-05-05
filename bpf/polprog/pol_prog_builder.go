@@ -208,30 +208,6 @@ func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset, ipOffset, portOffset 
 	p.b.StoreStack32(R1, keyOffset+ipsKeyID+4)
 }
 
-func validateNet (rule *proto.Rule) (*proto.Rule) {
-	ruleCopy := rule
-	var filteredAll bool
-	ruleCopy.SrcNet, filteredAll = rules.FilterNets(rule.SrcNet, uint8(rule.IpVersion))
-	if filteredAll {
-		return nil
-	}
-        ruleCopy.NotSrcNet, filteredAll = rules.FilterNets(rule.NotSrcNet, uint8(rule.IpVersion))
-        if filteredAll {
-                return nil
-        }
-
-        ruleCopy.DstNet, filteredAll = rules.FilterNets(rule.DstNet, uint8(rule.IpVersion))
-        if filteredAll {
-                return nil
-        }
-
-        ruleCopy.NotDstNet, filteredAll = rules.FilterNets(rule.NotDstNet, uint8(rule.IpVersion))
-        if filteredAll {
-                return nil
-        }
-	return ruleCopy
-}
-
 func (p *Builder) writeRules(rules [][][]*proto.Rule) {
 	for polOrProfIdx, polsOrProfs := range rules {
 		endOfTierLabel := fmt.Sprint("end_of_tier_", polOrProfIdx)
@@ -240,12 +216,9 @@ func (p *Builder) writeRules(rules [][][]*proto.Rule) {
 		for polIdx, pol := range polsOrProfs {
 			log.Debugf("Start of policy/profile %d", polIdx)
 			for ruleIdx, rule := range pol {
-				rule = validateNet (rule)
-				if rule != nil {
-					log.Debugf("Start of rule %d", ruleIdx)
-					p.writeRule(rule, endOfTierLabel)
-					log.Debugf("End of rule %d", ruleIdx)
-				}
+				log.Debugf("Start of rule %d", ruleIdx)
+				p.writeRule(rule, endOfTierLabel)
+				log.Debugf("End of rule %d", ruleIdx)
 			}
 			log.Debugf("End of policy/profile %d", polIdx)
 		}
@@ -266,11 +239,11 @@ const (
 )
 
 func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
-	if rule.IpVersion != 0 && rule.IpVersion != 4 {
-		log.Debugf ("Skipping rule it is for a different IP version.")
-		return
-	}
 
+	rule = rules.FilterRuleToIPVersion(4, rule)
+	if rule == nil {
+		log.Debugf("Version mismatch, skipping rule")
+	}
 	p.writeStartOfRule()
 
 	if rule.Protocol != nil {
@@ -388,8 +361,8 @@ func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 	}
 }
 
-func (p *Builder) writeICMPTypeMatch (negate bool,icmpType uint8) {
-	p.b.Load8(R1,R9, stateOffICMPType)
+func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
+	p.b.Load8(R1, R9, stateOffICMPType)
 	if negate {
 		p.b.JumpEqImm64(R1, int32(icmpType), p.endOfRuleLabel())
 	} else {
@@ -397,8 +370,8 @@ func (p *Builder) writeICMPTypeMatch (negate bool,icmpType uint8) {
 	}
 }
 
-func (p *Builder) writeICMPCodeMatch (negate bool,icmpCode uint8) {
-	p.b.Load8(R1,R9, stateOffICMPCode)
+func (p *Builder) writeICMPCodeMatch(negate bool, icmpCode uint8) {
+	p.b.Load8(R1, R9, stateOffICMPCode)
 	if negate {
 		p.b.JumpEqImm64(R1, int32(icmpCode), p.endOfRuleLabel())
 	} else {
