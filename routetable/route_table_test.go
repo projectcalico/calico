@@ -716,6 +716,35 @@ var _ = Describe("RouteTable", func() {
 			})
 		})
 
+		Describe("delete interface", func() {
+			BeforeEach(func() {
+				rt.SetRoutes("cali1", []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32")},
+				})
+				rt.SetRoutes("cali3", []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.3/32")},
+				})
+				// Apply the changes.
+				err := rt.Apply()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Modify route and delete interface
+				rt.SetRoutes("cali3", nil)
+				delete(dataplane.NameToLink, "cali3")
+			})
+			It("should still get conntrack deletion invocation during resync", func() {
+				rt.QueueResync()
+				err := rt.Apply()
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(dataplane.GetDeletedConntrackEntries).Should(Equal([]net.IP{net.ParseIP("10.0.0.3").To4()}))
+			})
+			It("should still get conntrack deletion invocation during apply", func() {
+				err := rt.Apply()
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(dataplane.GetDeletedConntrackEntries).Should(Equal([]net.IP{net.ParseIP("10.0.0.3").To4()}))
+			})
+		})
+
 		// We do the following tests in different failure (and non-failure) scenarios.  In
 		// each case, we make the failure transient so that only the first Apply() should
 		// fail.  Then, at most, the second call to Apply() should succeed.
@@ -791,6 +820,7 @@ var _ = Describe("RouteTable", func() {
 						Scope:     netlink.SCOPE_LINK,
 					}))
 					Expect(dataplane.DeletedRouteKeys.Contains("254-3-10.0.0.3/32")).To(BeTrue())
+					Eventually(dataplane.GetDeletedConntrackEntries).Should(Equal([]net.IP{net.ParseIP("10.0.0.3").To4()}))
 				})
 				It("should have expected number of routes at the end", func() {
 					Expect(len(dataplane.RouteKeyToRoute)).To(Equal(4),
