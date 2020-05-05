@@ -197,8 +197,8 @@ For this tutorial we will use **kubernetes-worker**. An example command to add t
 kubectl get node -l '!node-role.kubernetes.io/master' -o custom-columns=NAME:.metadata.name | tail -n +2 | xargs -I{} kubectl label node {} kubernetes-worker=
 ```
 
-The workers' ingress policy consists of three rules as well. As with the masters, the worker nodes need to access their kubelet API and calico/node healthcheck.
-The remaining two rules allow the workers and masters access to the workers' kubelet API. Now, we can apply the policy:
+The workers' ingress policy consists of two rules. As with the masters, the worker nodes need to access their kubelet API and calico/node healthcheck.
+Now apply the policy:
 
 ```
 calicoctl apply -f - << EOF
@@ -208,6 +208,10 @@ metadata:
   name: workers
 spec:
   selector: has(kubernetes-worker)
+  # Allow kubelet API access from the docker API and allow calico/node health check.
+  # An ephemeral port # is used by kubelet and docker for commands like 'kubectl exec'
+  # to a pod on a worker node.
+  # Note: This rule's port range will differ based on your system's ephemeral port range.
   ingress:
   - action: Allow
     protocol: TCP
@@ -217,18 +221,9 @@ spec:
       ports:
       # kubelet API
       - 10250
+      - "32768:60999"
       # calico/node health check
       - 9099
-  # Allow kubelet API access from the docker API. An ephemeral port
-  # is used by kubelet and docker for commands like 'kubectl exec' to a pod on a worker node.
-  # Note: This rule's port range will differ based on your system's ephemeral port range.
-  - action: Allow
-    protocol: TCP
-    destination:
-      nets:
-      - 127.0.0.1/32
-      ports:
-      - "32768:60999"
   # Allow the masters access to the nodes kubelet API.
   - action: Allow
     protocol: TCP
