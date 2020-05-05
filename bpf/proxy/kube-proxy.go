@@ -66,7 +66,7 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	go func() {
 		err := kp.start()
 		if err != nil {
-			log.Panic("kube-proxy failed to start")
+			log.WithError(err).Panic("kube-proxy failed to start")
 		}
 	}()
 
