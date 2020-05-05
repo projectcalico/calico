@@ -611,6 +611,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 		}
 	}
+	// icmp_type and icmp_code share storage with the ports; now we've used
+	// the ports set to 0 to do the conntrack lookup, we can set the ICMP fields
+	// for policy.
 	if (state.ip_proto == IPPROTO_ICMP)
 	{
 		state.icmp_type = icmp_header->type;
