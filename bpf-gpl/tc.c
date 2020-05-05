@@ -730,6 +730,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	CALI_DEBUG("ct_rc=%d\n", ct_rc);
 	CALI_DEBUG("ct_related=%d\n", ct_related);
 
+	// Set the dport to 0, to make sure conntrack entries for icmp is proper as we use
+	// dport to hold icmp type and code
+	if (state->ip_proto == IPPROTO_ICMP) {
+		state->dport = 0;
+	}
+
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {

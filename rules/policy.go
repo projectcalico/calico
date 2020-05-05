@@ -15,7 +15,6 @@
 package rules
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -78,7 +77,7 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 }
 
 func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
-	ruleCopy := pRule
+	ruleCopy := *pRule
 	var filteredAll bool
 
 	logCxt := log.WithFields(log.Fields{
@@ -107,8 +106,9 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 	if filteredAll {
 		return nil
 	}
-	return ruleCopy
+	return &ruleCopy
 }
+
 func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
 	// Filter the CIDRs to the IP version that we're rendering.  In general, we should have an
 	// explicit IP version in the rule and all CIDRs should match it (and calicoctl, for
@@ -247,15 +247,8 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	}
 
 	// Render the rest of the rule.
-	logCxt := log.WithFields(log.Fields{
-		"ipVersion": ipVersion,
-		"rule":      ruleCopy,
-	})
-	match, err := r.CalculateRuleMatch(ruleCopy, ipVersion)
-	if err == SkipRule {
-		logCxt.Debug("Rule skipped.")
-		return nil
-	}
+	match := r.CalculateRuleMatch(ruleCopy, ipVersion)
+
 	if matchBlockBuilder.UsingMatchBlocks {
 		// The CIDR or port matches in the rule overflowed and we rendered them
 		// as additional rules, which set the markAllBlocksPass bit on
@@ -550,9 +543,7 @@ func appendProtocolMatch(match iptables.MatchCriteria, protocol *proto.Protocol,
 	return match
 }
 
-var SkipRule = errors.New("Rule skipped")
-
-func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) (iptables.MatchCriteria, error) {
+func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) iptables.MatchCriteria {
 	match := iptables.Match()
 
 	logCxt := log.WithFields(log.Fields{
@@ -769,7 +760,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 			match = match.NotICMPV6Type(uint8(icmp.NotIcmpType))
 		}
 	}
-	return match, nil
+	return match
 }
 
 func PolicyChainName(prefix PolicyChainNamePrefix, polID *proto.PolicyID) string {

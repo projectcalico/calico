@@ -170,7 +170,7 @@ func udpPkt(src, dst string) packet {
 func icmpPkt(src, dst string) packet {
 	return packetWithPorts(1, src+":0", dst+":0")
 }
-func icmpPkt_with_type_code(src, dst string, icmpType, icmpCode int) packet {
+func icmpPktWithTypeCode(src, dst string, icmpType, icmpCode int) packet {
 	return packet{
 		protocol: 1,
 		srcAddr:  src,
@@ -862,9 +862,9 @@ var polProgramTests = []polProgramTest{
 			Icmp:   &proto.Rule_IcmpType{IcmpType: 8},
 		}}}},
 		AllowedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 8, 0)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 0)},
 		DroppedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 10, 0)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0)},
 	},
 	{
 		PolicyName: "allow icmp packet with type 8 and code 3",
@@ -873,11 +873,11 @@ var polProgramTests = []polProgramTest{
 			Icmp:   &proto.Rule_IcmpTypeCode{&proto.IcmpTypeAndCode{Type: 8, Code: 3}},
 		}}}},
 		AllowedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 8, 3)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
 		DroppedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 10, 0),
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 10, 3),
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 8, 4)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 3),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 4)},
 	},
 	{
 		PolicyName: "allow icmp packet with type not equal to 8",
@@ -886,9 +886,9 @@ var polProgramTests = []polProgramTest{
 			NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 8},
 		}}}},
 		AllowedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 10, 0)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0)},
 		DroppedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 8, 0)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 0)},
 	},
 	{
 		PolicyName: "allow icmp packet with type not equal to 8 and code not equal to 3",
@@ -897,11 +897,11 @@ var polProgramTests = []polProgramTest{
 			NotIcmp: &proto.Rule_NotIcmpTypeCode{&proto.IcmpTypeAndCode{Type: 8, Code: 3}},
 		}}}},
 		AllowedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 10, 0)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 4),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 3)},
 		DroppedPackets: []packet{
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 8, 3),
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 8, 4),
-			icmpPkt_with_type_code("10.0.0.1", "10.0.0.2", 10, 3)},
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
 	},
 }
 
