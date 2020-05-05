@@ -187,7 +187,7 @@ spec:
 EOF
 ```
 
-Note that the above policy selects the standard Kubernetes label **node-role.kubernetes.io/master** attached to master nodes.
+Note that the above policy selects the standard **node-role.kubernetes.io/master** label that kubeadm sets on master nodes.
 
 Next, we need to apply policy to restrict ingress to the Kubernetes workers.
 Before adding the policy we will add a label to all of our worker nodes, which then gets added to its automatic host endpoint.
