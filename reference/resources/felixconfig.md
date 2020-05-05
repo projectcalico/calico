@@ -92,6 +92,11 @@ spec:
 | vxlanMTU                           | MTU to use for the VXLAN tunnel device. Also controls NodePort MTU when eBPF enabled. | int | int | `1410` |
 | vxlanPort                          | Port to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4789` |
 | vxlanVNI                           | Virtual network ID to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4096` |
+| wireguardEnabled                   | Enable encryption on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
+| wireguardInterfaceName             | Name of the WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wireguard.cali |
+| wireguardListeningPort             | Port used by WireGuard tunnels. Felix sets up WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51820 |
+| wireguardMTU                       | MTU set on the WireGuard interface created by Felix. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 1420 |
+| wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
 | xdpRefreshInterval                 | Period at which Felix re-checks the XDP state in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable XDP refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | xdpEnabled                         | Enable XDP acceleration for host endpoint policies. [Default: `true`] | true,false | boolean | `true` |
 | bpfEnabled                         | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-ebpf).  This is a tech preview feature and subject to change in future releases. | true, false | boolean | false |
