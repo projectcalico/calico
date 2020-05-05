@@ -18,7 +18,7 @@ Make a manifests directory.
 mkdir manifests
 ```
 
-{% include content/install-openshift-manifests.md %}
+{% include content/install-openshift-manifests.md install_type="upgrade" %}
 
 Apply the updated manifests.
 

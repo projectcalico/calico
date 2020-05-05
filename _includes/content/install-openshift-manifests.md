@@ -15,5 +15,7 @@ curl {{ "/manifests/ocp/tigera-operator/02-serviceaccount-tigera-operator.yaml" 
 curl {{ "/manifests/ocp/tigera-operator/02-configmap-calico-resources.yaml" | absolute_url }} -o manifests/02-configmap-calico-resources.yaml
 curl {{ "/manifests/ocp/tigera-operator/02-configmap-tigera-install-script.yaml" | absolute_url }} -o manifests/02-configmap-tigera-install-script.yaml
 curl {{ "/manifests/ocp/tigera-operator/02-tigera-operator.yaml" | absolute_url }} -o manifests/02-tigera-operator.yaml
+{%- if include.install_type != "upgrade" %}
 curl {{ "/manifests/ocp/01-cr-installation.yaml" | absolute_url }} -o manifests/01-cr-installation.yaml
+{%- endif %}
 ```
