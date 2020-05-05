@@ -26,7 +26,7 @@ Each host has one or more network interfaces that it uses to communicate externa
 
 {{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
 
-Automatic host endpoints secure _all_ of the hosts interfaces non-workload interfaces. They are created by setting `interfaceName: "*"`.
+Automatic host endpoints secure all of the host's interfaces (i.e. in Linux, all the interfaces in the host network namespace). They are created by setting `interfaceName: "*"`.
 
 ### Automatic host endpoints
 
