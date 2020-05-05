@@ -535,6 +535,11 @@ func (c *Container) CopyFileIntoContainer(hostPath, containerPath string) error 
 	return cmd.Run()
 }
 
+func (c *Container) FileExists(path string) bool {
+	err := c.ExecMayFail("test", "-e", path)
+	return err == nil
+}
+
 func (c *Container) Exec(cmd ...string) {
 	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
 	arg := []string{"exec", c.Name}

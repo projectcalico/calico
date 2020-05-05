@@ -139,3 +139,34 @@ func describeConnCheckTests(protocol string) bool {
 		},
 	)
 }
+
+var _ = infrastructure.DatastoreDescribe("Container self tests",
+	[]apiconfig.DatastoreType{apiconfig.EtcdV3}, // Skipping k8s since these tests don't rely on the datastore.
+	func(getInfra infrastructure.InfraFactory) {
+
+		var (
+			infra   infrastructure.DatastoreInfra
+			felixes []*infrastructure.Felix
+		)
+
+		BeforeEach(func() {
+			infra = getInfra()
+			felixes, _ = infrastructure.StartNNodeTopology(1, infrastructure.DefaultTopologyOptions(), infra)
+		})
+
+		AfterEach(func() {
+			for _, felix := range felixes {
+				felix.Stop()
+			}
+			if CurrentGinkgoTestDescription().Failed {
+				infra.DumpErrorData()
+			}
+			infra.Stop()
+		})
+
+		It("should only report that existing files actually exist", func() {
+			Expect(felixes[0].FileExists("/usr/bin/calico-felix")).To(BeTrue())
+			Expect(felixes[0].FileExists("/garbage")).To(BeFalse())
+		})
+	},
+)

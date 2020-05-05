@@ -1658,13 +1658,18 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 }
 
 func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.MapIter) {
+	// Wait for the map to exist before trying to access it.  Otherwise, we
+	// might fail a test that was retrying this dump anyway.
+	Eventually(func() bool {
+		return felix.FileExists(m.Path())
+	}).Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
 	cmd, err := bpf.DumpMapCmd(m)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map dump command: " + m.Path())
 	log.WithField("cmd", cmd).Debug("dumpBPFMap")
 	out, err := felix.ExecOutput(cmd...)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "Failed to get dump BPF map: " + m.Path())
 	err = bpf.IterMapCmdOutput([]byte(out), iter)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "Failed to parse BPF map dump: " + m.Path())
 }
 
 func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
