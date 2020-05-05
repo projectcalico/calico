@@ -236,7 +236,7 @@ EOF
 ```
 
 Now that the policies are in place, the final task is to update the **FailsafeInboundHostPorts** and remove unnecessary failsafe ports.
-Without this step, the control plane is still accessible on ports 2379 and 2380.
+Without this step, the etcd client API on the masters is still accessible on ports 2379 and 2380.
 First, get the current **FelixConfiguration**:
 
 ```bash
