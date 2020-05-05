@@ -210,43 +210,6 @@ spec:
 EOF
 ```
 
-Now that the policies are in place, the final task is to update the **FailsafeInboundHostPorts** and remove unnecessary failsafe ports.
-Without this step, the etcd client API on the masters is still accessible on ports 2379 and 2380.
-First, get the current **FelixConfiguration**:
-
-```bash
-calicoctl get felixconfiguration default -oyaml --export > felixconfig.yaml
-```
-
-Next, edit the default FelixConfiguration failsafe inbound ports so it only has ports: tcp:22, udp:68, and tcp:179.
-This removes the etcd-related ports from the failsafes. For example, the configuration may look as follows:
-
-```
-apiVersion: projectcalico.org/v3
-kind: FelixConfiguration
-metadata:
-  creationTimestamp: null
-  name: default
-spec:
-  bpfLogLevel: ""
-  ipipEnabled: true
-  logSeverityScreen: Info
-  reportingInterval: 0s
-  failsafeInboundHostPorts:
-  - protocol: tcp
-    port: 22
-  - protocol: udp
-    port: 68
-  - protocol: tcp
-    port: 179
-```
-
-Finally, apply the updated configuration:
-
-```
-calicoctl apply -f - < felixconfig.yaml
-```
-
 ### Above and beyond
 
 - [Protect hosts tutorial]({{ site.baseurl }}/security/tutorials/protect-hosts)
