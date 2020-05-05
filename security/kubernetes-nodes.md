@@ -130,7 +130,8 @@ We will apply two policies: one for the master nodes. and one for the worker nod
 First, let's restrict ingress traffic to the master nodes. The ingress policy below contains three rules.
 The first rule allows access to the API server port from anywhere. The second rule allows all traffic to localhost, which
 allows Kubernetes to access control plane processes. These control plane processes includes the etcd server client API, the scheduler, and the controller-manager.
-This rule also whitelists localhost access to the kubelet API and calico/node health checks. And the final rule allows the etcd pods to peer with each other.
+This rule also whitelists localhost access to the kubelet API and calico/node health checks.
+And the final rule allows the etcd pods to peer with each other and allows the masters to access each others kubelet API.
 
 If you have not modified the failsafe ports, you should still have SSH access to the nodes after applying this policy.
 Now apply the ingress policy for the Kubernetes masters:
@@ -158,6 +159,7 @@ spec:
       - 127.0.0.1/32
   # This rule is required in multi-master clusters where etcd pods are colocated with the masters.
   # Allow the etcd pods on the masters to communicate with each other. 2380 is the etcd peer port.
+  # This rule also allows the masters to access the kubelet API on other masters (including itself).
   - action: Allow
     protocol: TCP
     source:
@@ -165,6 +167,7 @@ spec:
     destination:
       ports:
       - 2380
+      - 10250
 EOF
 ```
 
@@ -187,7 +190,7 @@ calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: workers
+  name: ingress-k8s-workers
 spec:
   selector: has(kubernetes-worker)
   # Allow all traffic to localhost.
@@ -196,7 +199,7 @@ spec:
     destination:
       nets:
       - 127.0.0.1/32
-  # Allow the masters access to the nodes kubelet API.
+  # Allow only the masters access to the nodes kubelet API.
   - action: Allow
     protocol: TCP
     source:
