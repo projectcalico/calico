@@ -19,6 +19,7 @@ require (
 	github.com/smartystreets/goconvey v0.0.0-20190710185942-9d28bd7c0945 // indirect
 	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
 	gopkg.in/ini.v1 v1.44.0 // indirect
+	k8s.io/api v0.0.0-20191114100352-16d7abae0d2a
 
 	// k8s.io/apimachinery 1.16.3 is at 72ed19daf4bb
 	k8s.io/apimachinery v0.0.0-20191028221656-72ed19daf4bb
