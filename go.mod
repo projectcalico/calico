@@ -7,8 +7,8 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/errors v0.8.1
-	github.com/projectcalico/felix v0.0.0-20200504145507-7c4824f031a9
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200427180741-f197f7370140
+	github.com/projectcalico/felix v0.0.0-20200506144350-f9fd9092c643
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200506032348-dda4a7964ffa
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
@@ -19,7 +19,7 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200429081100-b1084d738ccc
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200506140108-3f9bb6fbeaa3
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
 	k8s.io/api v0.0.0 => k8s.io/api v0.0.0-20191016110408-35e52d86657a
