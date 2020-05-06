@@ -143,5 +143,3 @@ varies by Linux distribution.
    add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade*.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
-
-{% include content/auto-hostendpoints-migrate.md orch="OpenStack" %}
