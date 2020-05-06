@@ -36,7 +36,7 @@ Host endpoints with the `projectcalico-default-allow` profile attached will have
 
 Note: If you have custom iptables rules, using host endpoints with allow-all rules (with no policies) will accept all traffic bypassing those rules.
 
-> Auto host endpoints specify the `projectcalico-default-allow` profile so they behave similary to pod workload endpoints.
+> Auto host endpoints specify the `projectcalico-default-allow` profile so they behave similarly to pod workload endpoints.
 {: .alert .alert-info}
 
 > **Important**: When rendering security rules on other hosts, {{site.prodname}} uses the
