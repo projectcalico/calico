@@ -14,7 +14,7 @@ In order to migrate existing all-interfaces host endpoints to {{site.prodname}}-
    kubectl label node node1 environment=dev
    ```
 
-2. Enable auto host endpoints by following the [enable automatic host endpoints howto]({{ site.baseurl }}/security/kubernetes-nodes#enable-automatic-host-endpoints).
+2. Enable auto host endpoints by following the [enable automatic host endpoints how-to guide]({{ site.baseurl }}/security/kubernetes-nodes#enable-automatic-host-endpoints).
    Note that automatic host endpoints are created with a profile attached that allows all traffic in the absence of network policy.
 
    ```bash
