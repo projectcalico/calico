@@ -1,4 +1,4 @@
-Download the {{site.prodname}} manifests for OpenShift and add them to the manifests directory:
+Download the {{site.prodname}} manifests for OpenShift and add them to the generated manifests directory:
 
 ```bash
 curl {{ "/manifests/ocp/crds/01-crd-installation.yaml" | absolute_url }} -o manifests/01-crd-installation.yaml

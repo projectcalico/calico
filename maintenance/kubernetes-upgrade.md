@@ -78,6 +78,9 @@ procedure varies by datastore type.
 1. If you have [enable application layer policy]({{site.baseurl}}/security/app-layer-policy),
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
+1. If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
+   add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade**.
+
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
 
@@ -141,6 +144,9 @@ procedure varies by datastore type.
 1. If you have [enabled application layer policy]({{site.baseurl}}/security/app-layer-policy),
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
+1. If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
+   add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade**.
+
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
 ## Upgrading if you have Application Layer Policy enabled
@@ -161,3 +167,5 @@ take the following steps to upgrade the Dikastes sidecars running in your applic
 
 1. Once the new template is in place, newly created pods use the upgraded version of Dikastes. Perform a rolling update of each of your service deployments
    to get them on the new version of Dikastes.
+
+{% include content/auto-hostendpoints-migrate.md orch="Kubernetes" %}
