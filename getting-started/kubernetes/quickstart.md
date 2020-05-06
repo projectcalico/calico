@@ -1,7 +1,7 @@
 ---
 title: Quickstart for Calico on Kubernetes
 description: Install Calico on a single-host Kubernetes cluster for testing or development in under 15 minutes.
-canonical_url: '/getting-started/kubernetes/index'
+canonical_url: '/getting-started/kubernetes/quickstart'
 ---
 
 ### Overview
@@ -10,7 +10,7 @@ This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
 in approximately 15 minutes. You can use this cluster for testing and
 development.
 
-To deploy a cluster suitable for production, refer to [Installation](installation).
+To deploy a cluster suitable for production, refer to [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
 
 ### Requirements
 

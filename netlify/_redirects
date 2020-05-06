@@ -70,6 +70,7 @@
 /getting-started/kubernetes/installation/azure /getting-started/kubernetes/self-managed-public-cloud/azure 301
 /getting-started/kubernetes/installation/calico /getting-started/kubernetes/self-managed-onprem/ 301
 /getting-started/kubernetes/installation/flannel /getting-started/kubernetes/flannel/flannel 301
+/getting-started/kubernetes/installation/ /getting-started/kubernetes/ 301
 /getting-started/kubernetes/installation/gce /getting-started/kubernetes/self-managed-public-cloud/gce 301
 /getting-started/kubernetes/installation/hosted/ /getting-started/kubernetes/self-managed-onprem/ 301
 /getting-started/kubernetes/installation/hosted/canal/ /getting-started/kubernetes/flannel/flannel 301
