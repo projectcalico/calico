@@ -118,7 +118,7 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 				// We have a valid event, so convert it.
 				events = crw.convertEvent(event)
 				if len(events) == 0 {
-					crw.logCxt.Debug("Event converted to a no-op")
+					crw.logCxt.WithField("event", event).Debug("Event converted to a no-op")
 					continue
 				}
 			}
@@ -155,7 +155,21 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) []*api.WatchEvent {
 	var kvps []*model.KVPair
 	var err error
-	if kevent.Type != kwatch.Error {
+
+	switch kevent.Type {
+	case kwatch.Error:
+		// An error directly from the k8s watcher is a terminating event.
+		return []*api.WatchEvent{{
+			Type: api.WatchError,
+			Error: cerrors.ErrorWatchTerminated{
+				Err: fmt.Errorf("terminating error event from Kubernetes watcher: %v", kevent.Object),
+			},
+		}}
+	case kwatch.Deleted:
+		fallthrough
+	case kwatch.Added:
+		fallthrough
+	case kwatch.Modified:
 		k8sRes := kevent.Object.(Resource)
 		kvps, err = crw.converter(k8sRes)
 		if err != nil {
@@ -169,42 +183,42 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) []*api.WatchEv
 		if len(kvps) == 0 {
 			return nil
 		}
+
+		return crw.buildEventsFromKVPs(kvps, kevent.Type)
+
+	default:
+		return []*api.WatchEvent{{
+			Type:  api.WatchError,
+			Error: fmt.Errorf("unhandled Kubernetes watcher event type: %v", kevent.Type),
+		}}
+	}
+
+}
+
+func (crw *k8sWatcherConverter) buildEventsFromKVPs(kvps []*model.KVPair, t kwatch.EventType) []*api.WatchEvent {
+	var getEvent func(*model.KVPair) *api.WatchEvent
+	switch t {
+	case kwatch.Deleted:
+		getEvent = func(kvp *model.KVPair) *api.WatchEvent {
+			return &api.WatchEvent{Type: api.WatchDeleted, Old: kvp}
+		}
+	case kwatch.Added:
+		getEvent = func(kvp *model.KVPair) *api.WatchEvent {
+			return &api.WatchEvent{Type: api.WatchAdded, New: kvp}
+		}
+	case kwatch.Modified:
+		// In KDD we don't have access to the previous settings, so just set the current settings.
+		getEvent = func(kvp *model.KVPair) *api.WatchEvent {
+			return &api.WatchEvent{Type: api.WatchModified, New: kvp}
+		}
+	default:
+		crw.logCxt.WithField("type", t).Error("unexpected event type when building events")
+		return nil
 	}
 
 	var wEvents []*api.WatchEvent
 	for _, kvp := range kvps {
-		switch kevent.Type {
-		case kwatch.Error:
-			// An error directly from the k8s watcher is a terminating event.
-			wEvents = append(wEvents, &api.WatchEvent{
-				Type: api.WatchError,
-				Error: cerrors.ErrorWatchTerminated{
-					Err: fmt.Errorf("terminating error event from Kubernetes watcher: %v", kevent.Object),
-				},
-			})
-		case kwatch.Deleted:
-			wEvents = append(wEvents, &api.WatchEvent{
-				Type: api.WatchDeleted,
-				Old:  kvp,
-			})
-		case kwatch.Added:
-			wEvents = append(wEvents, &api.WatchEvent{
-				Type: api.WatchAdded,
-				New:  kvp,
-			})
-		case kwatch.Modified:
-			// In KDD we don't have access to the previous settings, so just set the current settings.
-			wEvents = append(wEvents, &api.WatchEvent{
-				Type: api.WatchModified,
-				New:  kvp,
-			})
-		default:
-			wEvents = append(wEvents, &api.WatchEvent{
-				Type:  api.WatchError,
-				Error: fmt.Errorf("unhandled Kubernetes watcher event type: %v", kevent.Type),
-			})
-		}
+		wEvents = append(wEvents, getEvent(kvp))
 	}
-
 	return wEvents
 }
