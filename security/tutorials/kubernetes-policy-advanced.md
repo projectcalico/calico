@@ -11,7 +11,6 @@ This guide walks through using Kubernetes `NetworkPolicy` to define more complex
 
 ### Requirements
 
-- Calico v2.6.1+ with Kubernetes 1.8+
 - A working Kubernetes cluster and access to it using kubectl
 - Your Kubernetes nodes have connectivity to the public internet
 - You are familiar with [Kubernetes NetworkPolicy](kubernetes-policy-basic)

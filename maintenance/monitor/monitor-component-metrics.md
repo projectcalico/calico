@@ -80,7 +80,7 @@ EOF
 ```
 
 ##### **Typha Configuration**
-> **Note** Typha implementation is optional, if you don't have Typha in your cluster you should skip [Typha configuration]({{ site.baseurl }}/maintenance/monitor-component-metrics#typha-configuration) section.
+> **Note** Typha implementation is optional, if you don't have Typha in your cluster you should skip [Typha configuration](#typha-configuration) section.
    {: .alert .alert-danger}
 
 If you are uncertain whether you have `Typha` in your cluster execute the following code:
@@ -286,7 +286,7 @@ You can access prometheus dashboard by using port-forwarding feature.
 kubectl port-forward pod/prometheus-pod 9090:9090 -n calico-monitoring
 ```
 
-Browse to [http://localhost:9090](http://localhost:9090) you should be able to see prometheus dashboard. Type **felix_active_local_endpoints** in the Expression input textbox then hit the execute button. Console table should be populated with all your nodes and quantity of endpoints in each of them.
+Browse to [http://localhost:9090](http://localhost:9090){: data-proofer-ignore=""} you should be able to see prometheus dashboard. Type **felix_active_local_endpoints** in the Expression input textbox then hit the execute button. Console table should be populated with all your nodes and quantity of endpoints in each of them.
 
 > **Note**: A comprehensive list of metrics can be [found at this link]({{ site.baseurl }}/reference/felix/prometheus).
    {: .alert .alert-info}

@@ -44,6 +44,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
     # Sets the ipam. Can be 'calico-ipam' or 'host-local'
     ipam: calico-ipam
 
+    # Sets the mtu.
+    mtu: "1440"
+
     node:
       image: #{imageRegistry}#{imageNames.fetch("node")}
       tag: #{versions.fetch("calico/node")}
