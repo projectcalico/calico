@@ -24,7 +24,7 @@ With the names of the all-interfaces host endpoints, we can label each host endp
 
 ```bash
 calicoctl get hep -owide | grep '*' | awk '{print $1}' \
-  | xargs -I {} kubectl exec -i -n kube-system calicoctl /calicoctl label hostendpoint {} host-endpoint-upgrade=
+  | xargs -I {} kubectl exec -i -n kube-system calicoctl -- /calicoctl label hostendpoint {} host-endpoint-upgrade=
 ```
 
 Now that the nodes with an all-interfaces host endpoint are labeled with **host-endpoint-upgrade**, we can create a policy to log and whitelist all traffic
