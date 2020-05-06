@@ -17,9 +17,6 @@ varies by Linux distribution.
 > This may result in unexpected behavior and data.
 {: .alert .alert-danger}
 
-
-{% include content/hostendpoints-upgrade.md orch="OpenStack" %}
-
 ## Upgrading an OpenStack cluster based on CentOS
 
 1. On all nodes, change the location of the {{site.prodname}} packages to point to the {{page.version}} repo:
