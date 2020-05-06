@@ -63,7 +63,7 @@ type noOpConnTrack struct{}
 
 func (*noOpConnTrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {}
 
-type peerData struct {
+type nodeData struct {
 	ipv4EndpointAddr      ip.Addr
 	publicKey             wgtypes.Key
 	cidrs                 set.Set
@@ -71,13 +71,13 @@ type peerData struct {
 	routingToWireguard    bool
 }
 
-func newPeerData() *peerData {
-	return &peerData{
+func newNodeData() *nodeData {
+	return &nodeData{
 		cidrs: set.New(),
 	}
 }
 
-func (n *peerData) allowedCidrsForWireguard() []net.IPNet {
+func (n *nodeData) allowedCidrsForWireguard() []net.IPNet {
 	cidrs := make([]net.IPNet, 0, n.cidrs.Len())
 	n.cidrs.Iter(func(item interface{}) error {
 		cidrs = append(cidrs, item.(ip.CIDR).ToIPNet())
@@ -86,18 +86,21 @@ func (n *peerData) allowedCidrsForWireguard() []net.IPNet {
 	return cidrs
 }
 
-type peerUpdateData struct {
-	deleted             bool
-	ipv4EndpointAddr    *ip.Addr
-	publicKey           *wgtypes.Key
-	allowedCidrsAdded   set.Set
-	allowedCidrsDeleted set.Set
+type nodeUpdateData struct {
+	// Used for nodes *and* the local node.
+	cidrsAdded   set.Set
+	cidrsDeleted set.Set
+
+	// Only used for nodes.
+	deleted          bool
+	ipv4EndpointAddr *ip.Addr
+	publicKey        *wgtypes.Key
 }
 
-func newPeerUpdateData() *peerUpdateData {
-	return &peerUpdateData{
-		allowedCidrsDeleted: set.New(),
-		allowedCidrsAdded:   set.New(),
+func newNodeUpdateData() *nodeUpdateData {
+	return &nodeUpdateData{
+		cidrsDeleted: set.New(),
+		cidrsAdded:   set.New(),
 	}
 }
 
@@ -126,20 +129,20 @@ type Wireguard struct {
 	ourPublicKeyAgreesWithDataplaneMsg bool
 
 	// Local workload information
-	localCIDRsFiltered set.Set
-	localIPs           set.Set
-	localCIDRs         set.Set
-	localCIDRsUpdated  bool
+	localIPs          set.Set
+	localCIDRs        set.Set
+	localCIDRsUpdated bool
 
 	// Current configuration
-	// - all peerData information
-	// - mapping between CIDRs and peerData
-	// - mapping between public key and peers - this does not include the "zero" key.
-	peers                map[string]*peerData
+	// - all nodeData information
+	// - mapping between CIDRs and nodeData
+	// - mapping between public key and nodes - this does not include the "zero" key, and will not include the local
+	//   node.
+	nodes                map[string]*nodeData
 	publicKeyToNodeNames map[wgtypes.Key]set.Set
 
 	// Pending updates
-	peerUpdates map[string]*peerUpdateData
+	nodeUpdates map[string]*nodeUpdateData
 
 	// CIDR to node mappings - this is updated synchronously.
 	cidrToNodeName map[ip.CIDR]string
@@ -148,7 +151,7 @@ type Wireguard struct {
 	routetable *routetable.RouteTable
 	routerule  *routerule.RouteRules
 
-	// Callback function used to notify of public key updates for the local peerData
+	// Callback function used to notify of public key updates for the local nodeData
 	statusCallback func(publicKey wgtypes.Key) error
 }
 
@@ -224,14 +227,13 @@ func NewWithShims(
 		newNetlinkClient:     newWireguardNetlink,
 		newWireguardClient:   newWireguardDevice,
 		time:                 timeShim,
-		peers:                map[string]*peerData{},
+		nodes:                map[string]*nodeData{},
 		cidrToNodeName:       map[ip.CIDR]string{},
 		publicKeyToNodeNames: map[wgtypes.Key]set.Set{},
-		peerUpdates:          map[string]*peerUpdateData{},
+		nodeUpdates:          map[string]*nodeUpdateData{},
 		routetable:           rt,
 		routerule:            rr,
 		statusCallback:       statusCallback,
-		localCIDRsFiltered:   set.New(),
 		localIPs:             set.New(),
 		localCIDRs:           set.New(),
 	}
@@ -266,19 +268,19 @@ func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 		logCxt.Debug("Not enabled - ignoring")
 		return
 	} else if name == w.hostname {
-		// We don't need our own IP address, just interested in the peers.
+		// We don't need our own IP address, just interested in the nodes.
 		return
 	}
 
-	update := w.getOrInitPeerUpdate(name)
-	if existing, ok := w.peers[name]; ok && existing.ipv4EndpointAddr == ipv4Addr {
+	update := w.getOrInitNodeUpdateData(name)
+	if existing, ok := w.nodes[name]; ok && existing.ipv4EndpointAddr == ipv4Addr {
 		logCxt.Debug("Update contains unchanged IPv4 address")
 		update.ipv4EndpointAddr = nil
 	} else {
 		logCxt.Debug("Update contains new IPv4 address")
 		update.ipv4EndpointAddr = &ipv4Addr
 	}
-	w.setPeerUpdate(name, update)
+	w.setNodeUpdate(name, update)
 }
 
 func (w *Wireguard) EndpointRemove(name string) {
@@ -292,18 +294,18 @@ func (w *Wireguard) EndpointRemove(name string) {
 		return
 	}
 
-	if _, ok := w.peers[name]; ok {
+	if _, ok := w.nodes[name]; ok {
 		// Node data exists, so store a blank update with a deleted flag. The delete will be applied first, and then any
 		// subsequent updates. There is no need to remove the pending CIDR to node mappings since the route resolver
 		// provides self consistent route updates (i.e. we will get route removes or updates for these CIDRs).
 		logCxt.Debug("Existing node is flagged for removal")
-		nu := newPeerUpdateData()
+		nu := newNodeUpdateData()
 		nu.deleted = true
-		w.setPeerUpdate(name, nu)
+		w.setNodeUpdate(name, nu)
 	} else {
 		// Node data is not yet programmed so just delete the pending update.
 		logCxt.Debug("Node removed which has not yet been programmed - remove any pending update")
-		delete(w.peerUpdates, name)
+		delete(w.nodeUpdates, name)
 	}
 }
 
@@ -368,9 +370,12 @@ func (w *Wireguard) routeRemove(name string, cidr ip.CIDR) {
 	}
 }
 
-// Add a local workload CIDR. These CIDRs are used for the source-matched wireguard routes to limit wireguard encryption
-// to traffic to/from local workloads. The workload CIDRs may overlap, in which case the updateAndApplyRouteRules
-// method will determine the minimal set of non-overlapping CIDRs.
+// Add a local workload CIDR. These CIDRs are used for:
+// - the source-matched wireguard routing rules to limit wireguard encryption to traffic to/from local workloads.
+// - add throw routes to the wireguard route table to ensure we throw to the main table for local routing.
+//
+// Note that the workload CIDRs may overlap. This method determines if the added CIDR is wholly covered by one already
+// programmed - if it is then no further update is required.
 func (w *Wireguard) localWorkloadCIDRAdd(cidr ip.CIDR) {
 	log.WithField("cidr", cidr).Debug("localWorkloadCIDRAdd")
 	// Split the local CIDRs into actual /32 workload IPs and the CIDR blocks for the node. We assume the CIDR blocks
@@ -382,23 +387,31 @@ func (w *Wireguard) localWorkloadCIDRAdd(cidr ip.CIDR) {
 		w.localCIDRs.Add(cidr)
 	}
 	// Only flag the CIDRs for update if it not wholly covered by the already filtered local CIDRs.
-	contained := false
-	w.localCIDRsFiltered.Iter(func(item interface{}) error {
-		filtered := item.(ip.CIDR)
-		filteredIPNet := filtered.ToIPNet()
-		if filteredIPNet.Contains(cidr.ToIPNet().IP) && filtered.Prefix() >= cidr.Prefix() {
-			contained = true
-			return set.StopIteration
+	if !w.localCIDRsUpdated {
+		contained := false
+		if node, ok := w.nodes[w.hostname]; ok {
+			node.cidrs.Iter(func(item interface{}) error {
+				filtered := item.(ip.CIDR)
+				filteredIPNet := filtered.ToIPNet()
+				if filteredIPNet.Contains(cidr.ToIPNet().IP) && filtered.Prefix() >= cidr.Prefix() {
+					contained = true
+					return set.StopIteration
+				}
+				return nil
+			})
 		}
-		return nil
-	})
-	if !contained {
-		w.localCIDRsUpdated = true
+		if !contained {
+			w.localCIDRsUpdated = true
+		}
 	}
 }
 
-// Remove a local workload CIDR. These CIDRs are used for the source-matched wireguard routes to limit wireguard
-// encryption to traffic to/from local workloads.
+// Remove a local workload CIDR. These CIDRs are used for:
+// - the source-matched wireguard routing rules to limit wireguard encryption to traffic to/from local workloads.
+// - add throw routes to the wireguard route table to ensure we throw to the main table for local routing.
+//
+// Note that the workload CIDRs may overlap so the minimal overlapping set of routes needs to be recalculated, so
+// we only need to update the local CIDRs if the CIDR being removed is one of the ones programmed.
 func (w *Wireguard) localWorkloadCIDRRemove(cidr ip.CIDR) {
 	log.WithField("cidr", cidr).Debug("localWorkloadCIDRRemove")
 	if cidr.Prefix() == ipPrefixLen {
@@ -407,8 +420,10 @@ func (w *Wireguard) localWorkloadCIDRRemove(cidr ip.CIDR) {
 		w.localCIDRs.Discard(cidr)
 	}
 	// Only flag the CIDRs for update if this CIDR is one of the filtered CIDRs.
-	if w.localCIDRsFiltered.Contains(cidr) {
-		w.localCIDRsUpdated = true
+	if !w.localCIDRsUpdated {
+		if node, ok := w.nodes[w.hostname]; ok {
+			w.localCIDRsUpdated = node.cidrs.Contains(cidr)
+		}
 	}
 }
 
@@ -417,18 +432,18 @@ func (w *Wireguard) localWorkloadCIDRRemove(cidr ip.CIDR) {
 func (w *Wireguard) peerAllowedCIDRAdd(name string, cidr ip.CIDR) {
 	logCxt := log.WithFields(log.Fields{"node": name, "cidr": cidr})
 	logCxt.Debug("peerAllowedCIDRAdd")
-	update := w.getOrInitPeerUpdate(name)
-	if existing, ok := w.peers[name]; ok && existing.cidrs.Contains(cidr) {
+	update := w.getOrInitNodeUpdateData(name)
+	if existing, ok := w.nodes[name]; ok && existing.cidrs.Contains(cidr) {
 		// Adding the CIDR to a node that already has it. This may happen if there is a pending CIDR deletion for the
 		// node, so discard the deletion update.
 		logCxt.Debug("Peer CIDR added which is already programmed - remove any pending delete")
-		update.allowedCidrsDeleted.Discard(cidr)
+		update.cidrsDeleted.Discard(cidr)
 	} else {
 		// Adding the CIDR to a node that does not already have it.
 		logCxt.Debug("Peer CIDR added which is not programmed")
-		update.allowedCidrsAdded.Add(cidr)
+		update.cidrsAdded.Add(cidr)
 	}
-	w.setPeerUpdate(name, update)
+	w.setNodeUpdate(name, update)
 }
 
 // Remove a peer allowed CIDR.  These CIDRs are used for the destination-matched wireguard routes to limit wireguard
@@ -436,18 +451,18 @@ func (w *Wireguard) peerAllowedCIDRAdd(name string, cidr ip.CIDR) {
 func (w *Wireguard) peerAllowedCIDRRemove(name string, cidr ip.CIDR) {
 	logCxt := log.WithFields(log.Fields{"node": name, "cidr": cidr})
 	logCxt.Debug("peerAllowedCIDRRemove")
-	update := w.getOrInitPeerUpdate(name)
-	if existing, ok := w.peers[name]; ok && existing.cidrs.Contains(cidr) {
+	update := w.getOrInitNodeUpdateData(name)
+	if existing, ok := w.nodes[name]; ok && existing.cidrs.Contains(cidr) {
 		// Remove the CIDR from a node that already has the CIDR configured.
 		logCxt.Debug("Node CIDR removed")
-		update.allowedCidrsDeleted.Add(cidr)
+		update.cidrsDeleted.Add(cidr)
 	} else {
 		// Deleting the CIDR from a node that already doesn't have it configured. This may happen if there is a pending
 		// CIDR addition for the node, so discard the addition update.
 		logCxt.Debug("Node CIDR removed but is not programmed - remove any pending add")
-		update.allowedCidrsAdded.Discard(cidr)
+		update.cidrsAdded.Discard(cidr)
 	}
-	w.setPeerUpdate(name, update)
+	w.setNodeUpdate(name, update)
 }
 
 func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, ipv4InterfaceAddr ip.Addr) {
@@ -474,8 +489,10 @@ func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, 
 		return
 	}
 
-	update := w.getOrInitPeerUpdate(name)
-	if existing, ok := w.peers[name]; ok && existing.publicKey == publicKey {
+	// Only update the public key in the node data for nodes.  The local node will not have this set, this prevents the
+	// wireguard config processing from attempting to add the local node as a peer.
+	update := w.getOrInitNodeUpdateData(name)
+	if existing, ok := w.nodes[name]; ok && existing.publicKey == publicKey {
 		// Public key not updated
 		logCxt.Debug("Public key unchanged from programmed")
 		update.publicKey = nil
@@ -484,7 +501,7 @@ func (w *Wireguard) EndpointWireguardUpdate(name string, publicKey wgtypes.Key, 
 		logCxt.Debug("Storing updated public key")
 		update.publicKey = &publicKey
 	}
-	w.setPeerUpdate(name, update)
+	w.setNodeUpdate(name, update)
 }
 
 func (w *Wireguard) EndpointWireguardRemove(name string) {
@@ -496,20 +513,21 @@ func (w *Wireguard) EndpointWireguardRemove(name string) {
 	}
 	if name == w.hostname {
 		w.EndpointWireguardUpdate(name, zeroKey, nil)
+		return
 	}
 
 	// If there is no existing peer and no existing update then exit.
-	if _, ok := w.peers[name]; ok {
+	if _, ok := w.nodes[name]; ok {
 		logCxt.Debug("Peer is programmed")
-	} else if _, ok := w.peerUpdates[name]; !ok {
+	} else if _, ok := w.nodeUpdates[name]; !ok {
 		logCxt.Debug("Peer is not programmed, and there are no updates")
 		return
 	}
 
 	// Create update to remove the public key.
-	update := w.getOrInitPeerUpdate(name)
+	update := w.getOrInitNodeUpdateData(name)
 	update.publicKey = &zeroKey
-	w.setPeerUpdate(name, update)
+	w.setNodeUpdate(name, update)
 }
 
 func (w *Wireguard) QueueResync() {
@@ -578,25 +596,32 @@ func (w *Wireguard) Apply() (err error) {
 
 	// --- Wireguard is enabled ---
 
+	// Process local CIDR updates. This may result in node deltas for the local node.
+	if w.localCIDRsUpdated {
+		w.nodeUpdates[w.hostname] = w.getLocalNodeCIDRUpdates()
+		w.localCIDRsUpdated = false
+	}
+
 	// We scan the updates multiple times to perform the following ordered updates:
-	// 1. Deletion of peers and wireguard peers (we handle these separately from other updates because it is easier
+	// 1. Deletion of nodes and wireguard nodes (we handle these separately from other updates because it is easier
 	//    to handle a delete/re-add this way without needing to calculate delta configs.
 	// 2. Update of cached node configuration (we cannot be certain exactly what is programmable until updated)
 	// 3. Update of route table routes.
 	// 4. Construction of wireguard delta (if performing deltas, or re-sync of wireguard configuration)
 	// 5. Simultaneous updates of wireguard, routes and rules.
 	var conflictingKeys = set.New()
-	wireguardPeerDelete := w.handlePeerAndRouteDeletionFromPeerUpdates(conflictingKeys)
-	w.updateCacheFromPeerUpdates(conflictingKeys)
-	w.updateRouteTableFromPeerUpdates()
+	wireguardPeerDelete := w.handlePeerAndRouteDeletionFromNodeUpdates(conflictingKeys)
+	w.updateCacheFromNodeUpdates(conflictingKeys)
+	w.updateRouteTableFromNodeUpdates()
+	w.updateRouteRulesFromNodeUpdates()
 
 	defer func() {
 		// Flag the programmed state to be the same as the expected state for each peer. We do this even if we failed to
 		// apply the update because the routetable processing also uses this to maintain details about whether or not it
 		// has routed to wireguard. In the event of a failed update or wireguard config, a full resync will be performed
 		// next iteration which ignores the programmedInWireguard flag.
-		if len(w.peerUpdates) > 0 {
-			for name, node := range w.peers {
+		if len(w.nodeUpdates) > 0 {
+			for name, node := range w.nodes {
 				if w.shouldProgramWireguardPeer(name, node) {
 					log.WithField("node", name).Debug("Flag node as programmed")
 					node.programmedInWireguard = true
@@ -610,7 +635,7 @@ func (w *Wireguard) Apply() (err error) {
 		// All updates have been applied. Make sure we delete them after we exit - we will either have applied the deltas,
 		// or we'll need to do a full resync, in either case no need to keep the deltas.  Don't do this immediately because
 		// we may need them to calculate the wireguard config delta.
-		w.peerUpdates = map[string]*peerUpdateData{}
+		w.nodeUpdates = map[string]*nodeUpdateData{}
 	}()
 
 	// If necessary ensure the wireguard device is configured. If this errors or if it is not yet oper up then no point
@@ -676,7 +701,7 @@ func (w *Wireguard) Apply() (err error) {
 
 	// Apply wireguard configuration.
 	wg.Add(1)
-	var wireguardPeerUpdate *wgtypes.Config
+	var wireguardNodeUpdate *wgtypes.Config
 	var publicKey wgtypes.Key
 	go func() {
 		defer wg.Done()
@@ -687,23 +712,23 @@ func (w *Wireguard) Apply() (err error) {
 			// earlier, then construct and apply the update. Flag as not in-sync until we have finished processing.
 			log.Debug("Apply wireguard crypto routing delta update")
 			if errWireguard = w.applyWireguardConfig(wireguardClient, wireguardPeerDelete); errWireguard != nil {
-				log.WithError(errWireguard).Info("Failed to delete wireguard peers")
+				log.WithError(errWireguard).Info("Failed to delete wireguard nodes")
 				return
 			}
-			wireguardPeerUpdate = w.constructWireguardDeltaFromPeerUpdates(conflictingKeys)
-			if errWireguard = w.applyWireguardConfig(wireguardClient, wireguardPeerUpdate); errWireguard != nil {
-				log.WithError(errWireguard).Info("Failed to create or update wireguard peers")
+			wireguardNodeUpdate = w.constructWireguardDeltaFromNodeUpdates(conflictingKeys)
+			if errWireguard = w.applyWireguardConfig(wireguardClient, wireguardNodeUpdate); errWireguard != nil {
+				log.WithError(errWireguard).Info("Failed to create or update wireguard nodes")
 				return
 			}
 		} else {
 			// Wireguard configuration is not in-sync. Construct and apply the wireguard configuration required to
 			// synchronize with our cached data.
 			log.Debug("Apply wireguard crypto routing resync")
-			if publicKey, wireguardPeerUpdate, errWireguard = w.constructWireguardDeltaForResync(wireguardClient); errWireguard != nil {
+			if publicKey, wireguardNodeUpdate, errWireguard = w.constructWireguardDeltaForResync(wireguardClient); errWireguard != nil {
 				log.WithError(errWireguard).Info("Failed to construct a full wireguard delta for resync")
 				return
-			} else if errWireguard = w.applyWireguardConfig(wireguardClient, wireguardPeerUpdate); errWireguard != nil {
-				log.WithError(errWireguard).Info("Failed to update wireguard peers for resync")
+			} else if errWireguard = w.applyWireguardConfig(wireguardClient, wireguardNodeUpdate); errWireguard != nil {
+				log.WithError(errWireguard).Info("Failed to update wireguard nodes for resync")
 				return
 			} else if w.ourPublicKey == nil || *w.ourPublicKey != publicKey {
 				// The public key differs from the one we previously queried or this is the first time we queried it.
@@ -739,9 +764,8 @@ func (w *Wireguard) Apply() (err error) {
 	// Once the wireguard and routing configuration is in place we can add the routing rules to start using the new
 	// routing table.
 	log.Debug("Ensure routing rules are configured")
-	if err = w.updateAndApplyRouteRules(netlinkClient); err != nil {
-		// Error updating the ip rule - close the netlink client as a precaution.
-		w.closeNetlinkClient()
+	if err = w.routerule.Apply(); err != nil {
+		// Error updating the ip rule.
 		return ErrUpdateFailed
 	}
 
@@ -760,41 +784,93 @@ func (w *Wireguard) setNotSupported() {
 	w.wireguardNotSupported = true
 }
 
-func (w *Wireguard) getOrInitPeer(name string) *peerData {
-	if n := w.peers[name]; n != nil {
+func (w *Wireguard) getOrInitNodeData(name string) *nodeData {
+	if n := w.nodes[name]; n != nil {
 		return n
 	}
-	return newPeerData()
+	return newNodeData()
 }
 
-func (w *Wireguard) setPeer(name string, node *peerData) {
-	w.peers[name] = node
+func (w *Wireguard) setNode(name string, node *nodeData) {
+	w.nodes[name] = node
 }
 
-func (w *Wireguard) getOrInitPeerUpdate(name string) *peerUpdateData {
-	if nu := w.peerUpdates[name]; nu != nil {
+func (w *Wireguard) getOrInitNodeUpdateData(name string) *nodeUpdateData {
+	if nu := w.nodeUpdates[name]; nu != nil {
 		return nu
 	}
-	return newPeerUpdateData()
+	return newNodeUpdateData()
 }
 
-func (w *Wireguard) setPeerUpdate(name string, update *peerUpdateData) {
-	w.peerUpdates[name] = update
+func (w *Wireguard) setNodeUpdate(name string, update *nodeUpdateData) {
+	w.nodeUpdates[name] = update
 }
 
-// handlePeerAndRouteDeletionFromPeerUpdates handles wireguard peer deletion preparation:
-// -  Updates routing table to remove routes for permantently deleted peers
-// -  Creates a wireguard config update for deleted peers, or for peers whose public key has changed (which for
+// getLocalNodeCIDRUpdates gets a nodeUpdateData to handle any deltas to the set of local CIDRs.
+func (w *Wireguard) getLocalNodeCIDRUpdates() *nodeUpdateData {
+	node := w.getOrInitNodeData(w.hostname)
+
+	// Node updates for the local node should only consist of CIDR updates - since we are calculating the set in full
+	// here, no need to modify any existing data.
+	nodeUpdate := newNodeUpdateData()
+
+	// Include all local CIDRs, update the cidrsAdded with any missing.
+	oldFiltered := node.cidrs.Copy()
+	w.localCIDRs.Iter(func(itemCIDR interface{}) error {
+		cidr := itemCIDR.(ip.CIDR)
+		if oldFiltered.Contains(cidr) {
+			oldFiltered.Discard(cidr)
+		} else {
+			nodeUpdate.cidrsAdded.Add(cidr)
+		}
+		return nil
+	})
+	// Include all local IPs that are not covered by the local CIDRs, update the cidrsAdded with any missing.
+	w.localIPs.Iter(func(itemAddr interface{}) error {
+		addr := itemAddr.(ip.Addr)
+		overlaps := false
+		w.localCIDRs.Iter(func(itemCIDR interface{}) error {
+			cidr := itemCIDR.(ip.CIDR).ToIPNet()
+			if cidr.Contains(addr.AsNetIP()) {
+				overlaps = true
+				return set.StopIteration
+			}
+			return nil
+		})
+		if !overlaps {
+			ipAsCidr := addr.AsCIDR()
+			if oldFiltered.Contains(ipAsCidr) {
+				oldFiltered.Discard(ipAsCidr)
+			} else {
+				nodeUpdate.cidrsAdded.Add(ipAsCidr)
+			}
+		}
+		return nil
+	})
+	// Remove any existing entry that is now no longer required.
+	oldFiltered.Iter(func(itemCIDR interface{}) error {
+		cidr := itemCIDR.(ip.CIDR)
+		nodeUpdate.cidrsDeleted.Add(cidr)
+		return nil
+	})
+
+	// Return the node update
+	return nodeUpdate
+}
+
+// handlePeerAndRouteDeletionFromNodeUpdates handles wireguard peer deletion preparation:
+// -  Updates routing table to remove routes for permantently deleted nodes
+// -  Creates a wireguard config update for deleted nodes, or for nodes whose public key has changed (which for
 //    wireguard is effectively a different peer)
 //
 // This method does not perform any dataplane updates.
-func (w *Wireguard) handlePeerAndRouteDeletionFromPeerUpdates(conflictingKeys set.Set) *wgtypes.Config {
+func (w *Wireguard) handlePeerAndRouteDeletionFromNodeUpdates(conflictingKeys set.Set) *wgtypes.Config {
 	var wireguardPeerDelete wgtypes.Config
-	for name, update := range w.peerUpdates {
+	for name, update := range w.nodeUpdates {
 		// Get existing peer configuration. If peer not seen before then no deletion processing is required.
 		logCxt := log.WithField("node", name)
 		logCxt.Debug("Handle peer and route deletion for node")
-		node := w.peers[name]
+		node := w.nodes[name]
 		if node == nil {
 			logCxt.Debug("No wireguard configuration for node")
 			continue
@@ -803,9 +879,9 @@ func (w *Wireguard) handlePeerAndRouteDeletionFromPeerUpdates(conflictingKeys se
 		if update.deleted {
 			// Node is deleted, so remove the node configuration and the associated routes.
 			logCxt.Info("Node is deleted, remove associated routes and wireguard peer")
-			delete(w.peers, name)
+			delete(w.nodes, name)
 
-			// Delete all of the node routes for the peerData and remove CIDR->node association. Note that we always
+			// Delete all of the node routes for the nodeData and remove CIDR->node association. Note that we always
 			// update the routing table routes using delta updates even during a full resync. The routetable component
 			// takes care of its own kernel-cache synchronization.
 			node.cidrs.Iter(func(item interface{}) error {
@@ -845,7 +921,7 @@ func (w *Wireguard) handlePeerAndRouteDeletionFromPeerUpdates(conflictingKeys se
 			logCxt.WithField("publicKey", node.publicKey).Debug("Removed the only node claiming public key")
 			delete(w.publicKeyToNodeNames, node.publicKey)
 		} else {
-			// This is or was a conflicting key. Recheck the peers associated with this key at the end.
+			// This is or was a conflicting key. Recheck the nodes associated with this key at the end.
 			log.WithField("publicKey", node.publicKey).Info("Removed node which claimed the same public key as at least one other node")
 			conflictingKeys.Add(node.publicKey)
 		}
@@ -853,19 +929,19 @@ func (w *Wireguard) handlePeerAndRouteDeletionFromPeerUpdates(conflictingKeys se
 	}
 
 	if len(wireguardPeerDelete.Peers) > 0 {
-		log.Debug("There are wireguard peers to delete")
+		log.Debug("There are wireguard nodes to delete")
 		return &wireguardPeerDelete
 	}
 	return nil
 }
 
-// updateCacheFromPeerUpdates updates the cache from the node update configuration.
+// updateCacheFromNodeUpdates updates the cache from the node update configuration.
 //
 // This method applies the current set of node updates on top of the current cache. It removes updates that are no
 // ops so that they are not re-processed further down the pipeline.
-func (w *Wireguard) updateCacheFromPeerUpdates(conflictingKeys set.Set) {
-	for name, update := range w.peerUpdates {
-		node := w.getOrInitPeer(name)
+func (w *Wireguard) updateCacheFromNodeUpdates(conflictingKeys set.Set) {
+	for name, update := range w.nodeUpdates {
+		node := w.getOrInitNodeData(name)
 
 		// This is a remote node configuration. Update the node data and the key to node mappings.
 		logCxt := log.WithField("node", name)
@@ -891,14 +967,14 @@ func (w *Wireguard) updateCacheFromPeerUpdates(conflictingKeys set.Set) {
 			}
 			updated = true
 		}
-		update.allowedCidrsDeleted.Iter(func(item interface{}) error {
+		update.cidrsDeleted.Iter(func(item interface{}) error {
 			cidr := item.(ip.CIDR)
 			logCxt.WithField("cidr", cidr).Debug("Discarding CIDR")
 			node.cidrs.Discard(cidr)
 			updated = true
 			return nil
 		})
-		update.allowedCidrsAdded.Iter(func(item interface{}) error {
+		update.cidrsAdded.Iter(func(item interface{}) error {
 			cidr := item.(ip.CIDR)
 			logCxt.WithField("cidr", cidr).Debug("Adding CIDR")
 			node.cidrs.Add(cidr)
@@ -909,29 +985,29 @@ func (w *Wireguard) updateCacheFromPeerUpdates(conflictingKeys set.Set) {
 		if updated {
 			// Node configuration updated. Store node data.
 			log.Debug("Node updated")
-			w.setPeer(name, node)
+			w.setNode(name, node)
 		} else {
 			// No further update, delete update so it's not processed again.
 			log.Debug("No updates for the node - remove node update to remove additional processing")
-			delete(w.peerUpdates, name)
+			delete(w.nodeUpdates, name)
 		}
 	}
 }
 
 // updateRouteTable updates the route table from the node updates.
-func (w *Wireguard) updateRouteTableFromPeerUpdates() {
+func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 	// Do all deletes first. Then adds or updates separarately. This ensures a CIDR that has been deleted from one node
 	// and added to another will not add first then delete (which will remove the route, since the route table does not
 	// care about destination node).
-	for name, update := range w.peerUpdates {
+	for name, update := range w.nodeUpdates {
 		// Delete routes that are no longer required in routing.
-		node := w.getOrInitPeer(name)
+		node := w.getOrInitNodeData(name)
 		ifaceName := routetable.InterfaceNone
 		if node != nil && node.programmedInWireguard {
 			ifaceName = w.config.InterfaceName
 		}
 		logCxt := log.WithFields(log.Fields{"node": name, "ifaceName": ifaceName})
-		update.allowedCidrsDeleted.Iter(func(item interface{}) error {
+		update.cidrsDeleted.Iter(func(item interface{}) error {
 			cidr := item.(ip.CIDR)
 			logCxt.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
 			w.routetable.RouteRemove(ifaceName, cidr)
@@ -941,10 +1017,10 @@ func (w *Wireguard) updateRouteTableFromPeerUpdates() {
 
 	// Now do the adds or updates. The routetable component will take care of routes that don't actually change and
 	// effectively no-op the delta.
-	for name, update := range w.peerUpdates {
+	for name, update := range w.nodeUpdates {
 		logCxt := log.WithField("node", name)
 		logCxt.Debug("Add/update routing for peer")
-		node := w.getOrInitPeer(name)
+		node := w.getOrInitNodeData(name)
 
 		// If the node routing to wireguard does not match with whether we should route then we need to do a full
 		// route update, otherwise do an incremental update.
@@ -955,7 +1031,7 @@ func (w *Wireguard) updateRouteTableFromPeerUpdates() {
 			updateSet = node.cidrs
 		} else {
 			logCxt.WithField("shouldNowRouteToWireguard", shouldRouteToWireguard).Debug("Wireguard routing decision has not changed - only need to update added CIDRs")
-			updateSet = update.allowedCidrsAdded
+			updateSet = update.cidrsAdded
 		}
 
 		var targetType routetable.TargetType
@@ -997,16 +1073,16 @@ func (w *Wireguard) updateRouteTableFromPeerUpdates() {
 	}
 }
 
-// constructWireguardDeltaFromPeerUpdates constructs a wireguard delta update from the set of peer updates.
-func (w *Wireguard) constructWireguardDeltaFromPeerUpdates(conflictingKeys set.Set) *wgtypes.Config {
+// constructWireguardDeltaFromNodeUpdates constructs a wireguard delta update from the set of peer updates.
+func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.Set) *wgtypes.Config {
 	// 4. If we are performing a wireguard delta update then construct the delta now.
 	var wireguardUpdate wgtypes.Config
 	if w.inSyncWireguard {
 		// Construct a wireguard delta update
-		for name, update := range w.peerUpdates {
+		for name, update := range w.nodeUpdates {
 			logCxt := log.WithField("peer", name)
 			logCxt.Debug("Constructing wireguard delta")
-			peer := w.peers[name]
+			peer := w.nodes[name]
 			if peer == nil {
 				log.Warn("internal error: peer data is nil")
 				continue
@@ -1022,15 +1098,15 @@ func (w *Wireguard) constructWireguardDeltaFromPeerUpdates(conflictingKeys set.S
 					PublicKey:  peer.publicKey,
 				}
 				updatePeer := false
-				if !peer.programmedInWireguard || update.allowedCidrsDeleted.Len() > 0 {
+				if !peer.programmedInWireguard || update.cidrsDeleted.Len() > 0 {
 					logCxt.Debug("Peer not programmed or CIDRs were deleted - need to replace full set of CIDRs")
 					wgpeer.ReplaceAllowedIPs = true
 					wgpeer.AllowedIPs = peer.allowedCidrsForWireguard()
 					updatePeer = true
-				} else if update.allowedCidrsAdded.Len() > 0 {
+				} else if update.cidrsAdded.Len() > 0 {
 					logCxt.Debug("Peer programmmed, no CIDRs deleted and CIDRs added")
-					wgpeer.AllowedIPs = make([]net.IPNet, 0, update.allowedCidrsAdded.Len())
-					update.allowedCidrsAdded.Iter(func(item interface{}) error {
+					wgpeer.AllowedIPs = make([]net.IPNet, 0, update.cidrsAdded.Len())
+					update.cidrsAdded.Iter(func(item interface{}) error {
 						wgpeer.AllowedIPs = append(wgpeer.AllowedIPs, item.(ip.CIDR).ToIPNet())
 						return nil
 					})
@@ -1057,11 +1133,11 @@ func (w *Wireguard) constructWireguardDeltaFromPeerUpdates(conflictingKeys set.S
 			}
 		}
 
-		// Finally loop through any conflicting public keys and check each of the peers is now handled correctly.
+		// Finally loop through any conflicting public keys and check each of the nodes is now handled correctly.
 		conflictingKeys.Iter(func(item interface{}) error {
 			key := item.(wgtypes.Key)
 			logCxt := log.WithField("publicKey", key)
-			logCxt.Debug("Processing public key with conflicting peers")
+			logCxt.Debug("Processing public key with conflicting nodes")
 			nodenames := w.publicKeyToNodeNames[key]
 			if nodenames == nil {
 				return nil
@@ -1070,7 +1146,7 @@ func (w *Wireguard) constructWireguardDeltaFromPeerUpdates(conflictingKeys set.S
 				nodename := item.(string)
 				nodeLogCxt := logCxt.WithField("node", nodename)
 				nodeLogCxt.Debug("Processing peer")
-				peer := w.peers[nodename]
+				peer := w.nodes[nodename]
 				if peer == nil || peer.programmedInWireguard == w.shouldProgramWireguardPeer(nodename, peer) {
 					// The peer programming matches the expected value, so nothing to do.
 					nodeLogCxt.Debug("Programming state has not changed")
@@ -1099,7 +1175,7 @@ func (w *Wireguard) constructWireguardDeltaFromPeerUpdates(conflictingKeys set.S
 
 	// Delta updates only include updates to peer config, so if no peer updates, just return nil.
 	if len(wireguardUpdate.Peers) > 0 {
-		log.Debug("There are peers to update")
+		log.Debug("There are nodes to update")
 		return &wireguardUpdate
 	}
 	return nil
@@ -1151,13 +1227,13 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 	// not.
 	processedKeys := set.New()
 
-	// Handle peers that are configured
+	// Handle nodes that are configured
 	for peerIdx := range device.Peers {
 		key := device.Peers[peerIdx].PublicKey
 		node := w.getNodeFromKey(key)
 		logCxt := log.WithFields(log.Fields{"publicKey": key, "node": node})
 		if node == nil {
-			logCxt.Info("Peer key is not expected or is associated with multiple peers")
+			logCxt.Info("Peer key is not expected or is associated with multiple nodes")
 			wireguardUpdate.Peers = append(wireguardUpdate.Peers, wgtypes.PeerConfig{
 				PublicKey: key,
 				Remove:    true,
@@ -1209,8 +1285,8 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 		}
 	}
 
-	// Handle peers that are not configured at all.
-	for name, node := range w.peers {
+	// Handle nodes that are not configured at all.
+	for name, node := range w.nodes {
 		logCxt := log.WithFields(log.Fields{"publicKey": node.publicKey, "node": name})
 		if processedKeys.Contains(node.publicKey) {
 			logCxt.Debug("Peer key already handled")
@@ -1383,62 +1459,24 @@ func (w *Wireguard) ensureLinkAddressV4(netlinkClient netlinkshim.Netlink) error
 	return nil
 }
 
-// updateAndApplyRouteRules updates the route rule manager and applies the changes.
-func (w *Wireguard) updateAndApplyRouteRules(netlinkClient netlinkshim.Netlink) error {
-	if w.routerule == nil {
+// updateRouteRulesFromNodeUpdates updates the routerules from the node updates.
+func (w *Wireguard) updateRouteRulesFromNodeUpdates() {
+	// We need to add route rules for each local CIDR.
+	nodeUpdate, ok := w.nodeUpdates[w.hostname]
+	if !ok {
+		return
+	}
+
+	nodeUpdate.cidrsDeleted.Iter(func(item interface{}) error {
+		cidr := item.(ip.CIDR)
+		w.routerule.RemoveRule(w.createRouteRule(cidr))
 		return nil
-	}
-
-	// If there are local CIDR updates we'll need to recalculate the minimal set of non-overlapping CIDRs and send
-	// deltas to the routeule manager. The local CIDRs are split into IPs and (presumably) non-overlapping CIDRs. Just
-	// add all of the CIDRs and any IPs that are not covered by the CIDRs.
-	if w.localCIDRsUpdated {
-		oldFiltered := w.localCIDRsFiltered
-		newFiltered := set.New()
-		w.localCIDRs.Iter(func(itemCIDR interface{}) error {
-			cidr := itemCIDR.(ip.CIDR)
-			newFiltered.Add(cidr)
-			if oldFiltered.Contains(cidr) {
-				oldFiltered.Discard(cidr)
-			} else {
-				w.routerule.SetRule(w.createRouteRule(cidr))
-			}
-			return nil
-		})
-		w.localIPs.Iter(func(itemAddr interface{}) error {
-			addr := itemAddr.(ip.Addr)
-			overlaps := false
-			w.localCIDRs.Iter(func(itemCIDR interface{}) error {
-				cidr := itemCIDR.(ip.CIDR).ToIPNet()
-				if cidr.Contains(addr.AsNetIP()) {
-					overlaps = true
-					return set.StopIteration
-				}
-				return nil
-			})
-			if !overlaps {
-				ipAsCidr := addr.AsCIDR()
-				newFiltered.Add(ipAsCidr)
-				if oldFiltered.Contains(ipAsCidr) {
-					oldFiltered.Discard(ipAsCidr)
-				} else {
-					w.routerule.SetRule(w.createRouteRule(ipAsCidr))
-				}
-			}
-			return nil
-		})
-		oldFiltered.Iter(func(itemCIDR interface{}) error {
-			cidr := itemCIDR.(ip.CIDR)
-			w.routerule.RemoveRule(w.createRouteRule(cidr))
-			return nil
-		})
-
-		w.localCIDRsFiltered = newFiltered
-		w.localCIDRsUpdated = false
-	}
-
-	// Apply the routing rule updates.
-	return w.routerule.Apply()
+	})
+	nodeUpdate.cidrsAdded.Iter(func(item interface{}) error {
+		cidr := item.(ip.CIDR)
+		w.routerule.SetRule(w.createRouteRule(cidr))
+		return nil
+	})
 }
 
 // createRouteRule creates a routing rule to route a local source CIDR to the wireguard table (if wireguard firewall
@@ -1497,7 +1535,7 @@ func (w *Wireguard) ensureDisabled(netlinkClient netlinkshim.Netlink) error {
 // -  A peer to have an IPv4 endpoint address
 // -  A peer to have a valid public key, and
 // -  Only a single peer to be claiming that public key
-func (w *Wireguard) shouldProgramWireguardPeer(name string, node *peerData) bool {
+func (w *Wireguard) shouldProgramWireguardPeer(name string, node *nodeData) bool {
 	logCxt := log.WithField("node", name)
 	if node.ipv4EndpointAddr == nil {
 		logCxt.Debug("Peer should not be programmed, no endpoint address")
@@ -1587,11 +1625,11 @@ func (w *Wireguard) closeNetlinkClient() {
 	w.cachedNetlinkClient = nil
 }
 
-// getNodeFromKey returns the node data associated with a key. If there is no node, or if multiple peers have claimed the
+// getNodeFromKey returns the node data associated with a key. If there is no node, or if multiple nodes have claimed the
 // same key, this returns nil.
-func (w *Wireguard) getNodeFromKey(key wgtypes.Key) *peerData {
+func (w *Wireguard) getNodeFromKey(key wgtypes.Key) *nodeData {
 	if item := getOnlyItemInSet(w.publicKeyToNodeNames[key]); item != nil {
-		return w.peers[item.(string)]
+		return w.nodes[item.(string)]
 	}
 	return nil
 }
