@@ -220,7 +220,7 @@ type MockNetlinkDataplane struct {
 	addedArpEntries set.Set
 
 	mutex                   sync.Mutex
-	deletedConntrackEntries []net.IP
+	deletedConntrackEntries set.Set
 	ConntrackSleep          time.Duration
 }
 
@@ -243,6 +243,7 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.AddedRules = nil
 	d.DeletedRules = nil
 	d.WireguardConfigUpdated = false
+	d.deletedConntrackEntries = set.New()
 }
 
 // ----- Mock dataplane management functions for test code -----
@@ -252,8 +253,11 @@ func (d *MockNetlinkDataplane) GetDeletedConntrackEntries() []net.IP {
 	defer d.mutex.Unlock()
 	defer GinkgoRecover()
 
-	cpy := make([]net.IP, len(d.deletedConntrackEntries))
-	copy(cpy, d.deletedConntrackEntries)
+	cpy := make([]net.IP, 0, d.deletedConntrackEntries.Len())
+	d.deletedConntrackEntries.Iter(func(item interface{}) error {
+		cpy = append(cpy, item.(ip.Addr).AsNetIP())
+		return nil
+	})
 	return cpy
 }
 
@@ -712,7 +716,7 @@ func (d *MockNetlinkDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.
 		"sleepTime": d.ConntrackSleep,
 	}).Info("Mock dataplane: Removing conntrack flows")
 	d.mutex.Lock()
-	d.deletedConntrackEntries = append(d.deletedConntrackEntries, ipAddr)
+	d.deletedConntrackEntries.Add(ip.FromNetIP(ipAddr))
 	d.mutex.Unlock()
 	time.Sleep(d.ConntrackSleep)
 }
