@@ -202,6 +202,8 @@ github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:J
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/libcalico-go v0.0.0-20200429152500-6f7340886a5e h1:K+labw1KWpQisGftVUmoe7+lt/Gp9YtZwLya1FU/5Qo=
 github.com/projectcalico/libcalico-go v0.0.0-20200429152500-6f7340886a5e/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
+github.com/projectcalico/libcalico-go v0.0.0-20200506023842-e898422e4f3a h1:aGBNoFRu8nDdcC37LitMa2iZfKICFX1ttS3hIZfHVxY=
+github.com/projectcalico/libcalico-go v0.0.0-20200506023842-e898422e4f3a/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200423215051-ff990268245e h1:Y7JhMxjJrGFS8rMYPQwu6ZA3Kca2O9tTYkjP5D0QyeU=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200423215051-ff990268245e/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200427180741-f197f7370140 h1:vCbxITpOuAhnGZGERIiVdKigHGjGXJcidgQHvjpsrKI=
