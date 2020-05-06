@@ -17,6 +17,7 @@ procedure varies by datastore type.
 > This may result in unexpected behavior and data.
 {: .alert .alert-danger}
 
+{% include content/hostendpoints-upgrade.md orch="Kubernetes" %}
 
 ## Upgrading an installation that uses the Kubernetes API datastore
 
