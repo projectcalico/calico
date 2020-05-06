@@ -161,3 +161,5 @@ take the following steps to upgrade the Dikastes sidecars running in your applic
 
 1. Once the new template is in place, newly created pods use the upgraded version of Dikastes. Perform a rolling update of each of your service deployments
    to get them on the new version of Dikastes.
+
+{% include content/auto-hostendpoints-migrate.md orch="Kubernetes" %}

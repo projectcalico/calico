@@ -17,37 +17,18 @@ explicitly allow existing traffic flows. As a starting point, you can create an 
 First, we'll add a label to the existing host endpoints. Get a list of the nodes that have an all-interfaces host endpoint:
 
 ```bash
-calicoctl get hep -owide | grep '*' | awk '{print $2}'
+calicoctl get hep -owide | grep '*' | awk '{print $1}'
 ```
 
-Example output of this might be:
-```
-$$ calicoctl get hep -owide | grep '*' | awk '{print $2}'
-ip-172-16-101-179.us-west-2.compute.internal
-ip-172-16-101-184.us-west-2.compute.internal
-ip-172-16-101-192.us-west-2.compute.internal
-ip-172-16-101-206.us-west-2.compute.internal
-ip-172-16-102-60.us-west-2.compute.internal
-```
-
-With the node names, we can label each node with a new label (for example, **host-endpoint-upgrade: ""**):
+With the names of the all-interfaces host endpoints, we can label each host endpoint with a new label (for example, **host-endpoint-upgrade: ""**):
 
 ```bash
-calicoctl get hep -owide | grep '*' | awk '{print $2}' | xargs -I {} kubectl label node {} host-endpoint-upgrade=
+calicoctl get hep -owide | grep '*' | awk '{print $1}' \
+  | xargs -I {} kubectl exec -i -n kube-system calicoctl /calicoctl label hostendpoint {} host-endpoint-upgrade=
 ```
 
-Example output of the above command:
-
-```
-$ calicoctl get hep -owide | grep '*' | awk '{print $2}' | xargs -I {} kubectl label node {} host-endpoint-upgrade=
-node/ip-172-16-101-179.us-west-2.compute.internal labeled
-node/ip-172-16-101-184.us-west-2.compute.internal labeled
-node/ip-172-16-101-192.us-west-2.compute.internal labeled
-node/ip-172-16-101-206.us-west-2.compute.internal labeled
-node/ip-172-16-102-60.us-west-2.compute.internal labeled
-```
-
-Now that the nodes with an all-interfaces host endpoint are labeled, we can create a policy to log and whitelist all traffic temporarily:
+Now that the nodes with an all-interfaces host endpoint are labeled with **host-endpoint-upgrade**, we can create a policy to log and whitelist all traffic
+going into or out of the host endpoints temporarily:
 
 ```bash
 cat > allow-all-upgrade.yaml <<EOF
@@ -76,17 +57,5 @@ calicoctl apply -f - < allow-all-upgrade.yaml
 ```
 
 After applying this policy, all-interfaces host endpoints will log and allow all traffic through them.
-This policy will allow all traffic not accounted for by other policies
-After upgrading, please review syslog logs for traffic going through the host endpoints and update the policy as needed to secure access to the host endpoints.
-
-### Migrating to auto host endpoints
-
-> **Important**: Auto host endpoints have an allow-all profile attached which allows all traffic in the absence of network policy.
-{: .alert .alert-warning}
-
-In order to migrate existing all-interfaces host endpoints to {{site.prodname}}-managed auto host endpoints:
-
-- Add labels from existing host endpoints to {{include.orch}} nodes
-- Enable auto host endpoints: new all-interfaces host endpoints are created that have all node labels (including the ones just added)
-- Delete old host endpoints
-
+This policy will allow all traffic not accounted for by other policies.
+After upgrading, please review syslog logs for traffic going through the host endpoints and update the policy as needed to secure traffic to the host endpoints.

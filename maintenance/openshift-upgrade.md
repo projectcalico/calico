@@ -31,3 +31,5 @@ You can now monitor the upgrade progress with the following command:
 ```bash
 watch oc get tigerastatus
 ```
+
+{% include content/auto-hostendpoints-migrate.md orch="OpenShift" %}

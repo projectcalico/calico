@@ -140,3 +140,5 @@ varies by Linux distribution.
 1. Remove any existing `calicoctl` instances and [install the new `calicoctl`](../getting-started/clis/calicoctl/install).
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
+
+{% include content/auto-hostendpoints-migrate.md orch="OpenStack" %}
