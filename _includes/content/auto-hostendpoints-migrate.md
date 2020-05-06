@@ -11,7 +11,11 @@ In order to migrate existing all-interfaces host endpoints to {{site.prodname}}-
    For example, if your existing all-interface host endpoint for node **node1** has the label **environment: dev**, then you must add that same label to its node:
 
    ```bash
+{%- if include.orch == "OpenShift" %}
+   oc label node node1 environment=dev
+{%- else %}
    kubectl label node node1 environment=dev
+{%- endif %}
    ```
 
 2. Enable auto host endpoints by following the [enable automatic host endpoints how-to guide]({{ site.baseurl }}/security/kubernetes-nodes#enable-automatic-host-endpoints).
