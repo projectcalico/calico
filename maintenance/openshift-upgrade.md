@@ -32,4 +32,7 @@ You can now monitor the upgrade progress with the following command:
 watch oc get tigerastatus
 ```
 
+If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
+add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade*.
+
 {% include content/auto-hostendpoints-migrate.md orch="OpenShift" %}

@@ -139,6 +139,9 @@ varies by Linux distribution.
 
 1. Remove any existing `calicoctl` instances and [install the new `calicoctl`](../getting-started/clis/calicoctl/install).
 
+1. If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
+   add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade*.
+
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
 {% include content/auto-hostendpoints-migrate.md orch="OpenStack" %}
