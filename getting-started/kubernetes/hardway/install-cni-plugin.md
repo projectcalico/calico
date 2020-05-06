@@ -184,6 +184,13 @@ Step back to normal user.
 exit
 ```
 
+At this point Kubernetes nodes must became to `Ready` state, because Kubernetes has all the network configuration.
+
+Write the CNI configuration
+```bash
+kubectl get nodes
+```
+
 ## Next
 
 [Install Typha](./install-typha)
