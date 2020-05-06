@@ -7,6 +7,8 @@ section:
   section:
   - title: Kubernetes
     path: /maintenance/kubernetes-upgrade
+  - title: OpenShift
+    path: /maintenance/openshift-upgrade
   - title: OpenStack
     path: /maintenance/openstack-upgrade
 - title: Monitor
