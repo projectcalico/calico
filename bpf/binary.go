@@ -64,11 +64,11 @@ func (b *Binary) replaceAllLoadImm32(orig, replacement []byte) {
 
 // PatchIPv4 replaces a place holder with the actual IPv4
 func (b *Binary) PatchIPv4(ip net.IP) error {
-	ip = ip.To4()
-	if ip == nil {
+	ipv4 := ip.To4()
+	if ipv4 == nil {
 		return errors.Errorf("%s is not IPv4", ip)
 	}
-	b.replaceAllLoadImm32([]byte("HOST"), []byte(ip))
+	b.replaceAllLoadImm32([]byte("HOST"), []byte(ipv4))
 
 	return nil
 }
