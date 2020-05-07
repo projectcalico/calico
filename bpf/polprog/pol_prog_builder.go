@@ -85,7 +85,6 @@ var (
 	stateOffSrcPort        int16 = 20
 	stateOffDstPort        int16 = 22
 	stateOffICMPType       int16 = 22
-	stateOffICMPCode       int16 = 23
 	_                            = stateOffDstPort
 	stateOffPostNATDstPort int16 = 24
 	stateOffIPProto        int16 = 26

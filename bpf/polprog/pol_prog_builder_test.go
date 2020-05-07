@@ -64,5 +64,5 @@ func TestPolicySanityCheck(t *testing.T) {
 		t.Log(i, ": ", in)
 	}
 
-	Expect(insns).To(HaveLen(229))
+	Expect(insns).To(HaveLen(225))
 }
