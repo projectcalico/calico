@@ -9,7 +9,7 @@ calico_enterprise: true
 <br>
 <h3 style="font-style: italic;">If you like Calico, you'll love Calico Enterprise!</h3>
 <br>
-<table style="max-width: 900px; border: none;">
+<table style="max-width: 900px;">
   <thead>
     <tr>
       <th></th>
