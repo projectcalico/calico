@@ -14,7 +14,7 @@ If you like Calico, you'll love Calico Enterprise!
     <tr>
       <th></th>
       <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-logo-64px.png" alt="Calico"></th>
-      <th style="text-align: center"><img src="{{site.baseurl}}/calico-enterprise-logo-64px.png" alt="Calico Enterprise"></th>
+      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-enterprise-logo-64px.png" alt="Calico Enterprise"></th>
     </tr>
   </thead>
   <tbody>
