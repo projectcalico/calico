@@ -60,7 +60,7 @@ In the tech preview release, eBPF mode has the following pre-requisites:
 ### How to
 
 - [Set up a suitable cluster](#set-up-a-suitable-cluster)
-- [Install Calico on nodes](#install-calico-on-nodes)
+- [Install {{ site.prodname }} on nodes](#install-{{ site.prodnamedash }}-on-nodes)
 - [Try out DSR mode](#try-out-dsr-mode)
 - [Toggle between eBPF and the standard linux networking pipeline](#toggle-between-ebpf-and-the-standard-linux-networking-pipeline)
 
