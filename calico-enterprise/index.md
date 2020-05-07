@@ -59,7 +59,7 @@ calico_enterprise: true
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Web user interface</td>
+      <td>Rich graphical user interface</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
