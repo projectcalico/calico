@@ -13,16 +13,53 @@ is to **drop traffic**. This default behavior is consistent with "named" host en
 drop traffic in the absence of policy.
 
 Before upgrading to {{page.version}}, you must ensure that global network policies are in place that select existing all-interfaces host endpoints and
-explicitly allow existing traffic flows.
+explicitly allow existing traffic flows. As a starting point, you can create an allow-all policy that selects existing all-interfaces host endpoints.
+First, we'll add a label to the existing host endpoints. Get a list of the nodes that have an all-interfaces host endpoint:
 
-### Migrating to auto host endpoints
+```bash
+calicoctl get hep -owide | grep '*' | awk '{print $1}'
+```
 
-> **Important**: Auto host endpoints have an allow-all profile attached which allows all traffic in the absence of network policy.
-{: .alert .alert-warning}
+With the names of the all-interfaces host endpoints, we can label each host endpoint with a new label (for example, **host-endpoint-upgrade: ""**):
 
-In order to migrate existing all-interfaces host endpoints to {{site.prodname}}-managed auto host endpoints:
+```bash
+calicoctl get hep -owide | grep '*' | awk '{print $1}' \
+{%- if include.orch == "OpenShift" %}
+  | xargs -I {} oc exec -i -n kube-system calicoctl -- /calicoctl label hostendpoint {} host-endpoint-upgrade=
+{%- else %}
+  | xargs -I {} kubectl exec -i -n kube-system calicoctl -- /calicoctl label hostendpoint {} host-endpoint-upgrade=
+{%- endif %}
+```
 
-- Add labels from existing host endpoints to {{include.orch}} nodes
-- Enable auto host endpoints: new all-interfaces host endpoints are created that have all node labels (including the ones just added)
-- Delete old host endpoints
+Now that the nodes with an all-interfaces host endpoint are labeled with **host-endpoint-upgrade**, we can create a policy to log and whitelist all traffic
+going into or out of the host endpoints temporarily:
 
+```bash
+cat > allow-all-upgrade.yaml <<EOF
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-all-upgrade
+spec:
+  selector: has(host-endpoint-upgrade)
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Log
+  - action: Allow
+  egress:
+  - action: Log
+  - action: Allow
+EOF
+```
+
+Apply the policy:
+
+```bash
+calicoctl apply -f - < allow-all-upgrade.yaml
+```
+
+After applying this policy, all-interfaces host endpoints will log and allow all traffic through them.
+This policy will allow all traffic not accounted for by other policies.
+After upgrading, please review syslog logs for traffic going through the host endpoints and update the policy as needed to secure traffic to the host endpoints.
