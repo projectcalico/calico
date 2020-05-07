@@ -1,12 +1,20 @@
 ---
 title: Calico Enterprise
 description: Learn about Calico Enterprise
-calico_enterprise: true
 show_read_time: false
 show_toc: false
 ---
 
-Calico Enterprise is awesome!
+If you like Calico, you'll love Calico Enterprise!
+
+|     | ![Calico]({{site.baseurl}}/images/calico-logo-64px.png) | ![Calico Enterprise]({{site.baseurl}}/images/calico-enterprise-logo-64px.png) |
+| --- |:---:|:---:|
+| Pod Networking | &#10003; | &#10003; |
+| Advanced IP Address Management | &#10003; | &#10003; |
+| Kubernetes Network Policy | &#10003; | &#10003; |
+| Hierarchical network policy |   | &#10003; |
+
+
 
 
 - [Network visibility]({{ site.baseurl }}/security/calico-enterprise/network-visibility)
