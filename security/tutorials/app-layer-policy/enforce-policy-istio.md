@@ -10,8 +10,8 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 
 1. Build a Kubernetes cluster.
 2. Install Calico on Kubernetes:
-  - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/quickstart).
-  - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/getting-started/kubernetes/installation/) (or a non-Calico CNI) and Calico network policy are installed. 
+  - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
+  - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/networking/) (or a non-Calico CNI) and Calico network policy are installed.
 3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install).   
   **Note**: Ensure calicoctl is configured to connect with your datastore.  
 4. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).  

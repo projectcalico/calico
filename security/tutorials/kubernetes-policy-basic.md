@@ -6,7 +6,7 @@ canonical_url: '/security/tutorials/kubernetes-policy-basic'
 
 This guide provides a simple way to try out Kubernetes `NetworkPolicy` with {{site.prodname}}.  It requires a Kubernetes cluster configured with {{site.prodname}} networking, and expects that you have `kubectl` configured to interact with the cluster.
 
-You can quickly and easily deploy such a cluster by following one of the [installation guides]({{ site.baseurl }}/getting-started/kubernetes/installation/).
+You can quickly and easily deploy such a cluster by following one of the [installation guides]({{ site.baseurl }}/getting-started/kubernetes/).
 
 ### Configure namespaces
 
