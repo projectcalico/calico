@@ -76,7 +76,23 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 	return
 }
 
+//FilterRuleToIPVersion: Filter rule based on the IPversion
 func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
+	// Filter the CIDRs to the IP version that we're rendering.  In general, we should have an
+	// explicit IP version in the rule and all CIDRs should match it (and calicoctl, for
+	// example, enforces that).  However, we try to handle a rule gracefully if it's missing a
+	// version.
+	//
+	// We do that by rendering the rule, filtered to only have CIDRs of the right version,
+	// unless filtering the rule would completely remove one of its match fields.
+	//
+	// That handles the mainline case well, where the IP version is missing but the rule is
+	// otherwise consistent since we'll render the rule only for the matching version.
+	//
+	// It also handles rules like "allow from 10.0.0.1,feed::beef" in an intuitive way.  Only
+	// rules of the form "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out,
+	// and only for IPv6, where there's no obvious meaning to the rule.
+
 	ruleCopy := *pRule
 	var filteredAll bool
 
@@ -110,20 +126,6 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 }
 
 func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
-	// Filter the CIDRs to the IP version that we're rendering.  In general, we should have an
-	// explicit IP version in the rule and all CIDRs should match it (and calicoctl, for
-	// example, enforces that).  However, we try to handle a rule gracefully if it's missing a
-	// version.
-	//
-	// We do that by rendering the rule, filtered to only have CIDRs of the right version,
-	// unless filtering the rule would completely remove one of its match fields.
-	//
-	// That handles the mainline case well, where the IP version is missing but the rule is
-	// otherwise consistent since we'll render the rule only for the matching version.
-	//
-	// It also handles rules like "allow from 10.0.0.1,feed::beef" in an intuitive way.  Only
-	// rules of the form "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out,
-	// and only for IPv6, where there's no obvious meaning to the rule.
 
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
 	if ruleCopy == nil {

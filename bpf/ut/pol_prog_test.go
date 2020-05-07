@@ -870,7 +870,7 @@ var polProgramTests = []polProgramTest{
 		PolicyName: "allow icmp packet with type 8 and code 3",
 		Policy: [][][]*proto.Rule{{{{
 			Action: "Allow",
-			Icmp:   &proto.Rule_IcmpTypeCode{&proto.IcmpTypeAndCode{Type: 8, Code: 3}},
+			Icmp:   &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 8, Code: 3}},
 		}}}},
 		AllowedPackets: []packet{
 			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
@@ -894,7 +894,7 @@ var polProgramTests = []polProgramTest{
 		PolicyName: "allow icmp packet with type not equal to 8 and code not equal to 3",
 		Policy: [][][]*proto.Rule{{{{
 			Action:  "Allow",
-			NotIcmp: &proto.Rule_NotIcmpTypeCode{&proto.IcmpTypeAndCode{Type: 8, Code: 3}},
+			NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 8, Code: 3}},
 		}}}},
 		AllowedPackets: []packet{
 			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0),
