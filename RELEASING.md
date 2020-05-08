@@ -263,6 +263,8 @@ as described in the section above.
 
    1. Update the `CURRENT_RELEASE` environment variable.
 
+1. In [netlify/_redirects](netlify/_redirects), add a new line for the new release.
+
 1. Commit your changes. For example:
 
    ```
