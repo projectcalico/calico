@@ -444,7 +444,7 @@ func TestNATNodePort(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = 0xca140000 // CALI_SKB_MARK_SKIP_RPF
 
 	// Arriving at workload at node 2
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {

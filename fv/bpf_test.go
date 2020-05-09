@@ -1353,6 +1353,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									Expect(err).NotTo(HaveOccurred())
 								})
 
+								By("setting up routes to .20 net on dest node to trigger RPF check", func() {
+									// set up a dummy interface just for the routing purpose
+									felixes[0].Exec("ip", "link", "add", "dummy1", "type", "dummy")
+									felixes[0].Exec("ip", "link", "set", "dummy1", "up")
+									// set up route to the .20 net through the dummy iface. This
+									// makes the .20 a universaly reachable external world from the
+									// internal/private eth0 network
+									felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "dummy1")
+								})
+
 								By("Allowing traffic from the eth20 network", func() {
 									pol.Spec.Ingress = []api.Rule{
 										{
@@ -1664,12 +1674,12 @@ func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.MapIter) {
 		return felix.FileExists(m.Path())
 	}).Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
 	cmd, err := bpf.DumpMapCmd(m)
-	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map dump command: " + m.Path())
+	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map dump command: "+m.Path())
 	log.WithField("cmd", cmd).Debug("dumpBPFMap")
 	out, err := felix.ExecOutput(cmd...)
-	Expect(err).NotTo(HaveOccurred(), "Failed to get dump BPF map: " + m.Path())
+	Expect(err).NotTo(HaveOccurred(), "Failed to get dump BPF map: "+m.Path())
 	err = bpf.IterMapCmdOutput([]byte(out), iter)
-	Expect(err).NotTo(HaveOccurred(), "Failed to parse BPF map dump: " + m.Path())
+	Expect(err).NotTo(HaveOccurred(), "Failed to parse BPF map dump: "+m.Path())
 }
 
 func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
