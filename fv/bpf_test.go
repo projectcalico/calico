@@ -1361,6 +1361,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									// makes the .20 a universaly reachable external world from the
 									// internal/private eth0 network
 									felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "dummy1")
+									// This multi-NIC scenario works only if the kernel's RPF check
+									// is not strict so we need to override it for the test and must
+									// be set properly when product is deployed. We reply on
+									// iptables to do require check for us.
+									felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+									felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.dummy1.rp_filter=2")
 								})
 
 								By("Allowing traffic from the eth20 network", func() {
