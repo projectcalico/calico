@@ -222,6 +222,10 @@ func (b *PinnedMap) Delete(k []byte) error {
 	cmd := exec.Command("bpftool", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if strings.Contains(string(out), "delete failed: No such file or directory") {
+			logrus.WithField("k", k).Debug("Item didn't exist.")
+			return os.ErrNotExist
+		}
 		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
 	}
 	return err
