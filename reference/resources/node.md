@@ -49,6 +49,7 @@ spec:
 | ipv4VXLANTunnelAddr | IPv4 address of the VXLAN tunnel. This is system configured and should not be updated manually. | | string |
 | vxlanTunnelMACAddr | MAC address of the VXLAN tunnel. This is system configured and should not be updated manually. | | string |
 | orchRefs | Correlates this node to a node in another orchestrator. | | list of [OrchRefs](#OrchRef) |
+| wireguard | WireGuard configuration for this node. This is applicable only if WireGuard is enabled in [Felix Configuration]({{ site.baseurl }}/reference/resources/felixconfig). | | [WireGuard](#wireguard) |
 
 #### OrchRef
 
@@ -66,6 +67,12 @@ spec:
 | ipv6Address | The IPv6 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | Optional | string |
 | ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel. This is system configured and should not be updated manually. | Optional IPv4 address | string |
 | routeReflectorClusterID | Enables this node as a route reflector within the given cluster | Optional IPv4 address | string |
+
+#### WireGuard
+
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| interfaceIPv4Address | The IPv4 address and subnet for the WireGuard interface created by Felix on this node. | Optional | string |
 
 ### Supported operations
 
