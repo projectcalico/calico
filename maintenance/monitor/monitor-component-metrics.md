@@ -310,3 +310,7 @@ kubectl delete clusterrolebinding calico-prometheus-user
 If you enable {{site.prodname}} metrics to Prometheus, a best practice is to use network policy to limit access to the {{site.prodname}} metrics endpoints. For details, see [Secure {{site.prodname}} Prometheus endpoints]({{ site.baseurl }}/security/comms/secure-metrics).  
 
 If you are not using Prometheus metrics, we recommend disabling the Prometheus ports entirely for more security. 
+
+### Next Steps
+
+[Visualizing metrics via Grafana.]({{ site.baseurl }}/maintenance/monitor/monitor-component-visual)

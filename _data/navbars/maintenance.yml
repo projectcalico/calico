@@ -15,7 +15,9 @@ section:
   path: /maintenance/monitor/
   section: 
   - title: Monitor component metrics
-    path: /maintenance/monitor/monitor-component-metrics
+    path: /maintenance/monitor/monitor-component-metrics  
+  - title: Visualize component metrics
+    path: /maintenance/monitor/monitor-component-visual  
 - title: Remove nodes from a cluster
   path: /maintenance/decommissioning-a-node
 - title: Troubleshoot
