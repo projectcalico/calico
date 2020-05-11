@@ -222,14 +222,9 @@ func (b *PinnedMap) Delete(k []byte) error {
 	cmd := exec.Command("bpftool", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if strings.Contains(string(out), "No such file or directory") {
-			// Check that the error wasn't about the map as a whole being missing.
-			if _, statErr := os.Stat(b.versionedFilename()); statErr == nil {
-				// We expect failures due to the entry being missing, return a dedicated error
-				// and avoid logging a scary warning.
-				logrus.WithField("k", k).Debug("Item didn't exist.")
-				return os.ErrNotExist
-			}
+		if strings.Contains(string(out), "delete failed: No such file or directory") {
+			logrus.WithField("k", k).Debug("Item didn't exist.")
+			return os.ErrNotExist
 		}
 		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
 	}
