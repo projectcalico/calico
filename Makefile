@@ -143,7 +143,7 @@ update-pins: update-libcalico-pin update-typha-pin
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: bin/calico-felix
+build: bin/calico-felix build-bpf
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*

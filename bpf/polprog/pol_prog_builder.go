@@ -29,6 +29,7 @@ import (
 	. "github.com/projectcalico/felix/bpf/asm"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/rules"
 )
 
 type Builder struct {
@@ -83,6 +84,7 @@ var (
 	stateOffPolResult      int16 = 16
 	stateOffSrcPort        int16 = 20
 	stateOffDstPort        int16 = 22
+	stateOffICMPType       int16 = 22
 	_                            = stateOffDstPort
 	stateOffPostNATDstPort int16 = 24
 	stateOffIPProto        int16 = 26
@@ -236,7 +238,11 @@ const (
 )
 
 func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
-	// TODO IP version
+
+	rule = rules.FilterRuleToIPVersion(4, rule)
+	if rule == nil {
+		log.Debugf("Version mismatch, skipping rule")
+	}
 	p.writeStartOfRule()
 
 	if rule.Protocol != nil {
@@ -302,7 +308,24 @@ func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
 		p.writePortsMatch(true, legDest, rule.NotDstPorts, rule.NotDstNamedPortIpSetIds)
 	}
 
-	// TODO ICMP
+	if rule.Icmp != nil {
+		log.WithField("icmpv4", rule.Icmp).Debugf("ICMP type/code match")
+		switch icmp := rule.Icmp.(type) {
+		case *proto.Rule_IcmpTypeCode:
+			p.writeICMPTypeCodeMatch(false, uint8(icmp.IcmpTypeCode.Type), uint8(icmp.IcmpTypeCode.Code))
+		case *proto.Rule_IcmpType:
+			p.writeICMPTypeMatch(false, uint8(icmp.IcmpType))
+		}
+	}
+	if rule.NotIcmp != nil {
+		log.WithField("icmpv4", rule.Icmp).Debugf("Not ICMP type/code match")
+		switch icmp := rule.NotIcmp.(type) {
+		case *proto.Rule_NotIcmpTypeCode:
+			p.writeICMPTypeCodeMatch(true, uint8(icmp.NotIcmpTypeCode.Type), uint8(icmp.NotIcmpTypeCode.Code))
+		case *proto.Rule_NotIcmpType:
+			p.writeICMPTypeMatch(true, uint8(icmp.NotIcmpType))
+		}
+	}
 
 	p.writeEndOfRule(rule, passLabel)
 	p.ruleID++
@@ -335,6 +358,23 @@ func (p *Builder) writeProtoMatch(negate bool, protocol *proto.Protocol) {
 	}
 }
 
+func (p *Builder) writeICMPTypeMatch(negate bool, icmpType uint8) {
+	p.b.Load8(R1, R9, stateOffICMPType)
+	if negate {
+		p.b.JumpEqImm64(R1, int32(icmpType), p.endOfRuleLabel())
+	} else {
+		p.b.JumpNEImm64(R1, int32(icmpType), p.endOfRuleLabel())
+	}
+}
+
+func (p *Builder) writeICMPTypeCodeMatch(negate bool, icmpType, icmpCode uint8) {
+	p.b.Load16(R1, R9, stateOffICMPType)
+	if negate {
+		p.b.JumpEqImm64(R1, ((int32(icmpCode) << 8) | int32(icmpType)), p.endOfRuleLabel())
+	} else {
+		p.b.JumpNEImm64(R1, ((int32(icmpCode) << 8) | int32(icmpType)), p.endOfRuleLabel())
+	}
+}
 func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 	var offset int16
 	if leg == legSource {

@@ -170,10 +170,18 @@ func udpPkt(src, dst string) packet {
 func icmpPkt(src, dst string) packet {
 	return packetWithPorts(1, src+":0", dst+":0")
 }
+func icmpPktWithTypeCode(src, dst string, icmpType, icmpCode int) packet {
+	return packet{
+		protocol: 1,
+		srcAddr:  src,
+		srcPort:  0,
+		dstAddr:  dst,
+		dstPort:  (icmpCode << 8) | (icmpType),
+	}
+}
 
 var polProgramTests = []polProgramTest{
 	// Tests of actions and flow control.
-
 	{
 		PolicyName: "no tiers",
 		DroppedPackets: []packet{
@@ -846,9 +854,55 @@ var polProgramTests = []polProgramTest{
 			"setB": {"123.0.0.1/32,udp:1024"},
 		},
 	},
-
-	// TODO ICMP
-
+	//ICMP tests
+	{
+		PolicyName: "allow icmp packet with type 8",
+		Policy: [][][]*proto.Rule{{{{
+			Action: "Allow",
+			Icmp:   &proto.Rule_IcmpType{IcmpType: 8},
+		}}}},
+		AllowedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 0)},
+		DroppedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0)},
+	},
+	{
+		PolicyName: "allow icmp packet with type 8 and code 3",
+		Policy: [][][]*proto.Rule{{{{
+			Action: "Allow",
+			Icmp:   &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 8, Code: 3}},
+		}}}},
+		AllowedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
+		DroppedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 3),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 4)},
+	},
+	{
+		PolicyName: "allow icmp packet with type not equal to 8",
+		Policy: [][][]*proto.Rule{{{{
+			Action:  "Allow",
+			NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 8},
+		}}}},
+		AllowedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0)},
+		DroppedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 0)},
+	},
+	{
+		PolicyName: "allow icmp packet with type not equal to 8 and code not equal to 3",
+		Policy: [][][]*proto.Rule{{{{
+			Action:  "Allow",
+			NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 8, Code: 3}},
+		}}}},
+		AllowedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 4),
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 3)},
+		DroppedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
+	},
 }
 
 func TestPolicyPrograms(t *testing.T) {
@@ -887,6 +941,15 @@ func (p packet) String() string {
 }
 
 func (p packet) ToState() state.State {
+	if uint8(p.protocol) == 1 {
+		return state.State{
+			IPProto:        uint8(p.protocol),
+			SrcAddr:        ipUintFromString(p.srcAddr),
+			PostNATDstAddr: ipUintFromString(p.dstAddr),
+			SrcPort:        uint16(p.srcPort),
+			DstPort:        uint16(p.dstPort),
+		}
+	}
 	return state.State{
 		IPProto:        uint8(p.protocol),
 		SrcAddr:        ipUintFromString(p.srcAddr),

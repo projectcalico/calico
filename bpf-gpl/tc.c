@@ -611,6 +611,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 		}
 	}
+	/* icmp_type and icmp_code share storage with the ports; now we've used
+	 * the ports set to 0 to do the conntrack lookup, we can set the ICMP fields
+	 * for policy.
+	 */
+	if (state.ip_proto == IPPROTO_ICMP) {
+		state.icmp_type = icmp_header->type;
+        	state.icmp_code = icmp_header->code;
+	}
+
 
 	// Set up an entry in the state map and then jump to the normal policy program.
 	int key = 0;
@@ -720,6 +729,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	CALI_DEBUG("flags=%x\n", state->flags);
 	CALI_DEBUG("ct_rc=%d\n", ct_rc);
 	CALI_DEBUG("ct_related=%d\n", ct_related);
+
+	// Set the dport to 0, to make sure conntrack entries for icmp is proper as we use
+	// dport to hold icmp type and code
+	if (state->ip_proto == IPPROTO_ICMP) {
+		state->dport = 0;
+	}
 
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
