@@ -44,9 +44,12 @@ $(document).ready(function(){
     scrollBy(0, -bodyPaddingTop)
   };
 
-  if (location.hash) {
-    shiftWindow();
+  var onWindowLoad = function() {
+    if (location.hash) {
+      shiftWindow();
+    }
   }
 
   window.addEventListener("hashchange", shiftWindow);
+  window.addEventListener('load', onWindowLoad);
 });
