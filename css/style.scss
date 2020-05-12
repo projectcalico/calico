@@ -25,6 +25,14 @@ $sticky-top: $header-height + $navbar-margin-bottom;
   img {
     @extend .img-responsive;
   }
+
+  h2:target,
+  h3:target,
+  h4:target,
+  h5:target {
+    padding-top: $sticky-top;
+    margin-top: -$sticky-top;
+  }
 }
 
 h4 {
