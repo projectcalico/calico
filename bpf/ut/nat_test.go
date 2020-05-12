@@ -454,6 +454,15 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
+	// try a spoofed tunnel packet, should be dropped and have no effect
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		// modify the only known good src IP, we do not care about csums at this point
+		encapedPkt[26] = 234
+		res, err := bpfrun(encapedPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	})
+
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
 	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN

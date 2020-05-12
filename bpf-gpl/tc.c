@@ -533,6 +533,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* Do conntrack lookup before anything else */
 	state.ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
 
+	/* check if someone is trying to spoof a tunnel packet */
+	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(state.ct_result.rc)) {
+		CALI_DEBUG("dropping tunnel pkt with changed source node\n");
+		goto deny;
+	}
+
 	if (state.ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		state.flags |= CALI_ST_NAT_OUTGOING;
 	}

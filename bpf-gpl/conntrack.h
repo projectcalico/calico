@@ -363,6 +363,7 @@ enum calico_ct_result_type {
 
 #define CALI_CT_RELATED		(1 << 8)
 #define CALI_CT_RPF_FAILED	(1 << 9)
+#define CALI_CT_TUN_SRC_CHANGED	(1 << 10)
 
 #define ct_result_rc(rc)		((rc) & 0xff)
 #define ct_result_flags(rc)		((rc) & ~0xff)
@@ -370,6 +371,7 @@ enum calico_ct_result_type {
 
 #define ct_result_is_related(rc)	((rc) & CALI_CT_RELATED)
 #define ct_result_rpf_failed(rc)	((rc) & CALI_CT_RPF_FAILED)
+#define ct_result_tun_src_changed(rc)	((rc) & CALI_CT_TUN_SRC_CHANGED)
 
 struct calico_ct_result {
 	__s16 rc;
@@ -612,6 +614,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 		} else {
 			result.rc =	CALI_CT_ESTABLISHED;
+		}
+
+		if (CALI_F_FROM_HEP && result.tun_ret_ip && result.tun_ret_ip != ctx->nat_tun_src) {
+			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
+					be32_to_host(result.tun_ret_ip), be32_to_host(ctx->nat_tun_src));
+			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
 		}
 
 		break;
