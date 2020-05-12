@@ -455,6 +455,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		}
 	}
 
+	// Drop packets from/to workload Endpoints with IP options
+	if (CALI_F_TO_WEP || CALI_F_FROM_WEP) {
+		if (ip_header->ihl > 5) {
+			CALI_DEBUG("Drop packets with IP options\n");
+			return TC_ACT_SHOT;
+		}
+	}
 	// Setting all of these up-front to keep the verifier happy.
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
