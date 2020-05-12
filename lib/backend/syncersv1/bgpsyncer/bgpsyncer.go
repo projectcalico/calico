@@ -15,6 +15,7 @@
 package bgpsyncer
 
 import (
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -26,7 +27,7 @@ import (
 // the required resource types, the WatcherSyncer will go into a polling loop for
 // KDD.  An optional node name may be supplied.  If set, the syncer only watches
 // the specified node rather than all nodes.
-func New(client api.Client, callbacks api.SyncerCallbacks, node string) api.Syncer {
+func New(client api.Client, callbacks api.SyncerCallbacks, node string, cfg apiconfig.CalicoAPIConfigSpec) api.Syncer {
 	// Create ResourceTypes required for BGP.
 	resourceTypes := []watchersyncer.ResourceType{
 		{
@@ -43,9 +44,14 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string) api.Sync
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindBGPPeer},
 		},
-		{
-			ListInterface: model.BlockAffinityListOptions{Host: node},
-		},
 	}
+
+	// If using Calico IPAM, include IPAM resources.
+	if !cfg.K8sUsePodCIDR {
+		resourceTypes = append(resourceTypes, watchersyncer.ResourceType{
+			ListInterface: model.BlockAffinityListOptions{Host: node},
+		})
+	}
+
 	return watchersyncer.New(client, resourceTypes, callbacks)
 }

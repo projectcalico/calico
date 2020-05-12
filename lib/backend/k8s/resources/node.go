@@ -268,6 +268,14 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 		calicoNode.Status = wireguardStatus
 	}
 
+	// Fill in status with Kubernetes pod CIDRs.
+	if len(k8sNode.Spec.PodCIDRs) > 0 {
+		calicoNode.Status.PodCIDRs = make([]string, len(k8sNode.Spec.PodCIDRs))
+		for _, c := range k8sNode.Spec.PodCIDRs {
+			calicoNode.Status.PodCIDRs = append(calicoNode.Status.PodCIDRs, c)
+		}
+	}
+
 	// Create the resource key from the node name.
 	return &model.KVPair{
 		Key: model.ResourceKey{

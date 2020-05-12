@@ -51,7 +51,7 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNode},
-			UpdateProcessor: updateprocessors.NewFelixNodeUpdateProcessor(),
+			UpdateProcessor: updateprocessors.NewFelixNodeUpdateProcessor(cfg.K8sUsePodCIDR),
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindProfile},

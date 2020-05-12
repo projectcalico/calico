@@ -15,6 +15,9 @@
 package updateprocessors_test
 
 import (
+	"fmt"
+	"reflect"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -30,7 +33,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		Name: "mynode",
 	}
 	numFelixConfigs := 6
-	up := updateprocessors.NewFelixNodeUpdateProcessor()
+	up := updateprocessors.NewFelixNodeUpdateProcessor(false)
 
 	BeforeEach(func() {
 		up.OnSyncerStarting()
@@ -344,3 +347,86 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		)
 	})
 })
+
+var _ = Describe("Test the (Felix) Node update processor with USE_POD_CIDR=true", func() {
+	v3NodeKey1 := model.ResourceKey{
+		Kind: apiv3.KindNode,
+		Name: "mynode",
+	}
+	up := updateprocessors.NewFelixNodeUpdateProcessor(true)
+
+	BeforeEach(func() {
+		up.OnSyncerStarting()
+	})
+
+	It("should properly convert nodes into blocks for Felix", func() {
+		By("converting a node with PodCIDRs set")
+		res := apiv3.NewNode()
+		res.Name = "mynode"
+		res.Status.PodCIDRs = []string{
+			"192.168.1.0/24",
+			"192.168.2.0/24",
+		}
+
+		// Process it.
+		kvps, err := up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure we have the correct KVP updates - one for each CIDR.
+		c1 := net.MustParseCIDR("192.168.1.0/24")
+		aff := "host:mynode"
+		v1 := model.AllocationBlock{CIDR: c1, Affinity: &aff}
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c1}, Value: &v1})
+
+		c2 := net.MustParseCIDR("192.168.2.0/24")
+		v2 := model.AllocationBlock{CIDR: c2, Affinity: &aff}
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c2}, Value: &v2})
+
+		// Remove CIDR 2 and make sure we get a delete for it.
+		By("handling an update that removes a CIDR")
+		res.Status.PodCIDRs = []string{
+			"192.168.1.0/24",
+		}
+
+		// Process it.
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert we get block 1
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c1}, Value: &v1})
+
+		// And a remove for block 2.
+		assertBlockUpdate(kvps, &model.KVPair{Key: model.BlockKey{CIDR: c2}, Value: nil})
+	})
+})
+
+func assertBlockUpdate(kvps []*model.KVPair, expected *model.KVPair) {
+	for _, kvp := range kvps {
+		switch kvp.Key.(type) {
+		case model.BlockKey:
+			if reflect.DeepEqual(kvp.Key, expected.Key) {
+				if expected.Value == nil {
+					Expect(kvp.Value).To(BeNil())
+				} else {
+					Expect(kvp.Value).To(Equal(expected.Value))
+				}
+				return
+			}
+		}
+	}
+
+	// Build a nice error message.
+	e := fmt.Sprintf("%v \n\nnot found in\n\n [", expected)
+	for _, k := range kvps {
+		e = fmt.Sprintf("%s\n%#v", e, *k)
+
+	}
+	e += "]"
+	Expect(fmt.Errorf(e)).NotTo(HaveOccurred())
+}

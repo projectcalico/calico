@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,17 +23,23 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // Create a new SyncerUpdateProcessor to sync Node data in v1 format for
 // consumption by the BGP daemon.
-func NewBGPNodeUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return &bgpNodeUpdateProcessor{}
+func NewBGPNodeUpdateProcessor(usePodCIDR bool) watchersyncer.SyncerUpdateProcessor {
+	return &bgpNodeUpdateProcessor{
+		usePodCIDR:      usePodCIDR,
+		nodeCIDRTracker: newNodeCIDRTracker(),
+	}
 }
 
 // bgpNodeUpdateProcessor implements the SyncerUpdateProcessor interface.
 // This converts the v3 node configuration into the v1 data types consumed by confd.
 type bgpNodeUpdateProcessor struct {
+	usePodCIDR      bool
+	nodeCIDRTracker nodeCIDRTracker
 }
 
 func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
@@ -46,8 +52,10 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 	// Extract the separate bits of BGP config - these are stored as separate keys in the
 	// v1 model.  For a delete these will all be nil.
 	var asNum, ipv4, netv4, ipv6, netv6, rrClusterID interface{}
+	var node *apiv3.Node
+	var ok bool
 	if kvp.Value != nil {
-		node, ok := kvp.Value.(*apiv3.Node)
+		node, ok = kvp.Value.(*apiv3.Node)
 		if !ok {
 			return nil, errors.New("Incorrect value type - expecting resource of kind Node")
 		}
@@ -86,7 +94,7 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 		}
 	}
 
-	return []*model.KVPair{
+	kvps := []*model.KVPair{
 		{
 			Key: model.NodeBGPConfigKey{
 				Nodename: name,
@@ -135,7 +143,48 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 			Value:    rrClusterID,
 			Revision: kvp.Revision,
 		},
-	}, err
+	}
+
+	if c.usePodCIDR {
+		// If we're using host-local IPAM based off the Kubernetes node PodCIDR, then
+		// we need to send affinities based on the CIDRs to confd.
+		var currentPodCIDRs []string
+		if node != nil {
+			currentPodCIDRs = node.Status.PodCIDRs
+		}
+		toRemove := c.nodeCIDRTracker.SetNodeCIDRs(name, currentPodCIDRs)
+
+		// Send deletes for any CIDRs which are no longer present.
+		for _, c := range toRemove {
+			_, cidr, err := cnet.ParseCIDR(c)
+			if err != nil {
+				log.WithError(err).WithField("CIDR", c).Warn("Failed to parse Node PodCIDR")
+				continue
+			}
+			kvps = append(kvps, &model.KVPair{
+				Key:      model.BlockAffinityKey{Host: name, CIDR: *cidr},
+				Value:    nil,
+				Revision: kvp.Revision,
+			})
+		}
+
+		// Send updates for any CIDRs which are still present.
+		for _, c := range currentPodCIDRs {
+			_, cidr, err := cnet.ParseCIDR(c)
+			if err != nil {
+				log.WithError(err).WithField("CIDR", c).Warn("Failed to parse Node PodCIDR")
+				continue
+			}
+
+			kvps = append(kvps, &model.KVPair{
+				Key:      model.BlockAffinityKey{Host: name, CIDR: *cidr},
+				Value:    &model.BlockAffinity{State: model.StateConfirmed},
+				Revision: kvp.Revision,
+			})
+		}
+	}
+
+	return kvps, err
 }
 
 // Sync is restarting - nothing to do for this processor.

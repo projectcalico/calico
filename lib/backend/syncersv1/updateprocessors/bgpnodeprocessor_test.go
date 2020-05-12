@@ -15,12 +15,16 @@
 package updateprocessors_test
 
 import (
+	"fmt"
+	"reflect"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -30,7 +34,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		Name: "bgpnode1",
 	}
 	numBgpConfigs := 6
-	up := updateprocessors.NewBGPNodeUpdateProcessor()
+	up := updateprocessors.NewBGPNodeUpdateProcessor(false)
 
 	BeforeEach(func() {
 		up.OnSyncerStarting()
@@ -271,3 +275,84 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 	})
 })
+
+var _ = Describe("Test the (BGP) Node update processor with USE_POD_CIDR=true", func() {
+	v3NodeKey1 := model.ResourceKey{
+		Kind: apiv3.KindNode,
+		Name: "mynode",
+	}
+	up := updateprocessors.NewBGPNodeUpdateProcessor(true)
+
+	BeforeEach(func() {
+		up.OnSyncerStarting()
+	})
+
+	It("should properly convert nodes into block affinities for BGP", func() {
+		By("converting a node with PodCIDRs set")
+		res := apiv3.NewNode()
+		res.Name = "mynode"
+		res.Status.PodCIDRs = []string{
+			"192.168.1.0/24",
+			"192.168.2.0/24",
+		}
+
+		// Process it.
+		kvps, err := up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure we have the correct KVP updates - one for each CIDR.
+		c1 := net.MustParseCIDR("192.168.1.0/24")
+		v := model.BlockAffinity{State: model.StateConfirmed}
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c1, Host: "mynode"}, Value: &v})
+
+		c2 := net.MustParseCIDR("192.168.2.0/24")
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c2, Host: "mynode"}, Value: &v})
+
+		// Remove CIDR 2 and make sure we get a delete for it.
+		By("handling an update that removes a CIDR")
+		res.Status.PodCIDRs = []string{
+			"192.168.1.0/24",
+		}
+
+		// Process it.
+		kvps, err = up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert we get block affinity 1
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c1, Host: "mynode"}, Value: &v})
+
+		// And a remove for block affinity 2.
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c2, Host: "mynode"}, Value: nil})
+	})
+})
+
+func assertBlockAffinityUpdate(kvps []*model.KVPair, expected *model.KVPair) {
+	for _, kvp := range kvps {
+		switch kvp.Key.(type) {
+		case model.BlockAffinityKey:
+			if reflect.DeepEqual(kvp.Key, expected.Key) {
+				if expected.Value == nil {
+					Expect(kvp.Value).To(BeNil())
+				} else {
+					Expect(kvp.Value).To(Equal(expected.Value))
+				}
+				return
+			}
+		}
+	}
+
+	// Build a nice error message.
+	e := fmt.Sprintf("%v \n\nnot found in\n\n [", expected)
+	for _, k := range kvps {
+		e = fmt.Sprintf("%s\n%#v", e, *k)
+
+	}
+	e += "]"
+	Expect(fmt.Errorf(e)).NotTo(HaveOccurred())
+}
