@@ -15,27 +15,22 @@
 package k8s
 
 import (
-	"fmt"
-
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/typha/pkg/calc"
 )
 
-func NewK8sAPI() *RealK8sAPI {
-	return &RealK8sAPI{}
+func NewK8sAPI(nc *calc.NodeCounter) *RealK8sAPI {
+	return &RealK8sAPI{nodeCounter: nc}
 }
 
 type RealK8sAPI struct {
-	cachedClientSet    *kubernetes.Clientset
-	cachedNodeIndexer  cache.Indexer
-	cachedNodeInformer cache.Controller
+	cachedClientSet *kubernetes.Clientset
+	nodeCounter     *calc.NodeCounter
 }
 
 func (r *RealK8sAPI) clientSet() (*kubernetes.Clientset, error) {
@@ -54,28 +49,6 @@ func (r *RealK8sAPI) clientSet() (*kubernetes.Clientset, error) {
 		r.cachedClientSet = clientSet
 	}
 	return r.cachedClientSet, nil
-}
-
-func (r *RealK8sAPI) nodeIndexer() (cache.Indexer, error) {
-	if r.cachedNodeIndexer == nil {
-		// Create an indexer for nodes that we can use to access resource counts without
-		// going all the way to the API.
-		clientSet, err := r.clientSet()
-		if err != nil {
-			return nil, err
-		}
-
-		nodeListWatcher := cache.NewListWatchFromClient(clientSet.CoreV1().RESTClient(), "nodes", metav1.NamespaceNone, fields.Everything())
-		nodeIndexer, nodeInformer := cache.NewIndexerInformer(nodeListWatcher, &v1.Node{}, 0, cache.ResourceEventHandlerFuncs{}, cache.Indexers{})
-		r.cachedNodeIndexer = nodeIndexer
-		r.cachedNodeInformer = nodeInformer
-	}
-
-	// If the informer hasn't synced yet, return an error. We'll retry later.
-	if !r.cachedNodeInformer.HasSynced() {
-		return nil, fmt.Errorf("Node informer has not yet sync'd")
-	}
-	return r.cachedNodeIndexer, nil
 }
 
 func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int, error) {
@@ -109,10 +82,5 @@ func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int,
 }
 
 func (r *RealK8sAPI) GetNumNodes() (int, error) {
-	// Use the indexer's local store to get the number of nodes.
-	indexer, err := r.nodeIndexer()
-	if err != nil {
-		return 0, err
-	}
-	return len(indexer.ListKeys()), nil
+	return r.nodeCounter.GetNumNodes()
 }
