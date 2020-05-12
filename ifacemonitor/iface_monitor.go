@@ -15,6 +15,7 @@
 package ifacemonitor
 
 import (
+	"context"
 	"regexp"
 	"syscall"
 	"time"
@@ -91,6 +92,10 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	if err := m.netlinkStub.Subscribe(updates, addrUpdates); err != nil {
 		log.WithError(err).Panic("Failed to subscribe to netlink stub")
 	}
+	filteredUpdates := make(chan netlink.LinkUpdate, 10)
+	filteredAddrUpdates := make(chan netlink.AddrUpdate, 10)
+	updateFilter := NewUpdateFilter()
+	go updateFilter.FilterUpdates(context.Background(), filteredAddrUpdates, addrUpdates, filteredUpdates, updates)
 	log.Info("Subscribed to netlink updates.")
 
 	// Start of day, do a resync to notify all our existing interfaces.  We also do periodic
@@ -104,19 +109,19 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 readLoop:
 	for {
 		log.WithFields(log.Fields{
-			"updates":     updates,
-			"addrUpdates": addrUpdates,
+			"updates":     filteredUpdates,
+			"addrUpdates": filteredAddrUpdates,
 			"resyncC":     m.resyncC,
 		}).Debug("About to select on possible triggers")
 		select {
-		case update, ok := <-updates:
+		case update, ok := <-filteredUpdates:
 			log.WithField("update", update).Debug("Link update")
 			if !ok {
 				log.Warn("Failed to read a link update")
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
-		case addrUpdate, ok := <-addrUpdates:
+		case addrUpdate, ok := <-filteredAddrUpdates:
 			log.WithField("addrUpdate", addrUpdate).Debug("Address update")
 			if !ok {
 				log.Warn("Failed to read an address update")
