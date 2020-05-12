@@ -208,6 +208,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200423215051-ff990268245e h1:Y7
 github.com/projectcalico/libcalico-go v1.7.2-0.20200423215051-ff990268245e/go.mod h1:+JXWhLhg+IrIwStlE/VCgH28aXSL9uehnHbtYUl+hfY=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200427180741-f197f7370140 h1:vCbxITpOuAhnGZGERIiVdKigHGjGXJcidgQHvjpsrKI=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200427180741-f197f7370140/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200506023842-e898422e4f3a h1:+DAZQXxC02RT78TPnGEG+4ss6IDxgqt0HST83BGilWY=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200506023842-e898422e4f3a/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/typha v0.0.0-20200428231740-c01bb349f7f0 h1:1FxYrQfYQYmvPYJXLKwyM/K6LGql2E+Hnd5U963CBGI=
@@ -216,6 +218,8 @@ github.com/projectcalico/typha v0.0.0-20200429152632-a10912b58c82 h1:ewtisBZ9j2V
 github.com/projectcalico/typha v0.0.0-20200429152632-a10912b58c82/go.mod h1:gS03RELMmjVOrvVhIZyqQ2hlY8itfsHzcOqGCVx4JL8=
 github.com/projectcalico/typha v0.0.0-20200501165105-0d5f1a476bb5 h1:52WbE4Rh6PXeodl3U7XShXAOQZHpzrGuuXah09oUBkk=
 github.com/projectcalico/typha v0.0.0-20200501165105-0d5f1a476bb5/go.mod h1:gS03RELMmjVOrvVhIZyqQ2hlY8itfsHzcOqGCVx4JL8=
+github.com/projectcalico/typha v0.0.0-20200511164527-9f7389a31cff h1:jfS+BtSxNXJz9sNc7uWrO6o+31JDwq6gMmCaTxi+wWg=
+github.com/projectcalico/typha v0.0.0-20200511164527-9f7389a31cff/go.mod h1:bWbIcy7rt10Hfi8c505HBMMvqgebcJ9kNIhqIHVmvDs=
 github.com/projectcalico/typha v0.7.3-0.20200424145113-15dafd25b67b h1:oXLg5GBBmBh33tWHPNixbc8DBUrClYhAntmjng4BIDA=
 github.com/projectcalico/typha v0.7.3-0.20200424145113-15dafd25b67b/go.mod h1:XlLblB1ipB5Rfqt1AV6RsDJp4uCHCyZDvUzx8/hTCQk=
 github.com/projectcalico/typha v3.8.8+incompatible h1:XRWR22IRQIRHeKezRHvhMZhqxMYj9fX9AuYQxEMxrJI=
