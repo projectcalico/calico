@@ -386,6 +386,18 @@ func TestNATNodePort(t *testing.T) {
 		routes.NewValue(routes.FlagsLocalWorkload).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
+
+	// we must know that the encaped packet src ip if from a known host
+	node1CIDR := net.IPNet{
+		IP:   node1ip,
+		Mask: net.IPv4Mask(255, 255, 255, 255),
+	}
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValue(routes.FlagsRemoteHost).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
 	dumpRTMap(rtMap)
 
 	// now we are at the node with local workload

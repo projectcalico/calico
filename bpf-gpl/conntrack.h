@@ -150,6 +150,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 	__u16 dport = ctx->dport;
 	__be32 orig_dst = ctx->orig_dst;
 	__u16 orig_dport = ctx->orig_dport;
+	int err = 0;
 
 
 	__be32 seq = 0;
@@ -215,6 +216,12 @@ create:
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
 	if (type == CALI_CT_TYPE_NAT_REV && ctx->nat_tun_src) {
+		struct cali_rt *rt = cali_rt_lookup(ctx->nat_tun_src);
+		if (!rt || !cali_rt_is_host(rt)) {
+			CALI_DEBUG("CT-ALL nat tunnel src not a host %x\n", be32_to_host(ctx->nat_tun_src));
+			err = -1;
+			goto out;
+		}
 		ct_value.tun_ip = ctx->nat_tun_src;
 		CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->nat_tun_src));
 	}
@@ -274,7 +281,9 @@ create:
 		CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
 	}
 
-	int err = cali_v4_ct_update_elem(k, &ct_value, 0);
+	err = cali_v4_ct_update_elem(k, &ct_value, 0);
+
+out:
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
 	return err;
 }
@@ -330,11 +339,17 @@ static CALI_BPF_INLINE int calico_ct_v4_create(struct ct_ctx *ctx)
 static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx, int nat)
 {
 	struct calico_ct_key k;
+	int err;
 
-	calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NAT_REV, nat);
-	calico_ct_v4_create_nat_fwd(ctx, &k);
+	err = calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NAT_REV, nat);
+	if (!err) {
+		err = calico_ct_v4_create_nat_fwd(ctx, &k);
+		if (err) {
+			/* XXX we should clean up the tracking entry */
+		}
+	}
 
-	return 0;
+	return err;
 }
 
 enum calico_ct_result_type {

@@ -896,7 +896,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		// If we get here, we've passed policy.
 
 		if (nat_dest == NULL) {
-			conntrack_create(&ct_nat_ctx, CT_CREATE_NORMAL);
+			if (conntrack_create(&ct_nat_ctx, CT_CREATE_NORMAL)) {
+				CALI_DEBUG("Creating normal conntrack failed\n");
+				goto deny;
+			}
 			goto allow;
 		}
 
@@ -946,7 +949,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 					encap_needed && state->nat_tun_src == 0) {
 				ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
 			}
-			conntrack_create(&ct_nat_ctx, encap_needed ? CT_CREATE_NAT_FWD : CT_CREATE_NAT);
+			if (conntrack_create(&ct_nat_ctx,
+						encap_needed ? CT_CREATE_NAT_FWD : CT_CREATE_NAT)) {
+				CALI_DEBUG("Creating NAT conntrack failed\n");
+				goto deny;
+			}
 		}
 
 		if (encap_needed) {
