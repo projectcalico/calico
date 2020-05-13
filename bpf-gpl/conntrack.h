@@ -381,7 +381,7 @@ struct calico_ct_result {
 	__u16 flags;
 	__be32 nat_ip;
 	__u32 nat_port;
-	__be32 tun_ret_ip;
+	__be32 tun_ip;
 };
 
 /* skb_is_icmp_err_unpack fills in ctx, but only what needs to be changed. For instance, keeps the
@@ -605,7 +605,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.nat_ip = v->nat_rev_key.addr_a;
 			result.nat_port = v->nat_rev_key.port_a;
 		}
-		result.tun_ret_ip = tracking_v->tun_ip;
+		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", be32_to_host(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = tracking_v->flags;
@@ -622,9 +622,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 
 		if (CALI_F_FROM_HEP && !ct_result_np_node(result) &&
-				result.tun_ret_ip && result.tun_ret_ip != ctx->tun_ip) {
+				result.tun_ip && result.tun_ip != ctx->tun_ip) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
-					be32_to_host(result.tun_ret_ip), be32_to_host(ctx->tun_ip));
+					be32_to_host(result.tun_ip), be32_to_host(ctx->tun_ip));
 			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
 		}
 
@@ -640,7 +640,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			dst_to_src = &v->a_to_b;
 		}
 
-		result.tun_ret_ip = v->tun_ip;
+		result.tun_ip = v->tun_ip;
 		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
 
 		if (ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
