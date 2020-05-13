@@ -335,7 +335,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		state.prog_start_time = bpf_ktime_get_ns();
 	}
-	state.nat_tun_src = 0;
+	state.tun_ip = 0;
 
 #ifdef CALI_SET_SKB_MARK
 	/* workaround for test since bpftool run cannot set it in context, wont
@@ -437,7 +437,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				vxlan_size_ok(skb, udp_header) &&
 				vxlan_vni_is_valid(skb, udp_header) &&
 				vxlan_vni(skb, udp_header) == CALI_VXLAN_VNI) {
-			state.nat_tun_src = ip_header->saddr;
+			state.tun_ip = ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
 				fwd.reason = CALI_REASON_DECAP_FAIL;
@@ -451,7 +451,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 			ip_header = skb_iphdr(skb);
 
-			CALI_DEBUG("vxlan decap origin %x\n", be32_to_host(state.nat_tun_src));
+			CALI_DEBUG("vxlan decap origin %x\n", be32_to_host(state.tun_ip));
 		}
 	}
 
@@ -518,7 +518,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		.sport	= state.sport,
 		.dst	= state.ip_dst,
 		.dport	= state.dport,
-		.nat_tun_src = state.nat_tun_src,
+		.tun_ip = state.tun_ip,
 	};
 
 	if (state.ip_proto == IPPROTO_TCP) {
@@ -568,7 +568,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* No conntrack entry, check if we should do NAT */
 	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
 					 state.ip_proto, state.dport,
-					 state.nat_tun_src != 0);
+					 state.tun_ip != 0);
 
 	if (nat_dest != NULL) {
 		state.post_nat_ip_dst = nat_dest->addr;
@@ -729,7 +729,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
 	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
-	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
+	CALI_DEBUG("tun_ip=%x\n", state->tun_ip);
 	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
 	CALI_DEBUG("sport=%d\n", state->sport);
 	CALI_DEBUG("flags=%x\n", state->flags);
@@ -824,7 +824,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				ct_rc = CALI_CT_ESTABLISHED_DNAT;
 				break;
 			case CALI_CT_ESTABLISHED_DNAT:
-				if (CALI_F_FROM_HEP && state->nat_tun_src && ct_result_np_node(state->ct_result)) {
+				if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
 					/* Packet is returning from a NAT tunnel, just forward it. */
 					seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 					CALI_DEBUG("ICMP related returned from NAT tunnel\n");
@@ -885,7 +885,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		ct_nat_ctx.sport = state->sport;
 		ct_nat_ctx.dst = state->post_nat_ip_dst;
 		ct_nat_ctx.dport = state->post_nat_dport;
-		ct_nat_ctx.nat_tun_src = state->nat_tun_src;
+		ct_nat_ctx.tun_ip = state->tun_ip;
 		if (state->flags & CALI_ST_NAT_OUTGOING) {
 			ct_nat_ctx.flags |= CALI_CT_FLAG_NAT_OUT;
 		}
@@ -916,7 +916,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
 		if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
-			if (CALI_F_FROM_HEP && state->nat_tun_src && ct_result_np_node(state->ct_result)) {
+			if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
 				/* Packet is returning from a NAT tunnel,
 				 * already SNATed, just forward it.
 				 */
@@ -954,7 +954,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			int nat_type = CT_CREATE_NAT;
 
 			if (encap_needed) {
-				if (CALI_F_FROM_HEP && state->nat_tun_src == 0) {
+				if (CALI_F_FROM_HEP && state->tun_ip == 0) {
 					if (CALI_F_DSR) {
 						ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
 					}
@@ -962,7 +962,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				}
 
 				nat_type = CT_CREATE_NAT_FWD;
-				ct_nat_ctx.nat_tun_src = rt->next_hop;
+				ct_nat_ctx.tun_ip = rt->next_hop;
 			}
 
 			if (conntrack_create(&ct_nat_ctx, nat_type)) {

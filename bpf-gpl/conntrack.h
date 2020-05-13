@@ -127,7 +127,7 @@ struct ct_ctx {
 	__u16 dport;
 	__u16 orig_dport;
 	struct tcphdr *tcp;
-	__be32 nat_tun_src;
+	__be32 tun_ip;
 	__u8 flags;
 };
 
@@ -218,15 +218,15 @@ create:
 	ct_value.flags = ctx->flags;
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
-	if (type == CALI_CT_TYPE_NAT_REV && !(ctx->flags & CALI_CT_FLAG_NP_FWD) && ctx->nat_tun_src) {
-		struct cali_rt *rt = cali_rt_lookup(ctx->nat_tun_src);
+	if (type == CALI_CT_TYPE_NAT_REV && !(ctx->flags & CALI_CT_FLAG_NP_FWD) && ctx->tun_ip) {
+		struct cali_rt *rt = cali_rt_lookup(ctx->tun_ip);
 		if (!rt || !cali_rt_is_host(rt)) {
-			CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", be32_to_host(ctx->nat_tun_src));
+			CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", be32_to_host(ctx->tun_ip));
 			err = -1;
 			goto out;
 		}
-		ct_value.tun_ip = ctx->nat_tun_src;
-		CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->nat_tun_src));
+		ct_value.tun_ip = ctx->tun_ip;
+		CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->tun_ip));
 	}
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
@@ -385,7 +385,7 @@ struct calico_ct_result {
 };
 
 /* skb_is_icmp_err_unpack fills in ctx, but only what needs to be changed. For instance, keeps the
- * cxt->skb or ctx->nat_tun_src. It returns true if the original packet is an icmp error and all
+ * cxt->skb or ctx->tun_ip. It returns true if the original packet is an icmp error and all
  * checks went well.
  */
 static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct __sk_buff *skb, struct ct_ctx *ctx)
@@ -622,9 +622,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 
 		if (CALI_F_FROM_HEP && !ct_result_np_node(result) &&
-				result.tun_ret_ip && result.tun_ret_ip != ctx->nat_tun_src) {
+				result.tun_ret_ip && result.tun_ret_ip != ctx->tun_ip) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
-					be32_to_host(result.tun_ret_ip), be32_to_host(ctx->nat_tun_src));
+					be32_to_host(result.tun_ret_ip), be32_to_host(ctx->tun_ip));
 			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
 		}
 
@@ -720,7 +720,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 
 	int ret_from_tun = CALI_F_FROM_HEP &&
-				ctx->nat_tun_src &&
+				ctx->tun_ip &&
 				result.rc == CALI_CT_ESTABLISHED_DNAT &&
 				src_to_dst->whitelisted &&
 				result.flags & CALI_CT_FLAG_NP_FWD;
@@ -739,7 +739,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 
 	if (ret_from_tun) {
-		CALI_DEBUG("Packet returned from tunnel %x\n", be32_to_host(ctx->nat_tun_src));
+		CALI_DEBUG("Packet returned from tunnel %x\n", be32_to_host(ctx->tun_ip));
 	} else if (CALI_F_TO_HOST) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
