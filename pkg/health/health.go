@@ -36,17 +36,20 @@ var felixLivenessEp string
 func init() {
 	felixPort := os.Getenv("FELIX_HEALTHPORT")
 	if felixPort == "" {
-		felixReadinessEp = "http://localhost:9099/readiness"
-		felixLivenessEp = "http://localhost:9099/liveness"
-		return
+		felixPort = "9099"
 	}
 
 	if _, err := strconv.Atoi(felixPort); err != nil {
 		log.Panicf("Failed to parse value for port %q", felixPort)
 	}
 
-	felixReadinessEp = "http://localhost:" + felixPort + "/readiness"
-	felixLivenessEp = "http://localhost:" + felixPort + "/liveness"
+	felixHost := os.Getenv("FELIX_HEALTHHOST")
+	if felixHost == "" {
+		felixHost = "localhost"
+	}
+
+	felixReadinessEp = "http://" + felixHost + ":" + felixPort + "/readiness"
+	felixLivenessEp = "http://" + felixHost + ":" + felixPort + "/liveness"
 }
 
 func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) {
