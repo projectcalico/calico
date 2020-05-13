@@ -4,6 +4,9 @@
 > This may result in unexpected behavior and data.
 {: .alert .alert-danger}
 
+> **Important**: Only enable auto host endpoints after all Calico components have been upgraded otherwise it may result in an outage.
+{: .alert .alert-danger}
+
 In order to migrate existing all-interfaces host endpoints to {{site.prodname}}-managed auto host endpoints:
 
 1. Add any labels on existing all-interfaces host endpoints to their corresponding {{include.orch}} nodes. {{site.prodname}} manages labels on automatic host endpoints by syncing
