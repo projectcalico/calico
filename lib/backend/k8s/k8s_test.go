@@ -166,7 +166,7 @@ func (c cb) OnUpdates(updates []api.Update) {
 			log.Infof("[TEST] Syncer received deleted: %+v", u)
 			Expect(u.Value).To(BeNil())
 		case api.UpdateTypeKVUnknown:
-			panic(fmt.Sprintf("[TEST] Syncer received unkown update: %+v", u))
+			panic(fmt.Sprintf("[TEST] Syncer received unknown update: %+v", u))
 		}
 
 		// Send the update to a goroutine which will process it.

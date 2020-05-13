@@ -239,7 +239,7 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
 
-	// Setting to Watch all profiles in all namespaces; overriden below
+	// Setting to Watch all profiles in all namespaces; overridden below
 	watchNS, watchSA := true, true
 	ns := kapiv1.NamespaceAll
 	sa := ""

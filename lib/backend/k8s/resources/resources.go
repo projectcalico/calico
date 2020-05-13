@@ -42,7 +42,7 @@ type ResourceList interface {
 	metav1.ListMetaAccessor
 }
 
-// Function signature for conversion function to convert a K8s resouce to a
+// Function signature for conversion function to convert a K8s resource to a
 // KVPair equivalent.
 type ConvertK8sResourceToKVPair func(Resource) (*model.KVPair, error)
 type ConvertK8sResourceToKVPairs func(Resource) ([]*model.KVPair, error)

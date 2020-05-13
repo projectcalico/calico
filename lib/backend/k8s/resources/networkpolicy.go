@@ -301,7 +301,7 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
 
-	// Setting to Watch all networkPolicies in all namespaces; overriden below
+	// Setting to Watch all networkPolicies in all namespaces; overridden below
 	watchK8s, watchCrd := true, true
 
 	// Watch a specific networkPolicy

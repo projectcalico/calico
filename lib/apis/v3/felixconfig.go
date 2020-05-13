@@ -196,13 +196,13 @@ type FelixConfigurationSpec struct {
 	PrometheusProcessMetricsEnabled *bool `json:"prometheusProcessMetricsEnabled,omitempty"`
 
 	// FailsafeInboundHostPorts is a comma-delimited list of UDP/TCP ports that Felix will allow incoming traffic to host endpoints
-	// on irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration. Each
+	// on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. Each
 	// port should be specified as tcp:<port-number> or udp:<port-number>. For back-compatibility, if the protocol is not specified, it
 	// defaults to “tcp”. To disable all inbound host ports, use the value none. The default value allows ssh access and DHCP.
 	// [Default: tcp:22, udp:68]
 	FailsafeInboundHostPorts *[]ProtoPort `json:"failsafeInboundHostPorts,omitempty"`
 	// FailsafeOutboundHostPorts is a comma-delimited list of UDP/TCP ports that Felix will allow outgoing traffic from host endpoints to
-	// irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration. Each port
+	// irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. Each port
 	// should be specified as tcp:<port-number> or udp:<port-number>. For back-compatibility, if the protocol is not specified, it defaults
 	// to “tcp”. To disable all outbound host ports, use the value none. The default value opens etcd’s standard ports to ensure that Felix
 	// does not get cut off from etcd as well as allowing DHCP and DNS. [Default: tcp:2379, tcp:2380, tcp:4001, tcp:7001, udp:53, udp:67]
@@ -303,7 +303,7 @@ type FelixConfigurationSpec struct {
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
-	// - CalicoIPAM: the default - use IPAM data to contruct routes.
+	// - CalicoIPAM: the default - use IPAM data to construct routes.
 	RouteSource string `json:"routeSource,omitempty" validate:"omitempty,routeSource"`
 
 	// Calico programs additional Linux route tables for various purposes.  RouteTableRange
