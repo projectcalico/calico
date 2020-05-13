@@ -129,8 +129,9 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut    uint8 = 0x01
-	FlagNATRwdDsr uint8 = 0x02
+	FlagNATOut    uint8 = (1 << 0)
+	FlagNATFwdDsr uint8 = (1 << 1)
+	FlagNATNPFwd  uint8 = (1 << 2)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -241,7 +242,7 @@ func (e Value) String() string {
 			flagsStr += " nat-out"
 		}
 
-		if flags&FlagNATRwdDsr != 0 {
+		if flags&FlagNATFwdDsr != 0 {
 			flagsStr += " fwd-dsr"
 		}
 	}
@@ -262,7 +263,7 @@ func (e Value) String() string {
 }
 
 func (e Value) IsForwardDSR() bool {
-	return e.Flags()&FlagNATRwdDsr != 0
+	return e.Flags()&FlagNATFwdDsr != 0
 }
 
 var MapParams = bpf.MapParameters{

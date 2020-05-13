@@ -58,8 +58,11 @@ enum cali_ct_type {
 					 */
 };
 
-#define CALI_CT_FLAG_NAT_OUT	0x01
-#define CALI_CT_FLAG_DSR_FWD	0x02 /* marks entry into the tunnel on the fwd node when dsr */
+#define CALI_CT_FLAG_NAT_OUT	(1 << 0)
+#define CALI_CT_FLAG_DSR_FWD	(1 << 1) /* marks entry into the tunnel on the fwd node when dsr */
+#define CALI_CT_FLAG_NP_FWD	(1 << 2) /* marks entry into the tunnel on the fewd node */
+
+#define ct_result_np_node(res)		((res).flags & CALI_CT_FLAG_NP_FWD)
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -215,10 +218,10 @@ create:
 	ct_value.flags = ctx->flags;
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
-	if (type == CALI_CT_TYPE_NAT_REV && ctx->nat_tun_src) {
+	if (type == CALI_CT_TYPE_NAT_REV && !(ctx->flags & CALI_CT_FLAG_NP_FWD) && ctx->nat_tun_src) {
 		struct cali_rt *rt = cali_rt_lookup(ctx->nat_tun_src);
 		if (!rt || !cali_rt_is_host(rt)) {
-			CALI_DEBUG("CT-ALL nat tunnel src not a host %x\n", be32_to_host(ctx->nat_tun_src));
+			CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", be32_to_host(ctx->nat_tun_src));
 			err = -1;
 			goto out;
 		}
@@ -604,6 +607,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 		result.tun_ret_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", be32_to_host(tracking_v->tun_ip));
+		// flags are in the tracking entry
+		result.flags = tracking_v->flags;
 
 		if (ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -616,7 +621,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
 
-		if (CALI_F_FROM_HEP && result.tun_ret_ip && result.tun_ret_ip != ctx->nat_tun_src) {
+		if (CALI_F_FROM_HEP && !ct_result_np_node(result) &&
+				result.tun_ret_ip && result.tun_ret_ip != ctx->nat_tun_src) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
 					be32_to_host(result.tun_ret_ip), be32_to_host(ctx->nat_tun_src));
 			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
@@ -717,7 +723,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 				ctx->nat_tun_src &&
 				result.rc == CALI_CT_ESTABLISHED_DNAT &&
 				src_to_dst->whitelisted &&
-				!result.tun_ret_ip;
+				result.flags & CALI_CT_FLAG_NP_FWD;
 
 	if (related) {
 		if (proto_orig == IPPROTO_ICMP) {

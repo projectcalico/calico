@@ -824,7 +824,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				ct_rc = CALI_CT_ESTABLISHED_DNAT;
 				break;
 			case CALI_CT_ESTABLISHED_DNAT:
-				if (CALI_F_FROM_HEP && state->nat_tun_src && !state->ct_result.tun_ret_ip) {
+				if (CALI_F_FROM_HEP && state->nat_tun_src && ct_result_np_node(state->ct_result)) {
 					/* Packet is returning from a NAT tunnel, just forward it. */
 					seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 					CALI_DEBUG("ICMP related returned from NAT tunnel\n");
@@ -916,7 +916,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
 		if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
-			if (CALI_F_FROM_HEP && state->nat_tun_src && !state->ct_result.tun_ret_ip) {
+			if (CALI_F_FROM_HEP && state->nat_tun_src && ct_result_np_node(state->ct_result)) {
 				/* Packet is returning from a NAT tunnel,
 				 * already SNATed, just forward it.
 				 */
@@ -951,12 +951,21 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		 * we jump to do the encap.
 		 */
 		if (ct_rc == CALI_CT_NEW) {
-			if (CALI_F_DSR && CALI_F_FROM_HEP &&
-					encap_needed && state->nat_tun_src == 0) {
-				ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+			int nat_type = CT_CREATE_NAT;
+
+			if (encap_needed) {
+				if (CALI_F_FROM_HEP && state->nat_tun_src == 0) {
+					if (CALI_F_DSR) {
+						ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+					}
+					ct_nat_ctx.flags |= CALI_CT_FLAG_NP_FWD;
+				}
+
+				nat_type = CT_CREATE_NAT_FWD;
+				ct_nat_ctx.nat_tun_src = rt->next_hop;
 			}
-			if (conntrack_create(&ct_nat_ctx,
-						encap_needed ? CT_CREATE_NAT_FWD : CT_CREATE_NAT)) {
+
+			if (conntrack_create(&ct_nat_ctx, nat_type)) {
 				CALI_DEBUG("Creating NAT conntrack failed\n");
 				goto deny;
 			}
