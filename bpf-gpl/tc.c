@@ -931,27 +931,28 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		CALI_DEBUG("CT: DNAT to %x:%d\n",
 				be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
 
-		struct cali_rt *rt;
 
 		encap_needed = dnat_should_encap();
-		if (encap_needed) {
-			rt = cali_rt_lookup(state->post_nat_ip_dst);
-			if (!rt) {
-				reason = CALI_REASON_RT_UNKNOWN;
-				goto deny;
-			}
-			CALI_DEBUG("rt found for 0x%x local %d\n",
-					be32_to_host(state->post_nat_ip_dst), !!cali_rt_is_local(rt));
-
-			encap_needed = !cali_rt_is_local(rt);
-		}
 
 		/* We have not created the conntrack yet since we did not know
 		 * if we need encap or not. Must do before MTU check and before
 		 * we jump to do the encap.
 		 */
 		if (ct_rc == CALI_CT_NEW) {
+			struct cali_rt * rt;
 			int nat_type = CT_CREATE_NAT;
+
+			if (encap_needed) {
+				rt = cali_rt_lookup(state->post_nat_ip_dst);
+				if (!rt) {
+					reason = CALI_REASON_RT_UNKNOWN;
+					goto deny;
+				}
+				CALI_DEBUG("rt found for 0x%x local %d\n",
+						be32_to_host(state->post_nat_ip_dst), !!cali_rt_is_local(rt));
+
+				encap_needed = !cali_rt_is_local(rt);
+			}
 
 			if (encap_needed) {
 				if (CALI_F_FROM_HEP && state->tun_ip == 0) {
@@ -963,11 +964,19 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 				nat_type = CT_CREATE_NAT_FWD;
 				ct_nat_ctx.tun_ip = rt->next_hop;
+				state->ip_dst = rt->next_hop;
 			}
 
 			if (conntrack_create(&ct_nat_ctx, nat_type)) {
 				CALI_DEBUG("Creating NAT conntrack failed\n");
 				goto deny;
+			}
+		} else {
+			if (encap_needed && ct_result_np_node(state->ct_result)) {
+				CALI_DEBUG("CT says encap to node %x\n", be32_to_host(state->ct_result.tun_ip));
+				state->ip_dst = state->ct_result.tun_ip;
+			} else {
+				encap_needed = false;
 			}
 		}
 
@@ -978,7 +987,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				goto icmp_too_big;
 			}
 			state->ip_src = HOST_IP;
-			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
 
 			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */

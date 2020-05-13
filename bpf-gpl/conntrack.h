@@ -218,15 +218,19 @@ create:
 	ct_value.flags = ctx->flags;
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
-	if (type == CALI_CT_TYPE_NAT_REV && !(ctx->flags & CALI_CT_FLAG_NP_FWD) && ctx->tun_ip) {
-		struct cali_rt *rt = cali_rt_lookup(ctx->tun_ip);
-		if (!rt || !cali_rt_is_host(rt)) {
-			CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", be32_to_host(ctx->tun_ip));
-			err = -1;
-			goto out;
+	if (type == CALI_CT_TYPE_NAT_REV && ctx->tun_ip) {
+		if (ctx->flags & CALI_CT_FLAG_NP_FWD) {
+			CALI_DEBUG("CT-ALL nat tunneled to %x\n", be32_to_host(ctx->tun_ip));
+		} else {
+			struct cali_rt *rt = cali_rt_lookup(ctx->tun_ip);
+			if (!rt || !cali_rt_is_host(rt)) {
+				CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", be32_to_host(ctx->tun_ip));
+				err = -1;
+				goto out;
+			}
+			CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->tun_ip));
 		}
 		ct_value.tun_ip = ctx->tun_ip;
-		CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->tun_ip));
 	}
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
