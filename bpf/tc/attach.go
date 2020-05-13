@@ -96,7 +96,7 @@ func (ap AttachPoint) AttachProgram() error {
 	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
 	tempBinary := path.Join(tempDir, filename)
 
-	err = ap.patchBinary(preCompiledBinary, tempBinary)
+	err = ap.patchBinary(logCxt, preCompiledBinary, tempBinary)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to patch binary")
 		return err
@@ -132,13 +132,13 @@ func (ap AttachPoint) AttachProgram() error {
 	return nil
 }
 
-func (ap AttachPoint) patchBinary(ifile, ofile string) error {
+func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error {
 	b, err := bpf.BinaryFromFile(ifile)
 	if err != nil {
 		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
 	}
 
-	log.WithField("ap", ap).WithField("ip", ap.IP).Debug("Patching in IP")
+	logCtx.WithField("ip", ap.IP).Debug("Patching in IP")
 	err = b.PatchIPv4(ap.IP)
 	if err != nil {
 		return errors.WithMessage(err, "patching in IPv4")
