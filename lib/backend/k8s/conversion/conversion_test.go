@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package conversion
 
 import (
 	"os"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -2723,3 +2724,40 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 		Expect(err).To(HaveOccurred())
 	})
 })
+
+var _ = DescribeTable("Test port simplification",
+	func(inputPorts string, expectedOutput string) {
+		var ports []numorstring.Port
+		for _, p := range strings.Split(inputPorts, ",") {
+			if p == "" {
+				continue
+			}
+			port, err := numorstring.PortFromString(p)
+			Expect(err).NotTo(HaveOccurred(), "Failed to parse test input")
+			ports = append(ports, port)
+		}
+		simplified := SimplifyPorts(ports)
+		var outputParts []string
+		for _, p := range simplified {
+			outputParts = append(outputParts, p.String())
+		}
+		output := strings.Join(outputParts, ",")
+		Expect(output).To(Equal(expectedOutput))
+	},
+	simpleEntry("", ""),
+	simpleEntry("0", "0"),
+	simpleEntry("1", "1"),
+	simpleEntry("65535", "65535"),
+	simpleEntry("0:65535", "0:65535"),
+	simpleEntry("1,2", "1:2"),
+	simpleEntry("2,1", "1:2"),
+	simpleEntry("1,2,4", "1:2,4"),
+	simpleEntry("1,2,3,4,80:81,81:90,9090", "1:4,80:90,9090"),
+	simpleEntry("81:90,4,2,80:81,3,1,9090", "1:4,80:90,9090"),
+	simpleEntry("81:90,4,2,foo,80:81,3,1,9090,http", "foo,http,1:4,80:90,9090"),
+	simpleEntry("foo", "foo"),
+)
+
+func simpleEntry(in, out string) TableEntry {
+	return Entry(in+" -> "+out, in, out)
+}
