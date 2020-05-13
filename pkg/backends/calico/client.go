@@ -134,7 +134,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// callback) then we terminate confd - the calico/node init process will restart the
 	// confd process.
 	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", template.NodeName)
-	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor()
+	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor(config.Spec.K8sUsePodCIDR)
 
 	typhaAddr, err := discoverTyphaAddr(&confdConfig.Typha)
 	if err != nil {
@@ -170,7 +170,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		}()
 	} else {
 		// Use the syncer locally.
-		c.syncer = bgpsyncer.New(c.client, c, template.NodeName)
+		c.syncer = bgpsyncer.New(c.client, c, template.NodeName, config.Spec)
 		c.syncer.Start()
 	}
 
