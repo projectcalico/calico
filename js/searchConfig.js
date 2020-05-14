@@ -100,7 +100,11 @@
             }),
         ]);
 
-        search.addWidget(instantsearch.widgets.pagination({
+        const pagination = instantsearch.widgets.panel({
+            hidden: ({ results }) => results.nbPages === 1,
+          })(instantsearch.widgets.pagination);
+
+        search.addWidget(pagination({
             container: paginationSelector,
             maxPages: 20,
             scrollTo: false
@@ -113,6 +117,7 @@
         $(searchInputSelector).popover({
             html: true,
             placement: 'bottom',
+            trigger: 'manual',
             viewport: { selector: ".container-fluid", padding: 10 },
             content: function () {
                 return content;
@@ -121,15 +126,18 @@
     }
 
     function hidePopoversOnClickOutside() {
-        $('body').on('click', function (e) {
-            $('[data-toggle="popover"]').each(function () {
-                if (!$(this).is(e.target)
-                    && $(this).has(e.target).length === 0
-                    && $('.popover').has(e.target).length === 0) {
-                    $(this).popover('hide');
-                }
-            });
-        });
+        $("[data-toggle='popover']").popover({trigger: "click"}).click(function (event) {
+            $("[data-toggle='popover']").popover('show');
+            event.stopPropagation();
+        }).on('inserted.bs.popover', function () {
+            $(".popover").click(function (event) {
+                event.stopPropagation();
+            })
+        })
+        
+        $(document).click(function () {
+            $("[data-toggle='popover']").popover('hide');
+        })
     }
 
     function renderHits(renderOptions) {
