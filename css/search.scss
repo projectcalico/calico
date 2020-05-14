@@ -4,6 +4,22 @@
     display: none;
 }
 
+.search-powered-by {
+    &__container {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    &__link {
+        margin-top: 2px;
+        margin-bottom: 2px;
+    }
+
+    &__icon {
+        font-size: 1.2em;
+    }
+}
+
 .search-input-container .ais-search-box {
     max-width: unset;
 }
@@ -22,6 +38,8 @@
     }
 
     input {
+        padding-left: 24px;
+
         font-size: 14px;
     }
 }

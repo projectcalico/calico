@@ -1,5 +1,5 @@
 (function () {
-    window.initializeSearch = function (currentDocVersion, searchInputSelector, searchContentSelector,
+    window.initializeSearch = function (currentDocVersion, poweredBySelector, searchInputSelector, searchContentSelector,
         searchResultsSelector, searchPaginationSelector) {
         if (!currentDocVersion || typeof (currentDocVersion) !== 'string') {
             throw new Error('Provide a version');
@@ -22,42 +22,56 @@
         }
 
         $(document).ready(function () {
-            initializeInstantSearch(currentDocVersion, searchInputSelector, searchResultsSelector,
+            initializeInstantSearch(currentDocVersion, poweredBySelector, searchInputSelector, searchResultsSelector,
                 searchPaginationSelector);
             initializePopover(searchContentSelector, searchInputSelector);
             hidePopoversOnClickOutside();
         });
     };
 
-    function initializeInstantSearch(currentDocVersion, inputSelector, resultsSelector, paginationSelector) {
+    function initializeInstantSearch(currentDocVersion, poweredBySelector, inputSelector, resultsSelector, paginationSelector) {
         var search = instantsearch({
-            appId: 'BH4D9OD16A',
-            apiKey: '99def7ba73ea2430f7f42383148fe57a',
             indexName: 'projectcalico',
+            searchClient: algoliasearch(
+                'BH4D9OD16A',
+                '99def7ba73ea2430f7f42383148fe57a',
+            ),
             routing: false,
-            searchParameters: {
-                hitsPerPage: 10,
-                facetsRefinements: {
-                    version: [currentDocVersion]
-                },
-                facets: ['version']
-            }
         });
+        search.addWidget(instantsearch.widgets.configure({
+            hitsPerPage: 10,
+            facetsRefinements: {
+                version: [currentDocVersion]
+            },
+            facets: ['version']
+        }));
         search.addWidget(instantsearch.widgets.searchBox({
             container: inputSelector,
             placeholder: 'Search in the documentation',
             autofocus: false,
             poweredBy: true
         }));
-        search.addWidget(instantsearch.widgets.hits({
-            container: resultsSelector,
-            templates: {
-                empty: 'No results',
-                allItems: $('#search-results-template').html()
+
+        search.addWidget(instantsearch.widgets.poweredBy({
+            container: poweredBySelector,
+            cssClasses: {
+                root: `${poweredBySelector.split('.')[1]}__container`,
+                link: `${poweredBySelector.split('.')[1]}__link`,
+                logo: `${poweredBySelector.split('.')[1]}__icon`,
             },
-            transformData: {
-                allItems: searchResults => {
-                    searchResults.hits.sort(function (a, b) {
+        }));
+  
+
+        const customHits = instantsearch.connectors.connectHits(renderHits);
+
+        search.addWidgets([
+            customHits({
+                container: document.querySelector(resultsSelector),
+                templates: {
+                    empty: 'No results',
+                },
+                transformItems: searchResults => {
+                    searchResults.sort(function (a, b) {
                         var hitATopCategory = a.hierarchy.lvl0;
                         var hitBTopCategory = b.hierarchy.lvl0;
 
@@ -66,23 +80,26 @@
                             : hitATopCategory > hitBTopCategory;
                     });
 
-                    var visitedTopCategories = {};
+                    var visitedTopCategories = [];
 
-                    searchResults.hits.forEach(function (hit) {
+                    searchResults.forEach(function (hit) {
                         var hitTopCategory = hit.hierarchy.lvl0;
 
-                        if (hitTopCategory && visitedTopCategories[hitTopCategory]) {
+                        var hitTopCategoryInde = visitedTopCategories.indexOf(hitTopCategory);
+
+                        if (hitTopCategory && hitTopCategoryInde !== -1) {
                             hit.shouldDisplayTopCategory = false;
                         } else {
                             hit.shouldDisplayTopCategory = true;
-                            visitedTopCategories[hitTopCategory] = true;
+                            visitedTopCategories.push(hitTopCategory);
                         }
                     });
 
                     return searchResults;
                 }
-            }
-        }));
+            }),
+        ]);
+
         search.addWidget(instantsearch.widgets.pagination({
             container: paginationSelector,
             maxPages: 20,
@@ -113,5 +130,75 @@
                 }
             });
         });
+    }
+
+    function renderHits(renderOptions) {
+
+        const { hits, widgetParams } = renderOptions;
+
+        const content = hits.reduce((currentHtml, hit) => {
+            if (hit.shouldDisplayTopCategory && hit.hierarchy.lvl0) {
+                currentHtml += `
+                    <a href="${hit.url}" class="search-results__group-header">
+                        ${hit._highlightResult.hierarchy.lvl0.value}
+                    </a>
+                `;
+            }
+
+            currentHtml += `
+                <div class="search-results__search-result search-result columns-layout">
+                    <div class="columns-layout__left-column">
+            `;
+
+            if (hit.hierarchy.lvl1) {
+                currentHtml += `
+                    <a href="${hit.url}" class="search-result__subcategory">
+                        ${hit._highlightResult.hierarchy.lvl1.value}
+                    </a>
+                `;
+            }
+
+            currentHtml += `
+                </div>
+                <div class="columns-layout__right-column">
+            `;
+
+            if (hit.hierarchy.lvl2) {
+                currentHtml += `
+                    <a href="${hit.url}" class="search-result__subsubcategory">
+                        ${hit._highlightResult.hierarchy.lvl2.value}
+                    </a>
+                `;
+            }
+
+            if (hit.hierarchy.lvl3) {
+                currentHtml += `
+                    <a href="${hit.url}" class="search-result__subsubcategory">
+                        ${hit._highlightResult.hierarchy.lvl3.value}
+                    </a>
+                `;
+            }
+
+            if (hit.content) {
+                currentHtml += `
+                    <a href="${hit.url}" class="search-result__content">
+                        ${hit._snippetResult.content.value}
+                    </a>
+                `;
+            }
+
+            currentHtml += `
+                </div>
+                </div>
+            `;
+
+            return currentHtml;
+        }, '');
+
+        widgetParams.container.innerHTML = `
+            <div class="search-results">
+                ${content}
+            </div>
+        `;
     }
 })();
