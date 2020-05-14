@@ -9,7 +9,7 @@ Use Grafana dashboard to generate visual aids related to the health of your {{ s
 
 ### Value
 
-Using Grafana can be beneficial for IT personel, graphs and metrics can be crucial for you in order to identify any unsual activity.
+Using Grafana can be beneficial for IT personnel by providing a means to visualize metrics through graphs that can help you quickly identify unusual activity.
 
 ### Features
 
@@ -21,7 +21,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### About Grafana
 
-Grafana is an open source visualization and analytics software. It allows you to query, visualize, alert on, and explore your metrics no matter where they are stored.
+Grafana is an open source visualization and analytics software. It allows you to query, visualize, alert on, and explore metrics no matter where they are stored.
 
 ### Before you begin...
 
@@ -188,17 +188,16 @@ kubectl port-forward pod/grafana-pod 3000:3000 -n calico-monitoring
 
 You can now access Grafana web-ui at [http://localhost:3000](http://localhost:3000), if you like to go to your Felix dashboard directly [click here](http://localhost:3000/d/calico-felix-dashboard/felix-dashboard-calico?orgId=1).
 
+Since this is your first time visiting Grafana web-ui, you have to change the default password before being able to access your dashboards.
+
+> **Note**: Both username and password are `admin`.
+   {: .alert .alert-info}
+
 In this tutorial we have also prepared a [Typha dashboard](http://localhost:3000/d/calico-typha-dashboard/typha-dashborad-calico?orgId=1) for you, if you are not using Typha in your cluster you can delete the dashboard safely via Grafana web-ui.
 monitor-component-metrics#typha-configuration).
 
 > **Note**: A more detailed guide about Typha detection and setup can be found [at this link]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics#typha-configuration).
    {: .alert .alert-warning}
-
-
-Since this is your first time visiting Grafana web-ui, you have to change the default password before being able to access your dashboards.
-
-> **Note**: Both username and password are `admin`.
-   {: .alert .alert-info}
 
 After login you will be prompted to change the password, you can either change default password here (`Recommended`) and click `Save` or click `Skip` and do it later from settings.
 
