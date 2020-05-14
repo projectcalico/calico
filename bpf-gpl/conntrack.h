@@ -625,8 +625,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
 
-		if (CALI_F_FROM_HEP && !ct_result_np_node(result) &&
-				result.tun_ip && result.tun_ip != ctx->tun_ip) {
+		if (CALI_F_FROM_HEP && ctx->tun_ip && result.tun_ip && result.tun_ip != ctx->tun_ip) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
 					be32_to_host(result.tun_ip), be32_to_host(ctx->tun_ip));
 			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
