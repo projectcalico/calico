@@ -444,6 +444,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			log.WithField("id", iface).Info("Applied program to host interface")
 			return set.RemoveItem
 		}
+		if err == tc.ErrDeviceNotFound {
+			log.WithField("iface", iface).Debug(
+				"Tried to apply BPF program to interface but the interface wasn't present.  " +
+					"Will retry if it shows up.")
+		}
 		log.WithError(err).Warn("Failed to apply policy to interface")
 		return nil
 	})
@@ -478,6 +483,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 		if err == nil {
 			log.WithField("id", wlID).Info("Applied policy to workload")
 			return set.RemoveItem
+		}
+		if err == tc.ErrDeviceNotFound {
+			log.WithField("wep", wlID).Debug(
+				"Tried to apply BPF program to interface but the interface wasn't present.  " +
+					"Will retry if it shows up.")
 		}
 		log.WithError(err).Warn("Failed to apply policy to endpoint")
 		return nil

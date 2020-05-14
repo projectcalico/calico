@@ -64,6 +64,8 @@ func (e ErrAttachFailed) Error() string {
 	return fmt.Sprintf("tc failed with exit code %d; stderr=%v", e.ExitCode, e.Stderr)
 }
 
+var ErrDeviceNotFound = errors.New("device not found")
+
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap AttachPoint) AttachProgram() error {
 	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
@@ -108,14 +110,16 @@ func (ap AttachPoint) AttachProgram() error {
 		"bpf", "da", "obj", tempBinary,
 		"sec", SectionName(ap.Type, ap.ToOrFrom))
 
-	out, err := tcCmd.CombinedOutput()
+	out, err := tcCmd.Output()
 	if err != nil {
-		out := string(out)
-		if strings.Contains(out, "Cannot find device") {
-			// Avoid a big, spammy log when the issue is that the interface isn't present.
-			logCxt.WithField("iface", ap.Iface).Info(
-				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
-			return nil
+		if err, ok := err.(*exec.ExitError); ok {
+			stderr := string(err.Stderr)
+			if strings.Contains(stderr, "Cannot find device") {
+				// Avoid a big, spammy log when the issue is that the interface isn't present.
+				logCxt.WithField("iface", ap.Iface).Info(
+					"Failed to attach BPF program; interface not found.  Will retry if it show up.")
+				return ErrDeviceNotFound
+			}
 		}
 		logCxt.WithError(err).WithFields(log.Fields{"out": out}).
 			WithField("command", tcCmd).Error("Failed to attach BPF program")
