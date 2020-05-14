@@ -37,6 +37,13 @@ spec:
               description: CalicoNetwork specifies configuration options for Calico
                 provided pod networking.
               properties:
+                hostPorts:
+                  description: 'HostPorts configures whether or not Calico will support
+                    Kubernetes HostPorts. Default: Enabled'
+                  enum:
+                  - Enabled
+                  - Disabled
+                  type: string
                 ipPools:
                   description: IPPools contains a list of IP pools to use for allocating
                     pod IP addresses. At most one IP pool may be specified. If omitted,
@@ -144,11 +151,23 @@ spec:
               - Management
               - Managed
               type: string
+            controlPlaneNodeSelector:
+              additionalProperties:
+                type: string
+              description: ControlPlaneNodeSelector is used to select control plane
+                nodes on which to run specific Calico components. This currently only
+                applies to kube-controllers and the apiserver.
+              type: object
+            flexVolumePath:
+              description: FlexVolumePath optionally specifies a custom path for FlexVolume.
+                If not specified, FlexVolume will be enabled by default. If set to
+                'None', FlexVolume will be disabled. The default is based on the kubernetesProvider.
+              type: string
             imagePath:
               description: 'ImagePath allows for the path part of an image to be specified.
                 If specified then the specified value will be used as the image path
                 for each image. If not specified or empty, the default for each image
-                will be used.  Image format:    `<registry>/<imagePath>/<imageName>:<tag-name>`  This
+                will be used.  Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`  This
                 option allows configuring the `<imagePath>` portion of the above format.'
               type: string
             imagePullSecrets:
@@ -174,12 +193,23 @@ spec:
               - OpenShift
               - DockerEnterprise
               type: string
+            nodeMetricsPort:
+              description: NodeMetricsPort specifies which port calico/node serves
+                prometheus metrics on. By default, metrics are not enabled. If specified,
+                this overrides any FelixConfiguration resources which may exist. If
+                omitted, then prometheus metrics may still be configured through FelixConfiguration.
+              format: int32
+              type: integer
+            nodeUpdateStrategy:
+              description: NodeUpdateStrategy can be used to customize the desired
+                update strategy, such as the MaxUnavailable field.
+              type: object
             registry:
               description: 'Registry is the default Docker registry used for component
                 Docker images. If specified, all images will be pulled from this registry.
                 If not specified then the default registries will be used.  Image
-                format:    `<registry>/<imagePath>/<imageName>:<tag-name>`  This option
-                allows configuring the `<registry>` portion of the above format.'
+                format:    `<registry>/<imagePath>/<imageName>:<image-tag>`  This
+                option allows configuring the `<registry>` portion of the above format.'
               type: string
             variant:
               description: 'Variant is the product to install - one of Calico or TigeraSecureEnterprise
