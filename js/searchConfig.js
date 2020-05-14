@@ -85,9 +85,9 @@
                     searchResults.forEach(function (hit) {
                         var hitTopCategory = hit.hierarchy.lvl0;
 
-                        var hitTopCategoryInde = visitedTopCategories.indexOf(hitTopCategory);
+                        var hitTopCategoryIndex = visitedTopCategories.indexOf(hitTopCategory);
 
-                        if (hitTopCategory && hitTopCategoryInde !== -1) {
+                        if (hitTopCategory && hitTopCategoryIndex !== -1) {
                             hit.shouldDisplayTopCategory = false;
                         } else {
                             hit.shouldDisplayTopCategory = true;
