@@ -186,19 +186,19 @@ By using `port-forward` feature expose Grafana to your local machine.
 kubectl port-forward pod/grafana-pod 3000:3000 -n calico-monitoring
 ```
 
-You can now access Grafana web-ui at [http://localhost:3000](http://localhost:3000), if you like to go to your Felix dashboard directly [click here](http://localhost:3000/d/calico-felix-dashboard/felix-dashboard-calico?orgId=1).
+You can now access Grafana web-ui at [http://localhost:3000](http://localhost:3000), if you prefer to visit Felix dashboard directly [click here](http://localhost:3000/d/calico-felix-dashboard/felix-dashboard-calico?orgId=1).
 
 > **Note**: Both username and password are `admin`.
    {: .alert .alert-info}
 
 After login you will be prompted to change the default password, you can either change it here (`Recommended`) and click `Save` or click `Skip` and do it later from settings.
 
-In this tutorial we have also prepared a [Typha dashboard](http://localhost:3000/d/calico-typha-dashboard/typha-dashborad-calico?orgId=1) for you, if you are not using Typha in your cluster you can delete the dashboard safely via Grafana web-ui.
+Congratulation you have arrived at your Felix dashboard.
+
+In this tutorial we have also prepared a [Typha dashboard](http://localhost:3000/d/calico-typha-dashboard/typha-dashborad-calico?orgId=1) for you, if you are not using Typha in your cluster you can delete it safely via Grafana web-ui.
 
 > **Note**: A more detailed guide about Typha detection and setup can be found [at this link]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics#typha-configuration).
    {: .alert .alert-warning}
-
-Congratulation you have arrived at your Felix dashboard.
 
 ### Cleanup
 
