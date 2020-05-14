@@ -25,9 +25,9 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200512155201-5728ce4bda3a
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200513230509-02391ef5f438
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
-	github.com/projectcalico/typha v0.7.3-0.20200513155650-0f5779b36217
+	github.com/projectcalico/typha v0.7.3-0.20200514040816-be87f2aa5364
 	github.com/prometheus/client_golang v0.9.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
