@@ -1,6 +1,6 @@
 ---
 title: Try out the node-to-node encryption tech preview
-description: Try out enabling WireGuard for state-of-the-art cryptographic security between pods for Calico clusters.
+description: Try out enabling WireGuard for state-of-the-art cryptographic security between nodes for Calico clusters.
 ---
 
 ### Big picture
