@@ -16,19 +16,21 @@ package k8s
 
 import (
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/typha/pkg/calc"
 )
 
-func NewK8sAPI() *RealK8sAPI {
-	return &RealK8sAPI{}
+func NewK8sAPI(nc *calc.NodeCounter) *RealK8sAPI {
+	return &RealK8sAPI{nodeCounter: nc}
 }
 
 type RealK8sAPI struct {
 	cachedClientSet *kubernetes.Clientset
+	nodeCounter     *calc.NodeCounter
 }
 
 func (r *RealK8sAPI) clientSet() (*kubernetes.Clientset, error) {
@@ -56,7 +58,7 @@ func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int,
 	}
 
 	epClient := clientSet.CoreV1().Endpoints(namespace)
-	ep, err := epClient.Get(serviceName, v1.GetOptions{})
+	ep, err := epClient.Get(serviceName, metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Failed to get Typha endpoint from Kubernetes")
 	}
@@ -80,15 +82,5 @@ func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int,
 }
 
 func (r *RealK8sAPI) GetNumNodes() (int, error) {
-	clientSet, err := r.clientSet()
-	if err != nil {
-		return 0, err
-	}
-
-	noClient := clientSet.CoreV1().Nodes()
-	list, err := noClient.List(v1.ListOptions{})
-	if err != nil {
-		return 0, err
-	}
-	return len(list.Items), nil
+	return r.nodeCounter.GetNumNodes()
 }

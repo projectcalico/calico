@@ -83,6 +83,9 @@ type TyphaDaemon struct {
 
 	// Health monitoring.
 	healthAggregator *health.HealthAggregator
+
+	// Node counting.
+	nodeCounter *calc.NodeCounter
 }
 
 type syncerPipeline struct {
@@ -327,9 +330,18 @@ func (t *TyphaDaemon) addSyncerPipeline(
 	syncer := newSyncer(syncerToValidator)
 	log.Debugf("Created Syncer: %#v", syncer)
 
-	// Create the validator, which sits between the syncer and the cache.
-	validatorToCache := calc.NewSyncerCallbacksDecoupler()
-	validator := calc.NewValidationFilter(validatorToCache)
+	toCache := calc.NewSyncerCallbacksDecoupler()
+	var validator *calc.ValidationFilter
+	if syncerType == syncproto.SyncerTypeFelix {
+		// If this is a felix syncer, insert a counter after the validation filter which is used to track
+		// the number of nodes in the cluster. We only want to count nodes once, which is why we only do this
+		// for the felix syncer and not the BGP syncer as well.
+		t.nodeCounter = calc.NewNodeCounter(toCache)
+		validator = calc.NewValidationFilter(t.nodeCounter)
+	} else {
+		// Otherwise, just go from validator to cache directly.
+		validator = calc.NewValidationFilter(toCache)
+	}
 
 	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
 	cache := snapcache.New(snapcache.Config{
@@ -342,7 +354,7 @@ func (t *TyphaDaemon) addSyncerPipeline(
 		Syncer:            syncer,
 		SyncerToValidator: syncerToValidator,
 		Validator:         validator,
-		ValidatorToCache:  validatorToCache,
+		ValidatorToCache:  toCache,
 		Cache:             cache,
 	}
 	t.SyncerPipelines = append(t.SyncerPipelines, pipeline)
@@ -390,7 +402,7 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	t.Server.Start(cxt)
 	if t.ConfigParams.ConnectionRebalancingMode == "kubernetes" {
 		log.Info("Kubernetes connection rebalancing is enabled, starting k8s poll goroutine.")
-		k8sAPI := k8s.NewK8sAPI()
+		k8sAPI := k8s.NewK8sAPI(t.nodeCounter)
 		ticker := jitter.NewTicker(
 			t.ConfigParams.K8sServicePollIntervalSecs,
 			t.ConfigParams.K8sServicePollIntervalSecs/10)
