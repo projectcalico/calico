@@ -60,7 +60,7 @@ enum cali_ct_type {
 
 #define CALI_CT_FLAG_NAT_OUT	(1 << 0)
 #define CALI_CT_FLAG_DSR_FWD	(1 << 1) /* marks entry into the tunnel on the fwd node when dsr */
-#define CALI_CT_FLAG_NP_FWD	(1 << 2) /* marks entry into the tunnel on the fewd node */
+#define CALI_CT_FLAG_NP_FWD	(1 << 2) /* marks entry into the tunnel on the fwd node */
 
 #define ct_result_np_node(res)		((res).flags & CALI_CT_FLAG_NP_FWD)
 
@@ -127,7 +127,9 @@ struct ct_ctx {
 	__u16 dport;
 	__u16 orig_dport;
 	struct tcphdr *tcp;
-	__be32 tun_ip;
+	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
+			* It is also set on the first node when we create the
+			* initial CT entry for the tunneled traffic. */
 	__u8 flags;
 };
 
@@ -625,6 +627,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
 
+		/* If we are on a HEP - where encap/decap can happen - and if the packet
+		 * arrived through a tunnel, check if the src IP of the packet is expected.
+		 */
 		if (CALI_F_FROM_HEP && ctx->tun_ip && result.tun_ip && result.tun_ip != ctx->tun_ip) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
 					be32_to_host(result.tun_ip), be32_to_host(ctx->tun_ip));
