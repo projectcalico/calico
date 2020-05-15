@@ -94,8 +94,7 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	}
 	filteredUpdates := make(chan netlink.LinkUpdate, 10)
 	filteredAddrUpdates := make(chan netlink.AddrUpdate, 10)
-	updateFilter := NewUpdateFilter()
-	go updateFilter.FilterUpdates(context.Background(), filteredAddrUpdates, addrUpdates, filteredUpdates, updates)
+	go FilterUpdates(context.Background(), filteredAddrUpdates, addrUpdates, filteredUpdates, updates)
 	log.Info("Subscribed to netlink updates.")
 
 	// Start of day, do a resync to notify all our existing interfaces.  We also do periodic

@@ -27,24 +27,14 @@ import (
 
 const FlapDampingDelay = 100 * time.Millisecond
 
-func NewUpdateFilter(options ...UpdateFilterOp) *UpdateFilter {
-	u := &UpdateFilter{
-		Time: timeshim.NewRealTime(),
-	}
-	for _, op := range options {
-		op(u)
-	}
-	return u
-}
-
-type UpdateFilter struct {
+type updateFilter struct {
 	Time timeshim.Time
 }
 
-type UpdateFilterOp func(filter *UpdateFilter)
+type UpdateFilterOp func(filter *updateFilter)
 
 func WithTimeShim(t timeshim.Time) UpdateFilterOp {
-	return func(filter *UpdateFilter) {
+	return func(filter *updateFilter) {
 		filter.Time = t
 	}
 }
@@ -56,9 +46,17 @@ func WithTimeShim(t timeshim.Time) UpdateFilterOp {
 // * Maintain a queue of link and address updates per interface.
 // * When we see a potential flap (i.e. an IP deletion), defer processing the queue for a while.
 // * If the flap resolves itself (i.e. the IP is added back), suppress the IP deletion.
-func (u *UpdateFilter) FilterUpdates(ctx context.Context,
+func FilterUpdates(ctx context.Context,
 	addrOutC chan<- netlink.AddrUpdate, addrInC <-chan netlink.AddrUpdate,
-	linkOutC chan<- netlink.LinkUpdate, linkInC <-chan netlink.LinkUpdate) {
+	linkOutC chan<- netlink.LinkUpdate, linkInC <-chan netlink.LinkUpdate,
+	options ...UpdateFilterOp) {
+
+	u := &updateFilter{
+		Time: timeshim.NewRealTime(),
+	}
+	for _, op := range options {
+		op(u)
+	}
 
 	logrus.Debug("FilterUpdates: starting")
 	var timerC <-chan time.Time
@@ -70,14 +68,15 @@ func (u *UpdateFilter) FilterUpdates(ctx context.Context,
 
 	updatesByIfaceIdx := map[int][]timestampedUpd{}
 
+mainLoop:
 	for {
 		select {
 		case <-ctx.Done():
 			logrus.Info("FilterUpdates: Context expired, stopping")
 			return
 		case linkUpd := <-linkInC:
-			idx := linkUpd.Index
-			if len(updatesByIfaceIdx[int(idx)]) == 0 {
+			idx := int(linkUpd.Index)
+			if len(updatesByIfaceIdx[idx]) == 0 {
 				// We do see link updates as part of a flap but we've only seen them after the IP is
 				// flapped down.  Avoid delaying unrelated link updates.
 				logrus.Debug("FilterUpdates: link change with empty queue, short circuit.")
@@ -85,7 +84,7 @@ func (u *UpdateFilter) FilterUpdates(ctx context.Context,
 				continue
 			}
 			// Otherwise, we might have a flap in progress, delay the update.
-			updatesByIfaceIdx[int(idx)] = append(updatesByIfaceIdx[int(idx)],
+			updatesByIfaceIdx[idx] = append(updatesByIfaceIdx[idx],
 				timestampedUpd{
 					ReadyAt: u.Time.Now().Add(FlapDampingDelay),
 					Update:  linkUpd,
@@ -118,7 +117,8 @@ func (u *UpdateFilter) FilterUpdates(ctx context.Context,
 			}
 
 			// Coalesce updates for the same IP by squashing any previous updates for the same CIDR before
-			// we append this update to the queue.
+			// we append this update to the queue.  We need to scan the whole queue because there may be
+			// updates for different IPs in flight.
 			upds := oldUpds[:0]
 			for _, upd := range oldUpds {
 				logrus.WithField("previous", upd).Debug("FilterUpdates: examining previous update.")
@@ -126,11 +126,8 @@ func (u *UpdateFilter) FilterUpdates(ctx context.Context,
 					if ipNetsEqual(oldAddrUpd.LinkAddress, addrUpd.LinkAddress) {
 						// New update for the same IP, suppress the old update
 						logrus.WithField("address", oldAddrUpd.LinkAddress.String()).Debug(
-							"Received update for same IP within a short time, squashed the update.")
-						// To prevent continuous flapping from delaying route updates forever, take the timestamp of the
-						// first update.
-						readyToSendTime = upd.ReadyAt
-						break
+							"Received update for same IP within a short time, squashed the old update.")
+						continue
 					}
 				}
 				upds = append(upds, upd)
@@ -141,7 +138,7 @@ func (u *UpdateFilter) FilterUpdates(ctx context.Context,
 				// There's already a timer set and we know this update isn't ready to send.
 				// Avoid recalculating the timer.
 				logrus.Debug("FilterUpdates: timer already set.")
-				continue
+				continue mainLoop
 			}
 		case <-timerC:
 			logrus.Debug("FilterUpdates: timer popped.")
