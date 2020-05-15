@@ -176,7 +176,7 @@ func (b *PinnedMap) Iter(f MapIter) error {
 	args := cmd[1:]
 
 	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).CombinedOutput()
+	output, err := exec.Command(prog, args...).Output()
 	if err != nil {
 		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.versionedFilename(), err, output)
 	}
@@ -220,11 +220,13 @@ func (b *PinnedMap) Delete(k []byte) error {
 	args = appendBytes(args, k)
 
 	cmd := exec.Command("bpftool", args...)
-	out, err := cmd.CombinedOutput()
+	out, err := cmd.Output()
 	if err != nil {
-		if strings.Contains(string(out), "delete failed: No such file or directory") {
-			logrus.WithField("k", k).Debug("Item didn't exist.")
-			return os.ErrNotExist
+		if err, ok := err.(*exec.ExitError); ok {
+			if strings.Contains(string(err.Stderr), "delete failed: No such file or directory") {
+				logrus.WithField("k", k).Debug("Item didn't exist.")
+				return os.ErrNotExist
+			}
 		}
 		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
 	}
