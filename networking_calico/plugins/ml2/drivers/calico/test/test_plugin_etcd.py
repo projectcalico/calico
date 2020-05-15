@@ -79,6 +79,10 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         self.reset_etcd_after = None
         self.assert_etcd_writes_deletes = True
 
+    def tearDown(self):
+        etcdv3._client = None
+        super(_TestEtcdBase, self).tearDown()
+
     def maybe_reset_etcd(self):
         if self.reset_etcd_after is not None:
             self.reset_etcd_after -= 1

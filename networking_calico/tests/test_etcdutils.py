@@ -194,6 +194,10 @@ class TestEtcdWatcher(unittest.TestCase):
         self.m_dispatcher = Mock(spec=PathDispatcher)
         self.watcher.dispatcher = self.m_dispatcher
 
+    def tearDown(self):
+        etcdv3._client = None
+        super(TestEtcdWatcher, self).tearDown()
+
     def test_mainline(self):
         # Set up 3 iterations through the watcher's main loop.
         #

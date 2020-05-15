@@ -64,6 +64,7 @@ class TestFVEtcdutils(unittest.TestCase):
                 ready = True
                 break
             except Exception:
+                _log.exception("etcd server not ready yet")
                 eventlet.sleep(2)
         self.assertTrue(ready)
 
