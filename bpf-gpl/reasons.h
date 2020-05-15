@@ -33,6 +33,7 @@ enum calico_reason {
 	CALI_REASON_ENCAP_FAIL = 0xef,
 	CALI_REASON_DECAP_FAIL = 0xdf,
 	CALI_REASON_ICMP_DF = 0x1c,
+	CALI_REASON_IP_OPTIONS = 0xeb,
 	CALI_REASON_RT_UNKNOWN = 0xdead,
 };
 

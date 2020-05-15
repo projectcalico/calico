@@ -455,12 +455,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		}
 	}
 
-	// Drop packets from/to workload Endpoints with IP options
-	if (CALI_F_TO_WEP || CALI_F_FROM_WEP) {
-		if (ip_header->ihl > 5) {
-			CALI_DEBUG("Drop packets with IP options\n");
-			return TC_ACT_SHOT;
-		}
+	// Drop packets with IP options
+	if (ip_header->ihl > 5) {
+		fwd.reason = CALI_REASON_IP_OPTIONS;
+		CALI_DEBUG("Drop packets with IP options\n");
+		goto deny;
 	}
 	// Setting all of these up-front to keep the verifier happy.
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
@@ -687,7 +686,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 	ip_header = skb_iphdr(skb);
-
+	if (ip_header->ihl > 5) {
+		CALI_DEBUG("Drop packets with IP options\n");
+		goto deny;
+	}
 	__u32 key = 0;
 	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
 	if (!state) {
