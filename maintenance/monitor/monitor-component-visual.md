@@ -25,7 +25,7 @@ Grafana is an open source visualization and analytics tool that allows you to qu
 
 #### About Prometheus
 
-Prometheus is an open source monitoring tool that scrapes metrics from instrumented components and stores as time series data which can be viewed in a visualizer (such as Grafana). 
+Prometheus is an open source monitoring tool that scrapes metrics from instrumented components and stores them as time series data which can then be visualized using tools such as Grafana.
 
 ### Before you begin...
 
