@@ -69,6 +69,12 @@ rules:
       - list
       # Used to discover Typhas.
       - get
+  # Pod CIDR auto-detection on kubeadm needs access to config maps.
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs:
+      - get
   - apiGroups: [""]
     resources:
       - nodes/status

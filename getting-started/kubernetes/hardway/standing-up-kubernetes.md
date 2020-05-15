@@ -33,7 +33,7 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
 
        `kubectl get nodes`
 
-       Verify all nodes have joined. At this point nodes are joined but in `NotReady` state, because Kubernetes can't find network provider and configuration.
+       Verify all nodes have joined. At this point nodes have joined but they are in `NotReady` state, because Kubernetes can't find network a provider and configuration.
 
 ## Next
 
