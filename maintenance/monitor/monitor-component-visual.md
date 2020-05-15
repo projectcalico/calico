@@ -5,11 +5,11 @@ description: Use open source Grafana for visualizing Calico components.
 
 ### Big picture
 
-Use Grafana dashboard to generate visual aids related to the health of your {{ site.prodname }}
+Use Grafana dashboard to view {{ site.prodname }} component metrics.
 
 ### Value
 
-Using Grafana can be beneficial for IT personnel by providing a means to visualize metrics through graphs that can help you quickly identify unusual activity.
+Using Grafana can be beneficial by providing a means to visualize metrics through graphs that can help you quickly identify unusual activity.
 
 ### Features
 
@@ -21,14 +21,17 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### About Grafana
 
-Grafana is an open source visualization and analytics software. It allows you to query, visualize, alert on, and explore metrics no matter where they are stored.
+Grafana is an open source visualization and analytics tool that allows you to query, visualize, alert on, and explore metrics from a variety of data source, including Calico component metrics stored in Prometheus.
+
+#### About Prometheus
+
+Prometheus is an open source monitoring tool that scrapes metrics from instrumented components and stores as time series data which can be viewed in a visualizer (such as Grafana). 
 
 ### Before you begin...
 
-In this tutorial we assume that you have completed all steps in [component monitoring page]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics) and possess a running Kubernetes cluster with {{site.prodname}}, calicoctl and kubectl installed.
-
-> **Note**: We strongly suggest that you read the [component monitoring metrics]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics) tutorial.
-   {: .alert .alert-warning}
+In this tutorial we assume you have
+* a running Kubernetes cluster with {{site.prodname}}, calicoctl and kubectl installed
+* completed all steps in the [monitor component metrics]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics) guide to set up Prometheus to gather {{site.prodname}} component metrics.
 
 ### How to
 
@@ -202,7 +205,7 @@ In this tutorial we have also prepared a [Typha dashboard](http://localhost:3000
 
 ### Cleanup
 
-By executing below command, you will delete all the resource and services created by following this tutorial.
+By executing below command, you will delete all Calico monitoring resources, including the ones created by following this tutorial, *and* the [monitor component metrics]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics) guide.
 
 ```bash
 kubectl delete namespace calico-monitoring
