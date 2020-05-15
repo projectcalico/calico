@@ -4,6 +4,10 @@
     display: none;
 }
 
+mark {
+    padding: 0;
+}
+
 .search-powered-by {
     &__container {
         display: flex;
