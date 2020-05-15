@@ -943,6 +943,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			int nat_type = CT_CREATE_NAT;
 
 			if (encap_needed) {
+				/* When we need to encap, we need to find out if the backend is
+				 * local or not. If local, we actually do not need the encap.
+				 */
 				rt = cali_rt_lookup(state->post_nat_ip_dst);
 				if (!rt) {
 					reason = CALI_REASON_RT_UNKNOWN;
@@ -952,20 +955,20 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 						be32_to_host(state->post_nat_ip_dst), !!cali_rt_is_local(rt));
 
 				encap_needed = !cali_rt_is_local(rt);
-			}
-
-			if (encap_needed) {
-				if (CALI_F_FROM_HEP && state->tun_ip == 0) {
-					if (CALI_F_DSR) {
-						ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+				if (encap_needed) {
+					if (CALI_F_FROM_HEP && state->tun_ip == 0) {
+						if (CALI_F_DSR) {
+							ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+						}
+						ct_nat_ctx.flags |= CALI_CT_FLAG_NP_FWD;
 					}
-					ct_nat_ctx.flags |= CALI_CT_FLAG_NP_FWD;
-				}
 
-				nat_type = CT_CREATE_NAT_FWD;
-				ct_nat_ctx.tun_ip = rt->next_hop;
-				state->ip_dst = rt->next_hop;
+					nat_type = CT_CREATE_NAT_FWD;
+					ct_nat_ctx.tun_ip = rt->next_hop;
+					state->ip_dst = rt->next_hop;
+				}
 			}
+
 
 			if (conntrack_create(&ct_nat_ctx, nat_type)) {
 				CALI_DEBUG("Creating NAT conntrack failed\n");
