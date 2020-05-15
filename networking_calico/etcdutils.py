@@ -277,7 +277,7 @@ class EtcdWatcher(object):
                 # Loop until we should cancel the watch, either because of
                 # inactivity or because of stop() having been called.
                 while not self._stopped:
-                    self.debug_reporter("Start of loop (not stopped)")
+                    self.debug_reporter("Start of loop")
                     # If WATCH_TIMEOUT_SECS has now passed since the last watch
                     # event, break out of this loop.  If we are also writing a
                     # key within the tree every WATCH_TIMEOUT_SECS / 3 seconds,
