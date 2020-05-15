@@ -35,11 +35,14 @@ from networking_calico import etcdv3
 
 _log = logging.getLogger(__name__)
 
+ETCD_IMAGE = "quay.io/coreos/etcd:v3.3.11"
+
 
 class TestFVEtcdutils(unittest.TestCase):
     def setUp(self):
         super(TestFVEtcdutils, self).setUp()
         self.etcd_server_running = False
+        os.system("docker pull " + ETCD_IMAGE)
 
     def tearDown(self):
         self.stop_etcd_server()
@@ -47,7 +50,7 @@ class TestFVEtcdutils(unittest.TestCase):
 
     def start_etcd_server(self):
         os.system("docker run -d --rm --net=host --name etcd" +
-                  " quay.io/coreos/etcd:v3.3.11 etcd" +
+                  " " + ETCD_IMAGE + " etcd" +
                   " --advertise-client-urls http://127.0.0.1:2379" +
                   " --listen-client-urls http://0.0.0.0:2379")
         self.etcd_server_running = True
@@ -55,13 +58,13 @@ class TestFVEtcdutils(unittest.TestCase):
     def wait_etcd_ready(self):
         self.assertTrue(self.etcd_server_running)
         ready = False
-        for ii in range(5):
+        for ii in range(10):
             try:
                 etcdv3.get_status()
                 ready = True
                 break
             except Exception:
-                eventlet.sleep(1)
+                eventlet.sleep(2)
         self.assertTrue(ready)
 
     def stop_etcd_server(self):
