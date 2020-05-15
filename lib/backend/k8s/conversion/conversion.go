@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -436,6 +436,7 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 	// with each rule containing all the allowed ports.
 	for _, protocolStr := range protocols {
 		calicoPorts := protocolPorts[protocolStr]
+		calicoPorts = SimplifyPorts(calicoPorts)
 
 		var protocol *numorstring.Protocol
 		if protocolStr != "" {
@@ -477,6 +478,76 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		}
 	}
 	return rules, nil
+}
+
+// SimplifyPorts calculates a minimum set of port ranges that cover the given set of ports.
+// For example, if the input was [80, 81, 82, 9090, "foo"] the output would consist of
+// [80-82, 9090, "foo"] in some order.
+func SimplifyPorts(ports []numorstring.Port) []numorstring.Port {
+	if len(ports) <= 1 {
+		return ports
+	}
+	var numericPorts []int
+	var outputPorts []numorstring.Port
+	for _, p := range ports {
+		if p.PortName != "" {
+			// Pass named ports through immediately, there's nothing to be done for them.
+			outputPorts = append(outputPorts, p)
+		} else {
+			// Work with ints to avoid overflow with the uint16 port type.
+			// In practice, we currently only get single ports here so this
+			// loop should run exactly once.
+			for i := int(p.MinPort); i <= int(p.MaxPort); i++ {
+				numericPorts = append(numericPorts, i)
+			}
+		}
+	}
+
+	if len(numericPorts) <= 1 {
+		// We have nothing to combine, short-circuit.
+		return ports
+	}
+
+	// Sort the ports so it will be easy to find ranges.
+	sort.Ints(numericPorts)
+
+	// Each pass around this outer loop extracts one port range from the sorted slice
+	// and it moves the slice along to the start of the next range.
+	for len(numericPorts) > 0 {
+		// Initialise the next range to the contain only the first port in the slice.
+		firstPortInRange := numericPorts[0]
+		lastPortInRange := firstPortInRange
+
+		// Scan ahead, looking for ports that can be combined into this range.
+		numericPorts = numericPorts[1:]
+		for len(numericPorts) > 0 {
+			nextPort := numericPorts[0]
+			if nextPort > lastPortInRange+1 {
+				// This port can't be coalesced with the existing range, break out so
+				// that we record the range; then we'll loop again and pick up this
+				// port as the start of a new range.
+				break
+			}
+			// The next port is either equal to the last port (due to a duplicate port
+			// in the input) or it is exactly one greater.  Extend the range to include
+			// it.
+			lastPortInRange = nextPort
+			numericPorts = numericPorts[1:]
+		}
+
+		// Record the port.
+		outputPorts = appendPortRange(outputPorts, firstPortInRange, lastPortInRange)
+	}
+
+	return outputPorts
+}
+
+func appendPortRange(ports []numorstring.Port, first, last int) []numorstring.Port {
+	portRange, err := numorstring.PortFromRange(uint16(first), uint16(last))
+	if err != nil {
+		log.WithError(err).Panic("Failed to make port range from ports that should have been pre-validated.")
+	}
+	return append(ports, portRange)
 }
 
 func (c converter) k8sPortToCalicoFields(port *networkingv1.NetworkPolicyPort) (protocol *numorstring.Protocol, dstPorts []numorstring.Port, err error) {
