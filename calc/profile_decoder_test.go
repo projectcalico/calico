@@ -152,6 +152,14 @@ func (p *passthruCallbackRecorder) OnIPPoolRemove(model.IPPoolKey) {
 	Fail("IPPoolRemove received")
 }
 
+func (p *passthruCallbackRecorder) OnWireguardUpdate(string, *model.Wireguard) {
+	Fail("OnWireguardUpdate received")
+}
+
+func (p *passthruCallbackRecorder) OnWireguardRemove(string) {
+	Fail("OnWireguardRemove received")
+}
+
 func (p *passthruCallbackRecorder) OnServiceAccountUpdate(update *proto.ServiceAccountUpdate) {
 	p.saUpdates = append(p.saUpdates, update)
 }

@@ -67,13 +67,15 @@ const (
 var (
 	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
 	node1ip           = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2          = net.IPv4(10, 10, 2, 1).To4()
 	node2ip           = net.IPv4(10, 10, 0, 2).To4()
 )
 
 // Globals that we use to configure the next test run.
 var (
-	hostIP  = node1ip
-	skbMark uint32
+	hostIP       = node1ip
+	skbMark      uint32
+	bpfIfaceName string
 )
 
 const (
@@ -135,10 +137,14 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		obj += "to_"
 	}
 
+	progLog := ""
+
 	if strings.Contains(section, "host") {
 		obj += "hep_"
+		progLog = "HEP"
 	} else {
 		obj += "wep_"
+		progLog = "WEP"
 	}
 
 	log.WithField("hostIP", hostIP).Info("Host IP")
@@ -154,6 +160,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 
 	bin, err := bpf.BinaryFromFile(obj)
 	Expect(err).NotTo(HaveOccurred())
+	bin.PatchLogPrefix(progLog + "-" + bpfIfaceName)
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
@@ -592,6 +599,17 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.La
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
 	return testPacket(nil, nil, nil, nil)
+}
+
+func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+	if destIP == nil {
+		return testPacketUDPDefault()
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = destIP
+
+	return testPacket(nil, &ip, nil, nil)
 }
 
 func resetBPFMaps() {

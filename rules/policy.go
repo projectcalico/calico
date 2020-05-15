@@ -76,7 +76,9 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 	return
 }
 
-//FilterRuleToIPVersion: Filter rule based on the IPversion
+// FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule
+// excluding the CIDRs that are not of the given IP version. If the rule does not apply to the
+// given IP version at all, returns nil.
 func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 	// Filter the CIDRs to the IP version that we're rendering.  In general, we should have an
 	// explicit IP version in the rule and all CIDRs should match it (and calicoctl, for

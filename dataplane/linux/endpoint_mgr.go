@@ -34,12 +34,19 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type routeTable interface {
-	SetRoutes(ifaceName string, targets []routetable.Target)
-	SetL2Routes(ifaceName string, targets []routetable.L2Target)
+// routeTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
+// interface state changes, hooks to queue a full resync and apply routing updates.
+type routeTableSyncer interface {
 	OnIfaceStateChanged(string, ifacemonitor.State)
 	QueueResync()
 	Apply() error
+}
+
+// routeTable is the interface provided by the standard routetable module used to progam the RIB.
+type routeTable interface {
+	routeTableSyncer
+	SetRoutes(ifaceName string, targets []routetable.Target)
+	SetL2Routes(ifaceName string, targets []routetable.L2Target)
 }
 
 type endpointManagerCallbacks struct {
@@ -374,8 +381,8 @@ func (m *endpointManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *endpointManager) GetRouteTables() []routeTable {
-	return []routeTable{m.routeTable}
+func (m *endpointManager) GetRouteTableSyncers() []routeTableSyncer {
+	return []routeTableSyncer{m.routeTable}
 }
 
 func (m *endpointManager) markEndpointStatusDirtyByIface(ifaceName string) {

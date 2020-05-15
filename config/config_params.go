@@ -27,10 +27,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+
+	"github.com/projectcalico/felix/idalloc"
 )
 
 var (
@@ -67,9 +68,10 @@ const (
 	DatastorePerHost
 	ConfigFile
 	EnvironmentVariable
+	InternalOverride
 )
 
-var SourcesInDescendingOrder = []Source{EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
+var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
 
 func (source Source) String() string {
 	switch source {
@@ -83,6 +85,8 @@ func (source Source) String() string {
 		return "config file"
 	case EnvironmentVariable:
 		return "environment variable"
+	case InternalOverride:
+		return "internal override"
 	}
 	return fmt.Sprintf("<unknown(%v)>", uint8(source))
 }
@@ -102,6 +106,13 @@ type Config struct {
 	// Configuration parameters.
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+
+	// Wireguard configuration
+	WireguardEnabled             bool   `config:"bool;false"`
+	WireguardListeningPort       int    `config:"int;51820"`
+	WireguardRoutingRulePriority int    `config:"int;99"`
+	WireguardInterfaceName       string `config:"iface-param;wireguard.cali;non-zero"`
+	WireguardMTU                 int    `config:"int;1420;non-zero"`
 
 	BPFEnabled                         bool           `config:"bool;false"`
 	BPFDisableUnprivileged             bool           `config:"bool;true"`
@@ -247,18 +258,23 @@ type Config struct {
 
 	RouteTableRange idalloc.IndexRange `config:"route-table-range;1-250;die-on-fail"`
 
-	// State tracking.
-
-	// nameToSource tracks where we loaded each config param from.
-	sourceToRawConfig map[Source]map[string]string
-	rawValues         map[string]string
-	Err               error
-
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
 	SidecarAccelerationEnabled bool `config:"bool;false"`
 	XDPEnabled                 bool `config:"bool;true"`
 	GenericXDPEnabled          bool `config:"bool;false"`
+
+	// State tracking.
+
+	// internalOverrides contains our highest priority config source, generated from internal constraints
+	// such as kernel version support.
+	internalOverrides map[string]string
+	// sourceToRawConfig maps each source to the set of config that was give to us via UpdateFrom.
+	sourceToRawConfig map[Source]map[string]string
+	// rawValues maps keys to the current highest-priority raw value.
+	rawValues map[string]string
+	// Err holds the most recent error from a config update.
+	Err error
 
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 
@@ -683,13 +699,22 @@ func (config *Config) SetLoadClientConfigFromEnvironmentFunction(fnc func() (*ap
 	config.loadClientConfigFromEnvironment = fnc
 }
 
+// OverrideParam installs a maximum priority parameter override for the given parameter.  This is useful for
+// disabling features that are found to be unsupported, for example. By using an extra priority class, the
+// override will persist even if the host/global config is updated.
+func (config *Config) OverrideParam(name, value string) (bool, error) {
+	config.internalOverrides[name] = value
+	return config.UpdateFrom(config.internalOverrides, InternalOverride)
+}
+
 func New() *Config {
 	if knownParams == nil {
 		loadParams()
 	}
 	p := &Config{
-		rawValues:         make(map[string]string),
-		sourceToRawConfig: make(map[Source]map[string]string),
+		rawValues:         map[string]string{},
+		sourceToRawConfig: map[Source]map[string]string{},
+		internalOverrides: map[string]string{},
 	}
 	for _, param := range knownParams {
 		param.setDefault(p)
