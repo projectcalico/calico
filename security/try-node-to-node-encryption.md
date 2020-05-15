@@ -42,9 +42,10 @@ This how-to guide uses the following {{site.prodname}} features:
    For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{ site.baseurl }}/getting-started/openshift/installation#optionally-provide-additional-configuration).  
 
    >**Note**: This above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig#felix-configuration-definition).
-  {: .alert .alert-info}
+{: .alert .alert-info}
 
-  To disable WireGuard on a specific node with WireGuard installed, modify the host-specific Felix configuration. For example:
+To disable WireGuard on a specific node with WireGuard installed, modify the host-specific Felix configuration. For example:
+
   ```
   calicoctl patch felixconfiguration <Host-Name> --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
   ```
