@@ -299,9 +299,14 @@ class EtcdWatcher(object):
                         # Write to a key in the tree that we are watching.  If
                         # the watch is working normally, it will report this
                         # event.
-                        self.debug_reporter("Write round-trip key")
-                        etcdv3.put(self.prefix + self.round_trip_suffix,
-                                   str(time_now))
+                        try:
+                            etcdv3.put(self.prefix + self.round_trip_suffix,
+                                       str(time_now))
+                            self.debug_reporter("Wrote round-trip key")
+                        except ConnectionFailedError:
+                            LOG.exception(
+                                "etcd not available for watch round trip check"
+                            )
 
                     # Sleep until time for next write.
                     eventlet.sleep(WATCH_TIMEOUT_SECS / 3)
