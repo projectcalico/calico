@@ -154,29 +154,30 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 			return NULL;
 		}
 
-		if (!from_tun) {
-			/* XXX replace the following with a nodeport cidrs lookup once
-			 * XXX we have it.
-			 */
-			rt = cali_rt_lookup(ip_dst);
-			if (!rt) {
-				CALI_DEBUG("NAT: route miss\n");
+		/* XXX replace the following with a nodeport cidrs lookup once
+		 * XXX we have it.
+		 */
+		rt = cali_rt_lookup(ip_dst);
+		if (!rt) {
+			CALI_DEBUG("NAT: route miss\n");
+			if (!from_tun) {
 				return NULL;
 			}
 
-			if (!cali_rt_is_host(rt)) {
-				CALI_DEBUG("NAT: route dest not a host\n");
-				return NULL;
-			}
-		} else {
 			/* we got here because the original node that forwarded
-			 * it through the tunnel though it is a nodeport, we can
+			 * it through the tunnel thought it is a nodeport, we can
 			 * use the wildcard nodeport entry.
 			 *
 			 * If the nodes have multiple IPs/NICs, RT entries would
 			 * not know the other IPs of other nodes.
+			 *
+			 * XXX we might wrongly consider another service IP that
+			 * XXX we do not know yet (anymore?) as a nodeport.
 			 */
-			CALI_DEBUG("NAT: skip route lookup from tunnel, it is a nodeport\n");
+			CALI_DEBUG("NAT: ignore rt lookup miss from tunnel, assume nodeport\n");
+		} else if (!cali_rt_is_host(rt)) {
+			CALI_DEBUG("NAT: route dest not a host\n");
+			return NULL;
 		}
 
 		nat_key.addr = 0xffffffff;
