@@ -186,7 +186,6 @@ exit
 
 At this point Kubernetes nodes will become `Ready` because Kubernetes has a networking provider and configuration installed.
 
-Write the CNI configuration
 ```bash
 kubectl get nodes
 ```
