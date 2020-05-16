@@ -396,6 +396,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200512155201-5728ce4bda3a h1:SJ
 github.com/projectcalico/libcalico-go v1.7.2-0.20200512155201-5728ce4bda3a/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200513230509-02391ef5f438 h1:6oyi3tIp3IFU/mjYOaUT2vP3voGC0LCK2zL44AzbBpk=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200513230509-02391ef5f438/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200515163405-fc50f8064a53 h1:296fzjLOJjY6wCna/1LSdnGaKZ4a4Nnpq7r7BS9n/NE=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200515163405-fc50f8064a53/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799 h1:9jp4YoHqZvEKDW3Z9464x/whSRCWEinIo4/JifaKR+g=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271 h1:AOFOckD83tAIMQob6I1FpzSVs+Rn5Td701Q3/aQFqe8=
@@ -404,6 +406,8 @@ github.com/projectcalico/typha v0.7.3-0.20200513155650-0f5779b36217 h1:TfJZ1mWvS
 github.com/projectcalico/typha v0.7.3-0.20200513155650-0f5779b36217/go.mod h1:zKgZEjjB6FKSbvdsk5qVkrFirQ3AUO+HkipfcGwwZAA=
 github.com/projectcalico/typha v0.7.3-0.20200514040816-be87f2aa5364 h1:QN9UdxmpKrfNfxUjYsDII146GUCTOYUFYbH/4nw638Q=
 github.com/projectcalico/typha v0.7.3-0.20200514040816-be87f2aa5364/go.mod h1:bHlD69wgHvPuqcKy5wFf2AhkvskPV0AMVqbLbyvnSgc=
+github.com/projectcalico/typha v0.7.3-0.20200516040706-0ded08b5264f h1:61oxtoiBwOGjdwAQum52uK40EjR8cxko3h53avZHjus=
+github.com/projectcalico/typha v0.7.3-0.20200516040706-0ded08b5264f/go.mod h1:naIdt9P7D6SeL7sfAhoJmbt4oELI7Y/q8uf5uk6ae3s=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.2 h1:awm861/B8OKDd2I/6o1dy3ra4BamzKhYOiGItCeZ740=
