@@ -189,7 +189,13 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     font-size: 16px;
     font-weight: 600;    
     color: #2a302f;
+    transition: .4s;    
     -webkit-font-smoothing: antialiased;
+}
+
+
+#tigera-navbar ul.nav li a:hover {
+  color: #ff9e16;
 }
 
 // Submenu Navigation for Desktop
@@ -249,12 +255,18 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 #tigera-navbar .free-training {
   color: white !important;
   background-color: #ff9e16;
-  padding: 9px 14px !important;
-  margin: -11px 40px 0px 0px;
+  padding: 9px 15px !important;
+  margin: -11px 39px 0px 0px;
   border-width: 2px;
   border-style: solid;
   border-color: #ff9e16;
 }
+
+#tigera-navbar .free-training:hover {
+  color: #ff9e16;
+  background-color: white;
+}
+
 
 .panel-heading.free-training {
   background-color: #ff9e16;
