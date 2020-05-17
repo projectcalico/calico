@@ -174,9 +174,13 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     
     li {
        margin: 0 0 0 0;
+       @media (min-width: $screen-sm-min) {
+          padding: 0 0 25px 0;
+          height: auto;
+       }
        padding: 0;
        height: 48px;
-         
+      
       a {
         padding: 0;
       }
@@ -210,10 +214,9 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
 // Submenu Navigation for Desktop
 #tigera-navbar ul.nav li ul {
-    position: absolute;
-    display: none;
-    margin-top: 20px;
-    background: #09287d;
+    // position: absolute;
+    // display: none;
+    // margin-top: 20px;
     z-index: 1000;
 }
 
@@ -233,8 +236,9 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     #tigera-navbar ul.nav {
         li {
             ul {
-                margin: 26px 0 0 0;
+                // margin: 26px 0 0 0;
                 padding: 13px 0 0 0;
+                background: #09287d;
 
                 li {
                     min-height: 24px !important;
