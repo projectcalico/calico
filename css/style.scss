@@ -119,9 +119,10 @@ div.highlight {
 }
 
 #toplevel-nav {
-  -webkit-box-shadow: 0px 0px 8px 1px #666;
-  -moz-box-shadow: 0px 0px 8px 1px #666;
-  box-shadow: 0px 0px 8px 1px #666;
+  -webkit-box-shadow: 0px 0px 2px 0px rbga(0,0,0,0.5);
+  -moz-box-shadow: 0px 0px 2px 0px rbga(0,0,0,0.5);
+  box-shadow: 0px 0px 2px 0px rbga(0,0,0,0.5);
+  border: none;
 }
 
 // Fix conflicts between bootstrap theme and custom search theme.
@@ -160,13 +161,35 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     line-height: normal;
 }
 
+#tigera-navbar {
+  ul.nav {
+    margin-top: 26px;
+    
+    li {
+       margin: 0 0 0 20px;
+       padding: 0;
+         
+      a {
+        padding: 0;
+      }
+    }
+  }
+}
+
 #tigera-navbar ul.nav li a {
     @media (max-width: $screen-sm-min) {
         padding: 10px 0;
     }
     @media (min-width: $screen-xs-max) {
         padding: 0 0;
-    }
+    } 
+
+    padding: 0 20px;
+    font-family: "Poppins", Poppins;
+    font-size: 16px;
+    font-weight: 600;    
+    color: #2a302f;
+    -webkit-font-smoothing: antialiased;
 }
 
 // Submenu Navigation for Desktop
@@ -175,8 +198,16 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     display: none;
     margin-top: 20px;
     margin-left: -10px !important;
-    background: #004078;
+    background: #09287d;
     z-index: 1000;
+}
+
+#tigera-navbar .sub-arrow {
+  font-size: 11px;
+  line-height: 1;
+  padding: 10px 0 10px 10px;
+  margin-top: -10px;
+  margin-bottom: -10px;
 }
 
 @media screen and (min-width: 999px) {
@@ -186,31 +217,25 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
             height: 44px;
 
             ul {
-                margin: 24px 0 0 0;
+                margin: 0 0 0 0;
                 padding: 0;
 
                 li {
                     min-height: 24px !important;
                     display: block;
-                    padding: 8px 18px 8px 10px;
+                    padding: 13px 20px 13px 20px;
                     overflow: hidden;
-                    width: 200px;
+                    width: 220px;
                     margin: 0;
-                    border-top: 1px dashed #999;
 
                     a {
                         color: #fff;
-                        font-size: 14px;
                     }
 
                     a:hover {
                         color: $navbar-default-link-hover-color !important;
                         text-decoration: none;
                     }
-                }
-
-                li:first-child {
-                    border-top: none;
                 }
             }
         }
@@ -222,10 +247,13 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 #tigera-navbar .free-training {
-  color: white;
+  color: white !important;
   background-color: #ff9e16;
-  padding: 6px 10px !important;
-  margin: -6px 8px 0px 0px;
+  padding: 9px 14px !important;
+  margin: -11px 40px 0px 0px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #ff9e16;
 }
 
 .panel-heading.free-training {
