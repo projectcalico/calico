@@ -164,7 +164,11 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
 #tigera-navbar {
   ul.nav {
-    margin-top: 26px;
+    @media (min-width: $screen-sm-min) {
+      margin-top: 26px;
+    }    
+    
+    padding: 15px 20px;
     
     li {
        margin: 0 0 0 0;
@@ -178,12 +182,9 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 #tigera-navbar ul.nav li a {
-    @media (max-width: $screen-sm-min) {
-        padding: 10px 0;
+    @media (max-width: $screen-xs-max) {
+        padding: 15px 20px;
     }
-    @media (min-width: $screen-xs-max) {
-        padding: 0 20px;
-    } 
 
     padding: 0 20px;
     font-family: "Poppins", Poppins;
@@ -216,8 +217,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   margin-bottom: -10px;
 }
 
-@media screen and (min-width: 999px) {
-
+@media screen and (min-width: $screen-sm-min) {
     #tigera-navbar ul.nav {
         li {
             height: 44px;
