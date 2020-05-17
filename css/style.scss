@@ -167,7 +167,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     margin-top: 26px;
     
     li {
-       margin: 0 0 0 20px;
+       margin: 0 0 0 0;
        padding: 0;
          
       a {
@@ -182,7 +182,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
         padding: 10px 0;
     }
     @media (min-width: $screen-xs-max) {
-        padding: 0 0;
+        padding: 0 20px;
     } 
 
     padding: 0 20px;
@@ -264,7 +264,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 #tigera-navbar .free-training:hover {
-  color: #ff9e16;
+  color: #ff9e16 !important;
   background-color: white;
 }
 
