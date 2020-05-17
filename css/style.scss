@@ -163,6 +163,8 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 #tigera-navbar {
+  max-height: 380px;
+
   ul.nav {
     @media (min-width: $screen-sm-min) {
       margin-top: 26px;
@@ -220,10 +222,8 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 @media screen and (min-width: $screen-sm-min) {
     #tigera-navbar ul.nav {
         li {
-            height: 44px;
-
             ul {
-                margin: 24px 0 0 0;
+                margin: 11px 0 0 0;
                 padding: 13px 0 0 0;
 
                 li {
