@@ -45,6 +45,7 @@ The code is a little roundabout for a few reasons:
     {% if site.noindex %}<meta name="robots" content="noindex">{% endif %}
     <link rel="shortcut icon" type="image/png" href="{{site.baseurl}}/images/favicon.png">
     <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Poppins:100,100italic,200,200italic,300,300italic,400,400italic,500,500italic,600,600italic,700,700italic,800,800italic,900,900italic&amp;ver=5.3.2" rel="stylesheet" media="all">    
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
     <link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
     {% if page.custom_css %}
@@ -105,7 +106,7 @@ The code is a little roundabout for a few reasons:
             <ul class="nav navbar-nav navbar-right">
               <li><a data-proofer-ignore href="/releases">Releases</a></li>
               <li><a href="https://www.projectcalico.org/community">Community</a></li>
-              <li><a href="#"><span>Support</span></a>
+              <li><a href="#"><span>Support</span><span class="sub-arrow"><i class="fa"></i></span></a>
                 <ul>
                     <!-- <li><a data-proofer-ignore href="/latest/getting-started/"><i class="fa fa-tachometer" aria-hidden="true"></i> &nbsp; Getting Started</a></li> -->
                     <!-- <li><a href="{{site.baseurl}}"><i class="fa fa-book" aria-hidden="true"></i> &nbsp; Documentation</a></li> -->
