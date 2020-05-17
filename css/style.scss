@@ -204,7 +204,6 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     position: absolute;
     display: none;
     margin-top: 20px;
-    margin-left: -10px !important;
     background: #09287d;
     z-index: 1000;
 }
@@ -224,19 +223,21 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
             height: 44px;
 
             ul {
-                margin: 0 0 0 0;
-                padding: 0;
+                margin: 24px 0 0 0;
+                padding: 13px 0 0 0;
 
                 li {
                     min-height: 24px !important;
                     display: block;
-                    padding: 13px 20px 13px 20px;
                     overflow: hidden;
                     width: 220px;
                     margin: 0;
 
                     a {
                         color: #fff;
+                        padding: 13px 20px;
+                        margin: 0 0 0 8px;
+                        white-space: nowrap;
                     }
 
                     a:hover {
