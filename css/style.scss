@@ -167,7 +167,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
   ul.nav {
     @media (min-width: $screen-sm-min) {
-      margin-top: 26px;
+      margin-top: 11px;
     }    
     
     padding: 15px 20px;
@@ -186,6 +186,11 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 #tigera-navbar ul.nav li a {
     @media (max-width: $screen-xs-max) {
         padding: 15px 20px;
+    }
+
+    @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+      padding: 0 8px;
+      font-size: 13px;
     }
 
     padding: 0 20px;
@@ -212,6 +217,10 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 #tigera-navbar .sub-arrow {
+  @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+    padding: 10px 0 10px 3px;
+  }
+
   font-size: 11px;
   line-height: 1;
   padding: 10px 0 10px 10px;
@@ -223,11 +232,12 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     #tigera-navbar ul.nav {
         li {
             ul {
-                margin: 11px 0 0 0;
+                margin: 26px 0 0 0;
                 padding: 13px 0 0 0;
 
                 li {
                     min-height: 24px !important;
+                    padding: 13px 20px;
                     display: block;
                     overflow: hidden;
                     width: 220px;
@@ -235,7 +245,6 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
                     a {
                         color: #fff;
-                        padding: 13px 20px;
                         margin: 0 0 0 8px;
                         white-space: nowrap;
                     }
@@ -255,6 +264,10 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 #tigera-navbar .free-training {
+  @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+      margin: -11px 0px 0px 0px;
+  }
+
   color: white !important;
   background-color: #ff9e16;
   padding: 9px 15px !important;
