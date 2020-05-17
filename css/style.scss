@@ -170,11 +170,12 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
       margin-top: 11px;
     }    
     
-    padding: 15px 20px;
+    padding: 15px 20px 0px 20px;
     
     li {
        margin: 0 0 0 0;
        padding: 0;
+       height: 44px;
          
       a {
         padding: 0;
