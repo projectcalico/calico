@@ -176,7 +176,7 @@ func (b *PinnedMap) Iter(f MapIter) error {
 	args := cmd[1:]
 
 	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).CombinedOutput()
+	output, err := exec.Command(prog, args...).Output()
 	if err != nil {
 		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.versionedFilename(), err, output)
 	}
