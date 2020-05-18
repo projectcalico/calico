@@ -185,43 +185,65 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
       height: auto;
       
       a {
-        padding: 0;
+        @media (min-width: $screen-sm-min) and (max-width: 900px) {
+          padding: 0 8px;
+          font-size: 13px;
+        }
+    
+        @media (min-width: 901px) and (max-width: 1100px) {
+          padding: 0 10px;
+        }
+    
+        padding: 0 20px;
+        font-family: "Poppins", Poppins;
+        font-size: 16px;
+        font-weight: 600;    
+        color: #2a302f;
+        transition: .4s;    
+        -webkit-font-smoothing: antialiased;        
+      }
+
+      // Submenu Navigation for Desktop
+      ul {
+        @media (min-width: $screen-sm-min) {
+          padding: 13px 0 0 0;
+          background: #09287d;
+
+          li {
+            min-height: 24px !important;
+            padding: 13px 20px;
+            display: block;
+            overflow: hidden;
+            width: 220px;
+            margin: 0;
+
+            a {
+              color: #fff;
+              padding: 0;
+              white-space: nowrap;
+            }
+
+            a:hover {
+              color: $navbar-default-link-hover-color !important;
+              text-decoration: none;
+            }
+          }
+        }
+      }      
+    }
+
+    li a:hover {
+      color: #ff9e16;
+    }
+    
+    @media (min-width: $screen-sm-min) {
+      li:hover ul {
+        display: block;
       }
     }
   }
 }
 
-#tigera-navbar ul.nav li a {
-    @media (min-width: $screen-sm-min) and (max-width: 900px) {
-      padding: 0 8px;
-      font-size: 13px;
-    }
-
-    @media (min-width: 901px) and (max-width: 1100px) {
-      padding: 0 10px;
-    }
-
-    padding: 0 20px;
-    font-family: "Poppins", Poppins;
-    font-size: 16px;
-    font-weight: 600;    
-    color: #2a302f;
-    transition: .4s;    
-    -webkit-font-smoothing: antialiased;
-}
-
-
-#tigera-navbar ul.nav li a:hover {
-  color: #ff9e16;
-}
-
-// Submenu Navigation for Desktop
-#tigera-navbar ul.nav li ul {
-    // position: absolute;
-    // display: none;
-    // margin-top: 20px;
-    z-index: 1000;
-}
 
 #tigera-navbar .sub-arrow {
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
@@ -233,42 +255,6 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 10px 0 10px 10px;
   margin-top: -10px;
   margin-bottom: -10px;
-}
-
-@media screen and (min-width: $screen-sm-min) {
-    #tigera-navbar ul.nav {
-        li {
-            ul {
-                // margin: 26px 0 0 0;
-                padding: 13px 0 0 0;
-                background: #09287d;
-
-                li {
-                    min-height: 24px !important;
-                    padding: 13px 20px;
-                    display: block;
-                    overflow: hidden;
-                    width: 220px;
-                    margin: 0;
-
-                    a {
-                        color: #fff;
-                        padding: 0;
-                        white-space: nowrap;
-                    }
-
-                    a:hover {
-                        color: $navbar-default-link-hover-color !important;
-                        text-decoration: none;
-                    }
-                }
-            }
-        }
-
-        li:hover ul {
-            display: block;
-        }
-    }
 }
 
 #tigera-navbar .free-training {
