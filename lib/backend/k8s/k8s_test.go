@@ -2790,7 +2790,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				Key: model.BlockKey{
 					CIDR: net.MustParseCIDR("10.0.0.0/26"),
 				},
-				Value: &model.AllocationBlock{},
+				Value: &model.AllocationBlock{
+					Affinity:    nil,
+					Allocations: []*int{},
+					Unallocated: []int{},
+					Attributes:  nil,
+					Deleted:     false,
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 

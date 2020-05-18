@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/libcalico-go
-GO_BUILD_VER=v0.28
+GO_BUILD_VER=v0.40
 
 # libcalico-go still relies on vendoring
 GOMOD_VENDOR = true
@@ -24,8 +24,7 @@ include Makefile.common
 
 ###############################################################################
 
-K8S_VERSION      ?= v1.16.0
-BINDIR           ?= bin
+BINDIR?=bin
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
 UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go, \
@@ -54,9 +53,21 @@ GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
-gen-files:
+gen-files: gen-crds
 	rm -rf $(GENERATED_FILES)
 	$(MAKE) $(GENERATED_FILES)
+
+## Force a rebuild of custom resource definition yamls
+gen-crds: bin/controller-gen
+	@./bin/controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/
+	@rm config/crd/_.yaml
+
+# Used for generating CRD files.
+bin/controller-gen:
+	# Download a version of controller-gen that has been hacked to support additional types (e.g., float).
+	# We can remove this once we update the Calico v3 APIs to use only types which are supported by the upstream controller-gen
+	# tooling. Some examples: float, all the types in the numorstring package, etc.
+	wget -O $@ https://github.com/caseydavenport/controller-tools/releases/download/float-support/controller-gen && chmod +x $@
 
 $(BINDIR)/deepcopy-gen: vendor
 	$(DOCKER_GO_BUILD) sh -c 'go build -o $@ $(PACKAGE_NAME)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
@@ -159,8 +170,7 @@ run-kubernetes-master: stop-kubernetes-master
 	docker run \
 		--net=host --name st-apiserver \
 		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
-		/hyperkube kube-apiserver \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-apiserver \
 			--bind-address=0.0.0.0 \
 			--insecure-bind-address=0.0.0.0 \
 	        	--etcd-servers=http://127.0.0.1:2379 \
@@ -176,32 +186,28 @@ run-kubernetes-master: stop-kubernetes-master
 	docker run \
 		--net=host --name st-controller-manager \
 		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
-		/hyperkube kube-controller-manager \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-controller-manager \
                         --master=127.0.0.1:8080 \
                         --min-resync-period=3m \
                         --allocate-node-cidrs=true \
                         --cluster-cidr=10.10.0.0/16 \
                         --v=5
 
-	# Create CustomResourceDefinition (CRD) for Calico resources
-	# from the manifest crds.yaml
-	docker run \
+	# Create CustomResourceDefinition (CRD) for Calico resources.
+	while ! docker run \
 	    --net=host \
 	    --rm \
 		-v  $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
-		/hyperkube kubectl \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
 		--server=http://127.0.0.1:8080 \
-		apply -f /manifests/test/crds.yaml
+		apply -f /manifests/config/crd; do echo "Waiting for CRDs to apply..."; sleep 2; done
 
 	# Create a Node in the API for the tests to use.
 	docker run \
 	    --net=host \
 	    --rm \
 		-v  $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
-		/hyperkube kubectl \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
 		--server=http://127.0.0.1:8080 \
 		apply -f /manifests/test/mock-node.yaml
 
@@ -211,8 +217,7 @@ run-kubernetes-master: stop-kubernetes-master
 	    --net=host \
 	    --rm \
 		-v  $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
-		/hyperkube kubectl \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
 		--server=http://localhost:8080 \
 		apply -f /manifests/test/namespaces.yaml
 

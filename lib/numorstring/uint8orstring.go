@@ -24,9 +24,9 @@ import (
 // inner type.  This allows you to have, for example, a JSON field that can
 // accept a name or number.
 type Uint8OrString struct {
-	Type   NumOrStringType
-	NumVal uint8
-	StrVal string
+	Type   NumOrStringType `json:"type"`
+	NumVal uint8           `json:"numVal"`
+	StrVal string          `json:"strVal"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface.

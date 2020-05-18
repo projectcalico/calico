@@ -995,8 +995,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 	It("should respect Kubernetes UID for blocks", func() {
 		// Create a block
 		initKVP := &model.KVPair{
-			Key:   model.BlockKey{CIDR: *net},
-			Value: &model.AllocationBlock{},
+			Key: model.BlockKey{CIDR: *net},
+			Value: &model.AllocationBlock{
+				CIDR:        cnet.MustParseCIDR("10.0.1.0/29"),
+				Allocations: []*int{nil, nil, nil},
+				Unallocated: []int{0, 1, 2},
+			},
 		}
 		kvpa, err := bc.Create(ctx, initKVP)
 		Expect(err).NotTo(HaveOccurred())
@@ -1019,8 +1023,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 	It("should respect Kubernetes UID for handles", func() {
 		// Create a handle
 		initKVP := &model.KVPair{
-			Key:   model.IPAMHandleKey{HandleID: "someid"},
-			Value: &model.IPAMHandle{},
+			Key: model.IPAMHandleKey{HandleID: "someid"},
+			Value: &model.IPAMHandle{
+				HandleID: "someid",
+				Block:    map[string]int{"block1": 1},
+			},
 		}
 		kvpa, err := bc.Create(ctx, initKVP)
 		Expect(err).NotTo(HaveOccurred())
