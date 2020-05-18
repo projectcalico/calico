@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -202,13 +201,6 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 		logrus.Panic("Per-CPU operations not implemented")
 	}
 	return GetMapEntry(b.fd, k, b.ValueSize)
-}
-
-func appendBytes(strings []string, bytes []byte) []string {
-	for _, b := range bytes {
-		strings = append(strings, strconv.FormatInt(int64(b), 10))
-	}
-	return strings
 }
 
 func (b *PinnedMap) Delete(k []byte) error {
