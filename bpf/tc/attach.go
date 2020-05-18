@@ -64,15 +64,18 @@ func (e ErrAttachFailed) Error() string {
 	return fmt.Sprintf("tc failed with exit code %d; stderr=%v", e.ExitCode, e.Stderr)
 }
 
+var ErrDeviceNotFound = errors.New("device not found")
+
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap AttachPoint) AttachProgram() error {
 	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
 	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
 	// point).
-	log.Debug("AttachProgram waiting for lock...")
+	logCxt := log.WithField("attachPoint", ap)
+	logCxt.Debug("AttachProgram waiting for lock...")
 	tcLock.Lock()
 	defer tcLock.Unlock()
-	log.Debug("AttachProgram got lock.")
+	logCxt.Debug("AttachProgram got lock.")
 
 	// Work around tc map name collision: when we load two identical BPF programs onto different interfaces, tc
 	// pins object-local maps to a namespace based on the hash of the BPF program, which is the same for both
@@ -95,9 +98,9 @@ func (ap AttachPoint) AttachProgram() error {
 	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
 	tempBinary := path.Join(tempDir, filename)
 
-	err = ap.patchBinary(preCompiledBinary, tempBinary)
+	err = ap.patchBinary(logCxt, preCompiledBinary, tempBinary)
 	if err != nil {
-		log.WithError(err).Error("Failed to patch binary")
+		logCxt.WithError(err).Error("Failed to patch binary")
 		return err
 	}
 
@@ -109,13 +112,16 @@ func (ap AttachPoint) AttachProgram() error {
 
 	out, err := tcCmd.Output()
 	if err != nil {
-		if strings.Contains(err.Error(), "Cannot find device") {
-			// Avoid a big, spammy log when the issue is that the interface isn't present.
-			log.WithField("iface", ap.Iface).Info(
-				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
-			return nil
+		if err, ok := err.(*exec.ExitError); ok {
+			stderr := string(err.Stderr)
+			if strings.Contains(stderr, "Cannot find device") {
+				// Avoid a big, spammy log when the issue is that the interface isn't present.
+				logCxt.WithField("iface", ap.Iface).Info(
+					"Failed to attach BPF program; interface not found.  Will retry if it show up.")
+				return ErrDeviceNotFound
+			}
 		}
-		log.WithError(err).WithFields(log.Fields{"out": string(out)}).
+		logCxt.WithError(err).WithFields(log.Fields{"out": out}).
 			WithField("command", tcCmd).Error("Failed to attach BPF program")
 		if err, ok := err.(*exec.ExitError); ok {
 			// ExitError is really unhelpful dumped to the log, swap it for a custom one.
@@ -130,13 +136,13 @@ func (ap AttachPoint) AttachProgram() error {
 	return nil
 }
 
-func (ap AttachPoint) patchBinary(ifile, ofile string) error {
+func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error {
 	b, err := bpf.BinaryFromFile(ifile)
 	if err != nil {
 		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
 	}
 
-	log.WithField("ip", ap.IP).Debug("Patching in IP")
+	logCtx.WithField("ip", ap.IP).Debug("Patching in IP")
 	err = b.PatchIPv4(ap.IP)
 	if err != nil {
 		return errors.WithMessage(err, "patching in IPv4")

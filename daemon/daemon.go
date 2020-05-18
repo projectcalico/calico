@@ -229,7 +229,7 @@ configRetry:
 		backendClient = v3Client.(interface{ Backend() bapi.Client }).Backend()
 		for {
 			globalConfig, hostConfig, err := loadConfigFromDatastore(
-				ctx, backendClient, configParams.FelixHostname)
+				ctx, backendClient, datastoreConfig, configParams.FelixHostname)
 			if err == ErrNotReady {
 				log.Warn("Waiting for datastore to be initialized (or migrated)")
 				time.Sleep(1 * time.Second)
@@ -771,7 +771,7 @@ var (
 )
 
 func loadConfigFromDatastore(
-	ctx context.Context, client bapi.Client, hostname string,
+	ctx context.Context, client bapi.Client, cfg apiconfig.CalicoAPIConfig, hostname string,
 ) (globalConfig, hostConfig map[string]string, err error) {
 
 	// The configuration is split over 3 different resource types and 4 different resource
@@ -820,7 +820,7 @@ func loadConfigFromDatastore(
 	err = getAndMergeConfig(
 		ctx, client, hostConfig,
 		apiv3.KindNode, hostname,
-		updateprocessors.NewFelixNodeUpdateProcessor(),
+		updateprocessors.NewFelixNodeUpdateProcessor(cfg.Spec.K8sUsePodCIDR),
 		&ready,
 	)
 	if err != nil {
