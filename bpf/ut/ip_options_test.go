@@ -18,9 +18,45 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/ip"
 )
 
-func TestIPOptionsFromToWEP(t *testing.T) {
+func TestMalformedIP(t *testing.T) {
+	RegisterTestingT(t)
+
+	iphdr := *ipv4Default
+	iphdr.IHL = 4
+
+	_, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+	})
+
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+
+	})
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_UNSPEC")
+	})
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+
+	})
+}
+func TestIPOptions(t *testing.T) {
 	RegisterTestingT(t)
 
 	iphdr := *ipv4Default
@@ -44,13 +80,41 @@ func TestIPOptionsFromToWEP(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_UNSPEC")
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
 	})
 
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+
+	})
+}
+func TestIPOptionsWithHostIP(t *testing.T) {
+	RegisterTestingT(t)
+
+	iphdr := *ipv4Default
+	iphdr.IHL = 6
+	iphdr.DstIP = hostIP
+
+	_, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	rtKey := routes.NewKey(ip.CIDRFromNetIP(hostIP).(ip.V4CIDR)).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalHost, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+	})
+
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"), "expected program to return TC_ACT_UNSPEC")
 
 	})
 }

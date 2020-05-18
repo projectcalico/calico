@@ -455,11 +455,24 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		}
 	}
 
-	// Drop packets with IP options
-	if (ip_header->ihl > 5) {
-		fwd.reason = CALI_REASON_IP_OPTIONS;
-		CALI_DEBUG("Drop packets with IP options\n");
+	// Drop malformed IP packets
+	if (ip_header->ihl < 5) {
+		fwd.reason = CALI_REASON_IP_MALFORMED;
+		CALI_DEBUG("Drop malformed IP packets\n");
 		goto deny;
+	}
+	else if (ip_header->ihl > 5) {
+		/* Drop packets with IP options from/to WEP.
+		 * Also drop packets with IP options if the dest IP is not host IP
+		 */
+		if (CALI_F_FROM_WEP || CALI_F_TO_WEP ||
+			!cali_rt_flags_local_host(cali_rt_lookup_flags(ip_header->daddr))) {
+			fwd.reason = CALI_REASON_IP_OPTIONS;
+			CALI_DEBUG("Drop packets with IP options\n");
+			goto deny;
+		}
+		CALI_DEBUG("Allow packets with IP options and dst IP = hostIP\n");
+		goto allow;
 	}
 	// Setting all of these up-front to keep the verifier happy.
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
@@ -686,10 +699,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 	ip_header = skb_iphdr(skb);
-	if (ip_header->ihl > 5) {
-		CALI_DEBUG("Drop packets with IP options\n");
-		goto deny;
-	}
 	__u32 key = 0;
 	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
 	if (!state) {
