@@ -16,12 +16,12 @@ package ut_test
 
 import (
 	"net"
-	"os"
 	"reflect"
 	"testing"
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
 )
 
@@ -34,7 +34,7 @@ func TestMapEntryDeletion(t *testing.T) {
 	// Defer error checking since the Delete calls do the cleanup for this test...
 	Expect(err1).NotTo(HaveOccurred(), "Failed to create map entry")
 	Expect(err2).NotTo(HaveOccurred(), "Failed to delete map entry")
-	Expect(err3).To(Equal(os.ErrNotExist), "Error from deletion of non-existent entry was incorrect")
+	Expect(bpf.IsNotExists(err3)).To(Equal(true), "Error from deletion of non-existent entry was incorrect")
 }
 
 func TestMapIteration(t *testing.T) {

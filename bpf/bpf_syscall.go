@@ -362,7 +362,7 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 
 	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_DELETE_ELEM, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 
-	if errno != 0 && !IsNotExists(errno) {
+	if errno != 0 {
 		return errno
 	}
 	return nil
