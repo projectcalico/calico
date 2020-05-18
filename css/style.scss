@@ -162,84 +162,83 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     line-height: normal;
 }
 
+
 #tigera-navbar {
+  // Constrains nav menu height when in hamburger mode
   max-height: 355px;
+}
 
-  ul.nav {
-    @media (min-width: $screen-sm-min) {
-      margin-top: 11px;
-    }    
-    
-    padding: 15px 0 0 0;
-    
+#tigera-navbar ul.nav {
+  @media (min-width: $screen-sm-min) {
+    margin-top: 11px;
+  }    
+  
+  padding: 15px 0 0 0;
+}
+  
+#tigera-navbar ul.nav li {
+  margin: 0 0 0 0;
+  @media (min-width: $screen-sm-min) {
+    // When displaying in full size mode we must extend to the bottom of the nav-bar otherwise sub-menu disappears as move mouse towards it
+    padding: 0;
+    height: 48px;
+  }
+
+  // When displaying in hamburger mode we cannot set the height because that breaks the inlining of sub-menu items
+  padding: 0 0 25px 0;
+  height: auto;
+}
+  
+#tigera-navbar ul.nav li a {
+  @media (min-width: $screen-sm-min) and (max-width: 900px) {
+    padding: 0 8px;
+    font-size: 13px;
+  }
+
+  @media (min-width: 901px) and (max-width: 1100px) {
+    padding: 0 10px;
+  }
+
+  padding: 0 20px;
+  font-family: "Poppins", Poppins;
+  font-size: 16px;
+  font-weight: 600;    
+  color: #2a302f;
+  transition: .4s;    
+  -webkit-font-smoothing: antialiased;        
+}
+
+#tigera-navbar ul.nav li a:hover {
+  color: #ff9e16;
+}
+
+// Submenu for full size mode
+@media (min-width: $screen-sm-min) {
+  #tigera-navbar ul.nav li ul {
+    padding: 13px 0 0 0;
+    background: #09287d;
+
     li {
-      margin: 0 0 0 0;
-      @media (min-width: $screen-sm-min) {
-        // When displaying in full size mode we must extend to the bottom of the nav-bar otherwise sub-menu disappears as move mouse towards it
-        padding: 0;
-        height: 48px;
-      }
+      min-height: 24px !important;
+      padding: 13px 20px;
 
-      // When displaying in hamburger/collapsed mode we cannot set the height because that breaks the inlining of sub-menu items
-      padding: 0 0 25px 0;
-      height: auto;
-      
       a {
-        @media (min-width: $screen-sm-min) and (max-width: 900px) {
-          padding: 0 8px;
-          font-size: 13px;
-        }
-    
-        @media (min-width: 901px) and (max-width: 1100px) {
-          padding: 0 10px;
-        }
-    
-        padding: 0 20px;
-        font-family: "Poppins", Poppins;
-        font-size: 16px;
-        font-weight: 600;    
-        color: #2a302f;
-        transition: .4s;    
-        -webkit-font-smoothing: antialiased;        
+        color: #fff;
+        padding: 0;
+        white-space: nowrap;
       }
 
-      // Submenu Navigation for full size mode
-      ul {
-        @media (min-width: $screen-sm-min) {
-          padding: 13px 0 0 0;
-          background: #09287d;
-
-          li {
-            min-height: 24px !important;
-            padding: 13px 20px;
-
-            a {
-              color: #fff;
-              padding: 0;
-              white-space: nowrap;
-            }
-
-            a:hover {
-              color: $navbar-default-link-hover-color !important;
-              text-decoration: none;
-            }
-          }
-        }
-      }      
-    }
-
-    li a:hover {
-      color: #ff9e16;
-    }
-    
-    @media (min-width: $screen-sm-min) {
-      li:hover ul {
-        display: block;
+      a:hover {
+        color: $navbar-default-link-hover-color !important;
+        text-decoration: none;
       }
     }
   }
-}
 
+  #tigera-navbar ul.nav li:hover ul {
+   display: block;
+  }
+}
 
 #tigera-navbar .sub-arrow {
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
