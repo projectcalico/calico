@@ -77,7 +77,6 @@ blocks:
       commands:
       - if [ ${SEMAPHORE_JOB_INDEX} = "1" ]; then gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- make --directory=$(basename $(pwd)) ut-bpf; fi
       - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- -o ServerAliveInterval=10 make --directory=$(basename $(pwd)) fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
-      - if [ ${SEMAPHORE_JOB_INDEX} = "1" ]; then gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- -o ServerAliveInterval=10 make --directory=$(basename $(pwd)) fv-wireguard FORCE_WIREGUARD_FV="1"; fi
       parallelism: 5
     epilogue:
       always:
