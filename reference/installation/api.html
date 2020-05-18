@@ -6,12 +6,6 @@ layout: docwithnav
 
 The Kubernetes resources below configure {{site.prodname}} installation when using the operator (currently, only on Openshift). Each resource is responsible for installing and configuring a different subsystem of {{site.prodname}} during installation. Most options can be modified on a running cluster using `kubectl`.
 
-<p>Packages:</p>
-<ul>
-<li>
-<a href="#operator.tigera.io%2fv1">operator.tigera.io/v1</a>
-</li>
-</ul>
 <h2 id="operator.tigera.io/v1">operator.tigera.io/v1</h2>
 <p>API Schema definitions for configuring the installation of Calico and Calico Enterprise</p>
 Resource Types:
@@ -171,23 +165,6 @@ CalicoNetworkSpec
 <td>
 <em>(Optional)</em>
 <p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>clusterManagementType</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ClusterManagementType">
-ClusterManagementType
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
-Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
-a single view to manage any number of Managed clusters, which are a lighter weight installation.
-Default: Standalone</p>
 </td>
 </tr>
 <tr>
