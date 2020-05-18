@@ -184,17 +184,17 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     height: 48px;
   }
 
-  // When displaying in hamburger mode we cannot set the height because that breaks the inlining of sub-menu items
+  // When displaying in hamburger mode we cannot set the height because that breaks the inlining of sub-menu items so use padding instead
   padding: 0 0 25px 0;
   height: auto;
 }
   
 #tigera-navbar ul.nav li a {
+  // Shrink as we approach hamburger mode
   @media (min-width: $screen-sm-min) and (max-width: 900px) {
     padding: 0 8px;
     font-size: 13px;
   }
-
   @media (min-width: 901px) and (max-width: 1100px) {
     padding: 0 10px;
   }
@@ -212,7 +212,14 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   color: #ff9e16;
 }
 
-// Submenu for full size mode
+// Indent submenu items for hamburger mode
+@media (max-width: $screen-xs-max) {
+  #tigera-navbar ul.nav li ul li {
+    padding: 20px 0 0 20px;
+  }
+}
+
+// Submenu handling for full size mode
 @media (min-width: $screen-sm-min) {
   #tigera-navbar ul.nav li ul {
     padding: 13px 0 0 0;
@@ -230,6 +237,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
       a:hover {
         color: $navbar-default-link-hover-color !important;
+        background-color: transparent;
         text-decoration: none;
       }
     }
