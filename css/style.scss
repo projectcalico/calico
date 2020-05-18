@@ -250,11 +250,13 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
 #tigera-navbar .sub-arrow {
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+    width: 14px;
     padding: 10px 0 10px 3px;
   }
 
   font-size: 11px;
   line-height: 1;
+  width: 21px;
   padding: 10px 0 10px 10px;
   margin-top: -10px;
   margin-bottom: -10px;
