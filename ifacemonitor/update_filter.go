@@ -17,6 +17,7 @@ package ifacemonitor
 import (
 	"context"
 	"net"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -76,17 +77,25 @@ mainLoop:
 			return
 		case linkUpd := <-linkInC:
 			idx := int(linkUpd.Index)
-			if len(updatesByIfaceIdx[idx]) == 0 {
-				// We do see link updates as part of a flap but we've only seen them after the IP is
-				// flapped down.  Avoid delaying unrelated link updates.
-				logrus.Debug("FilterUpdates: link change with empty queue, short circuit.")
-				linkOutC <- linkUpd
-				continue
+			linkIsUp := linkUpd.Header.Type == syscall.RTM_NEWLINK && linkIsOperUp(linkUpd.Link)
+			var delay time.Duration
+			if linkIsUp {
+				if len(updatesByIfaceIdx[idx]) == 0 {
+					// Empty queue (so no flap in progress) and the link is up, no need to delay the message.
+					linkOutC <- linkUpd
+					continue mainLoop
+				}
+				// Link is up but potential flap in progress, queue the update behind the other messages.
+				delay = 0
+			} else {
+				// We delay link down updates because a flap can involve both a link down and an IP removal.
+				// Since we receive those two messages over separate channels, the two messages can race.
+				delay = FlapDampingDelay
 			}
-			// Otherwise, we might have a flap in progress, delay the update.
+
 			updatesByIfaceIdx[idx] = append(updatesByIfaceIdx[idx],
 				timestampedUpd{
-					ReadyAt: u.Time.Now().Add(FlapDampingDelay),
+					ReadyAt: u.Time.Now().Add(delay),
 					Update:  linkUpd,
 				})
 		case addrUpd := <-addrInC:
@@ -134,15 +143,18 @@ mainLoop:
 			}
 			upds = append(upds, timestampedUpd{ReadyAt: readyToSendTime, Update: addrUpd})
 			updatesByIfaceIdx[idx] = upds
-			if timerC != nil {
-				// There's already a timer set and we know this update isn't ready to send.
-				// Avoid recalculating the timer.
-				logrus.Debug("FilterUpdates: timer already set.")
-				continue mainLoop
-			}
 		case <-timerC:
 			logrus.Debug("FilterUpdates: timer popped.")
+			timerC = nil
 		}
+
+		if timerC != nil {
+			// Optimisation: we much have just queued an update but there's already a timer set and we know
+			// that timer must pop before the one for the new update.  Skip recalculating the timer.
+			logrus.Debug("FilterUpdates: timer already set.")
+			continue mainLoop
+		}
+
 		var nextUpdTime time.Time
 		for idx, upds := range updatesByIfaceIdx {
 			logrus.WithField("ifaceIdx", idx).Debug("FilterUpdates: examining updates for interface.")
@@ -177,18 +189,19 @@ mainLoop:
 				updatesByIfaceIdx[idx] = upds
 			}
 		}
-		if !nextUpdTime.IsZero() {
-			// Need to schedule a retry.
-			delay := u.Time.Until(nextUpdTime)
-			if delay <= 0 {
-				delay = 1
-			}
-			logrus.WithField("delay", delay).Debug("FilterUpdates: calculated delay.")
-			timerC = u.Time.After(delay)
-		} else {
-			logrus.Debug("FilterUpdates: no more updates to send, disabling timer.")
-			timerC = nil
+
+		if nextUpdTime.IsZero() {
+			// Queue is empty so no need to schedule a timer.
+			continue mainLoop
 		}
+
+		// Schedule timer to process the rest of the queue.
+		delay := u.Time.Until(nextUpdTime)
+		if delay <= 0 {
+			delay = 1
+		}
+		logrus.WithField("delay", delay).Debug("FilterUpdates: calculated delay.")
+		timerC = u.Time.After(delay)
 	}
 }
 

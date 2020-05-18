@@ -119,7 +119,7 @@ func (m *MockTime) incrementTimeLockHeld(t time.Duration) {
 			m.timers[0].TimeToFire.Equal(m.currentTime)) {
 		logrus.WithField("timer", m.timers[0]).Info("Firing timer.")
 		select {
-		case m.timers[0].C <- m.currentTime: // Should never block since there channel has cap 1.
+		case m.timers[0].C <- m.timers[0].TimeToFire: // Should never block since there channel has cap 1.
 		default:
 			logrus.Panic("Blocked while trying to fire timer")
 		}

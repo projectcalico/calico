@@ -286,11 +286,11 @@ func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemon
 func (dp *mockDataplane) expectLinkStateCb(ifaceName string, state ifacemonitor.State, idx int) {
 	var upd linkUpdate
 	Eventually(dp.linkC).Should(Receive(&upd))
-	Expect(upd).To(Equal(linkUpdate{
+	ExpectWithOffset(1, upd).To(Equal(linkUpdate{
 		name:  ifaceName,
 		state: state,
 		index: idx,
-	}))
+	}), "Received unexpected link state callback.")
 }
 
 func (dp *mockDataplane) notExpectLinkStateCb() {
@@ -492,6 +492,7 @@ var _ = Describe("ifacemonitor", func() {
 	})
 
 	It("should handle an interface rename", func() {
+		defer log.Info("Exiting...")
 		// Add a link and an address.  No link callback expected because the link is not up
 		// yet.  But we do get an address callback because those are independent of link
 		// state.  (Note that if the monitor's initial resync runs slowly enough, it might

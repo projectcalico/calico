@@ -243,6 +243,19 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	m.storeAndNotifyLinkInner(ifaceExists, newName, link)
 }
 
+func linkIsOperUp(link netlink.Link) bool {
+	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.  The
+	// IFF_UP flag contains the admin state, which doesn't tell us whether we can program routes
+	// etc.
+	attrs := link.Attrs()
+	if attrs == nil {
+		return false
+	}
+	rawFlags := attrs.RawFlags
+	ifaceIsUp := rawFlags&syscall.IFF_RUNNING != 0
+	return ifaceIsUp
+}
+
 func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName string, link netlink.Link) {
 	log.WithFields(log.Fields{
 		"ifaceExists": ifaceExists,
@@ -268,8 +281,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.  The
 	// IFF_UP flag contains the admin state, which doesn't tell us whether we can program routes
 	// etc.
-	rawFlags := attrs.RawFlags
-	ifaceIsUp := ifaceExists && rawFlags&syscall.IFF_RUNNING != 0
+	ifaceIsUp := ifaceExists && linkIsOperUp(link)
 	oldIfIndex, ifaceWasUp := m.upIfaces[ifaceName]
 	logCxt := log.WithField("ifaceName", ifaceName)
 	if ifaceIsUp && !ifaceWasUp {

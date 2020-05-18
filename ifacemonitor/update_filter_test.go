@@ -29,14 +29,22 @@ import (
 	"github.com/projectcalico/felix/time/mock"
 )
 
-func TestUpdateFilter_FilterUpdates_LinkUpdatePassThru(t *testing.T) {
-	t.Log("Link updates should be passed through if there's nothing in the queue")
+const (
+	chanPollTime  = "10ms"
+	chanPollIntvl = "100us"
+)
+
+func TestUpdateFilter_FilterUpdates_LinkUpdateDelay(t *testing.T) {
+	t.Log("Link updates should be delayed")
 	harness, cancel := setUpFilterTest(t)
 	defer cancel()
 
 	linkUpd := linkUpdateWithIndex(2)
 	harness.LinkIn <- linkUpd
-	Eventually(harness.LinkOut).Should(Receive(Equal(linkUpd)))
+	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	harness.Time.IncrementTime(100 * time.Millisecond)
+
+	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(linkUpd)))
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -47,12 +55,12 @@ func TestUpdateFilter_FilterUpdates_AddrUpdatePassThru(t *testing.T) {
 
 	addrUpd := addrUpdate("10.0.0.1/16", true, 2)
 	harness.AddrIn <- addrUpd
-	Eventually(harness.AddrOut, "50ms").Should(Receive(Equal(addrUpd)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrUpd)))
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
 func TestUpdateFilter_FilterUpdates_AddrUpdateSquash(t *testing.T) {
-	t.Log("After a DEL, an ADD and a link updateate should be delayed.")
+	t.Log("After a DEL, an ADD and a link update should be delayed.")
 	harness, cancel := setUpFilterTest(t)
 	defer cancel()
 
@@ -73,26 +81,26 @@ func TestUpdateFilter_FilterUpdates_AddrUpdateSquash(t *testing.T) {
 	harness.AddrIn <- addrAdd3
 
 	t.Log("Should get the unblocked ADD first.")
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAdd3)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd3)))
 
 	// Now we know the other addr updates have been processed, this link update should get queued.
 	linkUpd := linkUpdateWithIndex(2)
 	harness.LinkIn <- linkUpd
 	// Need to let the filter receive the above update before we can advance time.
-	Consistently(harness.LinkOut, "10ms", "1us").ShouldNot(Receive())
+	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("Shouldn't get any output after 99ms.")
 	harness.Time.IncrementTime(99 * time.Millisecond)
-	Consistently(harness.AddrOut, "10ms", "1us").ShouldNot(Receive())
-	Consistently(harness.LinkOut, "10ms", "1us").ShouldNot(Receive())
+	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("DEL should be dropped, should get the ADD and the link update after 100ms.")
 	harness.Time.IncrementTime(1 * time.Millisecond)
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrDel)))
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAdd2)))
-	Eventually(harness.LinkOut, "10ms", "1us").Should(Receive(Equal(linkUpd)))
-	Consistently(harness.AddrOut, "10ms", "1us").ShouldNot(Receive())
-	Consistently(harness.LinkOut, "10ms", "1us").ShouldNot(Receive())
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrDel)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd2)))
+	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(linkUpd)))
+	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -114,14 +122,14 @@ func TestUpdateFilter_FilterUpdates_MultipleIPs(t *testing.T) {
 	harness.AddrIn <- addrAdd2
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAdd2)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd2)))
 
 	t.Log("Updates should come through after 100ms.")
 	harness.Time.IncrementTime(100 * time.Millisecond)
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrDel)))
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAdd)))
-	Consistently(harness.AddrOut, "10ms", "1us").ShouldNot(Receive())
-	Consistently(harness.LinkOut, "10ms", "1us").ShouldNot(Receive())
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrDel)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd)))
+	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -146,14 +154,14 @@ func TestUpdateFilter_FilterUpdates_MultipleIPsWithSquash(t *testing.T) {
 	harness.AddrIn <- addrAddTenThree
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAddTenThree)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenThree)))
 
 	t.Log("Updates should come through after 100ms.")
 	harness.Time.IncrementTime(100 * time.Millisecond)
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAddTenTwo)))
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAddTenOne)))
-	Consistently(harness.AddrOut, "10ms", "1us").ShouldNot(Receive())
-	Consistently(harness.LinkOut, "10ms", "1us").ShouldNot(Receive())
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenTwo)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenOne)))
+	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -173,16 +181,16 @@ func TestUpdateFilter_FilterUpdates_AddrUpdateDelOnly(t *testing.T) {
 	harness.AddrIn <- addrAdd2
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrAdd2)))
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd2)))
 
 	t.Log("Shouldn't get any output after 99ms.")
 	harness.Time.IncrementTime(99 * time.Millisecond)
-	Consistently(harness.AddrOut, "10ms", "1us").ShouldNot(Receive())
+	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("Should get only the DEL after 100ms.")
 	harness.Time.IncrementTime(1 * time.Millisecond)
-	Eventually(harness.AddrOut, "10ms", "1us").Should(Receive(Equal(addrDel)))
-	Consistently(harness.AddrOut, "10ms", "1us").ShouldNot(Receive())
+	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrDel)))
+	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
