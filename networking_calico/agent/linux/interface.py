@@ -43,7 +43,8 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
         return True
 
     def plug_new(self, network_id, port_id, device_name, mac_address,
-                 bridge=None, namespace=None, prefix=None, mtu=None):
+                 bridge=None, namespace=None, prefix=None, mtu=None,
+                 link_up=True):
         """Plugin the interface."""
         ip = ip_lib.IPWrapper()
 
