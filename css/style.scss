@@ -203,7 +203,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
         -webkit-font-smoothing: antialiased;        
       }
 
-      // Submenu Navigation for Desktop
+      // Submenu Navigation for full size mode
       ul {
         @media (min-width: $screen-sm-min) {
           padding: 13px 0 0 0;
@@ -212,10 +212,6 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
           li {
             min-height: 24px !important;
             padding: 13px 20px;
-            display: block;
-            overflow: hidden;
-            width: 220px;
-            margin: 0;
 
             a {
               color: #fff;
