@@ -466,7 +466,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
 		if (CALI_F_FROM_WEP || CALI_F_TO_WEP ||
-			!cali_rt_flags_local_host(cali_rt_lookup_flags(ip_header->daddr))) {
+			(CALI_F_FROM_HEP && !cali_rt_flags_local_host(cali_rt_lookup_flags(ip_header->daddr)))) {
 			fwd.reason = CALI_REASON_IP_OPTIONS;
 			CALI_DEBUG("Drop packets with IP options\n");
 			goto deny;
