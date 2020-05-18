@@ -59,6 +59,7 @@ class TestElection(unittest.TestCase):
         self.sys_exit_p.stop()
         self.print_exc_patch.stop()
         eventlet.sleep = self._real_sleep
+        etcdv3._client = None
         super(TestElection, self).tearDown()
 
     def test_invalid(self):

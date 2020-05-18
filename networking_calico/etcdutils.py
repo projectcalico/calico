@@ -124,6 +124,7 @@ class EtcdWatcher(object):
         self.round_trip_suffix = round_trip_suffix
         self.dispatcher = PathDispatcher()
         self._stopped = False
+        self.debug_reporter = lambda msg: msg
 
     def register_path(self, *args, **kwargs):
         self.dispatcher.register(*args, **kwargs)
@@ -276,6 +277,7 @@ class EtcdWatcher(object):
                 # Loop until we should cancel the watch, either because of
                 # inactivity or because of stop() having been called.
                 while not self._stopped:
+                    self.debug_reporter("Start of loop")
                     # If WATCH_TIMEOUT_SECS has now passed since the last watch
                     # event, break out of this loop.  If we are also writing a
                     # key within the tree every WATCH_TIMEOUT_SECS / 3 seconds,
@@ -288,6 +290,7 @@ class EtcdWatcher(object):
                     if time_now > last_event_time + WATCH_TIMEOUT_SECS:
                         if self.round_trip_suffix is not None:
                             LOG.warning("Watch is not working")
+                            self.debug_reporter("Watch is not working")
                         else:
                             LOG.debug("Watch timed out")
                         break
@@ -296,8 +299,14 @@ class EtcdWatcher(object):
                         # Write to a key in the tree that we are watching.  If
                         # the watch is working normally, it will report this
                         # event.
-                        etcdv3.put(self.prefix + self.round_trip_suffix,
-                                   str(time_now))
+                        try:
+                            etcdv3.put(self.prefix + self.round_trip_suffix,
+                                       str(time_now))
+                            self.debug_reporter("Wrote round-trip key")
+                        except ConnectionFailedError:
+                            LOG.exception(
+                                "etcd not available for watch round trip check"
+                            )
 
                     # Sleep until time for next write.
                     eventlet.sleep(WATCH_TIMEOUT_SECS / 3)
@@ -310,6 +319,7 @@ class EtcdWatcher(object):
             # Spawn a greenlet to cancel the watch if it stops working, or if
             # stop() is called.  Cancelling the watch adds None to the event
             # stream, so the following for loop will see that.
+            self.debug_reporter("Start _cancel_watch_if_broken")
             eventlet.spawn(_cancel_watch_if_broken)
 
             for event in event_stream:
