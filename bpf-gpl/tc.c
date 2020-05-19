@@ -470,13 +470,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		fwd.reason = CALI_REASON_IP_MALFORMED;
 		CALI_DEBUG("Drop malformed IP packets\n");
 		goto deny;
-	}
-	else if (ip_header->ihl > 5) {
+	} else if (ip_header->ihl > 5) {
 		/* Drop packets with IP options from/to WEP.
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
-		if (CALI_F_FROM_WEP || CALI_F_TO_WEP ||
-			(CALI_F_FROM_HEP && !cali_rt_flags_local_host(cali_rt_lookup_flags(ip_header->daddr)))) {
+		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ip_header->daddr))) {
 			fwd.reason = CALI_REASON_IP_OPTIONS;
 			CALI_DEBUG("Drop packets with IP options\n");
 			goto deny;
