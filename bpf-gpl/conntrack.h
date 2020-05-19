@@ -58,8 +58,11 @@ enum cali_ct_type {
 					 */
 };
 
-#define CALI_CT_FLAG_NAT_OUT	0x01
-#define CALI_CT_FLAG_DSR_FWD	0x02 /* marks entry into the tunnel on the fwd node when dsr */
+#define CALI_CT_FLAG_NAT_OUT	(1 << 0)
+#define CALI_CT_FLAG_DSR_FWD	(1 << 1) /* marks entry into the tunnel on the fwd node when dsr */
+#define CALI_CT_FLAG_NP_FWD	(1 << 2) /* marks entry into the tunnel on the fwd node */
+
+#define ct_result_np_node(res)		((res).flags & CALI_CT_FLAG_NP_FWD)
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -124,7 +127,9 @@ struct ct_ctx {
 	__u16 dport;
 	__u16 orig_dport;
 	struct tcphdr *tcp;
-	__be32 nat_tun_src;
+	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
+			* It is also set on the first node when we create the
+			* initial CT entry for the tunneled traffic. */
 	__u8 flags;
 };
 
@@ -150,6 +155,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 	__u16 dport = ctx->dport;
 	__be32 orig_dst = ctx->orig_dst;
 	__u16 orig_dport = ctx->orig_dport;
+	int err = 0;
 
 
 	__be32 seq = 0;
@@ -214,9 +220,19 @@ create:
 	ct_value.flags = ctx->flags;
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
-	if (type == CALI_CT_TYPE_NAT_REV && ctx->nat_tun_src) {
-		ct_value.tun_ip = ctx->nat_tun_src;
-		CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->nat_tun_src));
+	if (type == CALI_CT_TYPE_NAT_REV && ctx->tun_ip) {
+		if (ctx->flags & CALI_CT_FLAG_NP_FWD) {
+			CALI_DEBUG("CT-ALL nat tunneled to %x\n", be32_to_host(ctx->tun_ip));
+		} else {
+			struct cali_rt *rt = cali_rt_lookup(ctx->tun_ip);
+			if (!rt || !cali_rt_is_host(rt)) {
+				CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", be32_to_host(ctx->tun_ip));
+				err = -1;
+				goto out;
+			}
+			CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->tun_ip));
+		}
+		ct_value.tun_ip = ctx->tun_ip;
 	}
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
@@ -274,7 +290,9 @@ create:
 		CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
 	}
 
-	int err = cali_v4_ct_update_elem(k, &ct_value, 0);
+	err = cali_v4_ct_update_elem(k, &ct_value, 0);
+
+out:
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
 	return err;
 }
@@ -330,11 +348,17 @@ static CALI_BPF_INLINE int calico_ct_v4_create(struct ct_ctx *ctx)
 static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx, int nat)
 {
 	struct calico_ct_key k;
+	int err;
 
-	calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NAT_REV, nat);
-	calico_ct_v4_create_nat_fwd(ctx, &k);
+	err = calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NAT_REV, nat);
+	if (!err) {
+		err = calico_ct_v4_create_nat_fwd(ctx, &k);
+		if (err) {
+			/* XXX we should clean up the tracking entry */
+		}
+	}
 
-	return 0;
+	return err;
 }
 
 enum calico_ct_result_type {
@@ -348,6 +372,7 @@ enum calico_ct_result_type {
 
 #define CALI_CT_RELATED		(1 << 8)
 #define CALI_CT_RPF_FAILED	(1 << 9)
+#define CALI_CT_TUN_SRC_CHANGED	(1 << 10)
 
 #define ct_result_rc(rc)		((rc) & 0xff)
 #define ct_result_flags(rc)		((rc) & ~0xff)
@@ -355,17 +380,18 @@ enum calico_ct_result_type {
 
 #define ct_result_is_related(rc)	((rc) & CALI_CT_RELATED)
 #define ct_result_rpf_failed(rc)	((rc) & CALI_CT_RPF_FAILED)
+#define ct_result_tun_src_changed(rc)	((rc) & CALI_CT_TUN_SRC_CHANGED)
 
 struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
 	__be32 nat_ip;
 	__u32 nat_port;
-	__be32 tun_ret_ip;
+	__be32 tun_ip;
 };
 
 /* skb_is_icmp_err_unpack fills in ctx, but only what needs to be changed. For instance, keeps the
- * cxt->skb or ctx->nat_tun_src. It returns true if the original packet is an icmp error and all
+ * cxt->skb or ctx->tun_ip. It returns true if the original packet is an icmp error and all
  * checks went well.
  */
 static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct __sk_buff *skb, struct ct_ctx *ctx)
@@ -585,8 +611,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.nat_ip = v->nat_rev_key.addr_a;
 			result.nat_port = v->nat_rev_key.port_a;
 		}
-		result.tun_ret_ip = tracking_v->tun_ip;
+		result.tun_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", be32_to_host(tracking_v->tun_ip));
+		// flags are in the tracking entry
+		result.flags = tracking_v->flags;
 
 		if (ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -597,6 +625,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 		} else {
 			result.rc =	CALI_CT_ESTABLISHED;
+		}
+
+		/* If we are on a HEP - where encap/decap can happen - and if the packet
+		 * arrived through a tunnel, check if the src IP of the packet is expected.
+		 */
+		if (CALI_F_FROM_HEP && ctx->tun_ip && result.tun_ip && result.tun_ip != ctx->tun_ip) {
+			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
+					be32_to_host(result.tun_ip), be32_to_host(ctx->tun_ip));
+			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
 		}
 
 		break;
@@ -611,7 +648,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			dst_to_src = &v->a_to_b;
 		}
 
-		result.tun_ret_ip = v->tun_ip;
+		result.tun_ip = v->tun_ip;
 		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
 
 		if (ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
@@ -691,10 +728,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 
 	int ret_from_tun = CALI_F_FROM_HEP &&
-				ctx->nat_tun_src &&
+				ctx->tun_ip &&
 				result.rc == CALI_CT_ESTABLISHED_DNAT &&
 				src_to_dst->whitelisted &&
-				!result.tun_ret_ip;
+				result.flags & CALI_CT_FLAG_NP_FWD;
 
 	if (related) {
 		if (proto_orig == IPPROTO_ICMP) {
@@ -710,7 +747,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 
 	if (ret_from_tun) {
-		CALI_DEBUG("Packet returned from tunnel %x\n", be32_to_host(ctx->nat_tun_src));
+		CALI_DEBUG("Packet returned from tunnel %x\n", be32_to_host(ctx->tun_ip));
 	} else if (CALI_F_TO_HOST) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {

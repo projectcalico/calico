@@ -69,6 +69,15 @@ var (
 	node1ip           = net.IPv4(10, 10, 0, 1).To4()
 	node1ip2          = net.IPv4(10, 10, 2, 1).To4()
 	node2ip           = net.IPv4(10, 10, 0, 2).To4()
+
+	node1CIDR = net.IPNet{
+		IP:   node1ip,
+		Mask: net.IPv4Mask(255, 255, 255, 255),
+	}
+	node2CIDR = net.IPNet{
+		IP:   node2ip,
+		Mask: net.IPv4Mask(255, 255, 255, 255),
+	}
 )
 
 // Globals that we use to configure the next test run.
