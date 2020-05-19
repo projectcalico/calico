@@ -60,13 +60,20 @@ import (
 //    attr->file_flags = flags;
 // }
 //
-// // bpf_attr_setup_map_elem sets up the bpf_attr union for use with BPF_MAP_GET|UPDATE|DELETE_ELEM.
+// // bpf_attr_setup_map_elem sets up the bpf_attr union for use with BPF_MAP_GET|UPDATE
 // // A C function makes this easier because unions aren't easy to access from Go.
 // void bpf_attr_setup_map_elem(union bpf_attr *attr, __u32 map_fd, void *pointer_to_key, void *pointer_to_value, __u64 flags) {
 //    attr->map_fd = map_fd;
 //    attr->key = (__u64)(unsigned long)pointer_to_key;
 //    attr->value = (__u64)(unsigned long)pointer_to_value;
 //    attr->flags = flags;
+// }
+//
+// // bpf_attr_setup_map_elem_for_delete sets up the bpf_attr union for use with BPF_MAP_DELETE_ELEM
+// // A C function makes this easier because unions aren't easy to access from Go.
+// void bpf_attr_setup_map_elem_for_delete(union bpf_attr *attr, __u32 map_fd, void *pointer_to_key) {
+//    attr->map_fd = map_fd;
+//    attr->key = (__u64)(unsigned long)pointer_to_key;
 // }
 //
 // // bpf_attr_setup_load_prog sets up the bpf_attr union for use with BPF_PROG_LOAD.
@@ -336,7 +343,7 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 }
 
 func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
-	log.Debugf("GetMapEntry(%v, %v, %v)", mapFD, k, valueSize)
+	log.Debugf("DeleteMapEntry(%v, %v, %v)", mapFD, k, valueSize)
 
 	err := checkMapIfDebug(mapFD, len(k), valueSize)
 	if err != nil {
@@ -350,14 +357,12 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 	// intermediate struct.
 	cK := C.CBytes(k)
 	defer C.free(cK)
-	cV := C.malloc(C.size_t(valueSize))
-	defer C.free(cV)
 
-	C.bpf_attr_setup_map_elem(bpfAttr, C.uint(mapFD), cK, cV, unix.BPF_ANY)
+	C.bpf_attr_setup_map_elem_for_delete(bpfAttr, C.uint(mapFD), cK)
 
 	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_DELETE_ELEM, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 
-	if errno != 0 && !IsNotExists(errno) {
+	if errno != 0 {
 		return errno
 	}
 	return nil

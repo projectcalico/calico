@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -204,33 +203,11 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 	return GetMapEntry(b.fd, k, b.ValueSize)
 }
 
-func appendBytes(strings []string, bytes []byte) []string {
-	for _, b := range bytes {
-		strings = append(strings, strconv.FormatInt(int64(b), 10))
-	}
-	return strings
-}
-
 func (b *PinnedMap) Delete(k []byte) error {
-	logrus.WithField("key", k).Debug("Deleting map entry")
-	args := make([]string, 0, 10+len(k))
-	args = append(args, "map", "delete",
-		"pinned", b.versionedFilename(),
-		"key")
-	args = appendBytes(args, k)
-
-	cmd := exec.Command("bpftool", args...)
-	out, err := cmd.Output()
-	if err != nil {
-		if err, ok := err.(*exec.ExitError); ok {
-			if strings.Contains(string(err.Stderr), "delete failed: No such file or directory") {
-				logrus.WithField("k", k).Debug("Item didn't exist.")
-				return os.ErrNotExist
-			}
-		}
-		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
+	if b.perCPU {
+		logrus.Panic("Per-CPU operations not implemented")
 	}
-	return err
+	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
 func (b *PinnedMap) EnsureExists() error {
