@@ -207,13 +207,7 @@ func (b *PinnedMap) Delete(k []byte) error {
 	if b.perCPU {
 		logrus.Panic("Per-CPU operations not implemented")
 	}
-	err := DeleteMapEntry(b.fd, k, b.ValueSize)
-	if err != nil {
-		if IsNotExists(err) {
-			return os.ErrNotExist
-		}
-	}
-	return err
+	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
 func (b *PinnedMap) EnsureExists() error {
