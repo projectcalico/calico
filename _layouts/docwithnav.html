@@ -56,6 +56,7 @@ The code is a little roundabout for a few reasons:
     <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
+    <script src="{{site.baseurl}}/js/algoliasearch/algoliasearch.min.js"></script>
     <script src="{{site.baseurl}}/js/instantsearch/instantsearch.min.js"></script>
     <script src="{{site.baseurl}}/js/script.js"></script>
     <script defer src="{{site.baseurl}}/js/scrollPage.js"></script>
@@ -86,7 +87,7 @@ The code is a little roundabout for a few reasons:
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5FQ2QV4" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     <section>
-      <nav id="toplevel-nav" class="navbar navbar-default navbar-static-top">
+      <nav id="toplevel-nav" class="navbar navbar-default navbar-fixed-top">
         <div class="container-fluid">
           <div class="navbar-header">
             <!-- Hamburger menu for mobile -->
@@ -159,6 +160,7 @@ The code is a little roundabout for a few reasons:
                   <div class="search-container__pagination"></div>
                 </div>
               </div>
+              <div class="search-powered-by" ></div>
               <div id="sidebar">
                 <div class="panel-group" id="sidebar-accordion">
                   {% for navbar in navbars %}
@@ -172,7 +174,7 @@ The code is a little roundabout for a few reasons:
                         aria-controls="{{ navbar_id }}"
                       >
                         <h4 class="panel-title">
-                            <a href="{{site.baseurl}}{{navbar.path}}" class="{% if navbar.section %}navbar-title--not-clickable{% endif %}">
+                            <a href="{{site.baseurl}}{{navbar.path}}" class="navbar-title--{% if navbar.section %}not-clickable{% else %}clickable{% endif %}">
                               <span>{{ navbar.title }}</span>
                             </a>
                         </h4>
@@ -255,56 +257,9 @@ The code is a little roundabout for a few reasons:
 
     <script src="{{site.baseurl}}/js/searchConfig.js"></script>
 
-    <script type="text/template" id="search-results-template">
-      {% raw %}
-      <div class="search-results">
-        {{#hits}}
-
-        {{#shouldDisplayTopCategory}}
-        {{#hierarchy.lvl0}}
-          <a href="{{url}}" class="search-results__group-header">
-            {{{_highlightResult.hierarchy.lvl0.value}}}
-          </a>
-        {{/hierarchy.lvl0}}
-        {{/shouldDisplayTopCategory}}
-
-        <div class="search-results__search-result search-result columns-layout">
-          <div class="columns-layout__left-column">
-            {{#hierarchy.lvl1}}
-              <a href="{{url}}" class="search-result__subcategory">
-                {{{_highlightResult.hierarchy.lvl1.value}}}
-              </a>
-            {{/hierarchy.lvl1}}
-          </div>
-
-          <div class="columns-layout__right-column">
-            {{#hierarchy.lvl2}}
-              <a href="{{url}}" class="search-result__subsubcategory">
-                {{{_highlightResult.hierarchy.lvl2.value}}}
-              </a>
-            {{/hierarchy.lvl2}}
-
-            {{#hierarchy.lvl3}}
-              <a href="{{url}}" class="search-result__subsubsubcategory">
-                {{{_highlightResult.hierarchy.lvl3.value}}}
-              </a>
-            {{/hierarchy.lvl3}}
-
-            {{#content}}
-              <a href="{{url}}" class="search-result__content">
-                {{{_snippetResult.content.value}}}
-              </a>
-            {{/content}}
-          </div>
-        </div>
-        {{/hits}}
-      </div>
-      {% endraw %}
-    </script>
-
     <script>
       $(document).ready(function() {
-        window.initializeSearch('{{page.version}}', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
+        window.initializeSearch('{{page.version}}', '.search-powered-by', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
       });
     </script>
   </body>
