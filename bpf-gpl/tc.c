@@ -442,7 +442,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		struct udphdr *udp_header = (void*)(ip_header+1);
 		/* decap on host ep only if directly for the node */
 		CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ip_header->daddr, HOST_IP);
-		if (ip_header->daddr == HOST_IP &&
+		if (rt_addr_is_local_host(ip_header->daddr) &&
 				vxlan_udp_csum_ok(udp_header) &&
 				vxlan_size_ok(skb, udp_header) &&
 				vxlan_vni_is_valid(skb, udp_header) &&
