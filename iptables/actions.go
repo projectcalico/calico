@@ -21,7 +21,7 @@ type Action interface {
 }
 
 type Referrer interface {
-	ReferredToChain() string
+	ReferencedChain() string
 }
 
 type GotoAction struct {
@@ -37,11 +37,11 @@ func (g GotoAction) String() string {
 	return "Goto->" + g.Target
 }
 
-func (g GotoAction) ReferredToChain() string {
+func (g GotoAction) ReferencedChain() string {
 	return g.Target
 }
 
-var _ Referrer = (*GotoAction)(nil)
+var _ Referrer = GotoAction{}
 
 type JumpAction struct {
 	Target   string
@@ -56,11 +56,11 @@ func (g JumpAction) String() string {
 	return "Jump->" + g.Target
 }
 
-func (g JumpAction) ReferredToChain() string {
+func (g JumpAction) ReferencedChain() string {
 	return g.Target
 }
 
-var _ Referrer = (*JumpAction)(nil)
+var _ Referrer = JumpAction{}
 
 type ReturnAction struct {
 	TypeReturn struct{}

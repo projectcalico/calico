@@ -197,7 +197,7 @@ type Table struct {
 	// as needed).
 	chainNameToChain map[string]*Chain
 	// chainRefCounts counts the number of chains that refer to a given chain.  Transitive
-	// reachabilty isn't tracked but testing whether a chain is referenced does allow us to
+	// reachability isn't tracked but testing whether a chain is referenced does allow us to
 	// avoid programming unreferenced leaf chains (for example, policies that aren't used in
 	// this table).
 	chainRefCounts map[string]int
@@ -518,7 +518,7 @@ func (t *Table) RemoveChainByName(name string) {
 func (t *Table) increfReferredChains(rules []Rule) {
 	for _, r := range rules {
 		if ref, ok := r.Action.(Referrer); ok {
-			t.increfChain(ref.ReferredToChain())
+			t.increfChain(ref.ReferencedChain())
 		}
 	}
 }
@@ -528,7 +528,7 @@ func (t *Table) increfReferredChains(rules []Rule) {
 func (t *Table) decrefReferredChains(rules []Rule) {
 	for _, r := range rules {
 		if ref, ok := r.Action.(Referrer); ok {
-			t.decrefChain(ref.ReferredToChain())
+			t.decrefChain(ref.ReferencedChain())
 		}
 	}
 }
