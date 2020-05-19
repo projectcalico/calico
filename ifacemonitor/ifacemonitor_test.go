@@ -27,8 +27,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"github.com/projectcalico/felix/ifacemonitor"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,7 +43,7 @@ type linkModel struct {
 
 type netlinkTest struct {
 	linkUpdates    chan netlink.LinkUpdate
-	addrUpdates    chan netlink.AddrUpdate
+	routeUpdates   chan netlink.RouteUpdate
 	userSubscribed chan int
 
 	nextIndex int
@@ -198,25 +199,32 @@ func (nl *netlinkTest) signalAddr(name string, addr string, exists bool) {
 		panic("Address parsing failed")
 	}
 	nl.linksMutex.Lock()
-	update := netlink.AddrUpdate{
-		LinkIndex:   nl.links[name].index,
-		NewAddr:     exists,
-		LinkAddress: *net,
+
+	routeUpd := netlink.RouteUpdate{}
+	routeUpd.Dst = net
+	routeUpd.Route.Type = unix.RTN_LOCAL
+	routeUpd.Table = unix.RT_TABLE_LOCAL
+	routeUpd.LinkIndex = nl.links[name].index
+	if exists {
+		routeUpd.Type = unix.RTM_NEWROUTE
+	} else {
+		routeUpd.Type = unix.RTM_DELROUTE
 	}
+
 	nl.linksMutex.Unlock()
 
 	// Send it.
 	log.WithField("channel", nl.linkUpdates).Info("Test code signaling an addr update")
-	nl.addrUpdates <- update
+	nl.routeUpdates <- routeUpd
 	log.Info("Test code signaled an addr update")
 }
 
 func (nl *netlinkTest) Subscribe(
 	linkUpdates chan netlink.LinkUpdate,
-	addrUpdates chan netlink.AddrUpdate,
+	routeUpdates chan netlink.RouteUpdate,
 ) error {
 	nl.linkUpdates = linkUpdates
-	nl.addrUpdates = addrUpdates
+	nl.routeUpdates = routeUpdates
 	nl.userSubscribed <- 1
 	return nil
 }
@@ -239,6 +247,40 @@ func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
 	}
 	nl.linksMutex.Unlock()
 	return links, nil
+}
+
+func (nl *netlinkTest) ListLocalRoutes(link netlink.Link, family int) ([]netlink.Route, error) {
+	name := link.Attrs().Name
+	nl.linksMutex.Lock()
+	defer nl.linksMutex.Unlock()
+	model, prs := nl.links[name]
+	var routes []netlink.Route
+	if prs {
+		model.addrs.Iter(func(item interface{}) error {
+			addr := item.(string)
+			net, err := netlink.ParseIPNet(addr)
+			if err != nil {
+				panic("Address parsing failed")
+			}
+			if strings.ContainsRune(addr, ':') {
+				if family == netlink.FAMILY_V6 {
+					routes = append(routes, netlink.Route{
+						Type: unix.RTN_LOCAL,
+						Dst:  net,
+					})
+				}
+			} else {
+				if family == netlink.FAMILY_V4 {
+					routes = append(routes, netlink.Route{
+						Type: unix.RTN_LOCAL,
+						Dst:  net,
+					})
+				}
+			}
+			return nil
+		})
+	}
+	return routes, nil
 }
 
 func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
@@ -323,18 +365,21 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, presen
 		"ifaceName": cbIface.ifaceName,
 		"addrs":     cbIface.addrs,
 	}).Debug("Mock dp got addr cb")
-	Expect(cbIface.ifaceName).To(Equal(ifaceName))
+	ExpectWithOffset(1, cbIface.ifaceName).To(Equal(ifaceName),
+		"Got update for unexpected interface name")
 	if (addr == "") && (!present) {
 		// Expected to get a nil addrs.
-		Expect(cbIface.addrs).To(BeNil())
+		ExpectWithOffset(1, cbIface.addrs).To(BeNil(), "Expected no addresses")
 	}
 	if (addr != "") && (!present) && cbIface.addrs != nil {
 		// Expected addr to be missing
-		Expect(cbIface.addrs.Contains(addr)).To(BeFalse())
+		ExpectWithOffset(1, cbIface.addrs.Contains(addr)).To(BeFalse(),
+			fmt.Sprintf("Expected %v not to contain %v", cbIface.addrs, addr))
 	}
 	if (addr != "") && present {
 		// Expected addr to be present
-		Expect(cbIface.addrs.Contains(addr)).To(BeTrue())
+		ExpectWithOffset(1, cbIface.addrs.Contains(addr)).To(BeTrue(),
+			fmt.Sprintf("Expected %v to contain %v", cbIface.addrs, addr))
 	}
 }
 

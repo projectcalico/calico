@@ -48,42 +48,42 @@ func TestUpdateFilter_FilterUpdates_LinkUpdateDelay(t *testing.T) {
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
-func TestUpdateFilter_FilterUpdates_AddrUpdatePassThru(t *testing.T) {
-	t.Log("Addr ADD updates should be passed through if there's nothing in the queue")
+func TestUpdateFilter_FilterUpdates_RouteUpdatePassThru(t *testing.T) {
+	t.Log("Route ADD updates should be passed through if there's nothing in the queue")
 	harness, cancel := setUpFilterTest(t)
 	defer cancel()
 
-	addrUpd := addrUpdate("10.0.0.1/16", true, 2)
-	harness.AddrIn <- addrUpd
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrUpd)))
+	routeUpd := routeUpdate("10.0.0.1/16", true, 2)
+	harness.RouteIn <- routeUpd
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeUpd)))
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
-func TestUpdateFilter_FilterUpdates_AddrUpdateSquash(t *testing.T) {
+func TestUpdateFilter_FilterUpdates_RouteUpdateSquash(t *testing.T) {
 	t.Log("After a DEL, an ADD and a link update should be delayed.")
 	harness, cancel := setUpFilterTest(t)
 	defer cancel()
 
 	// This DEL will cause the iface 2 queue to block.
-	addrDel := addrUpdate("10.0.0.1/16", false, 2)
-	harness.AddrIn <- addrDel
+	routeDel := routeUpdate("10.0.0.1/16", false, 2)
+	harness.RouteIn <- routeDel
 
 	// This DEL will be squashed by the following ADD.
-	addrDel2 := addrUpdate("10.0.0.2/16", false, 2)
-	harness.AddrIn <- addrDel2
-	addrAdd2 := addrUpdate("10.0.0.2/16", true, 2)
-	harness.AddrIn <- addrAdd2
+	routeDel2 := routeUpdate("10.0.0.2/16", false, 2)
+	harness.RouteIn <- routeDel2
+	routeAdd2 := routeUpdate("10.0.0.2/16", true, 2)
+	harness.RouteIn <- routeAdd2
 
 	// But this ADD on a different interface should go through without delay.
 	// (Waiting for this makes sure that the filter has pulled the other items
 	// off the channel, avoiding a race in the test.)
-	addrAdd3 := addrUpdate("10.0.0.3/16", true, 3)
-	harness.AddrIn <- addrAdd3
+	routeAdd3 := routeUpdate("10.0.0.3/16", true, 3)
+	harness.RouteIn <- routeAdd3
 
 	t.Log("Should get the unblocked ADD first.")
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd3)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd3)))
 
-	// Now we know the other addr updates have been processed, this link update should get queued.
+	// Now we know the other route updates have been processed, this link update should get queued.
 	linkUpd := linkUpdateWithIndex(2)
 	harness.LinkIn <- linkUpd
 	// Need to let the filter receive the above update before we can advance time.
@@ -91,15 +91,15 @@ func TestUpdateFilter_FilterUpdates_AddrUpdateSquash(t *testing.T) {
 
 	t.Log("Shouldn't get any output after 99ms.")
 	harness.Time.IncrementTime(99 * time.Millisecond)
-	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("DEL should be dropped, should get the ADD and the link update after 100ms.")
 	harness.Time.IncrementTime(1 * time.Millisecond)
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrDel)))
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd2)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeDel)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
 	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(linkUpd)))
-	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
@@ -110,25 +110,25 @@ func TestUpdateFilter_FilterUpdates_MultipleIPs(t *testing.T) {
 	defer cancel()
 
 	// This DEL will block the following messages from being delivered.
-	addrDel := addrUpdate("10.0.0.1/16", false, 2)
-	harness.AddrIn <- addrDel
-	addrAdd := addrUpdate("10.0.0.2/16", true, 2)
-	harness.AddrIn <- addrAdd
+	routeDel := routeUpdate("10.0.0.1/16", false, 2)
+	harness.RouteIn <- routeDel
+	routeAdd := routeUpdate("10.0.0.2/16", true, 2)
+	harness.RouteIn <- routeAdd
 
 	// But this ADD on a different interface should go through without delay.
 	// (Waiting for this makes sure that the filter has pulled the other items
 	// off the channel, avoiding a race in the test.)
-	addrAdd2 := addrUpdate("10.0.0.3/16", true, 3)
-	harness.AddrIn <- addrAdd2
+	routeAdd2 := routeUpdate("10.0.0.3/16", true, 3)
+	harness.RouteIn <- routeAdd2
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd2)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
 
 	t.Log("Updates should come through after 100ms.")
 	harness.Time.IncrementTime(100 * time.Millisecond)
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrDel)))
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd)))
-	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeDel)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd)))
+	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
@@ -139,58 +139,58 @@ func TestUpdateFilter_FilterUpdates_MultipleIPsWithSquash(t *testing.T) {
 	defer cancel()
 
 	// This DEL will block the following messages from being delivered.
-	addrDelTenOne := addrUpdate("10.0.0.1/16", false, 2)
-	harness.AddrIn <- addrDelTenOne
-	addrAddTenTwo := addrUpdate("10.0.0.2/16", true, 2)
-	harness.AddrIn <- addrAddTenTwo
+	addrDelTenOne := routeUpdate("10.0.0.1/16", false, 2)
+	harness.RouteIn <- addrDelTenOne
+	addrAddTenTwo := routeUpdate("10.0.0.2/16", true, 2)
+	harness.RouteIn <- addrAddTenTwo
 	// This ADD should squash the earlier DEL for this IP.
-	addrAddTenOne := addrUpdate("10.0.0.1/16", true, 2)
-	harness.AddrIn <- addrAddTenOne
+	addrAddTenOne := routeUpdate("10.0.0.1/16", true, 2)
+	harness.RouteIn <- addrAddTenOne
 
 	// But this ADD on a different interface should go through without delay.
 	// (Waiting for this makes sure that the filter has pulled the other items
 	// off the channel, avoiding a race in the test.)
-	addrAddTenThree := addrUpdate("10.0.0.3/16", true, 3)
-	harness.AddrIn <- addrAddTenThree
+	addrAddTenThree := routeUpdate("10.0.0.3/16", true, 3)
+	harness.RouteIn <- addrAddTenThree
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenThree)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenThree)))
 
 	t.Log("Updates should come through after 100ms.")
 	harness.Time.IncrementTime(100 * time.Millisecond)
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenTwo)))
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenOne)))
-	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenTwo)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenOne)))
+	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
-func TestUpdateFilter_FilterUpdates_AddrUpdateDelOnly(t *testing.T) {
-	t.Log("Addr DEL followed by an ADD should be delayed and coalesced")
+func TestUpdateFilter_FilterUpdates_RouteUpdateDelOnly(t *testing.T) {
+	t.Log("Route DEL followed by an ADD should be delayed and coalesced")
 	harness, cancel := setUpFilterTest(t)
 	defer cancel()
 
-	addrDel := addrUpdate("10.0.0.1/16", false, 2)
+	routeDel := routeUpdate("10.0.0.1/16", false, 2)
 	// This DEL will be queued.
-	harness.AddrIn <- addrDel
+	harness.RouteIn <- routeDel
 
 	// But this ADD on a different interface should go through without delay.
 	// (Waiting for this makes sure that the filter has pulled the other items
 	// off the channel, avoiding a race in the test.)
-	addrAdd2 := addrUpdate("10.0.0.2/16", true, 3)
-	harness.AddrIn <- addrAdd2
+	routeAdd2 := routeUpdate("10.0.0.2/16", true, 3)
+	harness.RouteIn <- routeAdd2
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAdd2)))
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
 
 	t.Log("Shouldn't get any output after 99ms.")
 	harness.Time.IncrementTime(99 * time.Millisecond)
-	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("Should get only the DEL after 100ms.")
 	harness.Time.IncrementTime(1 * time.Millisecond)
-	Eventually(harness.AddrOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrDel)))
-	Consistently(harness.AddrOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeDel)))
+	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -200,10 +200,10 @@ type filterUpdatesHarness struct {
 	Ctx    context.Context
 	Cancel context.CancelFunc
 
-	LinkIn  chan netlink.LinkUpdate
-	LinkOut chan netlink.LinkUpdate
-	AddrIn  chan netlink.AddrUpdate
-	AddrOut chan netlink.AddrUpdate
+	LinkIn   chan netlink.LinkUpdate
+	LinkOut  chan netlink.LinkUpdate
+	RouteIn  chan netlink.RouteUpdate
+	RouteOut chan netlink.RouteUpdate
 }
 
 func setUpFilterTest(t *testing.T) (*filterUpdatesHarness, context.CancelFunc) {
@@ -212,32 +212,36 @@ func setUpFilterTest(t *testing.T) (*filterUpdatesHarness, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	linkIn := make(chan netlink.LinkUpdate, 10)
-	addrIn := make(chan netlink.AddrUpdate, 10)
+	routeIn := make(chan netlink.RouteUpdate, 10)
 	linkOut := make(chan netlink.LinkUpdate, 10)
-	addrOut := make(chan netlink.AddrUpdate, 10)
+	routeOut := make(chan netlink.RouteUpdate, 10)
 
-	go ifacemonitor.FilterUpdates(ctx, addrOut, addrIn, linkOut, linkIn, ifacemonitor.WithTimeShim(mockTime))
+	go ifacemonitor.FilterUpdates(ctx, routeOut, routeIn, linkOut, linkIn, ifacemonitor.WithTimeShim(mockTime))
 	return &filterUpdatesHarness{
 		Ctx:    ctx,
 		Cancel: cancel,
 		Time:   mockTime,
 
-		LinkIn:  linkIn,
-		LinkOut: linkOut,
-		AddrIn:  addrIn,
-		AddrOut: addrOut,
+		LinkIn:   linkIn,
+		LinkOut:  linkOut,
+		RouteIn:  routeIn,
+		RouteOut: routeOut,
 	}, cancel
 }
 
-func addrUpdate(cidrStr string, up bool, ifaceIdx int) netlink.AddrUpdate {
+func routeUpdate(cidrStr string, up bool, ifaceIdx int) netlink.RouteUpdate {
 	ip, cidr, _ := net.ParseCIDR(cidrStr)
 	cidr.IP = ip.To4()
-	addrUpd := netlink.AddrUpdate{
-		LinkAddress: *cidr,
-		LinkIndex:   ifaceIdx,
-		NewAddr:     up,
+	routeUpd := netlink.RouteUpdate{}
+	routeUpd.Dst = cidr
+	routeUpd.Route.Type = unix.RTN_LOCAL
+	routeUpd.LinkIndex = ifaceIdx
+	if up {
+		routeUpd.Type = unix.RTM_NEWROUTE
+	} else {
+		routeUpd.Type = unix.RTM_DELROUTE
 	}
-	return addrUpd
+	return routeUpd
 }
 
 func linkUpdateWithIndex(idx int) netlink.LinkUpdate {

@@ -20,8 +20,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	timeshim "github.com/projectcalico/felix/time"
 )
@@ -48,7 +50,7 @@ func WithTimeShim(t timeshim.Time) UpdateFilterOp {
 // * When we see a potential flap (i.e. an IP deletion), defer processing the queue for a while.
 // * If the flap resolves itself (i.e. the IP is added back), suppress the IP deletion.
 func FilterUpdates(ctx context.Context,
-	addrOutC chan<- netlink.AddrUpdate, addrInC <-chan netlink.AddrUpdate,
+	addrOutC chan<- netlink.RouteUpdate, routeInC <-chan netlink.RouteUpdate,
 	linkOutC chan<- netlink.LinkUpdate, linkInC <-chan netlink.LinkUpdate,
 	options ...UpdateFilterOp) {
 
@@ -64,7 +66,7 @@ func FilterUpdates(ctx context.Context,
 
 	type timestampedUpd struct {
 		ReadyAt time.Time
-		Update  interface{} // AddrUpdate or LinkUpdate
+		Update  interface{} // RouteUpdate or LinkUpdate
 	}
 
 	updatesByIfaceIdx := map[int][]timestampedUpd{}
@@ -98,19 +100,29 @@ mainLoop:
 					ReadyAt: u.Time.Now().Add(delay),
 					Update:  linkUpd,
 				})
-		case addrUpd := <-addrInC:
-			idx := addrUpd.LinkIndex
+		case routeUpd := <-routeInC:
+			logrus.WithField("route", spew.Sdump(routeUpd)).Debug("Route update")
+			if routeUpd.Route.Type&unix.RTN_LOCAL == 0 {
+				logrus.WithField("route", routeUpd).Debug("Ignoring non-local route.")
+				continue
+			}
+			if routeUpd.LinkIndex == 0 {
+				logrus.WithField("route", routeUpd).Debug("Ignoring route with no link index.")
+				continue
+			}
+
+			idx := routeUpd.LinkIndex
 			oldUpds := updatesByIfaceIdx[idx]
 
 			var readyToSendTime time.Time
-			if addrUpd.NewAddr {
-				logrus.WithField("addr", addrUpd.LinkAddress).Debug("FilterUpdates: got address ADD")
+			if routeUpd.Type == unix.RTM_NEWROUTE {
+				logrus.WithField("addr", routeUpd.Dst).Debug("FilterUpdates: got address ADD")
 				if len(oldUpds) == 0 {
 					// This is an add for a new IP and there's nothing else in the queue for this interface.
 					// Short circuit.  We care about flaps where IPs are temporarily removed so no need to
 					// delay an add.
 					logrus.Debug("FilterUpdates: add with empty queue, short circuit.")
-					addrOutC <- addrUpd
+					addrOutC <- routeUpd
 					continue
 				}
 
@@ -121,7 +133,7 @@ mainLoop:
 				readyToSendTime = u.Time.Now()
 			} else {
 				// Got a delete, it might be a flap so queue the update.
-				logrus.WithField("addr", addrUpd.LinkAddress).Debug("FilterUpdates: got address DEL")
+				logrus.WithField("addr", routeUpd.Dst).Debug("FilterUpdates: got address DEL")
 				readyToSendTime = u.Time.Now().Add(FlapDampingDelay)
 			}
 
@@ -131,17 +143,17 @@ mainLoop:
 			upds := oldUpds[:0]
 			for _, upd := range oldUpds {
 				logrus.WithField("previous", upd).Debug("FilterUpdates: examining previous update.")
-				if oldAddrUpd, ok := upd.Update.(netlink.AddrUpdate); ok {
-					if ipNetsEqual(oldAddrUpd.LinkAddress, addrUpd.LinkAddress) {
+				if oldAddrUpd, ok := upd.Update.(netlink.RouteUpdate); ok {
+					if ipNetsEqual(oldAddrUpd.Dst, routeUpd.Dst) {
 						// New update for the same IP, suppress the old update
-						logrus.WithField("address", oldAddrUpd.LinkAddress.String()).Debug(
+						logrus.WithField("address", oldAddrUpd.Dst.String()).Debug(
 							"Received update for same IP within a short time, squashed the old update.")
 						continue
 					}
 				}
 				upds = append(upds, upd)
 			}
-			upds = append(upds, timestampedUpd{ReadyAt: readyToSendTime, Update: addrUpd})
+			upds = append(upds, timestampedUpd{ReadyAt: readyToSendTime, Update: routeUpd})
 			updatesByIfaceIdx[idx] = upds
 		case <-timerC:
 			logrus.Debug("FilterUpdates: timer popped.")
@@ -165,7 +177,7 @@ mainLoop:
 					// Ready to send...
 					logrus.WithField("update", firstUpd).Debug("FilterUpdates: update ready to send.")
 					switch u := firstUpd.Update.(type) {
-					case netlink.AddrUpdate:
+					case netlink.RouteUpdate:
 						addrOutC <- u
 					case netlink.LinkUpdate:
 						linkOutC <- u
@@ -205,7 +217,13 @@ mainLoop:
 	}
 }
 
-func ipNetsEqual(a net.IPNet, b net.IPNet) bool {
+func ipNetsEqual(a *net.IPNet, b *net.IPNet) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	aSize, aBits := a.Mask.Size()
 	bSize, bBits := b.Mask.Size()
 	return a.IP.Equal(b.IP) && aSize == bSize && aBits == bBits
