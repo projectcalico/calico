@@ -192,7 +192,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 #tigera-navbar ul.nav li a {
   // Shrink as we approach hamburger mode
   @media (min-width: $screen-sm-min) and (max-width: 900px) {
-    padding: 0 8px;
+    padding: 0 6px;
     font-size: 13px;
   }
   @media (min-width: 901px) and (max-width: 1100px) {
