@@ -841,6 +841,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.BPFKubeProxyEndpointSlicesEnabled != nil {
+		in, out := &in.BPFKubeProxyEndpointSlicesEnabled, &out.BPFKubeProxyEndpointSlicesEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.RouteTableRange != nil {
 		in, out := &in.RouteTableRange, &out.RouteTableRange
 		*out = new(RouteTableRange)
