@@ -22,11 +22,13 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-- Verify the operating system(s) running on the nodes in the cluster [support WireGuard](https://www.wireguard.com/install/).
+Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
 
-    >**Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time.
-    {: .alert .alert-info}
-- In the tech preview release, node-to-node encryption is supported on an underlying network that doesn’t require Calico to use an overlay. For example, a cluster with a routed network topology.
+>**Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time.
+{: .alert .alert-info}
+
+>**Note**: In the tech preview release, node-to-node encryption is supported on an underlying network that doesn’t require Calico to use an overlay. For example, a cluster with a routed network topology.
+{: .alert .alert-info}
 
 ### How to
 
@@ -37,8 +39,8 @@ This how-to guide uses the following {{site.prodname}} features:
 
 1. Enable WireGuard encryption across all the nodes using the following command.
     ```
-   calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
-   ```
+     calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
+    ```
    For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{ site.baseurl }}/getting-started/openshift/installation#optionally-provide-additional-configuration).  
 
    >**Note**: This above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig#felix-configuration-definition).
