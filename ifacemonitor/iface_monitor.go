@@ -15,6 +15,7 @@
 package ifacemonitor
 
 import (
+	"context"
 	"regexp"
 	"syscall"
 	"time"
@@ -91,6 +92,9 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	if err := m.netlinkStub.Subscribe(updates, addrUpdates); err != nil {
 		log.WithError(err).Panic("Failed to subscribe to netlink stub")
 	}
+	filteredUpdates := make(chan netlink.LinkUpdate, 10)
+	filteredAddrUpdates := make(chan netlink.AddrUpdate, 10)
+	go FilterUpdates(context.Background(), filteredAddrUpdates, addrUpdates, filteredUpdates, updates)
 	log.Info("Subscribed to netlink updates.")
 
 	// Start of day, do a resync to notify all our existing interfaces.  We also do periodic
@@ -104,19 +108,19 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 readLoop:
 	for {
 		log.WithFields(log.Fields{
-			"updates":     updates,
-			"addrUpdates": addrUpdates,
+			"updates":     filteredUpdates,
+			"addrUpdates": filteredAddrUpdates,
 			"resyncC":     m.resyncC,
 		}).Debug("About to select on possible triggers")
 		select {
-		case update, ok := <-updates:
+		case update, ok := <-filteredUpdates:
 			log.WithField("update", update).Debug("Link update")
 			if !ok {
 				log.Warn("Failed to read a link update")
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
-		case addrUpdate, ok := <-addrUpdates:
+		case addrUpdate, ok := <-filteredAddrUpdates:
 			log.WithField("addrUpdate", addrUpdate).Debug("Address update")
 			if !ok {
 				log.Warn("Failed to read an address update")
@@ -239,6 +243,19 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	m.storeAndNotifyLinkInner(ifaceExists, newName, link)
 }
 
+func linkIsOperUp(link netlink.Link) bool {
+	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.  The
+	// IFF_UP flag contains the admin state, which doesn't tell us whether we can program routes
+	// etc.
+	attrs := link.Attrs()
+	if attrs == nil {
+		return false
+	}
+	rawFlags := attrs.RawFlags
+	ifaceIsUp := rawFlags&syscall.IFF_RUNNING != 0
+	return ifaceIsUp
+}
+
 func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName string, link netlink.Link) {
 	log.WithFields(log.Fields{
 		"ifaceExists": ifaceExists,
@@ -264,8 +281,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.  The
 	// IFF_UP flag contains the admin state, which doesn't tell us whether we can program routes
 	// etc.
-	rawFlags := attrs.RawFlags
-	ifaceIsUp := ifaceExists && rawFlags&syscall.IFF_RUNNING != 0
+	ifaceIsUp := ifaceExists && linkIsOperUp(link)
 	oldIfIndex, ifaceWasUp := m.upIfaces[ifaceName]
 	logCxt := log.WithField("ifaceName", ifaceName)
 	if ifaceIsUp && !ifaceWasUp {

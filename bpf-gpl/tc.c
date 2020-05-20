@@ -335,7 +335,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		state.prog_start_time = bpf_ktime_get_ns();
 	}
-	state.nat_tun_src = 0;
+	state.tun_ip = 0;
 
 #ifdef CALI_SET_SKB_MARK
 	/* workaround for test since bpftool run cannot set it in context, wont
@@ -437,7 +437,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				vxlan_size_ok(skb, udp_header) &&
 				vxlan_vni_is_valid(skb, udp_header) &&
 				vxlan_vni(skb, udp_header) == CALI_VXLAN_VNI) {
-			state.nat_tun_src = ip_header->saddr;
+			state.tun_ip = ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
 				fwd.reason = CALI_REASON_DECAP_FAIL;
@@ -451,10 +451,29 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 			ip_header = skb_iphdr(skb);
 
-			CALI_DEBUG("vxlan decap origin %x\n", be32_to_host(state.nat_tun_src));
+			CALI_DEBUG("vxlan decap origin %x\n", be32_to_host(state.tun_ip));
 		}
 	}
 
+	// Drop malformed IP packets
+	if (ip_header->ihl < 5) {
+		fwd.reason = CALI_REASON_IP_MALFORMED;
+		CALI_DEBUG("Drop malformed IP packets\n");
+		goto deny;
+	}
+	else if (ip_header->ihl > 5) {
+		/* Drop packets with IP options from/to WEP.
+		 * Also drop packets with IP options if the dest IP is not host IP
+		 */
+		if (CALI_F_FROM_WEP || CALI_F_TO_WEP ||
+			(CALI_F_FROM_HEP && !cali_rt_flags_local_host(cali_rt_lookup_flags(ip_header->daddr)))) {
+			fwd.reason = CALI_REASON_IP_OPTIONS;
+			CALI_DEBUG("Drop packets with IP options\n");
+			goto deny;
+		}
+		CALI_DEBUG("Allow packets with IP options and dst IP = hostIP\n");
+		goto allow;
+	}
 	// Setting all of these up-front to keep the verifier happy.
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
@@ -518,7 +537,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		.sport	= state.sport,
 		.dst	= state.ip_dst,
 		.dport	= state.dport,
-		.nat_tun_src = state.nat_tun_src,
+		.tun_ip = state.tun_ip,
 	};
 
 	if (state.ip_proto == IPPROTO_TCP) {
@@ -532,6 +551,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Do conntrack lookup before anything else */
 	state.ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
+
+	/* check if someone is trying to spoof a tunnel packet */
+	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(state.ct_result.rc)) {
+		CALI_DEBUG("dropping tunnel pkt with changed source node\n");
+		goto deny;
+	}
 
 	if (state.ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		state.flags |= CALI_ST_NAT_OUTGOING;
@@ -562,7 +587,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* No conntrack entry, check if we should do NAT */
 	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
 					 state.ip_proto, state.dport,
-					 state.nat_tun_src != 0);
+					 state.tun_ip != 0);
 
 	if (nat_dest != NULL) {
 		state.post_nat_ip_dst = nat_dest->addr;
@@ -680,7 +705,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 	ip_header = skb_iphdr(skb);
-
 	__u32 key = 0;
 	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
 	if (!state) {
@@ -723,7 +747,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
 	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
-	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
+	CALI_DEBUG("tun_ip=%x\n", state->tun_ip);
 	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
 	CALI_DEBUG("sport=%d\n", state->sport);
 	CALI_DEBUG("flags=%x\n", state->flags);
@@ -775,7 +799,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			/* if we do SNAT ... */
 			outer_ip_snat = ct_rc == CALI_CT_ESTABLISHED_SNAT;
 			/* ... there is a return path to the tunnel ... */
-			outer_ip_snat = outer_ip_snat && state->ct_result.tun_ret_ip;
+			outer_ip_snat = outer_ip_snat && state->ct_result.tun_ip;
 			/* ... and should do encap and it is not DSR or it is leaving host
 			 * and either DSR from WEP or originated at host ... */
 			outer_ip_snat = outer_ip_snat &&
@@ -808,7 +832,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			switch (ct_rc) {
 			case CALI_CT_ESTABLISHED_SNAT:
 				/* handle the DSR case, see CALI_CT_ESTABLISHED_SNAT where nat is done */
-				if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
+				if (dnat_return_should_encap() && state->ct_result.tun_ip) {
 					if (CALI_F_DSR) {
 						/* SNAT will be done after routing, when leaving HEP */
 						CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
@@ -818,7 +842,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				ct_rc = CALI_CT_ESTABLISHED_DNAT;
 				break;
 			case CALI_CT_ESTABLISHED_DNAT:
-				if (CALI_F_FROM_HEP && state->nat_tun_src && !state->ct_result.tun_ret_ip) {
+				if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
 					/* Packet is returning from a NAT tunnel, just forward it. */
 					seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 					CALI_DEBUG("ICMP related returned from NAT tunnel\n");
@@ -879,7 +903,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		ct_nat_ctx.sport = state->sport;
 		ct_nat_ctx.dst = state->post_nat_ip_dst;
 		ct_nat_ctx.dport = state->post_nat_dport;
-		ct_nat_ctx.nat_tun_src = state->nat_tun_src;
+		ct_nat_ctx.tun_ip = state->tun_ip;
 		if (state->flags & CALI_ST_NAT_OUTGOING) {
 			ct_nat_ctx.flags |= CALI_CT_FLAG_NAT_OUT;
 		}
@@ -896,7 +920,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		// If we get here, we've passed policy.
 
 		if (nat_dest == NULL) {
-			conntrack_create(&ct_nat_ctx, CT_CREATE_NORMAL);
+			if (conntrack_create(&ct_nat_ctx, CT_CREATE_NORMAL)) {
+				CALI_DEBUG("Creating normal conntrack failed\n");
+				goto deny;
+			}
 			goto allow;
 		}
 
@@ -907,7 +934,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
 		if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
-			if (CALI_F_FROM_HEP && state->nat_tun_src && !state->ct_result.tun_ret_ip) {
+			if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
 				/* Packet is returning from a NAT tunnel,
 				 * already SNATed, just forward it.
 				 */
@@ -922,31 +949,56 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		CALI_DEBUG("CT: DNAT to %x:%d\n",
 				be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
 
-		struct cali_rt *rt;
 
 		encap_needed = dnat_should_encap();
-		if (encap_needed) {
-			rt = cali_rt_lookup(state->post_nat_ip_dst);
-			if (!rt) {
-				reason = CALI_REASON_RT_UNKNOWN;
-				goto deny;
-			}
-			CALI_DEBUG("rt found for 0x%x local %d\n",
-					be32_to_host(state->post_nat_ip_dst), !!cali_rt_is_local(rt));
-
-			encap_needed = !cali_rt_is_local(rt);
-		}
 
 		/* We have not created the conntrack yet since we did not know
 		 * if we need encap or not. Must do before MTU check and before
 		 * we jump to do the encap.
 		 */
 		if (ct_rc == CALI_CT_NEW) {
-			if (CALI_F_DSR && CALI_F_FROM_HEP &&
-					encap_needed && state->nat_tun_src == 0) {
-				ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+			struct cali_rt * rt;
+			int nat_type = CT_CREATE_NAT;
+
+			if (encap_needed) {
+				/* When we need to encap, we need to find out if the backend is
+				 * local or not. If local, we actually do not need the encap.
+				 */
+				rt = cali_rt_lookup(state->post_nat_ip_dst);
+				if (!rt) {
+					reason = CALI_REASON_RT_UNKNOWN;
+					goto deny;
+				}
+				CALI_DEBUG("rt found for 0x%x local %d\n",
+						be32_to_host(state->post_nat_ip_dst), !!cali_rt_is_local(rt));
+
+				encap_needed = !cali_rt_is_local(rt);
+				if (encap_needed) {
+					if (CALI_F_FROM_HEP && state->tun_ip == 0) {
+						if (CALI_F_DSR) {
+							ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+						}
+						ct_nat_ctx.flags |= CALI_CT_FLAG_NP_FWD;
+					}
+
+					nat_type = CT_CREATE_NAT_FWD;
+					ct_nat_ctx.tun_ip = rt->next_hop;
+					state->ip_dst = rt->next_hop;
+				}
 			}
-			conntrack_create(&ct_nat_ctx, encap_needed ? CT_CREATE_NAT_FWD : CT_CREATE_NAT);
+
+
+			if (conntrack_create(&ct_nat_ctx, nat_type)) {
+				CALI_DEBUG("Creating NAT conntrack failed\n");
+				goto deny;
+			}
+		} else {
+			if (encap_needed && ct_result_np_node(state->ct_result)) {
+				CALI_DEBUG("CT says encap to node %x\n", be32_to_host(state->ct_result.tun_ip));
+				state->ip_dst = state->ct_result.tun_ip;
+			} else {
+				encap_needed = false;
+			}
 		}
 
 		if (encap_needed) {
@@ -956,7 +1008,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				goto icmp_too_big;
 			}
 			state->ip_src = HOST_IP;
-			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
 
 			/* We cannot enforce RPF check on encapped traffic, do FIB if you can */
@@ -1000,11 +1051,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		 * are, we need to fail anyway.
 		 */
 		if (ct_related && state->ip_proto == IPPROTO_ICMP
-				&& state->ct_result.tun_ret_ip
+				&& state->ct_result.tun_ip
 				&& !CALI_F_DSR) {
 			if (dnat_return_should_encap()) {
 				CALI_DEBUG("Returning related ICMP from workload to tunnel\n");
-				state->ip_dst = state->ct_result.tun_ret_ip;
+				state->ip_dst = state->ct_result.tun_ip;
 				seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
 				goto nat_encap;
 			} else if (CALI_F_TO_HEP) {
@@ -1019,7 +1070,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				 */
 				CALI_DEBUG("Returning related ICMP from host to tunnel\n");
 				state->ip_src = HOST_IP;
-				state->ip_dst = state->ct_result.tun_ret_ip;
+				state->ip_dst = state->ct_result.tun_ip;
 				goto nat_encap;
 			}
 		}
@@ -1033,7 +1084,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		CALI_DEBUG("CT: SNAT from %x:%d\n",
 				be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
 
-		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
+		if (dnat_return_should_encap() && state->ct_result.tun_ip) {
 			if (CALI_F_DSR) {
 				/* SNAT will be done after routing, when leaving HEP */
 				CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
@@ -1081,8 +1132,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			goto deny;
 		}
 
-		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
-			state->ip_dst = state->ct_result.tun_ret_ip;
+		if (dnat_return_should_encap() && state->ct_result.tun_ip) {
+			state->ip_dst = state->ct_result.tun_ip;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
 			goto nat_encap;
 		}

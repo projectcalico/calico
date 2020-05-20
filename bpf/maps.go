@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -176,7 +175,7 @@ func (b *PinnedMap) Iter(f MapIter) error {
 	args := cmd[1:]
 
 	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).CombinedOutput()
+	output, err := exec.Command(prog, args...).Output()
 	if err != nil {
 		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.versionedFilename(), err, output)
 	}
@@ -202,13 +201,6 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 		logrus.Panic("Per-CPU operations not implemented")
 	}
 	return GetMapEntry(b.fd, k, b.ValueSize)
-}
-
-func appendBytes(strings []string, bytes []byte) []string {
-	for _, b := range bytes {
-		strings = append(strings, strconv.FormatInt(int64(b), 10))
-	}
-	return strings
 }
 
 func (b *PinnedMap) Delete(k []byte) error {

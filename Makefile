@@ -476,7 +476,7 @@ stop-grafana:
 bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building calico-bpf...
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) \
+	$(DOCKER_GO_BUILD_CGO) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
 bin/pktgen: $(SRC_FILES) $(LOCAL_BUILD_DEP)
