@@ -18,11 +18,6 @@ promotions:
 - name: Auto-update and commit dependency pins
   pipeline_file: update-pins.yml
   # No auto-promotion, update-pins.yml gets run directly by the scheduler.
-- name: Push images
-  pipeline_file: push-images.yml
-  auto_promote:
-    # Push images only if build passed and only for branches, not PRs.
-    when: "result = 'passed' and branch =~ '.+'"
 
 blocks:
 
@@ -43,3 +38,21 @@ blocks:
       commands:
       - make k8s-test
 
+# If tests passed, then build and push images.
+# We'll only do this on non-PR builds, where we have credentials to do so.
+- name: "Push images (non-PR builds only)"
+  skip:
+    # Only run on branches, not PRs.
+    when: "branch !~ '.+'"
+  dependencies: ["Tests"]
+  task:
+    secrets:
+    - name: quay-robot-semaphore_v2
+    - name: docker
+    jobs:
+    - name: "make cd"
+      commands:
+      - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USERNAME" --password-stdin quay.io
+      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+      - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
