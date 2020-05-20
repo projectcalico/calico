@@ -166,6 +166,7 @@ type Config struct {
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
 	KubeProxyMinSyncPeriod             time.Duration
+	KubeProxyEndpointSlicesEnabled     bool
 
 	SidecarAccelerationEnabled bool
 
@@ -540,6 +541,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create routes BPF map.")
 		}
 
+		bpfproxyOpts := []bpfproxy.Option{
+			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+		}
+
+		if config.KubeProxyEndpointSlicesEnabled {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithEndpointsSlices())
+		}
+
 		if config.KubeClientSet != nil {
 			// We have a Kubernetes connection, start watching services and populating the NAT maps.
 			kp, err := bpfproxy.StartKubeProxy(
@@ -548,7 +557,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				frontendMap,
 				backendMap,
 				backendAffinityMap,
-				bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+				bpfproxyOpts...,
 			)
 			if err != nil {
 				log.WithError(err).Panic("Failed to start kube-proxy.")
