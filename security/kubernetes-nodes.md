@@ -1,6 +1,6 @@
 ---
 title: Protect Kubernetes nodes
-Description: Protect Kubernetes nodes with host endpoints managed by Calico
+description: Protect Kubernetes nodes with host endpoints managed by Calico.
 ---
 
 ### Big picture
