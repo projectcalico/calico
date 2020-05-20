@@ -288,6 +288,16 @@ cancel_fib:
 skip_fib:
 
 	if (CALI_F_TO_HOST) {
+		/* If we received the packet from the tunnel and we forward it to a
+		 * workload we need to skip RPF check since there might be a better path
+		 * for the packet if the host has multiple ifaces and might get dropped.
+		 *
+		 * XXX We should check ourselves that we got our tunnel packets only from
+		 * XXX those devices where we expect them before we even decap.
+		 */
+		if (CALI_F_FROM_HEP && state->nat_tun_src != 0) {
+			fwd->mark = CALI_SKB_MARK_SKIP_RPF;
+		}
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */
@@ -1236,10 +1246,6 @@ nat_encap:
 
 	state->sport = state->dport = CALI_VXLAN_PORT;
 	state->ip_proto = IPPROTO_UDP;
-
-	if (CALI_F_INGRESS) {
-		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
-	}
 
 allow:
 	{
