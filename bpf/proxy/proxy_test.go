@@ -431,7 +431,7 @@ var _ = Describe("BPF Proxy", func() {
 		})
 	})
 
-	Describe("ExternalPolicy=local", func() {
+	Describe("ExternalPolicy=Local", func() {
 		var p proxy.Proxy
 		var dp *mockSyncer
 
@@ -454,7 +454,7 @@ var _ = Describe("BPF Proxy", func() {
 						NodePort: 32678,
 					},
 				},
-				ExternalTrafficPolicy: "local",
+				ExternalTrafficPolicy: "Local",
 			},
 		}
 

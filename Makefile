@@ -134,6 +134,8 @@ clean:
 	find . -name "*.pyc" -type f -delete
 	$(DOCKER_GO_BUILD) make -C bpf-apache clean
 	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
+	-docker rmi $(BUILD_IMAGE)-wgtool:latest-amd64
+	-docker rmi $(BUILD_IMAGE)-wgtool:latest
 
 ###############################################################################
 # Automated pin updates
@@ -236,10 +238,16 @@ ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 
-image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection
+image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection image-wgtool
 	docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) bin;
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE)-test:latest-$(ARCH) $(BUILD_IMAGE)-test:latest
+endif
+
+image-wgtool: fv/Dockerfile.wgtool.amd64
+	docker build -t $(BUILD_IMAGE)-wgtool:latest-$(ARCH) --file ./fv/Dockerfile.wgtool.$(ARCH) fv;
+ifeq ($(ARCH),amd64)
+	docker tag $(BUILD_IMAGE)-wgtool:latest-$(ARCH) $(BUILD_IMAGE)-wgtool:latest
 endif
 
 ###############################################################################
@@ -398,6 +406,20 @@ fv fv/latency.log: $(REMOTE_DEPS) image-test bin/iptables-locker bin/test-worklo
 
 fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
+
+KO_DIR := "/lib/modules/$(shell uname -r)/"
+WIREGUARD_KO_PATH := $(shell find $(KO_DIR) -name "wireguard.ko")
+fv-wireguard:
+ifndef FORCE_WIREGUARD_FV
+	@if test -z $(WIREGUARD_KO_PATH); then \
+		echo "WireGuard not available."; \
+		exit 1; \
+	else \
+		$(MAKE) fv FELIX_FV_WIREGUARD_AVAILABLE=true GINKGO_FOCUS="WireGuard-Supported"; \
+	fi
+else
+	$(MAKE) fv FELIX_FV_WIREGUARD_AVAILABLE=true GINKGO_FOCUS="WireGuard-Supported"
+endif
 
 ###############################################################################
 # K8SFV Tests
