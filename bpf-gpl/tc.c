@@ -295,7 +295,7 @@ skip_fib:
 		 * XXX We should check ourselves that we got our tunnel packets only from
 		 * XXX those devices where we expect them before we even decap.
 		 */
-		if (CALI_F_FROM_HEP && state->nat_tun_src != 0) {
+		if (CALI_F_FROM_HEP && state->tun_ip != 0) {
 			fwd->mark = CALI_SKB_MARK_SKIP_RPF;
 		}
 		/* Packet is towards host namespace, mark it so that downstream
