@@ -257,7 +257,7 @@ func DoNetworking(
 		return "", "", err
 	}
 
-	err = configureSysctls(hostVethName, hasIPv4, hasIPv6)
+	err = d.configureSysctls(hostVethName, hasIPv4, hasIPv6)
 	if err != nil {
 		return "", "", fmt.Errorf("error configuring sysctls for interface: %s, error: %s", hostVethName, err)
 	}
@@ -332,7 +332,7 @@ func SetupRoutes(hostVeth netlink.Link, result *current.Result) error {
 }
 
 // configureSysctls configures necessary sysctls required for the host side of the veth pair for IPv4 and/or IPv6.
-func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
+func (d *linuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 	var err error
 
 	if hasIPv4 {
@@ -378,6 +378,10 @@ func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", hostVethName), "1"); err != nil {
 			return fmt.Errorf("failed to set net.ipv6.conf.%s.forwarding=1: %s", hostVethName, err)
 		}
+	}
+
+	if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", hostVethName), "0"); err != nil {
+		d.logger.Warnf("failed to set net.ipv6.conf.%s.accept_ra=0: %s", hostVethName, err)
 	}
 
 	return nil
