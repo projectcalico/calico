@@ -185,7 +185,6 @@ type endpointManager struct {
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
-	openStackActive        bool
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
@@ -203,7 +202,6 @@ func newEndpointManager(
 	kubeIPVSSupportEnabled bool,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
-	openStackActive bool,
 	callbacks *callbacks,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
@@ -218,7 +216,6 @@ func newEndpointManager(
 		wlInterfacePrefixes,
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
-		openStackActive,
 		callbacks,
 	)
 }
@@ -235,7 +232,6 @@ func newEndpointManagerWithShims(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
-	openStackActive bool,
 	callbacks *callbacks,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
@@ -245,7 +241,6 @@ func newEndpointManagerWithShims(
 		ipVersion:              ipVersion,
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
-		openStackActive:        openStackActive,
 
 		rawTable:     rawTable,
 		mangleTable:  mangleTable,
@@ -1021,10 +1016,8 @@ func (m *endpointManager) configureInterface(name string) error {
 
 	// Try setting accept_ra to 0 and only log if it failed (it might fail if IPv6
 	// was disabled).
-	if !m.openStackActive {
-		err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name), "0")
-		log.WithField("ifaceName", name).Warnf("Could not set accept_ra: %v", err)
-	}
+	err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name), "0")
+	log.WithField("ifaceName", name).Warnf("Could not set accept_ra: %v", err)
 
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
