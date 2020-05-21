@@ -669,7 +669,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
 				false,
-				false,
 				newCallbacks(),
 			)
 		})
@@ -1724,45 +1723,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 								}})
 							}
 						})
-					})
-				})
-
-				Context("with OpenStack active and updates for the workload's iface", func() {
-					JustBeforeEach(func() {
-						epMgr.openStackActive = true
-						epMgr.OnUpdate(&ifaceUpdate{
-							Name:  "cali12345-ab",
-							State: "up",
-						})
-						epMgr.OnUpdate(&ifaceAddrsUpdate{
-							Name:  "cali12345-ab",
-							Addrs: set.New(),
-						})
-						err := epMgr.CompleteDeferredWork()
-						Expect(err).ToNot(HaveOccurred())
-					})
-
-					It("should have expected chains", expectWlChainsFor("cali12345-ab"))
-					It("should report endpoint up", func() {
-						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							wlEPID1: "up",
-						}))
-					})
-
-					It("should write /proc/sys entries", func() {
-						if ipVersion == 6 {
-							mockProcSys.checkState(map[string]string{
-								"/proc/sys/net/ipv6/conf/cali12345-ab/proxy_ndp":  "1",
-								"/proc/sys/net/ipv6/conf/cali12345-ab/forwarding": "1",
-							})
-						} else {
-							mockProcSys.checkState(map[string]string{
-								"/proc/sys/net/ipv4/conf/cali12345-ab/forwarding":     "1",
-								"/proc/sys/net/ipv4/conf/cali12345-ab/route_localnet": "1",
-								"/proc/sys/net/ipv4/conf/cali12345-ab/proxy_arp":      "1",
-								"/proc/sys/net/ipv4/neigh/cali12345-ab/proxy_delay":   "0",
-							})
-						}
 					})
 				})
 			})
