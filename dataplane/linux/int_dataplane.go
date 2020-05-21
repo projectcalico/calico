@@ -444,7 +444,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
-		config.RulesConfig.OpenStackSpecialCasesEnabled,
 		callbacks)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -517,7 +516,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.KubeIPVSSupportEnabled,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
-			config.RulesConfig.OpenStackSpecialCasesEnabled,
 			callbacks))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
