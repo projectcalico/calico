@@ -1,4 +1,5 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+# This is from registry.access.redhat.com/ubi8/ubi-minimal:8.2-267
+FROM registry.access.redhat.com/ubi8/ubi-minimal@sha256:7e432c89f285392c7d09343a3100e97158121bd5f73b89c852eba9609e19f9f4
 
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
