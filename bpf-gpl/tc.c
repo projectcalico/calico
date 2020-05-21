@@ -442,7 +442,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		struct udphdr *udp_header = (void*)(ip_header+1);
 		/* decap on host ep only if directly for the node */
 		CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ip_header->daddr, HOST_IP);
-		if (ip_header->daddr == HOST_IP &&
+		if (rt_addr_is_local_host(ip_header->daddr) &&
 				vxlan_udp_csum_ok(udp_header) &&
 				vxlan_size_ok(skb, udp_header) &&
 				vxlan_vni_is_valid(skb, udp_header) &&
@@ -470,13 +470,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		fwd.reason = CALI_REASON_IP_MALFORMED;
 		CALI_DEBUG("Drop malformed IP packets\n");
 		goto deny;
-	}
-	else if (ip_header->ihl > 5) {
+	} else if (ip_header->ihl > 5) {
 		/* Drop packets with IP options from/to WEP.
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
-		if (CALI_F_FROM_WEP || CALI_F_TO_WEP ||
-			(CALI_F_FROM_HEP && !cali_rt_flags_local_host(cali_rt_lookup_flags(ip_header->daddr)))) {
+		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ip_header->daddr))) {
 			fwd.reason = CALI_REASON_IP_OPTIONS;
 			CALI_DEBUG("Drop packets with IP options\n");
 			goto deny;

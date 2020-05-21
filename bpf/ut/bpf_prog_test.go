@@ -508,6 +508,19 @@ func resetRTMap(ctMap bpf.Map) {
 	}
 }
 
+func saveRTMap(rtMap bpf.Map) routes.MapMem {
+	rt, err := routes.LoadMap(rtMap)
+	Expect(err).NotTo(HaveOccurred())
+	return rt
+}
+
+func restoreRTMap(rtMap bpf.Map, m routes.MapMem) {
+	for k, v := range m {
+		err := rtMap.Update(k[:], v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
 var ethDefault = &layers.Ethernet{
 	SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
 	DstMAC:       []byte{0, 0, 0, 0, 0, 2},

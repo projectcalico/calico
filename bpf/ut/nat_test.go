@@ -323,6 +323,7 @@ func TestNATNodePort(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 	dumpRTMap(rtMap)
+	rtNode1 := saveRTMap(rtMap)
 
 	vni := uint32(0)
 
@@ -568,11 +569,8 @@ func TestNATNodePort(t *testing.T) {
 	hostIP = node1ip
 
 	// change to routing again to a remote workload
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
+	resetRTMap(rtMap)
+	restoreRTMap(rtMap, rtNode1)
 	dumpRTMap(rtMap)
 
 	// Response arriving at node 1
@@ -890,6 +888,11 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 	dumpRTMap(rtMap)

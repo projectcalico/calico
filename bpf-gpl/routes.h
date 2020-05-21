@@ -83,4 +83,9 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(__be32 addr)
 #define cali_rt_flags_local_workload(t) (((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
 #define cali_rt_flags_remote_workload(t) (!((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
 
+static CALI_BPF_INLINE bool rt_addr_is_local_host(__be32 addr)
+{
+	return  cali_rt_flags_local_host(cali_rt_lookup_flags(addr));
+}
+
 #endif /* __CALI_ROUTES_H__ */
