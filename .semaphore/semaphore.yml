@@ -47,12 +47,12 @@ blocks:
   dependencies: ["Tests"]
   task:
     secrets:
-    - name: quay-robot-semaphore_v2
+    - name: quay-robot-calico+semaphoreci
     - name: docker
     jobs:
     - name: "make cd"
       commands:
       - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-      - echo $QUAY_TOKEN | docker login --username "$QUAY_USERNAME" --password-stdin quay.io
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
