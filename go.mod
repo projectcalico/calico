@@ -7,15 +7,19 @@ require (
 	github.com/coreos/etcd v3.3.18+incompatible
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
+	github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e // indirect
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20200519175340-ef72e6bde2bd
+	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/projectcalico/felix v0.0.0-20200520204159-78176c34d305
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200515163405-fc50f8064a53
 	github.com/prometheus/client_golang v0.9.4 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
+	github.com/tinylib/msgp v1.1.0 // indirect
+	github.com/ugorji/go v0.0.0-20171019201919-bdcc60b419d1 // indirect
 
 	// k8s.io/api v1.16.3 is at 16d7abae0d2a
 	k8s.io/api v0.0.0
