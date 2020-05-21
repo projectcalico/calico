@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,10 @@ type Action interface {
 	ToFragment(features *Features) string
 }
 
+type Referrer interface {
+	ReferencedChain() string
+}
+
 type GotoAction struct {
 	Target   string
 	TypeGoto struct{}
@@ -33,6 +37,12 @@ func (g GotoAction) String() string {
 	return "Goto->" + g.Target
 }
 
+func (g GotoAction) ReferencedChain() string {
+	return g.Target
+}
+
+var _ Referrer = GotoAction{}
+
 type JumpAction struct {
 	Target   string
 	TypeJump struct{}
@@ -45,6 +55,12 @@ func (g JumpAction) ToFragment(features *Features) string {
 func (g JumpAction) String() string {
 	return "Jump->" + g.Target
 }
+
+func (g JumpAction) ReferencedChain() string {
+	return g.Target
+}
+
+var _ Referrer = JumpAction{}
 
 type ReturnAction struct {
 	TypeReturn struct{}

@@ -916,12 +916,28 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	}
 
 	for _, t := range d.iptablesRawTables {
+		rpfRules := []iptables.Rule{{
+			Match:  iptables.Match().MarkMatchesWithMask(0xca140000, 0xffff0000),
+			Action: iptables.ReturnAction{},
+		}}
+
+		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, 0xca100000, 0xfff00000,
+			d.config.RulesConfig.OpenStackSpecialCasesEnabled, true)...)
+
+		rpfChain := []*iptables.Chain{{
+			Name:  rules.ChainNamePrefix + "RPF",
+			Rules: rpfRules,
+		}}
+		t.UpdateChains(rpfChain)
+
 		rawChains := []*iptables.Chain{{
 			Name: rules.ChainRawPrerouting,
-			Rules: rules.RPFilter(t.IPVersion, 0xca100000, 0xfff00000,
-				d.config.RulesConfig.OpenStackSpecialCasesEnabled, true),
+			Rules: []iptables.Rule{{
+				Action: iptables.JumpAction{Target: rpfChain[0].Name},
+			}},
 		}}
 		t.UpdateChains(rawChains)
+
 		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})

@@ -32,7 +32,7 @@ ep_types="wep hep"
 for ep_type in $ep_types; do
   directions="from to"
   for from_or_to in $directions; do
-    for skb in "0x0" "0xca100000" "0xca130000" "0xca150000"; do
+    for skb in "0x0" "0xca100000" "0xca130000" "0xca140000" "0xca150000"; do
       for dsr in "" "_dsr"; do
         if [ "${dsr}" = "_dsr" ]; then
           if [ "${ep_type}" = "hep" ]; then

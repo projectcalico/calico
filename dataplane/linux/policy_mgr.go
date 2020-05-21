@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017, 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017, 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,6 +81,9 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 	case *proto.ActivePolicyUpdate:
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
 		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
+		// We can't easily tell whether the policy is in use in a particular table, and, if the policy
+		// type gets changed it may move between tables.  Hence, we put the policy into all tables.
+		// The iptables layer will avoid programming it if it is not actually used.
 		m.rawTable.UpdateChains(chains)
 		m.mangleTable.UpdateChains(chains)
 		m.filterTable.UpdateChains(chains)
@@ -89,6 +92,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
 		inName := rules.PolicyChainName(rules.PolicyInboundPfx, msg.Id)
 		outName := rules.PolicyChainName(rules.PolicyOutboundPfx, msg.Id)
+		// As above, we need to clean up in all the tables.
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
 		m.mangleTable.RemoveChainByName(inName)
