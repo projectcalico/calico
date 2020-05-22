@@ -22,7 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	"math"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -668,22 +668,61 @@ func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
 	return key, nil
 }
 
-func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) error {
-	key, err := getSvcNATKey(svc)
+func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
+	var keys[]nat.FrontendKey
+	ipaddr := svc.ClusterIP()
+	port := svc.Port()
+	loadBalancerSourceRanges := svc.LoadBalancerSourceRanges()
+	log.Debugf("loadbalancer %v",loadBalancerSourceRanges)
+	proto, err := protoV1ToInt(svc.Protocol())
 	if err != nil {
-		return err
+		return keys, err
 	}
+	key := nat.NewNATKey(ipaddr, uint16(port), proto)
+	keys = append (keys, key)
+	for _,src := range(loadBalancerSourceRanges) {
+		key := nat.NewNATKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
 
+func (s *Syncer) writeSvcNatKey(key nat.FrontendKey, val nat.FrontendValue ) error {
+	log.Debugf("bpf map writing %s:%s", key, val)
+	return s.bpfSvcs.Update(key[:], val[:])
+}
+
+func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) error {
 	affinityTimeo := uint32(0)
 	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
 	}
-
+	var key nat.FrontendKey
 	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
-
-	log.Debugf("bpf map writing %s:%s", key, val)
-	if err := s.bpfSvcs.Update(key[:], val[:]); err != nil {
-		return errors.Errorf("bpfSvcs.Update: %s", err)
+	if len(svc.LoadBalancerSourceRanges()) == 0 {
+		key, err := getSvcNATKey(svc)
+		if err != nil {
+			return err
+		}
+		err = s.writeSvcNatKey(key, val)
+		if err != nil {
+			return errors.Errorf("bpfSvcs.Update: %s", err)
+		}
+	} else {
+		keys, err := getSvcNATKeyLBSrcRange(svc)
+		if err != nil {
+			return err
+		}
+		for index,key := range(keys) {
+			if index == 0 {
+				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(count), uint32(local), affinityTimeo))
+			} else {
+				err = s.writeSvcNatKey(key, val)
+			}
+			if err != nil {
+				return errors.Errorf("bpfSvcs.Update: %s", err)
+			}
+		}
 	}
 
 	// we must have written the backends by now so the map exists

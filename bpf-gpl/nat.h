@@ -46,12 +46,24 @@
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
+struct calico_nat_v4 {
+        uint32_t addr; // NBO
+        uint16_t port; // HBO
+        uint8_t protocol;
+};
 
-struct calico_nat_v4_key {
+struct __attribute__((__packed__)) calico_nat_v4_key {
+	__u32 prefixlen;
 	uint32_t addr; // NBO
 	uint16_t port; // HBO
 	uint8_t protocol;
+	uint32_t saddr;
 	uint8_t pad;
+};
+
+union calico_nat_v4_lpm_key {
+        struct bpf_lpm_trie_key lpm;
+        struct calico_nat_v4_key key;
 };
 
 struct calico_nat_v4_value {
@@ -62,8 +74,8 @@ struct calico_nat_v4_value {
 };
 
 CALI_MAP_V1(cali_v4_nat_fe,
-		BPF_MAP_TYPE_HASH,
-		struct calico_nat_v4_key, struct calico_nat_v4_value,
+		BPF_MAP_TYPE_LPM_TRIE,
+		union calico_nat_v4_lpm_key, struct calico_nat_v4_value,
 		511000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 // Map: NAT level two.  ID and ordinal -> new dest and port.
@@ -85,7 +97,7 @@ CALI_MAP_V1(cali_v4_nat_be,
 		510000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 struct calico_nat_v4_affinity_key {
-	struct calico_nat_v4_key nat_key;
+	struct calico_nat_v4 nat_key;
 	uint32_t client_ip;
 	uint32_t padding;
 };
@@ -121,6 +133,13 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								     bool from_tun)
 {
 	struct calico_nat_v4_key nat_key = {
+		.prefixlen = 88,
+		.addr = ip_dst,
+		.port = dport,
+		.protocol = ip_proto,
+		.saddr = ip_src,
+	};
+	struct calico_nat_v4 nat_data = {
 		.addr = ip_dst,
 		.port = dport,
 		.protocol = ip_proto,
@@ -202,7 +221,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		goto skip_affinity;
 	}
 
-	affkey.nat_key =  nat_key;
+	affkey.nat_key =  nat_data;
 	affkey.client_ip = ip_src;
 
 	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo);

@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/ip"
 )
 
 // struct calico_nat_v4_key {
@@ -33,7 +34,7 @@ import (
 //    uint8_t protocol;
 //    uint8_t pad;
 // };
-const frontendKeySize = 8
+const frontendKeySize = 16
 
 // struct calico_nat_v4_value {
 //    uint32_t id;
@@ -59,14 +60,20 @@ const backendValueSize = 8
 type FrontendKey [frontendKeySize]byte
 
 func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
+	return NewNATKeySrc (addr, port, protocol, ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR))
+}
+
+func NewNATKeySrc (addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) FrontendKey {
 	var k FrontendKey
+	prefixlen := 56
 	addr = addr.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
-	copy(k[:4], addr)
-	binary.LittleEndian.PutUint16(k[4:6], port)
-	k[6] = protocol
+	k[0] = uint8 (uint32(prefixlen) + uint32(cidr.Prefix()))
+	copy(k[4:8], addr)
+	binary.LittleEndian.PutUint16(k[8:10], port)
+	k[10] = protocol
 	return k
 }
 
@@ -183,7 +190,7 @@ func (k BackendValue) AsBytes() []byte {
 
 var FrontendMapParameters = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_nat_fe",
-	Type:       "hash",
+	Type:       "lpm_trie",
 	KeySize:    frontendKeySize,
 	ValueSize:  frontendValueSize,
 	MaxEntries: 511000,
