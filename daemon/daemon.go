@@ -616,25 +616,26 @@ configRetry:
 }
 
 func servePrometheusMetrics(configParams *config.Config) {
-	for {
-		log.WithFields(log.Fields{
-			"host": configParams.PrometheusMetricsHost,
-			"port": configParams.PrometheusMetricsPort,
-		}).Info("Starting prometheus metrics endpoint")
-		if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled {
-			log.Info("Including Golang & Process metrics")
-		} else {
-			if !configParams.PrometheusGoMetricsEnabled {
-				log.Info("Discarding Golang metrics")
-				prometheus.Unregister(prometheus.NewGoCollector())
-			}
-			if !configParams.PrometheusProcessMetricsEnabled {
-				log.Info("Discarding process metrics")
-				prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-			}
+	log.WithFields(log.Fields{
+		"host": configParams.PrometheusMetricsHost,
+		"port": configParams.PrometheusMetricsPort,
+	}).Info("Starting prometheus metrics endpoint")
+	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled {
+		log.Info("Including Golang & Process metrics")
+	} else {
+		if !configParams.PrometheusGoMetricsEnabled {
+			log.Info("Discarding Golang metrics")
+			prometheus.Unregister(prometheus.NewGoCollector())
 		}
-		http.Handle("/metrics", promhttp.Handler())
-		err := http.ListenAndServe(net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort)), nil)
+		if !configParams.PrometheusProcessMetricsEnabled {
+			log.Info("Discarding process metrics")
+			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+		}
+	}
+	http.Handle("/metrics", promhttp.Handler())
+	addr := net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort))
+	for {
+		err := http.ListenAndServe(addr, nil)
 		log.WithError(err).Error(
 			"Prometheus metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
