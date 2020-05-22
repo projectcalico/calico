@@ -1,6 +1,6 @@
 ---
 title: Failsafe rules
-description: Avoid cutting off connectivity to hosts because of incorrect network policies. 
+description: Avoid cutting off connectivity to hosts because of incorrect network policies.
 canonical_url: '/reference/host-endpoints/failsafe'
 ---
 
@@ -20,6 +20,7 @@ By default, {{site.prodname}} keeps the following ports open on *all* host endpo
 |   179  |   TCP    |  Inbound & Outbound |             BGP access (Calico networking)     |
 |   2379 |   TCP    |  Inbound & Outbound |             etcd access                        |
 |   2380 |   TCP    |  Inbound & Outbound |             etcd access                        |
+|   6443 |   TCP    |  Inbound & Outbound |             Kubernetes API server access       |
 |   6666 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
 |   6667 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
 
