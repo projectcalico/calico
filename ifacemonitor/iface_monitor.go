@@ -22,6 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -29,10 +30,10 @@ import (
 type netlinkStub interface {
 	Subscribe(
 		linkUpdates chan netlink.LinkUpdate,
-		addrUpdates chan netlink.AddrUpdate,
+		routeUpdates chan netlink.RouteUpdate,
 	) error
 	LinkList() ([]netlink.Link, error)
-	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
+	ListLocalRoutes(link netlink.Link, family int) ([]netlink.Route, error)
 }
 
 type State string
@@ -88,13 +89,13 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	log.Info("Interface monitoring thread started.")
 
 	updates := make(chan netlink.LinkUpdate, 10)
-	addrUpdates := make(chan netlink.AddrUpdate, 10)
-	if err := m.netlinkStub.Subscribe(updates, addrUpdates); err != nil {
+	routeUpdates := make(chan netlink.RouteUpdate, 10)
+	if err := m.netlinkStub.Subscribe(updates, routeUpdates); err != nil {
 		log.WithError(err).Panic("Failed to subscribe to netlink stub")
 	}
 	filteredUpdates := make(chan netlink.LinkUpdate, 10)
-	filteredAddrUpdates := make(chan netlink.AddrUpdate, 10)
-	go FilterUpdates(context.Background(), filteredAddrUpdates, addrUpdates, filteredUpdates, updates)
+	filteredRouteUpdates := make(chan netlink.RouteUpdate, 10)
+	go FilterUpdates(context.Background(), filteredRouteUpdates, routeUpdates, filteredUpdates, updates)
 	log.Info("Subscribed to netlink updates.")
 
 	// Start of day, do a resync to notify all our existing interfaces.  We also do periodic
@@ -108,9 +109,9 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 readLoop:
 	for {
 		log.WithFields(log.Fields{
-			"updates":     filteredUpdates,
-			"addrUpdates": filteredAddrUpdates,
-			"resyncC":     m.resyncC,
+			"updates":      filteredUpdates,
+			"routeUpdates": filteredRouteUpdates,
+			"resyncC":      m.resyncC,
 		}).Debug("About to select on possible triggers")
 		select {
 		case update, ok := <-filteredUpdates:
@@ -120,13 +121,13 @@ readLoop:
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
-		case addrUpdate, ok := <-filteredAddrUpdates:
-			log.WithField("addrUpdate", addrUpdate).Debug("Address update")
+		case routeUpdate, ok := <-filteredRouteUpdates:
+			log.WithField("addrUpdate", routeUpdate).Debug("Address update")
 			if !ok {
 				log.Warn("Failed to read an address update")
 				break readLoop
 			}
-			m.handleNetlinkAddrUpdate(addrUpdate)
+			m.handleNetlinkRouteUpdate(routeUpdate)
 		case <-m.resyncC:
 			log.Debug("Resync trigger")
 			err := m.resync()
@@ -161,7 +162,7 @@ func (m *InterfaceMonitor) handleNetlinkUpdate(update netlink.LinkUpdate) {
 	m.storeAndNotifyLink(ifaceExists, update.Link)
 }
 
-func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
+func (m *InterfaceMonitor) handleNetlinkRouteUpdate(update netlink.RouteUpdate) {
 	ifIndex := update.LinkIndex
 	if ifName, known := m.ifaceName[ifIndex]; known {
 		if m.isExcludedInterface(ifName) {
@@ -169,8 +170,8 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 		}
 	}
 
-	addr := update.LinkAddress.IP.String()
-	exists := update.NewAddr
+	addr := update.Dst.IP.String()
+	exists := update.Type == unix.RTM_NEWROUTE
 	log.WithFields(log.Fields{
 		"addr":    addr,
 		"ifIndex": ifIndex,
@@ -305,15 +306,22 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		// Notify address changes for non excluded interfaces.
 		newAddrs := set.New()
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
-			addrs, err := m.netlinkStub.AddrList(link, family)
+			routes, err := m.netlinkStub.ListLocalRoutes(link, family)
 			if err != nil {
-				log.WithError(err).Warn("Netlink addr list operation failed.")
+				log.WithError(err).Warn("Netlink route list operation failed.")
 			}
-			for _, addr := range addrs {
-				newAddrs.Add(addr.IPNet.IP.String())
+			for _, route := range routes {
+				if route.Type != unix.RTN_LOCAL {
+					continue
+				}
+				newAddrs.Add(route.Dst.IP.String())
 			}
 		}
 		if (m.ifaceAddrs[ifIndex] == nil) || !m.ifaceAddrs[ifIndex].Equals(newAddrs) {
+			log.WithFields(log.Fields{
+				"old": m.ifaceAddrs[ifIndex],
+				"new": newAddrs,
+			}).Debug("Detected interface address change while notifying link")
 			m.ifaceAddrs[ifIndex] = newAddrs
 
 			m.notifyIfaceAddrs(ifIndex)

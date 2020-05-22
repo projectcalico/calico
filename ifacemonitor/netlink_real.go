@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package ifacemonitor
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	//"syscall"
 )
 
@@ -25,7 +26,7 @@ type netlinkReal struct {
 
 func (nl *netlinkReal) Subscribe(
 	linkUpdates chan netlink.LinkUpdate,
-	addrUpdates chan netlink.AddrUpdate,
+	routeUpdates chan netlink.RouteUpdate,
 ) error {
 	cancel := make(chan struct{})
 
@@ -33,7 +34,7 @@ func (nl *netlinkReal) Subscribe(
 		log.WithError(err).Panic("Failed to subscribe to link updates")
 		return err
 	}
-	if err := netlink.AddrSubscribe(addrUpdates, cancel); err != nil {
+	if err := netlink.RouteSubscribe(routeUpdates, cancel); err != nil {
 		log.WithError(err).Panic("Failed to subscribe to addr updates")
 		return err
 	}
@@ -45,6 +46,11 @@ func (nl *netlinkReal) LinkList() ([]netlink.Link, error) {
 	return netlink.LinkList()
 }
 
-func (nl *netlinkReal) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	return netlink.AddrList(link, family)
+func (nl *netlinkReal) ListLocalRoutes(link netlink.Link, family int) ([]netlink.Route, error) {
+	routeFilter := &netlink.Route{}
+	if link != nil {
+		routeFilter.LinkIndex = link.Attrs().Index
+	}
+	routeFilter.Table = unix.RT_TABLE_LOCAL
+	return netlink.RouteListFiltered(family, routeFilter, netlink.RT_FILTER_TABLE|netlink.RT_FILTER_OIF)
 }
