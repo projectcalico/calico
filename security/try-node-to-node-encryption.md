@@ -43,7 +43,7 @@ Verify the operating system(s) running on the nodes in the cluster {% include op
     ```
    For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{ site.baseurl }}/getting-started/openshift/installation#optionally-provide-additional-configuration).    
 
-   > **Note**: This above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig#felix-configuration-definition).
+   >**Note**: This above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig#felix-configuration-definition).
 {: .alert .alert-info}
 
 To disable WireGuard on a specific node with WireGuard installed, modify the host-specific Felix configuration. For example:
