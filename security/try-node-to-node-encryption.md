@@ -24,14 +24,17 @@ This how-to guide uses the following {{site.prodname}} features:
 
 Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
 
->**Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. {: .alert .alert-info}
+>**Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time.
+{: .alert .alert-info}
 
->**Note**: In the tech preview release, node-to-node encryption is supported on an underlying network that doesn’t require {{site.prodname}} to use an overlay. For example, a cluster with a routed network topology. {: .alert .alert-info}
+>**Note**: In the tech preview release, node-to-node encryption is supported on an underlying network that doesn’t require {{site.prodname}} to use an overlay. For example, a cluster with a routed network topology. 
+{: .alert .alert-info}
 
 ### How to
 
 1. Install WireGuard on cluster nodes using these {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}.
-   >**Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard. {: .alert .alert-info}
+   >**Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard. 
+{: .alert .alert-info}
 1. Enable WireGuard encryption across all the nodes using the following command.
     ```
      calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
@@ -46,7 +49,6 @@ To disable WireGuard on a specific node with WireGuard installed, modify the hos
   ```
   calicoctl patch felixconfiguration <Host-Name> --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
   ```
-
 #### Troubleshoot
 
 To verify that the nodes are configured for WireGuard encryption, check the node status set by Felix using `calicoctl`. For example:
@@ -59,7 +61,6 @@ To verify that the nodes are configured for WireGuard encryption, check the node
      wireguardPublicKey: jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=
      ...
    ```
-
 ### Above and beyond
 
 - [Secure Calico component communications]({{ site.baseurl }}/security/comms)
