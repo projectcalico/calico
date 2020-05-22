@@ -8,7 +8,7 @@ description: Try out enabling WireGuard for state-of-the-art cryptographic secur
 Enable WireGuard to secure node-to-node traffic in a {{site.prodname}} cluster.
 
 > **Warning!** Node-to-node encryption is a tech preview and should not be used in production clusters. It has had very limited testing and it will contain bugs (please report these on the {{site.prodname}} Users Slack or GitHub). This feature is currently not supported with overlay networks (IP in IP, VXLAN) due to known issues with NodePort services.
-{: .alert .alert-danger }
+{: .alert .alert-danger}
 
 ### Value
 
@@ -34,9 +34,8 @@ Verify the operating system(s) running on the nodes in the cluster {% include op
 
 1. Install WireGuard on cluster nodes using these {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}.
 
-   > **Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
+    >**Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
 {: .alert .alert-info}
-
 1. Enable WireGuard encryption across all the nodes using the following command.
     ```
      calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
