@@ -481,7 +481,7 @@ var _ = Describe("BPF Proxy", func() {
 		})
 	})
 
-	Describe("ExternalPolicy=Local", func() {
+	proxyLocalTest := func(endpointSlicesEnabled bool) {
 		var p proxy.Proxy
 		var dp *mockSyncer
 
@@ -536,7 +536,13 @@ var _ = Describe("BPF Proxy", func() {
 			},
 		}
 
-		k8s := fake.NewSimpleClientset(nodeport, nodeportEps)
+		var k8s *fake.Clientset
+
+		if endpointSlicesEnabled {
+			k8s = fake.NewSimpleClientset(nodeport, epsToSlice(nodeportEps))
+		} else {
+			k8s = fake.NewSimpleClientset(nodeport, nodeportEps)
+		}
 
 		BeforeEach(func() {
 			By("creating proxy with fake client and mock syncer", func() {
@@ -545,7 +551,12 @@ var _ = Describe("BPF Proxy", func() {
 				syncStop = make(chan struct{})
 				dp = newMockSyncer(syncStop)
 
-				p, err = proxy.New(k8s, dp, testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond))
+				opts := []proxy.Option{proxy.WithMinSyncPeriod(200 * time.Millisecond)}
+				if endpointSlicesEnabled {
+					opts = append(opts, proxy.WithEndpointsSlices())
+				}
+
+				p, err = proxy.New(k8s, dp, testNodeName, opts...)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -566,6 +577,16 @@ var _ = Describe("BPF Proxy", func() {
 					}
 				}
 			})
+		})
+	}
+
+	Describe("ExternalPolicy=Local with k8s client", func() {
+		Context("with Endpoints", func() {
+			proxyLocalTest(false)
+		})
+
+		Context("ExternalPolicy=Local with EndpointSlices", func() {
+			proxyLocalTest(true)
 		})
 	})
 })
