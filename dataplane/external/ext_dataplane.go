@@ -124,7 +124,7 @@ func (c *extDataplaneConn) RecvMessage() (msg interface{}, err error) {
 		msg = payload.HostEndpointStatusRemove
 	case *proto.FromDataplane_WireguardStatusUpdate:
 		msg = payload.WireguardStatusUpdate
-		
+
 	default:
 		log.WithField("payload", payload).Warn("Ignoring unknown message from dataplane")
 	}
