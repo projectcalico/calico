@@ -49,6 +49,10 @@ data:
   # Configure the MTU for workload interfaces and VXLAN encap.
   # In BPF mode, this should be set to your network MTU - 50.
   veth_mtu: "{{ .Values.mtu }}"
+  {{- else if .Values.vxlan }}
+  # Configure the MTU to use for workload interfaces and the
+  # tunnels. For VXLAN set to your network MTU - 50.
+  veth_mtu: "1410"
   {{- else }}
   # Configure the MTU to use for workload interfaces and the
   # tunnels. For IPIP, set to your network MTU - 20; for VXLAN
