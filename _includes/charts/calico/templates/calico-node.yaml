@@ -277,7 +277,10 @@ spec:
               value: "autodetect"
             # {{- if .Values.bpf }} For best performance, disable {{- else }} Enable {{- end }} IPIP
             - name: CALICO_IPV4POOL_IPIP
-              value: "{{- if .Values.bpf -}} Never {{- else -}} Always {{- end -}}"
+              value: "{{- if .Values.bpf -}} Never {{- else if .Values.vxlan -}} Never {{- else -}} Always {{- end -}}"
+            # Enable or Disable VXLAN on the default IP pool.
+            - name: CALICO_IPV4POOL_VXLAN
+              value: "{{- if .Values.vxlan -}} CrossSubnet {{- else -}} Never {{- end -}}"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
