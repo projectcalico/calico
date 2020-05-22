@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,11 @@
 package daemon
 
 import (
+	"fmt"
+
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/config"
 
@@ -24,29 +28,96 @@ import (
 )
 
 var _ = Describe("Typha address discovery", func() {
+	var (
+		configParams *config.Config
+		endpoints    *v1.Endpoints
+	)
 
-	getKubernetesService := func(namespace, name string) (*v1.Service, error) {
-		return &v1.Service{
-			Spec: v1.ServiceSpec{
-				ClusterIP: "fd5f:65af::2",
-				Ports: []v1.ServicePort{
-					v1.ServicePort{
-						Name: "calico-typha",
-						Port: 8156,
+	BeforeEach(func() {
+		configParams = config.New()
+		_, err := configParams.UpdateFrom(map[string]string{
+			"TyphaK8sServiceName": "calico-typha-service",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		endpoints = &v1.Endpoints{
+			Subsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{
+						{IP: "10.0.0.4"},
+					},
+					NotReadyAddresses: []v1.EndpointAddress{},
+					Ports: []v1.EndpointPort{
+						{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
+					},
+				},
+				{
+					Addresses: []v1.EndpointAddress{
+						{IP: "10.0.0.2"},
+					},
+					NotReadyAddresses: []v1.EndpointAddress{
+						{IP: "10.0.0.5"},
+					},
+					Ports: []v1.EndpointPort{
+						{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
+						{Name: "calico-typha", Port: 8156, Protocol: v1.ProtocolTCP},
 					},
 				},
 			},
-		}, nil
+		}
+	})
+
+	It("should return address if configured", func() {
+		configParams.TyphaAddr = "10.0.0.1:8080"
+		typhaAddr, err := discoverTyphaAddr(configParams, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(typhaAddr).To(Equal("10.0.0.1:8080"))
+	})
+
+	It("should return nothing if no service name", func() {
+		configParams.TyphaK8sServiceName = ""
+		typhaAddr, err := discoverTyphaAddr(configParams, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(typhaAddr).To(Equal(""))
+	})
+
+	getKubernetesEndpoints := func(namespace, name string) (*v1.Endpoints, error) {
+		Expect(name).To(Equal("calico-typha-service"))
+		Expect(namespace).To(Equal("kube-system"))
+		return endpoints, nil
 	}
 
-	It("should bracket an IPv6 Typha address", func() {
-		configParams := config.New()
-		_, err := configParams.UpdateFrom(map[string]string{
-			"TyphaK8sServiceName": "calico-typha",
-		}, config.EnvironmentVariable)
+	It("should return IP from endpoints", func() {
+		typhaAddr, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
 		Expect(err).NotTo(HaveOccurred())
-		typhaAddr, err := discoverTyphaAddr(configParams, getKubernetesService)
+		Expect(typhaAddr).To(Equal("10.0.0.2:8156"))
+	})
+
+	It("should bracket an IPv6 Typha address", func() {
+		endpoints.Subsets[1].Addresses[0].IP = "fd5f:65af::2"
+		typhaAddr, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal("[fd5f:65af::2]:8156"))
+	})
+
+	It("should error if no Typhas", func() {
+		endpoints.Subsets = nil
+		_, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should choose random Typhas", func() {
+		seenAddresses := set.New()
+		expected := set.From("10.0.0.2:8156", "10.0.0.6:8156")
+		endpoints.Subsets[1].Addresses = append(endpoints.Subsets[1].Addresses, v1.EndpointAddress{IP: "10.0.0.6"})
+		for i := 0; i < 32; i++ {
+			addr, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
+			Expect(err).NotTo(HaveOccurred())
+			seenAddresses.Add(addr)
+			if seenAddresses.ContainsAll(expected) {
+				return
+			}
+		}
+		Fail(fmt.Sprintf("Didn't get expected values; got %v", seenAddresses))
 	})
 })

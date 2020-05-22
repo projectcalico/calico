@@ -311,11 +311,11 @@ configRetry:
 		}
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
-		typhaAddr, err = discoverTyphaAddr(configParams, func(namespace, name string) (service *v1.Service, e error) {
+		typhaAddr, err = discoverTyphaAddr(configParams, func(namespace, name string) (service *v1.Endpoints, e error) {
 			if k8sClientSet == nil {
 				return nil, errors.New("failed to look up Typha, no Kubernetes client available")
 			}
-			return k8sClientSet.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
+			return k8sClientSet.CoreV1().Endpoints(namespace).Get(name, metav1.GetOptions{})
 		})
 		if err != nil {
 			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
@@ -1194,7 +1194,7 @@ func (fc *DataplaneConnector) Start() {
 
 var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port.")
 
-func discoverTyphaAddr(configParams *config.Config, getKubernetesService func(namespace, name string) (*v1.Service, error)) (string, error) {
+func discoverTyphaAddr(configParams *config.Config, getKubernetesEndpoints func(namespace, name string) (*v1.Endpoints, error)) (string, error) {
 	if configParams.TyphaAddr != "" {
 		// Explicit address; trumps other sources of config.
 		return configParams.TyphaAddr, nil
@@ -1205,26 +1205,50 @@ func discoverTyphaAddr(configParams *config.Config, getKubernetesService func(na
 		return "", nil
 	}
 
-	// If we get here, we need to look up the Typha service using the k8s API.
-	// TODO Typha: support Typha lookup without using rest.InClusterConfig().
-	svc, err := getKubernetesService(configParams.TyphaK8sNamespace, configParams.TyphaK8sServiceName)
+	// If we get here, we need to look up the Typha service endpoints using the k8s API.
+	eps, err := getKubernetesEndpoints(configParams.TyphaK8sNamespace, configParams.TyphaK8sServiceName)
 	if err != nil {
-		log.WithError(err).Error("Unable to get Typha service from Kubernetes.")
+		log.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
 		return "", err
 	}
-	host := svc.Spec.ClusterIP
-	log.WithField("clusterIP", host).Info("Found Typha ClusterIP.")
-	if host == "" {
-		log.WithError(err).Error("Typha service had no ClusterIP.")
-		return "", ErrServiceNotReady
-	}
-	for _, p := range svc.Spec.Ports {
-		if p.Name == "calico-typha" {
-			log.WithField("port", p).Info("Found Typha service port.")
-			typhaAddr := net.JoinHostPort(host, fmt.Sprintf("%v", p.Port))
-			return typhaAddr, nil
+
+	candidates := set.New()
+
+	for _, subset := range eps.Subsets {
+		var portForOurVersion int32
+		for _, port := range subset.Ports {
+			if port.Name == "calico-typha" {
+				portForOurVersion = port.Port
+				break
+			}
+		}
+
+		if portForOurVersion == 0 {
+			continue
+		}
+
+		// If we get here, this endpoint supports the typha port we're looking for.
+		for _, h := range subset.Addresses {
+			typhaAddr := net.JoinHostPort(h.IP, fmt.Sprint(portForOurVersion))
+			candidates.Add(typhaAddr)
 		}
 	}
-	log.Error("Didn't find Typha service port.")
-	return "", ErrServiceNotReady
+
+	if candidates.Len() == 0 {
+		log.Error("Didn't find any ready Typha instances.")
+		return "", ErrServiceNotReady
+	}
+
+	var addrs []string
+	candidates.Iter(func(item interface{}) error {
+		typhaAddr := item.(string)
+		addrs = append(addrs, typhaAddr)
+		return nil
+	})
+	log.WithField("addrs", addrs).Info("Found ready Typha addresses.")
+	n := rand.Intn(len(addrs))
+	chosenAddr := addrs[n]
+	log.WithField("choice", chosenAddr).Info("Chose Typha to connect to.")
+
+	return chosenAddr, nil
 }
