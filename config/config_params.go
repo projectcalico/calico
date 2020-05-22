@@ -93,7 +93,7 @@ func (source Source) String() string {
 
 func (source Source) Local() bool {
 	switch source {
-	case Default, ConfigFile, EnvironmentVariable:
+	case Default, ConfigFile, EnvironmentVariable, InternalOverride:
 		return true
 	default:
 		return false
@@ -345,19 +345,23 @@ func (config *Config) OpenstackActive() bool {
 
 func (config *Config) resolve() (changed bool, err error) {
 	newRawValues := make(map[string]string)
+	// Map from lower-case version of name to the highest-priority source found so far.
+	// We use the lower-case version of the name since we can calculate it both for
+	// expected and "raw" parameters, which may be used by plugins.
 	nameToSource := make(map[string]Source)
 	for _, source := range SourcesInDescendingOrder {
 	valueLoop:
 		for rawName, rawValue := range config.sourceToRawConfig[source] {
-			currentSource := nameToSource[rawName]
-			param, ok := knownParams[strings.ToLower(rawName)]
+			lowerCaseName := strings.ToLower(rawName)
+			currentSource := nameToSource[lowerCaseName]
+			param, ok := knownParams[lowerCaseName]
 			if !ok {
 				if source >= currentSource {
-					// Stash the raw value in case it's useful for
-					// a plugin.  Since we don't know the canonical
-					// name, use the raw name.
+					// Stash the raw value in case it's useful for an external
+					// dataplane driver.  Use the raw name since the driver may
+					// want it.
 					newRawValues[rawName] = rawValue
-					nameToSource[rawName] = source
+					nameToSource[lowerCaseName] = source
 				}
 				log.WithField("raw name", rawName).Info(
 					"Ignoring unknown config param.")
@@ -380,7 +384,7 @@ func (config *Config) resolve() (changed bool, err error) {
 				// the default value.  Typically, the zero value means "turn off
 				// the feature".
 				if metadata.NonZero {
-					err = errors.New("Non-zero field cannot be set to none")
+					err = errors.New("non-zero field cannot be set to none")
 					log.Errorf(
 						"Failed to parse value for %v: %v from source %v. %v",
 						name, rawValue, source, err)
@@ -418,7 +422,7 @@ func (config *Config) resolve() (changed bool, err error) {
 			field := reflect.ValueOf(config).Elem().FieldByName(name)
 			field.Set(reflect.ValueOf(value))
 			newRawValues[name] = rawValue
-			nameToSource[name] = source
+			nameToSource[lowerCaseName] = source
 		}
 	}
 	changed = !reflect.DeepEqual(newRawValues, config.rawValues)
