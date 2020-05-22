@@ -80,6 +80,7 @@ Review the following table to determine if the defaults work for your implementa
 |   179  |   TCP    |  Inbound & Outbound |             BGP access ({{site.prodname}} networking)     |
 |   2379 |   TCP    |  Inbound & Outbound |             etcd access                        |
 |   2380 |   TCP    |  Inbound & Outbound |             etcd access                        |
+|   6443 |   TCP    |  Inbound & Outbound |             Kubernetes API server access       |
 |   6666 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
 |   6667 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
 
