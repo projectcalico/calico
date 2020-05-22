@@ -20,7 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -101,7 +100,7 @@ mainLoop:
 					Update:  linkUpd,
 				})
 		case routeUpd := <-routeInC:
-			logrus.WithField("route", spew.Sdump(routeUpd)).Debug("Route update")
+			logrus.WithField("route", routeUpd).Debug("Route update")
 			if routeUpd.Route.Type&unix.RTN_LOCAL == 0 {
 				logrus.WithField("route", routeUpd).Debug("Ignoring non-local route.")
 				continue
