@@ -17,12 +17,13 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"math"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -669,25 +670,25 @@ func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
 }
 
 func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
-	var keys[]nat.FrontendKey
+	var keys []nat.FrontendKey
 	ipaddr := svc.ClusterIP()
 	port := svc.Port()
 	loadBalancerSourceRanges := svc.LoadBalancerSourceRanges()
-	log.Debugf("loadbalancer %v",loadBalancerSourceRanges)
+	log.Debugf("loadbalancer %v", loadBalancerSourceRanges)
 	proto, err := protoV1ToInt(svc.Protocol())
 	if err != nil {
 		return keys, err
 	}
 	key := nat.NewNATKey(ipaddr, uint16(port), proto)
-	keys = append (keys, key)
-	for _,src := range(loadBalancerSourceRanges) {
+	keys = append(keys, key)
+	for _, src := range loadBalancerSourceRanges {
 		key := nat.NewNATKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
 		keys = append(keys, key)
 	}
 	return keys, nil
 }
 
-func (s *Syncer) writeSvcNatKey(key nat.FrontendKey, val nat.FrontendValue ) error {
+func (s *Syncer) writeSvcNatKey(key nat.FrontendKey, val nat.FrontendValue) error {
 	log.Debugf("bpf map writing %s:%s", key, val)
 	return s.bpfSvcs.Update(key[:], val[:])
 }
@@ -713,7 +714,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		if err != nil {
 			return err
 		}
-		for index,key := range(keys) {
+		for index, key := range keys {
 			if index == 0 {
 				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(count), uint32(local), affinityTimeo))
 			} else {

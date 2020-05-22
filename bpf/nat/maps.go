@@ -35,6 +35,7 @@ import (
 //    uint8_t pad;
 // };
 const frontendKeySize = 16
+const frontendAffKeySize = 8
 
 // struct calico_nat_v4_value {
 //    uint32_t id;
@@ -60,17 +61,17 @@ const backendValueSize = 8
 type FrontendKey [frontendKeySize]byte
 
 func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
-	return NewNATKeySrc (addr, port, protocol, ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR))
+	return NewNATKeySrc(addr, port, protocol, ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR))
 }
 
-func NewNATKeySrc (addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) FrontendKey {
+func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) FrontendKey {
 	var k FrontendKey
 	prefixlen := 56
 	addr = addr.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
-	k[0] = uint8 (uint32(prefixlen) + uint32(cidr.Prefix()))
+	k[0] = uint8(uint32(prefixlen) + uint32(cidr.Prefix()))
 	copy(k[4:8], addr)
 	binary.LittleEndian.PutUint16(k[8:10], port)
 	k[10] = protocol
@@ -316,7 +317,7 @@ func BackendMapMemIter(m BackendMapMem) bpf.MapIter {
 // 	  uint32_t padding;
 // };
 
-const affinityKeySize = frontendKeySize + 8
+const affinityKeySize = frontendAffKeySize + 8
 
 // AffinityKey is a key into the affinity table that consist of FrontendKey and
 // the client's IP
@@ -326,20 +327,20 @@ type AffinityKey [affinityKeySize]byte
 func NewAffinityKey(clientIP net.IP, fEndKey FrontendKey) AffinityKey {
 	var k AffinityKey
 
-	copy(k[:], fEndKey[:])
+	copy(k[:], fEndKey[4:])
 
 	addr := clientIP.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
-	copy(k[frontendKeySize:frontendKeySize+4], addr)
+	copy(k[frontendAffKeySize:frontendAffKeySize+4], addr)
 
 	return k
 }
 
 // ClientIP returns the ClientIP part of the key
 func (k AffinityKey) ClientIP() net.IP {
-	return k[frontendKeySize : frontendKeySize+4]
+	return k[frontendAffKeySize : frontendAffKeySize+4]
 }
 
 // FrontendKey returns the FrontendKey part of the key
