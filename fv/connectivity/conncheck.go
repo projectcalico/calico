@@ -523,7 +523,7 @@ type CheckCmd struct {
 	recvLen int
 }
 
-// BinaryName is the name of the binry that the connectivity Check() executes
+// BinaryName is the name of the binary that the connectivity Check() executes
 const BinaryName = "test-connection"
 
 // Run executes the check command

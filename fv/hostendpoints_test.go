@@ -126,6 +126,11 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		cc.ExpectNone(felixes[0], w[1])
 		cc.ExpectNone(felixes[1], w[0])
 	}
+	expectConnectivityToAPIServer := func() {
+		ip := connectivity.TargetIP(infra.(*infrastructure.K8sDatastoreInfra).EndpointIP)
+		cc.ExpectSome(felixes[0], ip, 6443)
+		cc.ExpectSome(felixes[1], ip, 6443)
+	}
 
 	Context("with no policies and no profiles on the host endpoints", func() {
 		BeforeEach(func() {
@@ -151,6 +156,11 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 				_, err := client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
+		})
+
+		It("should allow connectivity from nodes to the Kubernetes API server", func() {
+			expectConnectivityToAPIServer()
+			cc.CheckConnectivity()
 		})
 
 		It("should block all traffic except pod-to-pod and host-to-own-pod traffic", func() {
