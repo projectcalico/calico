@@ -24,17 +24,15 @@ This how-to guide uses the following {{site.prodname}} features:
 
 Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
 
-> **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time.
-{: .alert .alert-info}
+>**Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. {: .alert .alert-info}
 
-> **Note**: In the tech preview release, node-to-node encryption is supported on an underlying network that doesn’t require {{site.prodname}} to use an overlay. For example, a cluster with a routed network topology.
-{: .alert .alert-info}
+>**Note**: In the tech preview release, node-to-node encryption is supported on an underlying network that doesn’t require {{site.prodname}} to use an overlay. For example, a cluster with a routed network topology. {: .alert .alert-info}
 
 ### How to
 
 1. Install WireGuard on cluster nodes using these {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}.
 
-    >**Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
+   >**Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
 {: .alert .alert-info}
 1. Enable WireGuard encryption across all the nodes using the following command.
     ```
