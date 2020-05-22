@@ -315,6 +315,13 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 		_ = tc.Close()
 	}()
 
+	if remotePort == "6443" {
+		// Testing for connectivity to the Kubernetes API server.  If we reach here, we're
+		// good.  Skip sending and receiving any data, as that would need TLS.
+		connectivity.Result{}.PrintToStdout()
+		return nil
+	}
+
 	if loopFile != "" {
 		return tc.tryLoopFile(loopFile)
 	}
