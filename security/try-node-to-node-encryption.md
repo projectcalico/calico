@@ -31,7 +31,6 @@ Verify the operating system(s) running on the nodes in the cluster {% include op
 ### How to
 
 1. Install WireGuard on cluster nodes using these {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}.
-
    >**Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
 {: .alert .alert-info}
 1. Enable WireGuard encryption across all the nodes using the following command.
