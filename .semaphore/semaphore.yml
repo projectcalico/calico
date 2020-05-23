@@ -12,4 +12,4 @@ blocks:
         commands:
           # Checkout the code and run the Kubernetes tests.
           - checkout
-          - make k8s-test
+          - make k8s-test REMOVE_GOBUILD_IMG=true

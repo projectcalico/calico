@@ -7,7 +7,7 @@ require (
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/felix v0.0.0-20191212061519-e2336e7ab067
+	github.com/projectcalico/felix v0.0.0-20200522190512-e8b5e6f3a93b
 	github.com/projectcalico/libcalico-go v1.7.2-0.20191211192103-ee42d4b5eaf9
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
