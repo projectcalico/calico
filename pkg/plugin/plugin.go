@@ -317,7 +317,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 				k := utils.SanitizeMesosLabel(label.Key)
 				v := utils.SanitizeMesosLabel(label.Value)
 
-				labels[k] = v
+				if label.Key == "projectcalico.org/namespace" {
+					wepIDs.Namespace = v
+				} else {
+					labels[k] = v
+				}
 			}
 
 			// 2) Create the endpoint object
