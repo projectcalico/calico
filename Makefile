@@ -52,8 +52,8 @@ BIRD_VERSION=v0.3.3-151-g767b5389
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 
 # Versions and locations of dependencies used in tests.
-CALICOCTL_VER?=master
-CNI_VER?=master
+CALICOCTL_VER?=release-v3.13
+CNI_VER?=release-v3.13
 TEST_CONTAINER_NAME_VER?=latest
 CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
