@@ -979,6 +979,8 @@ function dind::run {
   args+=("systemd.setenv=DIND_STORAGE_DRIVER=${DIND_STORAGE_DRIVER}")
   args+=("systemd.setenv=DIND_CRI=${DIND_CRI}")
 
+  opts+=(--sysctl net.ipv4.conf.all.rp_filter=1)
+
   if [[ ${IP_MODE} != "ipv4" ]]; then
     opts+=(--sysctl net.ipv6.conf.all.disable_ipv6=0)
     opts+=(--sysctl net.ipv6.conf.all.forwarding=1)
