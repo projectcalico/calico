@@ -34,8 +34,8 @@ Verify the operating system(s) running on the nodes in the cluster {% include op
 
 1. Install WireGuard on cluster nodes using these {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}.
 
-> **Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard. 
-{: .alert .alert-info}
+    > **Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard. 
+    {: .alert .alert-info}
 
 1. Enable WireGuard encryption across all the nodes using the following command.
     ```
@@ -43,8 +43,8 @@ Verify the operating system(s) running on the nodes in the cluster {% include op
     ```
    For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{ site.baseurl }}/getting-started/openshift/installation#optionally-provide-additional-configuration).    
 
-> **Note**: This above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig#felix-configuration-definition).
-{: .alert .alert-info}
+    > **Note**: The above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig#felix-configuration-definition).
+    {: .alert .alert-info}
 
 To disable WireGuard on a specific node with WireGuard installed, modify the host-specific Felix configuration. For example:
 
