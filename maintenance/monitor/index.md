@@ -1,5 +1,7 @@
 ---
-description: The recommended installation is to install both Calico policy and networking for your Kubernetes deployment.  
+title: Monitor
+description: Tools for scraping useful metrics 
+canonical_url: '/maintenance/monitor'
 show_read_time: false
 show_toc: false
 ---

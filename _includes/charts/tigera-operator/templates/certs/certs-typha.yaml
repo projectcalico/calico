@@ -1,0 +1,23 @@
+{{/* if any of .Values.certs.node or .Values.certs.typha is not nil */}}
+{{ if without (concat (values .Values.certs.node) (values .Values.certs.typha)) nil }}
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: typha-ca
+  namespace: tigera-operator
+data:
+  caBundle: |
+{{ required "must set certs.typha.caBundle" .Values.certs.typha.caBundle | indent 4}}
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: typha-certs
+  namespace: tigera-operator
+type: Opaque
+data:
+  cert.crt: {{ required "must set certs.typha.cert" .Values.certs.typha.cert | b64enc }}
+  key.key: {{ required "must set certs.typha.key" .Values.certs.typha.key | b64enc }}
+  common-name: {{ required "must set certs.typha.commonName" .Values.certs.typha.commonName | b64enc }}
+{{ end }}

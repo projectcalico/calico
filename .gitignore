@@ -17,4 +17,4 @@ pinned_versions.yml
 pinned_images.yml
 
 # This prevents us from checking in a supplementary values.yaml file
-_includes/*/charts/calico/values.yaml
+_includes/charts/*/values.yaml

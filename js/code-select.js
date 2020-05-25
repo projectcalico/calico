@@ -105,13 +105,11 @@ $(document).ready(function() {
         const normalizedText = codeSnippet.innerText
           .split('\n')
           .map(str => {
-            const normalizedString = str.trim();
-
-            if (normalizedString.startsWith('$')) {
-              return normalizedString.slice(1, normalizedString.length).trim();
+            if (str.startsWith('$')) {
+              return str.slice(1, str.length).trimLeft();
             }
 
-            return normalizedString;
+            return str;
           })
           .join('\n');
 

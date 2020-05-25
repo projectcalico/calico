@@ -1,10 +1,10 @@
 ---
-title: Install Calico for policy and flannel for networking
+title: Install Calico for policy and flannel (aka Canal) for networking
 description: If you use flannel for networking, you can install Calico network policy to secure cluster communications.
 canonical_url: '/getting-started/kubernetes/flannel'
 ---
 
-## Before you begin
+### Before you begin
 
 > **Note**: Calico includes native VXLAN capabilities without the need for flannel. If you're planning on using flannel for VXLAN, we recommend instead installing Calico using IP-in-IP or VXLAN mode. See how to [determine the best networking option]({{site.baseurl}}/networking/determine-best-networking) for your cluster.
 > If you're already using flannel for networking, you can [migrate your existing clusters to Calico networking]({{site.baseurl}}/getting-started/kubernetes/flannel/migration-from-flannel).
@@ -12,20 +12,19 @@ canonical_url: '/getting-started/kubernetes/flannel'
 
 Ensure that you have a Kubernetes cluster that meets the
 {{site.prodname}} [system requirements](../requirements). If you don't,
-follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
+follow the steps in {% include open-new-window.html text='Installing kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}.
 
-## Installing {{site.prodname}} for policy and flannel for networking
+### Installing {{site.prodname}} for policy and flannel (aka Canal) for networking
 
-### Selecting a datastore type
+#### Selecting a datastore type
 
-The procedure differs according to your datastore type. Refer to the
-section that matches your type.
+The procedure differs according to your datastore type. Refer to the section that matches your type.
 
 - [Kubernetes API datastore](#installing-with-the-kubernetes-api-datastore-recommended) (recommended)
 
 - [etcd datastore](#installing-with-the-etcd-datastore)
 
-### Installing with the Kubernetes API datastore (recommended)
+#### Installing with the Kubernetes API datastore (recommended)
 
 1. Ensure that the Kubernetes controller manager has the following flags
    set: <br>
@@ -53,9 +52,9 @@ section that matches your type.
    communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy) (optional).
 
 The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:Kubernetes' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:Kubernetes' %}
 
-### Installing with the etcd datastore
+#### Installing with the etcd datastore
 
 We strongly recommend using the Kubernetes API datastore, but if you prefer to use
 etcd, complete the following steps.
@@ -84,5 +83,5 @@ etcd, complete the following steps.
    communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy) (optional).
 
 The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:etcd' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:etcd' %}
 

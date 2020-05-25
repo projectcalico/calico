@@ -34,6 +34,8 @@ section:
       path: /reference/calicoctl/ipam/release
     - title: show
       path: /reference/calicoctl/ipam/show
+    - title: configure
+      path: /reference/calicoctl/ipam/configure
   - title: node
     path: /reference/calicoctl/node/
     section:
@@ -68,6 +70,8 @@ section:
       path: /reference/resources/hostendpoint
     - title: IP pool
       path: /reference/resources/ippool
+    - title: Kubernetes controllers configuration
+      path: /reference/resources/kubecontrollersconfig
     - title: Network policy
       path: /reference/resources/networkpolicy
     - title: Network set

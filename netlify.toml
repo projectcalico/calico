@@ -5,7 +5,8 @@
 [build.environment]
   RUBY_VERSION = "2.5.4"
   CANDIDATE_RELEASE = ""
-  CURRENT_RELEASE = "v3.12"
+  CURRENT_RELEASE = "v3.14"
+  CUSTOM_ARCHIVE_PATH = "/archive"
 
 [[headers]]
   for = "/*.yaml"

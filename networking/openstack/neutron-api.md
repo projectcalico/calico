@@ -10,8 +10,7 @@ the network. However, because {{site.prodname}} is substantially simpler than mu
 of what Neutron generally allows (see [IP addressing and connectivity]({{ site.baseurl }}/networking/openstack/connectivity)) and because it's a purely layer 3 model (see [The {{site.prodname}} data path]({{ site.baseurl }}/reference/architecture/data-path), not all Neutron API calls will have the same effect as they would with other backends.
 
 This document will go into detail on the full range of Neutron API
-calls, and will discuss the effect they have on the network. It uses the
-[Networking API v2.0](http://developer.openstack.org/api-ref-networking-v2.html)
+calls, and will discuss the effect they have on the network. It uses the {% include open-new-window.html text='Networking API v2.0' url='http://developer.openstack.org/api-ref-networking-v2.html' %}
 document from OpenStack as a basis for listing the various objects that
 the Neutron API uses: see that document for more information about what
 Neutron expects more generally.

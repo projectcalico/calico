@@ -69,7 +69,7 @@ Or, see the [reference documentation on host-local IPAM]({{ site.baseurl }}/refe
 
 ### Tutorial
 
-For a blog/tutorial on IP pools, see [Calico IPAM: Explained and Enhanced](https://www.tigera.io/blog/calico-ipam-explained-and-enhanced/)
+For a blog/tutorial on IP pools, see {% include open-new-window.html text='Calico IPAM: Explained and Enhanced' url='https://www.tigera.io/blog/calico-ipam-explained-and-enhanced/' %}.
 
 ### Above and beyond
 

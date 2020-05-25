@@ -31,7 +31,7 @@ Kube-proxy runs in three modes: **userspace**, **iptables**, and **ipvs**. (User
 | iptables            | An efficient firewall                                        | NAT pre-routing using sequential rules | Grows proportional to cluster size          |
 | ipvs                | A load balancer with scheduling options like round-robin, shortest-expected delay, least connections, etc. | Optimized lookup routine               | Stays constant, independent of cluster size |
 
-If you are wondering about the performance differences between iptables and ipvs, the answers are definitely not straightforward. For a comparison between iptables (including {{site.prodname}}’s own use of iptables) and ipvs modes, see [Comparing kube-proxy modes: iptables or IPVS? ](https://www.tigera.io/blog/comparing-kube-proxy-modes-iptables-or-ipvs/).
+If you are wondering about the performance differences between iptables and ipvs, the answers are definitely not straightforward. For a comparison between iptables (including {{site.prodname}}’s own use of iptables) and ipvs modes, see {% include open-new-window.html text='Comparing kube-proxy modes: iptables or IPVS?' url='https://www.projectcalico.org/comparing-kube-proxy-modes-iptables-or-ipvs/' %}.
 
 #### IPVS mode and NodePort ranges
 

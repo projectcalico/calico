@@ -46,7 +46,7 @@ Using {{site.prodname}}, you can secure network interfaces of the host; these in
 
 1. Check that your hosts meet the [system requirements](./requirements) for {{site.prodname}}
 1. Set up a datastore (if you have installed {{site.prodname}} on a cluster you will already have this)
-1. [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/)
+1. [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/)
 1. Choose an install method and whether to use {{site.prodname}} for networking & policy, or policy-only
 
 | Install method                                                       | Networking | Policy |

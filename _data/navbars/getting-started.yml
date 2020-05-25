@@ -1,4 +1,4 @@
-title: "Get started"
+title: "Install Calico"
 path: /getting-started/
 order: 1
 section:
@@ -7,15 +7,6 @@ section:
   section:
   - title: Quickstart
     path: /getting-started/kubernetes/quickstart
-  - title: System requirements
-    path: /getting-started/kubernetes/requirements
-  - title: Self-managed on-premises
-    path: /getting-started/kubernetes/self-managed-onprem/
-    section:
-    - title: Install Calico for on-premises deployments
-      path: /getting-started/kubernetes/self-managed-onprem/onpremises  
-    - title: Customize manifests
-      path: /getting-started/kubernetes/installation/config-options
   - title: Managed public cloud
     path: /getting-started/kubernetes/managed-public-cloud/
     section:
@@ -35,7 +26,21 @@ section:
     - title: Self-managed Kubernetes in GCE
       path: /getting-started/kubernetes/self-managed-public-cloud/gce
     - title: Self-managed Kubernetes in Azure
-      path: /getting-started/kubernetes/self-managed-public-cloud/azure      
+      path: /getting-started/kubernetes/self-managed-public-cloud/azure        
+  - title: Self-managed on-premises
+    path: /getting-started/kubernetes/self-managed-onprem/
+    section:
+    - title: Install Calico for on-premises deployments
+      path: /getting-started/kubernetes/self-managed-onprem/onpremises  
+    - title: Customize manifests
+      path: /getting-started/kubernetes/installation/config-options
+  - title: OpenShift
+    path: /getting-started/openshift/
+    section:
+    - title: System requirements
+      path: /getting-started/openshift/requirements
+    - title: Installation
+      path: /getting-started/openshift/installation
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
@@ -70,13 +75,10 @@ section:
       path: /getting-started/kubernetes/hardway/end-user-rbac
     - title: Istio integration
       path: /getting-started/kubernetes/hardway/istio-integration
-- title: OpenShift
-  path: /getting-started/openshift/
-  section:
   - title: System requirements
-    path: /getting-started/openshift/requirements
-  - title: Installation
-    path: /getting-started/openshift/installation
+    path: /getting-started/kubernetes/requirements
+  - title: Try out the eBPF tech preview
+    path: /getting-started/kubernetes/trying-ebpf
 - title: OpenStack
   path: /getting-started/openstack/
   section:
@@ -114,16 +116,16 @@ section:
     - title: Binary install without package manager
       path: /getting-started/bare-metal/installation/binary
 - title: calicoctl
-  path: /getting-started/calicoctl/
+  path: /getting-started/clis/calicoctl/
   section:
   - title: Install calicoctl
-    path: /getting-started/calicoctl/install
+    path: /getting-started/clis/calicoctl/install
   - title: Configure calicoctl
-    path: /getting-started/calicoctl/configure/
+    path: /getting-started/clis/calicoctl/configure/
     section:
     - title: Overview
-      path: /getting-started/calicoctl/configure/overview
+      path: /getting-started/clis/calicoctl/configure/overview
     - title: Configure calicoctl to connect to an etcd datastore
-      path: /getting-started/calicoctl/configure/etcd
+      path: /getting-started/clis/calicoctl/configure/etcd
     - title: Configure calicoctl to connect to the Kubernetes API datastore
-      path: /getting-started/calicoctl/configure/kdd
+      path: /getting-started/clis/calicoctl/configure/kdd

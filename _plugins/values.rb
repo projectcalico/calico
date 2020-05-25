@@ -1,11 +1,31 @@
 def gen_values(versions, imageNames, imageRegistry, chart)
   if chart == "tigera-operator"  
     versionsYml = <<~EOF
+    imagePullSecrets: {}
+
+    installation:
+      enabled: true
+      kubernetesProvider: ""
+
+    certs:
+      node:
+        key:
+        cert:
+        commonName:
+      typha:
+        key:
+        cert:
+        commonName:
+        caBundle:
+
     # Configuration for the tigera operator
     tigeraOperator:
       image: #{versions.fetch("tigera-operator").image}
       version: #{versions.fetch("tigera-operator").version}
       registry: #{versions.fetch("tigera-operator").registry}
+    calicoctl:
+      image: #{imageRegistry}#{imageNames.fetch("calicoctl")}
+      tag: #{versions.fetch("calicoctl")}
     EOF
   else
     versionsYml = <<~EOF
@@ -23,6 +43,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
     network: calico
     # Sets the ipam. Can be 'calico-ipam' or 'host-local'
     ipam: calico-ipam
+
+    # Sets the mtu.
+    mtu: "1440"
 
     node:
       image: #{imageRegistry}#{imageNames.fetch("node")}

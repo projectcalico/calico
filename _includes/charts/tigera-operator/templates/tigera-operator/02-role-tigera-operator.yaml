@@ -22,6 +22,9 @@ rules:
     resources:
       - nodes
     verbs:
+      # Need to update node labels when migrating nodes.
+      - 'get'
+      - 'patch'
       - 'list'
       # We need this for Typha autoscaling
       - 'watch'
@@ -81,7 +84,7 @@ rules:
     - poddisruptionbudgets
     verbs:
     - '*'
-{{- if eq .Values.kubernetesProvider "openshift" }}
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io
@@ -105,6 +108,22 @@ rules:
       - securitycontextconstraints
     verbs:
       - '*'
+  # Need these permissions for the calicoctl init container.
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - bgpconfigurations
+      - bgppeers
+      - felixconfigurations
+      - kubecontrollersconfigurations
+      - globalnetworkpolicies
+      - globalnetworksets
+      - hostendpoints
+      - ippools
+      - networkpolicies
+      - networksets
+    verbs:
+      - create
 {{- end }}
     # Permissions below this point are required for TSEE only.
   - apiGroups:

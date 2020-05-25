@@ -17,8 +17,8 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 
 ### Before you begin...
 
-- Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-- Install [AWS CLI tools](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
+- Install {% include open-new-window.html text='kubectl' url='https://kubernetes.io/docs/tasks/tools/install-kubectl/' %}
+- Install {% include open-new-window.html text='AWS CLI tools' url='https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html' %}
 
 ### How to
 
@@ -31,9 +31,9 @@ There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Op
 
 To use kops to create a cluster with {{site.prodname}} networking and network policy:
 
-1. [Install kops](https://kops.sigs.k8s.io/install/) on your workstation.
-1. [Set up your environment for AWS](https://kops.sigs.k8s.io/getting_started/aws/).
-  1. Be sure to [set up an S3 state store](https://kops.sigs.k8s.io/getting_started/aws/#cluster-state-storage) and export its name:
+1. {% include open-new-window.html text='Install kops' url='https://kops.sigs.k8s.io/install/' %} on your workstation.
+1. {% include open-new-window.html text='Set up your environment for AWS' url='https://kops.sigs.k8s.io/getting_started/aws/' %} .
+  1. Be sure to {% include open-new-window.html text='set up an S3 state store' url='https://kops.sigs.k8s.io/getting_started/aws/#cluster-state-storage' %} and export its name:
   
      ```
      export KOPS_STATE_STORE=s3://name-of-your-state-store-bucket
@@ -57,7 +57,7 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:etcd' %}   
 
-You can further customize the {{site.prodname}} install with [options listed in the kops documentation](https://kops.sigs.k8s.io/networking/#calico-example-for-cni-and-network-policy). 
+You can further customize the {{site.prodname}} install with {% include open-new-window.html text='options listed in the kops documentation' url='https://kops.sigs.k8s.io/networking/#calico-example-for-cni-and-network-policy' %}. 
 
 #### Other options and tools
 
@@ -78,9 +78,10 @@ The geeky details of what you get:
 
 ##### Kubespray
 
-[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+{% include open-new-window.html text='Kubespray' url='https://kubespray.io/' %} is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the {% include open-new-window.html text='Kubespray docs' url='https://kubespray.io/#/?id=network-plugins' %} for more details.
 
 ### Above and beyond
 
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on AWS' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)

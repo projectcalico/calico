@@ -119,9 +119,11 @@ div.highlight {
 }
 
 #toplevel-nav {
-  -webkit-box-shadow: 0px 0px 8px 1px #666;
-  -moz-box-shadow: 0px 0px 8px 1px #666;
-  box-shadow: 0px 0px 8px 1px #666;
+  -webkit-box-shadow: 0px 0px 2px 0px rgba(0,0,0,0.5);
+  -moz-box-shadow: 0px 0px 2px 0px rgba(0,0,0,0.5);
+  box-shadow: 0px 0px 2px 0px rgba(0,0,0,0.5);
+ 
+  border: none;
 }
 
 // Fix conflicts between bootstrap theme and custom search theme.
@@ -160,65 +162,133 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     line-height: normal;
 }
 
+
+#tigera-navbar {
+  // Constrains nav menu height when in hamburger mode
+  max-height: 355px;
+}
+
+#tigera-navbar ul.nav {
+  @media (min-width: $screen-sm-min) {
+    margin-top: 11px;
+  }    
+  
+  padding: 15px 0 0 0;
+}
+  
+#tigera-navbar ul.nav li {
+  margin: 0 0 0 0;
+  @media (min-width: $screen-sm-min) {
+    // When displaying in full size mode we must extend to the bottom of the nav-bar otherwise sub-menu disappears as move mouse towards it
+    padding: 0;
+    height: 48px;
+  }
+
+  // When displaying in hamburger mode we cannot set the height because that breaks the inlining of sub-menu items so use padding instead
+  padding: 0 0 25px 0;
+  height: auto;
+}
+  
 #tigera-navbar ul.nav li a {
-    @media (max-width: $screen-sm-min) {
-        padding: 10px 0;
-    }
-    @media (min-width: $screen-xs-max) {
-        padding: 0 0;
-    }
+  // Shrink as we approach hamburger mode
+  @media (min-width: $screen-sm-min) and (max-width: 900px) {
+    padding: 0 6px;
+    font-size: 13px;
+  }
+  @media (min-width: 901px) and (max-width: 1100px) {
+    padding: 0 10px;
+  }
+
+  padding: 0 20px;
+  font-family: "Poppins", Poppins;
+  font-size: 16px;
+  font-weight: 600;    
+  color: #2a302f;
+  transition: .4s;    
+  -webkit-font-smoothing: antialiased;        
 }
 
-// Submenu Navigation for Desktop
-#tigera-navbar ul.nav li ul {
-    position: absolute;
-    display: none;
-    margin-top: 20px;
-    margin-left: -10px !important;
-    background: #004078;
-    z-index: 1000;
+#tigera-navbar ul.nav li a:hover {
+  color: #ff9e16;
 }
 
-@media screen and (min-width: 999px) {
+// Indent submenu items for hamburger mode
+@media (max-width: $screen-xs-max) {
+  #tigera-navbar ul.nav li ul li {
+    padding: 20px 0 0 20px;
+  }
+}
 
-    #tigera-navbar ul.nav {
-        li {
-            height: 44px;
+// Submenu handling for full size mode
+@media (min-width: $screen-sm-min) {
+  #tigera-navbar ul.nav li ul {
+    padding: 13px 0 0 0;
+    background: #09287d;
 
-            ul {
-                margin: 24px 0 0 0;
-                padding: 0;
+    li {
+      min-height: 24px !important;
+      padding: 13px 20px;
 
-                li {
-                    min-height: 24px !important;
-                    display: block;
-                    padding: 8px 18px 8px 10px;
-                    overflow: hidden;
-                    width: 200px;
-                    margin: 0;
-                    border-top: 1px dashed #999;
+      a {
+        color: #fff;
+        padding: 0;
+        white-space: nowrap;
+      }
 
-                    a {
-                        color: #fff;
-                        font-size: 14px;
-                    }
-
-                    a:hover {
-                        color: $navbar-default-link-hover-color !important;
-                        text-decoration: none;
-                    }
-                }
-
-                li:first-child {
-                    border-top: none;
-                }
-            }
-        }
-
-        li:hover ul {
-            display: block;
-        }
+      a:hover {
+        color: $navbar-default-link-hover-color !important;
+        background-color: transparent;
+        text-decoration: none;
+      }
     }
+  }
+
+  #tigera-navbar ul.nav li:hover ul {
+   display: block;
+  }
+}
+
+#tigera-navbar .sub-arrow {
+  @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+    width: 14px;
+    padding: 10px 0 10px 3px;
+  }
+
+  font-size: 11px;
+  line-height: 1;
+  width: 21px;
+  padding: 10px 0 10px 10px;
+  margin-top: -10px;
+  margin-bottom: -10px;
+}
+
+#tigera-navbar .free-training {
+  @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+      padding: 6px 10px !important;
+      margin: -8px 0px 0px 0px;
+  }
+
+  color: white !important;
+  background-color: #ff9e16;
+  padding: 9px 15px !important;
+  margin: -11px 38px 0px 0px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #ff9e16;
+}
+
+#tigera-navbar .free-training:hover {
+  color: #ff9e16 !important;
+  background-color: white;
+}
+
+
+.panel-heading.free-training {
+  background-color: #ff9e16;
+}
+
+.panel-heading.free-training span {
+  color: white;
 }
 
 #enterprise-header .request-demo-button {
@@ -406,6 +476,11 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
       overflow-y: auto;
     }
   }
+}
+
+#right-toc {
+  padding-left: .5em;
+  border-left: 1px solid #ddd;
 }
 
 .navbar-right {

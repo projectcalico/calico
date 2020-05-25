@@ -30,11 +30,11 @@ metadata:
   labels:
     k8s-app: calico-typha
 spec:
-  # Number of Typha replicas.  To enable Typha, set this to a non-zero value *and* set the
+  # Number of Typha replicas. To enable Typha, set this to a non-zero value *and* set the
   # typha_service_name variable in the calico-config ConfigMap above.
   #
-  # We recommend using Typha if you have more than 50 nodes.  Above 100 nodes it is essential
-  # (when using the Kubernetes datastore).  Use one replica for every 100-200 nodes.  In
+  # We recommend using Typha if you have more than 50 nodes. Above 100 nodes it is essential
+  # (when using the Kubernetes datastore). Use one replica for every 100-200 nodes. In
   # production, we recommend running at least 3 replicas to reduce the impact of rolling upgrade.
   replicas: 1
   revisionHistoryLimit: 2
@@ -63,7 +63,7 @@ spec:
       # as a host-networked pod.
       serviceAccountName: calico-node
       priorityClassName: system-cluster-critical
-      # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573 
+      # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
       securityContext:
         fsGroup: 65534
       containers:
@@ -74,7 +74,20 @@ spec:
           name: calico-typha
           protocol: TCP
         env:
-          # Enable "info" logging by default.  Can be set to "debug" to increase verbosity.
+{{- if .Values.bpf }}
+          # Overrides for kubernetes API server host/port. Needed in BPF mode.
+          - name: KUBERNETES_SERVICE_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: calico-config
+                key: kubernetes_service_host
+          - name: KUBERNETES_SERVICE_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: calico-config
+                key: kubernetes_service_port
+{{- end }}
+          # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
           - name: TYPHA_LOGSEVERITYSCREEN
             value: "info"
           # Disable logging to file and syslog since those don't make sense in Kubernetes.
@@ -95,7 +108,7 @@ spec:
           - name: USE_POD_CIDR
             value: "true"
 {{- end }}
-          # Uncomment these lines to enable prometheus metrics.  Since Typha is host-networked,
+          # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
           # this opens a port on the host, which may need to be secured.
           #- name: TYPHA_PROMETHEUSMETRICSENABLED
           #  value: "true"

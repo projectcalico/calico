@@ -1,50 +1,73 @@
-
 (function () {
     const tocs = document.querySelectorAll('.toc');
     tocs.forEach(toc => {
-        let globalLink = undefined;
+        const links = getLinks(toc);
 
-        function handleScroll() {
-            const links = Array.from(toc.getElementsByTagName("a"));
-            const ids = links.map(l => {
-                const href = l.href.split("#");
-                const id = href[1];
+        links.emptyLinks.forEach(l => l.link.hidden = true);
 
-                return id;
-            })
+        const highlightNearestLink = highlightNearestLinkHandlerFactory(links.availableLinks);
+        highlightNearestLink();
+        window.addEventListener("scroll", highlightNearestLink);
+    });
 
-            let nearestId = globalLink ? globalLink.href.split("#")[1] : '';
-            let currentNearestPos = undefined;
+    function getLinks(toc) {
+        const links = Array
+            .from(toc.getElementsByTagName("a"))
+            .map(link => ({ link, id: link.href.split("#")[1] }));
 
-            for (const id of ids) {
-                const heading = document.getElementById(id);
-                const headingRect = heading.getBoundingClientRect();
-                const yPosition = headingRect.top;
-
-                if (yPosition === 0) {
-                    nearestId = id;
-                    break;
-                }
-
-
-                const diff = yPosition * yPosition;
-                if (!currentNearestPos || diff <= currentNearestPos) {
-                    currentNearestPos = diff;
-                    nearestId = id;
-                }
-            };
-
-            const link = links.find(l => l.href.split("#")[1] === nearestId);
-
-            if (globalLink) {
-                globalLink.className = '';
+        return links.reduce((links, link) => {
+            if (link.id) {
+                links.availableLinks.push(link);
+            } else {
+                links.emptyLinks.push(link);
             }
-            globalLink = link;
 
-            link.className = 'current';
+            return links;
+        }, { emptyLinks: [], availableLinks: [] });
+    }
+
+    function highlightNearestLinkHandlerFactory(availableLinks) {
+        let highlightedLink = undefined;
+
+        return function highlightNearestLink() {
+            const nearestLink = findNearestLink(availableLinks, highlightedLink);
+            if (highlightedLink) {
+                highlightedLink.link.className = '';
+            }
+            if (nearestLink) {
+                nearestLink.link.className = 'current';
+            }
+            highlightedLink = nearestLink;
+        }
+    }
+
+    function findNearestLink(availableLinks, previousNearestLink) {
+        let nearestLink = previousNearestLink;
+        let currentNearestPos = undefined;
+
+        for (const link of availableLinks) {
+            const id = link.id;
+            const heading = document.getElementById(id);
+
+            if (!heading) {
+                continue;
+            }
+
+            const headingRect = heading.getBoundingClientRect();
+            const yPosition = headingRect.top;
+
+            if (yPosition === 0) {
+                nearestLink = link;
+                break;
+            }
+
+            const diff = yPosition * yPosition;
+            if (!currentNearestPos || diff <= currentNearestPos) {
+                currentNearestPos = diff;
+                nearestLink = link;
+            }
         }
 
-        handleScroll();
-        window.addEventListener("scroll", handleScroll);
-    });
-})()
+        return nearestLink;
+    }
+})();

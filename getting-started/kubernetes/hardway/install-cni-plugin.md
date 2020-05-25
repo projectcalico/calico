@@ -128,9 +128,9 @@ sudo su
 Install the CNI plugin Binaries
 
 ```bash
-curl -L -o /opt/cni/bin/calico https://github.com/projectcalico/cni-plugin/releases/download/v3.8.0/calico-amd64
+curl -L -o /opt/cni/bin/calico https://github.com/projectcalico/cni-plugin/releases/download/v3.14.0/calico-amd64
 chmod 755 /opt/cni/bin/calico
-curl -L -o /opt/cni/bin/calico-ipam https://github.com/projectcalico/cni-plugin/releases/download/v3.8.0/calico-ipam-amd64
+curl -L -o /opt/cni/bin/calico-ipam https://github.com/projectcalico/cni-plugin/releases/download/v3.14.0/calico-ipam-amd64
 chmod 755 /opt/cni/bin/calico-ipam
 ```
 
@@ -176,6 +176,18 @@ cat > /etc/cni/net.d/10-calico.conflist <<EOF
   ]
 }
 EOF
+```
+
+Exit from su and go back to the logged in user.
+
+```bash
+exit
+```
+
+At this point Kubernetes nodes will become `Ready` because Kubernetes has a networking provider and configuration installed.
+
+```bash
+kubectl get nodes
 ```
 
 ## Next

@@ -79,7 +79,7 @@ Each network policy rule applies to either **ingress** or **egress** traffic. Fr
 You can specify whether policy applies to ingress, egress, or both using the **types** field. If you do not use the types field, Calico defaults to the following values.
 
 
-| Ingress rule present? | Engress rule present? |      Value      |
+| Ingress rule present? | Egress rule present?  |      Value      |
 | :-------------------: | :-------------------: | :-------------: |
 |          No           |          No           |     Ingress     |
 |          Yes          |          No           |     Ingress     |
@@ -97,6 +97,11 @@ The Kubernetes network policy specification defines the following behavior:
 
 For compatibility with Kubernetes, **Calico network policy** follows the same behavior for Kubernetes pods.  For other endpoint types (VMs, host interfaces), Calico network policy is default deny. That is, only traffic specifically allowed by network policy is allowed, even if no network policies apply to the endpoint.
 
+### Before you begin
+
+`calicoctl` must be **installed** and **configured** before use. `calicoctl` will use etcd as the datastore by default, but many {{site.prodname}} installation manifests configure Kubernetes as the datastore. You can find more information on how to configure `calicoctl` in the following link:
+
+- [Configure `calicoctl`]({{ site.baseurl }}/getting-started/clis/calicoctl/configure/overview)
 
 ### How to
 
@@ -270,3 +275,4 @@ Spec:
 - For details on the calicoctl command line tool, see [calicoctl user reference]({{ site.baseurl }}/reference/calicoctl/overview)
 - {% include enterprise_icon.html %}[Network visibility with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/network-visibility)
 - {% include enterprise_icon.html %}[Advanced compliance controls with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/compliance)
+

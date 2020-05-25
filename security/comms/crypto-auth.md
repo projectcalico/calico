@@ -1,5 +1,5 @@
 ---
-title: Configure encryption and authentication
+title: Configure encryption and authentication to secure Calico components
 description: Enable TLS authentication and encryption for various Calico components.
 canonical_url: '/security/comms/crypto-auth'
 ---
@@ -16,7 +16,7 @@ its connections as follows.
 - Configure each {{site.prodname}} component to verify the etcd server's identity and to present
   a certificate to the etcd server that is signed by the etcd certificate authority.
   - [{{site.nodecontainer}}](../../reference/node/configuration)
-  - [`calicoctl`](../../getting-started/calicoctl/configure/etcd)
+  - [`calicoctl`](../../getting-started/clis/calicoctl/configure/etcd)
   - [CNI plugin](../../reference/cni-plugin/configuration#etcd-location) (Kubernetes and OpenShift only)
   - [Kubernetes controllers](../../reference/kube-controllers/configuration#configuring-datastore-access) (Kubernetes and OpenShift only)
   - [Felix](../../reference/felix/configuration#etcd-datastore-configuration)

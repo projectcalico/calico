@@ -32,7 +32,7 @@ HP_IGNORE_LOCAL_DIRS="/v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/,/v2.3/,/v2.4/,/v2.5/,/v
 
 ##############################################################################
 # Version information used for cutting a release.
-RELEASE_STREAM?=
+RELEASE_STREAM := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].title' | grep --only-matching --extended-regexp '(v[0-9]+\.[0-9]+)|master')
 
 # Use := so that these V_ variables are computed only once per make run.
 CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].title')
@@ -213,10 +213,6 @@ kubeval: _site
 	rm filtered.out
 
 helm-tests: vendor bin/helm values.yaml
-ifndef RELEASE_STREAM
-	# Default the version to master if not set
-	$(eval RELEASE_STREAM = master)
-endif
 	mkdir -p .go-pkg-cache && \
 		docker run --rm \
 		--net=host \
@@ -273,7 +269,7 @@ release: release-prereqs
 	@echo ""
 	@echo "Release build complete. Next, push the release."
 	@echo ""
-	@echo "  make RELEASE_STREAM=$(RELEASE_STREAM) release-publish"
+	@echo "  make release-publish"
 	@echo ""
 
 ## Produces a git tag for the release.
@@ -333,9 +329,6 @@ endif
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
-ifndef RELEASE_STREAM
-	$(error RELEASE_STREAM is undefined - run using make release RELEASE_STREAM=vX.Y)
-endif
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
 		exit 1; fi
@@ -449,7 +442,7 @@ $(RELEASE_DIR_BIN)/%:
 ###############################################################################
 # Utilities
 ###############################################################################
-HELM_RELEASE=helm-v2.11.0-linux-amd64.tar.gz
+HELM_RELEASE=helm-v2.16.3-linux-amd64.tar.gz
 bin/helm:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
@@ -459,7 +452,7 @@ bin/helm:
 
 .PHONY: values.yaml
 values.yaml: _includes/charts/calico/values.yaml _includes/charts/tigera-operator/values.yaml
-_includes/charts/%/values.yaml:
+_includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
 	docker run --rm \
 	  -v $$PWD:/calico \
 	  -w /calico \

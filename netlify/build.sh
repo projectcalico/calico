@@ -31,6 +31,8 @@ if [ "$CONTEXT" == "deploy-preview" ]; then
     JEKYLL_CONFIG=$JEKYLL_CONFIG,$(pwd)/_config_url.yml
 fi
 
+# build builds a branch $1 into the dir _site/$2. If $2 is not provided, the
+# branch is built into _site/
 function build() {
     echo "[DEBUG] building branch $1 into dir $2"
     TEMP_DIR=$(mktemp -d)
@@ -44,17 +46,32 @@ function build() {
     rsync -r $TEMP_DIR/_site .
 }
 
-# master builds skip the git clone and build the site in the current tree
+# build_master builds skip the git clone and build the site in the current tree
 function build_master() {
     jekyll build --config $JEKYLL_CONFIG --baseurl /master --destination _site/master
 }
 
+# build_archives builds the archives. The release-legacy branch is special
+# and is built into _site directly (the legacy docs were a version per dir).
+# Newer archive versions are built into its own directory for that version.
 function build_archives() {
-    grep -oP '^- \K(.*)' _data/archives.yml | xargs -I _ echo release-_ | while read branch; do
-        if [[ "$branch" == release-legacy*  ]]; then
-            branch="release-legacy"
+    (echo "$CURRENT_RELEASE" && grep -oP '^- \K(.*)' _data/archives.yml) | while read branch; do
+        EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_config_noindex.yml
+        if [[ "$branch" == legacy* ]]; then
+            if [ -z "$CUSTOM_ARCHIVE_PATH" ]; then
+                build release-legacy
+            else
+                build release-legacy $CUSTOM_ARCHIVE_PATH
+                EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_manifests_only.yml build release-legacy /
+            fi
+        else
+            if [ -z "$CUSTOM_ARCHIVE_PATH" ]; then
+                build release-${branch} /${branch}
+            else
+                build release-${branch} $CUSTOM_ARCHIVE_PATH/${branch}
+                EXTRA_CONFIG=$EXTRA_CONFIG,$(pwd)/netlify/_manifests_only.yml build release-${branch} /${branch}
+            fi
         fi
-        build $branch
     done
 }
 
@@ -68,9 +85,6 @@ mv _site/sitemap.xml _site/release-legacy-sitemap.xml
 echo "[INFO] building current release"
 EXTRA_CONFIG=$(pwd)/netlify/_config_latest.yml build release-$CURRENT_RELEASE
 mv _site/sitemap.xml _site/latest-sitemap.xml
-
-echo "[INFO] building permalink for current release"
-EXTRA_CONFIG=$(pwd)/netlify/_config_latest.yml build release-$CURRENT_RELEASE /$CURRENT_RELEASE
 
 if [ ! -z "$CANDIDATE_RELEASE" ]; then
     echo "[INFO] building candidate release"

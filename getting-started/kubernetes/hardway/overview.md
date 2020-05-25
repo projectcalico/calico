@@ -6,12 +6,12 @@ canonical_url: '/getting-started/kubernetes/hardway/index'
 
 This tutorial walks you through setting up {{site.prodname}} the hard way.
 
- - If you are looking to get up and running quickly with {{site.prodname}}, to try things out, check out our [quickstart guide](/getting-started/kubernetes/quickstart).
- - If you are looking for the most direct path to a production-ready {{site.prodname}} install, check out our [install Guides](/getting-started/kubernetes/self-managed-onprem/onpremises).
+ - If you are looking to get up and running quickly with {{site.prodname}}, to try things out, check out our [quickstart guide]({{site.baseurl}}/getting-started/kubernetes/quickstart).
+ - If you are looking for the most direct path to a production-ready {{site.prodname}} install, check out our [install guides]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises).
 
 {{site.prodname}} the hard way is optimized for learning about how {{site.prodname}} works and what the other guides do “under the hood.”
 
-The name “{{site.prodname}} the hard way” is inspired by [Kubernetes the hard way](https://github.com/kelseyhightower/kubernetes-the-hard-way) by Kelsey Hightower.
+The name “{{site.prodname}} the hard way” is inspired by {% include open-new-window.html text='Kubernetes the hard way' url='https://github.com/kelseyhightower/kubernetes-the-hard-way' %} by Kelsey Hightower.
 
 ## Target Audience
 

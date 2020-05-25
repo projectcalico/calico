@@ -1,6 +1,6 @@
 ---
 title: System requirements
-description: Review requirements before installing Calico on nodes to ensure success. 
+description: Review requirements before installing Calico to ensure success. 
 canonical_url: '/getting-started/kubernetes/requirements'
 ---
 
@@ -48,8 +48,8 @@ IP ranges in your network, including:
 
 ## Application layer policy requirements
 
-- [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) enabled
-- Istio [v1.0](https://istio.io/about/notes/1.0/), [v1.1](https://archive.istio.io/v1.1/), [v1.2](https://archive.istio.io/v1.2/), or [v1.3](https://archive.istio.io/v1.3/)
+- {% include open-new-window.html text='MutatingAdmissionWebhook' url='https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook' %} enabled
+- Istio {% include open-new-window.html text='v1.0' url='https://istio.io/about/notes/1.0/' %}, {% include open-new-window.html text='v1.1' url='https://archive.istio.io/v1.1/' %}, {% include open-new-window.html text='v1.2' url='https://archive.istio.io/v1.2/' %}, or {% include open-new-window.html text='v1.3' url='https://archive.istio.io/v1.3/' %}
 
 Note that Kubernetes version 1.16+ requires Istio version 1.2 or greater.
 

@@ -20,20 +20,20 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
 
 ## Install Kubernetes
 
-1. Install kubeadm
+1. Install kubeadm, kubelet, kubectl by following (official documentation)[https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl].
 1. Choose one node as your Kubernetes master. On that node
-   `kubeadm init --pod-network-cidr=192.168.0.0/16`
+   `sudo kubeadm init --pod-network-cidr=192.168.0.0/16`
 
    The Kubernetes `pod-network-cidr` is the IP prefix for all pods in the Kubernetes cluster. This range must not clash with other networks in your VPC.
 1. On all other nodes
-   `kubeadm join <output from kubeadm init>`
+   `sudo kubeadm join <output from kubeadm init>`
 1. Copy admin credentials
 1. Test Access
     1. Run
 
        `kubectl get nodes`
 
-       Verify all nodes have joined
+       Verify all nodes have joined. At this point nodes have joined but they are in `NotReady` state, because Kubernetes can't find a networking provider and configuration.
 
 ## Next
 

@@ -1,0 +1,25 @@
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: install-resources-script
+  namespace: tigera-operator
+data:
+  install.sh: |
+   #!/bin/sh
+   for i in $(ls /calico-resources/*); do
+     output=$(calicoctl create -f $i 2>&1)
+     if [ $? -eq 0 ]; then
+       echo Created resource from $i
+     else
+       echo $output | grep "resource already exists" > /dev/null
+       if [ $? -eq 0 ]; then
+         echo Resource already exists $i
+       else
+         echo Failed to create from $i, $output
+         exit 1
+       fi
+     fi
+   done
+   echo All Calico resources were created or exist
+{{- end}}

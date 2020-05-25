@@ -11,6 +11,8 @@ section:
     path: /networking/bgp
   - title: Configure overlay networking
     path: /networking/vxlan-ipip
+  - title: Advertise Kubernetes service IP addresses
+    path: /networking/advertise-service-ips
   - title: Configure MTU to maximize network performance
     path: /networking/mtu
   - title: Configure workload access outside cluster
@@ -30,8 +32,6 @@ section:
      path: /networking/dual-stack
    - title: Enable IPv6
      path: /networking/ipv6
-   - title: Advertise Kubernetes service IP addresses
-     path: /networking/advertise-service-ips
    - title: Add a floating IP to a pod
      path: /networking/add-floating-ip
    - title: Use specific IP address for a pod
@@ -42,7 +42,7 @@ section:
      path: /networking/migrate-pools
    - title: Change IP pool block size
      path: /networking/change-block-size  
-   - title: Interoperate with legacy firewalls using IP ranges
+   - title: Restrict a pod to use an IP address in a specific range
      path: /networking/legacy-firewalls
 - title: Calico networking for OpenStack
   path: /networking/openstack/

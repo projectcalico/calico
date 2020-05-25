@@ -1,5 +1,5 @@
 ---
-title: Upgrading Calico on Kubernetes
+title: Upgrade Calico on Kubernetes
 description: Upgrade to a newer version of Calico for Kubernetes.
 canonical_url: '/maintenance/kubernetes-upgrade'
 ---
@@ -17,6 +17,7 @@ procedure varies by datastore type.
 > This may result in unexpected behavior and data.
 {: .alert .alert-danger}
 
+{% include content/hostendpoints-upgrade.md orch="Kubernetes" %}
 
 ## Upgrading an installation that uses the Kubernetes API datastore
 
@@ -63,8 +64,8 @@ procedure varies by datastore type.
    ```
    {: .no-select-button}
 
-1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/calicoctl/install)
-   and [configure it to connect to your datastore](../getting-started/calicoctl/configure/overview).
+1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/clis/calicoctl/install)
+   and [configure it to connect to your datastore](../getting-started/clis/calicoctl/configure/overview).
 
 1. Use the following command to check the {{site.prodname}} version number.
 
@@ -76,6 +77,9 @@ procedure varies by datastore type.
 
 1. If you have [enable application layer policy]({{site.baseurl}}/security/app-layer-policy),
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
+
+1. If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
+   add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade**.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
@@ -126,8 +130,8 @@ procedure varies by datastore type.
    {: .alert .alert-success}
 
 
-1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/calicoctl/install)
-   and [configure it to connect to your datastore](../getting-started/calicoctl/configure/overview).
+1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../getting-started/clis/calicoctl/install)
+   and [configure it to connect to your datastore](../getting-started/clis/calicoctl/configure/overview).
 
 1. Use the following command to check the {{site.prodname}} version number.
 
@@ -139,6 +143,9 @@ procedure varies by datastore type.
 
 1. If you have [enabled application layer policy]({{site.baseurl}}/security/app-layer-policy),
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
+
+1. If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
+   add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade**.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
@@ -160,3 +167,5 @@ take the following steps to upgrade the Dikastes sidecars running in your applic
 
 1. Once the new template is in place, newly created pods use the upgraded version of Dikastes. Perform a rolling update of each of your service deployments
    to get them on the new version of Dikastes.
+
+{% include content/auto-hostendpoints-migrate.md orch="Kubernetes" %}

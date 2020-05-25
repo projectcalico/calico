@@ -1,10 +1,12 @@
 ---
-title: calicoctl
-description: Install and configure the Calico CLI for managing resources. 
+title: Troubleshoot
+description: Troubleshooting, logs, and diagnostics.
+canonical_url: '/maintenance/troubleshoot/index'
 show_read_time: false
 show_toc: false
-canonical_url: '/getting-started/calicoctl/index'
 ---
+
 {{ page.description }}
+
 {% capture content %}{% include index.html %}{% endcapture %}
 {{ content | replace: "    ", "" }}

@@ -17,8 +17,8 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 ### Before you begin...
 
-- Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-- Install [Azure CLI tools](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+- Install {% include open-new-window.html text='kubectl' url='https://kubernetes.io/docs/tasks/tools/install-kubectl/' %}
+- Install {% include open-new-window.html text='Azure CLI tools' url='https://docs.microsoft.com/en-us/cli/azure/install-azure-cli' %}
 
 ### How to
 
@@ -29,9 +29,9 @@ There are many ways to install and manage Kubernetes in Azure. This guide shows 
 
 #### aks-engine for Azure networking and Calico network policy
 
-[Install aks-engine](https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md#install-aks-engine) on your workstation.
+{% include open-new-window.html text='Install aks-engine' url='https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md#install-aks-engine' %} on your workstation.
 
-Before deploying, customize your cluster definition to use {{site.prodname}} for network policy.  Add or modify the `kubernetesConfig` section to include the following (see the [aks-engine documentation](https://github.com/Azure/aks-engine/blob/master/docs/topics/clusterdefinitions.md#kubernetesconfig) for other Kubernetes configuration settings).
+Before deploying, customize your cluster definition to use {{site.prodname}} for network policy.  Add or modify the `kubernetesConfig` section to include the following (see the {% include open-new-window.html text='aks-engine documentation' url='https://github.com/Azure/aks-engine/blob/master/docs/topics/clusterdefinitions.md#kubernetesconfig' %} for other Kubernetes configuration settings).
 
 ```
 "kubernetesConfig": {
@@ -40,9 +40,9 @@ Before deploying, customize your cluster definition to use {{site.prodname}} for
  }
 ```
  
-Or, start with this [example cluster definition](https://github.com/Azure/aks-engine/blob/master/examples/networkpolicy/kubernetes-calico-azure.json) with these value already set, and customize to meet your needs. 
+Or, start with this {% include open-new-window.html text='example cluster definition' url='https://github.com/Azure/aks-engine/blob/master/examples/networkpolicy/kubernetes-calico-azure.json' %} with these value already set, and customize to meet your needs. 
 
-Then, [follow the ask-engine documentation to deploy your cluster](https://github.com/Azure/aks-engine/blob/master/docs/tutorials/deploy.md), passing your cluster definition to `aks-engine deploy` via the `-m` flag. 
+Then, {% include open-new-window.html text='follow the ask-engine documentation to deploy your cluster' url='https://github.com/Azure/aks-engine/blob/master/docs/tutorials/deploy.md' %}, passing your cluster definition to `aks-engine deploy` via the `-m` flag. 
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}  
@@ -60,17 +60,18 @@ Unfortunately, aks-engine does not support this mode, so you must use a differen
 
 #### Terraform
 
-Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform “provisioners.” See the [Terraform documentation](https://www.terraform.io/docs/index.html) for more details.
+Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform “provisioners.” See the {% include open-new-window.html text='Terraform documentation' url='https://www.terraform.io/docs/index.html' %} for more details.
 
 ##### kubeadm
 
-[kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/) is a command line tool for bootstrapping a Kubernetes cluster on top of already-provisioned compute resources, like VMs in a cloud or bare metal hosts. Unlike aks-engine which handles provisioning cloud resources, installing Kubernetes, and installing {{site.prodname}}, kubeadm only handles the second step of installing Kubernetes. You should proceed to install {{site.prodname}} after completing kubeadm install. 
+{% include open-new-window.html text='kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/' %} is a command line tool for bootstrapping a Kubernetes cluster on top of already-provisioned compute resources, like VMs in a cloud or bare metal hosts. Unlike aks-engine which handles provisioning cloud resources, installing Kubernetes, and installing {{site.prodname}}, kubeadm only handles the second step of installing Kubernetes. You should proceed to install {{site.prodname}} after completing kubeadm install. 
 
 ##### Kubespray
 
-[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Azure.  {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+{% include open-new-window.html text='Kubespray' url='https://kubespray.io/' %} is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Azure.  {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the {% include open-new-window.html text='Kubespray docs' url='https://kubespray.io/#/?id=network-plugins' %} for more details.
 
 ### Above and beyond
 
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Azure' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-azure/' %}
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)

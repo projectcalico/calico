@@ -1,9 +1,1 @@
-1. If you are using pod CIDR {% if include.yaml == "calico" %}`192.168.0.0/16`{% else %}`10.244.0.0/16`{% endif %}, skip to the next step. If you
-   are using a different pod CIDR, use the following commands to set an environment
-   variable called `POD_CIDR` containing your pod CIDR and
-   replace {% if include.yaml == "calico" %}`192.168.0.0/16`{% else %}`10.244.0.0/16`{% endif %} in the manifest with your pod CIDR.
-
-   ```bash
-   POD_CIDR="<your-pod-cidr>" \
-   sed -i -e "s?{% if include.yaml == "calico" %}192.168.0.0/16{% else %}10.244.0.0/16{% endif %}?$POD_CIDR?g" {{include.yaml}}.yaml
-   ```
+1. If you are using pod CIDR {% if include.yaml == "calico" %}`192.168.0.0/16`{% else %}`10.244.0.0/16`{% endif %}, skip to the next step. If you are using a different pod CIDR with kubeadm, no changes are required - Calico will automatically detect the CIDR based on the running configuration. For other platforms, make sure you uncomment the CALICO_IPV4POOL_CIDR variable in the manifest and set it to the same value as your chosen pod CIDR.
