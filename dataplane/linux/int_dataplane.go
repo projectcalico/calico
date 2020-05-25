@@ -507,6 +507,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 		dp.RegisterManager(newBPFEndpointManager(
 			config.BPFLogLevel,
+			config.Hostname,
 			fibLookupEnabled,
 			config.RulesConfig.EndpointToHostAction == "DROP",
 			config.BPFDataIfacePattern,
