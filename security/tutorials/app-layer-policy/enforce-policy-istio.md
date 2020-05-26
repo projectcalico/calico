@@ -12,8 +12,10 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 2. Install {{site.prodname}} on Kubernetes:
    - If Calico is not installed on Kubernetes, see [Quickstart guide]({{ site.baseurl }}/getting-started/kubernetes/quickstart).
    - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/networking/) (or a non-{{site.prodname}} CNI) and {{site.prodname}} network policy are installed.
-3. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).  
-  **Important!**: Label the default namespace for the Istio sidecar injection as shown:
+3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install).   
+   - **Note**: Ensure calicoctl is configured to connect with the Kubernetes datastore (kdd).  
+4. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy). 
+   - **Important!**: Label the default namespace for the Istio sidecar injection as shown:
   `kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
