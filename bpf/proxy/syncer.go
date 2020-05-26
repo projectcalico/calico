@@ -717,7 +717,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		}
 		for index, key := range keys {
 			if index == 0 {
-				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(count), uint32(local), affinityTimeo))
+				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(0), uint32(local), affinityTimeo))
 			} else {
 				err = s.writeSvcNatKey(key, val)
 			}
@@ -1104,6 +1104,13 @@ func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
 		o(x)
 	}
 	return x
+}
+
+// K8sSvcWithLBSourceRangeIPs sets LBSourcePortRangeIPs
+func K8sSvcWithLBSourceRangeIPs(ips []string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).loadBalancerSourceRanges = ips
+	}
 }
 
 // K8sSvcWithExternalIPs sets ExternalIPs
