@@ -8,8 +8,8 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 
 ## Prerequisites
 
-- A Kubernetes cluster install with {{site.prodname}}
-- [Application layer policy is enabled]({{site.baseurl}}/security/app-layer-policy). 
+- A Kubernetes cluster installed with {{site.prodname}}
+- [Application layer policy is enabled]({{site.baseurl}}/security/app-layer-policy) 
 
 **Important!**: The default namespace for the Istio sidecar injection must be labeled with `istio-injection=enabled`. For example: `kubectl label namespace default istio-injection=enabled`
 
