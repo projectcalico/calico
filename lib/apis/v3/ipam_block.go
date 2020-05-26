@@ -38,7 +38,7 @@ type IPAMBlock struct {
 // IPAMBlockSpec contains the specification for an IPAMBlock resource.
 type IPAMBlockSpec struct {
 	CIDR           string                `json:"cidr"`
-	Affinity       *string               `json:"affinity"`
+	Affinity       *string               `json:"affinity,omitempty"`
 	StrictAffinity bool                  `json:"strictAffinity"`
 	Allocations    []*int                `json:"allocations"`
 	Unallocated    []int                 `json:"unallocated"`
@@ -47,8 +47,8 @@ type IPAMBlockSpec struct {
 }
 
 type AllocationAttribute struct {
-	AttrPrimary   *string           `json:"handle_id"`
-	AttrSecondary map[string]string `json:"secondary"`
+	AttrPrimary   *string           `json:"handle_id,omitempty"`
+	AttrSecondary map[string]string `json:"secondary,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
