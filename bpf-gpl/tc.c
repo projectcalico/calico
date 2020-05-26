@@ -336,6 +336,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		.reason = CALI_REASON_UNKNOWN,
 	};
 	struct calico_nat_dest *nat_dest = NULL;
+	__u8 nat_lvl1_drop = 0;
 
 	/* we assume we do FIB and from this point on, we only set it to false
 	 * if we decide not to do it.
@@ -595,8 +596,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* No conntrack entry, check if we should do NAT */
 	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
 					 state.ip_proto, state.dport,
-					 state.tun_ip != 0);
+					 state.tun_ip != 0, &nat_lvl1_drop);
 
+	if (nat_lvl1_drop) {
+		goto deny;
+	}
 	if (nat_dest != NULL) {
 		state.post_nat_ip_dst = nat_dest->addr;
 		state.post_nat_dport = nat_dest->port;

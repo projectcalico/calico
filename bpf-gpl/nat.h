@@ -45,13 +45,13 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
-// Map: NAT level one.  Dest IP and port -> ID and num backends.
 struct calico_nat_v4 {
         uint32_t addr; // NBO
         uint16_t port; // HBO
         uint8_t protocol;
 };
 
+// Map: NAT level one.  Dest IP, port and src IP -> ID and num backends.
 struct __attribute__((__packed__)) calico_nat_v4_key {
 	__u32 prefixlen;
 	uint32_t addr; // NBO
@@ -130,7 +130,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								     __be32 ip_dst,
 								     __u8 ip_proto,
 								     __u16 dport,
-								     bool from_tun)
+								     bool from_tun,
+								     __u8 *drop)
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = 88,
@@ -207,7 +208,10 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		}
 		CALI_DEBUG("NAT: nodeport hit\n");
 	}
-
+	if (nat_lv1_val->id == 0xffffffff && nat_lv1_val->count == 0) {
+		*drop = 1;
+		return NULL;
+	}
 	uint32_t count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
@@ -286,9 +290,9 @@ skip_affinity:
 }
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport)
+								    __u8 ip_proto, __u16 dport, __u8 *drop)
 {
-	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false);
+	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false, drop);
 }
 
 struct vxlanhdr {
