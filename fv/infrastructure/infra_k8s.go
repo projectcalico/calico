@@ -57,6 +57,7 @@ type K8sDatastoreInfra struct {
 	K8sClient    *kubernetes.Clientset
 
 	Endpoint    string
+	EndpointIP  string
 	BadEndpoint string
 
 	CertFileName string
@@ -267,6 +268,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		return nil, err
 	}
 
+	kds.EndpointIP = kds.k8sApiContainer.IP
 	kds.Endpoint = fmt.Sprintf("https://%s:6443", kds.k8sApiContainer.IP)
 	kds.BadEndpoint = fmt.Sprintf("https://%s:1234", kds.k8sApiContainer.IP)
 
