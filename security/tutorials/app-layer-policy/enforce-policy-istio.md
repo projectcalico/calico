@@ -8,7 +8,7 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 
 ## Prerequisites
 
-- A Kubernetes cluster installed with {{site.prodname}}
+- A Kubernetes cluster installed with {{site.prodname}} using [kdd]({{site.baseurl}}/getting-started/calicoctl/configure/kdd)
 - [Application layer policy is enabled]({{site.baseurl}}/security/app-layer-policy) 
 
 **Important!**: The default namespace for the Istio sidecar injection must be labeled with `istio-injection=enabled`. For example: `kubectl label namespace default istio-injection=enabled`
