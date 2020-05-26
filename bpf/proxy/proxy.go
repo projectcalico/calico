@@ -18,6 +18,7 @@
 package proxy
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -216,17 +217,17 @@ func (p *proxy) invokeDPSyncer() {
 
 	staleUDPSvcs := svcUpdateResult.UDPStaleClusterIP
 
-	/* XXX no tincluded in 1.15 yet
 	// merge stale UDP services
-	for _, svcPortName := range endpointUpdateResult.StaleServiceNames {
+	for _, svcPortName := range epsUpdateResult.StaleServiceNames {
 		if svcInfo, ok := p.svcMap[svcPortName]; ok && svcInfo != nil && svcInfo.Protocol() == v1.ProtocolUDP {
+			log.Infof("Stale %s service %v -> %s",
+				strings.ToLower(string(svcInfo.Protocol())), svcPortName, svcInfo.ClusterIP().String())
 			staleUDPSvcs.Insert(svcInfo.ClusterIP().String())
 			for _, extIP := range svcInfo.ExternalIPStrings() {
 				staleUDPSvcs.Insert(extIP)
 			}
 		}
 	}
-	*/
 
 	// XXX perhaps in a different thread that runs regularly
 	if p.healthzServer != nil {
