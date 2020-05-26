@@ -1,32 +1,27 @@
 ---
-title: Enforce network policy using Istio (tutorial)
+title: Enforce Calico network policy using Istio (tutorial)
 description: Learn how Calico integrates with Istio to provide fine-grained access control using Calico network policies enforced within the service mesh and network layer.
 canonical_url: '/security/tutorials/app-layer-policy/enforce-policy-istio'
 ---
 
-The included demo sets up a microservices application, then demonstrates the use of application
-layer policy to mitigate some common threats.
+This tutorial sets up a microservices application, then demonstrates how to use {{site.prodname}} application layer policy to mitigate some common threats.
 
 ## Prerequisites
 
-To create a Kubernetes cluster that supports application layer policy, follow
-one of our [getting started guides]({{site.baseurl}}/getting-started/kubernetes),
-and [enable application layer policy]({{site.baseurl}}/security/app-layer-policy).
-
-### Create a test namespace and enable istio injection
-
-```bash
-kubectl create namespace yaobank
-kubectl label namespace yaobank istio-injection=enabled
-```
+1. Build a Kubernetes cluster.
+2. Install {{site.prodname}} on Kubernetes:
+  - If Calico is not installed on Kubernetes, see [Quickstart guide]({{ site.baseurl }}/getting-started/kubernetes/quickstart).
+  - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/networking/) (or a non-{{site.prodname}} CNI) and {{site.prodname}} network policy are installed.
+3. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).  
+  **Important!**: Label the default namespace for the Istio sidecar injection as shown:
+  `kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
 
-We will use a simple microservice application to demonstrate {{site.prodname}} application layer
-policy.  The [YAO Bank](https://github.com/spikecurtis/yaobank) application creates a customer-facing web application, a microservice that serves up account summaries, and an [etcd](https://github.com/coreos/etcd) datastore.
+We will use a simple microservice application to demonstrate {{site.prodname}} application layer policy.  The [YAO Bank](https://github.com/spikecurtis/yaobank) application creates a customer-facing web application, a microservice that serves up account summaries, and an [kdd](https://github.com/coreos/etcd) datastore.
 
 ```bash
-kubectl apply -n yaobank -f \
+kubectl apply -f \
 {{ "/security/tutorials/app-layer-policy/manifests/10-yaobank.yaml" | absolute_url }}
 ```
 
@@ -36,13 +31,11 @@ kubectl apply -n yaobank -f \
 
 Verify that the application pods have been created and are ready.
 
-```bash
-kubectl get pods -n yaobank
-```
+    kubectl get pods
 
 When the demo application has come up, you will see three pods.
 
-```bash
+```
 NAME                        READY     STATUS    RESTARTS   AGE
 customer-2809159614-qqfnx   3/3       Running   0          21h
 database-1601951801-m4w70   3/3       Running   0          21h
@@ -52,13 +45,11 @@ summary-2817688950-g1b3n    3/3       Running   0          21h
 
 View the Kubernetes ServiceAccounts created by the manifest.
 
-```bash
-kubectl get serviceaccount -n yaobank
-```
+    kubectl get serviceaccount
 
 You should see a Kubernetes ServiceAccount for each microservice in the application (in addition to the `default` account).
 
-```bash
+```
 NAME       SECRETS   AGE
 customer   1         21h
 database   1         21h
@@ -69,13 +60,11 @@ summary    1         21h
 
 Examine the Kubernetes Secrets.
 
-```bash
-kubectl get secret -n yaobank
-```
+    kubectl get secret
 
 You should see output similar to the following.
 
-```bash
+```
 NAME                   TYPE                                  DATA      AGE
 customer-token-mgb8w   kubernetes.io/service-account-token   3         21h
 database-token-nb5xp   kubernetes.io/service-account-token   3         21h
@@ -91,41 +80,16 @@ summary-token-8kpt1    kubernetes.io/service-account-token   3         21h
 Notice that Istio CA will have created a secret of type `istio.io/key-and-cert` for each
 service account.  These keys and X.509 certificates are used to cryptographically authenticate
 traffic in the Istio service mesh, and the corresponding service account identities are used by
-{{site.tseeprodname}} in authorization policy.
+{{site.prodname}} in authentication policy.
 
 ### Determine ingress IP and port
 
-You will use the `istio-ingressgateway` service to access the YAO Bank application.
-
-1. If your Kubernetes cluster is running in an environment that supports external load balancers, the IP address of
-   ingress can be  obtained by the following command:
-
-   ```bash
-   kubectl get svc istio-ingressgateway -n istio-system
-   ```
-
-   whose output should be similar to
+You will use the `istio-ingressgateway` service to access the YAO Bank application. Determine your
+ingress host and port [following the Istio instructions][ingress host port]. Once you have the
+`INGRESS_HOST` and `INGRESS_PORT` variables set, you can set the `GATEWAY_URL` as follows.
 
    ```bash
-   NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                                      AGE
-   istio-ingressgateway   LoadBalancer   172.21.109.129   130.211.10.121  80:31380/TCP,443:31390/TCP,31400:31400/TCP   17h
-   ```
-   {: .no-select-button}
-
-   The address of the ingressgateway service is the external IP of the `istio-ingressgateway`, followed by port 80:
-
-   ```bash
-   export GATEWAY_URL=130.211.10.121:80
-   ```
-
-1. If your cluster does not support external load balancers, you can use the public IP of the worker
-node, along with the NodePort, to access the ingress. The IP & port can be obtained from the output
-of the following command:
-
-   ```bash
-   export GATEWAY_URL=$(kubectl get pod -n istio-system -l istio=ingressgateway -o \
-   'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingressgateway -n istio-system -o \
-   'jsonpath={.spec.ports[0].nodePort}')
+   export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
    ```
 
 Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning
@@ -134,14 +98,14 @@ time you may see 404 or 500 errors.
 
 ### The need for policy
 
-Although {{site.prodname}} and Istio are running in the cluster, we have not defined any authorization
+Although {{site.prodname}} and Istio are running in the cluster, we have not defined any authentication
 policy. Istio was configured to mutually authenticate traffic between the pods in your application,
 so only connections with Istio-issued certificates are allowed, and all inter-pod traffic is encrypted with TLS.  That's already a big step in the right direction.
 
 But, let's consider some deficiencies in this security architecture:
 
  * All incoming connections from workloads in the Istio mesh are equally trusted
- * Possession of a key and certificate pair is the *only* access credential considered.
+ * Possession of a key & certificate pair is the *only* access credential considered.
 
 To understand why these might be a problem, let's take them one at a time.
 
@@ -165,23 +129,15 @@ people's financial information.
 Imagine what would happen if an attacker were to gain control of the customer web pod in our
 application. Let's simulate this by executing a remote shell inside that pod.
 
-```bash
-# Determine customer pod name
-CUSTOMER_POD=$(kubectl get pod -l app=customer -n yaobank -o jsonpath='{.items[0].metadata.name}')
-
-# Execute bash command in customer container
-kubectl exec -ti $CUSTOMER_POD -n yaobank -c customer bash
-```
+    kubectl exec -ti customer-<fill in pod ID> -c customer bash
 
 Notice that from here, we get direct access to the backend database.  For example, we can list all the entries in the database like this:
 
-```bash
-curl http://database:2379/v2/keys?recursive=true | python -m json.tool
-```
+    curl http://database:2379/v2/keys?recursive=true | python -m json.tool
 
 (Piping to `python -m json.tool` nicely formats the output.)
 
-#### Single factor authorization
+#### Single-factor authentication
 
 The possession of a key and certificate pair is a very strong assertion that a connection is
 authentic because it is based on cryptographic proofs that are believed to be nearly impossible to
@@ -201,7 +157,7 @@ If you still have your shell open in the customer pod, exit out or open a new te
 return to the customer pod later).
 
 ```bash
-kubectl apply -n yaobank -f \
+kubectl apply -f \
 {{ "/security/tutorials/app-layer-policy/manifests/20-attack-pod.yaml" | absolute_url }}
 ```
 
@@ -209,36 +165,25 @@ Take a look at the [`20-attack-pod.yaml` manifest in your browser](manifests/20-
 It creates a pod and mounts `istio.summary` secret.  This will allow us to masquerade as if we were
 the `summary` service, even though this pod is not run as that service account.  Let's try this out.  First, `exec` into the pod.
 
-```bash
-# Determine attack pod name
-ATTACK_POD=$(kubectl get pod -l app=attack -n yaobank -o jsonpath='{.items[0].metadata.name}')
-
-# Execute bash command in attack container
-kubectl exec -ti $ATTACK_POD -n yaobank bash
-```
+    kubectl exec -ti attack-<fill in pod ID> bash
 
 Now, we will attack the database.  Instead of listing the contents like we did before, let's try
 something more malicious, like changing the account balance with a `PUT` command.
 
-```bash
-curl -k https://database:2379/v2/keys/accounts/519940/balance -d value="10000.00" \
--XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
-```
+    curl -k https://database:2379/v2/keys/accounts/519940/balance -d value="10000.00" \
+    -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
 
 Unlike when we did this with the customer web pod, we do not have Envoy to handle encryption, so we
 have to pass an `https` URL, the `--key` and `--cert` parameters to `curl` to do the cryptography.
 
 Return to your web browser and refresh to confirm the new balance.
 
-#### Policy
+#### Network policy
 
-We can mitigate both of the above deficiencies with a {{site.prodname}} policy (if you still have your shell open in 
-the attack pod, first exit out or open a new terminal tab)
+We can mitigate both of the above deficiencies with a {{site.prodname}} policy.
 
-```bash
-wget {{ "/security/tutorials/app-layer-policy/manifests/30-policy.yaml" | absolute_url }}
-kubectl create -n yaobank -f 30-policy.yaml
-```
+    wget {{ "/security/tutorials/app-layer-policy/manifests/30-policy.yaml" | absolute_url }}
+    kubectl create -f 30-policy.yaml
 
 > **Note**: You can also
 > [view the manifest in your browser](manifests/30-policy.yaml){:target="_blank"}.
@@ -248,12 +193,11 @@ Let's examine this policy piece by piece.  It consists of three policy objects, 
 microservice.
 
 ```yaml
-apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
+apiVersion: crd.projectcalico.org/v1
+kind: GlobalNetworkPolicy
 metadata:
   name: default.customer
 spec:
-  tier: default
   selector: app == 'customer'
   ingress:
    - action: Allow
@@ -269,12 +213,11 @@ restrict what can communicate with it.  We do, however, restrict its communicati
 requests.
 
 ```yaml
-apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
+apiVersion: crd.projectcalico.org/v1
+kind: GlobalNetworkPolicy
 metadata:
   name: default.summary
 spec:
-  tier: default
   selector: app == 'summary'
   ingress:
     - action: Allow
@@ -291,12 +234,11 @@ service is the customer web app, so we restrict the source of incoming connectio
 account for the customer web app.
 
 ```yaml
-apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
+apiVersion: crd.projectcalico.org/v1
+kind: GlobalNetworkPolicy
 metadata:
   name: default.database
 spec:
-  tier: default
   selector: app == 'database'
     ingress:
       - action: Allow
@@ -317,26 +259,19 @@ ensure policy enforcement has not broken the application.
 Next, return to the customer web app.  Recall that we simulated an attacker gaining control of that
 pod by executing a remote shell inside it.
 
-```bash
-kubectl exec -ti $CUSTOMER_POD -n yaobank -c customer bash
-```
+    kubectl exec -ti customer-<fill in pod ID> -c customer bash
 
 Repeat our attempt to access the database.
 
-```bash
-curl -I http://database:2379/v2/keys?recursive=true
-```
+    curl -I http://database:2379/v2/keys?recursive=true
 
 We have left out the JSON formatting because we do not expect to get a valid JSON response. This
 time we should get a `403 Forbidden` response.  Only the account summary microservice has database
 access according to our policy.
 
-Finally, let's return to the attack pod that simulated stealing secret keys (again, if you still have your shell open in 
-the customer pod, exit out or open a new terminal tab).
+Finally, let's return to the attack pod that simulated stealing secret keys.
 
-```bash
-kubectl exec -ti $ATTACK_POD -n yaobank bash
-```
+    kubectl exec -ti attack-<fill in pod ID> bash
 
 Let's repeat our attack with stolen keys. We'll further increase the account balance to highlight
 whether it succeeds.
@@ -350,12 +285,12 @@ You should get no response, and refreshing your browser should not show an incre
 
 You might wonder how {{site.prodname}} was able to detect and prevent this attack—the attacker was
 able to steal the keys which prove identity in our system.  This highlights the value of multi-layer
-authorization checks.  Although our attack pod had the keys to fool the X.509 certificate check,
+authentication checks.  Although our attack pod had the keys to fool the X.509 certificate check,
 {{site.prodname}} also monitors the Kubernetes API Server for which IP addresses are associated with which
 service accounts.  Since our attack pod has an IP not associated with the account summary service
 account we disallow the connection.
 
-[yao bank]: https://github.com/projectcalico/yaobank
-[etcd]: https://github.com/coreos/etcd
-[struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638
-[heartbleed]: http://heartbleed.com/
+- [yao bank]: https://github.com/spikecurtis/yaobank
+- [etcd]: https://github.com/coreos/etcd
+- [struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638
+- [heartbleed]: http://heartbleed.com/
