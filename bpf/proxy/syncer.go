@@ -131,7 +131,7 @@ type Syncer struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
-	stickySvcs       map[nat.FrontendKey]stickyFrontend
+	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
 	stickySvcDeleted bool
 }
@@ -536,7 +536,7 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	}
 
 	// preallocate maps the track sticky service for cleanup
-	s.stickySvcs = make(map[nat.FrontendKey]stickyFrontend)
+	s.stickySvcs = make(map[nat.FrontEndAffinityKey]stickyFrontend)
 	s.stickyEps = make(map[uint32]map[nat.BackendValue]struct{})
 	s.stickySvcDeleted = false
 
@@ -665,7 +665,6 @@ func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
 	}
 
 	key := nat.NewNATKey(ip, uint16(port), proto)
-
 	return key, nil
 }
 
@@ -699,9 +698,11 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
 	}
 	var key nat.FrontendKey
+	var affkey nat.FrontEndAffinityKey
+	var err error
 	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
 	if len(svc.LoadBalancerSourceRanges()) == 0 {
-		key, err := getSvcNATKey(svc)
+		key, err = getSvcNATKey(svc)
 		if err != nil {
 			return err
 		}
@@ -725,15 +726,22 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 			}
 		}
 	}
-
+	copy(affkey[:], key[4:12])
 	// we must have written the backends by now so the map exists
 	if s.stickyEps[svcID] != nil {
-		s.stickySvcs[key] = stickyFrontend{
+		s.stickySvcs[affkey] = stickyFrontend{
 			id:    svcID,
 			timeo: time.Duration(affinityTimeo) * time.Second,
 		}
 	}
 
+	return nil
+}
+
+func (s *Syncer) deleteSvcNatKey(key nat.FrontendKey) error {
+	if err := s.bpfSvcs.Delete(key[:]); err != nil {
+		return errors.Errorf("bpfSvcs.Delete: %s", err)
+	}
 	return nil
 }
 
@@ -744,14 +752,26 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 		}
 	}
 
-	key, err := getSvcNATKey(svc)
-	if err != nil {
-		return err
-	}
-
-	log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
-	if err := s.bpfSvcs.Delete(key[:]); err != nil {
-		return errors.Errorf("bpfSvcs.Delete: %s", err)
+	if len(svc.LoadBalancerSourceRanges()) == 0 {
+		key, err := getSvcNATKey(svc)
+		if err != nil {
+			return err
+		}
+		err = s.deleteSvcNatKey(key)
+		if err != nil {
+			return errors.Errorf("bpfSvcs.Update: %s", err)
+		}
+	} else {
+		keys, err := getSvcNATKeyLBSrcRange(svc)
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
+			err = s.deleteSvcNatKey(key)
+			if err != nil {
+				return errors.Errorf("bpfSvcs.Delete: %s", err)
+			}
+		}
 	}
 
 	return nil

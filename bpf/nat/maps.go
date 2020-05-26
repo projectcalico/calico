@@ -79,15 +79,15 @@ func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) Fron
 }
 
 func (k FrontendKey) Proto() uint8 {
-	return k[6]
+	return k[10]
 }
 
 func (k FrontendKey) Addr() net.IP {
-	return k[:4]
+	return k[4:8]
 }
 
 func (k FrontendKey) Port() uint16 {
-	return binary.LittleEndian.Uint16(k[4:6])
+	return binary.LittleEndian.Uint16(k[8:10])
 }
 
 func (k FrontendKey) AsBytes() []byte {
@@ -323,18 +323,20 @@ const affinityKeySize = frontendAffKeySize + 8
 // the client's IP
 type AffinityKey [affinityKeySize]byte
 
+type FrontEndAffinityKey [frontendAffKeySize]byte
+
 // NewAffinityKey create a new AffinityKey from a clientIP and FrontendKey
 func NewAffinityKey(clientIP net.IP, fEndKey FrontendKey) AffinityKey {
 	var k AffinityKey
 
-	copy(k[:], fEndKey[4:])
+	copy(k[:], fEndKey[4:11])
 
 	addr := clientIP.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
 	copy(k[frontendAffKeySize:frontendAffKeySize+4], addr)
-
+	log.Debugf("Affinity key %v", k.AsBytes())
 	return k
 }
 
@@ -344,9 +346,9 @@ func (k AffinityKey) ClientIP() net.IP {
 }
 
 // FrontendKey returns the FrontendKey part of the key
-func (k AffinityKey) FrontendKey() FrontendKey {
-	var f FrontendKey
-	copy(f[:], k[:frontendKeySize])
+func (k AffinityKey) FrontendKey() FrontEndAffinityKey {
+	var f FrontEndAffinityKey
+	copy(f[:], k[:frontendAffKeySize])
 
 	return f
 }
