@@ -967,6 +967,11 @@ type serviceInfo struct {
 	onlyNodeLocalEndpoints   bool
 }
 
+// TopologyKeys is part of ServicePort interface.
+func (info *serviceInfo) TopologyKeys() []string {
+	panic("NOT IMPLEMENTED")
+}
+
 // String is part of ServicePort interface.
 func (info *serviceInfo) String() string {
 	return fmt.Sprintf("%s:%d/%s", info.clusterIP, info.port, info.protocol)

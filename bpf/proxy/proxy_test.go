@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1alpha1"
+	discovery "k8s.io/api/discovery/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
@@ -143,8 +143,9 @@ var _ = Describe("BPF Proxy", func() {
 				},
 				Ports: []v1.EndpointPort{
 					{
-						Port: 1221,
-						Name: "1221",
+						Port:     1221,
+						Name:     "1221",
+						Protocol: v1.ProtocolTCP,
 					},
 				},
 			},
@@ -193,7 +194,7 @@ var _ = Describe("BPF Proxy", func() {
 					Expect(len(s.SvcMap)).To(Equal(2))
 					Expect(len(s.EpsMap)).To(Equal(2))
 					Expect(len(s.StaleUDPEps)).To(Equal(0))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(1))
+					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 				})
 			})
 
@@ -252,8 +253,9 @@ var _ = Describe("BPF Proxy", func() {
 							},
 							Ports: []v1.EndpointPort{
 								{
-									Port: 1221,
-									Name: "1221",
+									Port:     1221,
+									Name:     "1221",
+									Protocol: v1.ProtocolTCP,
 								},
 							},
 						},
@@ -276,7 +278,8 @@ var _ = Describe("BPF Proxy", func() {
 						Namespace: secondSvcEps.ObjectMeta.Namespace,
 						Name:      secondSvcEps.ObjectMeta.Name,
 					},
-					Port: eps.Subsets[0].Ports[0].Name,
+					Port:     eps.Subsets[0].Ports[0].Name,
+					Protocol: v1.ProtocolTCP,
 				}
 
 				dp.checkState(func(s proxy.DPSyncerState) {
@@ -319,16 +322,19 @@ var _ = Describe("BPF Proxy", func() {
 							},
 							Ports: []v1.EndpointPort{
 								{
-									Name: "http",
-									Port: 80,
+									Name:     "http",
+									Port:     80,
+									Protocol: v1.ProtocolTCP,
 								},
 								{
-									Name: "http-alt",
-									Port: 8080,
+									Name:     "http-alt",
+									Port:     8080,
+									Protocol: v1.ProtocolTCP,
 								},
 								{
-									Name: "https",
-									Port: 443,
+									Name:     "https",
+									Port:     443,
+									Protocol: v1.ProtocolTCP,
 								},
 							},
 						},
@@ -355,7 +361,8 @@ var _ = Describe("BPF Proxy", func() {
 								Namespace: httpSvcEps.ObjectMeta.Namespace,
 								Name:      httpSvcEps.ObjectMeta.Name,
 							},
-							Port: port.Name,
+							Port:     port.Name,
+							Protocol: v1.ProtocolTCP,
 						}]
 
 						Expect(len(ep)).To(Equal(2))
@@ -462,8 +469,9 @@ var _ = Describe("BPF Proxy", func() {
 							Name:      "nodeport",
 							Namespace: "default",
 						},
+						Protocol: "TCP",
 					}
-
+					Expect(s.SvcMap).To(HaveKey(npKey))
 					Expect(s.SvcMap[npKey].Port()).
 						To(Equal(int(nodeport.Spec.Ports[0].Port)))
 					Expect(s.SvcMap[npKey].NodePort()).To(Equal(int(nodeport.Spec.Ports[0].NodePort)))
@@ -644,12 +652,10 @@ func strPtr(s string) *string {
 }
 
 func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
-	addrType := discovery.AddressTypeIP
-
 	slice := &discovery.EndpointSlice{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "EndpointSlice",
-			APIVersion: "discovery.k8s.io/v1alpha1",
+			APIVersion: "discovery.k8s.io/v1beta1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      eps.ObjectMeta.Name,
@@ -658,7 +664,7 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 				"kubernetes.io/service-name": eps.ObjectMeta.Name,
 			},
 		},
-		AddressType: &addrType,
+		AddressType: discovery.AddressTypeIP,
 	}
 
 	for i, subset := range eps.Subsets {
@@ -684,6 +690,9 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 
 			if port.Protocol != "" {
 				ep.Protocol = &port.Protocol
+			} else {
+				tcp := v1.ProtocolTCP
+				ep.Protocol = &tcp
 			}
 
 			slice.Ports = append(slice.Ports, ep)
