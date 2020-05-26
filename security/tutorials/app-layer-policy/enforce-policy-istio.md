@@ -8,19 +8,14 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 
 ## Prerequisites
 
-1. Build a Kubernetes cluster.
-2. Install {{site.prodname}} on Kubernetes:
-   - If Calico is not installed on Kubernetes, see [Quickstart guide]({{ site.baseurl }}/getting-started/kubernetes/quickstart).
-   - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/networking/) (or a non-{{site.prodname}} CNI) and {{site.prodname}} network policy are installed.
-3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install).   
-   - **Note**: Ensure calicoctl is configured to connect with the Kubernetes datastore (kdd).  
-4. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy). 
-   - **Important!**: Label the default namespace for the Istio sidecar injection as shown:
-  `kubectl label namespace default istio-injection=enabled`
+- A Kubernetes cluster install with {{site.prodname}}
+- [Application layer policy is enabled]({{site.baseurl}}/security/app-layer-policy). 
+
+**Important!**: The default namespace for the Istio sidecar injection must be labeled with `istio-injection=enabled`. For example: `kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
 
-We will use a simple microservice application to demonstrate {{site.prodname}} application layer policy.  The [YAO Bank](https://github.com/spikecurtis/yaobank) application creates a customer-facing web application, a microservice that serves up account summaries, and an [kdd](https://github.com/coreos/etcd) datastore.
+We will use a simple microservice application to demonstrate {{site.prodname}} application layer policy.  The [YAO Bank](https://github.com/spikecurtis/yaobank) application creates a customer-facing web application, a microservice that serves up account summaries, and an [kdd](https://github.com/) datastore.
 
 ```bash
 kubectl apply -f \
@@ -31,7 +26,7 @@ kubectl apply -f \
 > [view the manifest in your browser](manifests/10-yaobank.yaml){:target="_blank"}.
 {: .alert .alert-info}
 
-Verify that the application pods have been created and are ready.
+Verify that the application pods are created and ready.
 
     kubectl get pods
 
