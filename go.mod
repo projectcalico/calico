@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/coreos/etcd v3.3.13+incompatible // indirect
+	github.com/dgrijalva/jwt-go v3.0.0+incompatible // indirect
 	github.com/gophercloud/gophercloud v0.4.0 // indirect
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
