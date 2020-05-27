@@ -51,7 +51,7 @@ Because the `blockSize` field cannot be edited directly after {{site.prodname}} 
 ### How to
 
 >**Important!** Follow the steps in order to minimize pod connectivity disruption. Pods may lose connectivity when they are redeployed, and may lose external connectivity while in the temporary pool. Also, when pods are deleted, applications may be temporarily unavailable (depending on the type of application). Plan your changes accordingly. 
-{: .alert .alert-danger }
+{: .alert .alert-danger}
 
 The high-level steps to follow are:
 
@@ -135,7 +135,7 @@ kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 ```
 Restart all pods with just one command. 
 
->**WARNING!** The following command is disruptive and may take several minutes depending on the number of pods deployed.
+ >**WARNING!** The following command is disruptive and may take several minutes depending on the number of pods deployed.
 {: .alert .alert-danger}
 
 ```
@@ -186,9 +186,9 @@ In our example, **coredns** is our only pod; for multiple pods you would trigger
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 ```
 
-Restart all pods with just one command. 
+Restart all pods with just one command.  
 
-<**WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
+ >**WARNING!** The following command is disruptive and may take several minutes depending on the number of pods deployed.
 {: .alert .alert-danger}
 
 ```
