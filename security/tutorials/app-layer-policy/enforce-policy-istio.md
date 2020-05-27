@@ -287,7 +287,7 @@ authentication checks.  Although our attack pod had the keys to fool the X.509 c
 service accounts.  Since our attack pod has an IP not associated with the account summary service
 account we disallow the connection.
 
-- [yao bank]: https://github.com/spikecurtis/yaobank
-- [etcd]: https://github.com/coreos/etcd
-- [struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638
-- [heartbleed]: http://heartbleed.com/
+- [yao bank](https://github.com/spikecurtis/yaobank
+- [kdd]({{site.baseurl}}/getting-started/calicoctl/configure/kdd)
+- [struts cve](https://nvd.nist.gov/vuln/detail/CVE-2017-5638)
+- [heartbleed](http://heartbleed.com/)
