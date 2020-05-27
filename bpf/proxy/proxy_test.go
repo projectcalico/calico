@@ -178,7 +178,7 @@ var _ = Describe("BPF Proxy", func() {
 					Expect(len(s.SvcMap)).To(Equal(2))
 					Expect(len(s.EpsMap)).To(Equal(2))
 					Expect(len(s.StaleUDPEps)).To(Equal(0))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
+					Expect(len(s.StaleUDPSvcs)).To(Equal(1))
 				})
 			})
 
