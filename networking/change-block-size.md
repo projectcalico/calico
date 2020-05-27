@@ -200,7 +200,7 @@ Validate your pods and block size are correct by running the following commands:
 kubectl get pods --all-namespaces -o wide
 calicoctl ipam show --show-blocks
 ```
-#### Step 9: Delete the temporary IP pool
+#### Step 8: Delete the temporary IP pool
 
 Clean up the IP pools by deleting the temporary IP pool.
 
