@@ -45,6 +45,9 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
+/* Prefix len = (dst_addr + port + protocol + src_addr) in bits. */
+#define NAT_PREFIX_LEN_WITH_SRC_MATCH 88
+
 struct calico_nat_v4 {
         uint32_t addr; // NBO
         uint16_t port; // HBO
@@ -137,7 +140,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								     bool *drop)
 {
 	struct calico_nat_v4_key nat_key = {
-		.prefixlen = 88,
+		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH,
 		.addr = ip_dst,
 		.port = dport,
 		.protocol = ip_proto,
