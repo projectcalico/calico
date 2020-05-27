@@ -52,13 +52,6 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         # Start with an empty etcd database.
         self.etcd_data = {}
 
-        # Hook the (mock) etcdv2 client.
-        lib.m_etcd.Client.reset_mock()
-        self.client = lib.m_etcd.Client.return_value
-        self.client.read.side_effect = self.etcd_read
-        self.client.write.side_effect = self.check_etcd_write
-        self.client.delete.side_effect = self.check_etcd_delete
-
         # Insinuate a mock etcd3gw client.
         etcdv3._client = self.clientv3 = mock.Mock()
         self.clientv3.put.side_effect = self.etcd3gw_client_put
@@ -290,7 +283,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         else:
             read_result.value = None
             if not recursive:
-                raise lib.m_etcd.EtcdKeyNotFound()
+                raise lib.EtcdKeyNotFound()
 
         # Print and return the result object.
         _log.info("etcd read: %s; value: %s", key, read_result.value)
@@ -308,7 +301,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                     read_result.children.append(child)
                     read_result.leaves.append(child)
             if read_result.value is None and read_result.children == []:
-                raise lib.m_etcd.EtcdKeyNotFound(self.etcd_data)
+                raise lib.EtcdKeyNotFound(self.etcd_data)
             # Actual direct children of the dir in etcd response.
             # Needed for status_dir, where children are dirs and
             # needs to be iterated.
