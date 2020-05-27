@@ -122,6 +122,7 @@ var _ = Describe("BPF Proxy", func() {
 				{
 					Protocol: v1.ProtocolUDP,
 					Port:     1221,
+					Name:     "1221",
 				},
 			},
 		},
