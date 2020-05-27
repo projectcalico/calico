@@ -956,7 +956,7 @@ func (s *Syncer) cleanupSticky() error {
 		copy(key[:], k[:ks])
 		copy(val[:], v[:vs])
 
-		fend, ok := s.stickySvcs[key.FrontendKey()]
+		fend, ok := s.stickySvcs[key.FrontendAffinityKey()]
 		if !ok {
 			log.Debugf("cleaning affinity %v:%v - no such a service", key, val)
 			dels = append(dels, key)

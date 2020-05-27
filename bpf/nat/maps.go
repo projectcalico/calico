@@ -357,7 +357,7 @@ func (k AffinityKey) ClientIP() net.IP {
 }
 
 // FrontendKey returns the FrontendKey part of the key
-func (k AffinityKey) FrontendKey() FrontEndAffinityKey {
+func (k AffinityKey) FrontendAffinityKey() FrontEndAffinityKey {
 	var f FrontEndAffinityKey
 	copy(f[:], k[:frontendAffKeySize])
 
@@ -365,7 +365,7 @@ func (k AffinityKey) FrontendKey() FrontEndAffinityKey {
 }
 
 func (k AffinityKey) String() string {
-	return fmt.Sprintf("AffinityKey{ClientIP:%v %s}", k.ClientIP(), k.FrontendKey())
+	return fmt.Sprintf("AffinityKey{ClientIP:%v %s}", k.ClientIP(), k.FrontendAffinityKey())
 }
 
 // AsBytes returns the key as []byte
