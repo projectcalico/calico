@@ -56,12 +56,12 @@ Because the `blockSize` field cannot be edited directly after {{site.prodname}} 
 The high-level steps to follow are:
 
 1. [Create a temporary IP pool](#create-a-temporary-ip-pool)    
-  **Note**: The temporary IP pool must not overlap with the old one.
-1. [Disable the old IP pool](#disable-the-old-ip-pool)    
+  **Note**: The temporary IP pool must not overlap with the existing one.
+1. [Disable the existing IP pool](#disable-the-existing-ip-pool)    
   **Note**: When you disable an IP pool, only new IP address allocations are prevented; networking of existing pods are not affected.
-1. [Delete pods from the old IP pool](#ddelete-pods-from-the-old-ip-pool)    
-   This includes any new pods that may have been created with the old IP pool prior to disabling the pool. Verify that new pods get an address from the temporary IP pool.
-1. [Delete the old IP pool](#delete-the-old-ip-pool)
+1. [Delete pods from the existing IP pool](#ddelete-pods-from-the-existing-ip-pool)    
+   This includes any new pods that may have been created with the existing IP pool prior to disabling the pool. Verify that new pods get an address from the temporary IP pool.
+1. [Delete the existing IP pool](#delete-the-existing-ip-pool)
 1. [Create a new IP pool with the desired block size](#create-a-new-ip-pool-with-the-desired-block-size)
 1. [Disable the temporary IP pool](#disable-the-temporary-ip-pool)
 1. [Delete pods from the temporary IP pool](#delete-pods-from-the-temporary-ip-pool)
@@ -106,7 +106,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false
 temporary-pool        10.0.0.0/16      true   Always     false
 </pre>
 
-#### Step 2: Disable the old IP pool
+#### Step 2: Disable the existing IP pool
 
 List the existing IP pool definition.
 
@@ -126,7 +126,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     true
 temporary-pool        10.0.0.0/16      true   Always     false
 </pre>
 
-#### Step 3: Delete pods from the old IP pool
+#### Step 3: Delete pods from the existing IP pool
 
 In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.
 
@@ -142,9 +142,9 @@ Restart all pods with just one command.
 kubectl delete pod -A --all
 ```
 
-#### Step 4: Delete the old IP pool
+#### Step 4: Delete the existing IP pool
 
-Now that you’ve verified that pods are getting IPs from the new range, you can safely delete the old pool.
+Now that you’ve verified that pods are getting IPs from the new range, you can safely delete the existing pool.
 
 ```
 calicoctl delete ippool default-ipv4-ippool
@@ -152,7 +152,7 @@ calicoctl delete ippool default-ipv4-ippool
 
 #### Step 5: Create a new IP pool with the desired block size
 
-In this step, we update the IPPool to the new block size of (/28).
+In this step, we update the IPPool with the new block size of (/28).
 
 <pre>
 apiVersion: projectcalico.org/v3
