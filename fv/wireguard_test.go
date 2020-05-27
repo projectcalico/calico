@@ -132,12 +132,6 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 		infra.Stop()
 	})
 
-	tcpdumpMatchCount := func(tdump *tcpdump.TCPDump, matcherName string) func() int {
-		return func() int {
-			return tdump.MatchCount(matcherName)
-		}
-	}
-
 	Context("with Wireguard enabled", func() {
 		BeforeEach(func() {
 			for i, felix := range felixes {
@@ -175,6 +169,19 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 			Eventually(felixes[0].GetFelixPID, "5s", "100ms").ShouldNot(Equal(felixPID0))
 			Eventually(felixes[1].GetFelixPID, "5s", "100ms").ShouldNot(Equal(felixPID1))
 
+			// Old configuration should disappear.
+			for _, felix := range felixes {
+				Eventually(func() string {
+					out, _ := felix.ExecOutput("ip", "-d", "link", "show", wireguardInterfaceNameDefault)
+					return out
+				}, "10s", "100ms").Should(BeEmpty())
+				Eventually(func() string {
+					out, err := felix.ExecOutput("ip", "rule", "show", "pref", wireguardRoutingRulePriorityDefault)
+					Expect(err).NotTo(HaveOccurred())
+					return out
+				}, "10s", "100ms").Should(BeEmpty())
+			}
+
 			// Change Wireguard configuration.
 			ifaceName := "wg0"
 			mtu := 1400
@@ -208,17 +215,6 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 
 			// Expect the settings to be changed on the device.
 			for _, felix := range felixes {
-				// Old configuration should disappear.
-				Eventually(func() string {
-					out, _ := felix.ExecOutput("ip", "-d", "link", "show", wireguardInterfaceNameDefault)
-					return out
-				}, "10s", "100ms").Should(BeEmpty())
-				Eventually(func() string {
-					out, err := felix.ExecOutput("ip", "rule", "show", "pref", wireguardRoutingRulePriorityDefault)
-					Expect(err).NotTo(HaveOccurred())
-					return out
-				}, "10s", "100ms").Should(BeEmpty())
-				// New configuration must be present.
 				Eventually(func() string {
 					out, err := felix.ExecOutput("wg")
 					Expect(err).NotTo(HaveOccurred())
@@ -359,32 +355,33 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 
 	Context("with Wireguard disabled", func() {
 		BeforeEach(func() {
-			felixPID0 := felixes[0].GetFelixPID()
-			felixPID1 := felixes[1].GetFelixPID()
+			var felixPIDs [nodeCount]int
+			for i, felix := range felixes {
+				felixPIDs[i] = felix.GetFelixPID()
+			}
 			disableWireguard(client)
-			// Wait for felix to restart.
-			Eventually(felixes[0].GetFelixPID, "5s", "100ms").ShouldNot(Equal(felixPID0))
-			Eventually(felixes[1].GetFelixPID, "5s", "100ms").ShouldNot(Equal(felixPID1))
-		})
 
-		It("the Wireguard device shouldn't exist", func() {
+			// Wait for felix to restart.
+			for i, felix := range felixes {
+				Eventually(felix.GetFelixPID, "10s", "100ms").ShouldNot(Equal(felixPIDs[i]))
+			}
+
+			// Check Wireguard device doesn't exist.
 			for _, felix := range felixes {
 				Eventually(func() string {
 					out, _ := felix.ExecOutput("ip", "link", "show", wireguardInterfaceNameDefault)
 					return out
 				}, "10s", "100ms").Should(BeEmpty())
 			}
-		})
 
-		It("the Wireguard routing rule shouldn't exist", func() {
+			// Check that Wireguard routing rule doesn't exist.
 			for _, felix := range felixes {
-				Eventually(getWireguardRoutingRule(felix), "5s", "100ms").Should(BeEmpty())
+				Eventually(getWireguardRoutingRule(felix), "10s", "100ms").Should(BeEmpty())
 			}
-		})
 
-		It("the Wireguard route table entry shouldn't exist", func() {
+			// Check Wireguard route table entry doesn't exist.
 			for i, felix := range felixes {
-				Eventually(getWireguardRouteEntry(felix), "5s", "100ms").ShouldNot(ContainSubstring(routeEntries[i]))
+				Eventually(getWireguardRouteEntry(felix), "10s", "100ms").ShouldNot(ContainSubstring(routeEntries[i]))
 			}
 		})
 
@@ -394,7 +391,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 					node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 					return node.Status.WireguardPublicKey
-				}, "5s", "100ms").Should(BeEmpty())
+				}, "10s", "100ms").Should(BeEmpty())
 			}
 		})
 
@@ -530,4 +527,10 @@ func getWireguardRouteEntry(felix *infrastructure.Felix) string {
 	Expect(err).NotTo(HaveOccurred())
 
 	return routes
+}
+
+func tcpdumpMatchCount(tdump *tcpdump.TCPDump, matcherName string) func() int {
+	return func() int {
+		return tdump.MatchCount(matcherName)
+	}
 }
