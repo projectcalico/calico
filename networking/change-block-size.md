@@ -205,5 +205,5 @@ calicoctl ipam show --show-blocks
 Clean up the IP pools by deleting the temporary IP pool.
 
 ```
-calicoctl delete pool new-pool
+calicoctl delete pool temporary-pool
 ```
