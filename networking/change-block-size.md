@@ -55,17 +55,17 @@ Because the `blockSize` field cannot be edited directly after {{site.prodname}} 
 
 The high-level steps to follow are:
 
-1. [Create a temporary IP pool](#create-a-temporary-ip-pool)    
+1.[Create a temporary IP pool](#create-a-temporary-ip-pool)    
   **Note**: The temporary IP pool must not overlap with the existing one.
-1. [Disable the existing IP pool](#disable-the-existing-ip-pool)    
+1.[Disable the existing IP pool](#disable-the-existing-ip-pool)    
   **Note**: When you disable an IP pool, only new IP address allocations are prevented; networking of existing pods are not affected.
-1. [Delete pods from the existing IP pool](#delete-pods-from-the-existing-ip-pool)    
+1.[Delete pods from the existing IP pool](#delete-pods-from-the-existing-ip-pool)    
    This includes any new pods that may have been created with the existing IP pool prior to disabling the pool. Verify that new pods get an address from the temporary IP pool.
-1. [Delete the existing IP pool](#delete-the-existing-ip-pool)
-1. [Create a new IP pool with the desired block size](#create-a-new-ip-pool-with-the-desired-block-size)
-1. [Disable the temporary IP pool](#disable-the-temporary-ip-pool)
-1. [Delete pods from the temporary IP pool](#delete-pods-from-the-temporary-ip-pool)
-1. [Delete the temporary IP pool](#delete-the-temporary-ip-pool)
+1.[Delete the existing IP pool](#delete-the-existing-ip-pool)
+1.[Create a new IP pool with the desired block size](#create-a-new-ip-pool-with-the-desired-block-size)
+1.[Disable the temporary IP pool](#disable-the-temporary-ip-pool)
+1.[Delete pods from the temporary IP pool](#delete-pods-from-the-temporary-ip-pool)
+1.[Delete the temporary IP pool](#delete-the-temporary-ip-pool)
 
 ### Tutorial
 
