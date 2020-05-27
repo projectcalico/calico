@@ -9,7 +9,7 @@ Change the IP pool block size to efficiently manage IP pool addresses.
 
 ### Value
 
-Although it is best to change IP pool block size before installation, these post-install steps minimizes pod connectivity disruption. 
+Changing IP pool block size after installation requires ordered steps to minimize pod connectivity disruption. 
 
 ### Features
 
@@ -19,13 +19,13 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Concepts
 
-#### Change the IP pool block size
+#### Expand or shrink IP pool block sizes
 
 By default, the {{site.prodname}} IPAM block size for an IP pool is /26. To expand from the default size /26, lower the `blockSize` (for example, /24). To shrink the `blockSize` from the default /26, raise the number (for example, /28). 
 
 #### Best practice: change IP pool block size before installation 
 
-Because the `blockSize` field cannot be edited directly after {{site.prodname}} installation, it is best to change the IP pool block size prior to installation to minimize disruptions to pod connectivity. 
+Because the `blockSize` field cannot be edited directly after {{site.prodname}} installation, it is best to change the IP pool block size before installation to minimize disruptions to pod connectivity. 
 
 ### Before you begin...
 
@@ -69,7 +69,7 @@ The high-level steps to follow are:
 
 ### Tutorial
 
-In the following steps, we use start with a Kubernetes cluster with default CIDR block size of /26. We want to shrink the block size to /28 to use the pool more efficiently. 
+In the following steps, our Kubernetes cluster has a default CIDR block size of /26. We want to shrink the block size to /28 to use the pool more efficiently. 
 
 #### Step 1: Create a temporary IP pool
 
@@ -128,7 +128,7 @@ temporary-pool        10.0.0.0/16      true   Always     false
 
 #### Step 3: Delete pods from the old IP pool
 
-Delete existing pods from the old IP pool. In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.
+In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.
 
 ```
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
