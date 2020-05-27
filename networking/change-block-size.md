@@ -71,7 +71,7 @@ The high-level steps to follow are:
 
 In the following steps, our Kubernetes cluster has a default CIDR block size of /26. We want to shrink the block size to /28 to use the pool more efficiently. 
 
-#### Step 1: Create a temporary IP pool
+#### Create a temporary IP pool
 
 We add a new IPPool with the CIDR range, 10.0.0.0/16.
 
@@ -106,7 +106,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false
 temporary-pool        10.0.0.0/16      true   Always     false
 </pre>
 
-#### Step 2: Disable the existing IP pool
+#### Disable the existing IP pool
 
 List the existing IP pool definition.
 
@@ -126,7 +126,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     true
 temporary-pool        10.0.0.0/16      true   Always     false
 </pre>
 
-#### Step 3: Delete pods from the existing IP pool
+#### Delete pods from the existing IP pool
 
 In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.
 
@@ -142,7 +142,7 @@ Restart all pods with just one command.
 kubectl delete pod -A --all
 ```
 
-#### Step 4: Delete the existing IP pool
+#### Delete the existing IP pool
 
 Now that you’ve verified that pods are getting IPs from the new range, you can safely delete the existing pool.
 
@@ -150,7 +150,7 @@ Now that you’ve verified that pods are getting IPs from the new range, you can
 calicoctl delete ippool default-ipv4-ippool
 ```
 
-#### Step 5: Create a new IP pool with the desired block size
+#### Create a new IP pool with the desired block size
 
 In this step, we update the IPPool with the new block size of (/28).
 
@@ -172,13 +172,13 @@ Apply the changes.
 calicoctl apply -f pool.yaml
 ```
 
-#### Step 6: Disable the temporary IP pool
+#### Disable the temporary IP pool
 
 ```
 calicoctl patch ippool temporary-pool -p '{"spec": {"disabled": “true”}}'
 ```
 
-#### Step 7: Delete pods from the temporary IP pool
+#### Delete pods from the temporary IP pool
 
 In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.
 
@@ -200,7 +200,7 @@ Validate your pods and block size are correct by running the following commands:
 kubectl get pods --all-namespaces -o wide
 calicoctl ipam show --show-blocks
 ```
-#### Step 8: Delete the temporary IP pool
+#### Delete the temporary IP pool
 
 Clean up the IP pools by deleting the temporary IP pool.
 
