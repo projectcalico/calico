@@ -359,11 +359,6 @@ configRetry:
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
-	if configParams.BPFEnabled && !bpf.SyscallSupport() {
-		log.Error("BPFEnabled is set but BPF mode is not supported on this platform.  Continuing with BPF disabled.")
-		configParams.BPFEnabled = false
-	}
-
 	var dpDriver dp.DataplaneDriver
 	var dpDriverCmd *exec.Cmd
 

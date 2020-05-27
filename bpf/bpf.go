@@ -2198,7 +2198,11 @@ func SupportsBPFDataplane() error {
 
 	// Test endianness
 	if nativeEndian != binary.LittleEndian {
-		return fmt.Errorf("this bpf library only supports little endian architectures")
+		return errors.New("this bpf library only supports little endian architectures")
+	}
+
+	if !SyscallSupport() {
+		return errors.New("BPF syscall support is not available on this platform")
 	}
 
 	return nil
