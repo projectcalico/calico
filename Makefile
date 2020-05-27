@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.39
+GO_BUILD_VER?=v0.40
 
 # This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
@@ -225,9 +225,7 @@ run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 		-v $(CURDIR):/manifests \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 		--detach \
-		${HYPERKUBE_IMAGE} sh -c '\
-		go mod download; \
-		/hyperkube apiserver \
+		${HYPERKUBE_IMAGE} kube-apiserver \
 			--bind-address=0.0.0.0 \
 			--insecure-bind-address=0.0.0.0 \
 			--etcd-servers=http://127.0.0.1:2379 \
@@ -235,7 +233,7 @@ run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 			--authorization-mode=RBAC \
 			--service-cluster-ip-range=10.101.0.0/16 \
 			--v=10 \
-			--logtostderr=true'
+			--logtostderr=true
 
 	# Wait until we can configure a cluster role binding which allows anonymous auth.
 	while ! docker exec st-apiserver kubectl create \
