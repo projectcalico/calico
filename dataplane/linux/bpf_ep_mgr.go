@@ -612,12 +612,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 		epType = tc.EpTypeTunnel
 	}
 	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
-	if ifaceName == "tunl0" {
-		log.Debug("No IP for tunl0, perhaps IPIP is disabled?")
-		ap.IP = calicoRouterIP // Use the router IP to avoid spammy errors.
-	} else {
-		ap.IP = m.hostIP
-	}
+	ap.IP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	return ap.AttachProgram()
 }
