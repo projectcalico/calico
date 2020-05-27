@@ -697,12 +697,10 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
 	}
-	var key nat.FrontendKey
 	var affkey nat.FrontEndAffinityKey
-	var err error
 	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
 	if len(svc.LoadBalancerSourceRanges()) == 0 {
-		key, err = getSvcNATKey(svc)
+		key, err := getSvcNATKey(svc)
 		if err != nil {
 			return err
 		}
@@ -710,6 +708,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		if err != nil {
 			return errors.Errorf("bpfSvcs.Update: %s", err)
 		}
+		copy(affkey[:], key[4:12])
 	} else {
 		keys, err := getSvcNATKeyLBSrcRange(svc)
 		if err != nil {
@@ -718,6 +717,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		for index, key := range keys {
 			if index == 0 {
 				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(0), uint32(local), affinityTimeo))
+				copy(affkey[:], key[4:12])
 			} else {
 				err = s.writeSvcNatKey(key, val)
 			}
@@ -726,7 +726,6 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 			}
 		}
 	}
-	copy(affkey[:], key[4:12])
 	// we must have written the backends by now so the map exists
 	if s.stickyEps[svcID] != nil {
 		s.stickySvcs[affkey] = stickyFrontend{

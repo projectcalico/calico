@@ -51,7 +51,10 @@ struct calico_nat_v4 {
         uint8_t protocol;
 };
 
-// Map: NAT level one.  Dest IP, port and src IP -> ID and num backends.
+/* Map: NAT level one.  Dest IP, port and src IP -> ID and num backends.
+ * Modified the map from HASH to LPM_TRIE. This is to drop packets outside
+ * src IP range specified for Load Balancer
+ */
 struct __attribute__((__packed__)) calico_nat_v4_key {
 	__u32 prefixlen;
 	uint32_t addr; // NBO
@@ -73,7 +76,7 @@ struct calico_nat_v4_value {
 	uint32_t affinity_timeo;
 };
 
-CALI_MAP_V1(cali_v4_nat_fe,
+CALI_MAP(cali_v4_nat_fe, 2,
 		BPF_MAP_TYPE_LPM_TRIE,
 		union calico_nat_v4_lpm_key, struct calico_nat_v4_value,
 		511000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)

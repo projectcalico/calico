@@ -599,7 +599,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 					 state.tun_ip != 0, &nat_lvl1_drop);
 
 	if (nat_lvl1_drop) {
-		CALI_DEBUG("Dropping packet at level1 nat lookup\n");
+		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
+		fwd.reason = CALI_REASON_UNKNOWN_SOURCE;
 		goto deny;
 	}
 	if (nat_dest != NULL) {
