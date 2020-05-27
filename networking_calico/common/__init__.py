@@ -38,12 +38,6 @@ def validate_cidr(cidr, version):
         return False
 
 
-def canonicalise_cidr(cidr, version):
-    assert cidr is not None
-    nw = netaddr.IPNetwork(cidr, version=version)
-    return intern(str(nw))
-
-
 def mkdir_p(path):
     """http://stackoverflow.com/a/600612/190597 (tzot)"""
     try:
@@ -61,3 +55,14 @@ def mkdir_p(path):
 class ValidationFailed(Exception):
     """Class used for data validation exceptions."""
     pass
+
+
+# Interning for Unicode strings.
+try:
+    from sys import intern
+except ImportError:
+    pass
+
+
+def intern_string(s):
+    return intern(s)

@@ -153,7 +153,7 @@ class ResourceSyncer(object):
 
         LOG.info("Resync for %s; got etcd data, look for deletions...",
                  self.resource_kind)
-        for name, neutron_data in neutron_map.iteritems():
+        for name, neutron_data in neutron_map.items():
             # Skip this name if we already handled it above - i.e. if we
             # already had data for it in etcd.
             if name in names_compared:

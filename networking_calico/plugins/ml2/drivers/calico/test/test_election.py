@@ -262,12 +262,12 @@ class TestElection(unittest.TestCase):
             [
                 mock.call({
                     'compare': [{
-                        'value': u'c2VydmVyLWlkOjEyMzQ=',
+                        'value': 'c2VydmVyLWlkOjEyMzQ=',
                         'result': 'EQUAL',
-                        'key': u'L2Jsb29w',
+                        'key': 'L2Jsb29w',
                         'target': 'VALUE'}],
                     'success': [{
-                        'request_delete_range': {'key': u'L2Jsb29w'}}],
+                        'request_delete_range': {'key': 'L2Jsb29w'}}],
                     'failure': []
                 })
             ],

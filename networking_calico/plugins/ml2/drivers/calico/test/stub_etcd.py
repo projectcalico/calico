@@ -148,6 +148,10 @@ class EtcdResult(object):
         self.action = action
         self.exception = exception
         self.etcd_index = index
+        if self.key is not None:
+            self.key = self.key.encode()
+        if self.value is not None:
+            self.value = self.value.encode()
 
     def __str__(self):
         return ("key=%s, value=%s, action=%s,index=%d" %

@@ -14,11 +14,11 @@
 
 import collections
 import eventlet
-import functools
 import json
 import re
 
 from etcd3gw.exceptions import ConnectionFailedError
+from networking_calico.common import intern_string
 from networking_calico.compat import log
 from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
@@ -341,20 +341,20 @@ class EtcdWatcher(object):
 
                 # An event at this point has a form like
                 #
-                # {u'kv': {
-                #     u'mod_revision': u'4',
-                #     u'value': '...',
-                #     u'create_revision': u'4',
-                #     u'version': u'1',
-                #     u'key': '/calico/felix/v1/host/ubuntu-xenial...'
+                # {'kv': {
+                #     'mod_revision': '4',
+                #     'value': '...',
+                #     'create_revision': '4',
+                #     'version': '1',
+                #     'key': '/calico/felix/v1/host/ubuntu-xenial...'
                 # }}
                 #
                 # when a key/value pair is created or updated, and like
                 #
-                # {u'type': u'DELETE',
-                #  u'kv': {
-                #     u'mod_revision': u'88',
-                #     u'key': '/calico/felix/v1/host/ubuntu-xenial-...'
+                # {'type': 'DELETE',
+                #  'kv': {
+                #     'mod_revision': '88',
+                #     'key': '/calico/felix/v1/host/ubuntu-xenial-...'
                 # }}
                 #
                 # when a key/value pair is deleted.
@@ -367,12 +367,12 @@ class EtcdWatcher(object):
                 # Handler methods here expect
                 # - response.key
                 # - response.value
-                key = event['kv']['key']
+                key = event['kv']['key'].decode()
                 mod_revision = int(event['kv'].get('mod_revision', '0'))
                 response = Response(
                     action=event.get('type', 'SET').lower(),
                     key=key,
-                    value=event['kv'].get('value', ''),
+                    value=event['kv'].get('value', b'').decode(),
                     mod_revision=mod_revision,
                 )
                 LOG.info("Event: %s", response)
@@ -389,7 +389,7 @@ class EtcdWatcher(object):
         self._stopped = True
 
 
-def intern_dict(d, fields_to_intern=None):
+def intern_dict(d):
     """intern_dict
 
     Return a copy of the input dict where all its string/unicode keys
@@ -399,19 +399,32 @@ def intern_dict(d, fields_to_intern=None):
     to str by calling .encode("utf8") on each string.
 
     :param dict[StringTypes,...] d: Input dict.
-    :param set[StringTypes] fields_to_intern: set of field names whose values
-        should also be interned.
     :return: new dict with interned keys/values.
     """
-    fields_to_intern = fields_to_intern or set()
+    fields_to_intern = set([
+        # Endpoint dicts.  It doesn't seem worth interning items like the MAC
+        # address or TAP name, which are rarely (if ever) shared.
+        "profile_id",
+        "profile_ids",
+        "state",
+        "ipv4_gateway",
+        "ipv6_gateway",
+
+        # Rules dicts.
+        "protocol",
+        "!protocol",
+        "src_tag",
+        "!src_tag",
+        "dst_tag",
+        "!dst_tag",
+        "action",
+    ])
     out = {}
-    for k, v in d.iteritems():
-        # We can't intern unicode strings, as returned by etcd but all our
-        # keys should be ASCII anyway.  Use the utf8 encoding just in case.
-        k = intern(k.encode("utf8"))
+    for k, v in d.items():
+        k = intern_string(k)
         if k in fields_to_intern:
             if _is_string_instance(v):
-                v = intern(v.encode("utf8"))
+                v = intern_string(v)
             elif isinstance(v, list):
                 v = intern_list(v)
         out[k] = v
@@ -422,41 +435,17 @@ def intern_list(l):
     """intern_list
 
     Returns a new list with interned versions of the input list's contents.
-
-    Non-strings are copied to the new list verbatim.  Returned strings are
-    encoded using .encode("utf8").
+    Non-strings are copied to the new list verbatim.
     """
     out = []
     for item in l:
         if _is_string_instance(item):
-            item = intern(item.encode("utf8"))
+            item = intern_string(item)
         out.append(item)
     return out
 
 
-# Intern JSON keys as we load them to reduce occupancy.
-FIELDS_TO_INTERN = set([
-    # Endpoint dicts.  It doesn't seem worth interning items like the MAC
-    # address or TAP name, which are rarely (if ever) shared.
-    "profile_id",
-    "profile_ids",
-    "state",
-    "ipv4_gateway",
-    "ipv6_gateway",
-
-    # Rules dicts.
-    "protocol",
-    "!protocol",
-    "src_tag",
-    "!src_tag",
-    "dst_tag",
-    "!dst_tag",
-    "action",
-])
-json_decoder = json.JSONDecoder(
-    object_hook=functools.partial(intern_dict,
-                                  fields_to_intern=FIELDS_TO_INTERN)
-)
+json_decoder = json.JSONDecoder(object_hook=intern_dict)
 
 
 def safe_decode_json(raw_json, log_tag=None):

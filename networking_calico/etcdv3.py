@@ -90,6 +90,7 @@ def get(key, with_lease=False):
     if len(results) != 1:
         raise KeyNotFound()
     value, item = results[0]
+    value = value.decode()
     if with_lease:
         lease = None
         if 'lease' in item:
@@ -292,7 +293,7 @@ def get_prefix(prefix, revision=None):
     tuples = []
     for result in results:
         value, item = result
-        t = (item['key'], value, item['mod_revision'])
+        t = (item['key'].decode(), value.decode(), item['mod_revision'])
         tuples.append(t)
     return tuples
 

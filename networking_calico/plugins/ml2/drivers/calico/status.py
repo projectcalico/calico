@@ -99,7 +99,7 @@ class StatusWatcher(etcdutils.EtcdWatcher):
 
     def _post_snapshot_hook(self, old_endpoints_by_host):
         # Look for previous endpoints that are no longer present...
-        for hostname, ep_ids in old_endpoints_by_host.iteritems():
+        for hostname, ep_ids in old_endpoints_by_host.items():
             LOG.info("host: %s", hostname)
             # Check for particular endpoints that have disappeared, and
             # signal those.
