@@ -34,7 +34,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -311,12 +310,7 @@ configRetry:
 		}
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
-		typhaAddr, err = discoverTyphaAddr(configParams, func(namespace, name string) (service *v1.Endpoints, e error) {
-			if k8sClientSet == nil {
-				return nil, errors.New("failed to look up Typha, no Kubernetes client available")
-			}
-			return k8sClientSet.CoreV1().Endpoints(namespace).Get(name, metav1.GetOptions{})
-		})
+		typhaAddr, err = discoverTyphaAddr(configParams, k8sClientSet)
 		if err != nil {
 			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
 			time.Sleep(1 * time.Second)
@@ -1194,7 +1188,7 @@ func (fc *DataplaneConnector) Start() {
 
 var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port.")
 
-func discoverTyphaAddr(configParams *config.Config, getKubernetesEndpoints func(namespace, name string) (*v1.Endpoints, error)) (string, error) {
+func discoverTyphaAddr(configParams *config.Config, k8sClientSet kubernetes.Interface) (string, error) {
 	if configParams.TyphaAddr != "" {
 		// Explicit address; trumps other sources of config.
 		return configParams.TyphaAddr, nil
@@ -1205,8 +1199,13 @@ func discoverTyphaAddr(configParams *config.Config, getKubernetesEndpoints func(
 		return "", nil
 	}
 
+	if k8sClientSet == nil {
+		return "", errors.New("failed to look up Typha, no Kubernetes client available")
+	}
+
 	// If we get here, we need to look up the Typha service endpoints using the k8s API.
-	eps, err := getKubernetesEndpoints(configParams.TyphaK8sNamespace, configParams.TyphaK8sServiceName)
+	epClient := k8sClientSet.CoreV1().Endpoints(configParams.TyphaK8sNamespace)
+	eps, err := epClient.Get(configParams.TyphaK8sServiceName, metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
 		return "", err

@@ -18,6 +18,8 @@ import (
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 
@@ -31,7 +33,12 @@ var _ = Describe("Typha address discovery", func() {
 	var (
 		configParams *config.Config
 		endpoints    *v1.Endpoints
+		k8sClient    *fake.Clientset
 	)
+
+	refreshClient := func() {
+		k8sClient = fake.NewSimpleClientset(endpoints)
+	}
 
 	BeforeEach(func() {
 		configParams = config.New()
@@ -41,6 +48,14 @@ var _ = Describe("Typha address discovery", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		endpoints = &v1.Endpoints{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Endpoints",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "calico-typha-service",
+				Namespace: "kube-system",
+			},
 			Subsets: []v1.EndpointSubset{
 				{
 					Addresses: []v1.EndpointAddress{
@@ -65,6 +80,8 @@ var _ = Describe("Typha address discovery", func() {
 				},
 			},
 		}
+
+		refreshClient()
 	})
 
 	It("should return address if configured", func() {
@@ -81,28 +98,24 @@ var _ = Describe("Typha address discovery", func() {
 		Expect(typhaAddr).To(Equal(""))
 	})
 
-	getKubernetesEndpoints := func(namespace, name string) (*v1.Endpoints, error) {
-		Expect(name).To(Equal("calico-typha-service"))
-		Expect(namespace).To(Equal("kube-system"))
-		return endpoints, nil
-	}
-
 	It("should return IP from endpoints", func() {
-		typhaAddr, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
+		typhaAddr, err := discoverTyphaAddr(configParams, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal("10.0.0.2:8156"))
 	})
 
 	It("should bracket an IPv6 Typha address", func() {
 		endpoints.Subsets[1].Addresses[0].IP = "fd5f:65af::2"
-		typhaAddr, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
+		refreshClient()
+		typhaAddr, err := discoverTyphaAddr(configParams, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal("[fd5f:65af::2]:8156"))
 	})
 
 	It("should error if no Typhas", func() {
 		endpoints.Subsets = nil
-		_, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
+		refreshClient()
+		_, err := discoverTyphaAddr(configParams, k8sClient)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -110,8 +123,10 @@ var _ = Describe("Typha address discovery", func() {
 		seenAddresses := set.New()
 		expected := set.From("10.0.0.2:8156", "10.0.0.6:8156")
 		endpoints.Subsets[1].Addresses = append(endpoints.Subsets[1].Addresses, v1.EndpointAddress{IP: "10.0.0.6"})
+		refreshClient()
+
 		for i := 0; i < 32; i++ {
-			addr, err := discoverTyphaAddr(configParams, getKubernetesEndpoints)
+			addr, err := discoverTyphaAddr(configParams, k8sClient)
 			Expect(err).NotTo(HaveOccurred())
 			seenAddresses.Add(addr)
 			if seenAddresses.ContainsAll(expected) {
