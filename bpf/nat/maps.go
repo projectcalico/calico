@@ -82,7 +82,7 @@ func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) Fron
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
-	k[0] = uint8(uint32(prefixlen) + uint32(cidr.Prefix()))
+	binary.LittleEndian.PutUint32(k[:4], uint32(prefixlen) + uint32(cidr.Prefix()))
 	copy(k[4:8], addr)
 	binary.LittleEndian.PutUint16(k[8:10], port)
 	k[10] = protocol
