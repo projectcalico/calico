@@ -232,7 +232,44 @@ var _ = Describe("BPF Syncer", func() {
 
 		}))
 
-		By("removing 1 LBSourceRangeIP for existing service", makestep(func() {
+		By("updating LBSourceRangeIP for existing service", makestep(func() {
+			Expect(svcs.m).To(HaveLen(3))
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "23.0.1.2/16"}),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(3))
+
+			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
+			key1 := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
+				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
+			Expect(svcs.m).To(HaveKey(key1))
+
+			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
+			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
+				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
+			Expect(svcs.m).NotTo(HaveKey(key1))
+
+			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
+			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
+				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
+			Expect(svcs.m).To(HaveKey(key1))
+
+			key1 = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(key1))
+			val1 := nat.NewNATValue(math.MaxUint32, uint32(0), 0, 0)
+			val2, ok := svcs.m[key1]
+			Expect(ok).To(BeTrue())
+			Expect(val1).To(Equal(val2))
+
+		}))
+
+		By("Deleting one LBSourceRangeIP for existing service", makestep(func() {
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -249,17 +286,10 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
 			Expect(svcs.m).To(HaveKey(key1))
 
-			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
+			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
 			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
 				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
 			Expect(svcs.m).NotTo(HaveKey(key1))
-
-			key1 = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
-			Expect(svcs.m).To(HaveKey(key1))
-			val1 := nat.NewNATValue(math.MaxUint32, uint32(0), 0, 0)
-			val2, ok := svcs.m[key1]
-			Expect(ok).To(BeTrue())
-			Expect(val1).To(Equal(val2))
 
 		}))
 
@@ -280,7 +310,7 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
 			Expect(svcs.m).NotTo(HaveKey(key1))
 
-			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
+			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
 			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
 				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
 			Expect(svcs.m).NotTo(HaveKey(key1))

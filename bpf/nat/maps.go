@@ -86,6 +86,7 @@ func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) Fron
 	copy(k[4:8], addr)
 	binary.LittleEndian.PutUint16(k[8:10], port)
 	k[10] = protocol
+	copy(k[11:15], cidr.Addr().AsNetIP().To4())
 	return k
 }
 
@@ -103,6 +104,10 @@ func (k FrontendKey) Port() uint16 {
 
 func (k FrontendKey) AsBytes() []byte {
 	return k[:]
+}
+
+func (k FrontendKey) Affinitykey() []byte {
+	return k[4:12]
 }
 
 func (k FrontendKey) String() string {

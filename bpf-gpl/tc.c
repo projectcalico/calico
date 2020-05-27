@@ -336,7 +336,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		.reason = CALI_REASON_UNKNOWN,
 	};
 	struct calico_nat_dest *nat_dest = NULL;
-	__u8 nat_lvl1_drop = 0;
+	bool nat_lvl1_drop = 0;
 
 	/* we assume we do FIB and from this point on, we only set it to false
 	 * if we decide not to do it.
@@ -600,7 +600,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	if (nat_lvl1_drop) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
-		fwd.reason = CALI_REASON_UNKNOWN_SOURCE;
+		fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 		goto deny;
 	}
 	if (nat_dest != NULL) {

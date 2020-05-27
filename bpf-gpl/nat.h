@@ -134,7 +134,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								     __u8 ip_proto,
 								     __u16 dport,
 								     bool from_tun,
-								     __u8 *drop)
+								     bool *drop)
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = 88,
@@ -142,11 +142,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		.port = dport,
 		.protocol = ip_proto,
 		.saddr = ip_src,
-	};
-	struct calico_nat_v4 nat_data = {
-		.addr = ip_dst,
-		.port = dport,
-		.protocol = ip_proto,
 	};
 	struct calico_nat_v4_value *nat_lv1_val;
 	struct calico_nat_secondary_v4_key nat_lv2_key;
@@ -211,6 +206,10 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		}
 		CALI_DEBUG("NAT: nodeport hit\n");
 	}
+	/* With LB source range, we install a drop entry in the NAT FE map
+	 * with a special ID 0xffffffff and count 0. If we hit this entry,
+	 * packet is dropped.
+	 */
 	if (nat_lv1_val->id == 0xffffffff && nat_lv1_val->count == 0) {
 		*drop = 1;
 		return NULL;
@@ -228,6 +227,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		goto skip_affinity;
 	}
 
+        struct calico_nat_v4 nat_data = {
+                .addr = ip_dst,
+                .port = dport,
+                .protocol = ip_proto,
+        };
 	affkey.nat_key =  nat_data;
 	affkey.client_ip = ip_src;
 
@@ -293,7 +297,7 @@ skip_affinity:
 }
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport, __u8 *drop)
+								    __u8 ip_proto, __u16 dport, bool *drop)
 {
 	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false, drop);
 }

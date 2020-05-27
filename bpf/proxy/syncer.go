@@ -681,6 +681,9 @@ func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
 	key := nat.NewNATKey(ipaddr, uint16(port), proto)
 	keys = append(keys, key)
 	for _, src := range loadBalancerSourceRanges {
+		if strings.Contains(src, ":") {
+			continue
+		}
 		key := nat.NewNATKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
 		keys = append(keys, key)
 	}
@@ -708,7 +711,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		if err != nil {
 			return errors.Errorf("bpfSvcs.Update: %s", err)
 		}
-		copy(affkey[:], key[4:12])
+		copy(affkey[:], key.Affinitykey())
 	} else {
 		keys, err := getSvcNATKeyLBSrcRange(svc)
 		if err != nil {
@@ -717,7 +720,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		for index, key := range keys {
 			if index == 0 {
 				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(0), uint32(local), affinityTimeo))
-				copy(affkey[:], key[4:12])
+				copy(affkey[:], key.Affinitykey())
 			} else {
 				err = s.writeSvcNatKey(key, val)
 			}
