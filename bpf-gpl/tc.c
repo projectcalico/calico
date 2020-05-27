@@ -688,7 +688,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		 */
 		map_state->pol_rc = CALI_POL_ALLOW;
 		bpf_tail_call(skb, &cali_jump, 1);
-		CALI_DEBUG(" sridhar Tail call to epilogue program failed: ALLOW\n");
+		CALI_DEBUG("Tail call to epilogue program failed: ALLOW\n");
 		return TC_ACT_UNSPEC;
 	}
 

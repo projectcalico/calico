@@ -29,12 +29,21 @@ import (
 )
 
 // struct calico_nat_v4_key {
+//    uint32_t prefixLen;
 //    uint32_t addr; // NBO
 //    uint16_t port; // HBO
 //    uint8_t protocol;
+//    uint32_t saddr;
 //    uint8_t pad;
 // };
 const frontendKeySize = 16
+
+// struct calico_nat {
+//	uint32_t addr;
+//	uint16_t port;
+//	uint8_t  protocol;
+//	uint8_t  pad;
+// };
 const frontendAffKeySize = 8
 
 // struct calico_nat_v4_value {
@@ -58,10 +67,12 @@ const backendKeySize = 8
 // };
 const backendValueSize = 8
 
+var zeroCIDR = ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)
+
 type FrontendKey [frontendKeySize]byte
 
 func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
-	return NewNATKeySrc(addr, port, protocol, ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR))
+	return NewNATKeySrc(addr, port, protocol, zeroCIDR)
 }
 
 func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) FrontendKey {
@@ -197,6 +208,7 @@ var FrontendMapParameters = bpf.MapParameters{
 	MaxEntries: 511000,
 	Name:       "cali_v4_nat_fe",
 	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
 }
 
 func FrontendMap(mc *bpf.MapContext) bpf.Map {
@@ -312,7 +324,7 @@ func BackendMapMemIter(m BackendMapMem) bpf.MapIter {
 }
 
 // struct calico_nat_v4_affinity_key {
-//    struct calico_nat_v4_key nat_key;
+//    struct calico_nat_v4 nat_key;
 // 	  uint32_t client_ip;
 // 	  uint32_t padding;
 // };
@@ -336,7 +348,6 @@ func NewAffinityKey(clientIP net.IP, fEndKey FrontendKey) AffinityKey {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
 	copy(k[frontendAffKeySize:frontendAffKeySize+4], addr)
-	log.Debugf("Affinity key %v", k.AsBytes())
 	return k
 }
 
