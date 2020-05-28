@@ -45,8 +45,6 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
-/* Prefix len = (dst_addr + port + protocol + src_addr) in bits. */
-#define NAT_PREFIX_LEN_WITH_SRC_MATCH 88
 
 struct calico_nat_v4 {
         uint32_t addr; // NBO
@@ -66,6 +64,16 @@ struct __attribute__((__packed__)) calico_nat_v4_key {
 	uint32_t saddr;
 	uint8_t pad;
 };
+
+/* Prefix len = (dst_addr + port + protocol + src_addr) in bits. */
+#define NAT_PREFIX_LEN_WITH_SRC_MATCH  (sizeof(struct calico_nat_v4_key) - \
+					sizeof(((struct calico_nat_v4_key*)0)->prefixlen) - \
+					sizeof(((struct calico_nat_v4_key*)0)->pad))
+
+#define NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS (NAT_PREFIX_LEN_WITH_SRC_MATCH * 8)
+
+// This is used as a special ID along with count=0 to drop a packet at nat level1 lookup
+#define NAT_FE_DROP_ID	0xffffffff
 
 union calico_nat_v4_lpm_key {
         struct bpf_lpm_trie_key lpm;
@@ -140,7 +148,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								     bool *drop)
 {
 	struct calico_nat_v4_key nat_key = {
-		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH,
+		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
 		.addr = ip_dst,
 		.port = dport,
 		.protocol = ip_proto,
@@ -213,7 +221,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 	 * with a special ID 0xffffffff and count 0. If we hit this entry,
 	 * packet is dropped.
 	 */
-	if (nat_lv1_val->id == 0xffffffff && nat_lv1_val->count == 0) {
+	if (nat_lv1_val->id == NAT_FE_DROP_ID && nat_lv1_val->count == 0) {
 		*drop = 1;
 		return NULL;
 	}

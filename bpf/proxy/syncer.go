@@ -719,7 +719,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		}
 		for index, key := range keys {
 			if index == 0 {
-				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(0), uint32(local), affinityTimeo))
+				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(0), uint32(0), 0))
 				copy(affkey[:], key.Affinitykey())
 			} else {
 				err = s.writeSvcNatKey(key, val)
