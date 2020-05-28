@@ -372,7 +372,7 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 }
 
 // isAllowedExternalIP determines if the given IP is in the list of
-// whitelisted External IP CIDR's given in the default bgpconfiguration.
+// whitelisted External IP CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 
 	ip := net.ParseIP(externalIP)
@@ -472,7 +472,6 @@ func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 
 	routes := rg.getAdvertisedRoutes(key)
 	rg.withdrawRoutesForKey(key, routes)
-
 }
 
 // advertiseRoute advertises a route associated with the given key and

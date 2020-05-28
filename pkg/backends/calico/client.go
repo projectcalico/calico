@@ -809,7 +809,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 			log.Info("Starting route generator due to service advertisement update")
 			var err error
 			if c.rg, err = NewRouteGenerator(c); err != nil {
-				log.WithError(err).Error("Failed to start route generator, unable to advertise services")
+				log.WithError(err).Error("Failed to start route generator, unable to advertise node-specific service routes")
 				c.rg = nil
 			} else {
 				c.rg.Start()
@@ -817,7 +817,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 		}
 
 		if c.rg != nil {
-			// Update CIDRs. In v1 format, they are a single comma-separate string. If the string isn't empty,
+			// Update CIDRs. In v1 format, they are a single comma-separated string. If the string isn't empty,
 			// split on the comma and pass a list of strings to the route generator.
 			// An empty string indicates a withdrawal of that set of service IPs.
 			var externalIPs []string
