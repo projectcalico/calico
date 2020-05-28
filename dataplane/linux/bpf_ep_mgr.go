@@ -22,7 +22,6 @@ import (
 	"net"
 	"os/exec"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -48,7 +47,6 @@ import (
 
 type epIface struct {
 	ifacemonitor.State
-	addrs []net.IP
 }
 
 type bpfEndpointManager struct {
@@ -66,6 +64,8 @@ type bpfEndpointManager struct {
 	dirtyIfaces    set.Set
 
 	bpfLogLevel      string
+	hostname         string
+	hostIP           net.IP
 	fibLookupEnabled bool
 	dataIfaceRegex   *regexp.Regexp
 	ipSetIDAlloc     *idalloc.IDAllocator
@@ -79,6 +79,7 @@ type bpfEndpointManager struct {
 
 func newBPFEndpointManager(
 	bpfLogLevel string,
+	hostname string,
 	fibLookupEnabled bool,
 	epToHostDrop bool,
 	dataIfaceRegex *regexp.Regexp,
@@ -98,6 +99,7 @@ func newBPFEndpointManager(
 		dirtyWorkloads:      set.New(),
 		dirtyIfaces:         set.New(),
 		bpfLogLevel:         bpfLogLevel,
+		hostname:            hostname,
 		fibLookupEnabled:    fibLookupEnabled,
 		dataIfaceRegex:      dataIfaceRegex,
 		ipSetIDAlloc:        ipSetIDAlloc,
@@ -116,8 +118,6 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	// Interface updates.
 	case *ifaceUpdate:
 		m.onInterfaceUpdate(msg)
-	case *ifaceAddrsUpdate:
-		m.onInterfaceAddrsUpdate(msg)
 
 	// Updates from the datamodel:
 
@@ -136,6 +136,20 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		m.onProfileUpdate(msg)
 	case *proto.ActiveProfileRemove:
 		m.onProfileRemove(msg)
+
+	case *proto.HostMetadataUpdate:
+		if msg.Hostname == m.hostname {
+			log.WithField("HostMetadataUpdate", msg).Info("Host IP changed")
+			ip := net.ParseIP(msg.Ipv4Addr)
+			if ip != nil {
+				m.hostIP = ip
+				for iface := range m.ifaces {
+					m.dirtyIfaces.Add(iface)
+				}
+			} else {
+				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
+			}
+		}
 	}
 }
 
@@ -158,56 +172,6 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 			m.dirtyIfaces.Add(update.Name)
 		}
 	}
-}
-
-func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
-	if update == nil || update.Addrs == nil {
-		return
-	}
-
-	var addrs []net.IP
-	update.Addrs.Iter(func(s interface{}) error {
-		str, ok := s.(string)
-		if !ok {
-			log.WithField("addr", s).Errorf("wrong type %T", s)
-			return nil
-		}
-		ip := net.ParseIP(str)
-		if ip == nil {
-			return nil
-		}
-		ip = ip.To4()
-		if ip == nil {
-			return nil
-		}
-		addrs = append(addrs, ip)
-		return nil
-	})
-
-	// Sort the slice for determinism and to make comparison easier.
-	sort.Slice(addrs, func(i, j int) bool {
-		return bytes.Compare(addrs[i], addrs[j]) < 0
-	})
-
-	iface := m.ifaces[update.Name]
-	changed := len(addrs) != len(iface.addrs)
-	if !changed {
-		for i := range addrs {
-			if !addrs[i].Equal(iface.addrs[i]) {
-				changed = true
-				break
-			}
-		}
-	}
-	if !changed {
-		log.WithField("iface", update.Name).Debug("No-op IPs update.")
-		return
-	}
-	iface.addrs = addrs
-	m.ifaces[update.Name] = iface
-	m.dirtyIfaces.Add(update.Name)
-	log.WithField("iface", update.Name).WithField("addrs", addrs).WithField("State", iface.State).
-		Debugf("onInterfaceAddrsUpdate")
 }
 
 // onWorkloadEndpointUpdate adds/updates the workload in the cache along with the index from active policy to
@@ -648,13 +612,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 		epType = tc.EpTypeTunnel
 	}
 	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
-	iface := m.ifaces[ifaceName]
-	if len(iface.addrs) > 0 {
-		ap.IP = iface.addrs[0]
-	} else if ifaceName == "tunl0" {
-		log.Debug("No IP for tunl0, perhaps IPIP is disabled?")
-		ap.IP = calicoRouterIP // Use the router IP to avoid spammy errors.
-	}
+	ap.IP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	return ap.AttachProgram()
 }

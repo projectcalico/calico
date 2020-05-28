@@ -1351,6 +1351,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									// Add a route to felix[1] to be able to reach the nodeport
 									_, err = eth20.RunCmd("ip", "route", "add", felixes[1].IP+"/32", "via", "10.0.0.20")
 									Expect(err).NotTo(HaveOccurred())
+									// This multi-NIC scenario works only if the kernel's RPF check
+									// is not strict so we need to override it for the test and must
+									// be set properly when product is deployed. We reply on
+									// iptables to do require check for us.
+									felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+									felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth20.rp_filter=2")
 								})
 
 								By("setting up routes to .20 net on dest node to trigger RPF check", func() {
