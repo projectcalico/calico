@@ -25,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,6 +76,8 @@ type proxy struct {
 	svcMap k8sp.ServiceMap
 	epsMap k8sp.EndpointsMap
 
+	endpointSlicesEnabled bool
+
 	dpSyncer DPSyncer
 	// executes periodic the dataplane updates
 	runner *async.BoundedFrequencyRunner
@@ -97,6 +100,10 @@ type proxy struct {
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
+}
+
+type stoppableRunner interface {
+	Run(stopCh <-chan struct{})
 }
 
 // New returns a new Proxy for the given k8s interface
@@ -140,7 +147,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		nil, // change if you want to provide more ctx
 		&isIPv6,
 		p.recorder,
-		false, // endpointSlicesEnabled
+		p.endpointSlicesEnabled,
 	)
 	p.svcChanges = k8sp.NewServiceChangeTracker(nil, &isIPv6, p.recorder)
 
@@ -168,12 +175,20 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	)
 	svcConfig.RegisterEventHandler(p)
 
-	// TODO check if EndpointSlices are available and use them instead
-	epsConfig := config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), p.syncPeriod)
-	epsConfig.RegisterEventHandler(p)
+	var epsRunner stoppableRunner
+
+	if p.endpointSlicesEnabled {
+		epsConfig := config.NewEndpointSliceConfig(informerFactory.Discovery().V1alpha1().EndpointSlices(), p.syncPeriod)
+		epsConfig.RegisterEventHandler(p)
+		epsRunner = epsConfig
+	} else {
+		epsConfig := config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), p.syncPeriod)
+		epsConfig.RegisterEventHandler(p)
+		epsRunner = epsConfig
+	}
 
 	p.startRoutine(func() { p.runner.Loop(p.stopCh) })
-	p.startRoutine(func() { epsConfig.Run(p.stopCh) })
+	p.startRoutine(func() { epsRunner.Run(p.stopCh) })
 	p.startRoutine(func() { informerFactory.Start(p.stopCh) })
 	p.startRoutine(func() { svcConfig.Run(p.stopCh) })
 
@@ -287,6 +302,29 @@ func (p *proxy) OnEndpointsDelete(eps *v1.Endpoints) {
 }
 
 func (p *proxy) OnEndpointsSynced() {
+	p.setEpsSynced()
+	p.forceSyncDP()
+}
+
+func (p *proxy) OnEndpointSliceAdd(eps *discovery.EndpointSlice) {
+	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
+		p.syncDP()
+	}
+}
+
+func (p *proxy) OnEndpointSliceUpdate(_, eps *discovery.EndpointSlice) {
+	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
+		p.syncDP()
+	}
+}
+
+func (p *proxy) OnEndpointSliceDelete(eps *discovery.EndpointSlice) {
+	if p.epsChanges.EndpointSliceUpdate(eps, true) && p.isInitialized() {
+		p.syncDP()
+	}
+}
+
+func (p *proxy) OnEndpointSlicesSynced() {
 	p.setEpsSynced()
 	p.forceSyncDP()
 }

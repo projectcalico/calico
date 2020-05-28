@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
@@ -101,6 +102,7 @@ var _ = Describe("BPF Proxy", func() {
 				Ports: []v1.EndpointPort{
 					{
 						Port: 1234,
+						Name: "1234",
 					},
 				},
 			},
@@ -120,6 +122,7 @@ var _ = Describe("BPF Proxy", func() {
 				{
 					Protocol: v1.ProtocolUDP,
 					Port:     1221,
+					Name:     "1221",
 				},
 			},
 		},
@@ -141,16 +144,23 @@ var _ = Describe("BPF Proxy", func() {
 				Ports: []v1.EndpointPort{
 					{
 						Port: 1221,
+						Name: "1221",
 					},
 				},
 			},
 		},
 	}
 
-	Describe("with k8s client", func() {
+	proxyTransitionsTest := func(endpointSlicesEnabled bool) {
 		var p proxy.Proxy
 		var dp *mockSyncer
-		k8s := fake.NewSimpleClientset(testSvc, testSvcEps, secondSvc, secondSvcEps)
+		var k8s *fake.Clientset
+
+		if endpointSlicesEnabled {
+			k8s = fake.NewSimpleClientset(testSvc, epsToSlice(testSvcEps), secondSvc, epsToSlice(secondSvcEps))
+		} else {
+			k8s = fake.NewSimpleClientset(testSvc, testSvcEps, secondSvc, secondSvcEps)
+		}
 
 		BeforeEach(func() {
 			By("creating proxy with fake client and mock syncer", func() {
@@ -159,7 +169,12 @@ var _ = Describe("BPF Proxy", func() {
 				syncStop = make(chan struct{})
 				dp = newMockSyncer(syncStop)
 
-				p, err = proxy.New(k8s, dp, "testnode", proxy.WithMinSyncPeriod(200*time.Millisecond))
+				opts := []proxy.Option{proxy.WithMinSyncPeriod(200 * time.Millisecond)}
+				if endpointSlicesEnabled {
+					opts = append(opts, proxy.WithEndpointsSlices())
+				}
+
+				p, err = proxy.New(k8s, dp, "testnode", opts...)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -225,33 +240,43 @@ var _ = Describe("BPF Proxy", func() {
 			})
 
 			By("deleting an endpoint of the second-service", func() {
-				err := k8s.Tracker().Update(v1.SchemeGroupVersion.WithResource("endpoints"),
-					&v1.Endpoints{
-						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("second-service"),
-						Subsets: []v1.EndpointSubset{
-							{
-								Addresses: []v1.EndpointAddress{
-									{
-										IP: "10.1.2.11",
-									},
+				eps := &v1.Endpoints{
+					TypeMeta:   typeMetaV1("Endpoints"),
+					ObjectMeta: objectMeataV1("second-service"),
+					Subsets: []v1.EndpointSubset{
+						{
+							Addresses: []v1.EndpointAddress{
+								{
+									IP: "10.1.2.11",
 								},
-								Ports: []v1.EndpointPort{
-									{
-										Port: 1221,
-									},
+							},
+							Ports: []v1.EndpointPort{
+								{
+									Port: 1221,
+									Name: "1221",
 								},
 							},
 						},
 					},
-					"default")
-				Expect(err).NotTo(HaveOccurred())
+				}
+
+				if endpointSlicesEnabled {
+					slice := epsToSlice(eps)
+					err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
+						slice, "default")
+					Expect(err).NotTo(HaveOccurred())
+				} else {
+					err := k8s.Tracker().Update(v1.SchemeGroupVersion.WithResource("endpoints"),
+						eps, "default")
+					Expect(err).NotTo(HaveOccurred())
+				}
 
 				secondSvcEpsKey := k8sp.ServicePortName{
 					NamespacedName: types.NamespacedName{
 						Namespace: secondSvcEps.ObjectMeta.Namespace,
 						Name:      secondSvcEps.ObjectMeta.Name,
 					},
+					Port: eps.Subsets[0].Ports[0].Name,
 				}
 
 				dp.checkState(func(s proxy.DPSyncerState) {
@@ -310,8 +335,13 @@ var _ = Describe("BPF Proxy", func() {
 					},
 				}
 
-				err := k8s.Tracker().Add(httpSvcEps)
-				Expect(err).NotTo(HaveOccurred())
+				if endpointSlicesEnabled {
+					err := k8s.Tracker().Add(epsToSlice(httpSvcEps))
+					Expect(err).NotTo(HaveOccurred())
+				} else {
+					err := k8s.Tracker().Add(httpSvcEps)
+					Expect(err).NotTo(HaveOccurred())
+				}
 
 				dp.checkState(func(s proxy.DPSyncerState) {
 					for _, port := range httpSvcEps.Subsets[0].Ports {
@@ -335,26 +365,32 @@ var _ = Describe("BPF Proxy", func() {
 			})
 
 			By("including endpoints without service", func() {
-				err := k8s.Tracker().Add(
-					&v1.Endpoints{
-						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("noservice"),
-						Subsets: []v1.EndpointSubset{
-							{
-								Addresses: []v1.EndpointAddress{
-									{
-										IP: "10.1.2.244",
-									},
+				eps := &v1.Endpoints{
+					TypeMeta:   typeMetaV1("Endpoints"),
+					ObjectMeta: objectMeataV1("noservice"),
+					Subsets: []v1.EndpointSubset{
+						{
+							Addresses: []v1.EndpointAddress{
+								{
+									IP: "10.1.2.244",
 								},
-								Ports: []v1.EndpointPort{
-									{
-										Port: 666,
-									},
+							},
+							Ports: []v1.EndpointPort{
+								{
+									Port: 666,
 								},
 							},
 						},
-					})
-				Expect(err).NotTo(HaveOccurred())
+					},
+				}
+
+				if endpointSlicesEnabled {
+					err := k8s.Tracker().Add(epsToSlice(eps))
+					Expect(err).NotTo(HaveOccurred())
+				} else {
+					err := k8s.Tracker().Add(eps)
+					Expect(err).NotTo(HaveOccurred())
+				}
 
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(1))
@@ -407,8 +443,13 @@ var _ = Describe("BPF Proxy", func() {
 				Expect(err).NotTo(HaveOccurred())
 				dp.checkState(func(s proxy.DPSyncerState) { /* just consume the event */ })
 
-				err = k8s.Tracker().Add(nodeportEps)
-				Expect(err).NotTo(HaveOccurred())
+				if endpointSlicesEnabled {
+					err := k8s.Tracker().Add(epsToSlice(nodeportEps))
+					Expect(err).NotTo(HaveOccurred())
+				} else {
+					err := k8s.Tracker().Add(nodeportEps)
+					Expect(err).NotTo(HaveOccurred())
+				}
 
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(2))
@@ -429,9 +470,19 @@ var _ = Describe("BPF Proxy", func() {
 				})
 			})
 		})
+	}
+
+	Describe("with k8s client", func() {
+		Context("with Endpoints", func() {
+			proxyTransitionsTest(false)
+		})
+
+		Context("with EndpointSlices", func() {
+			proxyTransitionsTest(true)
+		})
 	})
 
-	Describe("ExternalPolicy=Local", func() {
+	proxyLocalTest := func(endpointSlicesEnabled bool) {
 		var p proxy.Proxy
 		var dp *mockSyncer
 
@@ -486,7 +537,13 @@ var _ = Describe("BPF Proxy", func() {
 			},
 		}
 
-		k8s := fake.NewSimpleClientset(nodeport, nodeportEps)
+		var k8s *fake.Clientset
+
+		if endpointSlicesEnabled {
+			k8s = fake.NewSimpleClientset(nodeport, epsToSlice(nodeportEps))
+		} else {
+			k8s = fake.NewSimpleClientset(nodeport, nodeportEps)
+		}
 
 		BeforeEach(func() {
 			By("creating proxy with fake client and mock syncer", func() {
@@ -495,7 +552,12 @@ var _ = Describe("BPF Proxy", func() {
 				syncStop = make(chan struct{})
 				dp = newMockSyncer(syncStop)
 
-				p, err = proxy.New(k8s, dp, testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond))
+				opts := []proxy.Option{proxy.WithMinSyncPeriod(200 * time.Millisecond)}
+				if endpointSlicesEnabled {
+					opts = append(opts, proxy.WithEndpointsSlices())
+				}
+
+				p, err = proxy.New(k8s, dp, testNodeName, opts...)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -516,6 +578,16 @@ var _ = Describe("BPF Proxy", func() {
 					}
 				}
 			})
+		})
+	}
+
+	Describe("ExternalPolicy=Local with k8s client", func() {
+		Context("with Endpoints", func() {
+			proxyLocalTest(false)
+		})
+
+		Context("ExternalPolicy=Local with EndpointSlices", func() {
+			proxyLocalTest(true)
 		})
 	})
 })
@@ -569,4 +641,54 @@ func objectMeataV1(name string) metav1.ObjectMeta {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
+	addrType := discovery.AddressTypeIP
+
+	slice := &discovery.EndpointSlice{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "EndpointSlice",
+			APIVersion: "discovery.k8s.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      eps.ObjectMeta.Name,
+			Namespace: eps.ObjectMeta.Namespace,
+			Labels: map[string]string{
+				"kubernetes.io/service-name": eps.ObjectMeta.Name,
+			},
+		},
+		AddressType: &addrType,
+	}
+
+	for i, subset := range eps.Subsets {
+		for _, addr := range subset.Addresses {
+			slice.Endpoints = append(slice.Endpoints, discovery.Endpoint{
+				Addresses: []string{addr.IP},
+				Hostname:  addr.NodeName,
+			})
+		}
+
+		for j, p := range subset.Ports {
+			port := p
+			ep := discovery.EndpointPort{
+				Port: &port.Port,
+			}
+
+			if port.Name != "" {
+				ep.Name = &port.Name
+			} else {
+				name := fmt.Sprintf("port-%d-%d-%d", i, j, port.Port)
+				ep.Name = &name
+			}
+
+			if port.Protocol != "" {
+				ep.Protocol = &port.Protocol
+			}
+
+			slice.Ports = append(slice.Ports, ep)
+		}
+	}
+
+	return slice
 }
