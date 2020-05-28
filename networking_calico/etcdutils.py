@@ -393,7 +393,7 @@ def intern_dict(d):
     """intern_dict
 
     Return a copy of the input dict where all its string/unicode keys
-    are interned, optionally interning some of its values too.
+    and some of its values are interned.
 
     Caveat: assumes that it is safe to convert the keys and interned values
     to str by calling .encode("utf8") on each string.
