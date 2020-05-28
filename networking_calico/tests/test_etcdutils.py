@@ -77,7 +77,7 @@ class _TestPathDispatcherBase(unittest.TestCase):
         m_response.action = self.action
         self.dispatcher.handle_event(m_response)
         exp_handlers = self.handlers[self.expected_handlers]
-        for handler_key, handler in exp_handlers.iteritems():
+        for handler_key, handler in exp_handlers.items():
             assert isinstance(handler, Mock)
             if handler_key == exp_handler:
                 continue
@@ -85,7 +85,7 @@ class _TestPathDispatcherBase(unittest.TestCase):
                              "Unexpected set handler %s was called for "
                              "key %s" % (handler_key, key))
         unexp_handlers = self.handlers[self.unexpected_handlers]
-        for handler_key, handler in unexp_handlers.iteritems():
+        for handler_key, handler in unexp_handlers.items():
             assert isinstance(handler, Mock)
             self.assertFalse(handler.called,
                              "Unexpected del handler %s was called for "
@@ -130,8 +130,8 @@ class _TestPathDispatcherBase(unittest.TestCase):
         m_result.key = "/a"
         m_result.action = "unknown"
         self.dispatcher.handle_event(m_result)
-        for handlers in self.handlers.itervalues():
-            for key, handler in handlers.iteritems():
+        for handlers in self.handlers.values():
+            for key, handler in handlers.items():
                 self.assertFalse(handler.called,
                                  msg="Unexpected handler called: %s" % key)
 
@@ -181,8 +181,8 @@ class ExpectedException(Exception):
 
 
 def _rsp_to_tuple(rsp):
-    item = {'key': rsp.key, 'mod_revision': rsp.mod_revision}
-    return (rsp.value, item)
+    item = {'key': rsp.key.encode(), 'mod_revision': rsp.mod_revision}
+    return (rsp.value.encode(), item)
 
 
 class TestEtcdWatcher(unittest.TestCase):

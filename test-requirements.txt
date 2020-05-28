@@ -16,6 +16,5 @@ testrepository>=0.0.18 # Apache-2.0/BSD
 testscenarios>=0.4 # Apache-2.0/BSD
 testtools>=2.2.0 # MIT
 
-# This is installed from git in OpenStackCI for jobs that add
-# the project to required-projects.
-neutron>=13.0.0.0b1 # Apache-2.0
+neutron>=13,<14
+neutron-lib==1.18.0

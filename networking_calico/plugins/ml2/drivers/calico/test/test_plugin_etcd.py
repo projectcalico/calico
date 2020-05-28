@@ -52,13 +52,6 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         # Start with an empty etcd database.
         self.etcd_data = {}
 
-        # Hook the (mock) etcdv2 client.
-        lib.m_etcd.Client.reset_mock()
-        self.client = lib.m_etcd.Client.return_value
-        self.client.read.side_effect = self.etcd_read
-        self.client.write.side_effect = self.check_etcd_write
-        self.client.delete.side_effect = self.check_etcd_delete
-
         # Insinuate a mock etcd3gw client.
         etcdv3._client = self.clientv3 = mock.Mock()
         self.clientv3.put.side_effect = self.check_etcd_write
@@ -180,18 +173,18 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
         if range_end is not None:
             # Ranged get...
-            decoded_end = _decode(range_end)
+            decoded_end = _decode(range_end).decode()
             _log.info("Ranged get %s...%s", key, decoded_end)
             assert revision is not None
-            keys = self.etcd_data.keys()
+            keys = list(self.etcd_data.keys())
             keys.sort()
             if sort_order == "descend":
                 keys.reverse()
             result = []
             keys_in_range = [k for k in keys if key <= k < decoded_end]
             for k in keys_in_range:
-                result.append((self.etcd_data[k],
-                               {'key': k, 'mod_revision': '10'}))
+                result.append((self.etcd_data[k].encode(),
+                               {'key': k.encode(), 'mod_revision': '10'}))
                 if limit is not None and len(result) >= limit:
                     break
             return result
@@ -202,10 +195,10 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
             # Print and return the result.
             _log.info("etcd3 get: %s; value: %s", key, value)
             if metadata:
-                item = {'key': key, 'mod_revision': '10'}
-                return [(value, item)]
+                item = {'key': key.encode(), 'mod_revision': '10'}
+                return [(value.encode(), item)]
             else:
-                return [value]
+                return [value.encode()]
         else:
             return []
 
@@ -214,7 +207,8 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         results = []
         for key, value in self.etcd_data.items():
             if key.startswith(prefix):
-                result = (value, {'mod_revision': 0, 'key': key})
+                result = (value.encode(),
+                          {'mod_revision': 0, 'key': key.encode()})
                 results.append(result)
 
         # Print and return the result.
@@ -230,7 +224,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
     def etcd3_delete_prefix(self, prefix):
         _log.info("etcd3 delete prefix: %s", prefix)
-        for key, value in self.etcd_data.items():
+        for key, value in list(self.etcd_data.items()):
             if key.startswith(prefix):
                 del self.etcd_data[key]
                 _log.info("etcd3 deleted %s", key)
@@ -239,11 +233,12 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
     def etcd3_transaction(self, txn):
         if 'request_put' in txn['success'][0]:
             put_request = txn['success'][0]['request_put']
-            succeeded = self.check_etcd_write(_decode(put_request['key']),
-                                              _decode(put_request['value']))
+            succeeded = self.check_etcd_write(
+                _decode(put_request['key']).decode(),
+                _decode(put_request['value']).decode())
         elif 'request_delete_range' in txn['success'][0]:
             del_request = txn['success'][0]['request_delete_range']
-            succeeded = self.etcd3_delete(_decode(del_request['key']))
+            succeeded = self.etcd3_delete(_decode(del_request['key']).decode())
         return {'succeeded': succeeded}
 
     def etcd_read(self, key, wait=False, waitIndex=None, recursive=False,
@@ -276,7 +271,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         else:
             read_result.value = None
             if not recursive:
-                raise lib.m_etcd.EtcdKeyNotFound()
+                raise lib.EtcdKeyNotFound()
 
         # Print and return the result object.
         _log.info("etcd read: %s; value: %s", key, read_result.value)
@@ -294,7 +289,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                     read_result.children.append(child)
                     read_result.leaves.append(child)
             if read_result.value is None and read_result.children == []:
-                raise lib.m_etcd.EtcdKeyNotFound(self.etcd_data)
+                raise lib.EtcdKeyNotFound(self.etcd_data)
             # Actual direct children of the dir in etcd response.
             # Needed for status_dir, where children are dirs and
             # needs to be iterated.
@@ -1686,7 +1681,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
         lib.m_compat.cfg.CONF.calico.etcd_key_file = "key-file"
         self.watcher = status.StatusWatcher(self.driver)
 
-    def test_snapshot(self):
+    @mock.patch('eventlet.spawn')
+    def test_snapshot(self, m_spawn):
         # Populate initial status tree data, for initial snapshot testing.
 
         felix_status_key = '/calico/felix/v2/no-region/host/hostname/status'
@@ -1780,9 +1776,9 @@ class TestStatusWatcher(TestStatusWatcherBase):
         # back to high after the snapshot.
         watch_events = [{
             "kv": {
-                "key": "/calico/felix/v2/no-region/host/hostname/workload/"
-                       "openstack/wlid/endpoint/ep1",
-                "value": '{"status": "up"}',
+                "key": ("/calico/felix/v2/no-region/host/hostname/workload/" +
+                        "openstack/wlid/endpoint/ep1").encode(),
+                "value": '{"status": "up"}'.encode(),
             },
             "type": "SET",
         }]

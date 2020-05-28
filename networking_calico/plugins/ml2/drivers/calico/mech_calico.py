@@ -60,6 +60,7 @@ import neutron.plugins.ml2.rpc as rpc
 
 # Calico imports.
 from networking_calico.common import config as calico_config
+from networking_calico.common import intern_string
 from networking_calico.compat import cfg
 from networking_calico.compat import constants
 from networking_calico.compat import db_exc
@@ -444,7 +445,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :param status_dict: new status dict for the port or None if the
                status was deleted.
         """
-        port_status_key = (intern(hostname.encode("utf8")), port_id)
+        port_status_key = (intern_string(hostname), port_id)
         # Unwrap the dict around the actual status.
         if status_dict is not None:
             # Update.
@@ -492,7 +493,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     # of the status strings.  We know the .encode() is safe
                     # because we just checked this was one of our expected
                     # strings.
-                    interned_status = intern(calico_status.encode("utf8"))
+                    interned_status = intern_string(calico_status)
                     self._port_status_cache[port_status_key] = interned_status
                 else:
                     LOG.error("Unknown port status: %r", calico_status)
@@ -569,8 +570,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.db.update_port_status(admin_context,
                                            port_id,
                                            neutron_status)
-        except (db_exc.DBError,
-                sa_exc.SQLAlchemyError) as e:
+        except db_exc.DBError as e:
+            # Defensive: pre-Liberty, it was easy to cause deadlocks here if
+            # any code path (in another loaded plugin, say) failed to take
+            # the db-access lock.  Post-Liberty, we shouldn't see any
+            # exceptions here because update_port_status() is wrapped with a
+            # retry decorator in the neutron code.
+            LOG.warning("Failed to update port status for %s due to %r.",
+                        port_id, e)
+            # Queue up a retry after a delay.
+            eventlet.spawn_after(PORT_UPDATE_RETRY_DELAY_SECS,
+                                 self._retry_port_status_update,
+                                 port_status_key)
+        except sa_exc.SQLAlchemyError as e:
             # Defensive: pre-Liberty, it was easy to cause deadlocks here if
             # any code path (in another loaded plugin, say) failed to take
             # the db-access lock.  Post-Liberty, we shouldn't see any
@@ -596,7 +608,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def _update_port_status_has_host_param(self):
         """Check whether update_port_status() supports the host parameter."""
         if self._cached_update_port_status_has_host_param is None:
-            args, _, varkw, _ = inspect.getargspec(self.db.update_port_status)
+            full_arg_spec = inspect.getfullargspec(
+                self.db.update_port_status
+            )
+            args = full_arg_spec.args
+            varkw = full_arg_spec.varkw
             has_host_param = varkw or "host" in args
             self._cached_update_port_status_has_host_param = has_host_param
             LOG.info("update_port_status() supports host arg: %s",
@@ -1011,7 +1027,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Generate a cluster GUID if there isn't one already.
             if not cluster_info.get(datamodel_v3.CLUSTER_GUID):
                 cluster_info[datamodel_v3.CLUSTER_GUID] = \
-                    uuid.uuid4().get_hex()
+                    uuid.uuid4().hex
                 rewrite_cluster_info = True
 
             # Add "openstack" to the cluster type, unless there already.
@@ -1237,20 +1253,20 @@ def check_request_etcd_compaction():
                 # what we see if we create a lease with TTL 5s and then query
                 # it every 0.5s:
                 #
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'4'}
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'4'}
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'3'}
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'3'}
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'2'}
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'2'}
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'1'}
-                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'1'}
-                # {..., u'ID': u'75...', u'grantedTTL': u'5'}
-                # {..., u'ID': u'75...', u'grantedTTL': u'5'}
-                # {..., u'ID': u'75...', u'grantedTTL': u'5'}
-                # {..., u'ID': u'75...', u'TTL': u'-1'}
-                # {..., u'ID': u'75...', u'TTL': u'-1'}
-                # {..., u'ID': u'75...', u'TTL': u'-1'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '4'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '4'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '3'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '3'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '2'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '2'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '1'}
+                # {..., 'grantedTTL': '5', 'ID': '75...', 'TTL': '1'}
+                # {..., 'ID': '75...', 'grantedTTL': '5'}
+                # {..., 'ID': '75...', 'grantedTTL': '5'}
+                # {..., 'ID': '75...', 'grantedTTL': '5'}
+                # {..., 'ID': '75...', 'TTL': '-1'}
+                # {..., 'ID': '75...', 'TTL': '-1'}
+                # {..., 'ID': '75...', 'TTL': '-1'}
                 #
                 # Strange but true!
                 LOG.info("Lease expired as we were checking it: %r", e)

@@ -32,7 +32,6 @@ import sys
 
 _log = logging.getLogger(__name__)
 
-sys.modules['etcd'] = m_etcd = mock.MagicMock()
 sys.modules['neutron'] = m_neutron = mock.MagicMock()
 sys.modules['neutron.agent'] = m_neutron.agent
 sys.modules['neutron.agent.rpc'] = m_neutron.agent.rpc
@@ -114,36 +113,8 @@ floating_ports = [{'fixed_port_id': 'DEADBEEF-1234-5678',
                    'floating_ip_address': '192.168.0.1'}]
 
 
-class EtcdException(Exception):
+class EtcdKeyNotFound(Exception):
     pass
-
-
-class EtcdKeyNotFound(EtcdException):
-    pass
-
-
-class EtcdClusterIdChanged(EtcdException):
-    pass
-
-
-class EtcdEventIndexCleared(EtcdException):
-    pass
-
-
-class EtcdValueError(EtcdException):
-    pass
-
-
-class EtcdDirNotEmpty(EtcdValueError):
-    pass
-
-
-m_etcd.EtcdException = EtcdException
-m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
-m_etcd.EtcdClusterIdChanged = EtcdClusterIdChanged
-m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
-m_etcd.EtcdValueError = EtcdValueError
-m_etcd.EtcdDirNotEmpty = EtcdDirNotEmpty
 
 
 class DBError(Exception):
@@ -497,14 +468,17 @@ class Lib(object):
             _log.info("T=%s", self.current_time)
 
             # Wake up all sleepers that should now wake up.
+            queues_to_wake = []
             for queue in self.sleepers.keys():
                 if self.sleepers[queue] <= self.current_time:
                     _log.info("T=%s >= %s: %s: Wake up!",
                               self.current_time,
                               self.sleepers[queue],
                               queue.stack)
-                    del self.sleepers[queue]
-                    queue.put_nowait(TIMEOUT_VALUE)
+                    queues_to_wake.append(queue)
+            for queue in queues_to_wake:
+                del self.sleepers[queue]
+                queue.put_nowait(TIMEOUT_VALUE)
 
             # Allow woken (and possibly other) threads to run.
             self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
@@ -531,7 +505,7 @@ class Lib(object):
         if filters is None:
             return self.osdb_ports
 
-        assert filters.keys() == ['id']
+        assert list(filters.keys()) == ['id']
         allowed_ids = set(filters['id'])
 
         return [p for p in self.osdb_ports if p['id'] in allowed_ids]
@@ -580,7 +554,7 @@ class Lib(object):
         if filters is None:
             return self.port_security_group_bindings
 
-        assert filters.keys() == ['port_id']
+        assert list(filters.keys()) == ['port_id']
         allowed_ids = set(filters['port_id'])
 
         return [b for b in self.port_security_group_bindings
@@ -611,7 +585,7 @@ class FixedUUID(object):
 
     def __enter__(self):
         guid = mock.MagicMock()
-        guid.get_hex.return_value = self.uuid
+        guid.hex = self.uuid
         guid.__str__.return_value = self.uuid
         uuid4 = self.uuid4_p.start()
         uuid4.return_value = guid

@@ -106,7 +106,7 @@ class TestCompaction(unittest.TestCase):
             # Read trigger: not found.
             [],
             # Read last.
-            [('0', {'mod_revision': '10'})],
+            [('0'.encode(), {'mod_revision': '10'})],
         ])
         self.client.status.return_value = {'header': {
             'cluster_id': '12345',
@@ -129,7 +129,7 @@ class TestCompaction(unittest.TestCase):
             # Read trigger: not found.
             [],
             # Read last.
-            [('0', {'mod_revision': '100'})],
+            [('0'.encode(), {'mod_revision': '100'})],
         ])
         self.client.status.return_value = {'header': {
             'cluster_id': '12345',
@@ -152,7 +152,7 @@ class TestCompaction(unittest.TestCase):
             # Read trigger: not found.
             [],
             # Read last.
-            [('0', {'mod_revision': '300'})],
+            [('0'.encode(), {'mod_revision': '300'})],
         ])
         self.client.status.return_value = {'header': {
             'cluster_id': '12345',
@@ -175,7 +175,7 @@ class TestCompaction(unittest.TestCase):
             # Read trigger: not found.
             [],
             # Read last.
-            [('100', {'mod_revision': '1100'})],
+            [('100'.encode(), {'mod_revision': '1100'})],
         ])
         self.client.status.return_value = {'header': {
             'cluster_id': '12345',
@@ -196,7 +196,7 @@ class TestCompaction(unittest.TestCase):
         LOG.info("Trigger present; nothing happens")
         self.client.get.side_effect = iter([
             # Read trigger: present with good lease.
-            [(self.pid, {'mod_revision': '2000', 'lease': '1'})],
+            [(self.pid.encode(), {'mod_revision': '2000', 'lease': '1'})],
         ])
         mech_calico.check_request_etcd_compaction()
         self.client.status.assert_not_called()
@@ -207,7 +207,7 @@ class TestCompaction(unittest.TestCase):
         LOG.info("Trigger present but with missing lease")
         self.client.get.side_effect = iter([
             # Read trigger: present but lease missing.
-            [(self.pid, {'mod_revision': '2000'})],
+            [(self.pid.encode(), {'mod_revision': '2000'})],
         ])
         mech_calico.check_request_etcd_compaction()
         self.assertEqual([
@@ -224,7 +224,7 @@ class TestCompaction(unittest.TestCase):
         LOG.info("Trigger present but with bad lease")
         self.client.get.side_effect = iter([
             # Read trigger: present but lease has unreasonably large TTL.
-            [(self.pid, {'mod_revision': '2000', 'lease': '2'})],
+            [(self.pid.encode(), {'mod_revision': '2000', 'lease': '2'})],
         ])
         mech_calico.check_request_etcd_compaction()
         self.assertEqual([
@@ -243,7 +243,7 @@ class TestCompaction(unittest.TestCase):
             # Read trigger: not found.
             [],
             # Read last.
-            [('3000', {'mod_revision': '1100'})],
+            [('3000'.encode(), {'mod_revision': '1100'})],
         ])
         self.client.status.return_value = {'header': {
             'cluster_id': '12345',
@@ -272,7 +272,7 @@ class TestCompaction(unittest.TestCase):
             # Read trigger: not found.
             [],
             # Read last.
-            [('100', {'mod_revision': '1100'})],
+            [('100'.encode(), {'mod_revision': '1100'})],
         ])
         self.client.status.return_value = {'header': {
             'cluster_id': '12345',

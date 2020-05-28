@@ -406,23 +406,35 @@ class TestDnsmasqRouted(base.BaseTestCase):
         with mock.patch.object(dhcp_driver, '_get_value_from_conf_file') as gv:
             gv.return_value = 'ns-dhcp'
             cmdline = dhcp_driver._build_cmdline_callback('/run/pid_file')
+
+        # Filter out dnsmasq args that we don't care about.
+        filtered_args = []
+        for arg in cmdline:
+            if '--domain=' in arg:
+                continue
+            if arg in [
+                    '--no-hosts',
+                    '--no-resolv',
+                    '--pid-file=/run/pid_file',
+                    '--dhcp-hostsfile=/run/calico/host',
+                    '--addn-hosts=/run/calico/addn_hosts',
+                    '--dhcp-optsfile=/run/calico/opts',
+                    '--dhcp-leasefile=/run/calico/leases',
+                    '--dhcp-match=set:ipxe,175',
+                    '--dhcp-lease-max=16777216',
+                    '--conf-file=',
+            ]:
+                continue
+            filtered_args.append(arg)
+
+        # Check the remaining filtered args against what we expect.
         self.assertEqual([
             'dnsmasq',
-            '--no-hosts',
-            '--no-resolv',
             '--except-interface=lo',
-            '--pid-file=/run/pid_file',
-            '--dhcp-hostsfile=/run/calico/host',
-            '--addn-hosts=/run/calico/addn_hosts',
-            '--dhcp-optsfile=/run/calico/opts',
-            '--dhcp-leasefile=/run/calico/leases',
-            '--dhcp-match=set:ipxe,175',
             '--bind-dynamic',
             '--interface=ns-dhcp',
             '--dhcp-range=set:subnet-v4subnet-1,10.28.0.0' +
             ',static,255.255.255.0,86400s',
-            '--dhcp-lease-max=16777216',
-            '--conf-file=',
             '--dhcp-range=set:subnet-v6subnet-1,2001:db8:1::' +
             ',static,off-link,80,86400s',
             '--enable-ra',
@@ -430,4 +442,4 @@ class TestDnsmasqRouted(base.BaseTestCase):
             '--interface=tap2',
             '--interface=tap3',
             '--bridge-interface=ns-dhcp,tap1,tap2,tap3'],
-            cmdline)
+            filtered_args)

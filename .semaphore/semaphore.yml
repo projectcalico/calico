@@ -19,8 +19,9 @@ blocks:
             - git checkout -b devstack-test
             - mkdir -p ~/calico
             - ln -s `pwd` ~/calico/networking-calico
-            - sudo apt-get install -y tox python-all-dev python3-all-dev
+            - sudo apt-get install -y tox python3-all-dev
             - export LIBVIRT_TYPE=qemu
+            - export USE_PYTHON3=True
             - TEMPEST=true TEMPEST_BRANCH=23.0.0 DEVSTACK_BRANCH=stable/rocky ./devstack/bootstrap.sh
             - source ./devstack/devstackgaterc
             - cd /opt/stack/tempest
