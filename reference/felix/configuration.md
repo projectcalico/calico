@@ -137,6 +137,7 @@ See the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/tr
 | BPFExternalServiceMode             / <br/> FELIX_BPFEXTERNALSERVICEMODE               | Controls how traffic from outside the cluster to NodePorts and ClusterIPs is handled.  In Tunnel mode, packet is tunneled from the ingress host to the host with the backing pod and back again.  In DSR mode, traffic is tunneled to the host with the backing pod and then returned directly; this requires a network that allows direct return. | Tunnel,DSR |  Tunnel |
 | BPFKubeProxyIptablesCleanupEnabled / <br/> FELIX_BPFKUBEPROXYIPTABLESCLEANUPENABLED   | Controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. This is a tech preview feature and subject to change in future releases. | true,false| true |
 | BPFKubeProxyMinSyncPeriod          / <br/> FELIX_BPFKUBEPROXYMINSYNCPERIOD            | Controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | seconds | `1` |
+| BPFKubeProxyEndpointSlicesEnabled  / <br/> FELIX_BPFKUBEPROXYENDPOINTSLICESENABLED    | Controls whether Felix's embedded kube-proxy derives its services from Kubernetes' EndpointSlices resources. Using EndpointSlices is more efficient but it requires EndpointSlices support to be enabled at the Kubernetes API server. | true,false | false |
 
 #### Kubernetes-specific configuration
 
