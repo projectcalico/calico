@@ -950,6 +950,7 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.loadBalancerSourceRanges = sport.LoadBalancerSourceRanges()
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
 	sinfo.onlyNodeLocalEndpoints = sport.OnlyNodeLocalEndpoints()
+	sinfo.topologyKeys = sport.TopologyKeys()
 
 	return sinfo
 }
@@ -965,11 +966,12 @@ type serviceInfo struct {
 	loadBalancerSourceRanges []string
 	healthCheckNodePort      int
 	onlyNodeLocalEndpoints   bool
+	topologyKeys             []string
 }
 
 // TopologyKeys is part of ServicePort interface.
 func (info *serviceInfo) TopologyKeys() []string {
-	panic("NOT IMPLEMENTED")
+	return info.topologyKeys
 }
 
 // String is part of ServicePort interface.
