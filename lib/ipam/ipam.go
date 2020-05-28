@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,12 +39,13 @@ const (
 
 	// Common attributes which may be set on allocations by clients.  Moved to the model package so they can be used
 	// by the AllocationBlock code too.
-	AttributePod       = model.IPAMBlockAttributePod
-	AttributeNamespace = model.IPAMBlockAttributeNamespace
-	AttributeNode      = model.IPAMBlockAttributeNode
-	AttributeType      = model.IPAMBlockAttributeType
-	AttributeTypeIPIP  = model.IPAMBlockAttributeTypeIPIP
-	AttributeTypeVXLAN = model.IPAMBlockAttributeTypeVXLAN
+	AttributePod           = model.IPAMBlockAttributePod
+	AttributeNamespace     = model.IPAMBlockAttributeNamespace
+	AttributeNode          = model.IPAMBlockAttributeNode
+	AttributeType          = model.IPAMBlockAttributeType
+	AttributeTypeIPIP      = model.IPAMBlockAttributeTypeIPIP
+	AttributeTypeVXLAN     = model.IPAMBlockAttributeTypeVXLAN
+	AttributeTypeWireguard = model.IPAMBlockAttributeTypeWireguard
 )
 
 var (
