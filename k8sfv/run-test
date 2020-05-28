@@ -76,7 +76,7 @@ fi
 : ${TYPHA_LOG_LEVEL:=info}
 #
 # CRD Manifest to use
-: ${CRD_PATH:=./fv/infrastructure/crds.yaml}
+: ${CRD_PATH:=./fv/infrastructure/crds}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -139,7 +139,7 @@ etcd_ip=$(get_container_ip ${prefix}-etcd)
 docker run --detach --name ${prefix}-apiserver \
        -v ${PRIVATE_KEY}:/private.key \
        $FV_K8SIMAGE \
-       /hyperkube apiserver \
+       kube-apiserver \
        --etcd-servers=http://${etcd_ip}:2379 \
        --service-cluster-ip-range=10.101.0.0/16 -v=10 \
        --authorization-mode=RBAC \
@@ -156,7 +156,7 @@ done
 docker run --detach --name ${prefix}-controller-manager \
 	  -v ${PRIVATE_KEY}:/private.key \
           $FV_K8SIMAGE \
-	  /hyperkube controller-manager \
+	  kube-controller-manager \
             --master=${k8s_ip}:8080 \
 	    --min-resync-period=3m \
 	    --allocate-node-cidrs=true \
@@ -175,12 +175,12 @@ if [ ! -e ${CRD_PATH} ]; then
 fi
 
 # Copy CRD manifest into running k8sfs-apiserver
-while ! docker cp ${CRD_PATH} ${prefix}-apiserver:/crds.yaml; do
+while ! docker cp ${CRD_PATH} ${prefix}-apiserver:/crds; do
     sleep 2
 done
 
 # Apply CRD manifest to pre-create resource definitions
-while ! docker exec ${prefix}-apiserver kubectl apply -f /crds.yaml; do
+while ! docker exec ${prefix}-apiserver kubectl apply -f /crds; do
     sleep 2
 done
 

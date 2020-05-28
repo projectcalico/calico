@@ -23,9 +23,9 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/errors v0.8.1
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200522134408-df181482b303
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200526191335-efdcb3c58dec
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
-	github.com/projectcalico/typha v0.7.3-0.20200523040929-7115ed00b715
+	github.com/projectcalico/typha v0.7.3-0.20200526212029-1ce1989d8c93
 	github.com/prometheus/client_golang v0.9.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2

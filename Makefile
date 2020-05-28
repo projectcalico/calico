@@ -28,7 +28,7 @@
 #
 ###############################################################################
 PACKAGE_NAME?=github.com/projectcalico/felix
-GO_BUILD_VER?=v0.38
+GO_BUILD_VER?=v0.40
 
 ###############################################################################
 # Download and include Makefile.common
@@ -126,7 +126,7 @@ clean:
 	       $(GENERATED_FILES) \
 	       go/docs/calc.pdf \
 	       release-notes-* \
-	       fv/infrastructure/crds.yaml
+	       fv/infrastructure/crds/
 	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
@@ -362,13 +362,13 @@ fv/fv.test: $(SRC_FILES)
 	# outside a container and allow them to interact with docker.
 	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
-REMOTE_DEPS=fv/infrastructure/crds.yaml
+REMOTE_DEPS=fv/infrastructure/crds
 
-fv/infrastructure/crds.yaml: go.mod go.sum
+fv/infrastructure/crds: go.mod go.sum $(LOCAL_BUILD_DEP)
 	$(DOCKER_GO_BUILD) sh -c ' \
 	go list all; \
-	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml; \
-	chmod +w fv/infrastructure/crds.yaml'
+	cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd fv/infrastructure/crds; \
+	chmod +w fv/infrastructure/crds/'
 
 .PHONY: fv
 # runs all of the fv tests

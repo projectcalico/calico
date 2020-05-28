@@ -127,7 +127,7 @@ func runK8sApiserver(etcdIp string) *containers.Container {
 		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
 		utils.Config.K8sImage,
-		"/hyperkube", "apiserver",
+		"kube-apiserver",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=RBAC",
 		"--insecure-port=8080", // allow insecure connection from controller manager.
@@ -142,7 +142,7 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
 		utils.Config.K8sImage,
-		"/hyperkube", "controller-manager",
+		"kube-controller-manager",
 		fmt.Sprintf("--master=%v:8080", apiserverIp),
 		// We run trivially small clusters, so increase the QPS to get the
 		// cluster to start up as fast as possible.
@@ -256,13 +256,13 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 
 	log.Info("Started controller manager.")
 
-	// Copy CRD registration manifest into the API server container, and apply it.
-	err := kds.k8sApiContainer.CopyFileIntoContainer("infrastructure/crds.yaml", "/crds.yaml")
+	// Copy CRD registration manifests into the API server container, and apply it.
+	err := kds.k8sApiContainer.CopyFileIntoContainer("infrastructure/crds", "/crds")
 	if err != nil {
 		TearDownK8sInfra(kds)
 		return nil, err
 	}
-	err = kds.k8sApiContainer.ExecMayFail("kubectl", "apply", "-f", "/crds.yaml")
+	err = kds.k8sApiContainer.ExecMayFail("kubectl", "apply", "-f", "/crds/")
 	if err != nil {
 		TearDownK8sInfra(kds)
 		return nil, err
@@ -275,7 +275,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	start = time.Now()
 	for {
 		var resp *http.Response
-		resp, err = insecureHTTPClient.Get(kds.Endpoint + "/apis/crd.projectcalico.org/v1/globalfelixconfigs")
+		resp, err = insecureHTTPClient.Get(kds.Endpoint + "/apis/crd.projectcalico.org/v1/felixconfigurations")
 		if resp.StatusCode != 200 {
 			err = fmt.Errorf("Bad status (%v) for CRD GET request", resp.StatusCode)
 		}
