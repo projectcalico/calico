@@ -117,11 +117,8 @@ func (rg *routeGenerator) Start() {
 		log.Info("RouteGenerator in sync")
 
 		// Loop waiting for trigger to recheck node-specific routes.
-		for {
-			select {
-			case <-rg.resyncKnownRoutesTrigger:
-				rg.resyncKnownRoutes()
-			}
+		for range rg.resyncKnownRoutesTrigger {
+			rg.resyncKnownRoutes()
 		}
 	}()
 }
