@@ -41,12 +41,13 @@ const (
 // valid service ips to advertise
 type routeGenerator struct {
 	sync.Mutex
-	client                  *client
-	nodeName                string
-	svcInformer, epInformer cache.Controller
-	svcIndexer, epIndexer   cache.Indexer
-	svcRouteMap             map[string]map[string]bool
-	routeAdvertisementCount map[string]int
+	client                   *client
+	nodeName                 string
+	svcInformer, epInformer  cache.Controller
+	svcIndexer, epIndexer    cache.Indexer
+	svcRouteMap              map[string]map[string]bool
+	routeAdvertisementCount  map[string]int
+	resyncKnownRoutesTrigger chan struct{}
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
@@ -62,10 +63,11 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 
 	// initialize empty route generator
 	rg = &routeGenerator{
-		client:                  c,
-		nodeName:                nodename,
-		svcRouteMap:             make(map[string]map[string]bool),
-		routeAdvertisementCount: make(map[string]int),
+		client:                   c,
+		nodeName:                 nodename,
+		svcRouteMap:              make(map[string]map[string]bool),
+		routeAdvertisementCount:  make(map[string]int),
+		resyncKnownRoutesTrigger: make(chan struct{}, 1),
 	}
 
 	// set up k8s client
@@ -113,6 +115,14 @@ func (rg *routeGenerator) Start() {
 		// Notify the main client we're in sync now.
 		rg.client.OnInSync(SourceRouteGenerator)
 		log.Info("RouteGenerator in sync")
+
+		// Loop waiting for trigger to recheck node-specific routes.
+		for {
+			select {
+			case <-rg.resyncKnownRoutesTrigger:
+				rg.resyncKnownRoutes()
+			}
+		}
 	}()
 }
 
