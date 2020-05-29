@@ -108,7 +108,7 @@ temporary-pool        10.0.0.0/16      true   Always     false
 
 #### Disable the existing IP pool
 
-List the existing IP pool definition.
+Disable allocations in the default pool.
 
 ```
 calicoctl patch ippool default-ipv4-ippool -p '{"spec": {"disabled": “true”}}'
