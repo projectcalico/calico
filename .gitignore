@@ -12,3 +12,4 @@ checkouts
 /report/*.xml
 /release
 Makefile.common*
+*.test
