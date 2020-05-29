@@ -107,11 +107,11 @@ func main() {
 		syncerType = syncproto.SyncerType(t)
 	}
 	options := &syncclient.Options{
-		SyncerType: syncerType,
-		KeyFile: arguments["--key-file"].(string),
-		CertFile: arguments["--cert-file"].(string),
-		CAFile: arguments["--ca-file"].(string),
-		ServerCN: arguments["--server-cn"].(string),
+		SyncerType:   syncerType,
+		KeyFile:      arguments["--key-file"].(string),
+		CertFile:     arguments["--cert-file"].(string),
+		CAFile:       arguments["--ca-file"].(string),
+		ServerCN:     arguments["--server-cn"].(string),
 		ServerURISAN: arguments["--server-uri"].(string),
 	}
 

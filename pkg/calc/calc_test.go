@@ -15,11 +15,12 @@
 package calc_test
 
 import (
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	. "github.com/projectcalico/typha/pkg/calc"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

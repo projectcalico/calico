@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
@@ -369,6 +370,7 @@ func (t *TyphaDaemon) CreateServer() {
 	// Now create the Syncer and caching layer (one pipeline for each syncer we support).
 	t.addSyncerPipeline(syncproto.SyncerTypeFelix, t.DatastoreClient.FelixSyncerByIface)
 	t.addSyncerPipeline(syncproto.SyncerTypeBGP, t.DatastoreClient.BGPSyncerByIface)
+	t.addSyncerPipeline(syncproto.SyncerTypeTunnelIPAllocation, t.DatastoreClient.TunnelIPAllocationSyncerByIface)
 
 	// Create the server, which listens for connections from Felix.
 	t.Server = syncserver.New(
@@ -459,11 +461,16 @@ func (s ClientV3Shim) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Sync
 	return bgpsyncer.New(s.Backend(), callbacks, "", s.config.Spec)
 }
 
+func (s ClientV3Shim) TunnelIPAllocationSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	return tunnelipsyncer.New(s.Backend(), callbacks, "")
+}
+
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.
 type DatastoreClient interface {
 	clientv3.Interface
 	FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 	BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
+	TunnelIPAllocationSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
 // RealClientV3 is the real API of the V3 client, including the semi-private API that we use to get the backend.

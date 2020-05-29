@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -135,7 +135,7 @@ var _ = Describe("Daemon", func() {
 
 			It("should create the server components", func() {
 				d.CreateServer()
-				Expect(d.SyncerPipelines).To(HaveLen(2))
+				Expect(d.SyncerPipelines).To(HaveLen(3))
 				for _, p := range d.SyncerPipelines {
 					Expect(p.SyncerToValidator).ToNot(BeNil())
 					Expect(p.Syncer).ToNot(BeNil())
@@ -147,6 +147,7 @@ var _ = Describe("Daemon", func() {
 				Expect(d.Server).ToNot(BeNil())
 				Expect(datastore.bgpSyncerCalled).To(BeTrue())
 				Expect(datastore.felixSyncerCalled).To(BeTrue())
+				Expect(datastore.allocateTunnelIpSyncerCalled).To(BeTrue())
 			})
 
 			It("should start a working server", func() {
@@ -235,17 +236,25 @@ var _ = Describe("Daemon", func() {
 })
 
 type mockDatastore struct {
-	mutex             sync.Mutex
-	bgpSyncerCalled   bool
-	felixSyncerCalled bool
-	initCalled        int
-	failInit          bool
+	mutex                        sync.Mutex
+	allocateTunnelIpSyncerCalled bool
+	bgpSyncerCalled              bool
+	felixSyncerCalled            bool
+	initCalled                   int
+	failInit                     bool
 }
 
 func (b *mockDatastore) FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	b.felixSyncerCalled = true
+	return &dummySyncer{}
+}
+
+func (b *mockDatastore) TunnelIPAllocationSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.allocateTunnelIpSyncerCalled = true
 	return &dummySyncer{}
 }
 
