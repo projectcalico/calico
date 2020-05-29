@@ -183,6 +183,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 			clusterCIDRs = append(clusterCIDRs, c.CIDR)
 		}
 	}
+	c.onClusterIPsUpdate(clusterCIDRs)
 
 	// Get external IP CIDRs.
 	externalCIDRs := []string{}
@@ -191,6 +192,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 			externalCIDRs = append(externalCIDRs, c.CIDR)
 		}
 	}
+	c.onExternalIPsUpdate(externalCIDRs)
 
 	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 {
 		// Create and start route generator, if configured to do so. This can either be through
@@ -202,8 +204,6 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 			c.OnInSync(SourceRouteGenerator)
 			c.rg = nil
 		} else {
-			c.rg.onClusterIPsUpdate(clusterCIDRs)
-			c.rg.onExternalIPsUpdate(externalCIDRs)
 			c.rg.Start()
 		}
 	} else {
@@ -307,6 +307,12 @@ type client struct {
 
 	// This node's log level key.
 	nodeLogKey string
+
+	// Current values of <bgpconfig>.spec.serviceExternalIPs and
+	// <bgpconfig>.spec.serviceClusterIPs.
+	externalIPs    []string
+	externalIPNets []*net.IPNet // same as externalIPs but parsed
+	clusterCIDRs   []string
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -816,29 +822,88 @@ func (c *client) OnUpdates(updates []api.Update) {
 			}
 		}
 
-		if c.rg != nil {
-			// Update CIDRs. In v1 format, they are a single comma-separated string. If the string isn't empty,
-			// split on the comma and pass a list of strings to the route generator.
-			// An empty string indicates a withdrawal of that set of service IPs.
-			var externalIPs []string
-			if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
-				externalIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ",")
-			}
-			var clusterCIDRs []string
-			if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
-				clusterCIDRs = strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ",")
-			}
+		// Update external IP CIDRs. In v1 format, they are a single comma-separated
+		// string. If the string isn't empty, split on the comma and pass a list of strings
+		// to the route generator.  An empty string indicates a withdrawal of that set of
+		// service IPs.
+		if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
+			c.onExternalIPsUpdate(strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ","))
+		}
 
-			// Run these as separate goroutines so that we don't block. We're already holding the lock,
-			// and these calls may attempt to take the lock in order to update the cache.
-			go c.rg.onExternalIPsUpdate(externalIPs)
-			go c.rg.onClusterIPsUpdate(clusterCIDRs)
+		// Same for cluster CIDRs.
+		if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
+			c.onClusterIPsUpdate(strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ","))
+		}
+
+		if c.rg != nil {
+			// Ask the route generator to recheck and advertise or withdraw
+			// node-specific routes.
+			go c.rg.resyncKnownRoutes()
 		}
 	}
 
 	// Notify watcher thread that we've received new updates.
 	log.WithField("cacheRevision", c.cacheRevision).Debug("Done processing OnUpdates from syncer, notify watchers")
 	c.onNewUpdates()
+}
+
+func (c *client) onExternalIPsUpdate(externalIPs []string) {
+	if err := c.updateGlobalRoutes(c.externalIPs, externalIPs); err == nil {
+		c.externalIPs = externalIPs
+		c.externalIPNets = parseIPNets(c.externalIPs)
+		log.Infof("Updated with new external IP CIDRs: %s", externalIPs)
+	} else {
+		log.WithError(err).Error("Failed to update external IP routes")
+	}
+}
+
+func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
+	if err := c.updateGlobalRoutes(c.clusterCIDRs, clusterCIDRs); err == nil {
+		c.clusterCIDRs = clusterCIDRs
+		log.Infof("Updated with new cluster IP CIDRs: %s", clusterCIDRs)
+	} else {
+		log.WithError(err).Error("Failed to update cluster CIDR routes")
+	}
+}
+
+func (c *client) AdvertiseClusterIPs() bool {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return len(c.clusterCIDRs) > 0
+}
+
+func (c *client) GetExternalIPs() []*net.IPNet {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.externalIPNets
+}
+
+// "Global" here means the routes for cluster IP and external IP CIDRs that are advertised from
+// every node in the cluster.
+func (c *client) updateGlobalRoutes(current, new []string) error {
+	for _, n := range new {
+		_, _, err := net.ParseCIDR(n)
+		if err != nil {
+			// Shouldn't ever happen, given prior validation.
+			return err
+		}
+	}
+
+	// Find any currently advertised CIDRs that we should withdraw.
+	withdraws := []string{}
+	for _, existing := range current {
+		if !contains(new, existing) {
+			withdraws = append(withdraws, existing)
+		}
+	}
+
+	// Withdraw the old CIDRs and add the new.
+	c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, new)
+	c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, new)
+	c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, withdraws)
+	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, withdraws)
+
+	return nil
 }
 
 func (c *client) incrementCacheRevision() {
@@ -1039,43 +1104,30 @@ var rejectKeyPrefix = "/calico/rejectcidrs/"
 var routeKeyPrefixV6 = "/calico/staticroutesv6/"
 var rejectKeyPrefixV6 = "/calico/rejectcidrsv6/"
 
-// AddRejectCIDRs rejects routes from being programmed into the data plane if
-// they are within the given CIDRs.
-func (c *client) AddRejectCIDRs(cidrs []string) {
-	c.cacheLock.Lock()
-	defer c.cacheLock.Unlock()
-
-	c.incrementCacheRevision()
+func (c *client) addRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string) {
 	for _, cidr := range cidrs {
 		var k string
 		if strings.Contains(cidr, ":") {
-			k = rejectKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV6 + strings.Replace(cidr, "/", "-", 1)
 		} else {
-			k = rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV4 + strings.Replace(cidr, "/", "-", 1)
 		}
 		c.cache[k] = cidr
 		c.keyUpdated(k)
 	}
-	c.onNewUpdates()
 }
 
-// DeleteRejectCIDRs removes the config to reject routes within the given CIDRs.
-func (c *client) DeleteRejectCIDRs(cidrs []string) {
-	c.cacheLock.Lock()
-	defer c.cacheLock.Unlock()
-
-	c.incrementCacheRevision()
+func (c *client) deleteRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string) {
 	for _, cidr := range cidrs {
 		var k string
 		if strings.Contains(cidr, ":") {
-			k = rejectKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV6 + strings.Replace(cidr, "/", "-", 1)
 		} else {
-			k = rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV4 + strings.Replace(cidr, "/", "-", 1)
 		}
 		delete(c.cache, k)
 		c.keyUpdated(k)
 	}
-	c.onNewUpdates()
 }
 
 // AddStaticRoutes adds the given CIDRs as static routes to be advertised from this node.
@@ -1084,16 +1136,7 @@ func (c *client) AddStaticRoutes(cidrs []string) {
 	defer c.cacheLock.Unlock()
 
 	c.incrementCacheRevision()
-	for _, cidr := range cidrs {
-		var k string
-		if strings.Contains(cidr, ":") {
-			k = routeKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
-		} else {
-			k = routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
-		}
-		c.cache[k] = cidr
-		c.keyUpdated(k)
-	}
+	c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, cidrs)
 	c.onNewUpdates()
 }
 
@@ -1104,15 +1147,6 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 	defer c.cacheLock.Unlock()
 
 	c.incrementCacheRevision()
-	for _, cidr := range cidrs {
-		var k string
-		if strings.Contains(cidr, ":") {
-			k = routeKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
-		} else {
-			k = routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
-		}
-		delete(c.cache, k)
-		c.keyUpdated(k)
-	}
+	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, cidrs)
 	c.onNewUpdates()
 }
