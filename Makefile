@@ -38,7 +38,7 @@ include Makefile.common
 # fail if unable to download
 CURL=curl -C - -sSf
 
-CNI_VERSION=v0.8.0
+CNI_VERSION=v0.8.6
 
 BUILD_IMAGE_ORG?=calico
 
