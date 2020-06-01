@@ -246,6 +246,9 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		)
 	}
 
+	// Note that we do not need to do this filtering for wireguard because it already has the peering and allowed IPs
+	// baked into the crypto routing table.
+
 	if r.KubeIPVSSupportEnabled {
 		// Check if packet belongs to forwarded traffic. (e.g. part of an ipvs connection).
 		// If it is, set endpoint mark and skip "to local host" rules below.
@@ -615,6 +618,10 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		)
 	}
 
+	// TODO(rlb): For wireguard, we add the destination port to the failsafes. We may want to revisit this so that we
+	// only include nodes that support wireguard. This will tie in with whether or not we want to include external
+	// wireguard destinations.
+
 	// Apply host endpoint policy.
 	rules = append(rules,
 		Rule{
@@ -686,6 +693,11 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 	}
 	if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
 		tunnelIfaces = append(tunnelIfaces, "vxlan.calico")
+	}
+	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {
+		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
+		// wireguard enabled.
+		tunnelIfaces = append(tunnelIfaces, r.WireguardInterfaceName)
 	}
 
 	for _, tunnel := range tunnelIfaces {

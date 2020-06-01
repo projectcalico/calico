@@ -481,6 +481,11 @@ func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, 
 	felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
 }
 
+func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWg bool) {
+	// Set to be the same as IPIP tunnel address.
+	felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+}
+
 func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	node_in := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -496,6 +501,9 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		node_in.Annotations["projectcalico.org/IPv4VXLANTunnelAddr"] = felix.ExpectedVXLANTunnelAddr
+	}
+	if felix.ExpectedWireguardTunnelAddr != "" {
+		node_in.Annotations["projectcalico.org/IPv4WireguardInterfaceAddr"] = felix.ExpectedWireguardTunnelAddr
 	}
 	log.WithField("node_in", node_in).Debug("Node defined")
 	node_out, err := kds.K8sClient.CoreV1().Nodes().Create(node_in)

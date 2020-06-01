@@ -487,6 +487,8 @@ enum RouteType {
   REMOTE_HOST = 2;
   LOCAL_WORKLOAD = 3;
   LOCAL_HOST = 4;
+  REMOTE_TUNNEL = 5;
+  LOCAL_TUNNEL = 6;
 }
 
 enum IPPoolType {
@@ -494,6 +496,12 @@ enum IPPoolType {
   NO_ENCAP = 1;
   VXLAN = 2;
   IPIP = 3;
+}
+
+message TunnelType {
+  bool ipip = 1;
+  bool vxlan = 2;
+  bool wireguard = 3;
 }
 
 message RouteUpdate {
@@ -507,6 +515,7 @@ message RouteUpdate {
   bool same_subnet = 7;
   bool nat_outgoing = 8;
   bool local_workload = 9;
+  TunnelType tunnel_type = 10;
 }
 
 message RouteRemove {

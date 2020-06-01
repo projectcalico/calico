@@ -71,6 +71,11 @@ type L3RouteResolver struct {
 type l3rrNodeInfo struct {
 	Addr ip.V4Addr
 	CIDR ip.V4CIDR
+
+	// Tunnel IP addresses
+	IPIPAddr      ip.Addr
+	VXLANAddr     ip.Addr
+	WireguardAddr ip.Addr
 }
 
 func (i l3rrNodeInfo) AddrAsCIDR() ip.V4CIDR {
@@ -144,14 +149,14 @@ func (c *L3RouteResolver) OnWorkloadUpdate(update api.Update) (_ bool) {
 	// Incref the new CIDRs.
 	for _, newCIDR := range newCIDRs {
 		cidr := ip.CIDRFromCalicoNet(newCIDR).(ip.V4CIDR)
-		c.trie.AddWEP(cidr, key.Hostname)
+		c.trie.AddRef(cidr, key.Hostname, RefTypeWEP)
 		c.nodeRoutes.Add(nodenameRoute{key.Hostname, cidr})
 	}
 
 	// Decref the old.
 	for _, oldCIDR := range oldCIDRs {
 		cidr := ip.CIDRFromCalicoNet(oldCIDR).(ip.V4CIDR)
-		c.trie.RemoveWEP(cidr, key.Hostname)
+		c.trie.RemoveRef(cidr, key.Hostname, RefTypeWEP)
 		c.nodeRoutes.Remove(nodenameRoute{key.Hostname, cidr})
 	}
 
@@ -282,6 +287,18 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 				Addr: ip.FromCalicoIP(*ipv4).(ip.V4Addr),
 				CIDR: ip.CIDRFromCalicoNet(*caliNodeCIDR).(ip.V4CIDR),
 			}
+
+			if node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv4Address != "" {
+				nodeInfo.WireguardAddr = ip.FromString(node.Spec.Wireguard.InterfaceIPv4Address)
+			}
+
+			if node.Spec.BGP != nil && node.Spec.BGP.IPv4IPIPTunnelAddr != "" {
+				nodeInfo.IPIPAddr = ip.FromString(node.Spec.BGP.IPv4IPIPTunnelAddr)
+			}
+
+			if node.Spec.IPv4VXLANTunnelAddr != "" {
+				nodeInfo.VXLANAddr = ip.FromString(node.Spec.IPv4VXLANTunnelAddr)
+			}
 		}
 	}
 
@@ -353,6 +370,31 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 		}
 	}
 
+	// Process the tunnel addresses. These are reference counted, so handle adds followed by deletes to minimize churn.
+	if newNodeInfo != nil {
+		if newNodeInfo.IPIPAddr != nil {
+			c.trie.AddRef(newNodeInfo.IPIPAddr.AsCIDR().(ip.V4CIDR), nodeName, RefTypeIPIP)
+		}
+		if newNodeInfo.VXLANAddr != nil {
+			c.trie.AddRef(newNodeInfo.VXLANAddr.AsCIDR().(ip.V4CIDR), nodeName, RefTypeVXLAN)
+		}
+		if newNodeInfo.WireguardAddr != nil {
+			c.trie.AddRef(newNodeInfo.WireguardAddr.AsCIDR().(ip.V4CIDR), nodeName, RefTypeWireguard)
+		}
+	}
+	if nodeExisted {
+		if oldNodeInfo.IPIPAddr != nil {
+			c.trie.RemoveRef(oldNodeInfo.IPIPAddr.AsCIDR().(ip.V4CIDR), nodeName, RefTypeIPIP)
+		}
+		if oldNodeInfo.VXLANAddr != nil {
+			c.trie.RemoveRef(oldNodeInfo.VXLANAddr.AsCIDR().(ip.V4CIDR), nodeName, RefTypeVXLAN)
+		}
+		if oldNodeInfo.WireguardAddr != nil {
+			c.trie.RemoveRef(oldNodeInfo.WireguardAddr.AsCIDR().(ip.V4CIDR), nodeName, RefTypeWireguard)
+		}
+	}
+
+	// Process the node CIDR and cache the node info.
 	if nodeExisted {
 		delete(c.nodeNameToNodeInfo, nodeName)
 		c.trie.RemoveHost(oldNodeInfo.AddrAsCIDR(), nodeName)
@@ -376,9 +418,9 @@ func (c *L3RouteResolver) visitAllRoutes(v func(route nodenameRoute)) {
 		// Construct a nodenameRoute to pass to the visiting function.
 		ri := c.trie.t.Get(cidr).(RouteInfo)
 		nnr := nodenameRoute{dst: cidr}
-		if len(ri.WEPs) > 0 {
-			// From a WEP.
-			nnr.nodeName = ri.WEPs[0].NodeName
+		if len(ri.Refs) > 0 {
+			// From a Ref.
+			nnr.nodeName = ri.Refs[0].NodeName
 		} else if ri.Block.NodeName != "" {
 			// From IPAM.
 			nnr.nodeName = ri.Block.NodeName
@@ -554,17 +596,46 @@ func (c *L3RouteResolver) flush() {
 				}
 			}
 
-			if len(ri.WEPs) > 0 {
-				// At least one WEP exists with this IP. It may be on this node, or a remote node.
-				// In steady state we only ever expect a single WEP for this CIDR. However there are rare transient
-				// cases we must handle where we may have two WEPs with the same IP. Since this will be transient,
-				// we can always just use the first entry.
-				rt.DstNodeName = ri.WEPs[0].NodeName
-				if ri.WEPs[0].NodeName == c.myNodeName {
-					rt.Type = proto.RouteType_LOCAL_WORKLOAD
-					rt.LocalWorkload = true
+			if len(ri.Refs) > 0 {
+				// At least one Ref exists with this IP. It may be on this node, or a remote node.
+				// In steady state we only ever expect a single workload Ref for this CIDR, or multiple tunnel Refs
+				// sharing the same CIDR. However, there are rare transient cases we must handle where we may have
+				// multiple workload, or workload and tunnel, or multiple node Refs with the same IP. Since this will be
+				// transient, we can always just use the first entry (and related tunnel entries)
+				rt.DstNodeName = ri.Refs[0].NodeName
+				if ri.Refs[0].RefType == RefTypeWEP {
+					// This is not a tunnel ref, so must be a workload.
+					if ri.Refs[0].NodeName == c.myNodeName {
+						rt.Type = proto.RouteType_LOCAL_WORKLOAD
+						rt.LocalWorkload = true
+					} else {
+						rt.Type = proto.RouteType_REMOTE_WORKLOAD
+					}
 				} else {
-					rt.Type = proto.RouteType_REMOTE_WORKLOAD
+					// This is a tunnel ref, set type and also store the tunnel type in the route. It is possible for
+					// multiple tunnels to have the same IP, so collate all tunnel types on the same node.
+					if ri.Refs[0].NodeName == c.myNodeName {
+						rt.Type = proto.RouteType_LOCAL_TUNNEL
+					} else {
+						rt.Type = proto.RouteType_REMOTE_TUNNEL
+					}
+
+					rt.TunnelType = &proto.TunnelType{}
+					for _, ref := range ri.Refs {
+						if ref.NodeName != ri.Refs[0].NodeName {
+							// This reference is on a different node to entry 0, so don't include.
+							continue
+						}
+
+						switch ref.RefType {
+						case RefTypeIPIP:
+							rt.TunnelType.Ipip = true
+						case RefTypeVXLAN:
+							rt.TunnelType.Vxlan = true
+						case RefTypeWireguard:
+							rt.TunnelType.Wireguard = true
+						}
+					}
 				}
 			}
 		}
@@ -724,50 +795,54 @@ func (r *RouteTrie) RemoveHost(cidr ip.V4CIDR, nodeName string) {
 	})
 }
 
-func (r *RouteTrie) AddWEP(cidr ip.V4CIDR, nodename string) {
+func (r *RouteTrie) AddRef(cidr ip.V4CIDR, nodename string, rt RefType) {
 	r.updateCIDR(cidr, func(ri *RouteInfo) {
-		// Find the WEP in the list for this nodename,
+		// Find the ref in the list for this nodename,
 		// if it exists. If it doesn't, we'll add it below.
-		for i := range ri.WEPs {
-			if ri.WEPs[i].NodeName == nodename {
-				// Found an existing WEP. Just increment the RefCount
+		for i := range ri.Refs {
+			// Reference count
+			if ri.Refs[i].NodeName == nodename && ri.Refs[i].RefType == rt {
+				// Found an existing ref. Just increment the RefCount
 				// and return.
-				ri.WEPs[i].RefCount++
+				ri.Refs[i].RefCount++
 				return
 			}
 		}
 
 		// If it doesn't already exist, add it to the slice and
-		// sort the slice based on nodename to make sure we are not dependent
+		// sort the slice based on nodename and ref type to make sure we are not dependent
 		// on event ordering.
-		wep := WEP{NodeName: nodename, RefCount: 1}
-		ri.WEPs = append(ri.WEPs, wep)
-		sort.Slice(ri.WEPs, func(i, j int) bool {
-			return ri.WEPs[i].NodeName < ri.WEPs[j].NodeName
+		ref := Ref{NodeName: nodename, RefCount: 1, RefType: rt}
+		ri.Refs = append(ri.Refs, ref)
+		sort.Slice(ri.Refs, func(i, j int) bool {
+			if ri.Refs[i].NodeName == ri.Refs[j].NodeName {
+				return ri.Refs[i].RefType < ri.Refs[j].RefType
+			}
+			return ri.Refs[i].NodeName < ri.Refs[j].NodeName
 		})
 	})
 }
 
-func (r *RouteTrie) RemoveWEP(cidr ip.V4CIDR, nodename string) {
+func (r *RouteTrie) RemoveRef(cidr ip.V4CIDR, nodename string, rt RefType) {
 	r.updateCIDR(cidr, func(ri *RouteInfo) {
-		for i := range ri.WEPs {
-			if ri.WEPs[i].NodeName == nodename {
-				// Decref the WEP.
-				ri.WEPs[i].RefCount--
-				if ri.WEPs[i].RefCount < 0 {
+		for i := range ri.Refs {
+			if ri.Refs[i].NodeName == nodename && ri.Refs[i].RefType == rt {
+				// Decref the Ref.
+				ri.Refs[i].RefCount--
+				if ri.Refs[i].RefCount < 0 {
 					logrus.WithField("cidr", cidr).Panic("BUG: Asked to decref a workload past 0.")
-				} else if ri.WEPs[i].RefCount == 0 {
+				} else if ri.Refs[i].RefCount == 0 {
 					// Remove it from the list.
-					ri.WEPs = append(ri.WEPs[:i], ri.WEPs[i+1:]...)
+					ri.Refs = append(ri.Refs[:i], ri.Refs[i+1:]...)
 				}
-				if len(ri.WEPs) == 0 {
-					ri.WEPs = nil
+				if len(ri.Refs) == 0 {
+					ri.Refs = nil
 				}
 				return
 			}
 		}
 
-		// Unable to find the requested WEP.
+		// Unable to find the requested Ref.
 		logrus.WithField("cidr", cidr).Panic("BUG: Asked to decref a workload that doesn't exist.")
 	})
 }
@@ -832,19 +907,32 @@ type RouteInfo struct {
 		NodeNames []string // set if this CIDR _is_ a node's own IP.
 	}
 
-	// WEPs contains information extracted from workload endpoints.
-	WEPs []WEP
+	// Refs contains information extracted from workload endpoints, or tunnel addresses extracted from the node.
+	Refs []Ref
 
 	// WasSent is set to true when the route is sent downstream.
 	WasSent bool
 }
 
-type WEP struct {
-	// Count of WEPs that have this CIDR.  Normally, this will be 0 or 1 but Felix has to be tolerant
-	// to bad data (two WEPs with the same CIDR) so we do ref counting.
+type RefType byte
+
+const (
+	RefTypeWEP RefType = iota
+	RefTypeWireguard
+	RefTypeIPIP
+	RefTypeVXLAN
+)
+
+type Ref struct {
+	// Count of Refs that have this CIDR.  Normally, for WEPs this will be 0 or 1 but Felix has to be tolerant
+	// to bad data (two Refs with the same CIDR) so we do ref counting. For tunnel IPs, multiple tunnels may share the
+	// same IP, so again ref counting is necessary here.
 	RefCount int
 
-	// NodeName contains the nodename for this WEP / CIDR.
+	// The type of reference.
+	RefType RefType
+
+	// NodeName contains the nodename for this Ref / CIDR.
 	NodeName string
 }
 
@@ -857,16 +945,16 @@ func (r RouteInfo) IsValidRoute() bool {
 		r.Block.NodeName != "" ||
 		len(r.Host.NodeNames) > 0 ||
 		r.Pool.NATOutgoing ||
-		len(r.WEPs) > 0
+		len(r.Refs) > 0
 }
 
 // Copy returns a copy of the RouteInfo. Since some fields are pointers, we need to
 // explicitly copy them so that they are not shared between the copies.
 func (r RouteInfo) Copy() RouteInfo {
 	cp := r
-	if len(r.WEPs) != 0 {
-		cp.WEPs = make([]WEP, len(r.WEPs))
-		copy(cp.WEPs, r.WEPs)
+	if len(r.Refs) != 0 {
+		cp.Refs = make([]Ref, len(r.Refs))
+		copy(cp.Refs, r.Refs)
 	}
 	return cp
 }

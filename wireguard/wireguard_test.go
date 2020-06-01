@@ -141,6 +141,7 @@ var _ = Describe("Enable wireguard", func() {
 	var t *mocktime.MockTime
 	var s *mockStatus
 	var wg *Wireguard
+	var rule *netlink.Rule
 
 	BeforeEach(func() {
 		wgDataplane = mocknetlink.NewMockNetlinkDataplane()
@@ -172,6 +173,13 @@ var _ = Describe("Enable wireguard", func() {
 			FelixRouteProtocol,
 			s.status,
 		)
+
+		rule = netlink.NewRule()
+		rule.Family = netlink.FAMILY_V4
+		rule.Priority = rulePriority
+		rule.Table = tableIndex
+		rule.Mark = 0
+		rule.Mask = firewallMark
 	})
 
 	It("should be constructable", func() {
@@ -252,18 +260,14 @@ var _ = Describe("Enable wireguard", func() {
 				Expect(s.key).To(Equal(link.WireguardPublicKey))
 			})
 
-			It("should not create rules until local routes have been added", func() {
-				Expect(rrDataplane.AddedRules).To(HaveLen(0))
-				Expect(rrDataplane.DeletedRules).To(HaveLen(0))
-			})
-
-			It("should leave the valid rule in place during resync", func() {
+			It("should add the routing rule when wireguard device is configured", func() {
 				wgDataplane.ResetDeltas()
 				err := wg.Apply()
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(rrDataplane.AddedRules).To(HaveLen(0))
+				Expect(rrDataplane.AddedRules).To(HaveLen(1))
 				Expect(rrDataplane.DeletedRules).To(HaveLen(0))
+				Expect(rrDataplane.AddedRules).To(ConsistOf(*rule))
 			})
 
 			It("should delete invalid rules jumping to the wireguard table", func() {
@@ -329,66 +333,28 @@ var _ = Describe("Enable wireguard", func() {
 			})
 
 			Describe("add local routes with overlap", func() {
-				var rule1, rule2, rule3, rule4 *netlink.Rule
-				var lc1, lc2, lc3, lc4 ip.CIDR
+				var lc1, lc2, lc3 ip.CIDR
 
 				BeforeEach(func() {
 					lc1 = ip.MustParseCIDROrIP("12.12.10.10/32")
 					lc2 = ip.MustParseCIDROrIP("12.12.10.0/24")
 					lc3 = ip.MustParseCIDROrIP("12.12.11.0/32")
-					lc4 = ip.MustParseCIDROrIP("12.12.10.11/32")
-					lc1Net := lc1.ToIPNet()
-					lc2Net := lc2.ToIPNet()
-					lc3Net := lc3.ToIPNet()
-					lc4Net := lc4.ToIPNet()
 
 					wg.RouteUpdate(hostname, lc1)
 					wg.RouteUpdate(hostname, lc2)
 					wg.RouteUpdate(hostname, lc3)
 
-					rule1 = netlink.NewRule()
-					rule1.Family = netlink.FAMILY_V4
-					rule1.Src = &lc1Net
-					rule1.Priority = rulePriority
-					rule1.Table = tableIndex
-					rule1.Mark = 0
-					rule1.Mask = firewallMark
-
-					rule2 = netlink.NewRule()
-					rule2.Family = netlink.FAMILY_V4
-					rule2.Src = &lc2Net
-					rule2.Priority = rulePriority
-					rule2.Table = tableIndex
-					rule2.Mark = 0
-					rule2.Mask = firewallMark
-
-					rule3 = netlink.NewRule()
-					rule3.Family = netlink.FAMILY_V4
-					rule3.Src = &lc3Net
-					rule3.Priority = rulePriority
-					rule3.Table = tableIndex
-					rule3.Mark = 0
-					rule3.Mask = firewallMark
-
-					rule4 = netlink.NewRule()
-					rule4.Family = netlink.FAMILY_V4
-					rule4.Src = &lc4Net
-					rule4.Priority = rulePriority
-					rule4.Table = tableIndex
-					rule4.Mark = 0
-					rule4.Mask = firewallMark
-
 					err := wg.Apply()
 					Expect(err).ToNot(HaveOccurred())
 				})
 
-				It("should not create rules until local routes have been added", func() {
+				It("should create the rule when routing config is updated", func() {
 					Expect(rrDataplane.DeletedRules).To(HaveLen(0))
-					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule2, *rule3))
+					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule))
 				})
 
 				It("should not re-add a deleted rule until resync", func() {
-					err := rrDataplane.RuleDel(rule2)
+					err := rrDataplane.RuleDel(rule)
 					Expect(err).ToNot(HaveOccurred())
 					rrDataplane.ResetDeltas()
 					err = wg.Apply()
@@ -400,15 +366,20 @@ var _ = Describe("Enable wireguard", func() {
 					err = wg.Apply()
 					Expect(err).ToNot(HaveOccurred())
 					Expect(rrDataplane.DeletedRules).To(HaveLen(0))
-					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule2))
+					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule))
 				})
 
 				It("should not fix a modified rule until resync", func() {
-					rule5 := *rule2
-					rule5.Priority = rulePriority - 1
-					err := rrDataplane.RuleDel(rule2)
+					badrule := netlink.NewRule()
+					badrule.Family = netlink.FAMILY_V4
+					badrule.Priority = rulePriority + 1
+					badrule.Table = tableIndex
+					badrule.Mark = 0
+					badrule.Mask = firewallMark
+
+					err := rrDataplane.RuleDel(rule)
 					Expect(err).ToNot(HaveOccurred())
-					err = rrDataplane.RuleAdd(&rule5)
+					err = rrDataplane.RuleAdd(badrule)
 					Expect(err).ToNot(HaveOccurred())
 
 					rrDataplane.ResetDeltas()
@@ -420,47 +391,8 @@ var _ = Describe("Enable wireguard", func() {
 					wg.QueueResync()
 					err = wg.Apply()
 					Expect(err).ToNot(HaveOccurred())
-					Expect(rrDataplane.DeletedRules).To(ConsistOf(rule5))
-					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule2))
-				})
-
-				It("should handle deletion of a CIDR that overlaps with a workload IP", func() {
-					wg.RouteRemove(lc2)
-					rrDataplane.ResetDeltas()
-					err := wg.Apply()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule1))
-					Expect(rrDataplane.DeletedRules).To(ConsistOf(*rule2))
-				})
-
-				It("should be a no-op if deleting a workload IP that overlaps with a CIDR", func() {
-					wg.RouteRemove(lc1)
-					rrDataplane.ResetDeltas()
-					err := wg.Apply()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(rrDataplane.NumRuleListCalls).To(BeZero())
-					Expect(rrDataplane.NumRuleAddCalls).To(BeZero())
-					Expect(rrDataplane.NumRuleDelCalls).To(BeZero())
-				})
-
-				It("should be a no-op if adding a workload IP that overlaps with a CIDR", func() {
-					wg.RouteUpdate(hostname, lc4)
-					rrDataplane.ResetDeltas()
-					err := wg.Apply()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(rrDataplane.NumRuleListCalls).To(BeZero())
-					Expect(rrDataplane.NumRuleAddCalls).To(BeZero())
-					Expect(rrDataplane.NumRuleDelCalls).To(BeZero())
-				})
-
-				It("should handle replacing and adding rules in a single apply", func() {
-					wg.RouteUpdate(hostname, lc4)
-					wg.RouteRemove(lc2)
-					rrDataplane.ResetDeltas()
-					err := wg.Apply()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule1, *rule4))
-					Expect(rrDataplane.DeletedRules).To(ConsistOf(*rule2))
+					Expect(rrDataplane.DeletedRules).To(ConsistOf(*badrule))
+					Expect(rrDataplane.AddedRules).To(ConsistOf(*rule))
 				})
 			})
 
