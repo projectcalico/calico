@@ -87,14 +87,18 @@ var _ = Describe("RouteGenerator", func() {
 			epIndexer:               cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
 			svcRouteMap:             make(map[string]map[string]bool),
 			routeAdvertisementCount: make(map[string]int),
-			clusterCIDRs:            []string{"10.0.0.0/16"},
-			externalIPNets: []*net.IPNet{
-				ipNet1,
-				ipNet2,
-			},
 			client: &client{
-				cache:  make(map[string]string),
-				synced: true,
+				cache:        make(map[string]string),
+				syncedOnce:   true,
+				clusterCIDRs: []string{"10.0.0.0/16"},
+				externalIPs: []string{
+					ipNet1.String(),
+					ipNet2.String(),
+				},
+				externalIPNets: []*net.IPNet{
+					ipNet1,
+					ipNet2,
+				},
 			},
 		}
 		rg.client.watcherCond = sync.NewCond(&rg.client.cacheLock)
@@ -148,13 +152,13 @@ var _ = Describe("RouteGenerator", func() {
 
 	Describe("onClusterIPsUpdate", func() {
 		It("should do updates only if the new nets are valid", func() {
-			testRouteGeneratorUpdatesOnlyWithValidCIDRs(rg.onClusterIPsUpdate)
+			testRouteGeneratorUpdatesOnlyWithValidCIDRs(rg.client.onClusterIPsUpdate)
 		})
 	})
 
 	Describe("onExternalIPsUpdate", func() {
 		It("should do updates only if the new nets are valid", func() {
-			testRouteGeneratorUpdatesOnlyWithValidCIDRs(rg.onExternalIPsUpdate)
+			testRouteGeneratorUpdatesOnlyWithValidCIDRs(rg.client.onExternalIPsUpdate)
 		})
 	})
 
@@ -409,7 +413,8 @@ var _ = Describe("RouteGenerator", func() {
 		Context("On BGP configuration changes from the syncer", func() {
 			It("should only advertise external IPs within the configured ranges", func() {
 				// Simulate an event from the syncer which sets the External IP range containing the first IP.
-				rg.onExternalIPsUpdate([]string{externalIPRange1})
+				rg.client.onExternalIPsUpdate([]string{externalIPRange1})
+				rg.resyncKnownRoutes()
 
 				// We should now advertise the first external IP, but not the second.
 				Expect(rg.client.cache["/calico/staticroutes/"+externalIP1+"-32"]).To(Equal(externalIP1 + "/32"))
@@ -419,7 +424,8 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.Replace(externalIPRange1, "/", "-", -1)]).To(Equal(externalIPRange1))
 
 				// Simulate an event from the syncer which updates to use the second range (removing the first)
-				rg.onExternalIPsUpdate([]string{externalIPRange2})
+				rg.client.onExternalIPsUpdate([]string{externalIPRange2})
+				rg.resyncKnownRoutes()
 
 				// We should now advertise the second external IP, but not the first.
 				Expect(rg.client.cache["/calico/staticroutes/"+externalIP1+"-32"]).To(BeEmpty())
@@ -436,7 +442,8 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
 
 				// Withdraw the cluster CIDR from the syncer.
-				rg.onClusterIPsUpdate([]string{})
+				rg.client.onClusterIPsUpdate([]string{})
+				rg.resyncKnownRoutes()
 
 				// We should no longer see cluster CIDRs to be advertised.
 				Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(BeEmpty())

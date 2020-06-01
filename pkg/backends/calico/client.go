@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,6 +115,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		nodeMeshEnabled:   nodeMeshEnabled,
 		nodeLabels:        make(map[string]map[string]string),
 		bgpPeers:          make(map[string]*apiv3.BGPPeer),
+		sourceReady:       make(map[string]bool),
 	}
 	for k, v := range globalDefaults {
 		c.cache[k] = v
@@ -125,9 +126,32 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.watcherCond = sync.NewCond(&c.cacheLock)
 
 	// Increment the waitForSync wait group.  This blocks the GetValues call until the
-	// syncer has completed it's initial snapshot and is in sync.  The syncer is started
-	// from the SetPrefixes() call from confd.
+	// syncer has completed its initial snapshot and is in sync.
 	c.waitForSync.Add(1)
+
+	// Get cluster CIDRs. Prefer the env var, if specified.
+	clusterCIDRs := []string{}
+	if clusterCIDR := os.Getenv(envAdvertiseClusterIPs); len(clusterCIDR) != 0 {
+		clusterCIDRs = []string{clusterCIDR}
+	} else if cfg != nil && cfg.Spec.ServiceClusterIPs != nil {
+		for _, c := range cfg.Spec.ServiceClusterIPs {
+			clusterCIDRs = append(clusterCIDRs, c.CIDR)
+		}
+	}
+	// Note: do this initial update before starting the syncer, so there's no chance of this
+	// racing with syncer-derived updates.
+	c.onClusterIPsUpdate(clusterCIDRs)
+
+	// Get external IP CIDRs.
+	externalCIDRs := []string{}
+	if cfg != nil && cfg.Spec.ServiceExternalIPs != nil {
+		for _, c := range cfg.Spec.ServiceExternalIPs {
+			externalCIDRs = append(externalCIDRs, c.CIDR)
+		}
+	}
+	// Note: do this initial update before starting the syncer, so there's no chance of this
+	// racing with syncer-derived updates.
+	c.onExternalIPsUpdate(externalCIDRs)
 
 	// Start the main syncer loop.  If the node-to-node mesh is enabled then we need to
 	// monitor all nodes.  If this setting changes (which we will monitor in the OnUpdates
@@ -174,24 +198,6 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		c.syncer.Start()
 	}
 
-	// Get cluster CIDRs. Prefer the env var, if specified.
-	clusterCIDRs := []string{}
-	if clusterCIDR := os.Getenv(envAdvertiseClusterIPs); len(clusterCIDR) != 0 {
-		clusterCIDRs = []string{clusterCIDR}
-	} else if cfg != nil && cfg.Spec.ServiceClusterIPs != nil {
-		for _, c := range cfg.Spec.ServiceClusterIPs {
-			clusterCIDRs = append(clusterCIDRs, c.CIDR)
-		}
-	}
-
-	// Get external IP CIDRs.
-	externalCIDRs := []string{}
-	if cfg != nil && cfg.Spec.ServiceExternalIPs != nil {
-		for _, c := range cfg.Spec.ServiceExternalIPs {
-			externalCIDRs = append(externalCIDRs, c.CIDR)
-		}
-	}
-
 	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 {
 		// Create and start route generator, if configured to do so. This can either be through
 		// environment variable, or the data store via BGPConfiguration.
@@ -199,15 +205,13 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		log.Info("Starting route generator for service advertisement")
 		if c.rg, err = NewRouteGenerator(c); err != nil {
 			log.WithError(err).Error("Failed to start route generator, routes will not be advertised")
-			c.OnInSync(SourceRouteGenerator)
+			c.OnSyncChange(SourceRouteGenerator, true)
 			c.rg = nil
 		} else {
-			c.rg.onClusterIPsUpdate(clusterCIDRs)
-			c.rg.onExternalIPsUpdate(externalCIDRs)
 			c.rg.Start()
 		}
 	} else {
-		c.OnInSync(SourceRouteGenerator)
+		c.OnSyncChange(SourceRouteGenerator, true)
 	}
 	return c, nil
 }
@@ -282,11 +286,11 @@ type client struct {
 	rg *routeGenerator
 
 	// Readiness signals for individual data sources.
-	syncerReady, rgReady bool
+	sourceReady map[string]bool
 
 	// Indicates whether all data sources have synced. We cannot start rendering until
 	// all sources have synced, so we block calls to GetValues until this is true.
-	synced      bool
+	syncedOnce  bool
 	waitForSync sync.WaitGroup
 
 	// Our internal cache of key/values, and our (internally defined) cache revision.
@@ -307,6 +311,12 @@ type client struct {
 
 	// This node's log level key.
 	nodeLogKey string
+
+	// Current values of <bgpconfig>.spec.serviceExternalIPs and
+	// <bgpconfig>.spec.serviceClusterIPs.
+	externalIPs    []string
+	externalIPNets []*net.IPNet // same as externalIPs but parsed
+	clusterCIDRs   []string
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -314,6 +324,8 @@ type client struct {
 // This client uses this information to initialize the revision map used to keep track of the
 // revision number of each prefix that the template is monitoring.
 func (c *client) SetPrefixes(keys []string) error {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 	log.Debugf("Set prefixes called with: %v", keys)
 	for _, k := range keys {
 		// Initialise the revision that we are watching for this prefix.  This will be updated
@@ -331,53 +343,54 @@ func (c *client) SetPrefixes(keys []string) error {
 // When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
 // GetValues calls.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
-	log.Debugf("Got status update: %s, syncer ready: %t", status, c.syncerReady)
+	log.Debugf("Got status update: %s", status)
 	switch status {
 	case api.InSync:
-		if !c.syncerReady {
-			c.OnInSync(SourceSyncer)
-		}
+		c.OnSyncChange(SourceSyncer, true)
 	case api.WaitForDatastore:
-		if c.syncerReady {
-			c.syncerReady = false
-			c.waitForSync.Add(1)
-		}
+		c.OnSyncChange(SourceSyncer, false)
 	}
 }
 
 // OnInSync handles multiplexing in-sync messages from multiple data sources
 // into a single representation of readiness.
-func (c *client) OnInSync(source string) {
-	switch source {
-	case SourceSyncer:
-		log.Info("Calico Syncer has indicated it is in sync")
-		c.syncerReady = true
-	case SourceRouteGenerator:
-		if c.rgReady {
-			// It's possible to get multiple messages from the route generator if
-			// we don't start it at start-of-day, but turn it on later due to a
-			// configuration change.
-			log.Debugf("Received second in sync notification from route generator, ignoring")
-			return
-		}
-		log.Info("RouteGenerator has indicated it is in sync")
-		c.rgReady = true
-	default:
-		log.Errorf("InSync message from unknown source: %s", source)
+func (c *client) OnSyncChange(source string, ready bool) {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+
+	if ready == c.sourceReady[source] {
+		log.Debugf("No change for source %v, ready %v", source, ready)
 		return
 	}
 
-	if c.syncerReady && c.rgReady {
+	log.Infof("Source %v readiness changed, ready=%v", source, ready)
+
+	// Check if we are fully in sync, before applying this change.
+	oldFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+
+	// Apply the change.
+	c.sourceReady[source] = ready
+
+	// Check if we are fully in sync now.
+	newFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+
+	if newFullSync == oldFullSync {
+		log.Debugf("No change to full sync status (%v)", newFullSync)
+		return
+	}
+
+	if newFullSync {
 		// All data sources are ready.
-		c.cacheLock.Lock()
-		defer c.cacheLock.Unlock()
-		c.synced = true
+		c.syncedOnce = true
 		c.waitForSync.Done()
-		log.Debugf("Data is now syncd, can start rendering templates")
+		log.Info("Data is now syncd, can start rendering templates")
 
 		// Now that we're in-sync, check if we should update our log level
 		// based on the datastore config.
 		c.updateLogLevel()
+	} else {
+		log.Info("Full sync lost")
+		c.waitForSync.Add(1)
 	}
 }
 
@@ -809,30 +822,30 @@ func (c *client) OnUpdates(updates []api.Update) {
 			log.Info("Starting route generator due to service advertisement update")
 			var err error
 			if c.rg, err = NewRouteGenerator(c); err != nil {
-				log.WithError(err).Error("Failed to start route generator, unable to advertise services")
+				log.WithError(err).Error("Failed to start route generator, unable to advertise node-specific service routes")
 				c.rg = nil
 			} else {
 				c.rg.Start()
 			}
 		}
 
-		if c.rg != nil {
-			// Update CIDRs. In v1 format, they are a single comma-separate string. If the string isn't empty,
-			// split on the comma and pass a list of strings to the route generator.
-			// An empty string indicates a withdrawal of that set of service IPs.
-			var externalIPs []string
-			if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
-				externalIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ",")
-			}
-			var clusterCIDRs []string
-			if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
-				clusterCIDRs = strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ",")
-			}
+		// Update external IP CIDRs. In v1 format, they are a single comma-separated
+		// string. If the string isn't empty, split on the comma and pass a list of strings
+		// to the route generator.  An empty string indicates a withdrawal of that set of
+		// service IPs.
+		if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
+			c.onExternalIPsUpdate(strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ","))
+		}
 
-			// Run these as separate goroutines so that we don't block. We're already holding the lock,
-			// and these calls may attempt to take the lock in order to update the cache.
-			go c.rg.onExternalIPsUpdate(externalIPs)
-			go c.rg.onClusterIPsUpdate(clusterCIDRs)
+		// Same for cluster CIDRs.
+		if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
+			c.onClusterIPsUpdate(strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ","))
+		}
+
+		if c.rg != nil {
+			// Trigger the route generator to recheck and advertise or withdraw
+			// node-specific routes.
+			c.rg.TriggerResync()
 		}
 	}
 
@@ -841,17 +854,76 @@ func (c *client) OnUpdates(updates []api.Update) {
 	c.onNewUpdates()
 }
 
+func (c *client) onExternalIPsUpdate(externalIPs []string) {
+	if err := c.updateGlobalRoutes(c.externalIPs, externalIPs); err == nil {
+		c.externalIPs = externalIPs
+		c.externalIPNets = parseIPNets(c.externalIPs)
+		log.Infof("Updated with new external IP CIDRs: %s", externalIPs)
+	} else {
+		log.WithError(err).Error("Failed to update external IP routes")
+	}
+}
+
+func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
+	if err := c.updateGlobalRoutes(c.clusterCIDRs, clusterCIDRs); err == nil {
+		c.clusterCIDRs = clusterCIDRs
+		log.Infof("Updated with new cluster IP CIDRs: %s", clusterCIDRs)
+	} else {
+		log.WithError(err).Error("Failed to update cluster CIDR routes")
+	}
+}
+
+func (c *client) AdvertiseClusterIPs() bool {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return len(c.clusterCIDRs) > 0
+}
+
+func (c *client) GetExternalIPs() []*net.IPNet {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.externalIPNets
+}
+
+// "Global" here means the routes for cluster IP and external IP CIDRs that are advertised from
+// every node in the cluster.
+func (c *client) updateGlobalRoutes(current, new []string) error {
+	for _, n := range new {
+		_, _, err := net.ParseCIDR(n)
+		if err != nil {
+			// Shouldn't ever happen, given prior validation.
+			return err
+		}
+	}
+
+	// Find any currently advertised CIDRs that we should withdraw.
+	withdraws := []string{}
+	for _, existing := range current {
+		if !contains(new, existing) {
+			withdraws = append(withdraws, existing)
+		}
+	}
+
+	// Withdraw the old CIDRs and add the new.
+	c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, new)
+	c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, new)
+	c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, withdraws)
+	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, withdraws)
+
+	return nil
+}
+
 func (c *client) incrementCacheRevision() {
 	// If we are in-sync then this is an incremental update, so increment our internal
 	// cache revision.
-	if c.synced {
+	if c.syncedOnce {
 		c.cacheRevision++
 		log.Debugf("Processing new updates, revision is now: %d", c.cacheRevision)
 	}
 }
 
 func (c *client) onNewUpdates() {
-	if c.synced {
+	if c.syncedOnce {
 		// Wake up the watchers to let them know there may be some updates of interest.  We only
 		// need to do this once we're synced because until that point all of the Watcher threads
 		// will be blocked getting values.
@@ -900,7 +972,7 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 	}
 
 	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, c.cache[k])
-	if c.synced {
+	if c.syncedOnce {
 		c.keyUpdated(k)
 	}
 	return true
@@ -1039,43 +1111,30 @@ var rejectKeyPrefix = "/calico/rejectcidrs/"
 var routeKeyPrefixV6 = "/calico/staticroutesv6/"
 var rejectKeyPrefixV6 = "/calico/rejectcidrsv6/"
 
-// AddRejectCIDRs rejects routes from being programmed into the data plane if
-// they are within the given CIDRs.
-func (c *client) AddRejectCIDRs(cidrs []string) {
-	c.cacheLock.Lock()
-	defer c.cacheLock.Unlock()
-
-	c.incrementCacheRevision()
+func (c *client) addRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string) {
 	for _, cidr := range cidrs {
 		var k string
 		if strings.Contains(cidr, ":") {
-			k = rejectKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV6 + strings.Replace(cidr, "/", "-", 1)
 		} else {
-			k = rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV4 + strings.Replace(cidr, "/", "-", 1)
 		}
 		c.cache[k] = cidr
 		c.keyUpdated(k)
 	}
-	c.onNewUpdates()
 }
 
-// DeleteRejectCIDRs removes the config to reject routes within the given CIDRs.
-func (c *client) DeleteRejectCIDRs(cidrs []string) {
-	c.cacheLock.Lock()
-	defer c.cacheLock.Unlock()
-
-	c.incrementCacheRevision()
+func (c *client) deleteRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string) {
 	for _, cidr := range cidrs {
 		var k string
 		if strings.Contains(cidr, ":") {
-			k = rejectKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV6 + strings.Replace(cidr, "/", "-", 1)
 		} else {
-			k = rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+			k = prefixV4 + strings.Replace(cidr, "/", "-", 1)
 		}
 		delete(c.cache, k)
 		c.keyUpdated(k)
 	}
-	c.onNewUpdates()
 }
 
 // AddStaticRoutes adds the given CIDRs as static routes to be advertised from this node.
@@ -1084,16 +1143,7 @@ func (c *client) AddStaticRoutes(cidrs []string) {
 	defer c.cacheLock.Unlock()
 
 	c.incrementCacheRevision()
-	for _, cidr := range cidrs {
-		var k string
-		if strings.Contains(cidr, ":") {
-			k = routeKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
-		} else {
-			k = routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
-		}
-		c.cache[k] = cidr
-		c.keyUpdated(k)
-	}
+	c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, cidrs)
 	c.onNewUpdates()
 }
 
@@ -1104,15 +1154,6 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 	defer c.cacheLock.Unlock()
 
 	c.incrementCacheRevision()
-	for _, cidr := range cidrs {
-		var k string
-		if strings.Contains(cidr, ":") {
-			k = routeKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
-		} else {
-			k = routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
-		}
-		delete(c.cache, k)
-		c.keyUpdated(k)
-	}
+	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, cidrs)
 	c.onNewUpdates()
 }

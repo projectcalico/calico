@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -42,14 +41,13 @@ const (
 // valid service ips to advertise
 type routeGenerator struct {
 	sync.Mutex
-	client                  *client
-	nodeName                string
-	svcInformer, epInformer cache.Controller
-	svcIndexer, epIndexer   cache.Indexer
-	svcRouteMap             map[string]map[string]bool
-	routeAdvertisementCount map[string]int
-	clusterCIDRs            []string
-	externalIPNets          []*net.IPNet
+	client                   *client
+	nodeName                 string
+	svcInformer, epInformer  cache.Controller
+	svcIndexer, epIndexer    cache.Indexer
+	svcRouteMap              map[string]map[string]bool
+	routeAdvertisementCount  map[string]int
+	resyncKnownRoutesTrigger chan struct{}
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
@@ -65,11 +63,11 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 
 	// initialize empty route generator
 	rg = &routeGenerator{
-		client:                  c,
-		nodeName:                nodename,
-		svcRouteMap:             make(map[string]map[string]bool),
-		routeAdvertisementCount: make(map[string]int),
-		externalIPNets:          make([]*net.IPNet, 0),
+		client:                   c,
+		nodeName:                 nodename,
+		svcRouteMap:              make(map[string]map[string]bool),
+		routeAdvertisementCount:  make(map[string]int),
+		resyncKnownRoutesTrigger: make(chan struct{}, 1),
 	}
 
 	// set up k8s client
@@ -115,9 +113,25 @@ func (rg *routeGenerator) Start() {
 		}
 
 		// Notify the main client we're in sync now.
-		rg.client.OnInSync(SourceRouteGenerator)
+		rg.client.OnSyncChange(SourceRouteGenerator, true)
 		log.Info("RouteGenerator in sync")
+
+		// Loop waiting for trigger to recheck node-specific routes.
+		for range rg.resyncKnownRoutesTrigger {
+			rg.resyncKnownRoutes()
+		}
 	}()
+}
+
+// Called by the client to trigger us to recheck and advertise or withdraw node-specific routes.
+// Must not block since this is called by the client while it holds its lock.
+func (rg *routeGenerator) TriggerResync() {
+	select {
+	case rg.resyncKnownRoutesTrigger <- struct{}{}:
+		log.Debug("Triggered route generator to resync known routes")
+	default:
+		log.Debug("Route generator already has pending resync trigger")
+	}
 }
 
 // getServiceForEndpoints retrieves the corresponding svc for the given ep
@@ -199,92 +213,6 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 	}
 }
 
-// onExternalIPsUpdate is called from the calico client, whenever there
-// is a change to the svc_external_ips. The set of whitelisted external IP networks
-// will be updated to the new values specified in the default BGP configuration.
-// All of the routes advertised for each service will then be updated to reflect
-// this change.
-func (rg *routeGenerator) onExternalIPsUpdate(newExternalNets []string) {
-	for _, n := range newExternalNets {
-		_, _, err := net.ParseCIDR(n)
-		if err != nil {
-			log.Warnf("Invalid externalIPs in update: %s. Skipping update.", newExternalNets)
-			return
-		}
-	}
-
-	rg.Lock()
-	// Check if it differs from our current configuration.
-	if reflect.DeepEqual(parseIPNets(newExternalNets), rg.externalIPNets) {
-		// No change, there's no work to do.
-		rg.Unlock()
-		return
-	}
-
-	// Determine the diff, and update the dataplane with it. First, find
-	// which CIDRs we should withdraw.
-	withdraws := []string{}
-	for _, existing := range rg.externalIPNets {
-		if !contains(newExternalNets, existing.String()) {
-			withdraws = append(withdraws, existing.String())
-		}
-	}
-	rg.externalIPNets = parseIPNets(newExternalNets)
-	rg.Unlock()
-
-	// Withdraw the old CIDRs and add the new.
-	rg.client.AddRejectCIDRs(newExternalNets)
-	rg.client.AddStaticRoutes(newExternalNets)
-	rg.client.DeleteRejectCIDRs(withdraws)
-	rg.client.DeleteStaticRoutes(withdraws)
-
-	// Resync routes.
-	rg.resyncKnownRoutes()
-	log.Infof("Updated with new external IP CIDRs: %s", newExternalNets)
-}
-
-// onClusterIPsUpdate is called from the calico client, whenever there
-// is a change to the svc_cluster_ips.
-func (rg *routeGenerator) onClusterIPsUpdate(newClusterNets []string) {
-	for _, n := range newClusterNets {
-		_, _, err := net.ParseCIDR(n)
-		if err != nil {
-			log.Warnf("Invalid clusterIPs in update: %s. Skipping update.", newClusterNets)
-			return
-		}
-	}
-
-	rg.Lock()
-	// Check if it differs from our current configuration.
-	if reflect.DeepEqual(newClusterNets, rg.clusterCIDRs) {
-		// No change, there's no work to do.
-		rg.Unlock()
-		return
-	}
-
-	// Determine the diff, and update the dataplane with it. First, find
-	// which CIDRs we should withdraw.
-	withdraws := []string{}
-	for _, existing := range rg.clusterCIDRs {
-		if !contains(newClusterNets, existing) {
-			withdraws = append(withdraws, existing)
-		}
-	}
-	// Update known CIDRs.
-	rg.clusterCIDRs = newClusterNets
-	rg.Unlock()
-
-	// Withdraw the old CIDRs and add the new.
-	rg.client.AddRejectCIDRs(newClusterNets)
-	rg.client.AddStaticRoutes(newClusterNets)
-	rg.client.DeleteRejectCIDRs(withdraws)
-	rg.client.DeleteStaticRoutes(withdraws)
-
-	// Resync routes.
-	rg.resyncKnownRoutes()
-	log.Infof("Updated with new Cluster CIDRs: %s", newClusterNets)
-}
-
 func (rg *routeGenerator) resyncKnownRoutes() {
 	// Get all the services that we know about and check if
 	// we need to change advertisement for them.
@@ -304,7 +232,7 @@ func (rg *routeGenerator) resyncKnownRoutes() {
 // for the given service.
 func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 	routes := make([]string, 0)
-	if len(rg.clusterCIDRs) != 0 {
+	if rg.client.AdvertiseClusterIPs() {
 		// Only advertise cluster IPs if we've been told to.
 		routes = append(routes, svc.Spec.ClusterIP)
 	}
@@ -372,7 +300,7 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 }
 
 // isAllowedExternalIP determines if the given IP is in the list of
-// whitelisted External IP CIDR's given in the default bgpconfiguration.
+// whitelisted External IP CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 
 	ip := net.ParseIP(externalIP)
@@ -381,7 +309,7 @@ func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 		return false
 	}
 
-	for _, allowedNet := range rg.externalIPNets {
+	for _, allowedNet := range rg.client.GetExternalIPs() {
 		if allowedNet.Contains(ip) {
 			return true
 		}
@@ -472,7 +400,6 @@ func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 
 	routes := rg.getAdvertisedRoutes(key)
 	rg.withdrawRoutesForKey(key, routes)
-
 }
 
 // advertiseRoute advertises a route associated with the given key and
