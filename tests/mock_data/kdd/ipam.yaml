@@ -6,6 +6,8 @@ metadata:
 spec:
   node: kube-master
   cidr: 192.168.221.192/26
+  deleted: ""
+  state: ""
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -16,6 +18,7 @@ spec:
   state: "pending"
   node: kube-master
   cidr: 192.168.221.0/26
+  deleted: ""
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -26,6 +29,7 @@ spec:
   state: "confirmed"
   node: kube-master
   cidr: 192.168.221.64/26
+  deleted: ""
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -35,6 +39,8 @@ metadata:
 spec:
   node: kube-master
   cidr: 10.0.0.0/30
+  deleted: ""
+  state: ""
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -44,3 +50,5 @@ metadata:
 spec:
   node: kube-master
   cidr: 10.1.0.0/24
+  deleted: ""
+  state: ""
