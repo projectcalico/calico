@@ -646,10 +646,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
 				},
 				expectedV6Routes: []string{
-					"dead:beef::[0-9a-f]* dev eth0  metric 256",
-					"fe80::/64 dev eth0  metric 256",
-					"default via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
-					"ff00::/8 dev eth0  metric 256",
+					"dead:beef::[0-9a-f]* dev eth0 proto kernel metric 256 pref medium",
+					"fe80::/64 dev eth0 proto kernel metric 256 pref medium",
+					"default via fe80::ecee:eeff:feee:eeee dev eth0 metric 1024",
 				},
 				unexpectedRoute: regexp.QuoteMeta("10."),
 				numIPv4IPs:      1,
@@ -708,10 +707,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
 				},
 				expectedV6Routes: []string{
-					"dead:beef::. dev eth0  metric 256",
-					"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
-					"fe80::/64 dev eth0  metric 256",
-					"ff00::/8 dev eth0  metric 256",
+					"dead:beef::. dev eth0 proto kernel metric 256 pref medium",
+					"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0 metric 1024",
+					"fe80::/64 dev eth0 proto kernel metric 256 pref medium",
 				},
 				unexpectedRoute: "default",
 				numIPv4IPs:      2,
@@ -770,10 +768,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
 				},
 				expectedV6Routes: []string{
-					"dead:beef::. dev eth0  metric 256",
-					"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
-					"fe80::/64 dev eth0  metric 256",
-					"ff00::/8 dev eth0  metric 256",
+					"dead:beef::. dev eth0 proto kernel metric 256 pref medium",
+					"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0 metric 1024",
+					"fe80::/64 dev eth0 proto kernel metric 256 pref medium",
 				},
 				numIPv4IPs: 2,
 				numIPv6IPs: 1,
@@ -2770,8 +2767,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 
+			containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			ids := names.WorkloadEndpointIdentifiers{

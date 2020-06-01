@@ -188,7 +188,8 @@ ut-datastore: $(LOCAL_BUILD_DEP)
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
-	-e LOCAL_USER_ID=0 \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	-e RUN_AS_ROOT=true \
 	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \
 	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
@@ -220,13 +221,14 @@ test-cni-versions:
 		make ut CNI_SPEC_VERSION=$$cniversion; \
 	done
 
-.PHONY: remote-deps
-remote-deps: mod-download
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/ .'
+config/crd: mod-download
+	mkdir -p config/crd
+	$(DOCKER_GO_BUILD) sh -c ' \
+		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd/* config/crd; \
+		chmod +w config/crd/*'
 
 ## Kubernetes apiserver used for tests
-run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
+run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
 	  -v `pwd`/config:/config \
@@ -237,7 +239,7 @@ run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 	    --service-account-key-file=/private.key
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-	docker exec calico-k8s-apiserver kubectl apply -f /config/crd
+	while ! docker exec calico-k8s-apiserver kubectl apply -f /config/crd; do echo "Waiting for CRDs..."; sleep 2; done
 
 ## Kubernetes controller manager used for tests
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
