@@ -11,6 +11,8 @@ section:
     path: /maintenance/openshift-upgrade
   - title: OpenStack
     path: /maintenance/openstack-upgrade
+- title: Migrate Calico data
+  path: /maintenance/datastore-migration
 - title: Monitor
   path: /maintenance/monitor/
   section: 
