@@ -73,7 +73,7 @@ struct __attribute__((__packed__)) calico_nat_v4_key {
 #define NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS (NAT_PREFIX_LEN_WITH_SRC_MATCH * 8)
 
 // This is used as a special ID along with count=0 to drop a packet at nat level1 lookup
-#define NAT_FE_DROP_ID	0xffffffff
+#define NAT_FE_DROP_COUNT  0xffffffff
 
 union calico_nat_v4_lpm_key {
         struct bpf_lpm_trie_key lpm;
@@ -218,10 +218,10 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		CALI_DEBUG("NAT: nodeport hit\n");
 	}
 	/* With LB source range, we install a drop entry in the NAT FE map
-	 * with a special ID 0xffffffff and count 0. If we hit this entry,
+	 * with count equal to 0xffffffff. If we hit this entry,
 	 * packet is dropped.
 	 */
-	if (nat_lv1_val->id == NAT_FE_DROP_ID && nat_lv1_val->count == 0) {
+	if (nat_lv1_val->count == NAT_FE_DROP_COUNT) {
 		*drop = 1;
 		return NULL;
 	}

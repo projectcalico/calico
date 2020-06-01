@@ -15,7 +15,6 @@
 package proxy_test
 
 import (
-	"math"
 	"net"
 	"sync"
 	"time"
@@ -197,131 +196,6 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 
 			delete(state.EpsMap, nosvcKey)
-		}))
-
-		By("adding LBSourceRangeIP for existing service", makestep(func() {
-			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
-				net.IPv4(10, 0, 0, 2),
-				2222,
-				v1.ProtocolTCP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "33.0.1.2/16"}),
-			)
-
-			err := s.Apply(state)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(svcs.m).To(HaveLen(3))
-
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			key1 = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
-			Expect(svcs.m).To(HaveKey(key1))
-
-			val1 := nat.NewNATValue(math.MaxUint32, uint32(0), 0, 0)
-			val2, ok := svcs.m[key1]
-			Expect(ok).To(BeTrue())
-			Expect(val1).To(Equal(val2))
-
-		}))
-
-		By("updating LBSourceRangeIP for existing service", makestep(func() {
-			Expect(svcs.m).To(HaveLen(3))
-			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
-				net.IPv4(10, 0, 0, 2),
-				2222,
-				v1.ProtocolTCP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "23.0.1.2/16"}),
-			)
-
-			err := s.Apply(state)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(svcs.m).To(HaveLen(3))
-
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			key1 = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
-			Expect(svcs.m).To(HaveKey(key1))
-			val1 := nat.NewNATValue(math.MaxUint32, uint32(0), 0, 0)
-			val2, ok := svcs.m[key1]
-			Expect(ok).To(BeTrue())
-			Expect(val1).To(Equal(val2))
-
-		}))
-
-		By("Deleting one LBSourceRangeIP for existing service", makestep(func() {
-			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
-				net.IPv4(10, 0, 0, 2),
-				2222,
-				v1.ProtocolTCP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
-			)
-
-			err := s.Apply(state)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(svcs.m).To(HaveLen(2))
-
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
-
-		}))
-
-		By("Deleting LBSourceRangeIP for existing service", makestep(func() {
-			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
-				net.IPv4(10, 0, 0, 2),
-				2222,
-				v1.ProtocolTCP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{}),
-			)
-
-			err := s.Apply(state)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(svcs.m).To(HaveLen(1))
-
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
-
-			key1 = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
-			Expect(svcs.m).To(HaveKey(key1))
-			val1 := nat.NewNATValue(math.MaxUint32, uint32(0), 0, 0)
-			val2, ok := svcs.m[key1]
-			Expect(ok).To(BeTrue())
-			Expect(val1).NotTo(Equal(val2))
-
 		}))
 
 		By("adding ExternalIP for existing service", makestep(func() {

@@ -67,6 +67,11 @@ const backendKeySize = 8
 // };
 const backendValueSize = 8
 
+const BlackHoleCount = 0xffffffff
+
+//(sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
+const ZeroCIDRPrefixLen = 56
+
 var zeroCIDR = ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)
 
 type FrontendKey [frontendKeySize]byte
@@ -77,7 +82,7 @@ func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
 
 func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) FrontendKey {
 	var k FrontendKey
-	prefixlen := 56
+	prefixlen := ZeroCIDRPrefixLen
 	addr = addr.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
@@ -98,6 +103,14 @@ func (k FrontendKey) Addr() net.IP {
 	return k[4:8]
 }
 
+func (k FrontendKey) SrcAddr() net.IP {
+	return k[11:15]
+}
+
+func (k FrontendKey) PrefixLen() uint32 {
+	return binary.LittleEndian.Uint32(k[0:4])
+}
+
 func (k FrontendKey) Port() uint16 {
 	return binary.LittleEndian.Uint16(k[8:10])
 }
@@ -111,7 +124,7 @@ func (k FrontendKey) Affinitykey() []byte {
 }
 
 func (k FrontendKey) String() string {
-	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v}", k.Proto(), k.Addr(), k.Port())
+	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v SrcAddr:%v}", k.Proto(), k.Addr(), k.Port(), k.SrcAddr())
 }
 
 type FrontendValue [frontendValueSize]byte

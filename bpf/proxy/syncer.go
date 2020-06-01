@@ -17,7 +17,8 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"math"
+
+	//"math"
 	"net"
 	"strconv"
 	"strings"
@@ -272,6 +273,16 @@ func (s *Syncer) cleanupDerived(id uint32) error {
 			if err := s.bpfSvcs.Delete(key[:]); err != nil {
 				return errors.Errorf("bpfSvcs.Delete: %s", err)
 			}
+			keys, err := getSvcNATKeyLBSrcRange(si.svc)
+			if err != nil {
+				return err
+			}
+			for _, key = range keys {
+				log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0, 0))
+				if err := s.bpfSvcs.Delete(key[:]); err != nil {
+					return errors.Errorf("bpfSvcs.Delete: %s", err)
+				}
+			}
 		}
 	}
 
@@ -418,6 +429,12 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 	if oldInfo, ok := s.prevSvcMap[skey]; !ok || oldInfo != newInfo {
 		if err := s.writeSvc(sinfo, svc.id, count, local); err != nil {
 			return err
+		}
+		if svcTypeExternalIP == t {
+			err := s.writeLBSrcRangeSvcNATKey(sinfo, svc.id, count, local)
+			if err != nil {
+				log.Debugf("Failed to write LB source range NAT keys")
+			}
 		}
 	}
 
@@ -678,9 +695,8 @@ func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
 	if err != nil {
 		return keys, err
 	}
-	key := nat.NewNATKey(ipaddr, uint16(port), proto)
-	keys = append(keys, key)
 	for _, src := range loadBalancerSourceRanges {
+		// Ignore IPv6 addresses
 		if strings.Contains(src, ":") {
 			continue
 		}
@@ -690,45 +706,58 @@ func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
 	return keys, nil
 }
 
-func (s *Syncer) writeSvcNatKey(key nat.FrontendKey, val nat.FrontendValue) error {
-	log.Debugf("bpf map writing %s:%s", key, val)
-	return s.bpfSvcs.Update(key[:], val[:])
-}
-
-func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) error {
+func (s *Syncer) writeLBSrcRangeSvcNATKey(svc k8sp.ServicePort, svcID uint32, count, local int) error {
+	var key nat.FrontendKey
 	affinityTimeo := uint32(0)
 	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
 	}
-	var affkey nat.FrontEndAffinityKey
-	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
+
 	if len(svc.LoadBalancerSourceRanges()) == 0 {
-		key, err := getSvcNATKey(svc)
-		if err != nil {
-			return err
-		}
-		err = s.writeSvcNatKey(key, val)
-		if err != nil {
+		return nil
+	}
+	keys, err := getSvcNATKeyLBSrcRange(svc)
+	if err != nil {
+		return err
+	}
+	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
+	for _, key := range keys {
+		log.Debugf("bpf map writing %s:%s", key, val)
+		if err = s.bpfSvcs.Update(key[:], val[:]); err != nil {
 			return errors.Errorf("bpfSvcs.Update: %s", err)
 		}
-		copy(affkey[:], key.Affinitykey())
-	} else {
-		keys, err := getSvcNATKeyLBSrcRange(svc)
-		if err != nil {
-			return err
-		}
-		for index, key := range keys {
-			if index == 0 {
-				err = s.writeSvcNatKey(key, nat.NewNATValue(math.MaxUint32, uint32(0), uint32(0), 0))
-				copy(affkey[:], key.Affinitykey())
-			} else {
-				err = s.writeSvcNatKey(key, val)
-			}
-			if err != nil {
-				return errors.Errorf("bpfSvcs.Update: %s", err)
-			}
-		}
 	}
+	key, err = getSvcNATKey(svc)
+	if err != nil {
+		return err
+	}
+	val = nat.NewNATValue(svcID, uint32(nat.BlackHoleCount), uint32(0), uint32(0))
+	if err = s.bpfSvcs.Update(key[:], val[:]); err != nil {
+		return errors.Errorf("bpfSvcs.Update: %s", err)
+	}
+	return nil
+}
+
+func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) error {
+	key, err := getSvcNATKey(svc)
+	if err != nil {
+		return err
+	}
+
+	affinityTimeo := uint32(0)
+	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
+		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
+	}
+
+	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
+
+	log.Debugf("bpf map writing %s:%s", key, val)
+	if err := s.bpfSvcs.Update(key[:], val[:]); err != nil {
+		return errors.Errorf("bpfSvcs.Update: %s", err)
+	}
+
+	var affkey nat.FrontEndAffinityKey
+	copy(affkey[:], key.Affinitykey())
 	// we must have written the backends by now so the map exists
 	if s.stickyEps[svcID] != nil {
 		s.stickySvcs[affkey] = stickyFrontend{
@@ -740,13 +769,6 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 	return nil
 }
 
-func (s *Syncer) deleteSvcNatKey(key nat.FrontendKey) error {
-	if err := s.bpfSvcs.Delete(key[:]); err != nil {
-		return errors.Errorf("bpfSvcs.Delete: %s", err)
-	}
-	return nil
-}
-
 func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error {
 	for i := 0; i < count; i++ {
 		if err := s.deleteSvcBackend(svcID, uint32(i)); err != nil {
@@ -754,25 +776,24 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 		}
 	}
 
-	if len(svc.LoadBalancerSourceRanges()) == 0 {
-		key, err := getSvcNATKey(svc)
-		if err != nil {
-			return err
-		}
-		err = s.deleteSvcNatKey(key)
-		if err != nil {
-			return errors.Errorf("bpfSvcs.Update: %s", err)
-		}
-	} else {
-		keys, err := getSvcNATKeyLBSrcRange(svc)
-		if err != nil {
-			return err
-		}
-		for _, key := range keys {
-			err = s.deleteSvcNatKey(key)
-			if err != nil {
-				return errors.Errorf("bpfSvcs.Delete: %s", err)
-			}
+	key, err := getSvcNATKey(svc)
+	if err != nil {
+		return err
+	}
+
+	log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
+	if err := s.bpfSvcs.Delete(key[:]); err != nil {
+		return errors.Errorf("bpfSvcs.Delete: %s", err)
+	}
+
+	keys, err := getSvcNATKeyLBSrcRange(svc)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
+		if err := s.bpfSvcs.Delete(key[:]); err != nil {
+			return errors.Errorf("bpfSvcs.Delete: %s", err)
 		}
 	}
 
@@ -838,7 +859,22 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 			}
 			continue
 		}
+		matchLBSrcIp := func() uint8 {
+			for _, srcip := range info.LoadBalancerSourceRanges() {
+				cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
+				addr := cidr.Addr().AsNetIP().To4().String()
+				prefix := uint32(cidr.Prefix() - nat.ZeroCIDRPrefixLen)
+				if addr == bsvc.SrcAddr().String() || prefix == bsvc.PrefixLen() {
+					return 1
+				}
+				continue
+			}
+			return 0
+		}
 
+		if matchLBSrcIp() == 0 {
+			continue
+		}
 		if bsvc.Addr().String() == info.ClusterIP().String() {
 			skey := &svcKey{
 				sname: svc,
