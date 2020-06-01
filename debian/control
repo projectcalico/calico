@@ -2,8 +2,7 @@ Source: networking-calico
 Section: net
 Priority: optional
 Maintainer: Neil Jerram <neil@projectcalico.org>
-Build-Depends: debhelper (>= 8.0.0), dh-systemd, python-all (>= 2.6), python-setuptools
-XS-Python-Version: >= 2.6
+Build-Depends: debhelper (>= 8.0.0), dh-systemd, python3-all, python3-setuptools
 Standards-Version: 3.9.4
 
 Package: calico-compute
@@ -14,7 +13,7 @@ Depends:
  networking-calico (= ${binary:Version}),
  neutron-dhcp-agent,
  ${misc:Depends},
- ${python:Depends},
+ ${python3:Depends},
  ${shlibs:Depends}
 Description: Project Calico networking for OpenStack/Neutron.
  Project Calico is an open source solution for virtual networking in
@@ -31,7 +30,7 @@ Architecture: all
 Depends:
  networking-calico (= ${binary:Version}),
  ${misc:Depends},
- ${python:Depends}
+ ${python3:Depends}
 Description: Project Calico networking for OpenStack/Neutron.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. It uses IP routing to provide connectivity
@@ -47,7 +46,7 @@ Architecture: all
 Depends:
  networking-calico (= ${binary:Version}),
  ${misc:Depends},
- ${python:Depends}
+ ${python3:Depends}
 Description: Project Calico networking for OpenStack/Neutron.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. It uses IP routing to provide connectivity
@@ -62,9 +61,9 @@ Package: networking-calico
 Architecture: all
 Depends:
  ${misc:Depends},
- python-babel,
- python-eventlet,
- python-six
+ python3-babel,
+ python3-eventlet,
+ python3-six
 Description: Project Calico networking for OpenStack/Neutron.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. It uses IP routing to provide connectivity
