@@ -1,4 +1,4 @@
-%{!?python_sitelib: %define python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
+%{!?python3_sitelib: %define python3_sitelib %(%{__python3} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
 
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
@@ -27,7 +27,7 @@ those workloads.
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron
 %if 0%{?el6}
-Requires:       calico-felix, networking-calico, openstack-neutron, iptables, python-argparse
+Requires:       calico-felix, networking-calico, openstack-neutron, iptables, python3-argparse
 %else
 Requires:       calico-felix, networking-calico, openstack-neutron, iptables
 %endif
@@ -128,7 +128,7 @@ integration code.
 
 %files
 %defattr(-,root,root,-)
-%{python_sitelib}/networking_calico*
+%{python3_sitelib}/networking_calico*
 %doc
 
 
@@ -137,12 +137,12 @@ integration code.
 
 
 %build
-%{__python} setup.py build
+%{__python3} setup.py build
 
 
 %install
 rm -rf $RPM_BUILD_ROOT
-%{__python} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
+%{__python3} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
 
 # For EL7, install systemd service files
 %if 0%{?el7}
