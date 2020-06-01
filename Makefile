@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.34
+GO_BUILD_VER=v0.40
 
 # This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
@@ -61,6 +61,7 @@ clean:
 	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 	rm -f *.created
 	rm -f crds.yaml
+	rm -rf config/
 
 ###############################################################################
 # Updating pins
@@ -187,7 +188,8 @@ ut-datastore: $(LOCAL_BUILD_DEP)
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
-	-e LOCAL_USER_ID=0 \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	-e RUN_AS_ROOT=true \
 	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \
 	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
@@ -219,34 +221,32 @@ test-cni-versions:
 		make ut CNI_SPEC_VERSION=$$cniversion; \
 	done
 
-.PHONY: remote-deps
-remote-deps: mod-download
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml crds.yaml; \
-		chmod +w crds.yaml'
+config/crd: mod-download
+	mkdir -p config/crd
+	$(DOCKER_GO_BUILD) sh -c ' \
+		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd/* config/crd; \
+		chmod +w config/crd/*'
 
 ## Kubernetes apiserver used for tests
-run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
+run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	  -v `pwd`/crds.yaml:/crds.yaml \
+	  -v `pwd`/config:/config \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
-	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
-	  /hyperkube apiserver \
+	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 	    --service-cluster-ip-range=10.101.0.0/16 \
 	    --service-account-key-file=/private.key
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-	docker exec calico-k8s-apiserver kubectl apply -f /crds.yaml
+	while ! docker exec calico-k8s-apiserver kubectl apply -f /config/crd; do echo "Waiting for CRDs..."; sleep 2; done
 
 ## Kubernetes controller manager used for tests
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
-	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
-	  /hyperkube controller-manager \
+	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) kube-controller-manager \
 	    --master=127.0.0.1:8080 \
 	    --min-resync-period=3m \
 	    --allocate-node-cidrs=true \
@@ -419,7 +419,7 @@ endif
 ## Run kube-proxy
 run-kube-proxy:
 	-docker rm -f calico-kube-proxy
-	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
+	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:$(K8S_VERSION) kube-proxy --master=http://127.0.0.1:8080 --v=2
 
 .PHONY: test-watch
 ## Run the unit tests, watching for changes.
