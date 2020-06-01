@@ -195,8 +195,9 @@ type Envelope struct {
 type SyncerType string
 
 const (
-	SyncerTypeFelix SyncerType = "felix"
-	SyncerTypeBGP   SyncerType = "bgp"
+	SyncerTypeFelix              SyncerType = "felix"
+	SyncerTypeBGP                SyncerType = "bgp"
+	SyncerTypeTunnelIPAllocation SyncerType = "tunnel-ip-allocation"
 )
 
 type MsgClientHello struct {
