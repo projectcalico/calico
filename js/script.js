@@ -37,16 +37,4 @@ $(document).ready(function(){
       return false;
     }
   });
-
-  var shiftWindow = function() {
-    var bodyPaddingTop = parseInt($('body').css('padding-top'));
-
-    scrollBy(0, -bodyPaddingTop)
-  };
-
-  if (location.hash) {
-    shiftWindow();
-  }
-
-  window.addEventListener("hashchange", shiftWindow);
 });
