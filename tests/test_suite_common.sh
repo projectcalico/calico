@@ -398,6 +398,8 @@ start_typha() {
     TYPHA_DATASTORETYPE=kubernetes \
         KUBECONFIG=/tests/confd_kubeconfig \
         TYPHA_LOGSEVERITYSCREEN=debug \
+	TYPHA_LOGSEVERITYSYS=none \
+	TYPHA_LOGFILEPATH=none \
 	typha >$LOGPATH/typha 2>&1 &
     TYPHA_PID=$!
 

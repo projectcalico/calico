@@ -226,6 +226,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200515163405-fc50f8064a53 h1:29
 github.com/projectcalico/libcalico-go v1.7.2-0.20200515163405-fc50f8064a53/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200522134408-df181482b303 h1:YWtdxawov6gquk7MkaotzQchQ/9VrIv46V0NNcwW0DE=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200522134408-df181482b303/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200529191439-77f762f742df h1:z+LPDycjewGKXtq6Q2jLsWT6tDc8PSy+UuGHvZXTZ6E=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200529191439-77f762f742df/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/typha v0.0.0-20200428231740-c01bb349f7f0 h1:1FxYrQfYQYmvPYJXLKwyM/K6LGql2E+Hnd5U963CBGI=
@@ -247,6 +249,8 @@ github.com/projectcalico/typha v0.7.3-0.20200424145113-15dafd25b67b h1:oXLg5GBBm
 github.com/projectcalico/typha v0.7.3-0.20200424145113-15dafd25b67b/go.mod h1:XlLblB1ipB5Rfqt1AV6RsDJp4uCHCyZDvUzx8/hTCQk=
 github.com/projectcalico/typha v0.7.3-0.20200513155650-0f5779b36217 h1:TfJZ1mWvSLxJx9iXzO6KIr8KuNgv5Gk02T1PerBcHK4=
 github.com/projectcalico/typha v0.7.3-0.20200513155650-0f5779b36217/go.mod h1:zKgZEjjB6FKSbvdsk5qVkrFirQ3AUO+HkipfcGwwZAA=
+github.com/projectcalico/typha v0.7.3-0.20200601160722-b55a2f1ba49b h1:m/o1EcBGRCBShQce+kyFIixNAf6/bBugtX8/RjkiI3g=
+github.com/projectcalico/typha v0.7.3-0.20200601160722-b55a2f1ba49b/go.mod h1:DADm6GN5i1I+n0VCrSLLiaEMwIhSrv7glUHuDCHgu5o=
 github.com/projectcalico/typha v3.8.8+incompatible h1:XRWR22IRQIRHeKezRHvhMZhqxMYj9fX9AuYQxEMxrJI=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
@@ -396,6 +400,7 @@ golang.zx2c4.com/wireguard v0.0.20200121 h1:vcswa5Q6f+sylDfjqyrVNNrjsFUUbPsgAQTB
 golang.zx2c4.com/wireguard v0.0.20200121/go.mod h1:P2HsVp8SKwZEufsnezXZA4GRX/T49/HlU7DGuelXsU4=
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf h1:rWUZHukj3poXegPQMZOXgxjTGIBe3mLNHNVvL5DsHus=
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf/go.mod h1:UdS9frhv65KTfwxME1xE8+rHYoFpbm36gOud1GhBe9c=
+gonum.org/v1/gonum v0.0.0-20190331200053-3d26580ed485 h1:OB/uP/Puiu5vS5QMRPrXCDWUPb+kt8f1KW8oQzFejQw=
 gonum.org/v1/gonum v0.0.0-20190331200053-3d26580ed485/go.mod h1:2ltnJ7xHfj0zHS40VVPYEAAMTa3ZGguvHGBSJeRWqE0=
 gonum.org/v1/netlib v0.0.0-20190313105609-8cb42192e0e0/go.mod h1:wa6Ws7BG/ESfp6dHfk7C6KdzKA7wR7u/rKwOGE66zvw=
 gonum.org/v1/netlib v0.0.0-20190331212654-76723241ea4e/go.mod h1:kS+toOQn6AQKjmKJ7gzohV1XkqsFehRA2FbsbkopSuQ=
@@ -452,8 +457,10 @@ k8s.io/apimachinery v0.0.0-20191028221656-72ed19daf4bb h1:ZUNsbuPdXWrj0rZziRfCWc
 k8s.io/apimachinery v0.0.0-20191028221656-72ed19daf4bb/go.mod h1:llRdnznGEAqC3DcNm6yEj472xaFVfLM7hnYofMb12tQ=
 k8s.io/client-go v0.0.0-20191114101535-6c5935290e33 h1:07mhG/2oEoo3N+sHVOo0L9PJ/qvbk3N5n2dj8IWefnQ=
 k8s.io/client-go v0.0.0-20191114101535-6c5935290e33/go.mod h1:4L/zQOBkEf4pArQJ+CMk1/5xjA30B5oyWv+Bzb44DOw=
+k8s.io/code-generator v0.0.0-20191004115455-8e001e5d1894 h1:NMYlxaF7rYQJk2E2IyrUhaX81zX24+dmoZdkPw0gJqI=
 k8s.io/code-generator v0.0.0-20191004115455-8e001e5d1894/go.mod h1:mJUgkl06XV4kstAnLHAIzJPVCOzVR+ZcfPIv4fUsFCY=
 k8s.io/gengo v0.0.0-20190128074634-0689ccc1d7d6/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
+k8s.io/gengo v0.0.0-20190822140433-26a664648505 h1:ZY6yclUKVbZ+SdWnkfY+Je5vrMpKOxmGeKRbsXVmqYM=
 k8s.io/gengo v0.0.0-20190822140433-26a664648505/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/klog v0.0.0-20181102134211-b9b56d5dfc92/go.mod h1:Gq+BEi5rUBO/HRz0bTSXDUcqjScdoY3a9IHpCEIOOfk=
 k8s.io/klog v0.3.0/go.mod h1:Gq+BEi5rUBO/HRz0bTSXDUcqjScdoY3a9IHpCEIOOfk=
