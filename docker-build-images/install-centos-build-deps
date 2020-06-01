@@ -9,7 +9,7 @@ yum install -y rpm-build \
                gcc \
                python3-setuptools \
                python3-pbr \
-	       python3-devel \
-	       python3-urllib3 \
-	       dbus-devel \
-	       libidn-devel
+               python3-devel \
+               python3-urllib3 \
+               dbus-devel \
+               libidn-devel
