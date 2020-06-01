@@ -28,6 +28,7 @@ func makeNode(ipv4 string, ipv6 string) *api.Node {
 				IPv4Address: ip4net.String(),
 				IPv6Address: ip6Addr,
 			},
+			Wireguard: &api.NodeWireguardSpec{},
 		},
 	}
 	return n

@@ -8,79 +8,228 @@ import (
 	"reflect"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/typha/pkg/syncclientutils"
+	"github.com/projectcalico/typha/pkg/syncproto"
+
+	"github.com/projectcalico/node/buildinfo"
 	"github.com/projectcalico/node/pkg/calicoclient"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 )
 
 // This file contains the main processing and common logic for assigning tunnel addresses,
-// used by calico/node to set the host's tunnel address if IPIP or VXLAN is enabled.
-// It will assign an address address if there are any available, and remove any tunnel address
-// that is configured if it should no longer be.
+// used by calico/node to set the host's tunnel address if IPIP or VXLAN is enabled on the pool or
+// wireguard is enabled on the node.
+//
+// It will assign an address if there are any available, and remove any tunnel addresses
+// that are configured and should no longer be.
 
-func Run() {
+// Run runs the tunnel ip allocator. If done is nil, it runs in single-shot mode. If non-nil, it runs in daemon mode
+// performing a reconciliation when IP pool or node configuration changes that may impact the allocations.
+func Run(done <-chan struct{}) {
 	// This binary is only ever invoked _after_ the
 	// startup binary has been invoked and the modified environments have
 	// been sourced.  Therefore, the NODENAME environment will always be
 	// set at this point.
 	nodename := os.Getenv("NODENAME")
 	if nodename == "" {
-		logrus.Panic("NODENAME environment is not set")
+		log.Panic("NODENAME environment is not set")
 	}
-
-	run(nodename)
-}
-
-func run(nodename string) {
 
 	// Load the client config from environment.
 	cfg, c := calicoclient.CreateClient()
 
-	// If configured to use host-local IPAM, this script has nothing to do, so just return.
-	if cfg.Spec.K8sUsePodCIDR {
-		logrus.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
+	run(nodename, cfg, c, done)
+}
+
+func run(nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, done <-chan struct{}) {
+	if done == nil {
+		// Running in single shot mode, so assign addresses and exit.
+		reconcileTunnelAddrs(nodename, cfg, c)
 		return
 	}
 
+	// This is running as a daemon. Create a long-running reconciler.
+	r := &reconciler{
+		nodename: nodename,
+		cfg:      cfg,
+		client:   c,
+		ch:       make(chan struct{}),
+		data:     make(map[string]interface{}),
+	}
+
+	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
+	// reconciler to trigger updates when necessary.
+
+	// Read Typha settings from the environment.
+	// When Typha is in use, there will already be variables prefixed with FELIX_, so it's
+	// convenient if we honor those as well as the CALICO variables.
+	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
+	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
+		&typhaConfig, syncproto.SyncerTypeTunnelIPAllocation,
+		buildinfo.GitVersion, nodename, fmt.Sprintf("tunnel-ip-allocation %s", buildinfo.GitVersion),
+		r,
+	) {
+		log.Debug("Using typha syncclient")
+	} else {
+		// Use the syncer locally.
+		log.Debug("Using local syncer")
+		syncer := tunnelipsyncer.New(c.(backendClientAccessor).Backend(), r, nodename)
+		syncer.Start()
+	}
+
+	// Run the reconciler.
+	r.run(done)
+}
+
+// reconciler watches IPPool and Node configuration and triggers a reconciliation of the Tunnel IP addresses whenever
+// it spots a configuration change that may impact IP selection.
+type reconciler struct {
+	nodename string
+	cfg      *apiconfig.CalicoAPIConfig
+	client   client.Interface
+	ch       chan struct{}
+	data     map[string]interface{}
+	inSync   bool
+}
+
+// run is the main reconciliation loop, it loops until done.
+func (r reconciler) run(done <-chan struct{}) {
+	// Loop forever, updating whenever we get a kick. The first kick will happen as soon as the syncer is in sync.
+	for {
+		select {
+		case <-r.ch:
+			// Received an update that requires reconciliation.  If the reconciliation fails it will cause the daemon
+			// to exit this is fine - it will be restarted, and the syncer will trigger a reconciliation when in-sync
+			// again.
+			reconcileTunnelAddrs(r.nodename, r.cfg, r.client)
+		case <-done:
+			return
+		}
+	}
+}
+
+// OnStatusUpdated handles the syncer status callback method.
+func (r *reconciler) OnStatusUpdated(status bapi.SyncStatus) {
+	if status == bapi.InSync {
+		// We are in-sync, trigger an initial scan/update of the IP addresses.
+		r.inSync = true
+		r.ch <- struct{}{}
+	}
+}
+
+// OnUpdates handles the syncer resource updates.
+func (r *reconciler) OnUpdates(updates []bapi.Update) {
+	var updated bool
+	for _, u := range updates {
+		switch u.UpdateType {
+		case bapi.UpdateTypeKVDeleted:
+			// Resource is deleted. If this resource is in our cache then trigger an update.
+			if _, ok := r.data[u.Key.String()]; ok {
+				updated = true
+			}
+			delete(r.data, u.Key.String())
+		case bapi.UpdateTypeKVNew, bapi.UpdateTypeKVUpdated:
+			// Resource is created or updated. Depending on the resource, we extract and cache the relevant data that
+			// we are monitoring. If the data has changed then trigger an update.
+			var data interface{}
+			switch v := u.Value.(type) {
+			case *model.IPPool:
+				// For pools just track the whole data.
+				log.Debugf("Updated pool resource: %s", u.Key)
+				data = v
+			case *v3.Node:
+				// For nodes, we only care about our own node, *and* we only care about the wireguard public key.
+				if v.Name != r.nodename {
+					continue
+				}
+				log.Debugf("Updated node resource: %s", u.Key)
+				data = v.Status.WireguardPublicKey
+			default:
+				// We got an update for an unexpected resource type. Rather than ignore, just treat as updated so that
+				// we reconcile the addresses.
+				log.Warningf("Unexpected resource update: %s", u.Key)
+				updated = true
+				continue
+			}
+
+			if existing, ok := r.data[u.Key.String()]; !ok || !reflect.DeepEqual(existing, data) {
+				// Entry is new or associated data is modified. In either case update the data and flag as updated.
+				log.Debug("Stored data has been modified - trigger reconciliation")
+				updated = true
+				r.data[u.Key.String()] = data
+			}
+		}
+	}
+
+	if updated && r.inSync {
+		// We have updated data. Trigger a reconciliation, but don't block if there is already an update pending.
+		select {
+		case r.ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// reconcileTunnelAddrs performs a single shot update of the tunnel IP allocations.
+func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface) {
 	ctx := context.Background()
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 	if err != nil {
-		logrus.WithError(err).Fatalf("failed to fetch node resource '%s'", nodename)
+		log.WithError(err).Fatalf("failed to fetch node resource '%s'", nodename)
 	}
 
 	// Get list of ip pools
 	ipPoolList, err := c.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
-		logrus.WithError(err).Fatal("Unable to query IP pool configuration")
+		log.WithError(err).Fatal("Unable to query IP pool configuration")
+	}
+
+	// If wireguard is enabled then allocate an IP for the wireguard device. We do this for all deployment types even
+	// when pod CIDRs are not managed by Calico.
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeWireguard); len(cidrs) > 0 {
+		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeWireguard)
+	} else {
+		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeWireguard)
+	}
+
+	// If configured to use host-local IPAM, there is no need to configure IPIP or VxLAN addresses.
+	if cfg.Spec.K8sUsePodCIDR {
+		log.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
+		return
 	}
 
 	// Query the IPIP enabled pools and either configure the tunnel
 	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, false); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs, false)
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeIPIP); len(cidrs) > 0 {
+		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeIPIP)
 	} else {
-		removeHostTunnelAddr(ctx, c, nodename, false)
+		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeIPIP)
 	}
 
 	// Query the VXLAN enabled pools and either configure the tunnel
 	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, true); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs, true)
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, ipam.AttributeTypeVXLAN); len(cidrs) > 0 {
+		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeVXLAN)
 	} else {
-		removeHostTunnelAddr(ctx, c, nodename, true)
+		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeVXLAN)
 	}
 }
 
-func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, vxlan bool) {
-	logCtx := getLogger(vxlan)
+func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, attrType string) {
+	logCtx := getLogger(attrType)
 	logCtx.WithField("Node", nodename).Debug("Ensure tunnel address is set")
 
 	// Get the currently configured address.
@@ -91,13 +240,17 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 
 	// Get the address and ipam attribute string
 	var addr string
-	var attrString string
-	if vxlan {
+	switch attrType {
+	case ipam.AttributeTypeVXLAN:
 		addr = node.Spec.IPv4VXLANTunnelAddr
-		attrString = ipam.AttributeTypeVXLAN
-	} else if node.Spec.BGP != nil {
-		addr = node.Spec.BGP.IPv4IPIPTunnelAddr
-		attrString = ipam.AttributeTypeIPIP
+	case ipam.AttributeTypeIPIP:
+		if node.Spec.BGP != nil {
+			addr = node.Spec.BGP.IPv4IPIPTunnelAddr
+		}
+	case ipam.AttributeTypeWireguard:
+		if node.Spec.Wireguard != nil {
+			addr = node.Spec.Wireguard.InterfaceIPv4Address
+		}
 	}
 
 	// Work out if we need to assign a tunnel address.
@@ -122,7 +275,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 		// Check if we got correct assignment attributes.
 		attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
 		if err == nil {
-			if attr[ipam.AttributeType] == attrString && attr[ipam.AttributeNode] == nodename {
+			if attr[ipam.AttributeType] == attrType && attr[ipam.AttributeNode] == nodename {
 				// The tunnel address is still assigned to this node, but is it in the correct pool this time?
 				if !isIpInPool(addr, cidrs) {
 					// Wrong pool, release this address.
@@ -149,7 +302,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 					// reassign the same address, but now with metadata. It's possible that someone
 					// else takes the address while we do this, in which case we'll just
 					// need to assign a new address.
-					if err := correctAllocationWithHandle(ctx, c, addr, nodename, vxlan); err != nil {
+					if err := correctAllocationWithHandle(ctx, c, addr, nodename, attrType); err != nil {
 						if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 							// Unknown error attempting to allocate the address. Exit.
 							logCtx.WithError(err).Fatal("Error correcting tunnel IP allocation")
@@ -183,7 +336,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 
 	if release {
 		logCtx.WithField("IP", addr).Info("Release any old tunnel addresses")
-		handle, _ := generateHandleAndAttributes(nodename, vxlan)
+		handle, _ := generateHandleAndAttributes(nodename, attrType)
 		if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				logCtx.WithError(err).Fatal("Failed to release old addresses")
@@ -194,11 +347,11 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 
 	if assign {
 		logCtx.WithField("IP", addr).Info("Assign new tunnel address")
-		assignHostTunnelAddr(ctx, c, nodename, cidrs, vxlan)
+		assignHostTunnelAddr(ctx, c, nodename, cidrs, attrType)
 	}
 }
 
-func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, nodename string, vxlan bool) error {
+func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, nodename string, attrType string) error {
 	ipAddr := net.ParseIP(addr)
 	if ipAddr == nil {
 		log.Fatalf("Failed to parse node tunnel address '%s'", addr)
@@ -213,7 +366,7 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	}
 
 	// Attempt to re-assign the same address, but with a handle this time.
-	handle, attrs := generateHandleAndAttributes(nodename, vxlan)
+	handle, attrs := generateHandleAndAttributes(nodename, attrType)
 	args := ipam.AssignIPArgs{
 		IP:       *ipAddr,
 		HandleID: &handle,
@@ -226,26 +379,28 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	return c.IPAM().AssignIP(ctx, args)
 }
 
-func generateHandleAndAttributes(nodename string, vxlan bool) (string, map[string]string) {
+func generateHandleAndAttributes(nodename string, attrType string) (string, map[string]string) {
 	attrs := map[string]string{ipam.AttributeNode: nodename}
 	var handle string
-	if vxlan {
-		attrs[ipam.AttributeType] = ipam.AttributeTypeVXLAN
+	switch attrType {
+	case ipam.AttributeTypeVXLAN:
 		handle = fmt.Sprintf("vxlan-tunnel-addr-%s", nodename)
-	} else {
-		attrs[ipam.AttributeType] = ipam.AttributeTypeIPIP
+	case ipam.AttributeTypeIPIP:
 		handle = fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
+	case ipam.AttributeTypeWireguard:
+		handle = fmt.Sprintf("wireguard-tunnel-addr-%s", nodename)
 	}
+	attrs[ipam.AttributeType] = attrType
 	return handle, attrs
 }
 
 // assignHostTunnelAddr claims an IP address from the first pool
 // with some space. Stores the result in the host's config as its tunnel
 // address. It will assign a VXLAN address if vxlan is true, otherwise an IPIP address.
-func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, vxlan bool) {
+func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, attrType string) {
 	// Build attributes and handle for this allocation.
-	handle, attrs := generateHandleAndAttributes(nodename, vxlan)
-	logCtx := getLogger(vxlan)
+	handle, attrs := generateHandleAndAttributes(nodename, attrType)
+	logCtx := getLogger(attrType)
 
 	args := ipam.AutoAssignArgs{
 		Num4:      1,
@@ -267,7 +422,7 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 
 	// Update the node object with the assigned address.
 	ip := ipv4Addrs[0].IP.String()
-	if err = updateNodeWithAddress(ctx, c, nodename, ip, vxlan); err != nil {
+	if err = updateNodeWithAddress(ctx, c, nodename, ip, attrType); err != nil {
 		// We hit an error, so release the IP address before exiting.
 		err := c.IPAM().ReleaseByHandle(ctx, handle)
 		if err != nil {
@@ -281,7 +436,7 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 	logCtx.WithField("IP", ip).Info("Assigned tunnel address to node")
 }
 
-func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename string, addr string, vxlan bool) error {
+func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename string, addr string, attrType string) error {
 	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
 	for i := 0; i < 5; i++ {
 		node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -289,13 +444,19 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 			return err
 		}
 
-		if vxlan {
+		switch attrType {
+		case ipam.AttributeTypeVXLAN:
 			node.Spec.IPv4VXLANTunnelAddr = addr
-		} else {
+		case ipam.AttributeTypeIPIP:
 			if node.Spec.BGP == nil {
 				node.Spec.BGP = &v3.NodeBGPSpec{}
 			}
 			node.Spec.BGP.IPv4IPIPTunnelAddr = addr
+		case ipam.AttributeTypeWireguard:
+			if node.Spec.Wireguard == nil {
+				node.Spec.Wireguard = &v3.NodeWireguardSpec{}
+			}
+			node.Spec.Wireguard.InterfaceIPv4Address = addr
 		}
 
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
@@ -314,9 +475,9 @@ func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename str
 // removeHostTunnelAddr removes any existing IP address for this host's
 // tunnel device and releases the IP from IPAM.  If no IP is assigned this function
 // is a no-op.
-func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, vxlan bool) {
+func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, attrType string) {
 	var updateError error
-	logCtx := getLogger(vxlan)
+	logCtx := getLogger(attrType)
 
 	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
 	for i := 0; i < 5; i++ {
@@ -326,21 +487,38 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		}
 
 		// Determine if we need to do any work.
-		ipipTunnelAddrExists := (node.Spec.BGP != nil && node.Spec.BGP.IPv4IPIPTunnelAddr != "")
+		ipipTunnelAddrExists := node.Spec.BGP != nil && node.Spec.BGP.IPv4IPIPTunnelAddr != ""
 		vxlanTunnelAddrExists := node.Spec.IPv4VXLANTunnelAddr != ""
-		if (vxlan && !vxlanTunnelAddrExists) || (!vxlan && !ipipTunnelAddrExists) {
+		wireguardTunnelAddrExists := node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv4Address != ""
+		if (attrType == ipam.AttributeTypeVXLAN && !vxlanTunnelAddrExists) ||
+			(attrType == ipam.AttributeTypeIPIP && !ipipTunnelAddrExists) ||
+			(attrType == ipam.AttributeTypeWireguard && !wireguardTunnelAddrExists) {
 			logCtx.Debug("No tunnel address assigned, and not required")
 			return
 		}
 
 		// Find out the currently assigned address and remove it from the node.
 		var ipAddr *net.IP
-		if vxlan {
+		switch attrType {
+		case ipam.AttributeTypeVXLAN:
 			ipAddr = net.ParseIP(node.Spec.IPv4VXLANTunnelAddr)
 			node.Spec.IPv4VXLANTunnelAddr = ""
-		} else if node.Spec.BGP != nil {
-			ipAddr = net.ParseIP(node.Spec.BGP.IPv4IPIPTunnelAddr)
-			node.Spec.BGP.IPv4IPIPTunnelAddr = ""
+		case ipam.AttributeTypeIPIP:
+			if node.Spec.BGP != nil {
+				ipAddr = net.ParseIP(node.Spec.BGP.IPv4IPIPTunnelAddr)
+				node.Spec.BGP.IPv4IPIPTunnelAddr = ""
+			}
+		case ipam.AttributeTypeWireguard:
+			if node.Spec.Wireguard != nil {
+				ipAddr = net.ParseIP(node.Spec.Wireguard.InterfaceIPv4Address)
+				node.Spec.Wireguard.InterfaceIPv4Address = ""
+			}
+		}
+
+		// If no IP address found then there is nothing to remove.
+		if ipAddr == nil {
+			logCtx.Debug("No valid tunnel address assigned")
+			return
 		}
 
 		// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
@@ -350,8 +528,14 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			node.Spec.BGP = nil
 		}
 
+		// Sim. for wireguard.
+		if node.Spec.Wireguard != nil && reflect.DeepEqual(*node.Spec.Wireguard, v3.NodeWireguardSpec{}) {
+			logCtx.Debug("Wireguard spec is now empty, setting to nil")
+			node.Spec.Wireguard = nil
+		}
+
 		// Release tunnel IP address(es) for the node.
-		handle, _ := generateHandleAndAttributes(nodename, vxlan)
+		handle, _ := generateHandleAndAttributes(nodename, attrType)
 		if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				// Unknown error releasing the address.
@@ -399,7 +583,14 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 
 // determineEnabledPools returns all enabled pools. If vxlan is true, then it will only return VXLAN pools. Otherwise
 // it will only return IPIP enabled pools.
-func determineEnabledPoolCIDRs(node api.Node, ipPoolList api.IPPoolList, vxlan bool) []net.IPNet {
+func determineEnabledPoolCIDRs(node api.Node, ipPoolList api.IPPoolList, attrType string) []net.IPNet {
+	// For wireguard, return no valid pools if the wireguard public key has not been set. Only once wireguard has been
+	// enabled *and* the wireguard device has been initialized do we require an IP address to be configured.
+	if attrType == ipam.AttributeTypeWireguard && node.Status.WireguardPublicKey == "" {
+		log.Debugf("Wireguard is not running on node %s", node.Name)
+		return nil
+	}
+
 	var cidrs []net.IPNet
 	for _, ipPool := range ipPoolList.Items {
 		_, poolCidr, err := net.ParseCIDR(ipPool.Spec.CIDR)
@@ -416,14 +607,21 @@ func determineEnabledPoolCIDRs(node api.Node, ipPoolList api.IPPoolList, vxlan b
 			continue
 		}
 
-		// Check if desired encap is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support encap with IPv6.
-		if vxlan {
+		// Check if desired encap is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we
+		// don't support encap with IPv6.
+		switch attrType {
+		case ipam.AttributeTypeVXLAN:
 			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
-		} else {
+		case ipam.AttributeTypeIPIP:
 			// Check if IPIP is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support IPIP with IPv6.
 			if (ipPool.Spec.IPIPMode == api.IPIPModeCrossSubnet || ipPool.Spec.IPIPMode == api.IPIPModeAlways) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
+				cidrs = append(cidrs, *poolCidr)
+			}
+		case ipam.AttributeTypeWireguard:
+			// Wireguard does not require a specific encap configuration on the pool.
+			if !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
 		}
@@ -442,10 +640,19 @@ func isIpInPool(ipAddrStr string, cidrs []net.IPNet) bool {
 	return false
 }
 
-func getLogger(vxlan bool) *logrus.Entry {
-	if vxlan {
-		return logrus.WithField("type", "vxlanTunnelAddress")
-	} else {
-		return logrus.WithField("type", "ipipTunnelAddress")
+func getLogger(attrType string) *log.Entry {
+	switch attrType {
+	case ipam.AttributeTypeVXLAN:
+		return log.WithField("type", "vxlanTunnelAddress")
+	case ipam.AttributeTypeIPIP:
+		return log.WithField("type", "ipipTunnelAddress")
+	case ipam.AttributeTypeWireguard:
+		return log.WithField("type", "wireguardTunnelAddress")
 	}
+	return nil
+}
+
+// backendClientAccessor is an interface to access the backend client from the main v2 client.
+type backendClientAccessor interface {
+	Backend() bapi.Client
 }
