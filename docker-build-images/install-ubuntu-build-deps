@@ -7,17 +7,17 @@ apt-get install -y build-essential  \
                    devscripts \
                    debhelper \
                    dh-systemd \
-                   python-all \
-                   python-setuptools \
+                   python3-all \
+                   python3-setuptools \
                    libyajl2 \
                    libdatrie1 \
-                   python-pbr \
+                   python3-pbr \
                    git \
                    libnetfilter-conntrack-dev \
-		   libidn11-dev \
-		   libdbus-1-dev \
-		   libgmp-dev \
-		   nettle-dev \
-		   m4 \
-		   texinfo
+                   libidn11-dev \
+                   libdbus-1-dev \
+                   libgmp-dev \
+                   nettle-dev \
+                   m4 \
+                   texinfo
 apt-get clean -y
