@@ -145,9 +145,11 @@
         const { hits, widgetParams } = renderOptions;
 
         const content = hits.reduce((currentHtml, hit) => {
+            const topLevelUrl = removeHashFromUrl(hit.url);
+
             if (hit.shouldDisplayTopCategory && hit.hierarchy.lvl0) {
                 currentHtml += `
-                    <a href="${hit.url}" class="search-results__group-header">
+                    <a href="${topLevelUrl}" class="search-results__group-header">
                         ${hit._highlightResult.hierarchy.lvl0.value}
                     </a>
                 `;
@@ -160,7 +162,7 @@
 
             if (hit.hierarchy.lvl1) {
                 currentHtml += `
-                    <a href="${hit.url}" class="search-result__subcategory">
+                    <a href="${topLevelUrl}" class="search-result__subcategory">
                         ${hit._highlightResult.hierarchy.lvl1.value}
                     </a>
                 `;
@@ -208,5 +210,9 @@
                 ${content}
             </div>
         `;
+    }
+
+    function removeHashFromUrl(url) {
+        return url.split('#')[0];
     }
 })();
