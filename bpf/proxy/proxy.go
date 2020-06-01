@@ -260,7 +260,6 @@ func (p *proxy) invokeDPSyncer() {
 		// completely to wipe out the loaded bpf maps
 	}
 
-	// XXX perhaps in a different thread that runs regularly
 	if p.healthzServer != nil {
 		p.healthzServer.Updated()
 	}
