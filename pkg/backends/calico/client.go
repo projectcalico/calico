@@ -126,8 +126,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.watcherCond = sync.NewCond(&c.cacheLock)
 
 	// Increment the waitForSync wait group.  This blocks the GetValues call until the
-	// syncer has completed its initial snapshot and is in sync.  The syncer is started
-	// from the SetPrefixes() call from confd.
+	// syncer has completed its initial snapshot and is in sync.
 	c.waitForSync.Add(1)
 
 	// Get cluster CIDRs. Prefer the env var, if specified.
@@ -325,6 +324,8 @@ type client struct {
 // This client uses this information to initialize the revision map used to keep track of the
 // revision number of each prefix that the template is monitoring.
 func (c *client) SetPrefixes(keys []string) error {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 	log.Debugf("Set prefixes called with: %v", keys)
 	for _, k := range keys {
 		// Initialise the revision that we are watching for this prefix.  This will be updated

@@ -124,6 +124,7 @@ func (rg *routeGenerator) Start() {
 }
 
 // Called by the client to trigger us to recheck and advertise or withdraw node-specific routes.
+// Must not block since this is called by the client while it holds its lock.
 func (rg *routeGenerator) TriggerResync() {
 	select {
 	case rg.resyncKnownRoutesTrigger <- struct{}{}:
