@@ -126,9 +126,33 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.watcherCond = sync.NewCond(&c.cacheLock)
 
 	// Increment the waitForSync wait group.  This blocks the GetValues call until the
-	// syncer has completed it's initial snapshot and is in sync.  The syncer is started
+	// syncer has completed its initial snapshot and is in sync.  The syncer is started
 	// from the SetPrefixes() call from confd.
 	c.waitForSync.Add(1)
+
+	// Get cluster CIDRs. Prefer the env var, if specified.
+	clusterCIDRs := []string{}
+	if clusterCIDR := os.Getenv(envAdvertiseClusterIPs); len(clusterCIDR) != 0 {
+		clusterCIDRs = []string{clusterCIDR}
+	} else if cfg != nil && cfg.Spec.ServiceClusterIPs != nil {
+		for _, c := range cfg.Spec.ServiceClusterIPs {
+			clusterCIDRs = append(clusterCIDRs, c.CIDR)
+		}
+	}
+	// Note: do this initial update before starting the syncer, so there's no chance of this
+	// racing with syncer-derived updates.
+	c.onClusterIPsUpdate(clusterCIDRs)
+
+	// Get external IP CIDRs.
+	externalCIDRs := []string{}
+	if cfg != nil && cfg.Spec.ServiceExternalIPs != nil {
+		for _, c := range cfg.Spec.ServiceExternalIPs {
+			externalCIDRs = append(externalCIDRs, c.CIDR)
+		}
+	}
+	// Note: do this initial update before starting the syncer, so there's no chance of this
+	// racing with syncer-derived updates.
+	c.onExternalIPsUpdate(externalCIDRs)
 
 	// Start the main syncer loop.  If the node-to-node mesh is enabled then we need to
 	// monitor all nodes.  If this setting changes (which we will monitor in the OnUpdates
@@ -174,26 +198,6 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		c.syncer = bgpsyncer.New(c.client, c, template.NodeName, config.Spec)
 		c.syncer.Start()
 	}
-
-	// Get cluster CIDRs. Prefer the env var, if specified.
-	clusterCIDRs := []string{}
-	if clusterCIDR := os.Getenv(envAdvertiseClusterIPs); len(clusterCIDR) != 0 {
-		clusterCIDRs = []string{clusterCIDR}
-	} else if cfg != nil && cfg.Spec.ServiceClusterIPs != nil {
-		for _, c := range cfg.Spec.ServiceClusterIPs {
-			clusterCIDRs = append(clusterCIDRs, c.CIDR)
-		}
-	}
-	c.onClusterIPsUpdate(clusterCIDRs)
-
-	// Get external IP CIDRs.
-	externalCIDRs := []string{}
-	if cfg != nil && cfg.Spec.ServiceExternalIPs != nil {
-		for _, c := range cfg.Spec.ServiceExternalIPs {
-			externalCIDRs = append(externalCIDRs, c.CIDR)
-		}
-	}
-	c.onExternalIPsUpdate(externalCIDRs)
 
 	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 {
 		// Create and start route generator, if configured to do so. This can either be through
