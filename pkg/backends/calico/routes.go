@@ -123,6 +123,16 @@ func (rg *routeGenerator) Start() {
 	}()
 }
 
+// Called by the client to trigger us to recheck and advertise or withdraw node-specific routes.
+func (rg *routeGenerator) TriggerResync() {
+	select {
+	case rg.resyncKnownRoutesTrigger <- struct{}{}:
+		log.Debug("Triggered route generator to resync known routes")
+	default:
+		log.Debug("Route generator already has pending resync trigger")
+	}
+}
+
 // getServiceForEndpoints retrieves the corresponding svc for the given ep
 func (rg *routeGenerator) getServiceForEndpoints(ep *v1.Endpoints) (*v1.Service, string) {
 	// get key

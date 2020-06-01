@@ -844,12 +844,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 		if c.rg != nil {
 			// Trigger the route generator to recheck and advertise or withdraw
 			// node-specific routes.
-			select {
-			case c.rg.resyncKnownRoutesTrigger <- struct{}{}:
-				log.Debug("Triggered route generator to resync known routes")
-			default:
-				log.Debug("Route generator already has pending resync trigger")
-			}
+			c.rg.TriggerResync()
 		}
 	}
 
