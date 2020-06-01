@@ -19,3 +19,4 @@ install_cni.test
 report/*.xml
 crds.yaml
 Makefile.common*
+config/

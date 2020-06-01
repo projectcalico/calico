@@ -61,6 +61,7 @@ clean:
 	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 	rm -f *.created
 	rm -f crds.yaml
+	rm -rf config/
 
 ###############################################################################
 # Updating pins
@@ -222,14 +223,13 @@ test-cni-versions:
 .PHONY: remote-deps
 remote-deps: mod-download
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml crds.yaml; \
-		chmod +w crds.yaml'
+		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/ .'
 
 ## Kubernetes apiserver used for tests
 run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	  -v `pwd`/crds.yaml:/crds.yaml \
+	  -v `pwd`/config:/config \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
 	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 	  /hyperkube apiserver \
@@ -238,7 +238,7 @@ run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 	    --service-account-key-file=/private.key
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
-	docker exec calico-k8s-apiserver kubectl apply -f /crds.yaml
+	docker exec calico-k8s-apiserver kubectl apply -f /config/crd
 
 ## Kubernetes controller manager used for tests
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
