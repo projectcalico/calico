@@ -221,7 +221,11 @@ function do_felix {
 
 function do_etcd3gw {
     pushd ${rootdir}/etcd3gw
-    PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
+    # We don't have Python 3 RPM packaging for etcd3gw, so it makes
+    # sense to retreat to the same solution as for Debian/Ubuntu:
+    # don't build etcd3gw packages, and instead document that 'pip
+    # install' should be used to install etcd3gw.
+    # PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
     popd
 }
 
