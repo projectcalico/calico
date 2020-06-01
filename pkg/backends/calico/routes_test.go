@@ -89,7 +89,7 @@ var _ = Describe("RouteGenerator", func() {
 			routeAdvertisementCount: make(map[string]int),
 			client: &client{
 				cache:        make(map[string]string),
-				synced:       true,
+				syncedOnce:   true,
 				clusterCIDRs: []string{"10.0.0.0/16"},
 				externalIPs: []string{
 					ipNet1.String(),

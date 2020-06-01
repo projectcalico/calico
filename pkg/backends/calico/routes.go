@@ -113,7 +113,7 @@ func (rg *routeGenerator) Start() {
 		}
 
 		// Notify the main client we're in sync now.
-		rg.client.OnInSync(SourceRouteGenerator)
+		rg.client.OnSyncChange(SourceRouteGenerator, true)
 		log.Info("RouteGenerator in sync")
 
 		// Loop waiting for trigger to recheck node-specific routes.

@@ -115,6 +115,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		nodeMeshEnabled:   nodeMeshEnabled,
 		nodeLabels:        make(map[string]map[string]string),
 		bgpPeers:          make(map[string]*apiv3.BGPPeer),
+		sourceReady:       make(map[string]bool),
 	}
 	for k, v := range globalDefaults {
 		c.cache[k] = v
@@ -201,13 +202,13 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		log.Info("Starting route generator for service advertisement")
 		if c.rg, err = NewRouteGenerator(c); err != nil {
 			log.WithError(err).Error("Failed to start route generator, routes will not be advertised")
-			c.OnInSync(SourceRouteGenerator)
+			c.OnSyncChange(SourceRouteGenerator, true)
 			c.rg = nil
 		} else {
 			c.rg.Start()
 		}
 	} else {
-		c.OnInSync(SourceRouteGenerator)
+		c.OnSyncChange(SourceRouteGenerator, true)
 	}
 	return c, nil
 }
@@ -282,11 +283,11 @@ type client struct {
 	rg *routeGenerator
 
 	// Readiness signals for individual data sources.
-	syncerReady, rgReady bool
+	sourceReady map[string]bool
 
 	// Indicates whether all data sources have synced. We cannot start rendering until
 	// all sources have synced, so we block calls to GetValues until this is true.
-	synced      bool
+	syncedOnce  bool
 	waitForSync sync.WaitGroup
 
 	// Our internal cache of key/values, and our (internally defined) cache revision.
@@ -337,53 +338,54 @@ func (c *client) SetPrefixes(keys []string) error {
 // When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
 // GetValues calls.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
-	log.Debugf("Got status update: %s, syncer ready: %t", status, c.syncerReady)
+	log.Debugf("Got status update: %s", status)
 	switch status {
 	case api.InSync:
-		if !c.syncerReady {
-			c.OnInSync(SourceSyncer)
-		}
+		c.OnSyncChange(SourceSyncer, true)
 	case api.WaitForDatastore:
-		if c.syncerReady {
-			c.syncerReady = false
-			c.waitForSync.Add(1)
-		}
+		c.OnSyncChange(SourceSyncer, false)
 	}
 }
 
 // OnInSync handles multiplexing in-sync messages from multiple data sources
 // into a single representation of readiness.
-func (c *client) OnInSync(source string) {
-	switch source {
-	case SourceSyncer:
-		log.Info("Calico Syncer has indicated it is in sync")
-		c.syncerReady = true
-	case SourceRouteGenerator:
-		if c.rgReady {
-			// It's possible to get multiple messages from the route generator if
-			// we don't start it at start-of-day, but turn it on later due to a
-			// configuration change.
-			log.Debugf("Received second in sync notification from route generator, ignoring")
-			return
-		}
-		log.Info("RouteGenerator has indicated it is in sync")
-		c.rgReady = true
-	default:
-		log.Errorf("InSync message from unknown source: %s", source)
+func (c *client) OnSyncChange(source string, ready bool) {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+
+	if ready == c.sourceReady[source] {
+		log.Debugf("No change for source %v, ready %v", source, ready)
 		return
 	}
 
-	if c.syncerReady && c.rgReady {
+	log.Infof("Source %v readiness changed, ready=%v", source, ready)
+
+	// Check if we are fully in sync, before applying this change.
+	oldFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+
+	// Apply the change.
+	c.sourceReady[source] = ready
+
+	// Check if we are fully in sync now.
+	newFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+
+	if newFullSync == oldFullSync {
+		log.Debugf("No change to full sync status (%v)", newFullSync)
+		return
+	}
+
+	if newFullSync {
 		// All data sources are ready.
-		c.cacheLock.Lock()
-		defer c.cacheLock.Unlock()
-		c.synced = true
+		c.syncedOnce = true
 		c.waitForSync.Done()
-		log.Debugf("Data is now syncd, can start rendering templates")
+		log.Info("Data is now syncd, can start rendering templates")
 
 		// Now that we're in-sync, check if we should update our log level
 		// based on the datastore config.
 		c.updateLogLevel()
+	} else {
+		log.Info("Full sync lost")
+		c.waitForSync.Add(1)
 	}
 }
 
@@ -914,14 +916,14 @@ func (c *client) updateGlobalRoutes(current, new []string) error {
 func (c *client) incrementCacheRevision() {
 	// If we are in-sync then this is an incremental update, so increment our internal
 	// cache revision.
-	if c.synced {
+	if c.syncedOnce {
 		c.cacheRevision++
 		log.Debugf("Processing new updates, revision is now: %d", c.cacheRevision)
 	}
 }
 
 func (c *client) onNewUpdates() {
-	if c.synced {
+	if c.syncedOnce {
 		// Wake up the watchers to let them know there may be some updates of interest.  We only
 		// need to do this once we're synced because until that point all of the Watcher threads
 		// will be blocked getting values.
@@ -970,7 +972,7 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 	}
 
 	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, c.cache[k])
-	if c.synced {
+	if c.syncedOnce {
 		c.keyUpdated(k)
 	}
 	return true
