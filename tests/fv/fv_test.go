@@ -562,8 +562,11 @@ var _ = Describe("kube-controllers FV tests", func() {
 					},
 				},
 			}
-			_, err := k8sClient.CoreV1().ServiceAccounts(nsName).Create(sa)
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				_, err := k8sClient.CoreV1().ServiceAccounts(nsName).Create(sa)
+				return err
+			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
+
 			Eventually(func() *api.Profile {
 				profile, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
 				return profile
@@ -638,13 +641,12 @@ var _ = Describe("kube-controllers FV tests", func() {
 					},
 				},
 			}
-			err := k8sClient.NetworkingV1().RESTClient().
-				Post().
-				Resource("networkpolicies").
-				Namespace("default").
-				Body(np).
-				Do().Error()
-			Expect(err).NotTo(HaveOccurred())
+
+			// Create the NP.
+			Eventually(func() error {
+				_, err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Create(np)
+				return err
+			}, time.Second*5).ShouldNot(HaveOccurred())
 
 			// Wait for it to appear in Calico's etcd.
 			Eventually(func() *api.NetworkPolicy {
@@ -688,12 +690,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 		It("should delete policies when they are deleted from the Kubernetes API", func() {
 			By("deleting the policy", func() {
-				err := k8sClient.NetworkingV1().RESTClient().
-					Delete().
-					Resource("networkpolicies").
-					Namespace("default").
-					Name(policyName).
-					Do().Error()
+				err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Delete(policyName, &metav1.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -745,13 +742,11 @@ var _ = Describe("kube-controllers FV tests", func() {
 				},
 			}
 
-			err := k8sClient.NetworkingV1().RESTClient().
-				Post().
-				Resource("networkpolicies").
-				Namespace("default").
-				Body(np).
-				Do().Error()
-			Expect(err).NotTo(HaveOccurred())
+			// Create the NP.
+			Eventually(func() error {
+				_, err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Create(np)
+				return err
+			}, time.Second*5).ShouldNot(HaveOccurred())
 
 			// Wait for it to appear in Calico's etcd.
 			Eventually(func() *api.NetworkPolicy {

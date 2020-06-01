@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/kube-controllers
-GO_BUILD_VER=v0.39
+GO_BUILD_VER=v0.40
 
 ###############################################################################
 # Download and include Makefile.common
@@ -59,6 +59,7 @@ clean:
 	rm -f tests/fv/fv.test
 	rm -f report/*.xml
 	rm -f tests/crds.yaml
+	rm -rf tests/crds
 
 ###############################################################################
 # Updating pins
@@ -110,9 +111,10 @@ endif
 
 .PHONY: remote-deps
 remote-deps: mod-download
+	@mkdir -p tests/crds/
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml tests/crds.yaml; \
-		chmod +w tests/crds.yaml'
+		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd/* tests/crds/; \
+		chmod +w tests/crds/*'
 
 ###############################################################################
 # Image build/push
@@ -219,7 +221,7 @@ fv: remote-deps tests/fv/fv.test image
 		CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) \
 		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
-		CRDS_FILE=${PWD}/tests/crds.yaml \
+		CRDS=${PWD}/tests/crds \
 		GO111MODULE=on \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
 
