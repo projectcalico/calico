@@ -431,7 +431,7 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 			return err
 		}
 		if svcTypeExternalIP == t {
-			err := s.writeLBSrcRangeSvcNATKey(sinfo, svc.id, count, local)
+			err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local)
 			if err != nil {
 				log.Debugf("Failed to write LB source range NAT keys")
 			}
@@ -706,7 +706,7 @@ func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
 	return keys, nil
 }
 
-func (s *Syncer) writeLBSrcRangeSvcNATKey(svc k8sp.ServicePort, svcID uint32, count, local int) error {
+func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, count, local int) error {
 	var key nat.FrontendKey
 	affinityTimeo := uint32(0)
 	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {

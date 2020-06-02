@@ -831,6 +831,36 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
+				Context("with LB test-service configured", func() {
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+					)
+
+					testSvcName := "test-lb-service"
+					tgtPort := 8055
+					srcIPRange := []string{"10.65.1.0/24"}
+					externalIP := []string{"35.1.2.3"}
+
+					BeforeEach(func() {
+						testSvc = k8sLBService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort, testOpts.protocol, externalIP, srcIPRange)
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+					})
+					It("should have connectivity from workloads[1][0] via a service to workload 0", func() {
+						ip := testSvc.Spec.ExternalIPs
+						port := uint16(testSvc.Spec.Ports[0].Port)
+						felixes[1].Exec("ip", "route", "add", "35.1.2.0/24", "via", felixes[1].IP)
+						felixes[0].Exec("ip", "route", "add", "35.1.2.0/24", "dev", "eth0")
+						cc.ExpectSome(w[1][0], TargetIP(ip[0]), port)
+						cc.ExpectNone(w[0][1], TargetIP(ip[0]), port)
+						cc.CheckConnectivity()
+					})
+
+				})
 				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
 					var (
 						testSvc          *v1.Service
@@ -1749,6 +1779,37 @@ func k8sService(name, clusterIP string, w *workload.Workload, port,
 					Protocol:   k8sProto,
 					Port:       int32(port),
 					NodePort:   nodePort,
+					Name:       fmt.Sprintf("port-%d", tgtPort),
+					TargetPort: intstr.FromInt(tgtPort),
+				},
+			},
+		},
+	}
+}
+
+func k8sLBService(name, clusterIP string, w *workload.Workload, port,
+	tgtPort int, protocol string, externalIPs, srcRange []string) *v1.Service {
+	k8sProto := v1.ProtocolTCP
+	if protocol == "udp" {
+		k8sProto = v1.ProtocolUDP
+	}
+
+	svcType := v1.ServiceTypeLoadBalancer
+	return &v1.Service{
+		TypeMeta:   typeMetaV1("Service"),
+		ObjectMeta: objectMetaV1(name),
+		Spec: v1.ServiceSpec{
+			ClusterIP:                clusterIP,
+			Type:                     svcType,
+			LoadBalancerSourceRanges: srcRange,
+			ExternalIPs:              externalIPs,
+			Selector: map[string]string{
+				"name": w.Name,
+			},
+			Ports: []v1.ServicePort{
+				{
+					Protocol:   k8sProto,
+					Port:       int32(port),
 					Name:       fmt.Sprintf("port-%d", tgtPort),
 					TargetPort: intstr.FromInt(tgtPort),
 				},
