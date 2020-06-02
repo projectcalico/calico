@@ -18,9 +18,12 @@ Calico networking and network policy are automatically installed and configured 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:IPIP,Routing:BGP,Datastore:Kubernetes' %}
 
-### Above and beyond
+### Next steps
 
-- [Controlling traffic with network policies for IKS](https://cloud.ibm.com/docs/containers?topic=containers-network_policies)
+**Required**
 - [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+
+**Recommmended**
+- [Controlling traffic with network policies for IKS](https://cloud.ibm.com/docs/containers?topic=containers-network_policies)
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
 - [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)

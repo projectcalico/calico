@@ -4,7 +4,7 @@ description: Install Calico on non-cluster hosts using a Docker container.
 canonical_url: '/getting-started/bare-metal/installation/container'
 ---
 
-### Big Picture
+### Big picture
 Install {{site.prodname}} on non-cluster hosts using a Docker container.
 
 ### Value
@@ -20,3 +20,4 @@ Installing {{site.prodname}} with a Docker container includes everything you nee
 
 The `{{site.nodecontainer}}` container should be started at boot time by your init system and the init system must be configured to restart it if stopped. {{site.prodname}} relies on that behavior for certain configuration changes.
 {% include content/docker-container-service.md %}
+

@@ -19,8 +19,12 @@ To enable Calico network policy enforcement, follow these step-by-step instructi
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Host Local,CNI:Calico,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
-### Above and beyond
+### Next steps
 
+**Required**
+- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+
+**Recommmended**
 - [Video: Everything you need to know about Kubernetes networking on Google cloud](https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/)
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
 - [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)
