@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -300,7 +301,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 
 	old, exists := s.prevSvcMap[skey]
 	if exists {
-		if old.svc == sinfo {
+		if ServicePortEqual(old.svc, sinfo) {
 			id = old.id
 			count, local, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, eps)
 		} else {
@@ -1057,6 +1058,7 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.sessionAffinityType = sport.SessionAffinityType()
 	sinfo.stickyMaxAgeSeconds = sport.StickyMaxAgeSeconds()
 	sinfo.externalIPs = sport.ExternalIPStrings()
+	sinfo.loadBalancerIPStrings = sport.LoadBalancerIPStrings()
 	sinfo.loadBalancerSourceRanges = sport.LoadBalancerSourceRanges()
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
 	sinfo.onlyNodeLocalEndpoints = sport.OnlyNodeLocalEndpoints()
@@ -1074,6 +1076,7 @@ type serviceInfo struct {
 	stickyMaxAgeSeconds      int
 	externalIPs              []string
 	loadBalancerSourceRanges []string
+	loadBalancerIPStrings    []string
 	healthCheckNodePort      int
 	onlyNodeLocalEndpoints   bool
 	topologyKeys             []string
@@ -1136,7 +1139,7 @@ func (info *serviceInfo) ExternalIPStrings() []string {
 
 // LoadBalancerIPStrings is part of ServicePort interface.
 func (info *serviceInfo) LoadBalancerIPStrings() []string {
-	panic("NOT IMPLEMENTED")
+	return info.loadBalancerIPStrings
 }
 
 // OnlyNodeLocalEndpoints is part of ServicePort interface.
@@ -1161,6 +1164,43 @@ func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
 		o(x)
 	}
 	return x
+}
+
+// ServicePortEqual compares if two k8sp.ServicePort are equal, that is all of
+// their methods return equal values, i.e., they may differ in implementation,
+// but present themselves equaly. String() is not considered as thay may differ
+// for debugging reasons.
+func ServicePortEqual(a, b k8sp.ServicePort) bool {
+	return a.ClusterIP().Equal(b.ClusterIP()) &&
+		a.Port() == b.Port() &&
+		a.SessionAffinityType() == b.SessionAffinityType() &&
+		a.StickyMaxAgeSeconds() == b.StickyMaxAgeSeconds() &&
+		a.Protocol() == b.Protocol() &&
+		a.HealthCheckNodePort() == b.HealthCheckNodePort() &&
+		a.NodePort() == b.NodePort() &&
+		a.OnlyNodeLocalEndpoints() == b.OnlyNodeLocalEndpoints() &&
+		stringsEqual(a.ExternalIPStrings(), b.ExternalIPStrings()) &&
+		stringsEqual(a.LoadBalancerIPStrings(), b.LoadBalancerIPStrings()) &&
+		stringsEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges()) &&
+		stringsEqual(a.TopologyKeys(), b.TopologyKeys())
+}
+
+func stringsEqual(a, b []string) bool {
+
+	if len(a) != len(b) {
+		return false
+	}
+
+	sort.Strings(a)
+	sort.Strings(b)
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // K8sSvcWithLBSourceRangeIPs sets LBSourcePortRangeIPs
