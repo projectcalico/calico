@@ -39,7 +39,7 @@ If you choose to implement {{site.prodname}} networking with [BGP peered with yo
 ### How to
 
 - [Create an IP pool with NAT outgoing enabled](#create-an-ip-pool-with-nat-outgoing-enabled)
-- [Use additional IP pools to specify addresses that can be reached without NAT](#use-additional-ip-pools-to-specify-addresses-that-can-be-reached-without-)
+- [Use additional IP pools to specify addresses that can be reached without NAT](#use-additional-ip-pools-to-specify-addresses-that-can-be-reached-without-nat)
 
 #### Create an IP pool with NAT outgoing enabled
 
