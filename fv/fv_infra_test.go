@@ -18,6 +18,8 @@ package fv_test
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -147,11 +149,16 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 		var (
 			infra   infrastructure.DatastoreInfra
 			felixes []*infrastructure.Felix
+			options infrastructure.TopologyOptions
 		)
 
 		BeforeEach(func() {
+			options = infrastructure.DefaultTopologyOptions()
+		})
+
+		JustBeforeEach(func() {
 			infra = getInfra()
-			felixes, _ = infrastructure.StartNNodeTopology(1, infrastructure.DefaultTopologyOptions(), infra)
+			felixes, _ = infrastructure.StartNNodeTopology(1, options, infra)
 		})
 
 		AfterEach(func() {
@@ -167,6 +174,28 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 		It("should only report that existing files actually exist", func() {
 			Expect(felixes[0].FileExists("/usr/bin/calico-felix")).To(BeTrue())
 			Expect(felixes[0].FileExists("/garbage")).To(BeFalse())
+		})
+
+		Describe("with DebugPanicAfter set to 2s", func() {
+			BeforeEach(func() {
+				options.ExtraEnvVars["FELIX_DebugPanicAfter"] = "2"
+			})
+
+			It("should panic and drop a core file", func() {
+				felixes[0].WaitNotRunning(5 * time.Second)
+				dir, err := ioutil.ReadDir("/tmp")
+				Expect(err).NotTo(HaveOccurred())
+				name := ""
+				for _, f := range dir {
+					if strings.Contains(f.Name(), "core_"+felixes[0].Hostname) {
+						name = f.Name()
+					}
+				}
+				Expect(name).NotTo(Equal(""), "Couldn't find core file")
+				s, err := os.Stat("/tmp/" + name)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s.Size()).To(BeNumerically(">", 4096))
+			})
 		})
 	},
 )

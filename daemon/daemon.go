@@ -351,6 +351,14 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
+	if configParams.DebugPanicAfter > 0 {
+		go func(delay time.Duration) {
+			log.WithField("delay", delay).Warn("DebugPanicAfter is set, will panic after delay.")
+			time.Sleep(delay)
+			log.Panic("Panicking because config told me to!")
+		}(configParams.DebugPanicAfter)
+	}
+
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
 	var dpDriver dp.DataplaneDriver

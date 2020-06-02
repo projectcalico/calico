@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,6 +74,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	// Add in the environment variables.
 	envVars := map[string]string{
+		// Enable core dumps.
+		"GOTRACEBACK": "crash",
+		// Tell the wrapper to set the core file name pattern so we can find the dump.
+		"SET_CORE_PATTERN": "true",
+
 		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
 		"FELIX_BPFLOGLEVEL":              "debug",
@@ -111,6 +116,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// Add in the volumes.
 	volumes := map[string]string{
 		"/lib/modules": "/lib/modules",
+		"/tmp":         "/tmp",
 	}
 	for k, v := range options.ExtraVolumes {
 		volumes[k] = v
