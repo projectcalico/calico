@@ -221,17 +221,14 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 
 	// Start a goroutine to process updates in a way that's decoupled from their sources.
 	go func() {
-		for {
-			select {
-			case e := <-c.syncerC:
-				switch event := e.(type) {
-				case []api.Update:
-					c.onUpdates(event)
-				case api.SyncStatus:
-					c.onStatusUpdated(event)
-				default:
-					log.Panicf("Unknown type %T in syncer channel", event)
-				}
+		for e := range c.syncerC {
+			switch event := e.(type) {
+			case []api.Update:
+				c.onUpdates(event)
+			case api.SyncStatus:
+				c.onStatusUpdated(event)
+			default:
+				log.Panicf("Unknown type %T in syncer channel", event)
 			}
 		}
 	}()
