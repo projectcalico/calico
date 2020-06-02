@@ -368,7 +368,7 @@ func waitForConnection(ctx context.Context, c client.Interface) {
 		if err != nil {
 			switch err.(type) {
 			case cerrors.ErrorConnectionUnauthorized:
-				log.Warn("Connection to the datastore is unauthorized")
+				log.WithError(err).Warn("Connection to the datastore is unauthorized")
 				terminate()
 			case cerrors.ErrorDatastoreError:
 				log.WithError(err).Info("Hit error connecting to datastore - retry")
