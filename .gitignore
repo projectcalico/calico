@@ -21,6 +21,7 @@
 .go-pkg-cache/
 /.glide/
 /vendor/
+/artifacts/
 
 # IDE files.
 /.idea/
