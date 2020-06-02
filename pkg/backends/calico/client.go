@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -116,6 +116,11 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		nodeLabels:        make(map[string]map[string]string),
 		bgpPeers:          make(map[string]*apiv3.BGPPeer),
 		sourceReady:       make(map[string]bool),
+
+		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
+		// capacity so that the caller blocks in the same way as it did before when its
+		// calls were processed synchronously.
+		syncerC: make(chan interface{}),
 	}
 	for k, v := range globalDefaults {
 		c.cache[k] = v
@@ -213,6 +218,21 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	} else {
 		c.OnSyncChange(SourceRouteGenerator, true)
 	}
+
+	// Start a goroutine to process updates in a way that's decoupled from their sources.
+	go func() {
+		for e := range c.syncerC {
+			switch event := e.(type) {
+			case []api.Update:
+				c.onUpdates(event)
+			case api.SyncStatus:
+				c.onStatusUpdated(event)
+			default:
+				log.Panicf("Unknown type %T in syncer channel", event)
+			}
+		}
+	}()
+
 	return c, nil
 }
 
@@ -317,6 +337,9 @@ type client struct {
 	externalIPs    []string
 	externalIPNets []*net.IPNet // same as externalIPs but parsed
 	clusterCIDRs   []string
+
+	// Channel used to decouple update and status processing.
+	syncerC chan interface{}
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -343,6 +366,10 @@ func (c *client) SetPrefixes(keys []string) error {
 // When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
 // GetValues calls.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
+	c.syncerC <- status
+}
+
+func (c *client) onStatusUpdated(status api.SyncStatus) {
 	log.Debugf("Got status update: %s", status)
 	switch status {
 	case api.InSync:
@@ -665,6 +692,10 @@ func (c *client) nodeAsBGPPeers(nodeName string) (peers []*bgpPeer) {
 // -  wakes up the watchers so that they can check if any of the prefixes they are
 //    watching have been updated.
 func (c *client) OnUpdates(updates []api.Update) {
+	c.syncerC <- updates
+}
+
+func (c *client) onUpdates(updates []api.Update) {
 
 	// Update our cache from the updates.
 	c.cacheLock.Lock()
@@ -1061,6 +1092,7 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 func (c *client) GetCurrentRevision() uint64 {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
+	log.Debugf("Current cache revision is %v", c.cacheRevision)
 	return c.cacheRevision
 }
 
