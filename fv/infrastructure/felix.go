@@ -27,6 +27,10 @@ import (
 	"github.com/projectcalico/felix/fv/utils"
 )
 
+// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
+// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
+const CreateCgroupV2 = false
+
 type Felix struct {
 	*containers.Container
 
@@ -96,9 +100,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// share maps.
 		envVars["FELIX_DebugBPFMapRepinEnabled"] = "false"
 
-		// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
-		// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
-		// envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
+		if CreateCgroupV2 {
+			envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
+		}
 	}
 
 	if options.DelayFelixStart {
@@ -164,7 +168,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 }
 
 func (f *Felix) Stop() {
-	_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
+	if CreateCgroupV2 {
+		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
+	}
 	f.Container.Stop()
 }
 
