@@ -37,9 +37,13 @@ type BlockAffinity struct {
 
 // BlockAffinitySpec contains the specification for a BlockAffinity resource.
 type BlockAffinitySpec struct {
-	State   string `json:"state"`
-	Node    string `json:"node"`
-	CIDR    string `json:"cidr"`
+	State string `json:"state"`
+	Node  string `json:"node"`
+	CIDR  string `json:"cidr"`
+
+	// Deleted indicates that this block affinity is being deleted.
+	// This field is a string for compatibility with older releases that
+	// mistakenly treat this field as a string.
 	Deleted string `json:"deleted"`
 }
 

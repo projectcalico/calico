@@ -39,6 +39,9 @@ spec:
               cidr:
                 type: string
               deleted:
+                description: Deleted indicates that this block affinity is being deleted.
+                  This field is a string for compatibility with older releases that
+                  mistakenly treat this field as a string.
                 type: string
               node:
                 type: string
