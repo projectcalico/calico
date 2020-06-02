@@ -510,6 +510,8 @@ github.com/projectcalico/typha v0.7.3-0.20200527211152-a1bf881f9cc4 h1:j/1Qd7cdp
 github.com/projectcalico/typha v0.7.3-0.20200527211152-a1bf881f9cc4/go.mod h1:GsholfXQWXxv8RHdqFLoq41GUjTF+WYM0VZwF/+TgAI=
 github.com/projectcalico/typha v0.7.3-0.20200530040817-4cdbcfc02b4b h1:PxnTyiIF6GGVces/wAiubHR8uHaJ74Vc7pDDdJRvH4s=
 github.com/projectcalico/typha v0.7.3-0.20200530040817-4cdbcfc02b4b/go.mod h1:DADm6GN5i1I+n0VCrSLLiaEMwIhSrv7glUHuDCHgu5o=
+github.com/projectcalico/typha v0.7.3-0.20200601160722-b55a2f1ba49b h1:m/o1EcBGRCBShQce+kyFIixNAf6/bBugtX8/RjkiI3g=
+github.com/projectcalico/typha v0.7.3-0.20200601160722-b55a2f1ba49b/go.mod h1:DADm6GN5i1I+n0VCrSLLiaEMwIhSrv7glUHuDCHgu5o=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0 h1:vrDKnkGzuGvhNAL56c7DBz29ZL+KxnoR0x7enabFceM=
@@ -869,6 +871,7 @@ k8s.io/client-go v0.17.2 h1:ndIfkfXEGrNhLIgkr0+qhRguSD3u6DCmonepn1O6NYc=
 k8s.io/client-go v0.17.2/go.mod h1:QAzRgsa0C2xl4/eVpeVAZMvikCn8Nm81yqVx3Kk9XYI=
 k8s.io/cloud-provider v0.17.2/go.mod h1:9rEcGqEsUFHxC83oMUGBcsXTBpRVNVPX/U+nyQJTvHU=
 k8s.io/cluster-bootstrap v0.17.2/go.mod h1:qiazpAM05fjAc+PEkrY8HSUhKlJSMBuLnVUSO6nvZL4=
+k8s.io/code-generator v0.17.2 h1:pTwl3rLB1fUyxmvEzmVPMM0tBSdUehd7z+bDzpj4lPE=
 k8s.io/code-generator v0.17.2/go.mod h1:DVmfPQgxQENqDIzVR2ddLXMH34qeszkKSdH/N+s+38s=
 k8s.io/component-base v0.17.2 h1:0XHf+cerTvL9I5Xwn9v+0jmqzGAZI7zNydv4tL6Cw6A=
 k8s.io/component-base v0.17.2/go.mod h1:zMPW3g5aH7cHJpKYQ/ZsGMcgbsA/VyhEugF3QT1awLs=
