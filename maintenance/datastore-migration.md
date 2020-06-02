@@ -29,7 +29,9 @@ documentation.
 ## How To
 
 In order to migrate contents of the datastore, we will be using the `calicoctl migrate`
-command and its accompanying subcommands. ADD REFERENCE TO COMMAND REFERENCE.
+command and its accompanying subcommands. For more information, see the
+[calicoctl migrate]({{ site.baseurl }}/reference/calicoctl/migrate/overview)
+documentation.
 
 1. Lock the datastore for migration. This will prevent any changes to the data from
    affecting the cluster.
@@ -56,5 +58,9 @@ command and its accompanying subcommands. ADD REFERENCE TO COMMAND REFERENCE.
    calicoctl migrate unlock
    ```
 
-6. Configure Calico to read from the Kubernetes datastore. This can be done by modifying the 
-   `cni-config` ConfigMap. ADD MORE DETAILS
+6. Configure Calico to read from the Kubernetes datastore. This can be done by following the
+   directions to install Calico with the Kubernetes datastore. See the installation instructions
+   for your version of Calico in order to find and apply the relevant `calico.yaml` file.
+   ```
+   kubectl apply -f calico.yaml
+   ```
