@@ -83,12 +83,14 @@ blocks:
       - ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-wireguard FORCE_WIREGUARD_FV="1"
     - name: FV on newer kernel
       commands:
-      - ./.semaphore/on-test-vm make --directory=$(basename $(pwd)) fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
+      - ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
       parallelism: 5
     epilogue:
       always:
         commands:
-        - ./.semaphore/collect-artifacts-from-test-vm
+        - ./.semaphore/on-test-vm ${REPO_NAME}/.semaphore/collect-artifacts
+        - gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${VM_NAME}:${REPO_NAME}/artifacts" ./ --recurse
+        - artifact push --expire-in 4w job artifacts
         - gcloud --quiet compute instances delete ${VM_NAME} --zone=${ZONE}
     secrets:
     - name: google-service-account-for-gce

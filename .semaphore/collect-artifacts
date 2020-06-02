@@ -17,7 +17,11 @@
 set -e
 set -x
 
-./.semaphore/on-test-vm sh -c "sudo cp -r /tmp/core_* ${REPO_NAME}/bin ${REPO_NAME}/artifacts"
-./.semaphore/on-test-vm sudo chmod a+r "${REPO_NAME}/artifacts"
-gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${VM_NAME}:${REPO_NAME}/artifacts" ./
-artifacts push --expire-in 4w job artifacts
+my_dir="$(dirname "$0")"
+repo_dir="$my_dir/.."
+
+cd "$repo_dir"
+
+mkdir -p artifacts
+cp /tmp/core_felix* artifacts || true
+cp -r bin artifacts
