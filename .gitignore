@@ -19,3 +19,4 @@ st-kubeconfig.yaml
 /report/*.xml
 Makefile.common*
 tests/crds.yaml
+tests/crds

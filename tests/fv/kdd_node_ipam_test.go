@@ -78,9 +78,16 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 			return err
 		}, 30*time.Second, 1*time.Second).Should(BeNil())
 
-		// Apply the necessary CRDs.
-		out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "crds.yaml")
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to apply CRDs: %s", out))
+		// Apply the necessary CRDs. There can somtimes be a delay between starting
+		// the API server and when CRDs are apply-able, so retry here.
+		apply := func() error {
+			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
+			if err != nil {
+				return fmt.Errorf("%s: %s", err, out)
+			}
+			return nil
+		}
+		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
 
 		// Make a Calico client and backend client.
 		type accessor interface {

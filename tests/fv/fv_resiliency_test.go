@@ -93,13 +93,12 @@ var _ = Describe("[Resilience] PolicyController", func() {
 				},
 			},
 		}
-		err = k8sClient.NetworkingV1().RESTClient().
-			Post().
-			Resource("networkpolicies").
-			Namespace(policyNamespace).
-			Body(np).
-			Do().Error()
-		Expect(err).NotTo(HaveOccurred())
+
+		// Create the NP.
+		Eventually(func() error {
+			_, err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Create(np)
+			return err
+		}, time.Second*5).ShouldNot(HaveOccurred())
 
 		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, calicoEtcd.IP, kconfigfile.Name(), "")
 
@@ -135,12 +134,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			Skip("TODO: improve FV framework to handle pod restart")
 			// Delete the Policy.
 			testutils.Stop(calicoEtcd)
-			err := k8sClient.NetworkingV1().RESTClient().
-				Delete().
-				Resource("networkpolicies").
-				Namespace(policyNamespace).
-				Name(policyName).
-				Do().Error()
+			err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Delete(policyName, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(10 * time.Second)
