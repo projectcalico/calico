@@ -115,6 +115,9 @@ type Syncer struct {
 	newEpsMap  k8sp.EndpointsMap
 	prevSvcMap map[svcKey]svcInfo
 	prevEpsMap k8sp.EndpointsMap
+	// active Maps contain all active svcs endpoints at the end of an iteration
+	activeSvcsMap map[ipPortProto]uint32
+	activeEpsMap  map[uint32]map[ipPort]struct{}
 
 	// We never have more than one thread accessing the [prev|new][Svc|Eps]Map,
 	// this is to just make sure and to make the --race checker happy
@@ -135,6 +138,26 @@ type Syncer struct {
 	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
 	stickySvcDeleted bool
+}
+
+type ipPort struct {
+	ip   string
+	port int
+}
+
+type ipPortProto struct {
+	ipPort
+	proto uint8
+}
+
+func servicePortToIPPortProto(sp k8sp.ServicePort) ipPortProto {
+	return ipPortProto{
+		ipPort: ipPort{
+			ip:   sp.ClusterIP().String(),
+			port: sp.Port(),
+		},
+		proto: ProtoV1ToIntPanic(sp.Protocol()),
+	}
 }
 
 func uniqueIPs(ips []net.IP) []net.IP {
@@ -162,7 +185,7 @@ func uniqueIPs(ips []net.IP) []net.IP {
 	return ret
 }
 
-// NewSyncer returns a new Syncer that uses the 2 provided maps
+// NewSyncer returns a new Syncer
 func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap, affmap bpf.Map, rt Routes) (*Syncer, error) {
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
@@ -334,9 +357,31 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 		svc:        sinfo,
 	}
 
+	s.newEpsMap[skey.sname] = eps
+
 	log.Debugf("applied a service %s update: sinfo=%+v", skey, s.newSvcMap[skey])
 
 	return nil
+}
+
+func (s *Syncer) addActiveEps(id uint32, svc k8sp.ServicePort, eps []k8sp.Endpoint) {
+	svcKey := servicePortToIPPortProto(svc)
+
+	s.activeSvcsMap[svcKey] = id
+
+	if len(eps) == 0 {
+		return
+	}
+
+	epsmap := make(map[ipPort]struct{})
+	s.activeEpsMap[id] = epsmap
+	for _, ep := range eps {
+		port, _ := ep.Port() // it is error free by this point
+		epsmap[ipPort{
+			ip:   ep.IP(),
+			port: port,
+		}] = struct{}{}
+	}
 }
 
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
@@ -454,6 +499,17 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	s.newSvcMap = make(map[svcKey]svcInfo)
 	s.newEpsMap = make(k8sp.EndpointsMap)
 
+	s.activeSvcsMap = make(map[ipPortProto]uint32)
+	s.activeEpsMap = make(map[uint32]map[ipPort]struct{})
+
+	defer func() {
+		log.WithField("activeSvcsMap", s.activeSvcsMap).Info("Syncer")
+		log.WithField("activeEpsMap", s.activeEpsMap).Info("Syncer")
+		// free the maps when the iteration is complete
+		s.activeSvcsMap = nil
+		s.activeEpsMap = nil
+	}()
+
 	var expNPMisses []*expandMiss
 
 	// insert or update existing services
@@ -523,6 +579,19 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		}
 
 		log.Infof("removed stale service %q", skey)
+	}
+
+	// build active maps for conntrack cleaning
+	for skey, sinfo := range s.newSvcMap {
+		if sinfo.count == 0 {
+			continue
+		}
+
+		if isSvcKeyDerived(skey) {
+			s.addActiveEps(sinfo.id, sinfo.svc, nil)
+		} else {
+			s.addActiveEps(sinfo.id, sinfo.svc, s.newEpsMap[skey.sname])
+		}
 	}
 
 	log.Debugf("new state written")
@@ -1045,6 +1114,22 @@ func (s *Syncer) cleanupSticky() error {
 		return errors.Errorf("encountered  %d errors writing NAT affinity map", errs)
 	}
 	return nil
+}
+
+func (s *Syncer) frontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool {
+	id, ok := s.activeSvcsMap[ipPortProto{ipPort{ip.String(), int(port)}, proto}]
+	if !ok {
+		return false
+	}
+
+	backends := s.activeEpsMap[id]
+	if backends == nil {
+		return false
+	}
+
+	_, ok = backends[ipPort{backendIP.String(), int(backendPort)}]
+
+	return ok
 }
 
 func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
