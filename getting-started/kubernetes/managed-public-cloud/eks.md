@@ -53,10 +53,10 @@ Before you get started, make sure you have downloaded and configured the {% incl
 1. Finally, add nodes to the cluster.
 
    ```bash
-   eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto
+   eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100
    ```
 
-   > **Tip**: See `eksctl create nodegroup --help` for the full set of node group options.
+   > **Tip**: Without `--max-pods-per-node` option above, EKS will limit the {% include open-new-window.html text='number of pods based on node-type' url='https://github.com/awslabs/amazon-eks-ami/blob/master/files/eni-max-pods.txt' %}. See `eksctl create nodegroup --help` for the full set of node group options.
    {: .alert .alert-success}
 
 ### Above and beyond
