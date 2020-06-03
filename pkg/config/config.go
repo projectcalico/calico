@@ -4,15 +4,13 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
-	"reflect"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	logutils "github.com/kelseyhightower/confd/pkg/log"
 	"github.com/kelseyhightower/confd/pkg/resource/template"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/typha/pkg/syncclientutils"
 )
 
 var (
@@ -29,26 +27,6 @@ var (
 	calicoconfig  string
 )
 
-// Copied from <felix>/config/config_params.go.
-type TyphaConfig struct {
-	Addr           string
-	K8sServiceName string
-	K8sNamespace   string
-	ReadTimeout    time.Duration
-	WriteTimeout   time.Duration
-
-	// Client-side TLS config for confd's communication with Typha.  If any of these are
-	// specified, they _all_ must be - except that either CN or URISAN may be left unset.
-	// confd will then initiate a secure (TLS) connection to Typha.  Typha must present a
-	// certificate signed by a CA in CAFile, and with CN matching CN or URI SAN matching
-	// URISAN.
-	KeyFile  string
-	CertFile string
-	CAFile   string
-	CN       string
-	URISAN   string
-}
-
 // A Config structure is used to configure confd.
 type Config struct {
 	ConfDir        string `toml:"confdir"`
@@ -59,7 +37,7 @@ type Config struct {
 	CalicoConfig   string `toml:"calicoconfig"`
 	Onetime        bool   `toml:"onetime"`
 	KeepStageFile  bool   `toml:"keep-stage-file"`
-	Typha          TyphaConfig
+	Typha          syncclientutils.TyphaConfig
 	TemplateConfig template.Config
 }
 
@@ -87,16 +65,16 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 		}
 	}
 	// Set defaults.
+	// Read Typha settings from the environment.
+	// When Typha is in use, there will already be variables prefixed with FELIX_, so it's
+	// convenient if confd honours those too.  However there may use cases for confd to
+	// have independent settings, so honour CONFD_ also.  Longer-term it would be nice to
+	// coalesce around CALICO_, so support that as well.
 	config := Config{
 		ConfDir:  "/etc/confd",
 		Interval: 600,
 		Prefix:   "",
-		Typha: TyphaConfig{
-			// Non-zero defaults copied from <felix>/config/config_params.go.
-			K8sNamespace: "kube-system",
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 10 * time.Second,
-		},
+		Typha:    syncclientutils.ReadTyphaConfig([]string{"CONFD_", "FELIX_", "CALICO_"}),
 	}
 	// Update config from the TOML configuration file.
 	if configFile == "" {
@@ -125,9 +103,6 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 		// Default to info level logs.
 		logutils.SetLevel("info")
 	}
-
-	// Read Typha settings from the environment.
-	readTyphaConfig(&config.Typha)
 
 	return &config, nil
 }
@@ -162,35 +137,5 @@ func (c *ConfigVisitor) setConfigFromFlag(f *flag.Flag) {
 		c.config.Onetime = onetime
 	case "keep-stage-file":
 		c.config.Onetime = keepStageFile
-	}
-}
-
-func readTyphaConfig(typhaConfig *TyphaConfig) {
-	// When Typha is in use, there will already be variables prefixed with FELIX_, so it's
-	// convenient if confd honours those too.  However there may use cases for confd to
-	// have independent settings, so honour CONFD_ also.  Longer-term it would be nice to
-	// coalesce around CALICO_, so support that as well.
-	supportedPrefixes := []string{"CONFD_", "FELIX_", "CALICO_"}
-	kind := reflect.TypeOf(*typhaConfig)
-	for ii := 0; ii < kind.NumField(); ii++ {
-		field := kind.Field(ii)
-		nameUpper := strings.ToUpper(field.Name)
-		for _, prefix := range supportedPrefixes {
-			varName := prefix + "TYPHA" + nameUpper
-			if value := os.Getenv(varName); value != "" && value != "none" {
-				log.Infof("Found %v=%v", varName, value)
-				if field.Type.Name() == "Duration" {
-					seconds, err := strconv.ParseFloat(value, 64)
-					if err != nil {
-						log.Error("Invalid float")
-					}
-					duration := time.Duration(seconds * float64(time.Second))
-					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).Set(reflect.ValueOf(duration))
-				} else {
-					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).Set(reflect.ValueOf(value))
-				}
-				break
-			}
-		}
 	}
 }
