@@ -72,12 +72,12 @@ const BlackHoleCount = 0xffffffff
 //(sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
 const ZeroCIDRPrefixLen = 56
 
-var zeroCIDR = ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)
+var ZeroCIDR = ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)
 
 type FrontendKey [frontendKeySize]byte
 
 func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
-	return NewNATKeySrc(addr, port, protocol, zeroCIDR)
+	return NewNATKeySrc(addr, port, protocol, ZeroCIDR)
 }
 
 func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) FrontendKey {
@@ -103,8 +103,19 @@ func (k FrontendKey) Addr() net.IP {
 	return k[4:8]
 }
 
-func (k FrontendKey) SrcAddr() net.IP {
-	return k[11:15]
+func (k FrontendKey) SrcAddr() ip.Addr {
+	var addr ip.V4Addr
+	copy(addr[:], k[11:15])
+	return addr
+}
+
+func (k FrontendKey) SrcPrefixLen() uint32 {
+	return k.PrefixLen() - ZeroCIDRPrefixLen
+}
+
+func (k FrontendKey) SrcCIDR() ip.CIDR {
+	//prefixLen := k.PrefixLen() - ZeroCIDRPrefixLen
+	return ip.CIDRFromAddrAndPrefix(k.SrcAddr(), int(k.SrcPrefixLen()))
 }
 
 func (k FrontendKey) PrefixLen() uint32 {

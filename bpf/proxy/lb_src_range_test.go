@@ -26,9 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	//"github.com/projectcalico/felix/bpf"
 	proxy "github.com/projectcalico/felix/bpf/proxy"
-	//"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ip"
 )
 
@@ -78,6 +76,18 @@ var _ = Describe("BPF Load Balancer source range", func() {
 		}
 	}
 
+	saddr1 := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
+	saddr2 := ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
+	saddr3 := ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
+
+	extIP := net.IPv4(35, 0, 0, 2)
+	proto := proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)
+	key_with_saddr1 := nat.NewNATKeySrc(extIP, 2222, proto, saddr1)
+	key_with_saddr2 := nat.NewNATKeySrc(extIP, 2222, proto, saddr2)
+	key_with_saddr3 := nat.NewNATKeySrc(extIP, 2222, proto, saddr3)
+	key_with_extip := nat.NewNATKey(extIP, 2222, proto)
+	blackhole_nat_val := nat.NewNATValue(uint32(0), uint32(nat.BlackHoleCount), 0, 0)
+
 	It("should make the right test transitions", func() {
 
 		By("adding LBSourceRangeIP for existing service", makestep(func() {
@@ -87,36 +97,22 @@ var _ = Describe("BPF Load Balancer source range", func() {
 
 			Expect(svcs.m).To(HaveLen(4))
 
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
+			key := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222, proto, saddr1)
+			Expect(svcs.m).NotTo(HaveKey(key))
 
-			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
+			key = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222, proto, saddr2)
+			Expect(svcs.m).NotTo(HaveKey(key))
 
-			key1 = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
-			Expect(svcs.m).To(HaveKey(key1))
+			key = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proto)
+			Expect(svcs.m).To(HaveKey(key))
 
-			saddr = ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
+			Expect(svcs.m).To(HaveKey(key_with_saddr1))
+			Expect(svcs.m).To(HaveKey(key_with_saddr2))
+			Expect(svcs.m).To(HaveKey(key_with_extip))
 
-			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			key1 = nat.NewNATKey(net.IPv4(35, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
-			Expect(svcs.m).To(HaveKey(key1))
-
-			val1 := nat.NewNATValue(uint32(0), uint32(nat.BlackHoleCount), 0, 0)
-			val2, ok := svcs.m[key1]
+			val, ok := svcs.m[key_with_extip]
 			Expect(ok).To(BeTrue())
-			Expect(val1).To(Equal(val2))
+			Expect(val).To(Equal(blackhole_nat_val))
 
 		}))
 
@@ -134,20 +130,9 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(4))
 
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
+			Expect(svcs.m).To(HaveKey(key_with_saddr1))
+			Expect(svcs.m).To(HaveKey(key_with_saddr3))
+			Expect(svcs.m).NotTo(HaveKey(key_with_saddr2))
 
 		}))
 
@@ -164,15 +149,8 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
 
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).To(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
+			Expect(svcs.m).To(HaveKey(key_with_saddr1))
+			Expect(svcs.m).NotTo(HaveKey(key_with_saddr3))
 
 		}))
 
@@ -189,38 +167,24 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(2))
 
-			saddr := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-			key1 := nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
-
-			saddr = ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
-			key1 = nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222,
-				proxy.ProtoV1ToIntPanic(v1.ProtocolTCP), saddr)
-			Expect(svcs.m).NotTo(HaveKey(key1))
+			Expect(svcs.m).NotTo(HaveKey(key_with_saddr1))
+			Expect(svcs.m).NotTo(HaveKey(key_with_saddr3))
 
 		}))
 
-		By("deleting the services", makestep(func() {
-			delete(state.SvcMap, svcKey)
+		By("Adding new entries to the map with different source IPs", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2", "45.0.1.2"}),
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{"33.0.1.2/24", "38.0.1.2/16", "40.0.1.2/32"}),
+			)
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
-
-			Expect(svcs.m).To(HaveLen(0))
-			Expect(eps.m).To(HaveLen(0))
-		}))
-
-		By("resyncing after creating a new syncer and delete stale entries", makestep(func() {
-			svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
-			svcs.m[nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222, 6, ip.MustParseCIDROrIP("33.0.1.2/24").(ip.V4CIDR))] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
-			svcs.m[nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222, 6, ip.MustParseCIDROrIP("38.0.1.2/16").(ip.V4CIDR))] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
-			svcs.m[nat.NewNATKeySrc(net.IPv4(35, 0, 0, 2), 2222, 6, ip.MustParseCIDROrIP("40.0.1.2/32").(ip.V4CIDR))] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
-			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
-			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
-			Expect(svcs.m).To(HaveLen(4))
-
+			Expect(svcs.m).To(HaveLen(9))
+			s.Stop()
 		}))
 
 		By("Recreate the service with stale entries", makestep(func() {
@@ -231,9 +195,33 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
+		}))
+
+		By("Recreate the service with stale entries and no lb source IPs", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+			)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(2))
+		}))
+
+		By("deleting the services", makestep(func() {
+			delete(state.SvcMap, svcKey)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(0))
+			Expect(eps.m).To(HaveLen(0))
 		}))
 
 	})

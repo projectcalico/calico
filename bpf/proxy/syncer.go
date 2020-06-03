@@ -859,22 +859,30 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 			}
 			continue
 		}
-		matchLBSrcIp := func() uint8 {
+		matchLBSrcIp := func() bool {
+			// Allow further comparison if CIDR is 0. It is treated as an entry without src addr
+			if bsvc.SrcCIDR() == nat.ZeroCIDR {
+				return true
+			}
+			// If the service does not have any source address range, treat all the entries with
+			// src cidr as stale.
+			if len(info.LoadBalancerSourceRanges()) == 0 {
+				return false
+			}
+			// If the service does have source range specified, look for a match
 			for _, srcip := range info.LoadBalancerSourceRanges() {
 				cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
-				addr := cidr.Addr().AsNetIP().To4().String()
-				prefix := uint32(cidr.Prefix() - nat.ZeroCIDRPrefixLen)
-				if addr == bsvc.SrcAddr().String() || prefix == bsvc.PrefixLen() {
-					return 1
+				if cidr == bsvc.SrcCIDR() {
+					return true
 				}
-				continue
 			}
-			return 0
+			return false
 		}
 
-		if matchLBSrcIp() == 0 {
+		if !matchLBSrcIp() {
 			continue
 		}
+
 		if bsvc.Addr().String() == info.ClusterIP().String() {
 			skey := &svcKey{
 				sname: svc,
