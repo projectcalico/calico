@@ -32,4 +32,4 @@ for file in /tmp/core_felix* ; do
     xz < "$file" > "$out_file"
   fi
 done
-tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf
+tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
