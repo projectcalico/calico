@@ -64,3 +64,6 @@ documentation.
    ```
    kubectl apply -f calico.yaml
    ```
+   >**Note**: If upgrading to an operator installed version of Calico, follow the installation
+   instructions instead.
+   {: .alert .alert-info}
