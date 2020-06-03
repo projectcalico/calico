@@ -61,6 +61,11 @@ blocks:
       commands:
       - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 5
+    epilogue:
+      always:
+        commands:
+        - ./.semaphore/collect-artifacts
+        - artifact push --expire-in 4w job artifacts
 - name: BPF UT/FV tests on new kernel
   dependencies: []
   task:
@@ -75,7 +80,6 @@ blocks:
       - export REPO_NAME=$(basename $(pwd))
       - mkdir artifacts
       - ./.semaphore/create-test-vm ${VM_NAME}
-        - ./.semaphore/on-test-vm mkdir ${REPO_NAME}/artifacts
     jobs:
     - name: UT on newer kernel
       commands:
