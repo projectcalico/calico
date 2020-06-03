@@ -486,52 +486,39 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			logCtx.WithError(err).Fatalf("Unable to retrieve tunnel address for cleanup. Error getting node '%s'", nodename)
 		}
 
-		// Determine if we need to do any work.
-		ipipTunnelAddrExists := node.Spec.BGP != nil && node.Spec.BGP.IPv4IPIPTunnelAddr != ""
-		vxlanTunnelAddrExists := node.Spec.IPv4VXLANTunnelAddr != ""
-		wireguardTunnelAddrExists := node.Spec.Wireguard != nil && node.Spec.Wireguard.InterfaceIPv4Address != ""
-		if (attrType == ipam.AttributeTypeVXLAN && !vxlanTunnelAddrExists) ||
-			(attrType == ipam.AttributeTypeIPIP && !ipipTunnelAddrExists) ||
-			(attrType == ipam.AttributeTypeWireguard && !wireguardTunnelAddrExists) {
-			logCtx.Debug("No tunnel address assigned, and not required")
-			return
-		}
-
 		// Find out the currently assigned address and remove it from the node.
+		var ipAddrStr string
 		var ipAddr *net.IP
 		switch attrType {
 		case ipam.AttributeTypeVXLAN:
-			ipAddr = net.ParseIP(node.Spec.IPv4VXLANTunnelAddr)
+			ipAddrStr = node.Spec.IPv4VXLANTunnelAddr
 			node.Spec.IPv4VXLANTunnelAddr = ""
 		case ipam.AttributeTypeIPIP:
 			if node.Spec.BGP != nil {
-				ipAddr = net.ParseIP(node.Spec.BGP.IPv4IPIPTunnelAddr)
+				ipAddrStr = node.Spec.BGP.IPv4IPIPTunnelAddr
 				node.Spec.BGP.IPv4IPIPTunnelAddr = ""
+
+				// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
+				// libcalico asserts that if a BGP spec is present, that it not be empty.
+				if reflect.DeepEqual(*node.Spec.BGP, v3.NodeBGPSpec{}) {
+					logCtx.Debug("BGP spec is now empty, setting to nil")
+					node.Spec.BGP = nil
+				}
 			}
 		case ipam.AttributeTypeWireguard:
 			if node.Spec.Wireguard != nil {
-				ipAddr = net.ParseIP(node.Spec.Wireguard.InterfaceIPv4Address)
+				ipAddrStr = node.Spec.Wireguard.InterfaceIPv4Address
 				node.Spec.Wireguard.InterfaceIPv4Address = ""
+
+				if reflect.DeepEqual(*node.Spec.Wireguard, v3.NodeWireguardSpec{}) {
+					logCtx.Debug("Wireguard spec is now empty, setting to nil")
+					node.Spec.Wireguard = nil
+				}
 			}
 		}
 
-		// If no IP address found then there is nothing to remove.
-		if ipAddr == nil {
-			logCtx.Debug("No valid tunnel address assigned")
-			return
-		}
-
-		// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
-		// libcalico asserts that if a BGP spec is present, that it not be empty.
-		if node.Spec.BGP != nil && reflect.DeepEqual(*node.Spec.BGP, v3.NodeBGPSpec{}) {
-			logCtx.Debug("BGP spec is now empty, setting to nil")
-			node.Spec.BGP = nil
-		}
-
-		// Sim. for wireguard.
-		if node.Spec.Wireguard != nil && reflect.DeepEqual(*node.Spec.Wireguard, v3.NodeWireguardSpec{}) {
-			logCtx.Debug("Wireguard spec is now empty, setting to nil")
-			node.Spec.Wireguard = nil
+		if ipAddrStr != "" {
+			ipAddr = net.ParseIP(ipAddrStr)
 		}
 
 		// Release tunnel IP address(es) for the node.
@@ -539,23 +526,28 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				// Unknown error releasing the address.
-				logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address by handle")
+				logCtx.WithError(err).WithFields(log.Fields{
+					"IP": ipAddrStr,
+					"Handle": handle,
+				}).Fatal("Error releasing address by handle")
 			}
 
-			// There are no addresses with this handle. Check to see if the IP on the node
-			// belongs to us. If it has no handle and no attributes, then we can pretty confidently
-			// say that it belongs to us rather than a pod and should be cleaned up.
-			logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
-			attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
-			if err != nil {
-				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-					logCtx.WithError(err).Fatal("Failed to query attributes")
-				}
-				// No allocation exists, we don't have anything to do.
-			} else if len(attr) == 0 && handle == nil {
-				// The IP is ours. Release it by passing the exact IP.
-				if _, err := c.IPAM().ReleaseIPs(ctx, []net.IP{*ipAddr}); err != nil {
-					logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
+			if ipAddr != nil {
+				// There are no addresses with this handle. If there is an IP configured on the node, check to see if it
+				// belongs to us. If it has no handle and no attributes, then we can pretty confidently
+				// say that it belongs to us rather than a pod and should be cleaned up.
+				logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
+				attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
+				if err != nil {
+					if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+						logCtx.WithError(err).Fatal("Failed to query attributes")
+					}
+					// No allocation exists, we don't have anything to do.
+				} else if len(attr) == 0 && handle == nil {
+					// The IP is ours. Release it by passing the exact IP.
+					if _, err := c.IPAM().ReleaseIPs(ctx, []net.IP{*ipAddr}); err != nil {
+						logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
+					}
 				}
 			}
 		}
