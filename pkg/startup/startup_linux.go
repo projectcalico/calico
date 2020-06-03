@@ -12,7 +12,7 @@ import (
 var DEFAULT_INTERFACES_TO_EXCLUDE []string = []string{
 	"docker.*", "cbr.*", "dummy.*",
 	"virbr.*", "lxcbr.*", "veth.*", "lo",
-	"cali.*", "tunl.*", "flannel.*", "kube-ipvs.*",
+	"cali.*", "tunl.*", "flannel.*", "kube-ipvs.*", "cni.*",
 }
 
 const defaultNodenameFile = "/var/lib/calico/nodename"
