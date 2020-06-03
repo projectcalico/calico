@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"reflect"
+	"strconv"
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,13 +82,25 @@ func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 		return nil, err
 	}
 	state := model.BlockAffinityState(kvpv3.Value.(*apiv3.BlockAffinity).Spec.State)
+
+	// Determine deleted status.
+	deletedString := kvpv3.Value.(*apiv3.BlockAffinity).Spec.Deleted
+	del := false
+	if deletedString != "" {
+		del, err = strconv.ParseBool(deletedString)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse deleted value as bool: %s", err)
+		}
+	}
+
 	return &model.KVPair{
 		Key: model.BlockAffinityKey{
 			CIDR: *cidr,
 			Host: kvpv3.Value.(*apiv3.BlockAffinity).Spec.Node,
 		},
 		Value: &model.BlockAffinity{
-			State: state,
+			State:   state,
+			Deleted: del,
 		},
 		Revision: kvpv3.Revision,
 		UID:      &kvpv3.Value.(*apiv3.BlockAffinity).UID,
@@ -140,9 +153,10 @@ func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				ResourceVersion: kvpv1.Revision,
 			},
 			Spec: apiv3.BlockAffinitySpec{
-				State: string(state),
-				Node:  host,
-				CIDR:  cidr,
+				State:   string(state),
+				Node:    host,
+				CIDR:    cidr,
+				Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
 			},
 		},
 		Revision: kvpv1.Revision,
@@ -224,7 +238,7 @@ func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision s
 		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
 			return nil, err
 		}
-		return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), key}
+		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
 	}
 
 	return v1kvp, nil
