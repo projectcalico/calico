@@ -45,6 +45,8 @@ section:
   section:
   - title: Protect hosts
     path: /security/protect-hosts
+  - title: Protect Kubernetes nodes
+    path: /security/kubernetes-nodes
   - title: Protect host tutorial
     path: /security/tutorials/protect-hosts
   - title: Apply policy to host forwarded traffic
@@ -74,6 +76,8 @@ section:
     path: /security/high-connection-workloads
   - title: Defend against DoS attacks
     path: /security/defend-dos-attack
+- title: Try out the node-to-node encryption tech preview
+  path: /security/try-node-to-node-encryption
 - title: Secure Calico component communications
   path: /security/comms/
   section:

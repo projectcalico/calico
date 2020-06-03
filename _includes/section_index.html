@@ -5,11 +5,11 @@
                 {% for nested_item in item.section %}
                     {% capture url %}{{ nested_item.path | relative_url }}{% endcapture %}
                     <div class="section-index__item">
-                        <h4>
+                        <div class="section-index__title">
                             <a href="{{ url }}">
                                 {{ nested_item.title }}
                             </a>
-                        </h4>
+                        </div>
                         <p>
                             {% assign p = site.pages | where: 'url', nested_item.path | first %}
                             {{ p.description | default p.Description | default nested_item.description | default "no description" }}

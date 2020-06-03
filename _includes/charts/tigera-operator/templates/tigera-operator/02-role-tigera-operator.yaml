@@ -115,6 +115,7 @@ rules:
       - bgpconfigurations
       - bgppeers
       - felixconfigurations
+      - kubecontrollersconfigurations
       - globalnetworkpolicies
       - globalnetworksets
       - hostendpoints

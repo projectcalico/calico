@@ -53,7 +53,7 @@ In terms of design consistency in {{site.prodname}}, you may wonder about the fo
 Yes. DefaultEndpointToHostAction controls whether or not workloads can acesss their local host.<br>
 
 **Does {{site.prodname}} protect a workload from the host it is running on?**<br>
-No. {{site.prodname}} allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local {{site.prodname}} policy. Be very cautious with the processes that you allow to run in the host's root network namespace.</br>
+No. {{site.prodname}} allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local {{site.prodname}} policy. Be very cautious with the processes that you allow to run in the host's root network namespace.
 
 ### Before you begin...
 
@@ -80,6 +80,7 @@ Review the following table to determine if the defaults work for your implementa
 |   179  |   TCP    |  Inbound & Outbound |             BGP access ({{site.prodname}} networking)     |
 |   2379 |   TCP    |  Inbound & Outbound |             etcd access                        |
 |   2380 |   TCP    |  Inbound & Outbound |             etcd access                        |
+|   6443 |   TCP    |  Inbound & Outbound |             Kubernetes API server access       |
 |   6666 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
 |   6667 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
 
@@ -185,6 +186,7 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 ### Above and beyond
 
 - [Apply policy to Kubernetes node ports]({{ site.baseurl }}/security/kubernetes-node-ports)
+- [Protect Kubernetes nodes with host endpoints managed by {{site.prodname}}]({{ site.baseurl }}/security/kubernetes-nodes)
 - [Defend against DoS attacks]({{ site.baseurl }}/security/defend-dos-attack)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - [Host endpoint]({{ site.baseurl }}/reference/resources/hostendpoint)

@@ -23,7 +23,7 @@
   > **Note**: Many Linux distributions, such as most of the above, include NetworkManager.
   > By default, NetworkManager does not allow {{site.prodname}} to manage interfaces.
   > If your nodes have NetworkManager, complete the steps in
-  > [Preventing NetworkManager from controlling {{site.prodname}} interfaces]({{ site.baseurl }}/maintenance/troubleshooting#configure-networkmanager)
+  > [Preventing NetworkManager from controlling {{site.prodname}} interfaces]({{ site.baseurl }}/maintenance/troubleshoot/troubleshooting#configure-networkmanager)
   > before installing {{site.prodname}}.
   {: .alert .alert-info}
 

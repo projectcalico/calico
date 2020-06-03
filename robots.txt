@@ -6,3 +6,4 @@ Disallow: /js/
 Disallow: /fonts/
 Disallow: /css/
 Disallow: /assets/
+Disallow: /archive/

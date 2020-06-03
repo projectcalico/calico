@@ -45,10 +45,18 @@ data:
   calico_backend: "bird"
 {{- end }}
 
-  # Configure the MTU to use
   {{- if .Values.bpf }}
+  # Configure the MTU for workload interfaces and VXLAN encap.
+  # In BPF mode, this should be set to your network MTU - 50.
+  veth_mtu: "{{ .Values.mtu }}"
+  {{- else if .Values.vxlan }}
+  # Configure the MTU to use for workload interfaces and the
+  # tunnels. For VXLAN set to your network MTU - 50.
   veth_mtu: "1410"
   {{- else }}
+  # Configure the MTU to use for workload interfaces and the
+  # tunnels. For IPIP, set to your network MTU - 20; for VXLAN
+  # set to your network MTU - 50.
   veth_mtu: "1440"
   {{- end}}
 {{- else if eq .Values.network "flannel" }}
@@ -65,7 +73,7 @@ data:
   veth_mtu: "1450"
 {{- end }}
 
-  # The CNI network configuration to install on each node.  The special
+  # The CNI network configuration to install on each node. The special
   # values in this config will be automatically populated.
 {{- if and (eq .Values.datastore "etcd") (eq .Values.network "flannel") }}
   cni_network_config: |-
