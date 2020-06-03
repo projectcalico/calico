@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,10 @@ import (
 	"github.com/projectcalico/felix/fv/tcpdump"
 	"github.com/projectcalico/felix/fv/utils"
 )
+
+// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
+// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
+const CreateCgroupV2 = false
 
 type Felix struct {
 	*containers.Container
@@ -74,6 +78,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	// Add in the environment variables.
 	envVars := map[string]string{
+		// Enable core dumps.
+		"GOTRACEBACK": "crash",
+		// Tell the wrapper to set the core file name pattern so we can find the dump.
+		"SET_CORE_PATTERN": "true",
+
 		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
 		"FELIX_BPFLOGLEVEL":              "debug",
@@ -91,9 +100,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// share maps.
 		envVars["FELIX_DebugBPFMapRepinEnabled"] = "false"
 
-		// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
-		// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
-		// envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
+		if CreateCgroupV2 {
+			envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
+		}
 	}
 
 	if options.DelayFelixStart {
@@ -111,6 +120,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// Add in the volumes.
 	volumes := map[string]string{
 		"/lib/modules": "/lib/modules",
+		"/tmp":         "/tmp",
 	}
 	for k, v := range options.ExtraVolumes {
 		volumes[k] = v
@@ -158,7 +168,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 }
 
 func (f *Felix) Stop() {
-	_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
+	if CreateCgroupV2 {
+		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
+	}
 	f.Container.Stop()
 }
 

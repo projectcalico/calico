@@ -25,6 +25,10 @@ trap 'echo "calico-felix-wrapper: SIGHUP received, passing on to calico-felix"; 
 
 rc=unknown
 
+if [ "$SET_CORE_PATTERN" == "true" ]; then
+  echo '/tmp/core_%h_%e.%p' > /proc/sys/kernel/core_pattern
+fi
+
 while true; do
   if [ "$DELAY_FELIX_START" == "true" ]; then
     while [ ! -e /start-trigger ]; do

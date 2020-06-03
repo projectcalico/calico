@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"net"
 	"os"
@@ -123,7 +122,7 @@ func main() {
 	seconds, err := strconv.Atoi(duration)
 	if err != nil {
 		// panic on error
-		panic(fmt.Sprintf("invalid duration argument - %s", duration))
+		log.WithField("duration", duration).Fatal("Invalid duration argument")
 	}
 	loopFile := ""
 	if arg, ok := arguments["--loop-with-file"]; ok && arg != nil {
@@ -156,7 +155,7 @@ func main() {
 		var namespace ns.NetNS
 		namespace, err = ns.GetNS(namespacePath)
 		if err != nil {
-			panic(err)
+			log.WithError(err).Fatal("Failed to get netns")
 		}
 		log.WithField("namespace", namespace).Debug("Got namespace")
 
@@ -173,7 +172,7 @@ func main() {
 	}
 
 	if err != nil {
-		panic(err)
+		log.WithError(err).Fatal("Failed to connect")
 	}
 }
 
@@ -288,7 +287,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 	} else {
 		connType = connectivity.ConnectionTypeStream
 		if protocol != "udp" {
-			panic("Wrong protocol for packets loss test")
+			log.Fatal("Wrong protocol for packets loss test")
 		}
 	}
 
@@ -309,7 +308,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
 		time.Duration(seconds)*time.Second, sendLen, recvLen)
 	if err != nil {
-		panic(err)
+		log.WithError(err).Fatal("Failed to create TestConn")
 	}
 	defer func() {
 		_ = tc.Close()
@@ -487,7 +486,7 @@ func (tc *testConn) tryConnectWithPacketLoss() error {
 					reqTotal, count, lastSequence, outOfOrder, maxGap)
 
 				if count > reqTotal {
-					panic("Got more packets than we sent")
+					log.Fatal("Got more packets than we sent")
 				}
 
 				tc.stat.totalReq = reqTotal
@@ -504,7 +503,7 @@ func (tc *testConn) tryConnectWithPacketLoss() error {
 					continue
 				} else if err != nil {
 					// This is an error, not a timeout
-					panic(err)
+					log.WithError(err).Fatal("Got non-timeout error while reading.")
 				}
 
 				var resp connectivity.Response
@@ -517,7 +516,7 @@ func (tc *testConn) tryConnectWithPacketLoss() error {
 
 				lastSequence, err = tc.config.GetTestMessageSequence(resp.Request.Payload)
 				if err != nil {
-					panic(err)
+					log.WithError(err).Fatal("Failed to get test message sequence from payload")
 				}
 
 				if lastSequence != count {
@@ -619,11 +618,11 @@ func (l *loopState) Next() bool {
 		// and quit.
 		if _, err := os.Stat(l.loopFile); err != nil {
 			if !os.IsNotExist(err) {
-				panic(fmt.Errorf("Failed to stat loop file %s: %v", l.loopFile, err))
+				log.Panicf("Failed to stat loop file %s: %v", l.loopFile, err)
 			}
 		} else {
 			if err := os.Remove(l.loopFile); err != nil {
-				panic(fmt.Errorf("Could not remove loop file %s: %v", l.loopFile, err))
+				log.Panicf("Could not remove loop file %s: %v", l.loopFile, err)
 			}
 			return false
 		}
@@ -633,7 +632,7 @@ func (l *loopState) Next() bool {
 		// delete the loop file, so other process can continue
 		// with the appropriate checks
 		if err := os.Remove(l.loopFile); err != nil {
-			panic(fmt.Errorf("Could not remove loop file %s: %v", l.loopFile, err))
+			log.Panicf("Could not remove loop file %s: %v", l.loopFile, err)
 		}
 		l.sentInitial = true
 	}
