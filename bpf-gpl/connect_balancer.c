@@ -51,25 +51,28 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, uint8_t pro
 
 	uint32_t dport_be = host_to_ctx_port(nat_dest->port);
 
-	uint64_t cookie = bpf_get_socket_cookie(ctx);
-	CALI_DEBUG("Store: ip=%x port=%d(BE) cookie=%x\n", nat_dest->addr, dport_be, cookie);
-	struct sendrecv4_key key = {
-		.ip	= nat_dest->addr,
-		.port	= dport_be,
-		.cookie	= cookie,
-	};
-	struct sendrecv4_val val = {
-		.ip	= ctx->user_ip4,
-		.port	= ctx->user_port,
-		/* XXX we should also store the backend key to verify that it is
-		 * XXX still ok upon recvmsg.
-		 */
-	};
+	if (proto != IPPROTO_TCP) {
+		uint64_t cookie = bpf_get_socket_cookie(ctx);
+		CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
+				be32_to_host(nat_dest->addr), be16_to_host((uint16_t)dport_be), cookie);
+		struct sendrecv4_key key = {
+			.ip	= nat_dest->addr,
+			.port	= dport_be,
+			.cookie	= cookie,
+		};
+		struct sendrecv4_val val = {
+			.ip	= ctx->user_ip4,
+			.port	= ctx->user_port,
+			/* XXX we should also store the backend key to verify that it is
+			 * XXX still ok upon recvmsg.
+			 */
+		};
 
-	if (cali_v4_srmsg_update_elem(&key, &val, 0)) {
-		/* if this happens things are really bad! report */
-		CALI_INFO("Failed to update map\n");
-		goto out;
+		if (cali_v4_srmsg_update_elem(&key, &val, 0)) {
+			/* if this happens things are really bad! report */
+			CALI_INFO("Failed to update map\n");
+			goto out;
+		}
 	}
 
 	ctx->user_ip4 = nat_dest->addr;
