@@ -47,11 +47,6 @@ documentation.
    calicoctl datastore migrate import -f etcd-data
    ```
 
-1. Unlock the datastore. This allows the {{site.prodname}} resources to affect the cluster again.
-   ```
-   calicoctl datastore migrate unlock
-   ```
-
 1. Configure {{site.prodname}} to read from the Kubernetes datastore. Follow the
    directions to install {{site.prodname}} with the Kubernetes datastore. The
    installation instructions contain the relevant version of the
@@ -63,3 +58,9 @@ documentation.
    there will not be a `calico.yaml` file to apply. Follow the operator installation
    instructions instead.
    {: .alert .alert-info}
+
+1. Unlock the datastore. This allows the {{site.prodname}} resources to affect the cluster again.
+   ```
+   calicoctl datastore migrate unlock
+   ```
+
