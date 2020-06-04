@@ -1,0 +1,5 @@
+---
+layout: null
+---
+
+{% include content/non-helm-manifests/custom-resources.yaml %}
