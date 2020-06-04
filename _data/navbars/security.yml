@@ -4,8 +4,6 @@ order: 3
 section:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust
-- title: Try out the node-to-node encryption tech preview
-  path: /security/try-node-to-node-encryption
 - title: Get started with policy
   path: /security/get-started
   section:
