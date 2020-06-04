@@ -384,7 +384,6 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			m.ensureQdisc(iface)
 			err := m.attachDataIfaceProgram(iface, PolDirnIngress)
 			if err == nil {
 				err = m.attachDataIfaceProgram(iface, PolDirnEgress)
@@ -466,9 +465,6 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 		// TODO clean up old workloads
 		return nil
 	}
-	ifaceName := wep.Name
-
-	m.ensureQdisc(ifaceName)
 
 	var ingressErr, egressErr error
 	var wg sync.WaitGroup
@@ -496,16 +492,12 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	return nil
 }
 
-func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
-	tc.EnsureQdisc(ifaceName)
-}
-
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
 func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
 	// Host side of the veth is always configured as 169.254.1.1.
-	ap.IP = calicoRouterIP
+	ap.HostIP = calicoRouterIP
 	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
 	// * We also expect that to be the MTU used on veths.
 	// * We do encap on the veths, and there's a bogus kernel MTU check in the BPF helper
@@ -612,7 +604,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 		epType = tc.EpTypeTunnel
 	}
 	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
-	ap.IP = m.hostIP
+	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	return ap.AttachProgram()
 }

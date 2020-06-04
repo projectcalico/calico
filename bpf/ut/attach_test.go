@@ -49,7 +49,6 @@ func TestJumpMapCleanup(t *testing.T) {
 		vethName, veth := createVeth()
 		defer deleteLink(veth)
 
-		tc.EnsureQdisc(vethName)
 		ap.Iface = vethName
 
 		log.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
@@ -61,15 +60,14 @@ func TestJumpMapCleanup(t *testing.T) {
 		t.Log("Adding program, should add one dir and one map.")
 		startingJumpMaps := countJumpMaps()
 		startingTCDirs := countTCDirs()
-		ap.IP = net.ParseIP("10.0.0.1")
+		ap.HostIP = net.ParseIP("10.0.0.1")
 		err := ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
 		Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
 
 		t.Log("Replacing program should add another map and dir.")
-		tc.EnsureQdisc(vethName)
-		ap.IP = net.ParseIP("10.0.0.2")
+		ap.HostIP = net.ParseIP("10.0.0.2")
 		err = ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+2), "unexpected number of jump maps after replacing program")
@@ -82,7 +80,6 @@ func TestJumpMapCleanup(t *testing.T) {
 
 		// Remove the program.
 		t.Log("Removing all programs and cleaning up, should return to base state.")
-		tc.EnsureQdisc(vethName)
 		tc.CleanUpJumpMaps()
 		Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps), "unexpected number of jump maps")
 		Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs), "unexpected number of TC dirs")
