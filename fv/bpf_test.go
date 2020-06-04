@@ -150,7 +150,7 @@ const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
-FELIX_0/32: local host
+FELIX_0/32: local host idx -
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
@@ -161,7 +161,7 @@ const expectedRouteDumpIPIP = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
-FELIX_0/32: local host
+FELIX_0/32: local host idx -
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
@@ -478,6 +478,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					}
 
 					labels["name"] = w.Name
+					labels["workload"] = "regular"
 
 					w.WorkloadEndpoint.Labels = labels
 					w.ConfigureInDatastore(infra)
@@ -511,6 +512,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
 						"8055",
 						testOpts.protocol)
+
+					hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
+					hostW[ii].ConfigureInDatastore(infra)
 
 					// Two workloads on each host so we can check the same host and other host cases.
 					w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
@@ -574,7 +578,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				cc.CheckConnectivity()
 			})
 
-			Context("with a policy allowing ingress to w[0][0] from all workloads", func() {
+			Context("with a policy allowing ingress to w[0][0] from all regular workloads", func() {
 				var (
 					pol       *api.GlobalNetworkPolicy
 					k8sClient *kubernetes.Clientset
@@ -588,7 +592,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						{
 							Action: "Allow",
 							Source: api.EntityRule{
-								Selector: "all()",
+								Selector: "workload=='regular'",
 							},
 						},
 					}
@@ -596,11 +600,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						{
 							Action: "Allow",
 							Source: api.EntityRule{
-								Selector: "all()",
+								Selector: "workload=='regular'",
 							},
 						},
 					}
-					pol.Spec.Selector = "all()"
+					pol.Spec.Selector = "workload=='regular'"
 
 					pol = createPolicy(pol)
 
