@@ -7,7 +7,7 @@ description: Try out enabling WireGuard for state-of-the-art cryptographic secur
 
 Enable WireGuard to secure on the wire pod-to-pod traffic in a {{site.prodname}} cluster.
 
-> **Warning!** Node-to-node encryption is a tech preview and should not be used in production clusters. It has had very limited testing and it will contain bugs (please report these on the Calico Users Slack or GitHub). This feature is currently not supported with overlay networks (IP in IP or VXLAN) due to known issues with NodePort services.
+> **Warning!** Pod-to-pod encryption is a tech preview and should not be used in production clusters. It has had very limited testing and it will contain bugs (please report these on the Calico Users Slack or GitHub). This feature is currently not supported with overlay networks (IP in IP or VXLAN) due to known issues with NodePort services.
 {: .alert .alert-danger}
 
 ### Value
@@ -24,9 +24,11 @@ This how-to guide uses the following {{site.prodname}} features:
 
 - Verify the operating system(s) running on the nodes in the cluster [support WireGuard](https://www.wireguard.com/install/).
 
-    >**Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time.
-    {: .alert .alert-info}
-- In the tech preview release, node-to-node encryption is supported on an underlying network that doesn’t require Calico to use an overlay. For example, a cluster with a routed network topology.
+> **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time.
+{: .alert .alert-info}
+
+> **Note**: In the tech preview release, pod-to-pod encryption is supported on an underlying network that doesn’t require {{site.prodname}} to use an overlay. For example, a cluster with a routed network topology. 
+{: .alert .alert-info}
 
 ### How to
 
