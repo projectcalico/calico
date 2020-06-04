@@ -1,17 +1,15 @@
 ---
-title: Migrate a cluster from flannel networking to Calico networking
-description: Take advantage of the more flexible Calico IP address management by upgrading from flannel VXLAN to Calico VXLAN netowrking. 
+title: Migrate a Kubernetes cluster from flannel/Canal to Calico
+description: Preserve your existing VXLAN networking in Calico, but take full advantage of advanced network policy and other networking options.
 ---
 
 ### Big picture
 
-Migrate an existing Kubernetes cluster with flannel VXLAN networking to Calico VXLAN networking.
+Migrate an existing Kubernetes cluster with flannel/Canal to {{site.prodname}} networking. 
 
 ### Value
 
-Migrating from flannel networking to Calico networking lets you take advantage of Calico IP address management (IPAM) for more efficient and flexible managed of IP addresses.
-
-To see all options for using flannel with Calico (including using Calico network policy), see [Blog: Live Migration from Flannel to Calico](https://www.projectcalico.org/live-migration-from-flannel-to-calico/).
+If you are already using flannel for networking, it is easy to migrate to {{site.prodname}}'s native VXLAN networking. After migration, you can consider other {{site.prodname}} networking options like IP-in-IP or BGP peering. Either way, you automatically get {{site.prodname}} advanced network policy features. 
 
 ### Concepts
 
@@ -23,15 +21,15 @@ Flannel networking uses the host-local IPAM (IP address management) CNI plugin, 
 
 - Because each node has a pre-allocated CIDR, pods must always have an IP address assigned based on the node it is running on. Being able to allocate IP addresses based on other attributes (for example, the pod’s namespace), provides flexiblity to meet use cases that arise.
 
-Migrating to Calico IPAM solves these use cases and more.
+Migrating to {{site.prodname}} IPAM solves these use cases and more. For advantages of Calico IPAM, see [Blog: Live Migration from Flannel to Calico](https://www.projectcalico.org/live-migration-from-flannel-to-calico/).
 
-#### Methods for migrating to Calico networking
+#### Methods for migrating to {{site.prodname}} networking
 
-There are two ways to switch your cluster to use Calico networking. Both methods give you a fully-functional Calico cluster using VXLAN networking between pods.
+There are two ways to switch your cluster to use {{site.prodname}} networking. Both methods give you a fully-functional {{site.prodname}} cluster using VXLAN networking between pods.
 
-- **Create a new cluster using Calico and migrate existing workloads**
+- **Create a new cluster using {{site.prodname}} and migrate existing workloads**
 
-  If you have the ability to migrate worloads from one cluster to the next without caring about downtime, this is the easiest method: [create a new cluster using Calico]({{site.baseurl}}/getting-started/kubernetes/quickstart).
+  If you have the ability to migrate worloads from one cluster to the next without caring about downtime, this is the easiest method: [create a new cluster using {{site.prodname}}]({{site.baseurl}}/getting-started/kubernetes/quickstart).
 
 - **Live migration on an existing cluster**
 
@@ -60,7 +58,7 @@ There are two ways to switch your cluster to use Calico networking. Both methods
 
 #### Migrate from flannel networking to Calico networking, live migration
 
-1. Install Calico.
+1. Install {{site.prodname}}.
 
    ```
    kubectl apply -f {{ "/manifests/flannel-migration/calico.yaml" | absolute_url }}
@@ -130,17 +128,17 @@ kubectl logs -n kube-system -l k8s-app=flannel-migration-controller
 
 #### Revert migration
 
-If you need to revert a cluster from Calico back to flannel, follow these steps.
+If you need to revert a cluster from {{site.prodname}} back to flannel, follow these steps.
 
 
-1. Remove the migration controller and Calico.
+1. Remove the migration controller and {{site.prodname}}.
 
    ```
    kubectl delete -f {{ "/manifests/flannel-migration/migration-job.yaml" | absolute_url }}
    kubectl delete -f {{ "/manifests/flannel-migration/calico.yaml" | absolute_url }}
    ```
 
-1. Determine the nodes that were migrated to Calico.
+1. Determine the nodes that were migrated to {{site.prodname}}.
 
    ```
    kubectl get nodes -l projectcalico.org/node-network-during-migration=calico
@@ -190,4 +188,4 @@ After the above steps have been completed on each node, perform the following st
 
 ### Next steps
 
-Learn about [Calico IP address management]({{site.baseurl}}/networking/ipam)
+Learn about [{{site.prodname}} IP address management]({{site.baseurl}}/networking/ipam)
