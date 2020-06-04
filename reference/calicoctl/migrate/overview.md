@@ -1,22 +1,22 @@
 ---
-title: calicoctl migrate
-description: Commands for calicoctl migrate. 
+title: calicoctl datastore migrate
+description: Commands for calicoctl datastore migrate. 
 canonical_url: '/reference/calicoctl/node/index'
 ---
 
-This section describes the `calicoctl migrate` commands.
+This section describes the `calicoctl datastore migrate` commands.
 
 Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl migrate' commands
+## Display the help text for 'calicoctl datastore migrate' commands
 
-Run `calicoctl migrate --help` to display the following help menu for the
+Run `calicoctl datastore migrate --help` to display the following help menu for the
 commands.
 
 ```
 Usage:
-  calicoctl migrate <command> [<args>...]
+  calicoctl datastore migrate <command> [<args>...]
 
     export  Export the contents of the etcdv3 datastore to yaml.
     import  Store and convert yaml of resources into the Kubernetes datastore.
@@ -29,7 +29,7 @@ Options:
 Description:
   Migration specific commands for calicoctl.
 
-  See 'calicoctl migrate <command> --help' to read about a specific subcommand.
+  See 'calicoctl datastore migrate <command> --help' to read about a specific subcommand.
 ```
 {: .no-select-button}
 
@@ -38,7 +38,7 @@ Description:
 Details on the `calicoctl node` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl migrate export]({{ site.baseurl }}/reference/calicoctl/migrate/export)
--  [calicoctl migrate import]({{ site.baseurl }}/reference/calicoctl/migrate/import)
--  [calicoctl migrate lock]({{ site.baseurl }}/reference/calicoctl/migrate/lock)
--  [calicoctl migrate unlock]({{ site.baseurl }}/reference/calicoctl/migrate/unlock)
+-  [calicoctl datastore migrate export]({{ site.baseurl }}/reference/calicoctl/migrate/export)
+-  [calicoctl datastore migrate import]({{ site.baseurl }}/reference/calicoctl/migrate/import)
+-  [calicoctl datastore migrate lock]({{ site.baseurl }}/reference/calicoctl/migrate/lock)
+-  [calicoctl datastore migrate unlock]({{ site.baseurl }}/reference/calicoctl/migrate/unlock)

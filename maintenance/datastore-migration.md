@@ -1,69 +1,65 @@
 ---
-title: Migrate Calico Data from an etcdv3 Datastore to a Kubernetes Datastore
+title: Migrate Calico data from an etcdv3 datastore to a Kubernetes datastore
 description: Migrate your cluster from using an etcdv3 datastore to a Kubernetes datastore.
 canonical_url: '/maintenance/datastore-migration'
 ---
 
-## Big Picture
+## Big picture
 
-Switch the Calico datastore from etcdv3 to Kubernetes.
+Switch your {{site.prodname}} datastore from etcdv3 to Kubernetes.
 
 ## Value
 
-In order to utilize all of Calico's newest features, Calico backed by
-the kubernetes datastore is required. Migrating your data allows users
-with an existing cluster set up with an etcdv3 datastore to seamlessly
-transition their cluster to a Kubernetes datastore and take advantage
-of new Calico functionality. For more on the advantages of using a
-Kubernetes datastore over an etcd datastore, see this section of the
-[Calico Datastore]({{ site.baseurl }}/getting-started/kubernetes/hardway/the-calico-datastore#using-kubernetes-as-the-datastore)
+To utilize all of {{site.prodname}}'s newest features, Kubernetes datastore
+is required. We provide a seamless way to migrate your data from an existing
+cluster with an etcdv3 datastore to a Kubernetes datastore. For the
+advantages of using a Kubernetes datastore over an etcd datastore, see
+[{{site.prodname}} Datastore]({{ site.baseurl }}/getting-started/kubernetes/hardway/the-calico-datastore#using-kubernetes-as-the-datastore)
 documentation.
 
 ## Before you begin...
 
-[calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install) must be installed
-and configured to access the current etcdv3 datastore. For more information, see the
-[calicoctl configuration]({{ site.baseurl }}/getting-started/clis/calicoctl/configure/etcd)
-documentation.
+[calicoctl must be installed and configured]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 
 ## How To
 
-In order to migrate contents of the datastore, we will be using the `calicoctl migrate`
-command and its accompanying subcommands. For more information, see the
-[calicoctl migrate]({{ site.baseurl }}/reference/calicoctl/migrate/overview)
+To migrate contents of the datastore, we will be using the `calicoctl datastore migrate`
+command and subcommands. For more information, see the
+[calicoctl datastore migrate]({{ site.baseurl }}/reference/calicoctl/migrate/overview)
 documentation.
 
-1. Lock the datastore for migration. This will prevent any changes to the data from
+1. Lock the etcd datastore for migration. This prevents any changes to the data from
    affecting the cluster.
    ```
-   calicoctl migrate lock
+   calicoctl datastore migrate lock
    ```
 
-2. Export the datastore contents to a file.
+1. Export the datastore contents to a file.
    ```
-   calicoctl migrate export > etcd-data
-   ```
-
-3. Configure `calicoctl` to access the Kubernetes datastore. For more details, see
-   the [calicoctl configuration]{{ site.baseurl }}/getting-started/clis/calicoctl/configure/kdd)
-   documentation.
-
-4. Import the datastore contents from your exported file.
-   ```
-   calicoctl migrate import -f etcd-data
+   calicoctl datastore migrate export > etcd-data
    ```
 
-5. Unlock the datastore. This will allow the Calico resources to affect the cluster again.
+1. Configure `calicoctl` to access the
+   [Kubernetes datastore]({{ site.baseurl }}/getting-started/clis/calicoctl/configure/kdd).
+
+1. Import the datastore contents from your exported file.
    ```
-   calicoctl migrate unlock
+   calicoctl datastore migrate import -f etcd-data
    ```
 
-6. Configure Calico to read from the Kubernetes datastore. This can be done by following the
-   directions to install Calico with the Kubernetes datastore. See the installation instructions
-   for your version of Calico in order to find and apply the relevant `calico.yaml` file.
+1. Unlock the datastore. This allows the {{site.prodname}} resources to affect the cluster again.
+   ```
+   calicoctl datastore migrate unlock
+   ```
+
+1. Configure {{site.prodname}} to read from the Kubernetes datastore. Follow the
+   directions to install {{site.prodname}} with the Kubernetes datastore. The
+   installation instructions contain the relevant version of the
+   `calico.yaml` file to apply.
    ```
    kubectl apply -f calico.yaml
    ```
-   >**Note**: If upgrading to an operator installed version of Calico, follow the installation
+   >**Note**: If upgrading to an operator installed version of {{site.prodname}},
+   there will not be a `calico.yaml` file to apply. Follow the operator installation
    instructions instead.
    {: .alert .alert-info}

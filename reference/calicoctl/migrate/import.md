@@ -1,22 +1,22 @@
 ---
-title: calicoctl migrate import
+title: calicoctl datastore migrate import
 description: Command and options for importing exported data to a kubernetes datastore.
 canonical_url: '/reference/calicoctl/migrate/import'
 ---
 
-This sections describes the `calicoctl migrate import` command.
+This sections describes the `calicoctl datastore migrate import` command.
 
 Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl migrate import' command
+## Display the help text for 'calicoctl datastore migrate import' command
 
-Run `calicoctl migrate import --help` to display the following help menu for the
+Run `calicoctl datastore migrate import --help` to display the following help menu for the
 command.
 
 ```
 Usage:
-  calicoctl migrate import --filename=<FILENAME> [--config=<CONFIG>]
+  calicoctl datastore migrate import --filename=<FILENAME> [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -37,7 +37,7 @@ Description:
 Import the contents of an etcdv3 datastore stored in a file named `etcd-migration`.
 
 ```bash
-calicoctl migrate import -f etcd-migration
+calicoctl datastore migrate import -f etcd-migration
 ```
 
 ### Options
@@ -59,7 +59,7 @@ calicoctl migrate import -f etcd-migration
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+-  [Install calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 -  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format
    and schema
 -  [Policy]({{ site.baseurl }}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model

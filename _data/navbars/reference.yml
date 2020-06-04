@@ -49,7 +49,7 @@ section:
       path: /reference/calicoctl/node/diags
     - title: checksystem
       path: /reference/calicoctl/node/checksystem
-  - title: migrate
+  - title: datastore migrate
     path: /reference/calicoctl/migrate/
     section:
     - title: Overview

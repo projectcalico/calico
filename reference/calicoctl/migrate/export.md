@@ -1,22 +1,22 @@
 ---
-title: calicoctl migrate export
+title: calicoctl datastore migrate export
 description: Command and options for exporting an etcdv3 datastore.
 canonical_url: '/reference/calicoctl/migrate/export'
 ---
 
-This sections describes the `calicoctl migrate export` command.
+This sections describes the `calicoctl datastore migrate export` command.
 
 Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl migrate export' command
+## Display the help text for 'calicoctl datastore migrate export' command
 
-Run `calicoctl migrate export --help` to display the following help menu for the
+Run `calicoctl datastore migrate export --help` to display the following help menu for the
 command.
 
 ```
 Usage:
-  calicoctl migrate export [--config=<CONFIG>]
+  calicoctl datastore migrate export [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -81,7 +81,7 @@ since they should be generated:
 Export the contents of an etcdv3 datastore to a file named `etcd-migration`.
 
 ```bash
-calicoctl migrate export > etcd-migration
+calicoctl datastore migrate export > etcd-migration
 ```
 
 ### General options
@@ -95,7 +95,7 @@ calicoctl migrate export > etcd-migration
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+-  [Install calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 -  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format
    and schema
 -  [Policy]({{ site.baseurl }}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model

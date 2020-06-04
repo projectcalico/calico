@@ -1,22 +1,22 @@
 ---
-title: calicoctl migrate lock
+title: calicoctl datastore migrate lock
 description: Command and options for locking a datastore for migration.
 canonical_url: '/reference/calicoctl/migrate/lock'
 ---
 
-This sections describes the `calicoctl migrate lock` command.
+This sections describes the `calicoctl datastore migrate lock` command.
 
 Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl migrate unlock' command
+## Display the help text for 'calicoctl datastore migrate unlock' command
 
-Run `calicoctl migrate lock --help` to display the following help menu for the
+Run `calicoctl datastore migrate lock --help` to display the following help menu for the
 command.
 
 ```
 Usage:
-  calicoctl migrate lock [--config=<CONFIG>]
+  calicoctl datastore migrate lock [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -37,7 +37,7 @@ Lock the datastore to prepare it for migration so that any changes to the
 data will not affect the cluster during migration.
 
 ```bash
-calicoctl migrate lock
+calicoctl datastore migrate lock
 ```
 
 ### General options
@@ -51,7 +51,7 @@ calicoctl migrate lock
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+-  [Install calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 -  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format
    and schema
 -  [Policy]({{ site.baseurl }}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model

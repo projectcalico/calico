@@ -1,22 +1,22 @@
 ---
-title: calicoctl migrate unlock
+title: calicoctl datastore migrate unlock
 description: Command and options for unlocking a datastore after migration.
 canonical_url: '/reference/calicoctl/migrate/unlock'
 ---
 
-This sections describes the `calicoctl migrate lock` command.
+This sections describes the `calicoctl datastore migrate lock` command.
 
 Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl migrate unlock' command
+## Display the help text for 'calicoctl datastore migrate unlock' command
 
-Run `calicoctl migrate unlock --help` to display the following help menu for the
+Run `calicoctl datastore migrate unlock --help` to display the following help menu for the
 command.
 
 ```
 Usage:
-  calicoctl migrate unlock [--config=<CONFIG>]
+  calicoctl datastore migrate unlock [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -36,7 +36,7 @@ Unlock the datastore after migration to allow the Calico resources to affect
 the cluster.
 
 ```bash
-calicoctl migrate unlock
+calicoctl datastore migrate unlock
 ```
 
 ### General options
@@ -50,7 +50,7 @@ calicoctl migrate unlock
 
 ## See also
 
--  [Installing calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
+-  [Install calicoctl]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 -  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format
    and schema
 -  [Policy]({{ site.baseurl }}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model
