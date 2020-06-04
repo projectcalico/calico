@@ -1,18 +1,18 @@
 ---
-title: Try out the node-to-node encryption tech preview
+title: Try out the pod-to-pod encryption tech preview
 description: Try out enabling WireGuard for state-of-the-art cryptographic security between pods for Calico clusters.
 ---
 
 ### Big picture
 
-Enable WireGuard to secure node-to-node traffic in a {{site.prodname}} cluster.
+Enable WireGuard to secure on the wire pod-to-pod traffic in a {{site.prodname}} cluster.
 
-> **Warning!** Node-to-node encryption is a tech preview and should not be used in production clusters. It has had very limited testing and it will contain bugs (please report these on the Calico Users Slack or GitHub). This feature is currently not supported with overlay networks (IP in IP, VXLAN) due to known issues with NodePort services.
-{: .alert .alert-danger }
+> **Warning!** Node-to-node encryption is a tech preview and should not be used in production clusters. It has had very limited testing and it will contain bugs (please report these on the Calico Users Slack or GitHub). This feature is currently not supported with overlay networks (IP in IP or VXLAN) due to known issues with NodePort services.
+{: .alert .alert-danger}
 
 ### Value
 
-{{ site.prodname }} supports WireGuard tunnels between nodes providing transport-level security for node-to-node traffic. WireGuard provides [formally verified](https://www.wireguard.com/formal-verification/) secure and [performant tunnels](https://www.wireguard.com/performance/) without any specialized hardware. For a deep dive in to WireGuard implementation, see [whitepaper](https://www.wireguard.com/papers/wireguard.pdf).
+{{ site.prodname }} automatically creates and manages WireGuard tunnels between nodes providing transport-level security for on the wire pod-to-pod traffic. WireGuard provides {% include open-new-window.html text='formally verified' url='https://www.wireguard.com/formal-verification/' %} secure and {% include open-new-window.html text='performant tunnels' url='https://www.wireguard.com/performance/' %} without any specialized hardware. For a deep dive in to WireGuard implementation, see {% include open-new-window.html text='whitepaper' url='https://www.wireguard.com/papers/wireguard.pdf' %}.
 
 ### Features
 

@@ -78,6 +78,8 @@ section:
     path: /security/high-connection-workloads
   - title: Defend against DoS attacks
     path: /security/defend-dos-attack
+- title: Try out the pod-to-pod encryption tech preview
+  path: /security/try-node-to-node-encryption
 - title: Secure Calico component communications
   path: /security/comms/
   section:
