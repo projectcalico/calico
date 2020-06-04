@@ -1,6 +1,6 @@
 ---
 title: Migrate a Kubernetes cluster from flannel/Canal to Calico
-description: Preserve your existing VXLAN networking in Calico, but take full advantage of advanced network policy and other networking options.
+description: Preserve your existing VXLAN networking in Calico, but take full advantage of Calico IP address management (IPAM) and advanced network policy features.
 ---
 
 ### Big picture
@@ -9,7 +9,7 @@ Migrate an existing Kubernetes cluster with flannel/Canal to {{site.prodname}} n
 
 ### Value
 
-If you are already using flannel for networking, it is easy to migrate to {{site.prodname}}'s native VXLAN networking. After migration, you can consider other {{site.prodname}} networking options like IP-in-IP or BGP peering. Either way, you automatically get {{site.prodname}} advanced network policy features. 
+If you are already using flannel for networking, it is easy to migrate to {{site.prodname}}'s native VXLAN networking. After migration, you can take advantage of {{site.prodname}}'s more flexible {{site.prodname}} IPAM and advanced network policy features. 
 
 ### Concepts
 
