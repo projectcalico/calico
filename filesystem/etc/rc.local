@@ -21,7 +21,7 @@ NODENAME=$(cat /var/lib/calico/nodename)
 export NODENAME
 
 # If possible pre-allocate any tunnel addresses. 
-calico-node -allocate-tunnel-addrs || exit 1
+calico-node -allocate-tunnel-addrs -allocate-tunnel-addrs-run-once || exit 1
 
 # Create a directly to put enabled service files
 mkdir /etc/service/enabled
@@ -35,6 +35,9 @@ mkdir /etc/service/enabled
 if [ -z "$CALICO_DISABLE_FELIX" ]; then
   cp -a /etc/service/available/felix /etc/service/enabled/
 fi
+
+# Enable the allocate tunnel IP service
+cp -a /etc/service/available/allocate-tunnel-addrs  /etc/service/enabled/
 
 case "$CALICO_NETWORKING_BACKEND" in
 	"none" )
@@ -67,6 +70,7 @@ if [ "$CALICO_MANAGE_CNI" = "true" ]; then
 fi
 
 if [ "$CALICO_DISABLE_FILE_LOGGING" = "true" ]; then
+	rm -rf /etc/service/enabled/allocate-tunnel-addrs/log
 	rm -rf /etc/service/enabled/bird/log
 	rm -rf /etc/service/enabled/bird6/log
 	rm -rf /etc/service/enabled/confd/log

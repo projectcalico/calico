@@ -1,0 +1,4 @@
+#!/bin/sh
+LOGDIR=/var/log/calico/allocate-tunnel-addrs
+mkdir -p $LOGDIR
+exec svlogd $LOGDIR
