@@ -23,9 +23,9 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/errors v0.8.1
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200603171336-1b8bc835691e
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200605154551-89d66798ae9a
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
-	github.com/projectcalico/typha v0.7.3-0.20200604041231-8008b7863673
+	github.com/projectcalico/typha v0.7.3-0.20200605163503-074b94b91ff2
 	github.com/prometheus/client_golang v1.0.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -40,7 +40,7 @@ require (
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
-	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/client-go v0.17.2
 	k8s.io/kubernetes v1.17.2
 )
 
