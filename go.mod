@@ -17,7 +17,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.9.6 // indirect
 	github.com/jonboulle/clockwork v0.1.0 // indirect
-	github.com/json-iterator/go v1.1.8 // indirect
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
@@ -32,7 +31,6 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/soheilhy/cmux v0.1.4 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
@@ -44,21 +42,13 @@ require (
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/go-playground/validator.v9 v9.27.0
-	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tchap/go-patricia.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 
-	// k8s.io/api v1.16.3 is at 16d7abae0d2a
-	k8s.io/api v0.0.0-20191114100352-16d7abae0d2a
-
-	// k8s.io/apimachinery 1.16.3 is at 72ed19daf4bb
-	k8s.io/apimachinery v0.0.0-20191028221656-72ed19daf4bb
-
-	// k8s.io/client-go 1.16.3 is at 6c5935290e33
-	k8s.io/client-go v0.0.0-20191114101535-6c5935290e33
-
-	// k8s.io/code-generator v1.16.3 is at 8e001e5d1894
-	k8s.io/code-generator v0.0.0-20191004115455-8e001e5d1894
+	k8s.io/api v0.17.2
+	k8s.io/apimachinery v0.17.2
+	k8s.io/client-go v0.17.2
+	k8s.io/code-generator v0.17.2
 
 	// k8s.io/utils is not (tag) versioned
 	k8s.io/utils v0.0.0-20191114200735-6ca3b61696b6 // indirect
