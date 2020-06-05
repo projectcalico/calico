@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	//"math"
 	"net"
 	"strconv"
 	"strings"
@@ -792,7 +791,8 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 	}
 	for _, key := range keys {
 		log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
-		if err := s.bpfSvcs.Delete(key[:]); err != nil {
+		err := s.bpfSvcs.Delete(key[:])
+		if err != nil && !bpf.IsNotExists(err) {
 			return errors.Errorf("bpfSvcs.Delete: %s", err)
 		}
 	}
@@ -860,7 +860,8 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 			continue
 		}
 		matchLBSrcIp := func() bool {
-			// Allow further comparison if CIDR is 0. It is treated as an entry without src addr
+			// External IP with zero Src CIDR is a valid entry and should not be considered
+			// as stale
 			if bsvc.SrcCIDR() == nat.ZeroCIDR {
 				return true
 			}
@@ -871,16 +872,15 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 			}
 			// If the service does have source range specified, look for a match
 			for _, srcip := range info.LoadBalancerSourceRanges() {
+				if strings.Contains(srcip, ":") {
+					continue
+				}
 				cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
 				if cidr == bsvc.SrcCIDR() {
 					return true
 				}
 			}
 			return false
-		}
-
-		if !matchLBSrcIp() {
-			continue
 		}
 
 		if bsvc.Addr().String() == info.ClusterIP().String() {
@@ -893,12 +893,14 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 
 		for _, eip := range info.ExternalIPStrings() {
 			if bsvc.Addr().String() == eip {
-				skey := &svcKey{
-					sname: svc,
-					extra: getSvcKeyExtra(svcTypeExternalIP, eip),
+				if matchLBSrcIp() {
+					skey := &svcKey{
+						sname: svc,
+						extra: getSvcKeyExtra(svcTypeExternalIP, eip),
+					}
+					log.Debugf("resolved %s as %s", bsvc, skey)
+					return skey
 				}
-				log.Debugf("resolved %s as %s", bsvc, skey)
-				return skey
 			}
 		}
 

@@ -103,19 +103,19 @@ func (k FrontendKey) Addr() net.IP {
 	return k[4:8]
 }
 
-func (k FrontendKey) SrcAddr() ip.Addr {
+func (k FrontendKey) srcAddr() ip.Addr {
 	var addr ip.V4Addr
 	copy(addr[:], k[11:15])
 	return addr
 }
 
+// This function returns the Prefix length of the source CIDR
 func (k FrontendKey) SrcPrefixLen() uint32 {
 	return k.PrefixLen() - ZeroCIDRPrefixLen
 }
 
 func (k FrontendKey) SrcCIDR() ip.CIDR {
-	//prefixLen := k.PrefixLen() - ZeroCIDRPrefixLen
-	return ip.CIDRFromAddrAndPrefix(k.SrcAddr(), int(k.SrcPrefixLen()))
+	return ip.CIDRFromAddrAndPrefix(k.srcAddr(), int(k.SrcPrefixLen()))
 }
 
 func (k FrontendKey) PrefixLen() uint32 {
@@ -135,7 +135,7 @@ func (k FrontendKey) Affinitykey() []byte {
 }
 
 func (k FrontendKey) String() string {
-	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v SrcAddr:%v}", k.Proto(), k.Addr(), k.Port(), k.SrcAddr())
+	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v SrcAddr:%v}", k.Proto(), k.Addr(), k.Port(), k.SrcCIDR())
 }
 
 type FrontendValue [frontendValueSize]byte
