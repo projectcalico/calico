@@ -140,15 +140,34 @@ NEUTRON_CREATE_INITIAL_NETWORKS=False
 EOF
 fi
 
+# Create stack user.
+sudo tools/create-stack-user.sh
+cd ..
+sudo mkdir -p /opt/stack
+sudo mv devstack /opt/stack
+sudo chown -R stack:stack /opt/stack
+ls -la /opt/stack
+
 # Stack!
+sudo -u stack -H -E bash -x <<'EOF'
+
+set
+cd /opt/stack/devstack
 ./stack.sh
 
-# If we're on the controller node and not setting up for Tempest, create a
-# Calico network.
 if ! ${TEMPEST:-false}; then
-     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
-	 . openrc admin admin
-	 neutron net-create --shared --provider:network_type local calico
-	 neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
-     fi
+    if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
+        # We're not running Tempest tests, and we're on the controller node.
+        # Create a Calico network, for demonstration purposes.
+        . openrc admin admin
+        neutron net-create --shared --provider:network_type local calico
+        neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
+    fi
+else
+    # Run mainline Tempest tests.
+    source ../networking-calico/devstack/devstackgaterc
+    cd /opt/stack/tempest
+    tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
+
+EOF
