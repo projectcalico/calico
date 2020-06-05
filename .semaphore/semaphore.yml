@@ -8,12 +8,12 @@ blocks:
   - name: 'Testing'
     task:
       jobs:
-        - name: 'Unit tests (tox)'
+        - name: 'Unit and FV tests (tox)'
           commands:
             - checkout
             - sudo apt-get install -y tox
             - tox
-        - name: 'FV (DevStack + Tempest)'
+        - name: 'Mainline ST (DevStack + Tempest) on Rocky'
           commands:
             - checkout
             - git checkout -b devstack-test
