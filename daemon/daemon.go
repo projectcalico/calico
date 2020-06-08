@@ -386,7 +386,7 @@ configRetry:
 	var policySyncProcessor *policysync.Processor
 	var policySyncAPIBinder binder.Binder
 	calcGraphClientChannels := []chan<- interface{}{dpConnector.ToDataplane}
-	if configParams.PolicySyncPathPrefix != "" {
+	if configParams.IsLeader() && configParams.PolicySyncPathPrefix != "" {
 		log.WithField("policySyncPathPrefix", configParams.PolicySyncPathPrefix).Info(
 			"Policy sync API enabled.  Creating the policy sync server.")
 		toPolicySync := make(chan interface{})
@@ -440,7 +440,7 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
-		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator)
+		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
 
 		log.Info("using resource updates where applicable")
 		configParams.SetUseNodeResourceUpdates(true)
