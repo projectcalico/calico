@@ -54,6 +54,17 @@ func Run(done <-chan struct{}) {
 }
 
 func run(nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, done <-chan struct{}) {
+	// If configured to use host-local IPAM, there is no need to configure tunnel addresses as they use the
+	// first IP of the pod CIDR - this is handled in the k8s backend code in libcalico-go.
+	if cfg.Spec.K8sUsePodCIDR {
+		log.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
+		if done != nil {
+			// If a done channel is specified, only exit when this is closed.
+			<-done
+		}
+		return
+	}
+
 	if done == nil {
 		// Running in single shot mode, so assign addresses and exit.
 		reconcileTunnelAddrs(nodename, cfg, c)
@@ -203,12 +214,6 @@ func reconcileTunnelAddrs(nodename string, cfg *apiconfig.CalicoAPIConfig, c cli
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeWireguard)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeWireguard)
-	}
-
-	// If configured to use host-local IPAM, there is no need to configure IPIP or VxLAN addresses.
-	if cfg.Spec.K8sUsePodCIDR {
-		log.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
-		return
 	}
 
 	// Query the IPIP enabled pools and either configure the tunnel
