@@ -410,7 +410,7 @@ var _ = Describe("Test Node conversion", func() {
 	})
 
 	Context("using host-local IPAM backed by pod CIDR", func() {
-		It("should parse a k8s Node to a Calico Node with an IPv4IPIPTunnelAddr", func() {
+		It("should parse a k8s Node to a Calico Node with an IPv4IPIPTunnelAddr and no wireguard tunnel addr if there is no public key", func() {
 			node := k8sapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "TestNode",
@@ -431,11 +431,46 @@ var _ = Describe("Test Node conversion", func() {
 			// Ensure we got the correct values.
 			bgpIpv4Address := n.Value.(*apiv3.Node).Spec.BGP.IPv4Address
 			ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+			wg := n.Value.(*apiv3.Node).Spec.Wireguard
 			asn := n.Value.(*apiv3.Node).Spec.BGP.ASNumber
 			ip := net.ParseIP("172.17.17.10")
 
 			Expect(bgpIpv4Address).To(Equal(ip.String()))
 			Expect(ipInIpAddr).To(Equal("10.0.0.1"))
+			Expect(wg).To(BeNil())
+			Expect(asn.String()).To(Equal("2546"))
+		})
+
+		It("should parse a k8s Node to a Calico Node with an IPv4IPIPTunnelAddr and a wireguard tunnel addr if there is a public key", func() {
+			node := k8sapi.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "TestNode",
+					ResourceVersion: "1234",
+					Annotations: map[string]string{
+						nodeBgpIpv4AddrAnnotation: "172.17.17.10",
+						nodeBgpAsnAnnotation:      "2546",
+						nodeWireguardPublicKeyAnnotation: "abcd",
+					},
+				},
+				Spec: k8sapi.NodeSpec{
+					PodCIDR: "10.0.0.0/24",
+				},
+			}
+
+			n, err := K8sNodeToCalico(&node, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure we got the correct values.
+			bgpIpv4Address := n.Value.(*apiv3.Node).Spec.BGP.IPv4Address
+			ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+			wg := n.Value.(*apiv3.Node).Spec.Wireguard
+			asn := n.Value.(*apiv3.Node).Spec.BGP.ASNumber
+			ip := net.ParseIP("172.17.17.10")
+
+			Expect(bgpIpv4Address).To(Equal(ip.String()))
+			Expect(ipInIpAddr).To(Equal("10.0.0.1"))
+			Expect(wg).ToNot(BeNil())
+			Expect(wg.InterfaceIPv4Address).To(Equal("10.0.0.1"))
 			Expect(asn.String()).To(Equal("2546"))
 		})
 

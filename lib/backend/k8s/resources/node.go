@@ -233,18 +233,31 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 			bgpSpec.ASNumber = &asn
 		}
 	}
-	bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
+
+	// Initialize the wireguard spec. We'll include it if it contains non-zero data.
+	wireguardSpec := &apiv3.NodeWireguardSpec{}
 
 	// Add in an orchestrator reference back to the Kubernetes node name.
 	calicoNode.Spec.OrchRefs = []apiv3.OrchRef{{NodeName: k8sNode.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
 
-	// If using host-local IPAM, assign an IPIP tunnel address statically.
+	// If using host-local IPAM, assign an IPIP and wireguard tunnel address statically. They can both have the same IP.
 	if usePodCIDR && k8sNode.Spec.PodCIDR != "" {
-		// For back compatibility with v2.6.x, always generate a tunnel address if we have the pod CIDR.
-		bgpSpec.IPv4IPIPTunnelAddr, err = getIPIPTunnelAddress(k8sNode)
+		// For back compatibility with v2.6.x, always generate an IPIP tunnel address if we have the pod CIDR.
+		tunnelAddr, err := getStaticTunnelAddress(k8sNode)
 		if err != nil {
 			return nil, err
 		}
+		bgpSpec.IPv4IPIPTunnelAddr = tunnelAddr
+
+		// Only assign the wireguard tunnel IP if we have a public key assigned - this is inline with how the IPs are
+		// assigned in the calico IPAM scenarios.
+		if annotations[nodeWireguardPublicKeyAnnotation] != "" {
+			wireguardSpec.InterfaceIPv4Address = tunnelAddr
+		}
+	} else {
+		// We are not using host local, so assign tunnel addresses from annotations.
+		bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
+		wireguardSpec.InterfaceIPv4Address = annotations[nodeWireguardIpv4IfaceAddrAnnotation]
 	}
 
 	// Only set the BGP spec if it is not empty.
@@ -252,20 +265,20 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 		calicoNode.Spec.BGP = bgpSpec
 	}
 
+	// Only set the Wireguard spec if it is not empty.
+	if !reflect.DeepEqual(*wireguardSpec, apiv3.NodeWireguardSpec{}) {
+		calicoNode.Spec.Wireguard = wireguardSpec
+	}
+
 	// Set the VXLAN tunnel address based on annotation.
 	calicoNode.Spec.IPv4VXLANTunnelAddr = annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation]
 	calicoNode.Spec.VXLANTunnelMACAddr = annotations[nodeBgpVXLANTunnelMACAddrAnnotation]
 
-	// Set the Wireguard interface address and public-key based on annotation.
-	wireguardSpec := &apiv3.NodeWireguardSpec{}
-	wireguardSpec.InterfaceIPv4Address = annotations[nodeWireguardIpv4IfaceAddrAnnotation]
-	wireguardStatus := apiv3.NodeStatus{}
-	wireguardStatus.WireguardPublicKey = annotations[nodeWireguardPublicKeyAnnotation]
-	if !reflect.DeepEqual(*wireguardSpec, apiv3.NodeWireguardSpec{}) {
-		calicoNode.Spec.Wireguard = wireguardSpec
-	}
-	if !reflect.DeepEqual(wireguardStatus, apiv3.NodeStatus{}) {
-		calicoNode.Status = wireguardStatus
+	// Set the node status
+	nodeStatus := apiv3.NodeStatus{}
+	nodeStatus.WireguardPublicKey = annotations[nodeWireguardPublicKeyAnnotation]
+	if !reflect.DeepEqual(nodeStatus, apiv3.NodeStatus{}) {
+		calicoNode.Status = nodeStatus
 	}
 
 	// Fill in status with Kubernetes pod CIDRs.
@@ -457,9 +470,9 @@ func restoreCalicoLabels(calicoNode *apiv3.Node) (*apiv3.Node, error) {
 	return calicoNode, nil
 }
 
-// getIPIPTunnelAddress calculates the IPv4 address to use for the IPIP tunnel based on the node's pod CIDR, for use
-// in conjunction with host-local IPAM backed by node.Spec.PodCIDR allocations.
-func getIPIPTunnelAddress(n *kapiv1.Node) (string, error) {
+// getStaticTunnelAddress calculates the IPv4 address to use for the IPIP tunnel and wireguard tunnel based on the
+// node's pod CIDR, for use in conjunction with host-local IPAM backed by node.Spec.PodCIDR allocations.
+func getStaticTunnelAddress(n *kapiv1.Node) (string, error) {
 	ip, _, err := net.ParseCIDR(n.Spec.PodCIDR)
 	if err != nil {
 		log.Warnf("Invalid pod CIDR for node: %s, %s", n.Name, n.Spec.PodCIDR)
