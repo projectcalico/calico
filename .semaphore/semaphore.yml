@@ -28,6 +28,17 @@ blocks:
         - name: 'Master'
           commands:
             - make release-publish
+        - name: 'v3.15 Python 2 branch'
+          # This is a special case, probably (hopefully!) for v3.15
+          # only: we have 2 separate PPAs for Python 2 and Python 3,
+          # and corresponding separate branches in the
+          # networking-calico repo.
+          commands:
+            - export REPO_NAME=calico-3.15-python2
+            - export VERSION=release-v3.15-python2
+            - export FELIX_CHECKOUT=master
+            - export PACKAGE_ETCD3GW=true
+            - make release-publish
         - name: 'Current release branch'
           commands:
             - export REPO_NAME=calico-current
