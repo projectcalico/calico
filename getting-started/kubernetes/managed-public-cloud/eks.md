@@ -5,14 +5,13 @@ description: Enable Calico network policy in EKS.
 
 ### Big picture
 
-Enable Calico in EKS managed Kubernetes service.
+Enable {{site.prodname}} in EKS managed Kubernetes service.
 
 ### Value
 
-EKS has built-in support for Calico, providing a robust implementation of the full Kubernetes Network Policy API. EKS users wanting to go beyond Kubernetes network policy capabilities can make full use of the Calico Network Policy API.
+EKS has built-in support for {{site.prodname}}, providing a robust implementation of the full Kubernetes Network Policy API. EKS users wanting to go beyond Kubernetes network policy capabilities can make full use of the Calico Network Policy API.
 
-You can also use Calico for networking on EKS in place of the default AWS VPC networking without the need to use IP addresses from the underlying VPC. This allows you to take
-advantage of the full set of Calico networking features, including Calico's flexible IP address managemenet capabilities.
+You can also use {{site.prodname}} for networking on EKS in place of the default AWS VPC networking without the need to use IP addresses from the underlying VPC. This allows you to take advantage of the full set of {{site.prodname}} networking features, including {{site.prodname}}'s flexible IP address managemenet capabilities.
 
 ### How to
 
@@ -21,9 +20,9 @@ advantage of the full set of Calico networking features, including Calico's flex
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
-To enable Calico network policy enforcement on an EKS cluster using the AWS VPC CNI plugin, follow these step-by-step instructions: {% include open-new-window.html text='Installing Calico on Amazon EKS' url='https://docs.aws.amazon.com/eks/latest/userguide/calico.html' %}
+To enable {{site.prodname}} network policy enforcement on an EKS cluster using the AWS VPC CNI plugin, follow these step-by-step instructions: {% include open-new-window.html text='Installing Calico on Amazon EKS' url='https://docs.aws.amazon.com/eks/latest/userguide/calico.html' %}
 
-#### Install EKS with Calico networking
+#### Install EKS with {{site.prodname}} networking
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
@@ -38,13 +37,13 @@ Before you get started, make sure you have downloaded and configured the {% incl
    eksctl create cluster --name my-calico-cluster --without-nodegroup
    ```
 
-1. Since this cluster will use Calico for networking, you must delete the `aws-node` daemon set to disable AWS VPC networking for pods.
+1. Since this cluster will use {{site.prodname}} for networking, you must delete the `aws-node` daemon set to disable AWS VPC networking for pods.
 
    ```bash
    kubectl delete daemonset -n kube-system aws-node
    ```
 
-1. Now that you have a cluster configured, you can install Calico.
+1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
    ```bash
    kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
@@ -65,7 +64,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 - [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 
 **Recommended**
-- [Video: Everything you need to know about Kubernetes pod networking on AWS](https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/)
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
-- [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)
+- [Get started with {{site.prodname}} network policy]({{ site.baseurl }}/security/calico-network-policy)
 - [Enable default deny for Kubernetes pods]({{ site.baseurl }}/security/kubernetes-default-deny)
