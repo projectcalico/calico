@@ -8,7 +8,7 @@ blocks:
   - name: 'Packaging'
     task:
       jobs:
-        - name: 'Update master packages'
+        - name: 'Master'
           commands:
             - checkout
             - git config --global user.email marvin@tigera.io
@@ -19,6 +19,34 @@ blocks:
             - export SECRET_KEY=$HOME/secrets/marvin.txt
             - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
             - export HOST=ubuntu@binaries-projectcalico-org
+            - make release-publish
+        - name: 'Current release branch'
+          commands:
+            - checkout
+            - git config --global user.email marvin@tigera.io
+            - git config --global user.name Marvin
+            - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
+            - gcloud config set project tigera-wp-tcp-redirect
+            - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+            - export SECRET_KEY=$HOME/secrets/marvin.txt
+            - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
+            - export HOST=ubuntu@binaries-projectcalico-org
+            - export REPO_NAME=calico-current
+            - export VERSION=release-v3.14
+            - make release-publish
+        - name: 'Previous release branch'
+          commands:
+            - checkout
+            - git config --global user.email marvin@tigera.io
+            - git config --global user.name Marvin
+            - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
+            - gcloud config set project tigera-wp-tcp-redirect
+            - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+            - export SECRET_KEY=$HOME/secrets/marvin.txt
+            - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
+            - export HOST=ubuntu@binaries-projectcalico-org
+            - export REPO_NAME=calico-previous
+            - export VERSION=release-v3.13
             - make release-publish
       secrets:
         - name: google-service-account-for-tigera-infra
