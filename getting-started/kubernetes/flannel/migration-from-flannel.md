@@ -9,7 +9,7 @@ Migrate an existing Kubernetes cluster with flannel/Canal to {{site.prodname}} n
 
 ### Value
 
-If you are already using flannel for networking, it is easy to migrate to {{site.prodname}}'s native VXLAN networking. {{site.prodname}} VXLAN is a direct equivalent of flannel vxlan, but you get the benefits of the broader range of features offered by {{site.prodname}} with an active maintainer community.
+If you are already using flannel for networking, it is easy to migrate to {{site.prodname}}'s native VXLAN networking. {{site.prodname}} VXLAN is fully equivalent to flannel vxlan, but you get the benefits of the broader range of features offered by {{site.prodname}} with an active maintainer community.
 
 ### Concepts
 
