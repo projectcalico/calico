@@ -21,6 +21,7 @@ import (
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 )
 
@@ -101,28 +102,28 @@ Description:
 		return nil
 	}
 
-	results := executeConfigCommand(parsedArgs, actionDelete)
+	results := common.ExecuteConfigCommand(parsedArgs, common.ActionDelete)
 	log.Infof("results: %+v", results)
 
-	if results.fileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.err)
-	} else if results.numResources == 0 {
+	if results.FileInvalid {
+		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.NumResources == 0 {
 		return fmt.Errorf("No resources specified")
-	} else if results.err == nil && results.numHandled > 0 {
-		if results.singleKind != "" {
-			fmt.Printf("Successfully deleted %d '%s' resource(s)\n", results.numHandled, results.singleKind)
+	} else if results.Err == nil && results.NumHandled > 0 {
+		if results.SingleKind != "" {
+			fmt.Printf("Successfully deleted %d '%s' resource(s)\n", results.NumHandled, results.SingleKind)
 		} else {
-			fmt.Printf("Successfully deleted %d resource(s)\n", results.numHandled)
+			fmt.Printf("Successfully deleted %d resource(s)\n", results.NumHandled)
 		}
-	} else if results.err != nil {
-		return fmt.Errorf("Hit error: %v", results.err)
+	} else if results.Err != nil {
+		return fmt.Errorf("Hit error: %v", results.Err)
 	}
 
-	if len(results.resErrs) > 0 {
+	if len(results.ResErrs) > 0 {
 		var errStr string
-		for _, err := range results.resErrs {
-			if results.singleKind != "" {
-				errStr += fmt.Sprintf("Failed to delete '%s' resource: %v\n", results.singleKind, err)
+		for _, err := range results.ResErrs {
+			if results.SingleKind != "" {
+				errStr += fmt.Sprintf("Failed to delete '%s' resource: %v\n", results.SingleKind, err)
 			} else {
 				errStr += fmt.Sprintf("Failed to delete resource: %v\n", err)
 			}

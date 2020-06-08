@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/v1resourceloader"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
@@ -65,14 +66,14 @@ Description:
 		return nil
 	}
 
-	var rp resourcePrinter
+	var rp common.ResourcePrinter
 	output := parsedArgs["--output"].(string)
 	// Only supported output formats are yaml (default) and json.
 	switch output {
 	case "yaml", "yml":
-		rp = resourcePrinterYAML{}
+		rp = common.ResourcePrinterYAML{}
 	case "json":
-		rp = resourcePrinterJSON{}
+		rp = common.ResourcePrinterJSON{}
 	default:
 		return fmt.Errorf("unrecognized output format '%s'", output)
 	}
@@ -116,7 +117,7 @@ Description:
 
 	log.Infof("results: %+v", results)
 
-	err = rp.print(nil, results)
+	err = rp.Print(nil, results)
 	if err != nil {
 		return fmt.Errorf("Failed to execute command: %v", err)
 	}

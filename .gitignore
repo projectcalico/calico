@@ -26,3 +26,4 @@ nosetests.xml
 testfile.yaml
 report/*.xml
 Makefile.common*
+config

@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 
 	log "github.com/sirupsen/logrus"
@@ -125,17 +126,17 @@ Description:
 		printNamespace = true
 	}
 
-	var rp resourcePrinter
+	var rp common.ResourcePrinter
 	output := parsedArgs["--output"].(string)
 	switch output {
 	case "yaml", "yml":
-		rp = resourcePrinterYAML{}
+		rp = common.ResourcePrinterYAML{}
 	case "json":
-		rp = resourcePrinterJSON{}
+		rp = common.ResourcePrinterJSON{}
 	case "ps":
-		rp = resourcePrinterTable{wide: false, printNamespace: printNamespace}
+		rp = common.ResourcePrinterTable{Wide: false, PrintNamespace: printNamespace}
 	case "wide":
-		rp = resourcePrinterTable{wide: true, printNamespace: printNamespace}
+		rp = common.ResourcePrinterTable{Wide: true, PrintNamespace: printNamespace}
 	default:
 		// Output format may be a key=value pair, so split on "=" to find out.  Pull
 		// out the key and value, and split the value by "," as some options allow
@@ -154,17 +155,17 @@ Description:
 			if outputValue == "" {
 				return fmt.Errorf("need to specify a template")
 			}
-			rp = resourcePrinterTemplate{template: outputValue}
+			rp = common.ResourcePrinterTemplate{Template: outputValue}
 		case "go-template-file":
 			if outputValue == "" {
 				return fmt.Errorf("need to specify a template file")
 			}
-			rp = resourcePrinterTemplateFile{templateFile: outputValue}
+			rp = common.ResourcePrinterTemplateFile{TemplateFile: outputValue}
 		case "custom-columns":
 			if outputValue == "" {
 				return fmt.Errorf("need to specify at least one column")
 			}
-			rp = resourcePrinterTable{headings: outputValues}
+			rp = common.ResourcePrinterTable{Headings: outputValues}
 		}
 	}
 
@@ -172,26 +173,26 @@ Description:
 		return fmt.Errorf("unrecognized output format '%s'", output)
 	}
 
-	results := executeConfigCommand(parsedArgs, actionGetOrList)
+	results := common.ExecuteConfigCommand(parsedArgs, common.ActionGetOrList)
 
 	log.Infof("results: %+v", results)
 
-	if results.fileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.err)
-	} else if results.err != nil {
-		return fmt.Errorf("Failed to get resources: %v", results.err)
+	if results.FileInvalid {
+		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.Err != nil {
+		return fmt.Errorf("Failed to get resources: %v", results.Err)
 	}
 
-	err = rp.print(results.client, results.resources)
+	err = rp.Print(results.Client, results.Resources)
 	if err != nil {
 		return err
 	}
 
-	if len(results.resErrs) > 0 {
+	if len(results.ResErrs) > 0 {
 		var errStr string
-		for i, err := range results.resErrs {
+		for i, err := range results.ResErrs {
 			errStr += err.Error()
-			if (i + 1) != len(results.resErrs) {
+			if (i + 1) != len(results.ResErrs) {
 				errStr += "\n"
 			}
 		}

@@ -21,6 +21,7 @@ import (
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 )
 
@@ -88,39 +89,39 @@ Description:
 		return nil
 	}
 
-	results := executeConfigCommand(parsedArgs, actionCreate)
+	results := common.ExecuteConfigCommand(parsedArgs, common.ActionCreate)
 	log.Infof("results: %+v", results)
 
-	if results.fileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.err)
-	} else if results.numHandled == 0 {
-		if results.numResources == 0 {
+	if results.FileInvalid {
+		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.NumHandled == 0 {
+		if results.NumResources == 0 {
 			return fmt.Errorf("No resources specified in file")
-		} else if results.numResources == 1 {
-			return fmt.Errorf("Failed to create '%s' resource: %v", results.singleKind, results.resErrs)
-		} else if results.singleKind != "" {
-			return fmt.Errorf("Failed to create any '%s' resources: %v", results.singleKind, results.resErrs)
+		} else if results.NumResources == 1 {
+			return fmt.Errorf("Failed to create '%s' resource: %v", results.SingleKind, results.ResErrs)
+		} else if results.SingleKind != "" {
+			return fmt.Errorf("Failed to create any '%s' resources: %v", results.SingleKind, results.ResErrs)
 		} else {
-			return fmt.Errorf("Failed to create any resources: %v", results.resErrs)
+			return fmt.Errorf("Failed to create any resources: %v", results.ResErrs)
 		}
-	} else if len(results.resErrs) == 0 {
-		if results.singleKind != "" {
-			fmt.Printf("Successfully created %d '%s' resource(s)\n", results.numHandled, results.singleKind)
+	} else if len(results.ResErrs) == 0 {
+		if results.SingleKind != "" {
+			fmt.Printf("Successfully created %d '%s' resource(s)\n", results.NumHandled, results.SingleKind)
 		} else {
-			fmt.Printf("Successfully created %d resource(s)\n", results.numHandled)
+			fmt.Printf("Successfully created %d resource(s)\n", results.NumHandled)
 		}
 	} else {
-		if results.numHandled-len(results.resErrs) > 0 {
+		if results.NumHandled-len(results.ResErrs) > 0 {
 			fmt.Printf("Partial success: ")
-			if results.singleKind != "" {
+			if results.SingleKind != "" {
 				fmt.Printf("created the first %d out of %d '%s' resources:\n",
-					results.numHandled, results.numResources, results.singleKind)
+					results.NumHandled, results.NumResources, results.SingleKind)
 			} else {
 				fmt.Printf("created the first %d out of %d resources:\n",
-					results.numHandled, results.numResources)
+					results.NumHandled, results.NumResources)
 			}
 		}
-		return fmt.Errorf("Hit error: %v", results.resErrs)
+		return fmt.Errorf("Hit error: %v", results.ResErrs)
 	}
 
 	return nil

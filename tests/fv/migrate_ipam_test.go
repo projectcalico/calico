@@ -16,6 +16,7 @@ package fv_test
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
@@ -41,7 +42,7 @@ func init() {
 	log.SetFormatter(&logutils.Formatter{})
 }
 
-func TestIPAM(t *testing.T) {
+func TestDatastoreMigrationIPAM(t *testing.T) {
 	RegisterTestingT(t)
 
 	ctx := context.Background()
@@ -69,29 +70,67 @@ func TestIPAM(t *testing.T) {
 
 	// Create a Node resource for this host.
 	node := v3.NewNode()
-	node.Name, err = os.Hostname()
-	Expect(err).NotTo(HaveOccurred())
+	node.Name = "node4"
+	node.Spec.OrchRefs = []v3.OrchRef{
+		{
+			NodeName:     "node4",
+			Orchestrator: "k8s",
+		},
+	}
 	_, err = client.Nodes().Create(ctx, node, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	// ipam show with specific unallocated IP.
-	out := Calicoctl(false, "ipam", "show", "--ip=10.65.0.2")
-	Expect(out).To(ContainSubstring("10.65.0.2 is not assigned"))
-
-	// ipam show, with no allocations yet.
-	out = Calicoctl(false, "ipam", "show")
-	Expect(out).To(ContainSubstring("IPS IN USE"))
-
 	// Assign some IPs.
 	v4, v6, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-		Num4:  5,
-		Num6:  7,
-		Attrs: map[string]string{"note": "reserved by ipam_test.go"},
+		Num4:     5,
+		Num6:     7,
+		Attrs:    map[string]string{"note": "reserved by migrate_ipam_test.go"},
+		Hostname: "node4",
 	})
 	Expect(err).NotTo(HaveOccurred())
 
+	// Create a pool with blocksize 29, so we can easily allocate
+	// an entire block.
+	pool = v3.NewIPPool()
+	pool.Name = "ipam-test-v4-b29"
+	pool.Spec.CIDR = "10.66.0.0/16"
+	pool.Spec.BlockSize = 29
+	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	// Allocate more than one block's worth (8) of IPs from that
+	// pool.
+	// Assign some IPs.
+	v4More, v6More, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+		Num4:      11,
+		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
+		Hostname:  "node4",
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	// Migrate the data
+	// Lock the etcd datastore
+	out := Calicoctl(false, "datastore", "migrate", "lock")
+	Expect(out).To(Equal("Datastore locked.\n"))
+
+	// Export the data
+	// Create a temporary file
+	tempfile, err := ioutil.TempFile("", "ipam-migration-test")
+	defer os.Remove(tempfile.Name())
+	Expect(err).NotTo(HaveOccurred())
+	out = Calicoctl(false, "datastore", "migrate", "export")
+	_, err = tempfile.WriteString(out)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Import the data
+	_ = Calicoctl(true, "datastore", "migrate", "import", "-f", tempfile.Name())
+
+	// Unlock the datastore
+	_ = Calicoctl(true, "datastore", "migrate", "unlock")
+
+	// Validate with the appropriate 'ipam show' commands
 	// ipam show, pools only.
-	out = Calicoctl(false, "ipam", "show")
+	out = Calicoctl(true, "ipam", "show")
 	Expect(out).To(ContainSubstring("IPS IN USE"))
 	Expect(out).To(ContainSubstring("10.65.0.0/16"))
 	Expect(out).To(ContainSubstring("5 (0%)"))
@@ -99,7 +138,7 @@ func TestIPAM(t *testing.T) {
 	Expect(out).To(ContainSubstring("fd5f:abcd:64::/48"))
 
 	// ipam show, including blocks.
-	out = Calicoctl(false, "ipam", "show", "--show-blocks")
+	out = Calicoctl(true, "ipam", "show", "--show-blocks")
 	Expect(out).To(ContainSubstring("Block"))
 	Expect(out).To(ContainSubstring("5 (8%)"))
 	Expect(out).To(ContainSubstring("59 (92%)"))
@@ -123,30 +162,7 @@ func TestIPAM(t *testing.T) {
 	out = Calicoctl(false, "ipam", "show", "--ip="+allocatedIP)
 	Expect(out).To(ContainSubstring(allocatedIP + " is in use"))
 	Expect(out).To(ContainSubstring("Attributes:"))
-	Expect(out).To(ContainSubstring("note: reserved by ipam_test.go"))
-
-	// ipam show with an invalid IP.
-	out, err = CalicoctlMayFail(false, "ipam", "show", "--ip=10.240.0.300")
-	Expect(err).To(HaveOccurred())
-	Expect(out).To(ContainSubstring("invalid IP address"))
-
-	// Create a pool with blocksize 29, so we can easily allocate
-	// an entire block.
-	pool = v3.NewIPPool()
-	pool.Name = "ipam-test-v4-b29"
-	pool.Spec.CIDR = "10.66.0.0/16"
-	pool.Spec.BlockSize = 29
-	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
-	Expect(err).NotTo(HaveOccurred())
-
-	// Allocate more than one block's worth (8) of IPs from that
-	// pool.
-	// Assign some IPs.
-	v4More, v6More, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-		Num4:      11,
-		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
-	})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(out).To(ContainSubstring("note: reserved by migrate_ipam_test.go"))
 
 	// ipam show, including blocks.
 	//
@@ -170,11 +186,9 @@ func TestIPAM(t *testing.T) {
 	cidrs := append(v4, v4More...)
 	cidrs = append(cidrs, v6...)
 	cidrs = append(cidrs, v6More...)
-	nodename, err := os.Hostname()
-	Expect(err).NotTo(HaveOccurred())
 	var ips []cnet.IP
 	for _, cidr := range cidrs {
-		err = client.IPAM().ReleaseAffinity(ctx, cidr, nodename, false)
+		err = client.IPAM().ReleaseAffinity(ctx, cidr, "node4", false)
 		Expect(err).NotTo(HaveOccurred())
 		ip := cnet.ParseIP(cidr.IP.String())
 		ips = append(ips, *ip)
@@ -187,7 +201,7 @@ func TestIPAM(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	_, err = client.IPPools().Delete(ctx, "ipam-test-v6", options.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	_, err = client.Nodes().Delete(ctx, nodename, options.DeleteOptions{})
+	_, err = client.Nodes().Delete(ctx, "node4", options.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	_, err = client.IPPools().Delete(ctx, "ipam-test-v4-b29", options.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())

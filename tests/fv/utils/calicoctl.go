@@ -24,15 +24,18 @@ import (
 
 var calicoctl = "/go/src/github.com/projectcalico/calicoctl/bin/calicoctl-linux-amd64"
 
-func Calicoctl(args ...string) string {
-	out, err := CalicoctlMayFail(args...)
+func Calicoctl(kdd bool, args ...string) string {
+	out, err := CalicoctlMayFail(kdd, args...)
 	Expect(err).NotTo(HaveOccurred())
 	return out
 }
 
-func CalicoctlMayFail(args ...string) (string, error) {
+func CalicoctlMayFail(kdd bool, args ...string) (string, error) {
 	cmd := exec.Command(calicoctl, args...)
 	cmd.Env = []string{"ETCD_ENDPOINTS=http://127.0.0.1:2379"}
+	if kdd {
+		cmd.Env = []string{"K8S_API_ENDPOINT=http://localhost:8080", "DATASTORE_TYPE=kubernetes"}
+	}
 	out, err := cmd.CombinedOutput()
 	log.Infof("Run: calicoctl %v", strings.Join(args, " "))
 	log.Infof("Output:\n%v", string(out))

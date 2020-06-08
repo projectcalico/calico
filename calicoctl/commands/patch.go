@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	log "github.com/sirupsen/logrus"
 )
@@ -87,21 +88,21 @@ Description:
 		return nil
 	}
 
-	results := executeConfigCommand(parsedArgs, actionPatch)
+	results := common.ExecuteConfigCommand(parsedArgs, common.ActionPatch)
 	log.Infof("results: %+v", results)
 
-	if results.numResources == 0 {
+	if results.NumResources == 0 {
 		return fmt.Errorf("No resources specified")
-	} else if results.err == nil && results.numHandled > 0 {
-		fmt.Printf("Successfully patched %d '%s' resource\n", results.numHandled, results.singleKind)
-	} else if results.err != nil {
-		return fmt.Errorf("Hit error: %v", results.err)
+	} else if results.Err == nil && results.NumHandled > 0 {
+		fmt.Printf("Successfully patched %d '%s' resource\n", results.NumHandled, results.SingleKind)
+	} else if results.Err != nil {
+		return fmt.Errorf("Hit error: %v", results.Err)
 	}
 
-	if len(results.resErrs) > 0 {
+	if len(results.ResErrs) > 0 {
 		var errStr string
-		for _, err := range results.resErrs {
-			errStr += fmt.Sprintf("Failed to patch '%s' resource: %v\n", results.singleKind, err)
+		for _, err := range results.ResErrs {
+			errStr += fmt.Sprintf("Failed to patch '%s' resource: %v\n", results.SingleKind, err)
 		}
 		return fmt.Errorf(errStr)
 	}

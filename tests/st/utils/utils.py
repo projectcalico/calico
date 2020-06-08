@@ -15,6 +15,7 @@ import copy
 import os
 import socket
 import sys
+import tempfile
 from datetime import datetime
 from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
@@ -37,6 +38,7 @@ ETCD_CA = os.environ.get("ETCD_CA_CERT_FILE", "")
 ETCD_CERT = os.environ.get("ETCD_CERT_FILE", "")
 ETCD_KEY = os.environ.get("ETCD_KEY_FILE", "")
 ETCD_HOSTNAME_SSL = "etcd-authority-ssl"
+K8S_API_ENDPOINT = "http://localhost:8080"
 
 API_VERSION = 'projectcalico.org/v3'
 ERROR_CONFLICT = "update conflict"
@@ -45,6 +47,9 @@ NOT_NAMESPACED = "is not namespaced"
 SET_DEFAULT = "Cannot set"
 NOT_SUPPORTED = "is not supported on"
 KUBERNETES_NP = "kubernetes network policies must be managed through the kubernetes API"
+NOT_LOCKED = "Datastore is not locked. Run the `calicoctl datastore migrate lock` command in order to begin migration."
+NOT_KUBERNETES = "Invalid datastore type: etcdv3 to import to for datastore migration. Datastore type must be kubernetes"
+NO_IPAM = "No IPAM resources specified in file"
 
 class CalicoctlOutput:
     """
@@ -182,7 +187,7 @@ class CalicoctlOutput:
             "\nunexpected=\n" + text
 
 
-def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdout=False, no_config=False):
+def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdout=False, no_config=False, kdd=False):
     """
     Convenience function for abstracting away calling the calicoctl
     command.
@@ -234,6 +239,10 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
                 "export DATASTORE_TYPE=%s; %s %s" % \
                 (ETCD_SCHEME+"://"+etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY,
                  "etcdv3", stdin, calicoctl_bin)
+    if kdd:
+        calicoctl_env_cmd = "export DATASTORE_TYPE=kubernetes; " \
+                "export K8S_API_ENDPOINT=%s; %s %s" % \
+                (K8S_API_ENDPOINT, stdin, calicoctl_bin)
     if no_config :
         calicoctl_env_cmd = calicoctl_bin
     full_cmd = calicoctl_env_cmd + " " + command + option_file
@@ -304,11 +313,12 @@ def decode_json_yaml(value):
     return None, None
 
 def find_and_format_creation_timestamp(decoded):
-    if 'items' in decoded:
-        for i in xrange(len(decoded['items'])):
-            decoded['items'][i] = format_creation_timestamp(decoded['items'][i])
-    else:
-        decoded = format_creation_timestamp(decoded)
+    if decoded:
+        if 'items' in decoded:
+            for i in xrange(len(decoded['items'])):
+                decoded['items'][i] = format_creation_timestamp(decoded['items'][i])
+        else:
+            decoded = format_creation_timestamp(decoded)
     return decoded
 
 def format_creation_timestamp(decoded):

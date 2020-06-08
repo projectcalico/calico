@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package common
 
 import (
 	"context"
@@ -36,12 +36,12 @@ import (
 type action int
 
 const (
-	actionApply action = iota
-	actionCreate
-	actionUpdate
-	actionDelete
-	actionGetOrList
-	actionPatch
+	ActionApply action = iota
+	ActionCreate
+	ActionUpdate
+	ActionDelete
+	ActionGetOrList
+	ActionPatch
 )
 
 // Convert loaded resources to a slice of resources for easier processing.
@@ -79,37 +79,37 @@ func convertToSliceOfResources(loaded interface{}) ([]resourcemgr.ResourceObject
 	return res, nil
 }
 
-// commandResults contains the results from executing a CLI command
-type commandResults struct {
+// CommandResults contains the results from executing a CLI command
+type CommandResults struct {
 	// Whether the input file was invalid.
-	fileInvalid bool
+	FileInvalid bool
 
 	// The number of resources that are being configured.
-	numResources int
+	NumResources int
 
 	// The number of resources that were actually configured.  This will
 	// never be 0 without an associated error.
-	numHandled int
+	NumHandled int
 
 	// The associated error.
-	err error
+	Err error
 
 	// The single type of resource that is being configured, or blank
 	// if multiple resource types are being configured in a single shot.
-	singleKind string
+	SingleKind string
 
 	// The results returned from each invocation
-	resources []runtime.Object
+	Resources []runtime.Object
 
 	// Errors associated with individual resources
-	resErrs []error
+	ResErrs []error
 
 	// The Calico API client used for the requests (useful if required
 	// again).
-	client client.Interface
+	Client client.Interface
 }
 
-// executeConfigCommand is main function called by all of the resource management commands
+// ExecuteConfigCommand is main function called by all of the resource management commands
 // in calicoctl (apply, create, replace, get, delete and patch).  This provides common function
 // for all these commands:
 // 	-  Load resources from file (or if not specified determine the resource from
@@ -117,7 +117,7 @@ type commandResults struct {
 // 	-  Convert the loaded resources into a list of resources (easier to handle)
 // 	-  Process each resource individually, fanning out to the appropriate methods on
 //	   the client interface, collate results and exit on the first error.
-func executeConfigCommand(args map[string]interface{}, action action) commandResults {
+func ExecuteConfigCommand(args map[string]interface{}, action action) CommandResults {
 	var resources []resourcemgr.ResourceObject
 
 	singleKind := false
@@ -129,12 +129,12 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 		// of resources for easier handling.
 		r, err := resourcemgr.CreateResourcesFromFile(filename.(string))
 		if err != nil {
-			return commandResults{err: err, fileInvalid: true}
+			return CommandResults{Err: err, FileInvalid: true}
 		}
 
 		resources, err = convertToSliceOfResources(r)
 		if err != nil {
-			return commandResults{err: err}
+			return CommandResults{Err: err}
 		}
 	} else {
 		// Filename is not specific so extract the resource from the arguments. This
@@ -145,12 +145,12 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 		singleKind = true
 		resources, err = resourcemgr.GetResourcesFromArgs(args)
 		if err != nil {
-			return commandResults{err: err}
+			return CommandResults{Err: err}
 		}
 	}
 
 	if len(resources) == 0 {
-		return commandResults{err: errors.New("no resources specified")}
+		return CommandResults{Err: errors.New("no resources specified")}
 	}
 
 	if log.GetLevel() >= log.DebugLevel {
@@ -160,7 +160,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 
 		d, err := yaml.Marshal(resources)
 		if err != nil {
-			return commandResults{err: err}
+			return CommandResults{Err: err}
 		}
 		log.Debugf("Data: %s", string(d))
 	}
@@ -176,16 +176,16 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 
 	// Initialise the command results with the number of resources and the name of the
 	// kind of resource (if only dealing with a single resource).
-	results := commandResults{client: client}
+	results := CommandResults{Client: client}
 	var kind string
 	count := make(map[string]int)
 	for _, r := range resources {
 		kind = r.GetObjectKind().GroupVersionKind().Kind
 		count[kind] = count[kind] + 1
-		results.numResources = results.numResources + 1
+		results.NumResources = results.NumResources + 1
 	}
 	if len(count) == 1 || singleKind {
-		results.singleKind = kind
+		results.SingleKind = kind
 	}
 
 	// Now execute the command on each resource in order, exiting as soon as we hit an
@@ -208,18 +208,18 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	}
 
 	if emptyName {
-		return commandResults{err: fmt.Errorf("resource name may not be empty")}
+		return CommandResults{Err: fmt.Errorf("resource name may not be empty")}
 	}
 
 	for _, r := range resources {
-		res, err := executeResourceAction(args, client, r, action)
+		res, err := ExecuteResourceAction(args, client, r, action)
 		if err != nil {
 			switch action {
-			case actionApply, actionCreate, actionDelete, actionGetOrList:
-				results.resErrs = append(results.resErrs, err)
+			case ActionApply, ActionCreate, ActionDelete, ActionGetOrList:
+				results.ResErrs = append(results.ResErrs, err)
 				continue
 			default:
-				results.err = err
+				results.Err = err
 			}
 		}
 
@@ -239,16 +239,16 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 			}
 		}
 
-		results.resources = append(results.resources, res...)
-		results.numHandled = results.numHandled + len(res)
+		results.Resources = append(results.Resources, res...)
+		results.NumHandled = results.NumHandled + len(res)
 	}
 
 	return results
 }
 
-// executeResourceAction fans out the specific resource action to the appropriate method
+// ExecuteResourceAction fans out the specific resource action to the appropriate method
 // on the ResourceManager for the specific resource.
-func executeResourceAction(args map[string]interface{}, client client.Interface, resource resourcemgr.ResourceObject, action action) ([]runtime.Object, error) {
+func ExecuteResourceAction(args map[string]interface{}, client client.Interface, resource resourcemgr.ResourceObject, action action) ([]runtime.Object, error) {
 	rm := resourcemgr.GetResourceManager(resource)
 
 	err := handleNamespace(resource, rm, args)
@@ -260,17 +260,17 @@ func executeResourceAction(args map[string]interface{}, client client.Interface,
 	ctx := context.Background()
 
 	switch action {
-	case actionApply:
+	case ActionApply:
 		resOut, err = rm.Apply(ctx, client, resource)
-	case actionCreate:
+	case ActionCreate:
 		resOut, err = rm.Create(ctx, client, resource)
-	case actionUpdate:
+	case ActionUpdate:
 		resOut, err = rm.Update(ctx, client, resource)
-	case actionDelete:
+	case ActionDelete:
 		resOut, err = rm.Delete(ctx, client, resource)
-	case actionGetOrList:
+	case ActionGetOrList:
 		resOut, err = rm.GetOrList(ctx, client, resource)
-	case actionPatch:
+	case ActionPatch:
 		patch := args["--patch"].(string)
 		resOut, err = rm.Patch(ctx, client, resource, patch)
 	}

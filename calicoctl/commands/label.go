@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 
@@ -119,21 +120,21 @@ Description:
 
 	// TODO: add more validation on key/value?
 
-	results := executeConfigCommand(parsedArgs, actionGetOrList)
-	if results.fileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.err)
-	} else if results.err != nil {
+	results := common.ExecuteConfigCommand(parsedArgs, common.ActionGetOrList)
+	if results.FileInvalid {
+		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.Err != nil {
 		return fmt.Errorf("failed to get %s %s, error %v",
-			kind, name, results.err)
-	} else if len(results.resources) == 0 {
+			kind, name, results.Err)
+	} else if len(results.Resources) == 0 {
 		return fmt.Errorf("%s %s not found", kind, name)
 	}
 
-	resource := results.resources[0].(resourcemgr.ResourceObject)
+	resource := results.Resources[0].(resourcemgr.ResourceObject)
 	labels := resource.GetObjectMeta().GetLabels()
 	overwrite := parsedArgs["--overwrite"].(bool)
 	overwritten := false
-	client := results.client
+	client := results.Client
 	if labels == nil {
 		labels = make(map[string]string)
 	}
@@ -165,7 +166,7 @@ Description:
 	}
 
 	resource.GetObjectMeta().SetLabels(labels)
-	_, err = executeResourceAction(parsedArgs, client, resource, actionUpdate)
+	_, err = common.ExecuteResourceAction(parsedArgs, client, resource, common.ActionUpdate)
 	if err != nil {
 		return fmt.Errorf("failed to update %s %s, label not changed", kind, name)
 	}

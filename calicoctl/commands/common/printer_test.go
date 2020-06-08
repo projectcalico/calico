@@ -1,4 +1,4 @@
-package commands
+package common
 
 import (
 	. "github.com/onsi/ginkgo/extensions/table"

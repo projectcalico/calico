@@ -21,6 +21,7 @@ import (
 
 	"fmt"
 
+	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	log "github.com/sirupsen/logrus"
 )
@@ -88,37 +89,37 @@ Description:
 		return nil
 	}
 
-	results := executeConfigCommand(parsedArgs, actionUpdate)
+	results := common.ExecuteConfigCommand(parsedArgs, common.ActionUpdate)
 	log.Infof("results: %+v", results)
 
-	if results.fileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.err)
-	} else if results.numHandled == 0 {
-		if results.numResources == 0 {
+	if results.FileInvalid {
+		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.NumHandled == 0 {
+		if results.NumResources == 0 {
 			return fmt.Errorf("No resources specified in file")
-		} else if results.numResources == 1 {
-			return fmt.Errorf("Failed to replace '%s' resource: %v", results.singleKind, results.err)
-		} else if results.singleKind != "" {
-			return fmt.Errorf("Failed to replace any '%s' resources: %v", results.singleKind, results.err)
+		} else if results.NumResources == 1 {
+			return fmt.Errorf("Failed to replace '%s' resource: %v", results.SingleKind, results.Err)
+		} else if results.SingleKind != "" {
+			return fmt.Errorf("Failed to replace any '%s' resources: %v", results.SingleKind, results.Err)
 		} else {
-			return fmt.Errorf("Failed to replace any resources: %v", results.err)
+			return fmt.Errorf("Failed to replace any resources: %v", results.Err)
 		}
-	} else if results.err == nil {
-		if results.singleKind != "" {
-			fmt.Printf("Successfully replaced %d '%s' resource(s)\n", results.numHandled, results.singleKind)
+	} else if results.Err == nil {
+		if results.SingleKind != "" {
+			fmt.Printf("Successfully replaced %d '%s' resource(s)\n", results.NumHandled, results.SingleKind)
 		} else {
-			fmt.Printf("Successfully replaced %d resource(s)\n", results.numHandled)
+			fmt.Printf("Successfully replaced %d resource(s)\n", results.NumHandled)
 		}
 	} else {
 		fmt.Printf("Partial success: ")
-		if results.singleKind != "" {
+		if results.SingleKind != "" {
 			fmt.Printf("replaced the first %d out of %d '%s' resources:\n",
-				results.numHandled, results.numResources, results.singleKind)
+				results.NumHandled, results.NumResources, results.SingleKind)
 		} else {
 			fmt.Printf("replaced the first %d out of %d resources:\n",
-				results.numHandled, results.numResources)
+				results.NumHandled, results.NumResources)
 		}
-		return fmt.Errorf("Hit error: %v", results.err)
+		return fmt.Errorf("Hit error: %v", results.Err)
 	}
 
 	return nil

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package common
 
 import (
 	"bytes"
@@ -37,15 +37,15 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-type resourcePrinter interface {
-	print(client client.Interface, resources []runtime.Object) error
+type ResourcePrinter interface {
+	Print(client client.Interface, resources []runtime.Object) error
 }
 
-// resourcePrinterJSON implements the resourcePrinter interface and is used to display
+// ResourcePrinterJSON implements the ResourcePrinter interface and is used to display
 // a slice of resources in JSON format.
-type resourcePrinterJSON struct{}
+type ResourcePrinterJSON struct{}
 
-func (r resourcePrinterJSON) print(client client.Interface, resources []runtime.Object) error {
+func (r ResourcePrinterJSON) Print(client client.Interface, resources []runtime.Object) error {
 	// If the results contain a single entry then extract the only value.
 	var rs interface{}
 	if len(resources) == 1 {
@@ -61,11 +61,11 @@ func (r resourcePrinterJSON) print(client client.Interface, resources []runtime.
 	return nil
 }
 
-// resourcePrinterYAML implements the resourcePrinter interface and is used to display
+// ResourcePrinterYAML implements the ResourcePrinter interface and is used to display
 // a slice of resources in YAML format.
-type resourcePrinterYAML struct{}
+type ResourcePrinterYAML struct{}
 
-func (r resourcePrinterYAML) print(client client.Interface, resources []runtime.Object) error {
+func (r ResourcePrinterYAML) Print(client client.Interface, resources []runtime.Object) error {
 	// If the results contain a single entry then extract the only value.
 	var rs interface{}
 	if len(resources) == 1 {
@@ -81,38 +81,38 @@ func (r resourcePrinterYAML) print(client client.Interface, resources []runtime.
 	return nil
 }
 
-// resourcePrinterTable implements the resourcePrinter interface and is used to display
+// ResourcePrinterTable implements the ResourcePrinter interface and is used to display
 // a slice of resources in ps table format.
-type resourcePrinterTable struct {
+type ResourcePrinterTable struct {
 	// The headings to display in the table.  If this is nil, the default headings for the
 	// resource are used instead (in which case the `wide` boolean below is used to specify
 	// whether wide or narrow format is required.
-	headings []string
+	Headings []string
 
 	// Wide format.  When headings have not been explicitly specified, this is used to
 	// determine whether to the resource-specific default wide or narrow headings.
-	wide bool
+	Wide bool
 
 	// Namespace included. When a resource being printed is namespaced, this is used
 	// to determine if the namespace column should be printed or not.
-	printNamespace bool
+	PrintNamespace bool
 }
 
-func (r resourcePrinterTable) print(client client.Interface, resources []runtime.Object) error {
-	log.Infof("Output in table format (wide=%v)", r.wide)
+func (r ResourcePrinterTable) Print(client client.Interface, resources []runtime.Object) error {
+	log.Infof("Output in table format (wide=%v)", r.Wide)
 	for _, resource := range resources {
 		// Get the resource manager for the resource type.
 		rm := resourcemgr.GetResourceManager(resource)
 
 		// If no headings have been specified then we must be using the default
 		// headings for that resource type.
-		headings := r.headings
-		if r.headings == nil {
-			headings = rm.GetTableDefaultHeadings(r.wide)
+		headings := r.Headings
+		if r.Headings == nil {
+			headings = rm.GetTableDefaultHeadings(r.Wide)
 		}
 
 		// Look up the template string for the specific resource type.
-		tpls, err := rm.GetTableTemplate(headings, r.printNamespace)
+		tpls, err := rm.GetTableTemplate(headings, r.PrintNamespace)
 		if err != nil {
 			return err
 		}
@@ -146,28 +146,28 @@ func (r resourcePrinterTable) print(client client.Interface, resources []runtime
 	return nil
 }
 
-// resourcePrinterTemplateFile implements the resourcePrinter interface and is used to display
+// ResourcePrinterTemplateFile implements the ResourcePrinter interface and is used to display
 // a slice of resources using a user-defined go-lang template specified in a file.
-type resourcePrinterTemplateFile struct {
-	templateFile string
+type ResourcePrinterTemplateFile struct {
+	TemplateFile string
 }
 
-func (r resourcePrinterTemplateFile) print(client client.Interface, resources []runtime.Object) error {
-	template, err := ioutil.ReadFile(r.templateFile)
+func (r ResourcePrinterTemplateFile) Print(client client.Interface, resources []runtime.Object) error {
+	template, err := ioutil.ReadFile(r.TemplateFile)
 	if err != nil {
 		return err
 	}
-	rp := resourcePrinterTemplate{template: string(template)}
-	return rp.print(client, resources)
+	rp := ResourcePrinterTemplate{Template: string(template)}
+	return rp.Print(client, resources)
 }
 
-// resourcePrinterTemplate implements the resourcePrinter interface and is used to display
+// ResourcePrinterTemplate implements the ResourcePrinter interface and is used to display
 // a slice of resources using a user-defined go-lang template string.
-type resourcePrinterTemplate struct {
-	template string
+type ResourcePrinterTemplate struct {
+	Template string
 }
 
-func (r resourcePrinterTemplate) print(client client.Interface, resources []runtime.Object) error {
+func (r ResourcePrinterTemplate) Print(client client.Interface, resources []runtime.Object) error {
 	// We include a join function in the template as it's useful for multi
 	// value columns.
 	fns := template.FuncMap{
@@ -175,7 +175,7 @@ func (r resourcePrinterTemplate) print(client client.Interface, resources []runt
 		"joinAndTruncate": joinAndTruncate,
 		"config":          config(client),
 	}
-	tmpl, err := template.New("get").Funcs(fns).Parse(r.template)
+	tmpl, err := template.New("get").Funcs(fns).Parse(r.Template)
 	if err != nil {
 		return err
 	}
