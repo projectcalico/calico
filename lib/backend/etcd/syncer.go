@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ import (
 
 	"strconv"
 
-	"github.com/coreos/etcd/client"
-	etcd "github.com/coreos/etcd/client"
 	log "github.com/sirupsen/logrus"
+	"go.etcd.io/etcd/client"
+	etcd "go.etcd.io/etcd/client"
 	"golang.org/x/net/context"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"

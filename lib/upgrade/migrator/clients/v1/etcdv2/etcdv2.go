@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@ import (
 
 	"time"
 
-	etcd "github.com/coreos/etcd/client"
-	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
+	etcd "go.etcd.io/etcd/client"
+	"go.etcd.io/etcd/pkg/transport"
 	"golang.org/x/net/context"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -61,9 +61,9 @@ func NewEtcdClient(config *apiv1.EtcdConfig) (*EtcdClient, error) {
 
 	// Create the etcd client
 	tls := transport.TLSInfo{
-		CAFile:   config.EtcdCACertFile,
-		CertFile: config.EtcdCertFile,
-		KeyFile:  config.EtcdKeyFile,
+		TrustedCAFile: config.EtcdCACertFile,
+		CertFile:      config.EtcdCertFile,
+		KeyFile:       config.EtcdKeyFile,
 	}
 	t, err := transport.NewTransport(tls, clientTimeout)
 	if err != nil {
