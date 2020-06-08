@@ -78,7 +78,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 
 	Describe("Felix syncer functionality", func() {
 		It("should receive the synced after return all current data", func() {
-			syncer := felixsyncer.New(be, config.Spec, syncTester)
+			syncer := felixsyncer.New(be, config.Spec, syncTester, true)
 			syncer.Start()
 			expectedCacheSize := 0
 
@@ -495,7 +495,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// We need to create a new syncTester and syncer.
 			current := syncTester.GetCacheEntries()
 			syncTester = testutils.NewSyncerTester()
-			syncer = felixsyncer.New(be, config.Spec, syncTester)
+			syncer = felixsyncer.New(be, config.Spec, syncTester, true)
 			syncer.Start()
 
 			// Verify the data is the same as the data from the previous cache.  We got the cache in the previous
@@ -534,7 +534,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (KDD only)", testutil
 
 	It("should handle IPAM blocks properly for host-local IPAM", func() {
 		config.Spec.K8sUsePodCIDR = true
-		syncer := felixsyncer.New(be, config.Spec, syncTester)
+		syncer := felixsyncer.New(be, config.Spec, syncTester, true)
 		syncer.Start()
 
 		// Verify we start a resync.
@@ -549,5 +549,58 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (KDD only)", testutil
 
 		// Expect to be in-sync.
 		syncTester.ExpectStatusUpdate(api.InSync)
+	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (passive mode)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+	var be api.Client
+	var syncTester *testutils.SyncerTester
+	var err error
+	var c clientv3.Interface
+
+	BeforeEach(func() {
+		// Create the backend client to obtain a syncer interface.
+		be, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		c, err = clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a SyncerTester to receive the BGP syncer callback events and to allow us
+		// to assert state.
+		syncTester = testutils.NewSyncerTester()
+	})
+
+	It("should only receive config updates when in passive mode", func() {
+		syncer := felixsyncer.New(be, config.Spec, syncTester, false)
+		syncer.Start()
+
+		// Verify we start a resync.
+		syncTester.ExpectStatusUpdate(api.WaitForDatastore)
+		syncTester.ExpectStatusUpdate(api.ResyncInProgress)
+
+		// Expect to be in-sync.
+		syncTester.ExpectStatusUpdate(api.InSync)
+
+		// We don't expect any resources, since we're only watching config.
+		syncTester.ExpectCacheSize(0)
+
+		// Change the variant.
+		ci := &apiv3.ClusterInformation{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec: apiv3.ClusterInformationSpec{
+				Variant: "Calico",
+			},
+		}
+		_, err = c.ClusterInformation().Create(context.Background(), ci, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect an update for the variant.
+		syncTester.ExpectCacheSize(1)
+		syncTester.ExpectValueMatches(
+			model.GlobalConfigKey{Name: "Variant"},
+			MatchRegexp("Calico"),
+		)
 	})
 })
