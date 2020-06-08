@@ -32,9 +32,11 @@ blocks:
           commands:
             - export REPO_NAME=calico-current
             - export VERSION=release-v3.14
+            - export PACKAGE_ETCD3GW=true
             - make release-publish
         - name: 'Previous release branch'
           commands:
             - export REPO_NAME=calico-previous
             - export VERSION=release-v3.13
+            - export PACKAGE_ETCD3GW=true
             - make release-publish
