@@ -23,11 +23,16 @@ scriptdir=$(dirname $(realpath $0))
 . ${scriptdir}/lib.sh
 rootdir=`git_repo_root`
 
+pub_steps=
+if "${PUBLISH:-false}"; then
+    pub_steps="pub_debs pub_rpms"
+fi
+
 if [ "${SEMAPHORE_GIT_PR_NUMBER}${SEMAPHORE_GIT_BRANCH}" = master -o -z "${SEMAPHORE_GIT_BRANCH}" ]; then
     # Normally - if not Semaphore, or if this is Semaphore running on
     # the master branch and not for a PR - do all the steps including
     # publication.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle pub_debs pub_rpms}
+    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
 else
     # For Semaphore building a PR or a branch other than master, build
     # packages but do not publish them.
