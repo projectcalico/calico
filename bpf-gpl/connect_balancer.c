@@ -41,9 +41,10 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, uint8_t pro
 	 * XXX same affinity, which (a) is sub-optimal and (b) leaks info between
 	 * XXX workloads.
 	 */
+	bool nat_lvl1_drop = 0;
 	uint16_t dport_he = (uint16_t)(be32_to_host(ctx->user_port)>>16);
 	struct calico_nat_dest *nat_dest;
-	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he);
+	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he, &nat_lvl1_drop);
 	if (!nat_dest) {
 		CALI_INFO("NAT miss.\n");
 		goto out;

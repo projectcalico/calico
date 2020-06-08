@@ -25,15 +25,26 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/ip"
 )
 
 // struct calico_nat_v4_key {
+//    uint32_t prefixLen;
 //    uint32_t addr; // NBO
 //    uint16_t port; // HBO
 //    uint8_t protocol;
+//    uint32_t saddr;
 //    uint8_t pad;
 // };
-const frontendKeySize = 8
+const frontendKeySize = 16
+
+// struct calico_nat {
+//	uint32_t addr;
+//	uint16_t port;
+//	uint8_t  protocol;
+//	uint8_t  pad;
+// };
+const frontendAffKeySize = 8
 
 // struct calico_nat_v4_value {
 //    uint32_t id;
@@ -56,38 +67,75 @@ const backendKeySize = 8
 // };
 const backendValueSize = 8
 
+const BlackHoleCount = 0xffffffff
+
+//(sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
+const ZeroCIDRPrefixLen = 56
+
+var ZeroCIDR = ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)
+
 type FrontendKey [frontendKeySize]byte
 
 func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
+	return NewNATKeySrc(addr, port, protocol, ZeroCIDR)
+}
+
+func NewNATKeySrc(addr net.IP, port uint16, protocol uint8, cidr ip.V4CIDR) FrontendKey {
 	var k FrontendKey
+	prefixlen := ZeroCIDRPrefixLen
 	addr = addr.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
-	copy(k[:4], addr)
-	binary.LittleEndian.PutUint16(k[4:6], port)
-	k[6] = protocol
+	binary.LittleEndian.PutUint32(k[:4], uint32(prefixlen)+uint32(cidr.Prefix()))
+	copy(k[4:8], addr)
+	binary.LittleEndian.PutUint16(k[8:10], port)
+	k[10] = protocol
+	copy(k[11:15], cidr.Addr().AsNetIP().To4())
 	return k
 }
 
 func (k FrontendKey) Proto() uint8 {
-	return k[6]
+	return k[10]
 }
 
 func (k FrontendKey) Addr() net.IP {
-	return k[:4]
+	return k[4:8]
+}
+
+func (k FrontendKey) srcAddr() ip.Addr {
+	var addr ip.V4Addr
+	copy(addr[:], k[11:15])
+	return addr
+}
+
+// This function returns the Prefix length of the source CIDR
+func (k FrontendKey) SrcPrefixLen() uint32 {
+	return k.PrefixLen() - ZeroCIDRPrefixLen
+}
+
+func (k FrontendKey) SrcCIDR() ip.CIDR {
+	return ip.CIDRFromAddrAndPrefix(k.srcAddr(), int(k.SrcPrefixLen()))
+}
+
+func (k FrontendKey) PrefixLen() uint32 {
+	return binary.LittleEndian.Uint32(k[0:4])
 }
 
 func (k FrontendKey) Port() uint16 {
-	return binary.LittleEndian.Uint16(k[4:6])
+	return binary.LittleEndian.Uint16(k[8:10])
 }
 
 func (k FrontendKey) AsBytes() []byte {
 	return k[:]
 }
 
+func (k FrontendKey) Affinitykey() []byte {
+	return k[4:12]
+}
+
 func (k FrontendKey) String() string {
-	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v}", k.Proto(), k.Addr(), k.Port())
+	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v SrcAddr:%v}", k.Proto(), k.Addr(), k.Port(), k.SrcCIDR())
 }
 
 type FrontendValue [frontendValueSize]byte
@@ -183,12 +231,13 @@ func (k BackendValue) AsBytes() []byte {
 
 var FrontendMapParameters = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_nat_fe",
-	Type:       "hash",
+	Type:       "lpm_trie",
 	KeySize:    frontendKeySize,
 	ValueSize:  frontendValueSize,
 	MaxEntries: 511000,
 	Name:       "cali_v4_nat_fe",
 	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
 }
 
 func FrontendMap(mc *bpf.MapContext) bpf.Map {
@@ -304,47 +353,48 @@ func BackendMapMemIter(m BackendMapMem) bpf.MapIter {
 }
 
 // struct calico_nat_v4_affinity_key {
-//    struct calico_nat_v4_key nat_key;
+//    struct calico_nat_v4 nat_key;
 // 	  uint32_t client_ip;
 // 	  uint32_t padding;
 // };
 
-const affinityKeySize = frontendKeySize + 8
+const affinityKeySize = frontendAffKeySize + 8
 
 // AffinityKey is a key into the affinity table that consist of FrontendKey and
 // the client's IP
 type AffinityKey [affinityKeySize]byte
 
+type FrontEndAffinityKey [frontendAffKeySize]byte
+
 // NewAffinityKey create a new AffinityKey from a clientIP and FrontendKey
 func NewAffinityKey(clientIP net.IP, fEndKey FrontendKey) AffinityKey {
 	var k AffinityKey
 
-	copy(k[:], fEndKey[:])
+	copy(k[:], fEndKey[4:11])
 
 	addr := clientIP.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
 	}
-	copy(k[frontendKeySize:frontendKeySize+4], addr)
-
+	copy(k[frontendAffKeySize:frontendAffKeySize+4], addr)
 	return k
 }
 
 // ClientIP returns the ClientIP part of the key
 func (k AffinityKey) ClientIP() net.IP {
-	return k[frontendKeySize : frontendKeySize+4]
+	return k[frontendAffKeySize : frontendAffKeySize+4]
 }
 
 // FrontendKey returns the FrontendKey part of the key
-func (k AffinityKey) FrontendKey() FrontendKey {
-	var f FrontendKey
-	copy(f[:], k[:frontendKeySize])
+func (k AffinityKey) FrontendAffinityKey() FrontEndAffinityKey {
+	var f FrontEndAffinityKey
+	copy(f[:], k[:frontendAffKeySize])
 
 	return f
 }
 
 func (k AffinityKey) String() string {
-	return fmt.Sprintf("AffinityKey{ClientIP:%v %s}", k.ClientIP(), k.FrontendKey())
+	return fmt.Sprintf("AffinityKey{ClientIP:%v %v}", k.ClientIP(), k.FrontendAffinityKey())
 }
 
 // AsBytes returns the key as []byte

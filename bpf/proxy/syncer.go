@@ -17,6 +17,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+
 	"net"
 	"strconv"
 	"strings"
@@ -130,7 +131,7 @@ type Syncer struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
-	stickySvcs       map[nat.FrontendKey]stickyFrontend
+	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
 	stickySvcDeleted bool
 }
@@ -270,6 +271,16 @@ func (s *Syncer) cleanupDerived(id uint32) error {
 			log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0, 0))
 			if err := s.bpfSvcs.Delete(key[:]); err != nil {
 				return errors.Errorf("bpfSvcs.Delete: %s", err)
+			}
+			keys, err := getSvcNATKeyLBSrcRange(si.svc)
+			if err != nil {
+				return err
+			}
+			for _, key = range keys {
+				log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0, 0))
+				if err := s.bpfSvcs.Delete(key[:]); err != nil {
+					return errors.Errorf("bpfSvcs.Delete: %s", err)
+				}
 			}
 		}
 	}
@@ -418,6 +429,12 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 		if err := s.writeSvc(sinfo, svc.id, count, local); err != nil {
 			return err
 		}
+		if svcTypeExternalIP == t {
+			err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local)
+			if err != nil {
+				log.Debugf("Failed to write LB source range NAT keys")
+			}
+		}
 	}
 
 	s.newSvcMap[skey] = newInfo
@@ -535,7 +552,7 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	}
 
 	// preallocate maps the track sticky service for cleanup
-	s.stickySvcs = make(map[nat.FrontendKey]stickyFrontend)
+	s.stickySvcs = make(map[nat.FrontEndAffinityKey]stickyFrontend)
 	s.stickyEps = make(map[uint32]map[nat.BackendValue]struct{})
 	s.stickySvcDeleted = false
 
@@ -664,8 +681,60 @@ func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
 	}
 
 	key := nat.NewNATKey(ip, uint16(port), proto)
-
 	return key, nil
+}
+
+func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
+	var keys []nat.FrontendKey
+	ipaddr := svc.ClusterIP()
+	port := svc.Port()
+	loadBalancerSourceRanges := svc.LoadBalancerSourceRanges()
+	log.Debugf("loadbalancer %v", loadBalancerSourceRanges)
+	proto, err := protoV1ToInt(svc.Protocol())
+	if err != nil {
+		return keys, err
+	}
+	for _, src := range loadBalancerSourceRanges {
+		// Ignore IPv6 addresses
+		if strings.Contains(src, ":") {
+			continue
+		}
+		key := nat.NewNATKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
+
+func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, count, local int) error {
+	var key nat.FrontendKey
+	affinityTimeo := uint32(0)
+	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
+		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
+	}
+
+	if len(svc.LoadBalancerSourceRanges()) == 0 {
+		return nil
+	}
+	keys, err := getSvcNATKeyLBSrcRange(svc)
+	if err != nil {
+		return err
+	}
+	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
+	for _, key := range keys {
+		log.Debugf("bpf map writing %s:%s", key, val)
+		if err = s.bpfSvcs.Update(key[:], val[:]); err != nil {
+			return errors.Errorf("bpfSvcs.Update: %s", err)
+		}
+	}
+	key, err = getSvcNATKey(svc)
+	if err != nil {
+		return err
+	}
+	val = nat.NewNATValue(svcID, uint32(nat.BlackHoleCount), uint32(0), uint32(0))
+	if err = s.bpfSvcs.Update(key[:], val[:]); err != nil {
+		return errors.Errorf("bpfSvcs.Update: %s", err)
+	}
+	return nil
 }
 
 func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) error {
@@ -686,9 +755,11 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		return errors.Errorf("bpfSvcs.Update: %s", err)
 	}
 
+	var affkey nat.FrontEndAffinityKey
+	copy(affkey[:], key.Affinitykey())
 	// we must have written the backends by now so the map exists
 	if s.stickyEps[svcID] != nil {
-		s.stickySvcs[key] = stickyFrontend{
+		s.stickySvcs[affkey] = stickyFrontend{
 			id:    svcID,
 			timeo: time.Duration(affinityTimeo) * time.Second,
 		}
@@ -711,7 +782,19 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 
 	log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
 	if err := s.bpfSvcs.Delete(key[:]); err != nil {
-		return errors.Errorf("bpfSvcs.Delete: %s", err)
+		return errors.WithMessage(err, "Delete svc")
+	}
+
+	keys, err := getSvcNATKeyLBSrcRange(svc)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
+		err := s.bpfSvcs.Delete(key[:])
+		if err != nil && !bpf.IsNotExists(err) {
+			return errors.WithMessage(err, "Delete svc")
+		}
 	}
 
 	return nil
@@ -776,23 +859,50 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 			}
 			continue
 		}
+		matchLBSrcIp := func() bool {
+			// External IP with zero Src CIDR is a valid entry and should not be considered
+			// as stale
+			if bsvc.SrcCIDR() == nat.ZeroCIDR {
+				return true
+			}
+			// If the service does not have any source address range, treat all the entries with
+			// src cidr as stale.
+			if len(info.LoadBalancerSourceRanges()) == 0 {
+				return false
+			}
+			// If the service does have source range specified, look for a match
+			for _, srcip := range info.LoadBalancerSourceRanges() {
+				if strings.Contains(srcip, ":") {
+					continue
+				}
+				cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
+				if cidr == bsvc.SrcCIDR() {
+					return true
+				}
+			}
+			return false
+		}
 
 		if bsvc.Addr().String() == info.ClusterIP().String() {
-			skey := &svcKey{
-				sname: svc,
+			if bsvc.SrcCIDR() == nat.ZeroCIDR {
+				skey := &svcKey{
+					sname: svc,
+				}
+				log.Debugf("resolved %s as %s", bsvc, skey)
+				return skey
 			}
-			log.Debugf("resolved %s as %s", bsvc, skey)
-			return skey
 		}
 
 		for _, eip := range info.ExternalIPStrings() {
 			if bsvc.Addr().String() == eip {
-				skey := &svcKey{
-					sname: svc,
-					extra: getSvcKeyExtra(svcTypeExternalIP, eip),
+				if matchLBSrcIp() {
+					skey := &svcKey{
+						sname: svc,
+						extra: getSvcKeyExtra(svcTypeExternalIP, eip),
+					}
+					log.Debugf("resolved %s as %s", bsvc, skey)
+					return skey
 				}
-				log.Debugf("resolved %s as %s", bsvc, skey)
-				return skey
 			}
 		}
 
@@ -897,7 +1007,7 @@ func (s *Syncer) cleanupSticky() error {
 		copy(key[:], k[:ks])
 		copy(val[:], v[:vs])
 
-		fend, ok := s.stickySvcs[key.FrontendKey()]
+		fend, ok := s.stickySvcs[key.FrontendAffinityKey()]
 		if !ok {
 			log.Debugf("cleaning affinity %v:%v - no such a service", key, val)
 			dels = append(dels, key)
@@ -1051,6 +1161,13 @@ func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
 		o(x)
 	}
 	return x
+}
+
+// K8sSvcWithLBSourceRangeIPs sets LBSourcePortRangeIPs
+func K8sSvcWithLBSourceRangeIPs(ips []string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).loadBalancerSourceRanges = ips
+	}
 }
 
 // K8sSvcWithExternalIPs sets ExternalIPs

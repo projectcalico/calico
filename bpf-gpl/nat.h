@@ -45,13 +45,39 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
-// Map: NAT level one.  Dest IP and port -> ID and num backends.
 
-struct calico_nat_v4_key {
+struct calico_nat_v4 {
+        uint32_t addr; // NBO
+        uint16_t port; // HBO
+        uint8_t protocol;
+};
+
+/* Map: NAT level one.  Dest IP, port and src IP -> ID and num backends.
+ * Modified the map from HASH to LPM_TRIE. This is to drop packets outside
+ * src IP range specified for Load Balancer
+ */
+struct __attribute__((__packed__)) calico_nat_v4_key {
+	__u32 prefixlen;
 	uint32_t addr; // NBO
 	uint16_t port; // HBO
 	uint8_t protocol;
+	uint32_t saddr;
 	uint8_t pad;
+};
+
+/* Prefix len = (dst_addr + port + protocol + src_addr) in bits. */
+#define NAT_PREFIX_LEN_WITH_SRC_MATCH  (sizeof(struct calico_nat_v4_key) - \
+					sizeof(((struct calico_nat_v4_key*)0)->prefixlen) - \
+					sizeof(((struct calico_nat_v4_key*)0)->pad))
+
+#define NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS (NAT_PREFIX_LEN_WITH_SRC_MATCH * 8)
+
+// This is used as a special ID along with count=0 to drop a packet at nat level1 lookup
+#define NAT_FE_DROP_COUNT  0xffffffff
+
+union calico_nat_v4_lpm_key {
+        struct bpf_lpm_trie_key lpm;
+        struct calico_nat_v4_key key;
 };
 
 struct calico_nat_v4_value {
@@ -61,9 +87,9 @@ struct calico_nat_v4_value {
 	uint32_t affinity_timeo;
 };
 
-CALI_MAP_V1(cali_v4_nat_fe,
-		BPF_MAP_TYPE_HASH,
-		struct calico_nat_v4_key, struct calico_nat_v4_value,
+CALI_MAP(cali_v4_nat_fe, 2,
+		BPF_MAP_TYPE_LPM_TRIE,
+		union calico_nat_v4_lpm_key, struct calico_nat_v4_value,
 		511000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 // Map: NAT level two.  ID and ordinal -> new dest and port.
@@ -85,7 +111,7 @@ CALI_MAP_V1(cali_v4_nat_be,
 		510000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
 
 struct calico_nat_v4_affinity_key {
-	struct calico_nat_v4_key nat_key;
+	struct calico_nat_v4 nat_key;
 	uint32_t client_ip;
 	uint32_t padding;
 };
@@ -118,12 +144,15 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								     __be32 ip_dst,
 								     __u8 ip_proto,
 								     __u16 dport,
-								     bool from_tun)
+								     bool from_tun,
+								     bool *drop)
 {
 	struct calico_nat_v4_key nat_key = {
+		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
 		.addr = ip_dst,
 		.port = dport,
 		.protocol = ip_proto,
+		.saddr = ip_src,
 	};
 	struct calico_nat_v4_value *nat_lv1_val;
 	struct calico_nat_secondary_v4_key nat_lv2_key;
@@ -188,7 +217,14 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		}
 		CALI_DEBUG("NAT: nodeport hit\n");
 	}
-
+	/* With LB source range, we install a drop entry in the NAT FE map
+	 * with count equal to 0xffffffff. If we hit this entry,
+	 * packet is dropped.
+	 */
+	if (nat_lv1_val->count == NAT_FE_DROP_COUNT) {
+		*drop = 1;
+		return NULL;
+	}
 	uint32_t count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
@@ -202,7 +238,12 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		goto skip_affinity;
 	}
 
-	affkey.nat_key =  nat_key;
+	struct calico_nat_v4 nat_data = {
+		.addr = ip_dst,
+		.port = dport,
+		.protocol = ip_proto,
+	};
+	affkey.nat_key = nat_data;
 	affkey.client_ip = ip_src;
 
 	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo);
@@ -267,9 +308,9 @@ skip_affinity:
 }
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport)
+								    __u8 ip_proto, __u16 dport, bool *drop)
 {
-	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false);
+	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false, drop);
 }
 
 struct vxlanhdr {
