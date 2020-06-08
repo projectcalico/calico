@@ -782,7 +782,7 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 
 	log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
 	if err := s.bpfSvcs.Delete(key[:]); err != nil {
-		return errors.Errorf("bpfSvcs.Delete: %s", err)
+		return errors.WithMessage(err, "Delete svc")
 	}
 
 	keys, err := getSvcNATKeyLBSrcRange(svc)
@@ -793,7 +793,7 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 		log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
 		err := s.bpfSvcs.Delete(key[:])
 		if err != nil && !bpf.IsNotExists(err) {
-			return errors.Errorf("bpfSvcs.Delete: %s", err)
+			return errors.WithMessage(err, "Delete svc")
 		}
 	}
 
@@ -884,11 +884,13 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 		}
 
 		if bsvc.Addr().String() == info.ClusterIP().String() {
-			skey := &svcKey{
-				sname: svc,
+			if bsvc.SrcCIDR() == nat.ZeroCIDR {
+				skey := &svcKey{
+					sname: svc,
+				}
+				log.Debugf("resolved %s as %s", bsvc, skey)
+				return skey
 			}
-			log.Debugf("resolved %s as %s", bsvc, skey)
-			return skey
 		}
 
 		for _, eip := range info.ExternalIPStrings() {
