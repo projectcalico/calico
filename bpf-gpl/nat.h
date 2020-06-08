@@ -238,7 +238,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		goto skip_affinity;
 	}
 
-        struct calico_nat_v4 nat_data = {
+	struct calico_nat_v4 nat_data = {
                 .addr = ip_dst,
                 .port = dport,
                 .protocol = ip_proto,

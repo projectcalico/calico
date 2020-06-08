@@ -842,6 +842,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var ip []string
 					var port uint16
 					BeforeEach(func() {
+						if testOpts.connTimeEnabled {
+							Skip("FIXME externalClient also does conntime balancing")
+						}
+						externalClient.EnsureBinary("test-connection")
+						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
 						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName, "10.101.0.10", w[0][0], 80, tgtPort,
 							testOpts.protocol, externalIP, srcIPRange)
 						// when we point Load Balancer to a node in GCE it adds local routes to the external IP on the hosts.
@@ -850,43 +855,29 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						ip = testSvc.Spec.ExternalIPs
 						port = uint16(testSvc.Spec.Ports[0].Port)
-					})
-
-					Context("Test LB-service with external IP and workloads", func() {
-
-						It("should have connectivity from workloads[1][0],[1][1] and [0][1] via external IP to workload 0", func() {
-							cc.ExpectSome(w[1][0], TargetIP(ip[0]), port)
-							cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
-							cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
-							cc.CheckConnectivity()
-						})
-					})
-
-					Context("Test LB-service with external IP and external Client", func() {
-						BeforeEach(func() {
-							if testOpts.connTimeEnabled {
-								Skip("FIXME externalClient also does conntime balancing")
-							}
-							externalClient.EnsureBinary("test-connection")
-							externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
-							pol.Spec.Ingress = []api.Rule{
-								{
-									Action: "Allow",
-									Source: api.EntityRule{
-										Nets: []string{
-											externalClient.IP + "/32",
-										},
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{
+										externalClient.IP + "/32",
+										w[0][1].IP + "/32",
+										w[1][0].IP + "/32",
+										w[1][1].IP + "/32",
 									},
 								},
-							}
-							pol = updatePolicy(pol)
-						})
-						It("should have connectivity from external Client via external IP to workload 0", func() {
-							cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
-							cc.CheckConnectivity()
-						})
+							},
+						}
+						pol = updatePolicy(pol)
 					})
 
+					It("should have connectivity from workloads[1][0],[1][1], [0][1] and external client via external IP to workload 0", func() {
+						cc.ExpectSome(w[1][0], TargetIP(ip[0]), port)
+						cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
+						cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
+						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
+						cc.CheckConnectivity()
+					})
 				})
 
 				Context("Test load balancer service with src ranges", func() {
@@ -917,10 +908,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var testSvc *v1.Service
 					tgtPort := 8055
 					externalIP := []string{extIP}
-					srcIPRange := []string{"10.65.1.3/24"}
 					testSvcName := "test-lb-service-extip"
 					var ip []string
 					var port uint16
+					var srcIPRange []string
 					BeforeEach(func() {
 						if testOpts.connTimeEnabled {
 							Skip("FIXME externalClient also does conntime balancing")
@@ -940,6 +931,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pol = updatePolicy(pol)
 						felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
+						srcIPRange = []string{"10.65.1.3/24"}
 					})
 					Context("Test LB-service with external Client's IP not in src range", func() {
 						BeforeEach(func() {
