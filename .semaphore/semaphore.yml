@@ -16,12 +16,15 @@ blocks:
         - name: 'FV (DevStack + Tempest)'
           commands:
             - checkout
-            - ln -s . networking-calico
+            - git checkout -b devstack-test
+            - mkdir -p ~/calico
+            - ln -s `pwd` ~/calico/networking-calico
             - sudo apt-get install -y tox python-all-dev python3-all-dev
             - export LIBVIRT_TYPE=qemu
-            - TEMPEST=true DEVSTACK_BRANCH=stable/rocky DEVSTACK_REPO=https://github.com/neiljerram/devstack.git ./devstack/bootstrap.sh
+            - TEMPEST=true TEMPEST_BRANCH=23.0.0 DEVSTACK_BRANCH=stable/rocky ./devstack/bootstrap.sh
             - source ./devstack/devstackgaterc
             - cd /opt/stack/tempest
+            - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/rocky
             - tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
       epilogue:
         on_fail:
