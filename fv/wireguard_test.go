@@ -56,7 +56,6 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 		felixes      []*infrastructure.Felix
 		client       clientv3.Interface
 		tcpdumps     []*tcpdump.TCPDump
-		wlTcpdumps   []*tcpdump.TCPDump
 		wls          [nodeCount]*workload.Workload // simulated host workloads
 		cc           *connectivity.Checker
 		routeEntries [nodeCount]string
@@ -108,7 +107,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range felixes {
-				felix.Exec("ip", "link", "show")
+				felix.Exec("ip", "addr")
 				felix.Exec("ip", "rule", "list")
 				felix.Exec("ip", "route", "show", "table", "all")
 				felix.Exec("ip", "route", "show", "cached")
@@ -286,7 +285,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 				Eventually(getWireguardRouteEntry(felix), "10s", "100ms").Should(ContainSubstring(routeEntries[i]))
 			}
 
-			for i, felix := range felixes {
+			for _, felix := range felixes {
 				// Felix tcpdump
 				tcpdump := felix.AttachTCPDump("eth0")
 
@@ -294,22 +293,14 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 				tcpdump.AddMatcher("numInTunnelPackets", regexp.MustCompile(inTunnelPacketsPattern))
 				outTunnelPacketsPattern := fmt.Sprintf("IP \\d+\\.\\d+\\.\\d+\\.\\d+\\.51820 > %s\\.51820: UDP", felix.IP)
 				tcpdump.AddMatcher("numOutTunnelPackets", regexp.MustCompile(outTunnelPacketsPattern))
+				workload01PacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+: ", wls[0].IP, wls[1].IP)
+				tcpdump.AddMatcher("numWorkload01Packets", regexp.MustCompile(workload01PacketsPattern))
+				workload10PacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+: ", wls[1].IP, wls[0].IP)
+				tcpdump.AddMatcher("numWorkload10Packets", regexp.MustCompile(workload10PacketsPattern))
 
 				tcpdump.Start()
-
 				tcpdumps = append(tcpdumps, tcpdump)
 
-				// Workload tcpdump
-				wlTcpdump := wls[i].AttachTCPDump()
-
-				workload01PacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+: ", wls[0].IP, wls[1].IP)
-				wlTcpdump.AddMatcher("numWorkload01Packets", regexp.MustCompile(workload01PacketsPattern))
-				workload10PacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+: ", wls[1].IP, wls[0].IP)
-				wlTcpdump.AddMatcher("numWorkload10Packets", regexp.MustCompile(workload10PacketsPattern))
-
-				wlTcpdump.Start()
-
-				wlTcpdumps = append(wlTcpdumps, wlTcpdump)
 			}
 		})
 
@@ -322,8 +313,8 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 			for i := range felixes {
 				Eventually(tcpdumpMatchCount(tcpdumps[i], "numInTunnelPackets"), "10s", "100ms").Should(BeNumerically(">", 0))
 				Eventually(tcpdumpMatchCount(tcpdumps[i], "numOutTunnelPackets"), "10s", "100ms").Should(BeNumerically(">", 0))
-				Eventually(tcpdumpMatchCount(wlTcpdumps[i], "numWorkload01Packets"), "10s", "100ms").Should(BeNumerically("==", 0))
-				Eventually(tcpdumpMatchCount(wlTcpdumps[i], "numWorkload10Packets"), "10s", "100ms").Should(BeNumerically("==", 0))
+				Eventually(tcpdumpMatchCount(tcpdumps[i], "numWorkload01Packets"), "10s", "100ms").Should(BeNumerically("==", 0))
+				Eventually(tcpdumpMatchCount(tcpdumps[i], "numWorkload10Packets"), "10s", "100ms").Should(BeNumerically("==", 0))
 			}
 		})
 
