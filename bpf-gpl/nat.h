@@ -239,11 +239,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 	}
 
 	struct calico_nat_v4 nat_data = {
-                .addr = ip_dst,
-                .port = dport,
-                .protocol = ip_proto,
-        };
-	affkey.nat_key =  nat_data;
+		.addr = ip_dst,
+		.port = dport,
+		.protocol = ip_proto,
+	};
+	affkey.nat_key = nat_data;
 	affkey.client_ip = ip_src;
 
 	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo);
