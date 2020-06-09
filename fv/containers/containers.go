@@ -319,6 +319,10 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 	if err != nil {
 		log.WithError(err).Error("Failed to open data race log file.")
 	}
+	defer func() {
+		err := dataRaceFile.Close()
+		Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log (close).")
+	}()
 
 	for scanner.Scan() {
 		line := scanner.Text()

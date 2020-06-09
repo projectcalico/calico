@@ -32,5 +32,8 @@ for file in /tmp/core_felix* ; do
     xz < "$file" > "$out_file"
   fi
 done
-xz < fv/data-races.log > artifacts/data-races.log
+if [ -s fv/data-races.log ]; then
+  # Only save the log if it's non-empty.
+  xz < fv/data-races.log > artifacts/data-races.log.xz
+fi
 tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
