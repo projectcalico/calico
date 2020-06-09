@@ -185,8 +185,11 @@ You may have noticed that the bulk of the above instructions are about provision
 
 {% include open-new-window.html text='Kubespray' url='https://kubespray.io/' %} is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Google Compute Engine.  Calico is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the Kubespray docs for more details. See the {% include open-new-window.html text='Kubespray docs' url='https://kubespray.io/#/?id=network-plugins' %} for more details.
 
-### Above and beyond
+### Next steps
 
-- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %} 
+**Required**
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+
+**Recommended**
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %} 
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)

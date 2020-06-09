@@ -104,8 +104,20 @@ oc get tigerastatus
 
 > **Note**: To get more information, add `-o yaml` to the above command.
 
-### Above and beyond
+### Next steps 
 
-- [Get started with Kubernetes network policy]({{site.baseurl}}/security/kubernetes-network-policy)
-- [Get started with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
-- [Enable default deny for Kubernetes pods]({{site.baseurl}}/security/kubernetes-default-deny)
+**Required**
+
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+
+**Recommended - Networking**
+
+- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.baseurl}}/networking/bgp) to get traffic flowing between pods.
+- If you are unsure about networking options, or want to implement encapsulation (overlay networking), see [Determine best networking option]({{site.baseurl}}/networking/determine-best-networking).
+
+**Recommended - Security**
+
+- [Secure Calico component communications]({{site.baseurl}}/security/comms/crypto-auth)
+- [Secure hosts by installing Calico on hosts]({{site.baseurl}}/getting-started/bare-metal/about)
+- [Secure pods with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
+- If you are using {{site.prodname}} with Istio service mesh, get started here: [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy)

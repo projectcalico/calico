@@ -10,9 +10,7 @@ This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
 
 ### Value
 
-To deploy a cluster suitable for production, refer to [{{site.prodname}} on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
-
-You can use this quickstart to quickly and easily try {{side.prodname}} features.
+Use this quickstart to quickly and easily try {{side.prodname}} features. To deploy a cluster suitable for production, refer to [{{site.prodname}} on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
 
 ### Before you begin
 
@@ -129,11 +127,15 @@ The geeky details of what you get:
    ```
    {: .no-select-button}
 
-Congratulations! You now have a single-host Kubernetes cluster equipped with {{site.prodname}}.
+Congratulations! You now have a single-host Kubernetes cluster with {{site.prodname}}.
 
 ### Next steps
 
+**Required**
+- [Install and configure calicoctl](../clis/calicoctl/install)
+
+**Recommended tutorials**
 - [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)
 - [Control ingress and egress traffic using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-advanced)
-- [Create a user interface that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
-- [Install and configure calicoctl](../clis/calicoctl/install)
+- [Run a tutorial that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+
