@@ -22,6 +22,8 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
+[Install and configure calicoctl]({{site.prodname}}/getting-started/clis/calicoctl/)
+
 Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
 
 > **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time.
