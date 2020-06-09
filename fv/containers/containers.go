@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -312,9 +313,32 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 	defer done.Done()
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
+	dataRace := false
+
+	dataRaceFile, err := os.OpenFile("data-races.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.WithError(err).Error("Failed to open data race log file.")
+	}
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		log.Info(c.Name, "[", streamName, "] ", line)
+
+		if strings.Contains(line, "WARNING: DATA RACE") {
+			_, err := fmt.Fprintf(dataRaceFile, "Detected data race while running test: %s\n", ginkgo.CurrentGinkgoTestDescription().FullTestText)
+			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
+			dataRace = true
+		}
+		if dataRace {
+			var err error
+			if strings.Contains(line, "==================") {
+				dataRace = false
+				_, err = dataRaceFile.WriteString("\n\n")
+			} else {
+				_, err = dataRaceFile.WriteString(line + "\n")
+			}
+			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
+		}
 
 		if watches == nil {
 			continue

@@ -32,4 +32,5 @@ for file in /tmp/core_felix* ; do
     xz < "$file" > "$out_file"
   fi
 done
+xz < fv/data-races.log > artifacts/data-races.log
 tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
