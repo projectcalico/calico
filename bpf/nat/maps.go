@@ -67,7 +67,7 @@ const backendKeySize = 8
 // };
 const backendValueSize = 8
 
-const BlackHoleCount = 0xffffffff
+const BlackHoleCount uint32 = 0xffffffff
 
 //(sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
 const ZeroCIDRPrefixLen = 56

@@ -86,7 +86,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 	keyWithSaddr2 := nat.NewNATKeySrc(extIP, 2222, proto, saddr2)
 	keyWithSaddr3 := nat.NewNATKeySrc(extIP, 2222, proto, saddr3)
 	keyWithExtIP := nat.NewNATKey(extIP, 2222, proto)
-	BlackholeNATVal := nat.NewNATValue(uint32(0), uint32(nat.BlackHoleCount), 0, 0)
+	BlackholeNATVal := nat.NewNATValue(0, nat.BlackHoleCount, 0, 0)
 
 	It("should make the right test transitions", func() {
 

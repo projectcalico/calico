@@ -800,7 +800,7 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 	if err != nil {
 		return err
 	}
-	val = nat.NewNATValue(svcID, uint32(nat.BlackHoleCount), uint32(0), uint32(0))
+	val = nat.NewNATValue(svcID, nat.BlackHoleCount, uint32(0), uint32(0))
 	if err = s.bpfSvcs.Update(key[:], val[:]); err != nil {
 		return errors.Errorf("bpfSvcs.Update: %s", err)
 	}
