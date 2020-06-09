@@ -23,11 +23,16 @@ scriptdir=$(dirname $(realpath $0))
 . ${scriptdir}/lib.sh
 rootdir=`git_repo_root`
 
+pub_steps=
+if "${PUBLISH:-false}"; then
+    pub_steps="pub_debs pub_rpms"
+fi
+
 if [ "${SEMAPHORE_GIT_PR_NUMBER}${SEMAPHORE_GIT_BRANCH}" = master -o -z "${SEMAPHORE_GIT_BRANCH}" ]; then
     # Normally - if not Semaphore, or if this is Semaphore running on
     # the master branch and not for a PR - do all the steps including
     # publication.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle pub_debs pub_rpms}
+    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
 else
     # For Semaphore building a PR or a branch other than master, build
     # packages but do not publish them.
@@ -221,11 +226,15 @@ function do_felix {
 
 function do_etcd3gw {
     pushd ${rootdir}/etcd3gw
-    # We don't have Python 3 RPM packaging for etcd3gw, so it makes
-    # sense to retreat to the same solution as for Debian/Ubuntu:
-    # don't build etcd3gw packages, and instead document that 'pip
-    # install' should be used to install etcd3gw.
-    # PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
+    if ${PACKAGE_ETCD3GW:-false}; then
+	# When PACKAGE_ETCD3GW is explicitly specified, build RPM Python 2 packages for etcd3gw.
+	PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
+    else
+        # Otherwise, no-op.  We don't have Python 3 RPM packaging for etcd3gw, so it makes sense to
+	# retreat to the same solution as for Debian/Ubuntu: don't build etcd3gw packages, and
+	# instead document that 'pip install' should be used to install etcd3gw.
+	:
+    fi
     popd
 }
 

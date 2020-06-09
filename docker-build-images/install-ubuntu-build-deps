@@ -7,11 +7,12 @@ apt-get install -y build-essential  \
                    devscripts \
                    debhelper \
                    dh-systemd \
+                   python-all \
+                   python-setuptools \
                    python3-all \
                    python3-setuptools \
                    libyajl2 \
                    libdatrie1 \
-                   python3-pbr \
                    git \
                    libnetfilter-conntrack-dev \
                    libidn11-dev \

@@ -4,22 +4,50 @@ agent:
   machine:
     type: e1-standard-4
     os_image: ubuntu1804
+
+global_job_config:
+  secrets:
+    - name: google-service-account-for-tigera-infra
+    - name: launchpad-secret-key
+  prologue:
+    commands:
+      - checkout
+      - git config --global user.email marvin@tigera.io
+      - git config --global user.name Marvin
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
+      - gcloud config set project tigera-wp-tcp-redirect
+      - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+      - export SECRET_KEY=$HOME/secrets/marvin.txt
+      - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
+      - export HOST=ubuntu@binaries-projectcalico-org
+
 blocks:
   - name: 'Packaging'
     task:
       jobs:
-        - name: 'Update master packages'
+        - name: 'Master'
           commands:
-            - checkout
-            - git config --global user.email marvin@tigera.io
-            - git config --global user.name Marvin
-            - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
-            - gcloud config set project tigera-wp-tcp-redirect
-            - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-            - export SECRET_KEY=$HOME/secrets/marvin.txt
-            - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
-            - export HOST=ubuntu@binaries-projectcalico-org
             - make release-publish
-      secrets:
-        - name: google-service-account-for-tigera-infra
-        - name: launchpad-secret-key
+        - name: 'v3.15 Python 2 branch'
+          # This is a special case, probably (hopefully!) for v3.15
+          # only: we have 2 separate PPAs for Python 2 and Python 3,
+          # and corresponding separate branches in the
+          # networking-calico repo.
+          commands:
+            - export REPO_NAME=calico-3.15-python2
+            - export VERSION=release-v3.15-python2
+            - export FELIX_CHECKOUT=master
+            - export PACKAGE_ETCD3GW=true
+            - make release-publish
+        - name: 'Current release branch'
+          commands:
+            - export REPO_NAME=calico-current
+            - export VERSION=release-v3.14
+            - export PACKAGE_ETCD3GW=true
+            - make release-publish
+        - name: 'Previous release branch'
+          commands:
+            - export REPO_NAME=calico-previous
+            - export VERSION=release-v3.13
+            - export PACKAGE_ETCD3GW=true
+            - make release-publish
