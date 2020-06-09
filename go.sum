@@ -239,6 +239,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200603171336-1b8bc835691e h1:1l
 github.com/projectcalico/libcalico-go v1.7.2-0.20200603171336-1b8bc835691e/go.mod h1:P4D/eq0J3r5BMLmyyFD6TVNWKP2UzNUUT+atwSlqY4Y=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200605154551-89d66798ae9a h1:T7FoJap/DQ0YNts7ZO0CjmIR9+UQoeiF+8pXy6JIgY8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200605154551-89d66798ae9a/go.mod h1:P+KtlWYdi0TY2NpPWao6vUOSGle40VpuHnYn7T1WolQ=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200608214448-871c78fe00ea h1:+wDFdl+7tuszjFLxArKanQEz81THubJ90fIlwaDnqWk=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200608214448-871c78fe00ea/go.mod h1:P+KtlWYdi0TY2NpPWao6vUOSGle40VpuHnYn7T1WolQ=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/typha v0.0.0-20200428231740-c01bb349f7f0 h1:1FxYrQfYQYmvPYJXLKwyM/K6LGql2E+Hnd5U963CBGI=
@@ -266,6 +268,8 @@ github.com/projectcalico/typha v0.7.3-0.20200604041231-8008b7863673 h1:Czl6SSRii
 github.com/projectcalico/typha v0.7.3-0.20200604041231-8008b7863673/go.mod h1:1JCNo9Zbsd1Dlnr9emZa5v9BqW/QeazNWplWRqB/vl0=
 github.com/projectcalico/typha v0.7.3-0.20200605163503-074b94b91ff2 h1:UrrtOmJz/y0S4nDv0938z+vdK7hnvR1Rj04iqt2+uzA=
 github.com/projectcalico/typha v0.7.3-0.20200605163503-074b94b91ff2/go.mod h1:9hRcaKCt0ACAo7X0F5lv4Eo6BaUMmiY03kfo8g4lZsg=
+github.com/projectcalico/typha v0.7.3-0.20200609040740-1f53331676c0 h1:Wohi33JijEdJWDmg6C3e3Eg2ZAP5/YuHkfn/PC97q5o=
+github.com/projectcalico/typha v0.7.3-0.20200609040740-1f53331676c0/go.mod h1:4divLId/R5AI6nintVek9SMowqBEmqQhA4WpwxHjw6o=
 github.com/projectcalico/typha v3.8.8+incompatible h1:XRWR22IRQIRHeKezRHvhMZhqxMYj9fX9AuYQxEMxrJI=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
