@@ -92,8 +92,10 @@ type printfFn func(format string, i ...interface{})
 func dumpNice(printf printfFn, natMap nat.MapMem, back nat.BackendMapMem) {
 	for nk, nv := range natMap {
 		count := nv.Count()
+		local := nv.LocalCount()
 		id := nv.ID()
-		printf("%s port %d proto %d id %d count %d\n", nk.Addr(), nk.Port(), nk.Proto(), id, count)
+		printf("%s port %d proto %d id %d count %d local %d\n",
+			nk.Addr(), nk.Port(), nk.Proto(), id, count, local)
 		for i := uint32(0); i < count; i++ {
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]
