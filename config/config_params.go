@@ -284,9 +284,13 @@ type Config struct {
 	useNodeResourceUpdates bool
 }
 
+// Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.
+// This saves work since updates to the copy will trigger the config params to be recalculated.
 func (config *Config) Copy() *Config {
+	// Start by shallow-copying the object.
 	cp := *config
 
+	// Copy the internal state over as a deep copy.
 	cp.internalOverrides = map[string]string{}
 	for k, v := range config.internalOverrides {
 		cp.internalOverrides[k] = v
@@ -338,8 +342,8 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 	return
 }
 
-func (c *Config) InterfacePrefixes() []string {
-	return strings.Split(c.InterfacePrefix, ",")
+func (config *Config) InterfacePrefixes() []string {
+	return strings.Split(config.InterfacePrefix, ",")
 }
 
 func (config *Config) OpenstackActive() bool {
