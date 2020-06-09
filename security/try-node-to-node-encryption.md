@@ -22,7 +22,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-[Install and configure calicoctl]({{site.prodname}}/getting-started/clis/calicoctl/)
+[Install and configure calicoctl]({{site.prodname}}/getting-started/clis/calicoctl/install)
 
 Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
 
