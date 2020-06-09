@@ -352,11 +352,13 @@ configRetry:
 		"Successfully loaded configuration.")
 
 	if configParams.DebugPanicAfter > 0 {
-		go func(delay time.Duration) {
-			log.WithField("delay", delay).Warn("DebugPanicAfter is set, will panic after delay.")
-			time.Sleep(delay)
-			log.Panic("Panicking because config told me to!")
-		}(configParams.DebugPanicAfter)
+		log.WithField("delay", configParams.DebugPanicAfter).Warn("DebugPanicAfter is set, will panic after delay!")
+		go panicAfter(configParams.DebugPanicAfter)
+	}
+
+	if configParams.DebugSimulateDataRace {
+		log.Warn("DebugSimulateDataRace is set, will start some racing goroutines!")
+		simulateDataRace()
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external

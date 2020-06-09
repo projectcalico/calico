@@ -252,6 +252,7 @@ type Config struct {
 	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
 	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 	DebugPanicAfter                 time.Duration `config:"seconds;0"`
+	DebugSimulateDataRace           bool          `config:"bool;false"`
 
 	// Configure where Felix gets its routing information.
 	// - workloadIPs: use workload endpoints to construct routes.

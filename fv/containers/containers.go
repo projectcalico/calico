@@ -50,6 +50,7 @@ type Container struct {
 	binaries      set.Set
 	stdoutWatches []*watch
 	stderrWatches []*watch
+	dataRaces     []string
 
 	logFinished sync.WaitGroup
 }
@@ -313,8 +314,21 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 	defer done.Done()
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
-	dataRace := false
 
+	// Felix is configured with the race detector enabled. When the race detector fires, we get output like this:
+	//
+	// ==================
+	// WARNING: DATA RACE
+	// <stack trace>
+	// ==================
+	//
+	// We capture that output and emit it to a dedicated log file so that the CI job can save it off.
+	// foundDataRace is set to true when we see the WARNING line and then it is set back to false when we
+	// see the trailing "==================".  We collect the text of the warning in dataRaceText.
+	//
+	// We do this for all containers because we already have the machinery here.
+	foundDataRace := false
+	dataRaceText := ""
 	dataRaceFile, err := os.OpenFile("data-races.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.WithError(err).Error("Failed to open data race log file.")
@@ -328,17 +342,23 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		line := scanner.Text()
 		log.Info(c.Name, "[", streamName, "] ", line)
 
+		// Capture data race warnings and log to file.
 		if strings.Contains(line, "WARNING: DATA RACE") {
 			_, err := fmt.Fprintf(dataRaceFile, "Detected data race while running test: %s\n", ginkgo.CurrentGinkgoTestDescription().FullTestText)
 			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
-			dataRace = true
+			foundDataRace = true
 		}
-		if dataRace {
+		if foundDataRace {
 			var err error
 			if strings.Contains(line, "==================") {
-				dataRace = false
+				foundDataRace = false
+				c.mutex.Lock()
+				c.dataRaces = append(c.dataRaces, dataRaceText)
+				c.mutex.Unlock()
+				dataRaceText = ""
 				_, err = dataRaceFile.WriteString("\n\n")
 			} else {
+				dataRaceText += line + "\n"
 				_, err = dataRaceFile.WriteString(line + "\n")
 			}
 			Expect(err).NotTo(HaveOccurred(), "Failed to write to data race log.")
@@ -370,6 +390,13 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 		logCxt.WithError(scanner.Err()).Error("Non-EOF error reading container stream")
 	}
 	logCxt.Info("Stream finished")
+}
+
+func (c *Container) DataRaces() []string {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return c.dataRaces
 }
 
 func (c *Container) DockerInspect(format string) string {
