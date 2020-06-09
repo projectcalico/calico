@@ -73,6 +73,10 @@ spec:
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
+              bpfKubeProxyEndpointSlicesEnabled:
+                description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
+                  whether Felix's embedded kube-proxy accepts EndpointSlices or not.
+                type: boolean
               bpfKubeProxyIptablesCleanupEnabled:
                 description: 'BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF
                   mode, Felix will proactively clean up the upstream Kubernetes kube-proxy''s

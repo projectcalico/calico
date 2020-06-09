@@ -221,6 +221,9 @@ run-kubernetes-master: stop-kubernetes-master
 		--server=http://localhost:8080 \
 		apply -f /manifests/test/namespaces.yaml
 
+	# Wait until some resources we expect to exist are present.
+	while ! docker exec st-apiserver kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
+
 ## Stop the local kubernetes master
 stop-kubernetes-master:
 	# Delete the cluster role binding.

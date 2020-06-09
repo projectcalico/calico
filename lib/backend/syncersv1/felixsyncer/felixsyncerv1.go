@@ -24,10 +24,8 @@ import (
 )
 
 // New creates a new Felix v1 Syncer.
-func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.SyncerCallbacks) api.Syncer {
-	// Create the set of ResourceTypes required for Felix.  Since the update processors
-	// also cache state, we need to create individual ones per syncer rather than create
-	// a common global set.
+func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.SyncerCallbacks, isLeader bool) api.Syncer {
+	// Felix always needs ClusterInformation and FelixConfiguration resources.
 	resourceTypes := []watchersyncer.ResourceType{
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindClusterInformation},
@@ -37,47 +35,55 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindFelixConfiguration},
 			UpdateProcessor: updateprocessors.NewFelixConfigUpdateProcessor(),
 		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy},
-			UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkSet},
-			UpdateProcessor: updateprocessors.NewGlobalNetworkSetUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindIPPool},
-			UpdateProcessor: updateprocessors.NewIPPoolUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNode},
-			UpdateProcessor: updateprocessors.NewFelixNodeUpdateProcessor(cfg.K8sUsePodCIDR),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindProfile},
-			UpdateProcessor: updateprocessors.NewProfileUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint},
-			UpdateProcessor: updateprocessors.NewWorkloadEndpointUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
-			UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkSet},
-			UpdateProcessor: updateprocessors.NewNetworkSetUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
-			UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
-		},
 	}
 
-	// If using Calico IPAM, include IPAM resources the felix cares about.
-	if !cfg.K8sUsePodCIDR {
-		resourceTypes = append(resourceTypes, watchersyncer.ResourceType{ListInterface: model.BlockListOptions{}})
+	if isLeader {
+		// These resources are only required if this is the active Felix instance on the node.
+		additionalTypes := []watchersyncer.ResourceType{
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkSet},
+				UpdateProcessor: updateprocessors.NewGlobalNetworkSetUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindIPPool},
+				UpdateProcessor: updateprocessors.NewIPPoolUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNode},
+				UpdateProcessor: updateprocessors.NewFelixNodeUpdateProcessor(cfg.K8sUsePodCIDR),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindProfile},
+				UpdateProcessor: updateprocessors.NewProfileUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint},
+				UpdateProcessor: updateprocessors.NewWorkloadEndpointUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkSet},
+				UpdateProcessor: updateprocessors.NewNetworkSetUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
+				UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
+			},
+		}
+
+		// If using Calico IPAM, include IPAM resources the felix cares about.
+		if !cfg.K8sUsePodCIDR {
+			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{ListInterface: model.BlockListOptions{}})
+		}
+
+		resourceTypes = append(resourceTypes, additionalTypes...)
 	}
 
 	return watchersyncer.New(
