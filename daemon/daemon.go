@@ -367,7 +367,7 @@ configRetry:
 	failureReportChan := make(chan string)
 	configChangedRestartCallback := func() { failureReportChan <- reasonConfigChanged }
 
-	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator, configChangedRestartCallback, k8sClientSet)
+	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams.Copy(), healthAggregator, configChangedRestartCallback, k8sClientSet)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
@@ -378,7 +378,7 @@ configRetry:
 		// (Otherwise, we pass in a nil channel, which disables such updates.)
 		connToUsageRepUpdChan = make(chan map[string]string, 1)
 	}
-	dpConnector := newConnector(configParams, connToUsageRepUpdChan, backendClient, v3Client, dpDriver, failureReportChan)
+	dpConnector := newConnector(configParams.Copy(), connToUsageRepUpdChan, backendClient, v3Client, dpDriver, failureReportChan)
 
 	// If enabled, create a server for the policy sync API.  This allows clients to connect to
 	// Felix over a socket and receive policy updates.
@@ -493,7 +493,7 @@ configRetry:
 	// do the dynamic calculation of ipset memberships and active policies
 	// etc.
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
-		configParams,
+		configParams.Copy(),
 		calcGraphClientChannels,
 		healthAggregator,
 	)

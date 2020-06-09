@@ -283,6 +283,30 @@ type Config struct {
 	useNodeResourceUpdates bool
 }
 
+func (config *Config) Copy() *Config {
+	cp := *config
+
+	cp.internalOverrides = map[string]string{}
+	for k, v := range config.internalOverrides {
+		cp.internalOverrides[k] = v
+	}
+
+	cp.sourceToRawConfig = map[Source]map[string]string{}
+	for k, v := range config.sourceToRawConfig {
+		cp.sourceToRawConfig[k] = map[string]string{}
+		for k2, v2 := range v {
+			cp.sourceToRawConfig[k][k2] = v2
+		}
+	}
+
+	cp.rawValues = map[string]string{}
+	for k, v := range config.rawValues {
+		cp.rawValues[k] = v
+	}
+
+	return &cp
+}
+
 type ProtoPort struct {
 	Protocol string
 	Port     uint16
