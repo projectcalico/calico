@@ -42,13 +42,14 @@ type KubeProxy struct {
 	frontendMap bpf.Map
 	backendMap  bpf.Map
 	affinityMap bpf.Map
+	ctMap       bpf.Map
 	rt          *RTCache
 	opts        []Option
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	frontendMap, backendMap, affinityMap bpf.Map, opts ...Option) (*KubeProxy, error) {
+	frontendMap, backendMap, affinityMap, ctMap bpf.Map, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
 		k8s:         k8s,
@@ -56,6 +57,7 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 		frontendMap: frontendMap,
 		backendMap:  backendMap,
 		affinityMap: affinityMap,
+		ctMap:       ctMap,
 		opts:        opts,
 		rt:          NewRTCache(),
 
@@ -95,7 +97,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	copy(withLocalNP, hostIPs)
 	withLocalNP = append(withLocalNP, podNPIP)
 
-	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
+	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.ctMap, kp.rt)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

@@ -30,6 +30,8 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/mock"
 	proxy "github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ip"
@@ -44,11 +46,12 @@ var _ = Describe("BPF Syncer", func() {
 	svcs := newMockNATMap()
 	eps := newMockNATBackendMap()
 	aff := newMockAffinityMap()
+	ct := mock.NewMockMap(conntrack.MapParams)
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -134,7 +137,21 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
-		By("deletng the test-service", makestep(func() {
+		By("creating conntrack entries for test-service", makestep(func() {
+			svc := state.SvcMap[svcKey]
+			ep := state.EpsMap[svcKey][0]
+			ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 123)
+		}))
+
+		By("creating conntrack entries for second-service", makestep(func() {
+			svc := state.SvcMap[svcKey2]
+			ep := state.EpsMap[svcKey2][0]
+			ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 123)
+			ep = state.EpsMap[svcKey2][1]
+			ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 321)
+		}))
+
+		By("deleting the test-service", makestep(func() {
 			delete(state.SvcMap, svcKey)
 			delete(state.EpsMap, svcKey)
 
@@ -153,6 +170,21 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
+		By("checking that a CT entry pair is cleaned up", makestep(func() {
+			cnt := 0
+
+			err := ct.Iter(func(k, v []byte) {
+				cnt++
+				key := conntrack.KeyFromBytes(k)
+				val := conntrack.ValueFromBytes(v)
+				log("key = %s\n", key)
+				log("val = %s\n", val)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cnt).To(Equal(4))
+		}))
+
 		By("deleting one second-service backend", makestep(func() {
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
@@ -169,6 +201,21 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(1))
 			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
+		By("checking that another CT entry pair is cleaned up", makestep(func() {
+			cnt := 0
+
+			err := ct.Iter(func(k, v []byte) {
+				cnt++
+				key := conntrack.KeyFromBytes(k)
+				val := conntrack.ValueFromBytes(v)
+				log("key = %s\n", key)
+				log("val = %s\n", val)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cnt).To(Equal(2))
 		}))
 
 		By("not programming eps without a service - non reachables", makestep(func() {
@@ -282,7 +329,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
 			checkAfterResync()
 		}))
 
@@ -290,7 +337,7 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
 			checkAfterResync()
 		}))
 
@@ -445,7 +492,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, ct, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -528,7 +575,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, ct, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -607,7 +654,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, ct, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -804,6 +851,22 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(0))
 			Expect(aff.m).To(HaveLen(0))
 		}))
+
+		By("checking that CT table is empty", makestep(func() {
+			cnt := 0
+
+			err := ct.Iter(func(k, v []byte) {
+				cnt++
+				key := conntrack.KeyFromBytes(k)
+				val := conntrack.ValueFromBytes(v)
+				log("key = %s\n", key)
+				log("val = %s\n", val)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cnt).To(Equal(0))
+		}))
+
 	})
 })
 
@@ -1061,4 +1124,29 @@ func (m *mockAffinityMap) Delete(k []byte) error {
 
 func (m *mockAffinityMap) MapFD() bpf.MapFD {
 	panic("implement me")
+}
+
+func ctEntriesForSvc(ct bpf.Map, proto v1.Protocol,
+	svcIP net.IP, svcPort uint16, ep k8sp.Endpoint, srcIP net.IP, srcPort uint16) {
+
+	p, err := proxy.ProtoV1ToInt(proto)
+	if err != nil {
+		p, _ = proxy.ProtoV1ToInt(v1.ProtocolTCP)
+	}
+
+	epPort, err := ep.Port()
+	Expect(err).NotTo(HaveOccurred(), "Test failed to parse EP port")
+
+	key := conntrack.NewKey(p, srcIP, srcPort, svcIP, svcPort)
+	revKey := conntrack.NewKey(p, srcIP, srcPort, net.ParseIP(ep.IP()), uint16(epPort))
+	val := conntrack.NewValueNATForward(0, 0, 0, revKey)
+
+	err = ct.Update(key.AsBytes(), val.AsBytes())
+	Expect(err).NotTo(HaveOccurred(), "Test failed to populate ct map with FWD entry")
+
+	val = conntrack.NewValueNATReverse(0, 0, 0, conntrack.Leg{}, conntrack.Leg{},
+		net.IPv4(0, 0, 0, 0), svcIP, svcPort)
+
+	err = ct.Update(revKey.AsBytes(), val.AsBytes())
+	Expect(err).NotTo(HaveOccurred(), "Test failed to populate ct map with REV")
 }

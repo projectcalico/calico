@@ -65,8 +65,8 @@ func NewLivenessScanner(timeouts Timeouts, dsr bool, ctMap bpf.Map) *LivenessSca
 
 func (l *LivenessScanner) Scan() {
 	err := l.ctMap.Iter(func(k, v []byte) {
-		ctKey := keyFromBytes(k)
-		ctVal := entryFromBytes(v)
+		ctKey := KeyFromBytes(k)
+		ctVal := ValueFromBytes(v)
 		log.WithFields(log.Fields{
 			"key":   ctKey,
 			"entry": ctVal,
@@ -97,7 +97,7 @@ func (l *LivenessScanner) Scan() {
 				log.WithError(err).Warn("Failed to look up conntrack entry.")
 				return
 			}
-			revEntry := entryFromBytes(revEntryBytes)
+			revEntry := ValueFromBytes(revEntryBytes)
 			if reason, expired := l.EntryExpired(now, ctKey.Proto(), revEntry); expired {
 				log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
 				err := l.ctMap.Delete(k)

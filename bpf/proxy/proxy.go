@@ -52,7 +52,6 @@ type Proxy interface {
 type DPSyncerState struct {
 	SvcMap       k8sp.ServiceMap
 	EpsMap       k8sp.EndpointsMap
-	StaleUDPEps  []k8sp.ServiceEndpoint
 	StaleUDPSvcs sets.String
 }
 
@@ -106,6 +105,7 @@ type stoppableRunner interface {
 
 // New returns a new Proxy for the given k8s interface
 func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option) (Proxy, error) {
+
 	if k8s == nil {
 		return nil, errors.Errorf("no k8s client")
 	}

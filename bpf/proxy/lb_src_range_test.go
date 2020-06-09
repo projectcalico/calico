@@ -26,7 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	proxy "github.com/projectcalico/felix/bpf/proxy"
+	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/mock"
+	"github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/ip"
 )
 
@@ -39,11 +41,12 @@ var _ = Describe("BPF Load Balancer source range", func() {
 	svcs := newMockNATMap()
 	eps := newMockNATBackendMap()
 	aff := newMockAffinityMap()
+	ct := mock.NewMockMap(conntrack.MapParams)
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -195,7 +198,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
@@ -208,7 +211,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				v1.ProtocolTCP,
 				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
 			)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(2))

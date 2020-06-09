@@ -130,6 +130,11 @@ func (e Value) OrigIP() net.IP {
 	return e[48:52]
 }
 
+// OrigPort returns the original destination port, valid only if Type() is TypeNormal or TypeNATReverse
+func (e Value) OrigPort() uint16 {
+	return binary.LittleEndian.Uint16(e[52:54])
+}
+
 const (
 	TypeNormal uint8 = iota
 	TypeNATForward
@@ -374,7 +379,7 @@ const (
 	ProtoUDP  = 17
 )
 
-func keyFromBytes(k []byte) Key {
+func KeyFromBytes(k []byte) Key {
 	var ctKey Key
 	if len(k) != len(ctKey) {
 		log.Panic("Key has unexpected length")
@@ -383,7 +388,7 @@ func keyFromBytes(k []byte) Key {
 	return ctKey
 }
 
-func entryFromBytes(v []byte) Value {
+func ValueFromBytes(v []byte) Value {
 	var ctVal Value
 	if len(v) != len(ctVal) {
 		log.Panic("Value has unexpected length")
