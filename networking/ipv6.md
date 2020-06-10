@@ -1,16 +1,16 @@
 ---
-title: Configure IPv6 and IPv4 modes
-description: Configure IPv6, IPv4 or both modes (dual stack) IP modes for workloads.
+title: Configure IPv6 
+description: Configure IPv6 for workloads.
 canonical_url: '/networking/ipv6'
 ---
 
 ### Big picture
 
-Configure {{site.prodname}} IP address allocation mode (IPv6, IPv4, or both) for workload communications.
+Configure {{site.prodname}} IP address allocation to use IPv6 for workload communications.
 
 ### Value
 
-Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it is often a requirement to continue support for IPv4. {{site.prodname}} supports using both protocols (called "**dual stack**"), as well as IPv6-only, and the default IPv4. 
+Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it is often a requirement to continue support for IPv4. {{site.prodname}} supports using both IPv4 and IPv6 (called "**dual stack**"), as well as IPv6-only. 
 
 ### Features
 
@@ -24,7 +24,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **{{site.prodname}} requirements** 
 
-  You must be using {{site.prodname}} IPAM. The defaut mode is **IPv4** (CNI ConfigMap manifest with `assign_ipv4: true`).
+  You must be using {{site.prodname}} IPAM. The defaut mode is **IPv4** with `assign_ipv4: true`.
 
 **Kubernetes support**
   - 1.16 and 1.17 support dual stack (alpha-level)
@@ -47,16 +47,13 @@ This how-to guide uses the following {{site.prodname}} features:
 - [Configure IPv6-only, during installation](#configure-ipv6-only-during-installation)
 - [Configure IPv6-only, after installation](#configure-ipv6-only-after-installation)
 
-**OpenStack**
-- [Configure OpenStack for IPv6, IPv4, or dual stack](#configure-openstack-for-ipv6-ipv4-or-dual-stack)
-
 #### Configure dual stack
 
 To configure dual stack for Kubernetes, follow these steps: 
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
-1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the right {{site.prodname}} manifest for the cluster, and your preferred datastore type. 
+1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the right {{site.prodname}} manifest for the cluster, and datastore type. 
 
 1. Edit the CNI config (`calico-config` ConfigMap in the manifest), and enable IP address allocation by setting both modes to true.
 
