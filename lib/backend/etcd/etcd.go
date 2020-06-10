@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ import (
 	"strings"
 	"time"
 
-	etcd "github.com/coreos/etcd/client"
-	"github.com/coreos/etcd/pkg/srv"
-	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
+	etcd "go.etcd.io/etcd/client"
+	"go.etcd.io/etcd/pkg/srv"
+	"go.etcd.io/etcd/pkg/transport"
 	"golang.org/x/net/context"
 
 	v1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -64,7 +64,7 @@ func NewEtcdClient(config *v1.EtcdConfig) (*EtcdClient, error) {
 		etcdLocation = strings.Split(config.EtcdEndpoints, ",")
 	}
 	if config.EtcdDiscoverySrv != "" {
-		srvs, srvErr := srv.GetClient("etcd-client", config.EtcdDiscoverySrv)
+		srvs, srvErr := srv.GetClient("etcd-client", config.EtcdDiscoverySrv, "")
 		if srvErr != nil {
 			return nil, fmt.Errorf("failed to discover etcd endpoints through SRV discovery: %v", srvErr)
 		}
@@ -77,9 +77,9 @@ func NewEtcdClient(config *v1.EtcdConfig) (*EtcdClient, error) {
 
 	// Create the etcd client
 	tls := transport.TLSInfo{
-		CAFile:   config.EtcdCACertFile,
-		CertFile: config.EtcdCertFile,
-		KeyFile:  config.EtcdKeyFile,
+		TrustedCAFile: config.EtcdCACertFile,
+		CertFile:      config.EtcdCertFile,
+		KeyFile:       config.EtcdKeyFile,
 	}
 	transport, err := transport.NewTransport(tls, clientTimeout)
 	if err != nil {
