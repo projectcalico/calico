@@ -117,7 +117,7 @@ NetworkManager from interfering with the interfaces:
 
 ```conf
 [keyfile]
-unmanaged-devices=interface-name:cali*;interface-name:tunl*
+unmanaged-devices=interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico
 ```
 
 ### Errors when running sudo calicoctl
