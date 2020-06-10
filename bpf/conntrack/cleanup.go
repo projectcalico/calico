@@ -79,7 +79,8 @@ func (l *LivenessScanner) Scan() {
 			// Look up the reverse entry, where we do the book-keeping.
 			revEntryBytes, err := l.ctMap.Get(ctVal.ReverseNATKey().AsBytes())
 			if err != nil && bpf.IsNotExists(err) {
-				// Forward entry exists but no reverse entry (and the grace period has expired).
+				// Forward entry exists but no reverse entry. We might have come across the reverse
+				// entry first and removed it. It is useless on its own, so delete it now.
 				log.Info("Found a forward NAT conntrack entry with no reverse entry, removing...")
 				err := l.ctMap.Delete(k)
 				log.WithError(err).Debug("Deletion result")
@@ -99,11 +100,9 @@ func (l *LivenessScanner) Scan() {
 				if err != nil && !bpf.IsNotExists(err) {
 					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
 				}
-				err = l.ctMap.Delete(ctVal.ReverseNATKey().AsBytes())
-				log.WithError(err).Debug("Deletion result")
-				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).Warn("Failed to delete expired conntrack reverse-NAT entry.")
-				}
+				// do not delete the reverse entry yet to avoid breaking the iterating
+				// over the map.  We must not delete other than the current key. We remove
+				// it once we come across it again.
 			}
 		case TypeNATReverse:
 			if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
