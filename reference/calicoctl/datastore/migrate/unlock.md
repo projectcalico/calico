@@ -1,7 +1,7 @@
 ---
-title: calicoctl datastore migrate lock
-description: Command and options for locking a datastore for migration.
-canonical_url: '/reference/calicoctl/migrate/lock'
+title: calicoctl datastore migrate unlock
+description: Command and options for unlocking a datastore after migration.
+canonical_url: '/reference/calicoctl/datastore/migrate/unlock'
 ---
 
 This sections describes the `calicoctl datastore migrate lock` command.
@@ -11,12 +11,12 @@ for a full list of calicoctl commands.
 
 ## Display the help text for 'calicoctl datastore migrate unlock' command
 
-Run `calicoctl datastore migrate lock --help` to display the following help menu for the
+Run `calicoctl datastore migrate unlock --help` to display the following help menu for the
 command.
 
 ```
 Usage:
-  calicoctl datastore migrate lock [--config=<CONFIG>]
+  calicoctl datastore migrate unlock [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -25,19 +25,18 @@ Options:
                             [default: /etc/calico/calicoctl.cfg]
 
 Description:
-  Lock the datastore to prepare it for migration. This prevents any new
-  Calico resources from affecting the cluster but does not prevent updating
-  or creating new Calico resources.
+  Unlock the datastore to complete migration. This once again allows
+  Calico resources to take effect in the cluster.
 ```
 {: .no-select-button}
 
 ### Examples
 
-Lock the datastore to prepare it for migration so that any changes to the
-data will not affect the cluster during migration.
+Unlock the datastore after migration to allow the Calico resources to affect
+the cluster.
 
 ```bash
-calicoctl datastore migrate lock
+calicoctl datastore migrate unlock
 ```
 
 ### General options

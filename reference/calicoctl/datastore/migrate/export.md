@@ -1,7 +1,7 @@
 ---
 title: calicoctl datastore migrate export
 description: Command and options for exporting an etcdv3 datastore.
-canonical_url: '/reference/calicoctl/migrate/export'
+canonical_url: '/reference/calicoctl/datastore/migrate/export'
 ---
 
 This sections describes the `calicoctl datastore migrate export` command.

@@ -1,7 +1,7 @@
 ---
 title: calicoctl datastore migrate import
 description: Command and options for importing exported data to a kubernetes datastore.
-canonical_url: '/reference/calicoctl/migrate/import'
+canonical_url: '/reference/calicoctl/datastore/migrate/import'
 ---
 
 This sections describes the `calicoctl datastore migrate import` command.

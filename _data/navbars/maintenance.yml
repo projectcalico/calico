@@ -11,7 +11,7 @@ section:
     path: /maintenance/openshift-upgrade
   - title: OpenStack
     path: /maintenance/openstack-upgrade
-- title: Migrate Calico data
+- title: Migrate datastore from etcd to Kubernetes
   path: /maintenance/datastore-migration
 - title: Monitor
   path: /maintenance/monitor/

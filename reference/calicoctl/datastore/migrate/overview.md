@@ -1,7 +1,7 @@
 ---
 title: calicoctl datastore migrate
 description: Commands for calicoctl datastore migrate. 
-canonical_url: '/reference/calicoctl/node/index'
+canonical_url: '/reference/calicoctl/datastore/migrate/index'
 ---
 
 This section describes the `calicoctl datastore migrate` commands.
@@ -35,10 +35,10 @@ Description:
 
 ## Migrate specific commands
 
-Details on the `calicoctl node` commands are described in the documents linked below
+Details on the `calicoctl datastore migrate` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl datastore migrate export]({{ site.baseurl }}/reference/calicoctl/migrate/export)
--  [calicoctl datastore migrate import]({{ site.baseurl }}/reference/calicoctl/migrate/import)
--  [calicoctl datastore migrate lock]({{ site.baseurl }}/reference/calicoctl/migrate/lock)
--  [calicoctl datastore migrate unlock]({{ site.baseurl }}/reference/calicoctl/migrate/unlock)
+-  [calicoctl datastore migrate export]({{ site.baseurl }}/reference/calicoctl/datastore/migrate/export)
+-  [calicoctl datastore migrate import]({{ site.baseurl }}/reference/calicoctl/datastore/migrate/import)
+-  [calicoctl datastore migrate lock]({{ site.baseurl }}/reference/calicoctl/datastore/migrate/lock)
+-  [calicoctl datastore migrate unlock]({{ site.baseurl }}/reference/calicoctl/datastore/migrate/unlock)
