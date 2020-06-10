@@ -74,7 +74,7 @@ When you set the MTU, it applies to new workloads. To apply MTU changes to exist
 Edit the `calico-config` ConfigMap to set values in FelixConfiguration. For example:
 
 ```bash
-kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
+kubectl patch configmap/calico-config -n kube-system --type merge \
   -p '{"data":{"veth_mtu": "1440"}}'
 ```
 
