@@ -27,6 +27,8 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
@@ -37,7 +39,7 @@ const (
 )
 
 var (
-	summaryUpdateSize = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryUpdateSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_breadcrumb_size",
 		Help: "Number of KVs recorded in each breadcrumb.",
 	})

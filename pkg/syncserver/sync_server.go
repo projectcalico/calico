@@ -35,6 +35,8 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/snapcache"
@@ -61,30 +63,30 @@ var (
 		Name: "typha_connections_active",
 		Help: "Number of open client connections.",
 	})
-	summarySnapshotSendTime = prometheus.NewSummary(prometheus.SummaryOpts{
+	summarySnapshotSendTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_client_snapshot_send_secs",
 		Help: "How long it took to send the initial snapshot to each client.",
 	})
-	summaryClientLatency = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryClientLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_client_latency_secs",
 		Help: "Per-client latency.  I.e. how far behind the current state is each client.",
 		// Reduce the time window so the stat is more useful after a spike.
 		MaxAge:     1 * time.Minute,
 		AgeBuckets: 2,
 	})
-	summaryWriteLatency = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryWriteLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_client_write_latency_secs",
 		Help: "Per-client write.  How long each write call is taking.",
 	})
-	summaryNextCatchupLatency = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryNextCatchupLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_next_breadcrumb_latency_secs",
 		Help: "Time to retrieve next breadcrumb when already behind.",
 	})
-	summaryPingLatency = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryPingLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_ping_latency",
 		Help: "Round-trip ping latency to client.",
 	})
-	summaryNumKVsPerMsg = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryNumKVsPerMsg = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_kvs_per_msg",
 		Help: "Number of KV pairs sent in each message.",
 	})
