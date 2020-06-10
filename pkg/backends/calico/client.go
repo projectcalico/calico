@@ -631,7 +631,7 @@ func (c *client) onUpdates(updates []api.Update) {
 	needUpdatePeersReasons := []string{}
 
 	// Track whether these updates require service advertisement to be recomputed.
-	needsServiceAdvertismentUpdates := false
+	needServiceAdvertismentUpdates := false
 
 	log.WithField("cacheRevision", c.cacheRevision).Debug("Processing OnUpdates from syncer")
 	for _, u := range updates {
@@ -661,7 +661,7 @@ func (c *client) onUpdates(updates []api.Update) {
 
 				if cfgKey.Name == "svc_external_ips" {
 					log.Debugf("Global service external IP ranges update.")
-					needsServiceAdvertismentUpdates = true
+					needServiceAdvertismentUpdates = true
 				}
 
 				if cfgKey.Name == "svc_cluster_ips" {
@@ -671,7 +671,7 @@ func (c *client) onUpdates(updates []api.Update) {
 						// that variable takes precedence over datastore config, so we should ignore the update.
 						log.Debugf("Ignoring serviceClusterIPs update due to environment variable %s", envAdvertiseClusterIPs)
 					} else {
-						needsServiceAdvertismentUpdates = true
+						needServiceAdvertismentUpdates = true
 					}
 				}
 			}
@@ -768,7 +768,7 @@ func (c *client) onUpdates(updates []api.Update) {
 	}
 
 	// If we need to update Service advertisement based on the updates, then do so.
-	if needsServiceAdvertismentUpdates {
+	if needServiceAdvertismentUpdates {
 		log.Info("Updates included service advertisment changes.")
 		if c.rg == nil {
 			// If this is the first time we've needed to start the route generator, then do so here.
@@ -786,14 +786,18 @@ func (c *client) onUpdates(updates []api.Update) {
 		// string. If the string isn't empty, split on the comma and pass a list of strings
 		// to the route generator.  An empty string indicates a withdrawal of that set of
 		// service IPs.
+		var externalIPs []string
 		if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
-			c.onExternalIPsUpdate(strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ","))
+			externalIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ",")
 		}
+		c.onExternalIPsUpdate(externalIPs)
 
 		// Same for cluster CIDRs.
+		var clusterIPs []string
 		if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
-			c.onClusterIPsUpdate(strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ","))
+			clusterIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ",")
 		}
+		c.onClusterIPsUpdate(clusterIPs)
 
 		if c.rg != nil {
 			// Trigger the route generator to recheck and advertise or withdraw
