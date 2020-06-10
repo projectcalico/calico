@@ -20,8 +20,6 @@ spec:
       namespace: kube-system
       labels:
         k8s-app: calico-kube-controllers
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
       nodeSelector:
         kubernetes.io/os: linux
