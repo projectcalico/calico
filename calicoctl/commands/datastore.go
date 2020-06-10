@@ -20,27 +20,24 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calicoctl/calicoctl/commands/migrate"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/datastore"
 )
 
-// Migrate function is a switch to migrate related sub-commands
-func Migrate(args []string) error {
+// Datastore function is a switch to datastore related sub-commands
+func Datastore(args []string) error {
 	var err error
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl datastore migrate <command> [<args>...]
+  calicoctl datastore <command> [<args>...]
 
-    export  Export the contents of the etcdv3 datastore to yaml.
-    import  Store and convert yaml of resources into the Kubernetes datastore.
-    lock    Lock the datastore to prevent changes from occurring during datastore migration.
-    unlock  Unlock the datastore to allow changes once the migration is completed.
+    migrate  Migrate the contents of an etcdv3 datastore to a Kubernetes datastore.
 
 Options:
   -h --help      Show this screen.
 
 Description:
-  Migration specific commands for calicoctl.
+  Datastore specific commands for calicoctl.
 
-  See 'calicoctl datastore migrate <command> --help' to read about a specific subcommand.
+  See 'calicoctl datastore <command> --help' to read about a specific subcommand.
 `
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
@@ -51,17 +48,11 @@ Description:
 	}
 
 	command := arguments["<command>"].(string)
-	args = append([]string{"datastore", "migrate", command}, arguments["<args>"].([]string)...)
+	args = append([]string{"datastore", command}, arguments["<args>"].([]string)...)
 
 	switch command {
-	case "export":
-		return migrate.Export(args)
-	case "import":
-		return migrate.Import(args)
-	case "lock":
-		return migrate.Lock(args)
-	case "unlock":
-		return migrate.Unlock(args)
+	case "migrate":
+		return datastore.Migrate(args)
 	default:
 		fmt.Println(doc)
 	}

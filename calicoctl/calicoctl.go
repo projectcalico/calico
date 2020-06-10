@@ -109,7 +109,7 @@ Description:
 		case "ipam":
 			err = commands.IPAM(args)
 		case "datastore":
-			err = commands.Migrate(args)
+			err = commands.Datastore(args)
 		default:
 			err = fmt.Errorf("Unknown command: %q\n%s", command, doc)
 		}
