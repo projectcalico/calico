@@ -97,7 +97,8 @@ do
   done
 
   echo "Wrote Calico CNI binaries to $dir"
-  echo "CNI plugin version: $($dir/calico -v)"
+  calico_version=$(${dir}/calico -v)
+  echo "CNI plugin version: ${calico_version}"
 done
 
 TMP_CONF='/calico.conf.tmp'
