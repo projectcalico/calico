@@ -47,15 +47,6 @@ set -ex
 #     For a single node Calico/DevStack cluster, the environment should leave
 #     SERVICE_HOST unset.
 #
-# TEST_GERRIT_CHANGE
-#
-#     By default this script uses the master branch of networking-calico.  To
-#     test a networking-calico change in Gerrit that hasn't yet been merged to
-#     master, set the TEST_GERRIT_CHANGE environment variable to indicate that
-#     change, before running this script; for example:
-#
-#         export TEST_GERRIT_CHANGE=219646/1
-#
 # DEVSTACK_BRANCH
 #
 #     By default this script uses the master branch of devstack.  To use a
@@ -91,18 +82,6 @@ sudo apt-get -y install git
 test -e networking-calico || \
     git clone https://github.com/projectcalico/networking-calico
 pushd networking-calico
-
-# If TEST_GERRIT_CHANGE has been specified, merge that change from Gerrit.
-if [ -n "$TEST_GERRIT_CHANGE" ]; then
-    git fetch https://review.openstack.org/openstack/networking-calico \
-	refs/changes/${TEST_GERRIT_CHANGE:4:2}/${TEST_GERRIT_CHANGE}
-    git checkout FETCH_HEAD
-    git checkout -b devstack-test
-    git checkout master
-    git config user.name "someone"
-    git config user.email "someone@someplace.com"
-    git merge --no-edit devstack-test
-fi
 
 # Remember the current directory.
 ncdir=`pwd`
@@ -161,15 +140,34 @@ NEUTRON_CREATE_INITIAL_NETWORKS=False
 EOF
 fi
 
+# Create stack user.
+sudo tools/create-stack-user.sh
+cd ..
+sudo mkdir -p /opt/stack
+sudo mv devstack /opt/stack
+sudo chown -R stack:stack /opt/stack
+ls -la /opt/stack
+
 # Stack!
+sudo -u stack -H -E bash -x <<'EOF'
+
+set
+cd /opt/stack/devstack
 ./stack.sh
 
-# If we're on the controller node and not setting up for Tempest, create a
-# Calico network.
 if ! ${TEMPEST:-false}; then
-     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
-	 . openrc admin admin
-	 neutron net-create --shared --provider:network_type local calico
-	 neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
-     fi
+    if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
+        # We're not running Tempest tests, and we're on the controller node.
+        # Create a Calico network, for demonstration purposes.
+        . openrc admin admin
+        neutron net-create --shared --provider:network_type local calico
+        neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
+    fi
+else
+    # Run mainline Tempest tests.
+    source ../networking-calico/devstack/devstackgaterc
+    cd /opt/stack/tempest
+    tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
+
+EOF
