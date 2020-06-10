@@ -28,14 +28,15 @@ import (
 type conntrackManager struct {
 	ctMap   bpf.Map
 	started bool
-	scanner *conntrack.LivenessScanner
+	scanner *conntrack.Scanner
 }
 
 func newBPFConntrackManager(timeouts conntrack.Timeouts, dsr bool, mc *bpf.MapContext) *conntrackManager {
 	ctMap := conntrack.Map(mc)
+	lc := conntrack.NewLivenessScanner(timeouts, dsr)
 	return &conntrackManager{
 		ctMap:   ctMap,
-		scanner: conntrack.NewLivenessScanner(timeouts, dsr, ctMap),
+		scanner: conntrack.NewScanner(ctMap, lc.ScanEntry),
 	}
 }
 

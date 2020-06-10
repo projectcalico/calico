@@ -47,24 +47,47 @@ func DefaultTimeouts() Timeouts {
 	}
 }
 
-type LivenessScanner struct {
-	timeouts Timeouts
+// ScanVerdict represents the set of values returned by EntryScan
+type ScanVerdict int
+
+const (
+	// ScanVerdictOK means entry is fine and should remain
+	ScanVerdictOK = iota
+	// ScanVerdictDelete meand entry should be deleted
+	ScanVerdictDelete
+)
+
+// EntryGet is a function prototype provided to EntryScanner in case it needs to
+// evaluate other entries to make a verdict
+type EntryGet func(Key) (Value, error)
+
+// EntryScanner is a function prototype to be called on every entry by the scanner
+type EntryScanner func(Key, Value, EntryGet) ScanVerdict
+
+// Scanner iterates over a provided conntrack map and call a set of EntryScanner
+// functions on each  entry in the order as they were passed to NewScanner. If
+// any of the EntryScanner returns ScanVerdictDelete, it deletes the entry, does
+// not call any other EntryScanner and continues the iteration.
+//
+// It provides a delete sae iteration over the conntrack table for multiple
+// evaluation functions, to keep their implementation simpler.
+type Scanner struct {
 	ctMap    bpf.Map
-	dsr      bool
-	NowNanos func() int64
+	scanners []EntryScanner
 }
 
-func NewLivenessScanner(timeouts Timeouts, dsr bool, ctMap bpf.Map) *LivenessScanner {
-	return &LivenessScanner{
-		timeouts: timeouts,
+// NewScanner returns a scanner for the given conntrack map and the set of
+// EntryScanner. They are executed in the provided order on each entry.
+func NewScanner(ctMap bpf.Map, scanners ...EntryScanner) *Scanner {
+	return &Scanner{
 		ctMap:    ctMap,
-		dsr:      dsr,
-		NowNanos: bpf.KTimeNanos,
+		scanners: scanners,
 	}
 }
 
-func (l *LivenessScanner) Scan() {
-	err := l.ctMap.Iter(func(k, v []byte) {
+// Scan executes a scanning iteration
+func (s *Scanner) Scan() {
+	err := s.ctMap.Iter(func(k, v []byte) {
 		ctKey := KeyFromBytes(k)
 		ctVal := ValueFromBytes(v)
 		log.WithFields(log.Fields{
@@ -72,69 +95,90 @@ func (l *LivenessScanner) Scan() {
 			"entry": ctVal,
 		}).Debug("Examining conntrack entry")
 
-		now := l.NowNanos()
-
-		switch ctVal.Type() {
-		case TypeNATForward:
-			// Look up the reverse entry, where we do the book-keeping.
-			revEntryBytes, err := l.ctMap.Get(ctVal.ReverseNATKey().AsBytes())
-			if err != nil && bpf.IsNotExists(err) {
-				// Forward entry exists but no reverse entry. We might have come across the reverse
-				// entry first and removed it. It is useless on its own, so delete it now.
-				//
-				// N.B. BPF code always creates REV entry before FWD entry, therefore if the REV
-				// entry does not exist now, we are not racing with the BPF code, we must have
-				// removed the entry or there is some external inconsistency. In either case, the
-				// FWD entry should be removed.
-				log.Info("Found a forward NAT conntrack entry with no reverse entry, removing...")
-				err := l.ctMap.Delete(k)
+		for _, scanner := range s.scanners {
+			if verdict := scanner(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
+				err := s.ctMap.Delete(k)
 				log.WithError(err).Debug("Deletion result")
 				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).Warn("Failed to delete conntrack entry.")
+					log.WithError(err).WithField("key", ctKey).Warn("Failed to delete conntrack entry")
 				}
-				return
-			} else if err != nil {
-				log.WithError(err).Warn("Failed to look up conntrack entry.")
-				return
+				break // the entry is no more
 			}
-			revEntry := ValueFromBytes(revEntryBytes)
-			if reason, expired := l.EntryExpired(now, ctKey.Proto(), revEntry); expired {
-				log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
-				err := l.ctMap.Delete(k)
-				log.WithError(err).Debug("Deletion result")
-				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
-				}
-				// do not delete the reverse entry yet to avoid breaking the iterating
-				// over the map.  We must not delete other than the current key. We remove
-				// it once we come across it again.
-			}
-		case TypeNATReverse:
-			if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
-				log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
-				err := l.ctMap.Delete(k)
-				log.WithError(err).Debug("Deletion result")
-				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
-				}
-				// TODO Handle forward entry.
-			}
-		case TypeNormal:
-			if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
-				log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
-				err := l.ctMap.Delete(k)
-				log.WithError(err).Debug("Deletion result")
-				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
-				}
-			}
-		default:
-			log.WithField("type", ctVal.Type()).Warn("Unknown conntrack entry type!")
 		}
 	})
+
 	if err != nil {
 		log.WithError(err).Warn("Failed to iterate over conntrack map")
 	}
+}
+
+func (s *Scanner) get(k Key) (Value, error) {
+	v, err := s.ctMap.Get(k.AsBytes())
+
+	if err != nil {
+		return Value{}, err
+	}
+
+	return ValueFromBytes(v), nil
+}
+
+type LivenessScanner struct {
+	timeouts Timeouts
+	dsr      bool
+	NowNanos func() int64
+}
+
+func NewLivenessScanner(timeouts Timeouts, dsr bool) *LivenessScanner {
+	return &LivenessScanner{
+		timeouts: timeouts,
+		dsr:      dsr,
+		NowNanos: bpf.KTimeNanos,
+	}
+}
+
+func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVerdict {
+	now := l.NowNanos()
+
+	switch ctVal.Type() {
+	case TypeNATForward:
+		// Look up the reverse entry, where we do the book-keeping.
+		revEntry, err := get(ctVal.ReverseNATKey())
+		if err != nil && bpf.IsNotExists(err) {
+			// Forward entry exists but no reverse entry. We might have come across the reverse
+			// entry first and removed it. It is useless on its own, so delete it now.
+			//
+			// N.B. BPF code always creates REV entry before FWD entry, therefore if the REV
+			// entry does not exist now, we are not racing with the BPF code, we must have
+			// removed the entry or there is some external inconsistency. In either case, the
+			// FWD entry should be removed.
+			log.Info("Found a forward NAT conntrack entry with no reverse entry, removing...")
+			return ScanVerdictDelete
+		} else if err != nil {
+			log.WithError(err).Warn("Failed to look up conntrack entry.")
+			return ScanVerdictOK
+		}
+		if reason, expired := l.EntryExpired(now, ctKey.Proto(), revEntry); expired {
+			log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
+			return ScanVerdictDelete
+			// do not delete the reverse entry yet to avoid breaking the iterating
+			// over the map.  We must not delete other than the current key. We remove
+			// it once we come across it again.
+		}
+	case TypeNATReverse:
+		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
+			log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
+			return ScanVerdictDelete
+		}
+	case TypeNormal:
+		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
+			log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
+			return ScanVerdictDelete
+		}
+	default:
+		log.WithField("type", ctVal.Type()).Warn("Unknown conntrack entry type!")
+	}
+
+	return ScanVerdictOK
 }
 
 func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Value) (reason string, expired bool) {
