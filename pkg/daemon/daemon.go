@@ -454,7 +454,7 @@ type ClientV3Shim struct {
 }
 
 func (s ClientV3Shim) FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return felixsyncer.New(s.Backend(), s.config.Spec, callbacks)
+	return felixsyncer.New(s.Backend(), s.config.Spec, callbacks, true)
 }
 
 func (s ClientV3Shim) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
