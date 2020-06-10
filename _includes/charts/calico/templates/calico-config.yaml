@@ -44,19 +44,16 @@ data:
 {{- else }}
   calico_backend: "bird"
 {{- end }}
-
+  # Configure the MTU to use for workload interfaces and tunnels.
+  # - If Wireguard is enabled, set to your network MTU - 60
+  # - Otherwise, if VXLAN or BPF mode is enabled, set to your network MTU - 50
+  # - Otherwise, if IPIP is enabled, set to your network MTU - 20
+  # - Otherwise, if not using any encapsulation, set to your network MTU.
   {{- if .Values.bpf }}
-  # Configure the MTU for workload interfaces and VXLAN encap.
-  # In BPF mode, this should be set to your network MTU - 50.
   veth_mtu: "{{ .Values.mtu }}"
   {{- else if .Values.vxlan }}
-  # Configure the MTU to use for workload interfaces and the
-  # tunnels. For VXLAN set to your network MTU - 50.
   veth_mtu: "1410"
   {{- else }}
-  # Configure the MTU to use for workload interfaces and the
-  # tunnels. For IPIP, set to your network MTU - 20; for VXLAN
-  # set to your network MTU - 50.
   veth_mtu: "1440"
   {{- end}}
 {{- else if eq .Values.network "flannel" }}
