@@ -8,14 +8,14 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/pkg/errors v0.8.1
 	github.com/projectcalico/felix v0.0.0-20200530082554-d7efcf1ff34b
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200529191439-77f762f742df
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200608214448-871c78fe00ea
 	github.com/projectcalico/typha v0.7.3-0.20200601160722-b55a2f1ba49b
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
+	k8s.io/api v0.17.2
+	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v12.0.0+incompatible
 )
 
