@@ -45,6 +45,11 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
+typedef enum calico_nat_lookup_result {
+	NAT_LOOKUP_ALLOW,
+	NAT_FE_LOOKUP_DROP,
+	NAT_NO_BACKEND,
+}nat_lookup_result;
 
 struct calico_nat_v4 {
         uint32_t addr; // NBO
@@ -145,7 +150,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								     __u8 ip_proto,
 								     __u16 dport,
 								     bool from_tun,
-								     bool *drop)
+								     nat_lookup_result *res)
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
@@ -222,7 +227,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 	 * packet is dropped.
 	 */
 	if (nat_lv1_val->count == NAT_FE_DROP_COUNT) {
-		*drop = 1;
+		*res = NAT_FE_LOOKUP_DROP;
 		return NULL;
 	}
 	uint32_t count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
@@ -231,6 +236,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 
 	if (count == 0) {
 		CALI_DEBUG("NAT: no backend\n");
+		*res = NAT_NO_BACKEND;
 		return NULL;
 	}
 
@@ -308,9 +314,9 @@ skip_affinity:
 }
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport, bool *drop)
+								    __u8 ip_proto, __u16 dport, nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false, drop);
+	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false, res);
 }
 
 struct vxlanhdr {

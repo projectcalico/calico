@@ -306,6 +306,10 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to update jump map (epilogue program)")
 	}
+	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "2", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_2"))
+	if err != nil {
+		return errors.Wrap(err, "failed to update jump map (epilogue program)")
+	}
 
 	return nil
 }
