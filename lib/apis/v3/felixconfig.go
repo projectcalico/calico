@@ -29,6 +29,15 @@ const (
 	IptablesBackendNFTables    = "NFT"
 )
 
+// +kubebuilder:validation:Enum=DoNothing;Enable;Disable
+type AWSSrcDstCheckOption string
+
+const (
+	AWSSrcDstCheckOptionDoNothing AWSSrcDstCheckOption = "DoNothing"
+	AWSSrcDstCheckOptionEnable                         = "Enable"
+	AWSSrcDstCheckOptionDisable                        = "Disable"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -324,6 +333,10 @@ type FelixConfigurationSpec struct {
 	WireguardInterfaceName string `json:"wireguardInterfaceName,omitempty" validate:"omitempty,interface"`
 	// WireguardMTU controls the MTU on the Wireguard interface. See Configuring MTU [Default: 1420]
 	WireguardMTU *int `json:"wireguardMTU,omitempty"`
+
+	// Set source-destination-check on AWS EC2 instances. Accepted value must be one of "DoNothing", "Enabled" or "Disabled".
+	// [Default: DoNothing]
+	AWSSrcDstCheck *AWSSrcDstCheckOption `json:"awsSrcDstCheck,omitempty" validate:"omitempty,oneof=DoNothing Enable Disable"`
 }
 
 type RouteTableRange struct {

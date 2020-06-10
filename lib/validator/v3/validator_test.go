@@ -66,6 +66,15 @@ func init() {
 	validWireguardPortOrRulePriority := 12345
 	invalidWireguardPortOrRulePriority := 99999
 
+	var awsCheckEnable, awsCheckDisable, awsCheckDoNothing,
+		awsCheckbadVal, awsCheckenable api.AWSSrcDstCheckOption
+
+	awsCheckEnable = api.AWSSrcDstCheckOptionEnable
+	awsCheckDisable = api.AWSSrcDstCheckOptionDisable
+	awsCheckDoNothing = api.AWSSrcDstCheckOptionDoNothing
+	awsCheckbadVal = api.AWSSrcDstCheckOption("badVal")
+	awsCheckenable = api.AWSSrcDstCheckOption("enable")
+
 	// longLabelsValue is 63 and 64 chars long
 	maxAnnotationsLength := 256 * (1 << 10)
 	longValue := make([]byte, maxAnnotationsLength)
@@ -1362,6 +1371,13 @@ func init() {
 		Entry("should reject invalid Wireguard public-key", api.NodeStatus{
 			WireguardPublicKey: "foobar",
 		}, false),
+
+		// AWS source-destination-check.
+		Entry("should accept a valid AWSSrcDstCheck value 'DoNothing'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckDoNothing}, true),
+		Entry("should accept a valid AWSSrcDstCheck value 'Enable'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckEnable}, true),
+		Entry("should accept a valid AWSSrcDstCheck value 'Disable'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckDisable}, true),
+		Entry("should reject an invalid AWSSrcDstCheck value 'enable'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckenable}, false),
+		Entry("should reject an invalid AWSSrcDstCheck value 'badVal'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckbadVal}, false),
 
 		// GlobalNetworkPolicy validation.
 		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
