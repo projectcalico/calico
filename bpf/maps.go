@@ -166,25 +166,42 @@ func IterMapCmdOutput(output []byte, f MapIter) error {
 }
 
 func (b *PinnedMap) Iter(f MapIter) error {
-	cmd, err := DumpMapCmd(b)
+	var nilKey []byte
+
+	// Get the first key
+	k, err := GetMapNextKey(b.fd, nilKey, b.KeySize)
 	if err != nil {
-		return err
+		if IsNotExists(err) {
+			return nil
+		}
+		return errors.Errorf("GetMapNextKey failed: %s", err)
 	}
 
-	prog := cmd[0]
-	args := cmd[1:]
+	for {
+		next, nextErr := GetMapNextKey(b.fd, k, b.KeySize)
 
-	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).Output()
-	if err != nil {
-		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.versionedFilename(), err, output)
+		v, err := GetMapEntry(b.fd, k, b.ValueSize)
+		if err != nil {
+			if IsNotExists(err) {
+				return nil
+			}
+			return errors.Errorf("GetMapEntry failed to get key %s: %s", k, err)
+		}
+
+		// We hope we have the next key in case the iterator deleted the current key
+		f(k, v)
+
+		// We check if we really have the next key, if it was a failure, quit
+		if nextErr != nil {
+			if IsNotExists(nextErr) {
+				return nil
+			}
+			return errors.Errorf("GetMapNextKey failed: %s", nextErr)
+		}
+
+		// We have the next key!
+		k = next
 	}
-
-	if err := IterMapCmdOutput(output, f); err != nil {
-		return errors.WithMessagef(err, "map %s", b.versionedFilename())
-	}
-
-	return nil
 }
 
 func (b *PinnedMap) Update(k, v []byte) error {

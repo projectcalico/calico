@@ -69,6 +69,15 @@ import (
 //    attr->flags = flags;
 // }
 //
+// // bpf_attr_setup_map_get_next_key sets up the bpf_attr union for use with BPF_MAP_GET_NEXT_KEY
+// // A C function makes this easier because unions aren't easy to access from Go.
+// void bpf_attr_setup_map_get_next_key(union bpf_attr *attr, __u32 map_fd, void *key, void *next_key, __u64 flags) {
+//    attr->map_fd = map_fd;
+//    attr->key = (__u64)(unsigned long)key;
+//    attr->next_key = (__u64)(unsigned long)next_key;
+//    attr->flags = flags;
+// }
+//
 // // bpf_attr_setup_map_elem_for_delete sets up the bpf_attr union for use with BPF_MAP_DELETE_ELEM
 // // A C function makes this easier because unions aren't easy to access from Go.
 // void bpf_attr_setup_map_elem_for_delete(union bpf_attr *attr, __u32 map_fd, void *pointer_to_key) {
@@ -366,4 +375,47 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 		return errno
 	}
 	return nil
+}
+
+// GetMapNextKey returns the next key for the given key if the current key exists.
+// Otherwise it returns the first key. Order is implemention / map type
+// dependent.
+//
+// Start iterating by passing a nil key.
+func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
+	log.Debugf("MapNextKey(%v, %v, %v)", mapFD, k, keySize)
+
+	err := checkMapIfDebug(mapFD, keySize, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	bpfAttr := C.bpf_attr_alloc()
+	defer C.free(unsafe.Pointer(bpfAttr))
+
+	var cK unsafe.Pointer
+
+	// Have to make C-heap copies here because passing these to the syscalls is done via pointers in an
+	// intermediate struct.
+	//
+	// it is valid to pass a nil key to start the iteration
+	if k != nil {
+		cK = C.CBytes(k)
+		defer C.free(cK)
+	}
+	cV := C.malloc(C.size_t(keySize)) // value has the size of a key - it is the key!
+	defer C.free(cV)
+
+	C.bpf_attr_setup_map_get_next_key(bpfAttr, C.uint(mapFD), cK, cV, 0)
+
+	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_GET_NEXT_KEY,
+		uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
+
+	v := C.GoBytes(cV, C.int(keySize))
+
+	if errno != 0 {
+		return nil, errno
+	}
+
+	return v, nil
 }
