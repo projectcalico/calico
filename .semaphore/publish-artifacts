@@ -17,23 +17,11 @@
 # No set -e so that we continue to collect artifacts even if some fail.
 set -x
 
-my_dir="$(dirname "$0")"
-repo_dir="$my_dir/.."
+my_dir=$(dirname "$0")
+repo_dir=$my_dir/..
 
-cd "$repo_dir" || exit 1
+cd "$repo_dir/artifacts" || exit 1
 
-rm -rf artifacts
-mkdir -p artifacts
-for file in /tmp/core_felix* ; do
-  if [ -f "$file" ]; then
-    echo "Adding core file: $file"
-    sudo chmod a+r "$file"
-    out_file="artifacts/$(basename "$file").xz"
-    xz < "$file" > "$out_file"
-  fi
+for file in *; do
+  artifact push --expire-in 4w job "$file"
 done
-if [ -s fv/data-races.log ]; then
-  # Only save the log if it's non-empty.
-  xz < fv/data-races.log > artifacts/data-races.log.xz
-fi
-tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*

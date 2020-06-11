@@ -252,6 +252,7 @@ type Config struct {
 	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
 	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 	DebugPanicAfter                 time.Duration `config:"seconds;0"`
+	DebugSimulateDataRace           bool          `config:"bool;false"`
 
 	// Configure where Felix gets its routing information.
 	// - workloadIPs: use workload endpoints to construct routes.
@@ -283,6 +284,34 @@ type Config struct {
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 
 	useNodeResourceUpdates bool
+}
+
+// Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.
+// This saves work since updates to the copy will trigger the config params to be recalculated.
+func (config *Config) Copy() *Config {
+	// Start by shallow-copying the object.
+	cp := *config
+
+	// Copy the internal state over as a deep copy.
+	cp.internalOverrides = map[string]string{}
+	for k, v := range config.internalOverrides {
+		cp.internalOverrides[k] = v
+	}
+
+	cp.sourceToRawConfig = map[Source]map[string]string{}
+	for k, v := range config.sourceToRawConfig {
+		cp.sourceToRawConfig[k] = map[string]string{}
+		for k2, v2 := range v {
+			cp.sourceToRawConfig[k][k2] = v2
+		}
+	}
+
+	cp.rawValues = map[string]string{}
+	for k, v := range config.rawValues {
+		cp.rawValues[k] = v
+	}
+
+	return &cp
 }
 
 type ProtoPort struct {
@@ -319,8 +348,8 @@ func (config *Config) IsLeader() bool {
 	return config.Variant == "Calico"
 }
 
-func (c *Config) InterfacePrefixes() []string {
-	return strings.Split(c.InterfacePrefix, ",")
+func (config *Config) InterfacePrefixes() []string {
+	return strings.Split(config.InterfacePrefix, ",")
 }
 
 func (config *Config) OpenstackActive() bool {

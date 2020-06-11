@@ -769,7 +769,9 @@ func (d *InternalDataplane) routeTableSyncers() []routeTableSyncer {
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
 	switch mgr := mgr.(type) {
 	case ManagerWithRouteTables:
-		log.WithField("manager", mgr).Debug("registering ManagerWithRouteTables")
+		// Used to log the whole manager out here but if we do that then we cause races if the manager has
+		// other threads or locks.
+		log.WithField("manager", reflect.TypeOf(mgr).Name()).Debug("registering ManagerWithRouteTables")
 		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr)
 	}
 	d.allManagers = append(d.allManagers, mgr)
@@ -1334,7 +1336,8 @@ func (d *InternalDataplane) apply() {
 	for _, mgr := range d.allManagers {
 		err := mgr.CompleteDeferredWork()
 		if err != nil {
-			log.WithField("manager", mgr).WithError(err).Debug("couldn't complete deferred work for manager, will try again later")
+			log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
+				"couldn't complete deferred work for manager, will try again later")
 			d.dataplaneNeedsSync = true
 		}
 		d.reportHealth()
