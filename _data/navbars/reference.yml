@@ -113,6 +113,8 @@ section:
     path: /reference/typha/overview
   - title: Configuration
     path: /reference/typha/configuration
+  - title: Prometheus statistics
+    path: /reference/typha/prometheus
 - title: Dikastes
   path: /reference/dikastes/configuration
 - title: Calico CNI plugins
