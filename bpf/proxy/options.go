@@ -17,8 +17,9 @@ package proxy
 import (
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/bpf/conntrack"
 )
 
 // Option defines Proxy options
@@ -28,9 +29,19 @@ func makeOption(f func(*proxy) error) Option {
 	return func(P Proxy) error {
 		p, ok := P.(*proxy)
 		if !ok {
-			return errors.Errorf("option used on a wrong type")
+			return nil
 		}
 
+		return f(p)
+	}
+}
+
+func makeKubeProxyOption(f func(*KubeProxy) error) Option {
+	return func(P Proxy) error {
+		p, ok := P.(*KubeProxy)
+		if !ok {
+			return nil
+		}
 		return f(p)
 	}
 
@@ -56,6 +67,22 @@ func WithEndpointsSlices() Option {
 	return makeOption(func(p *proxy) error {
 		p.endpointSlicesEnabled = true
 		log.Infof("proxy.WithEndpointsSlices()")
+		return nil
+	})
+}
+
+// WithConntrackTimeouts overrides the default timeouts for connection entries
+func WithConntrackTimeouts(timeouts conntrack.Timeouts) Option {
+	return makeKubeProxyOption(func(kp *KubeProxy) error {
+		kp.conntrackTimeouts = timeouts
+		return nil
+	})
+}
+
+// WithDSREnabled sets the DSR mode
+func WithDSREnabled() Option {
+	return makeKubeProxyOption(func(kp *KubeProxy) error {
+		kp.dsrEnabled = true
 		return nil
 	})
 }

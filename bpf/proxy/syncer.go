@@ -31,7 +31,6 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ip"
@@ -120,8 +119,7 @@ type Syncer struct {
 	activeSvcsMap map[ipPortProto]uint32
 	activeEpsMap  map[uint32]map[ipPort]struct{}
 
-	// We never have more than one thread accessing the [prev|new][Svc|Eps]Map,
-	// this is to just make sure and to make the --race checker happy
+	// Protects acessing the [prev|new][Svc|Eps]Map,
 	mapsLck sync.Mutex
 
 	// synced is true after reconciling the first Apply
@@ -139,8 +137,6 @@ type Syncer struct {
 	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
 	stickySvcDeleted bool
-
-	conntrackScanner *conntrack.Scanner
 }
 
 type ipPort struct {
@@ -189,7 +185,7 @@ func uniqueIPs(ips []net.IP) []net.IP {
 }
 
 // NewSyncer returns a new Syncer
-func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap, affmap, ctmap bpf.Map, rt Routes) (*Syncer, error) {
+func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap, affmap bpf.Map, rt Routes) (*Syncer, error) {
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
 		bpfEps:      epsmap,
@@ -200,8 +196,6 @@ func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap, affmap, ctmap bpf.Map, rt 
 		prevEpsMap:  make(k8sp.EndpointsMap),
 		stop:        make(chan struct{}),
 	}
-
-	s.conntrackScanner = conntrack.NewScanner(ctmap, conntrack.NewStaleNATScanner(s.frontendHasBackend))
 
 	if err := s.loadOrigs(); err != nil {
 		return nil, err
@@ -504,15 +498,6 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	s.newSvcMap = make(map[svcKey]svcInfo)
 	s.newEpsMap = make(k8sp.EndpointsMap)
 
-	s.activeSvcsMap = make(map[ipPortProto]uint32)
-	s.activeEpsMap = make(map[uint32]map[ipPort]struct{})
-
-	defer func() {
-		// free the maps when the iteration is complete
-		s.activeSvcsMap = nil
-		s.activeEpsMap = nil
-	}()
-
 	var expNPMisses []*expandMiss
 
 	// insert or update existing services
@@ -584,23 +569,9 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		log.Infof("removed stale service %q", skey)
 	}
 
-	// build active maps for conntrack cleaning
-	for skey, sinfo := range s.newSvcMap {
-		if sinfo.count == 0 {
-			continue
-		}
-
-		if isSvcKeyDerived(skey) {
-			s.addActiveEps(sinfo.id, sinfo.svc, nil)
-		} else {
-			s.addActiveEps(sinfo.id, sinfo.svc, s.newEpsMap[skey.sname])
-		}
-	}
-
 	log.Debugf("new state written")
 
 	s.runExpandNPFixup(expNPMisses)
-	s.conntrackScanner.Scan()
 
 	return nil
 }
@@ -1051,11 +1022,13 @@ func (s *Syncer) stopExpandNPFixup() {
 	s.expFixupWg.Wait()
 }
 
-// Stop sto pthe syncer
+// Stop stops the syncer
 func (s *Syncer) Stop() {
 	s.stopOnce.Do(func() {
+		log.Info("Syncer stopping")
 		close(s.stop)
 		s.expFixupWg.Wait()
+		log.Info("Syncer stopped")
 	})
 }
 
@@ -1122,7 +1095,10 @@ func (s *Syncer) cleanupSticky() error {
 	return nil
 }
 
-func (s *Syncer) frontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool {
+// ConntrackFrontenddHasBackend returns true if the given front-backend pair exists
+func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
+	backendIP net.IP, backendPort uint16, proto uint8) bool {
+
 	id, ok := s.activeSvcsMap[ipPortProto{ipPort{ip.String(), int(port)}, proto}]
 	if !ok {
 		return false
@@ -1136,6 +1112,36 @@ func (s *Syncer) frontendHasBackend(ip net.IP, port uint16, backendIP net.IP, ba
 	_, ok = backends[ipPort{backendIP.String(), int(backendPort)}]
 
 	return ok
+}
+
+// ConntrackScanStart excludes Apply from running and builds the active maps from
+// ConntrackFrontendHasBackend
+func (s *Syncer) ConntrackScanStart() {
+	s.mapsLck.Lock()
+
+	s.activeSvcsMap = make(map[ipPortProto]uint32)
+	s.activeEpsMap = make(map[uint32]map[ipPort]struct{})
+
+	// build active maps for conntrack cleaning
+	for skey, sinfo := range s.newSvcMap {
+		if sinfo.count == 0 {
+			continue
+		}
+
+		if isSvcKeyDerived(skey) {
+			s.addActiveEps(sinfo.id, sinfo.svc, nil)
+		} else {
+			s.addActiveEps(sinfo.id, sinfo.svc, s.newEpsMap[skey.sname])
+		}
+	}
+}
+
+// ConntrackScanEnd enables Apply and frees active maps
+func (s *Syncer) ConntrackScanEnd() {
+	// free the maps when the iteration is complete
+	s.activeSvcsMap = nil
+	s.activeEpsMap = nil
+	s.mapsLck.Unlock()
 }
 
 func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {

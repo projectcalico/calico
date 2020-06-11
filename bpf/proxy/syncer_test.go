@@ -48,10 +48,12 @@ var _ = Describe("BPF Syncer", func() {
 	aff := newMockAffinityMap()
 	ct := mock.NewMockMap(conntrack.MapParams)
 
+	var connScan *conntrack.Scanner
+
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
+	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -137,6 +139,10 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
+		By("creating a CT scanner", func() {
+			connScan = conntrack.NewScanner(ct, conntrack.NewStaleNATScanner(s.ConntrackFrontendHasBackend))
+		})
+
 		By("creating conntrack entries for test-service", makestep(func() {
 			svc := state.SvcMap[svcKey]
 			ep := state.EpsMap[svcKey][0]
@@ -170,7 +176,12 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
-		By("checking that a CT entry pair is cleaned up", makestep(func() {
+		By("checking that a CT entry pair is cleaned up by connScan", makestep(func() {
+
+			s.ConntrackScanStart()
+			connScan.Scan()
+			s.ConntrackScanEnd()
+
 			cnt := 0
 
 			err := ct.Iter(func(k, v []byte) {
@@ -203,7 +214,12 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
-		By("checking that another CT entry pair is cleaned up", makestep(func() {
+		By("checking that another CT entry pair is cleaned up by connScan", makestep(func() {
+
+			s.ConntrackScanStart()
+			connScan.Scan()
+			s.ConntrackScanEnd()
+
 			cnt := 0
 
 			err := ct.Iter(func(k, v []byte) {
@@ -329,7 +345,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 			checkAfterResync()
 		}))
 
@@ -337,7 +353,7 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, ct, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 			checkAfterResync()
 		}))
 
@@ -492,7 +508,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, ct, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -575,7 +591,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, ct, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -654,7 +670,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, ct, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -852,7 +868,16 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(aff.m).To(HaveLen(0))
 		}))
 
-		By("checking that CT table is empty", makestep(func() {
+		By("recreating a CT scanner for the actual syncer", func() {
+			connScan = conntrack.NewScanner(ct, conntrack.NewStaleNATScanner(s.ConntrackFrontendHasBackend))
+		})
+
+		By("checking that CT table emptied by connScan", makestep(func() {
+
+			s.ConntrackScanStart()
+			connScan.Scan()
+			s.ConntrackScanEnd()
+
 			cnt := 0
 
 			err := ct.Iter(func(k, v []byte) {
