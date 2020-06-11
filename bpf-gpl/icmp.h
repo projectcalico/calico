@@ -141,7 +141,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 		return -1;
 	}
 	ret = bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) +
-				offsetof(struct icmphdr, checksum), 0, icmp_csum, 0);
+					offsetof(struct icmphdr, checksum), 0, icmp_csum, 0);
 	if (ret) {
 		CALI_DEBUG("ICMP v4 reply: set icmp csum failed\n");
 		return -1;
