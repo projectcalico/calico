@@ -25,6 +25,8 @@ documentation.
 
 ## How To
 
+### Migrate the datastore
+
 To migrate contents of the datastore, we will be using the `calicoctl datastore migrate`
 command and subcommands. For more information, see the
 [calicoctl datastore migrate]({{ site.baseurl }}/reference/calicoctl/datastore/migrate/overview)
@@ -68,12 +70,17 @@ documentation.
    ```
    calicoctl datastore migrate unlock
    ```
+   >**Note**: Once the Kubernetes datastore is unlocked, the datastore migration
+   cannot be rolled back. Make sure that the Kubernetes datastore is populated with
+   all of the expected {{site.prodname}} resources prior to unlocking the datastore.
+   {: .alert .alert-info}
 
-## Roll back the datastore migration.
+### Roll back the datastore migration
 
-Rolling back the datastore migration can only be done if the original etcd datastore still exists.
-The following steps delete the {{site.prodname}} resources imported into the Kubernetes datastore
-and configure the cluster to once again read from the original etcd datastore.
+Rolling back the datastore migration can only be done if the original etcd datastore still exists
+and the Kubernetes datastore was not unlocked after the datastore resources were imported. The
+following steps delete the {{site.prodname}} resources imported into the Kubernetes datastore and
+configure the cluster to once again read from the original etcd datastore.
 
 1. Lock the Kubernetes datastore.
    ```
