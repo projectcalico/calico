@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ip"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -51,6 +52,10 @@ var routesCmd = &cobra.Command{
 func dumpRoutes() error {
 	mc := &bpf.MapContext{}
 	routesMap := routes.Map(mc)
+
+	if err := routesMap.Open(); err != nil {
+		return errors.WithMessage(err, "failed to open map")
+	}
 
 	var dests []ip.CIDR
 	valueByDest := map[ip.CIDR]routes.Value{}

@@ -32,6 +32,11 @@ func (m Map) MapFD() bpf.MapFD {
 	panic("implement me")
 }
 
+func (m Map) Open() error {
+	m.logCxt.Info("Open called")
+	return nil
+}
+
 func (m Map) EnsureExists() error {
 	m.logCxt.Info("EnsureExists called")
 	return nil

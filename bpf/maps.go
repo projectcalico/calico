@@ -33,6 +33,8 @@ type Map interface {
 	GetName() string
 	// EnsureExists opens the map, creating and pinning it if needed.
 	EnsureExists() error
+	// Open opens the map, returns error if it does not exist.
+	Open() error
 	// MapFD gets the file descriptor of the map, only valid after calling EnsureExists().
 	MapFD() MapFD
 	// Path returns the path that the map is (to be) pinned to.
@@ -227,7 +229,7 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
-func (b *PinnedMap) EnsureExists() error {
+func (b *PinnedMap) Open() error {
 	if b.fdLoaded {
 		return nil
 	}
@@ -266,8 +268,21 @@ func (b *PinnedMap) EnsureExists() error {
 			b.fdLoaded = true
 			logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 				Info("Loaded map file descriptor.")
+			return nil
 		}
 		return err
+	}
+
+	return err
+}
+
+func (b *PinnedMap) EnsureExists() error {
+	if b.fdLoaded {
+		return nil
+	}
+
+	if err := b.Open(); err == nil {
+		return nil
 	}
 
 	logrus.Debug("Map didn't exist, creating it")
