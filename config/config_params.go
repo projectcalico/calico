@@ -267,6 +267,8 @@ type Config struct {
 	XDPEnabled                 bool `config:"bool;true"`
 	GenericXDPEnabled          bool `config:"bool;false"`
 
+	Variant string `config:"string;Calico"`
+
 	// State tracking.
 
 	// internalOverrides contains our highest priority config source, generated from internal constraints
@@ -340,6 +342,10 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 
 	changed, err = config.resolve()
 	return
+}
+
+func (config *Config) IsLeader() bool {
+	return config.Variant == "Calico"
 }
 
 func (config *Config) InterfacePrefixes() []string {

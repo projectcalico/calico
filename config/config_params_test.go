@@ -50,6 +50,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"ClusterGUID",
 		"ClusterType",
 		"CalicoVersion",
+		"Variant",
 
 		// Moved to Node.
 		"IpInIpTunnelAddr",
