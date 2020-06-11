@@ -38,8 +38,12 @@ import (
 
 var validate *validator.Validate
 
-// Maximum size of annotations.
-const totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
+const (
+	// Maximum size of annotations.
+	totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
+
+	globalSelector = "global()"
+)
 
 var (
 	nameLabelFmt     = "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
@@ -62,6 +66,10 @@ var (
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 
+	// global() cannot be used with other selectors.
+	andOr               = `(&&|\|\|)`
+	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
+
 	interfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	ifaceFilterRegex      = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
@@ -82,6 +90,8 @@ var (
 	protocolPortsMsg      = "rules that specify ports must set protocol to TCP or UDP or SCTP"
 	protocolIcmpMsg       = "rules that specify ICMP fields must set protocol to ICMP"
 	protocolAndHTTPMsg    = "rules that specify HTTP fields must set protocol to TCP or empty"
+	globalSelectorEntRule = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
+	globalSelectorOnly    = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
@@ -176,6 +186,7 @@ func init() {
 	registerStructValidator(validate, validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validate, validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validate, validateRule, api.Rule{})
+	registerStructValidator(validate, validateEntityRule, api.EntityRule{})
 	registerStructValidator(validate, validateBGPPeerSpec, api.BGPPeerSpec{})
 	registerStructValidator(validate, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
@@ -943,6 +954,27 @@ func validateRule(structLevel validator.StructLevel) {
 	}
 }
 
+func validateEntityRule(structLevel validator.StructLevel) {
+	rule := structLevel.Current().Interface().(api.EntityRule)
+	if strings.Contains(rule.Selector, globalSelector) {
+		structLevel.ReportError(reflect.ValueOf(rule.Selector),
+			"Selector field", "", reason(globalSelectorEntRule), "")
+	}
+
+	// Get the parsed and canonicalised string of the namespaceSelector
+	// so we can make assertions against it.
+	// Note: err can be ignored; the field is validated separately and before
+	// this point.
+	n, _ := selector.Parse(rule.NamespaceSelector)
+	namespaceSelector := n.String()
+
+	// If the namespaceSelector contains global(), then it should be the only selector.
+	if globalSelectorRegex.MatchString(namespaceSelector) {
+		structLevel.ReportError(reflect.ValueOf(rule.NamespaceSelector),
+			"NamespaceSelector field", "", reason(globalSelectorOnly), "")
+	}
+}
+
 func validateNodeSpec(structLevel validator.StructLevel) {
 	ns := structLevel.Current().Interface().(api.NodeSpec)
 
@@ -1079,6 +1111,26 @@ func validateNetworkPolicy(structLevel validator.StructLevel) {
 			}
 		}
 	}
+
+	// Check that the selector doesn't have the global() selector which is only
+	// valid as an EntityRule namespaceSelector.
+	if strings.Contains(spec.Selector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"NetworkPolicySpec.Selector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
+
+	if strings.Contains(spec.ServiceAccountSelector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.ServiceAccountSelector),
+			"NetworkPolicySpec.ServiceAccountSelector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
 }
 
 func validateNetworkSet(structLevel validator.StructLevel) {
@@ -1188,6 +1240,35 @@ func validateGlobalNetworkPolicy(structLevel validator.StructLevel) {
 				structLevel.ReportError(v, f, "", reason("not allowed in egress rules"), "")
 			}
 		}
+	}
+
+	// Check that the selector doesn't have the global() selector which is only
+	// valid as an EntityRule namespaceSelector.
+	if strings.Contains(spec.Selector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"GlobalNetworkPolicySpec.Selector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
+
+	if strings.Contains(spec.ServiceAccountSelector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"GlobalNetworkPolicySpec.ServiceAccountSelector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
+	}
+
+	if strings.Contains(spec.NamespaceSelector, globalSelector) {
+		structLevel.ReportError(
+			reflect.ValueOf(spec.Selector),
+			"GlobalNetworkPolicySpec.NamespaceSelector",
+			"",
+			reason(globalSelectorEntRule),
+			"")
 	}
 }
 

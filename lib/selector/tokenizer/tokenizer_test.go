@@ -207,6 +207,14 @@ var tokenTests = []struct {
 		{tokenizer.TokRBrace, nil},
 		{tokenizer.TokEOF, nil},
 	}},
+	{`global()`, []tokenizer.Token{
+		{tokenizer.TokGlobal, nil},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`all()`, []tokenizer.Token{
+		{tokenizer.TokAll, nil},
+		{tokenizer.TokEOF, nil},
+	}},
 }
 
 var _ = Describe("Token", func() {

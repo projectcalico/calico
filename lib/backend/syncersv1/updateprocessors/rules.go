@@ -70,6 +70,11 @@ func getEndpointSelector(namespaceSelector, endpointSelector, serviceAccountSele
 		// all endpoints, translate this to an equivalent expression which means select any workload that
 		// is in a namespace.
 		nsSelector = strings.Replace(nsSelector, "all()", "has(projectcalico.org/namespace)", -1)
+
+		// We treat "global()" as opposite to `all()`, selects only host endpoints or GlobalNetworksets
+		// Since in the v1 data model "all()" will select all endpoints,
+		// translate this to an equivalent expressions which means select no workload endpoints
+		nsSelector = strings.Replace(nsSelector, "global()", "!has(projectcalico.org/namespace)", -1)
 	} else if ns != "" {
 		// No namespace selector was given and this is a namespaced network policy,
 		// so the rule applies only to its own namespace.

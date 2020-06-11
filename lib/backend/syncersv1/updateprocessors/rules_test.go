@@ -472,4 +472,37 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 			Expect(rulev1.DstSelector).To(Equal(dste))
 		})
 	})
+
+	It("should parse a set of rules and validates the namespaceselector with label and all()", func() {
+		rules := []apiv3.Rule{
+			{
+				Action: apiv3.Allow,
+				Destination: apiv3.EntityRule{
+					NamespaceSelector: "namespace == 'red'",
+					Selector:          "has(label1)",
+				},
+			},
+			{
+				Action: apiv3.Allow,
+				Destination: apiv3.EntityRule{
+					NamespaceSelector: "all()",
+					Selector:          "has(label2)",
+				},
+			},
+			{
+				Action: apiv3.Allow,
+				Destination: apiv3.EntityRule{
+					NamespaceSelector: "global()",
+					Selector:          "has(label3)",
+				},
+			},
+		}
+
+		outRules := updateprocessors.RulesAPIV2ToBackend(rules, "namespace")
+		// The first rule should select "namespace `red`, the second rule should have 'has(projectcalico.org/namespace)'
+		// and third rule should select '!has(projectcalico.org/namespace)'
+		Expect(outRules[0].DstSelector).To(Equal("(pcns.namespace == \"red\") && (has(label1))"))
+		Expect(outRules[1].DstSelector).To(Equal("(has(projectcalico.org/namespace)) && (has(label2))"))
+		Expect(outRules[2].DstSelector).To(Equal("(!has(projectcalico.org/namespace)) && (has(label3))"))
+	})
 })

@@ -137,6 +137,9 @@ type EntityRule struct {
 	// For NetworkPolicy, an empty NamespaceSelector implies that the Selector is limited to selecting
 	// only workload endpoints in the same namespace as the NetworkPolicy.
 	//
+	// For NetworkPolicy, `global()` NamespaceSelector implies that the Selector is limited to selecting
+	// only GlobalNetworkSet or HostEndpoint.
+	//
 	// For GlobalNetworkPolicy, an empty NamespaceSelector implies the Selector applies to workload
 	// endpoints across all namespaces.
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`

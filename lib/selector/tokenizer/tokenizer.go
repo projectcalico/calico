@@ -46,6 +46,7 @@ const (
 	TokRParen
 	TokAnd
 	TokOr
+	TokGlobal
 	TokEOF
 )
 
@@ -66,6 +67,7 @@ const (
 	allExpr         = `all\(\s*\)`
 	notInExpr       = `not\s*in\b`
 	inExpr          = `in\b`
+	globalExpr      = `global\(\s*\)`
 )
 
 var (
@@ -77,6 +79,7 @@ var (
 	allRegex        = regexp.MustCompile("^" + allExpr)
 	notInRegex      = regexp.MustCompile("^" + notInExpr)
 	inRegex         = regexp.MustCompile("^" + inExpr)
+	globalRegex     = regexp.MustCompile("^" + globalExpr)
 )
 
 // Tokenize transforms string to token slice
@@ -198,6 +201,10 @@ func Tokenize(input string) (tokens []Token, err error) {
 			} else if idxs := allRegex.FindStringIndex(input); idxs != nil {
 				// Found "all"
 				tokens = append(tokens, Token{TokAll, nil})
+				input = input[idxs[1]:]
+			} else if idxs := globalRegex.FindStringIndex(input); idxs != nil {
+				// Found "global"
+				tokens = append(tokens, Token{TokGlobal, nil})
 				input = input[idxs[1]:]
 			} else if idxs := identifierRegex.FindStringIndex(input); idxs != nil {
 				// Found "label"

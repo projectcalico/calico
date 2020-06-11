@@ -1650,6 +1650,63 @@ func init() {
 				},
 			}, false,
 		),
+		Entry("disallow global() in namespaceSelector field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					NamespaceSelector: "global()",
+				},
+			}, false,
+		),
+		Entry("disallow global() in selector field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Selector: "global()",
+				},
+			}, false,
+		),
+		Entry("disallow global() in serviceAccountSelector field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					ServiceAccountSelector: "global()",
+				},
+			}, false,
+		),
+		Entry("disallow global() in EntityRule selector field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								Selector: "global()",
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("allow global() and projectcalico.org/name in EntityRule namespaceSelector field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								NamespaceSelector: "global()",
+							},
+							Destination: api.EntityRule{
+								NamespaceSelector: "projectcalico.org/name == 'test'",
+							},
+						},
+					},
+				},
+			}, true,
+		),
 
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
@@ -1779,6 +1836,67 @@ func init() {
 					Egress: []api.Rule{{Action: "Allow", HTTP: &api.HTTPMatch{Methods: []string{"GET"}}}},
 					Types:  []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
 				},
+			}, false,
+		),
+		Entry("disallow global() in selector field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Selector: "global()",
+				},
+			}, false,
+		),
+		Entry("disallow global() in serviceAccountSelector field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					ServiceAccountSelector: "global()",
+				},
+			}, false,
+		),
+		Entry("allow global() and projectcalico.org/name in EntityRule namespaceSelector field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								NamespaceSelector: "global()",
+							},
+							Destination: api.EntityRule{
+								NamespaceSelector: "projectcalico.org/name == 'test'",
+							},
+						},
+					},
+				},
+			}, true,
+		),
+		// Validate EntityRule against special selectors global().
+		// Extra spaces added in some cases to make sure validation handles it.
+		Entry("disallow global() in EntityRule selector field",
+			&api.EntityRule{
+				Selector: "  global()  ",
+			}, false,
+		),
+		Entry("allow global() in EntityRule namespaceSelector field",
+			&api.EntityRule{
+				NamespaceSelector: "  global()  ",
+			}, true,
+		),
+		Entry("disallow global() in EntityRule namespaceSelector field AND'd with other expressions",
+			&api.EntityRule{
+				NamespaceSelector: " global() && all()",
+			}, false,
+		),
+		Entry("disallow global() in EntityRule namespaceSelector field OR'd other expressions",
+			&api.EntityRule{
+				NamespaceSelector: "global()||all()",
+			}, false,
+		),
+		Entry("disallow bad selectors in EntityRule selector field",
+			&api.EntityRule{
+				Selector: "global() && bad",
 			}, false,
 		),
 		Entry("allow HTTP Path with permitted match clauses",

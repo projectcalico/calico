@@ -429,3 +429,19 @@ func appendLabelOpAndQuotedString(fragments []string, label, op, s string) []str
 	}
 	return append(fragments, label, op, quote, s, quote)
 }
+
+type GlobalNode struct {
+}
+
+func (node *GlobalNode) Evaluate(labels Labels) bool {
+
+	return true
+}
+
+func (node *GlobalNode) AcceptVisitor(v Visitor) {
+	v.Visit(node)
+}
+
+func (node *GlobalNode) collectFragments(fragments []string) []string {
+	return append(fragments, "global()")
+}
