@@ -352,11 +352,13 @@ configRetry:
 		"Successfully loaded configuration.")
 
 	if configParams.DebugPanicAfter > 0 {
-		go func(delay time.Duration) {
-			log.WithField("delay", delay).Warn("DebugPanicAfter is set, will panic after delay.")
-			time.Sleep(delay)
-			log.Panic("Panicking because config told me to!")
-		}(configParams.DebugPanicAfter)
+		log.WithField("delay", configParams.DebugPanicAfter).Warn("DebugPanicAfter is set, will panic after delay!")
+		go panicAfter(configParams.DebugPanicAfter)
+	}
+
+	if configParams.DebugSimulateDataRace {
+		log.Warn("DebugSimulateDataRace is set, will start some racing goroutines!")
+		simulateDataRace()
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -367,7 +369,11 @@ configRetry:
 	failureReportChan := make(chan string)
 	configChangedRestartCallback := func() { failureReportChan <- reasonConfigChanged }
 
-	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator, configChangedRestartCallback, k8sClientSet)
+	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
+		configParams.Copy(), // Copy to avoid concurrent access.
+		healthAggregator,
+		configChangedRestartCallback,
+		k8sClientSet)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
@@ -378,7 +384,13 @@ configRetry:
 		// (Otherwise, we pass in a nil channel, which disables such updates.)
 		connToUsageRepUpdChan = make(chan map[string]string, 1)
 	}
-	dpConnector := newConnector(configParams, connToUsageRepUpdChan, backendClient, v3Client, dpDriver, failureReportChan)
+	dpConnector := newConnector(
+		configParams.Copy(), // Copy to avoid concurrent access.
+		connToUsageRepUpdChan,
+		backendClient,
+		v3Client,
+		dpDriver,
+		failureReportChan)
 
 	// If enabled, create a server for the policy sync API.  This allows clients to connect to
 	// Felix over a socket and receive policy updates.
@@ -386,7 +398,7 @@ configRetry:
 	var policySyncProcessor *policysync.Processor
 	var policySyncAPIBinder binder.Binder
 	calcGraphClientChannels := []chan<- interface{}{dpConnector.ToDataplane}
-	if configParams.PolicySyncPathPrefix != "" {
+	if configParams.IsLeader() && configParams.PolicySyncPathPrefix != "" {
 		log.WithField("policySyncPathPrefix", configParams.PolicySyncPathPrefix).Info(
 			"Policy sync API enabled.  Creating the policy sync server.")
 		toPolicySync := make(chan interface{})
@@ -440,7 +452,7 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
-		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator)
+		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
 
 		log.Info("using resource updates where applicable")
 		configParams.SetUseNodeResourceUpdates(true)
@@ -493,7 +505,7 @@ configRetry:
 	// do the dynamic calculation of ipset memberships and active policies
 	// etc.
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
-		configParams,
+		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
 		healthAggregator,
 	)

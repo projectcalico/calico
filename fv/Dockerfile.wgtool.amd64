@@ -15,8 +15,8 @@
 # WireGuard FVs use `wg` tool.
 # With this image, we avail the tool for felix-test image to use.
 
-FROM ubuntu:eoan
+FROM ubuntu:focal
 LABEL maintainer="Gaurav <gaurav@tigera.io>"
 
 RUN apt-get update && \
-    apt-get install wireguard -y
+    apt-get install --no-install-recommends wireguard-tools -y

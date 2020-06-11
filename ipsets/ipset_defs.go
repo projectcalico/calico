@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"strconv"
 
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -50,7 +52,7 @@ var (
 		Name: "felix_ipset_lines_executed",
 		Help: "Number of ipset operations executed.",
 	})
-	summaryExecStart = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryExecStart = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_exec_time_micros",
 		Help: "Summary of time taken to fork/exec child processes",
 	})

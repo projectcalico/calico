@@ -31,3 +31,4 @@ RUN apt-get update && apt-get install -y \
     tcpdump
 
 ADD test-connection test-workload pktgen  /
+ADD calico-felix-race-amd64 /code/calico-felix

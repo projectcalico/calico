@@ -80,6 +80,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	envVars := map[string]string{
 		// Enable core dumps.
 		"GOTRACEBACK": "crash",
+		"GORACE":      "history_size=2",
 		// Tell the wrapper to set the core file name pattern so we can find the dump.
 		"SET_CORE_PATTERN": "true",
 
