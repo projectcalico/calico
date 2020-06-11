@@ -68,6 +68,8 @@ metadata:
   name: allow-tcp-port-6379
 ```
 
+Because global network policies use **kind: GlobalNetworkPolicy**, they are grouped seperately from **kind: NetworkPolicy**. For example, global network policies will not be returned from `calicoctl get networkpolicy`, and are rather returned from `calicoctl get globalnetworkpolicy`.
+
 #### kubectl vs calicoctl
 
 Calico network policies and Calico global network policies are applied using calicoctl. Syntax is similar to Kubernetes, but there a few differences. For help, see [calicoctl user reference]({{ site.baseurl }}/reference/calicoctl/overview).
