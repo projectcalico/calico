@@ -170,7 +170,7 @@ static CALI_BPF_INLINE int update_state_map(struct cali_tc_state *state)
 		// Shouldn't be possible; the map is pre-allocated.
 		CALI_INFO("State map lookup failed: DROP\n");
 		return -1;
-        }
+	}
 	*map_state = *state;
 	return 0;
 }
@@ -623,11 +623,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		/* send icmp port unreachable if there is no backend for a service */
 		state.icmp_type = ICMP_DEST_UNREACH;
 		state.icmp_code = ICMP_PORT_UNREACH;
-		if (update_state_map(&state))
-			goto deny;
-		bpf_tail_call(skb, &cali_jump, 2);
-		/* should not reach here */
-		goto deny;
+		goto icmp_allow;
 	} else {
 		state.post_nat_ip_dst = state.ip_dst;
 		state.post_nat_dport = state.dport;
@@ -719,6 +715,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	bpf_tail_call(skb, &cali_jump, 0);
 	CALI_DEBUG("Tail call to policy program failed: DROP\n");
 	return TC_ACT_SHOT;
+
+icmp_allow:
+	if (update_state_map(&state)) {
+		goto deny;
+	}
+	bpf_tail_call (skb, &cali_jump, 2);
+	/* should not reach here */
+	goto deny;
 
 skip_policy:
 	fwd = calico_tc_skb_accepted(skb, ip_header, &state, nat_dest);
@@ -1214,8 +1218,9 @@ icmp_too_big:
 	goto icmp_allow;
 
 icmp_allow:
-	if (update_state_map(state))
+	if (update_state_map(state)) {
 		goto deny;
+	}
 	bpf_tail_call (skb, &cali_jump, 2);
 	goto deny;
 
@@ -1235,7 +1240,6 @@ allow:
 			.mark = seen_mark,
 		};
 		fwd_fib_set(&fwd, fib);
-		fwd_fib_set_flags(&fwd, 0);
 		return fwd;
 	}
 
@@ -1275,7 +1279,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_icmp_accepted(struct __sk_buff *
 		}
 	}
 
-	if (icmp_v4_reply (skb, ip, type, code, un))
+	if (icmp_v4_reply(skb, ip, type, code, un))
 		goto deny;
 	/* packet was created because of approved traffic, treat it as related */
 	seen_mark = CALI_SKB_MARK_BYPASS_FWD;
@@ -1300,12 +1304,11 @@ __attribute__((section("1/2")))
 int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_send_icmp_replies\n");
-	struct iphdr *ip_header = NULL;
 	if (skb_too_short(skb)) {
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	ip_header = skb_iphdr(skb);
+	struct iphdr *ip_header = skb_iphdr(skb);
 	__u32 key = 0;
 	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
 	if (!state) {
@@ -1313,7 +1316,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		goto deny;
 	}
 	CALI_DEBUG("ICMP type %d and code %d\n",state->icmp_type, state->icmp_code);
-	struct fwd fwd = calico_tc_skb_icmp_accepted (skb, ip_header, state->icmp_type, state->icmp_code);
+	struct fwd fwd = calico_tc_skb_icmp_accepted(skb, ip_header, state->icmp_type, state->icmp_code);
 	if (skb_too_short(skb)) {
 		CALI_DEBUG("Too short\n");
 		goto deny;
