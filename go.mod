@@ -4,13 +4,15 @@ go 1.12
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/coreos/bbolt v1.3.3 // indirect
+	github.com/coreos/etcd v3.3.18+incompatible // indirect
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200608214448-871c78fe00ea
-	github.com/projectcalico/typha v0.7.3-0.20200609040740-1f53331676c0
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200610201441-7f5b8c620b5c
+	github.com/projectcalico/typha v0.7.3-0.20200611040902-de25078e2868
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tinylib/msgp v1.1.0 // indirect
 	github.com/ugorji/go v0.0.0-20171019201919-bdcc60b419d1 // indirect
