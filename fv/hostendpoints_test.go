@@ -59,6 +59,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPEnabled = false
+		options.WithTypha = true
 		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
 
 		// Create workloads, using that profile. One on each "host".
@@ -131,6 +132,12 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		cc.ExpectSome(felixes[0], ip, 6443)
 		cc.ExpectSome(felixes[1], ip, 6443)
 	}
+	expectConnectivityToTypha := func() {
+		typhaIP1 := connectivity.TargetIP(felixes[0].TyphaIP)
+		typhaIP2 := connectivity.TargetIP(felixes[1].TyphaIP)
+		cc.ExpectSome(felixes[0], typhaIP1, 5473)
+		cc.ExpectSome(felixes[1], typhaIP2, 5473)
+	}
 
 	Context("with no policies and no profiles on the host endpoints", func() {
 		BeforeEach(func() {
@@ -160,6 +167,11 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 
 		It("should allow connectivity from nodes to the Kubernetes API server", func() {
 			expectConnectivityToAPIServer()
+			cc.CheckConnectivity()
+		})
+
+		It("should allow connectivity from nodes to Typha", func() {
+			expectConnectivityToTypha()
 			cc.CheckConnectivity()
 		})
 

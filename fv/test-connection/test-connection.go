@@ -321,6 +321,13 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 		return nil
 	}
 
+	if remotePort == "5473" {
+		// Testing for connectivity to Typha. If we reach here, we're good.
+		// Skip sending and receiving any data.
+		connectivity.Result{}.PrintToStdout()
+		return nil
+	}
+
 	if loopFile != "" {
 		return tc.tryLoopFile(loopFile)
 	}
