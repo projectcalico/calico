@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 // Copyright 2017 The Kubernetes Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,10 +30,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
 )
 
 var (
-	summaryLockAcquisitionTime = prometheus.NewSummary(prometheus.SummaryOpts{
+	summaryLockAcquisitionTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_iptables_lock_acquire_secs",
 		Help: "Time in seconds that it took to acquire the iptables lock(s).",
 	})

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+
 	netlinkshim "github.com/projectcalico/felix/netlink"
 	timeshim "github.com/projectcalico/felix/time"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -51,11 +53,11 @@ var (
 
 	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
-	listIfaceTime = prometheus.NewSummary(prometheus.SummaryOpts{
+	listIfaceTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_route_table_list_seconds",
 		Help: "Time taken to list all the interfaces during a resync.",
 	})
-	perIfaceSyncTime = prometheus.NewSummary(prometheus.SummaryOpts{
+	perIfaceSyncTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_route_table_per_iface_sync_seconds",
 		Help: "Time taken to sync each interface",
 	})
