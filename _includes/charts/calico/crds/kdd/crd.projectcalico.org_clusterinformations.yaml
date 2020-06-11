@@ -52,6 +52,9 @@ spec:
                   to signal to components such as Felix that it should wait before
                   accessing the datastore.
                 type: boolean
+              variant:
+                description: Variant declares which variant of Calico should be active.
+                type: string
             type: object
         type: object
     served: true
