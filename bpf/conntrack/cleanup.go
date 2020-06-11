@@ -15,6 +15,7 @@
 package conntrack
 
 import (
+	"net"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -222,4 +223,81 @@ func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Value)
 		}
 	}
 	return "", false
+}
+
+// NATChecker returns true a given combination of frontend-backend exists
+type NATChecker func(frontIP net.IP, frontPort uint16, backIP net.IP, backPort uint16, proto uint8) bool
+
+// NewStaleNATScanner returns an EntryScanner that checks if entries have
+// exisitng NAT entries using the provided NATChecker and if not, it deletes
+// them.
+func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
+	return func(k Key, v Value, get EntryGet) ScanVerdict {
+		switch v.Type() {
+		case TypeNormal:
+			// skip non-NAT entry
+
+		case TypeNATReverse:
+			proto := k.Proto()
+			ipA := k.AddrA()
+			ipB := k.AddrB()
+
+			portA := k.PortA()
+			portB := k.PortB()
+
+			svcIP := v.OrigIP()
+			svcPort := v.OrigPort()
+
+			// We cannot tell which leg is EP and which is the client, we must
+			// try both. If there is a record for one of them, it is still most
+			// likely an active entry.
+			if !frontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
+				!frontendHasBackend(svcIP, svcPort, ipB, portB, proto) {
+				log.WithField("key", k).Debugf("TypeNATReverse is stale")
+				return ScanVerdictDelete
+			}
+			log.WithField("key", k).Debugf("TypeNATReverse still active")
+
+		case TypeNATForward:
+			proto := k.Proto()
+			kA := k.AddrA()
+			kB := k.AddrB()
+			revKey := v.ReverseNATKey()
+			revA := revKey.AddrA()
+			revB := revKey.AddrB()
+
+			var (
+				svcIP, epIP     net.IP
+				svcPort, epPort uint16
+			)
+
+			// Because client IP/Port are both in fwd key and rev key, we can
+			// can tell which one it is and thus determine exactly meaning of
+			// the other values.
+			if kA.Equal(revA) {
+				epIP = revB
+				epPort = revKey.PortB()
+				svcIP = kB
+				svcPort = k.PortB()
+			} else if kA.Equal(revB) {
+				epIP = revA
+				epPort = revKey.PortA()
+				svcIP = kA
+				svcPort = k.PortA()
+			} else {
+				log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
+			}
+
+			if !frontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
+				log.WithField("key", k).Debugf("TypeNATForward is stale")
+				return ScanVerdictDelete
+			}
+			log.WithField("key", k).Debugf("TypeNATForward still active")
+
+		default:
+			log.WithField("conntrack.Value.Type()", v.Type()).Warn("Unknown type")
+		}
+
+		return ScanVerdictOK
+	}
 }

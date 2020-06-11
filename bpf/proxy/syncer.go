@@ -103,7 +103,6 @@ type Syncer struct {
 	bpfSvcs bpf.Map
 	bpfEps  bpf.Map
 	bpfAff  bpf.Map
-	bpfCt   bpf.Map
 
 	nextSvcID uint32
 
@@ -140,6 +139,8 @@ type Syncer struct {
 	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
 	stickySvcDeleted bool
+
+	conntrackScanner *conntrack.Scanner
 }
 
 type ipPort struct {
@@ -193,13 +194,14 @@ func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap, affmap, ctmap bpf.Map, rt 
 		bpfSvcs:     svcsmap,
 		bpfEps:      epsmap,
 		bpfAff:      affmap,
-		bpfCt:       ctmap,
 		rt:          rt,
 		nodePortIPs: uniqueIPs(nodePortIPs),
 		prevSvcMap:  make(map[svcKey]svcInfo),
 		prevEpsMap:  make(k8sp.EndpointsMap),
 		stop:        make(chan struct{}),
 	}
+
+	s.conntrackScanner = conntrack.NewScanner(ctmap, conntrack.NewStaleNATScanner(s.frontendHasBackend))
 
 	if err := s.loadOrigs(); err != nil {
 		return nil, err
@@ -598,11 +600,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	log.Debugf("new state written")
 
 	s.runExpandNPFixup(expNPMisses)
-
-	if err := s.conntrackCleanup(); err != nil {
-		// This is non-fatal, coonections/entries will eventually expire and get reclaimed
-		log.WithError(err).Warn("Failed to clean up conntrack")
-	}
+	s.conntrackScanner.Scan()
 
 	return nil
 }
@@ -876,7 +874,7 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 	return nil
 }
 
-// ProtoV1ToIntPanic translates k8s v1.Protocol to its IANA number and returns
+// ProtoV1ToInt translates k8s v1.Protocol to its IANA number and returns
 // error if the proto is not recognized
 func ProtoV1ToInt(p v1.Protocol) (uint8, error) {
 	switch p {
@@ -1138,93 +1136,6 @@ func (s *Syncer) frontendHasBackend(ip net.IP, port uint16, backendIP net.IP, ba
 	_, ok = backends[ipPort{backendIP.String(), int(backendPort)}]
 
 	return ok
-}
-
-func (s *Syncer) conntrackCleanup() error {
-	return s.bpfCt.Iter(func(key, val []byte) {
-		k := conntrack.KeyFromBytes(key)
-		v := conntrack.ValueFromBytes(val)
-
-		log.WithFields(log.Fields{
-			"key":   k,
-			"value": v,
-		}).Debug("Syncer cleaning conntrack entry")
-
-		switch v.Type() {
-		case conntrack.TypeNormal:
-			// skip non-NAT entry
-
-		case conntrack.TypeNATReverse:
-			proto := k.Proto()
-			ipA := k.AddrA()
-			ipB := k.AddrB()
-
-			portA := k.PortA()
-			portB := k.PortB()
-
-			svcIP := v.OrigIP()
-			svcPort := v.OrigPort()
-
-			// We cannot tell which leg is EP and which is the client, we must
-			// try both. If there is a record for one of them, it is still most
-			// likely an active entry.
-			if !s.frontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
-				!s.frontendHasBackend(svcIP, svcPort, ipB, portB, proto) {
-				err := s.bpfCt.Delete(k.AsBytes())
-				log.WithError(err).Debug("Deletion result")
-				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).Warn("Failed to delete conntrack rev-NAT entry.")
-				}
-				log.WithField("key", k).Debugf("TypeNATReverse deleted")
-			} else {
-				log.WithField("key", k).Debugf("TypeNATReverse still active")
-			}
-
-		case conntrack.TypeNATForward:
-			proto := k.Proto()
-			kA := k.AddrA()
-			kB := k.AddrB()
-			revKey := v.ReverseNATKey()
-			revA := revKey.AddrA()
-			revB := revKey.AddrB()
-
-			var (
-				svcIP, epIP     net.IP
-				svcPort, epPort uint16
-			)
-
-			// Because client IP/Port are both in fwd key and rev key, we can
-			// can tell which one it is and thus determine exactly meaning of
-			// the other values.
-			if kA.Equal(revA) {
-				epIP = revB
-				epPort = revKey.PortB()
-				svcIP = kB
-				svcPort = k.PortB()
-			} else if kA.Equal(revB) {
-				epIP = revA
-				epPort = revKey.PortA()
-				svcIP = kA
-				svcPort = k.PortA()
-			} else {
-				log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
-			}
-
-			if !s.frontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
-				err := s.bpfCt.Delete(k.AsBytes())
-				log.WithError(err).Debug("Deletion result")
-				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).Warn("Failed to delete conntrack forward-NAT entry.")
-				}
-				log.WithField("key", k).Debugf("TypeNATForward deleted")
-			} else {
-				log.WithField("key", k).Debugf("TypeNATForward still active")
-			}
-
-		default:
-			log.WithField("conntrack.Value.Type()", v.Type()).Warn("Unknown type")
-		}
-	})
 }
 
 func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
