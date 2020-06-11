@@ -27,6 +27,4 @@ Then, run the following.
 
 Then, there are a few bits of cleanup you'll need to do
 
-1. Copy the generated `api.html` into this directory.
-
-1. Add the layout section and introduction text to the top of the document so it renders properly in our docs.
+1. Copy the generated `api.html` into this directory, renaming it to `_api.html`.
