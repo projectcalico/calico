@@ -173,6 +173,12 @@ static CALI_BPF_INLINE int icmp_v4_ttl_exceeded(struct __sk_buff *skb)
 	return icmp_v4_reply(skb, ip, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
 }
 
+static CALI_BPF_INLINE int icmp_v4_port_unreachable(struct __sk_buff *skb)
+{
+	struct iphdr *ip = skb_iphdr(skb);
+	return icmp_v4_reply(skb, ip, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
+}
+
 static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
 {
 	switch (type) {

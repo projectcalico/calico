@@ -291,6 +291,7 @@ skip_affinity:
 
 	if (!(nat_lv2_val = cali_v4_nat_be_lookup_elem(&nat_lv2_key))) {
 		CALI_DEBUG("NAT: backend miss\n");
+		*res = NAT_NO_BACKEND;
 		return NULL;
 	}
 

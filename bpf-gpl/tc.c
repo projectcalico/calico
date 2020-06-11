@@ -162,6 +162,19 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	return ret;
 }
 
+static CALI_BPF_INLINE int update_state_map(struct cali_tc_state *state)
+{
+	int key = 0;
+	struct cali_tc_state *map_state = cali_v4_state_lookup_elem(&key);
+	if (!map_state) {
+		// Shouldn't be possible; the map is pre-allocated.
+		CALI_INFO("State map lookup failed: DROP\n");
+		return -1;
+        }
+	*map_state = *state;
+	return 0;
+}
+
 static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 					   struct cali_tc_state *state,
 					   struct fwd *fwd)
@@ -607,9 +620,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		state.post_nat_ip_dst = nat_dest->addr;
 		state.post_nat_dport = nat_dest->port;
 	} else if (nat_res == NAT_NO_BACKEND) {
+		/* send icmp port unreachable if there is no backend for a service */
 		state.icmp_type = ICMP_DEST_UNREACH;
 		state.icmp_code = ICMP_PORT_UNREACH;
+		if (update_state_map(&state))
+			goto deny;
 		bpf_tail_call(skb, &cali_jump, 2);
+		/* should not reach here */
+		goto deny;
 	} else {
 		state.post_nat_ip_dst = state.ip_dst;
 		state.post_nat_dport = state.dport;
@@ -1188,12 +1206,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 icmp_ttl_exceeded:
 	state->icmp_type = ICMP_TIME_EXCEEDED;
 	state->icmp_code = ICMP_EXC_TTL;
-	bpf_tail_call (skb, &cali_jump, 2);
-	goto deny;
+	goto icmp_allow;
 
 icmp_too_big:
 	state->icmp_type = ICMP_DEST_UNREACH;
 	state->icmp_code = ICMP_FRAG_NEEDED;
+	goto icmp_allow;
+
+icmp_allow:
+	if (update_state_map(state))
+		goto deny;
 	bpf_tail_call (skb, &cali_jump, 2);
 	goto deny;
 
@@ -1290,6 +1312,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		goto deny;
 	}
+	CALI_DEBUG("ICMP type %d and code %d\n",state->icmp_type, state->icmp_code);
 	struct fwd fwd = calico_tc_skb_icmp_accepted (skb, ip_header, state->icmp_type, state->icmp_code);
 	if (skb_too_short(skb)) {
 		CALI_DEBUG("Too short\n");
