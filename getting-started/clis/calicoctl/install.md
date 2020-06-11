@@ -10,7 +10,7 @@ canonical_url: '/getting-started/clis/calicoctl/install'
 from the command line. {{site.prodname}} objects are stored in one of two datastores,
 either etcd or Kubernetes. The choice of datastore is determined at the time Calico
 is installed. Typically for Kubernetes installations the Kubernetes datastore is the
-default
+default.
 
 You can run `calicoctl` on any host with network access to the
 {{site.prodname}} datastore as either a binary or a container.
