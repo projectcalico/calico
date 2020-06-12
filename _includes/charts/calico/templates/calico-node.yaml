@@ -293,6 +293,11 @@ spec:
                 configMapKeyRef:
                   name: {{include "variant_name" . | lower}}-config
                   key: veth_mtu
+{{- if .Values.srcdstcheck }}
+            # Enable AWS source-destination-check.
+            - name: FELIX_AWSSRCDSTCHECK
+              value: "Enable"
+{{- end }}
 {{- else if eq .Values.network "flannel" }}
             # Don't enable BGP.
             - name: CALICO_NETWORKING_BACKEND
