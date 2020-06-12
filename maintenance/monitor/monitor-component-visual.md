@@ -9,7 +9,9 @@ Use Grafana dashboard to view {{ site.prodname }} component metrics.
 
 ### Value
 
-Using Grafana can be beneficial by providing a means to visualize metrics through graphs that can help you quickly identify unusual activity.
+Using Grafana can be beneficial by providing a means to visualize metrics through graphs that can help you quickly identify unusual activity, following image shows some of the graphs and metrics that are available for you to leverage in order to achieve this goal.
+
+![]({{ site.baseurl }}/images/grafana-dashboard.png)
 
 ### Features
 
@@ -170,8 +172,6 @@ You can now access Grafana web-ui at [http://localhost:3000](http://localhost:30
 After login you will be prompted to change the default password, you can either change it here (`Recommended`) and click `Save` or click `Skip` and do it later from settings.
 
 Congratulation you have arrived at your Felix dashboard.
-
-![]({{ site.baseurl }}/images/grafana-dashboard.png)
 
 In this tutorial we have also prepared a [Typha dashboard](http://localhost:3000/d/calico-typha-dashboard/typha-dashborad-calico?orgId=1) for you, if you are not using Typha in your cluster you can delete it safely via Grafana web-ui.
 
