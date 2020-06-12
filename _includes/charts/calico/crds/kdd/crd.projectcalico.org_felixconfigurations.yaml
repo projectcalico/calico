@@ -36,15 +36,6 @@ spec:
           spec:
             description: FelixConfigurationSpec contains the values of the Felix configuration.
             properties:
-              awsSrcDstCheck:
-                description: 'Set source-destination-check on AWS EC2 instances. Accepted
-                  value must be one of "DoNothing", "Enabled" or "Disabled". [Default:
-                  DoNothing]'
-                enum:
-                - DoNothing
-                - Enable
-                - Disable
-                type: string
               bpfConnectTimeLoadBalancingEnabled:
                 description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode,
                   controls whether Felix installs the connection-time load balancer.  The
