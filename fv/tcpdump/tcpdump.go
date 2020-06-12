@@ -125,6 +125,14 @@ func (t *TCPDump) MatchCount(name string) int {
 	return c
 }
 
+func (t *TCPDump) ResetCount(name string) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	t.matchers[name].count = 0
+	logrus.Infof("[%s] Reset count for %s", t.contName, name)
+}
+
 func (t *TCPDump) Start(expr ...string) {
 	args := append(t.args, expr...)
 	t.cmd = utils.Command(t.exe, args...)

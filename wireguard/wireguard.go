@@ -608,12 +608,11 @@ func (w *Wireguard) Apply() (err error) {
 	// 2. Update of cached node configuration (we cannot be certain exactly what is programmable until updated)
 	// 3. Update of route table routes.
 	// 4. Construction of wireguard delta (if performing deltas, or re-sync of wireguard configuration)
-	// 5. Simultaneous updates of wireguard, routes and rules.
+	// 5. Simultaneous updates of wireguard and routes.
 	var conflictingKeys = set.New()
 	wireguardPeerDelete := w.handlePeerAndRouteDeletionFromNodeUpdates(conflictingKeys)
 	w.updateCacheFromNodeUpdates(conflictingKeys)
 	w.updateRouteTableFromNodeUpdates()
-	w.updateRouteRulesFromNodeUpdates()
 
 	defer func() {
 		// Flag the programmed state to be the same as the expected state for each peer. We do this even if we failed to
@@ -764,6 +763,7 @@ func (w *Wireguard) Apply() (err error) {
 	// Once the wireguard and routing configuration is in place we can add the routing rules to start using the new
 	// routing table.
 	log.Debug("Ensure routing rules are configured")
+	w.addRouteRule()
 	if err = w.routerule.Apply(); err != nil {
 		// Error updating the ip rule.
 		return ErrUpdateFailed
@@ -1459,34 +1459,11 @@ func (w *Wireguard) ensureLinkAddressV4(netlinkClient netlinkshim.Netlink) error
 	return nil
 }
 
-// updateRouteRulesFromNodeUpdates updates the routerules from the node updates.
-func (w *Wireguard) updateRouteRulesFromNodeUpdates() {
-	// We need to add route rules for each local CIDR.
-	nodeUpdate, ok := w.nodeUpdates[w.hostname]
-	if !ok {
-		return
-	}
-
-	nodeUpdate.cidrsDeleted.Iter(func(item interface{}) error {
-		cidr := item.(ip.CIDR)
-		w.routerule.RemoveRule(w.createRouteRule(cidr))
-		return nil
-	})
-	nodeUpdate.cidrsAdded.Iter(func(item interface{}) error {
-		cidr := item.(ip.CIDR)
-		w.routerule.SetRule(w.createRouteRule(cidr))
-		return nil
-	})
-}
-
-// createRouteRule creates a routing rule to route a local source CIDR to the wireguard table (if wireguard firewall
-// mark is not set).
-func (w *Wireguard) createRouteRule(cidr ip.CIDR) *routerule.Rule {
-	rule := routerule.NewRule(ipVersion, w.config.RoutingRulePriority).
+// addRouteRule adds a routing rule to use the wireguard table.
+func (w *Wireguard) addRouteRule() {
+	w.routerule.SetRule(routerule.NewRule(ipVersion, w.config.RoutingRulePriority).
 		GoToTable(w.config.RoutingTableIndex).
-		MatchFWMarkWithMask(0, uint32(w.config.FirewallMark)).
-		MatchSrcAddress(cidr.ToIPNet())
-	return rule
+		MatchFWMarkWithMask(0, uint32(w.config.FirewallMark)))
 }
 
 // ensureDisabled ensures all calico-installed wireguard configuration is removed.

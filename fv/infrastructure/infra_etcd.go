@@ -105,6 +105,13 @@ func (eds *EtcdDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int,
 	}
 }
 
+func (eds *EtcdDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWireguard bool) {
+	if needWireguard {
+		// Set to be the same as IPIP.
+		felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+	}
+}
+
 func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	felixNode := api.NewNode()
 	felixNode.Name = felix.Hostname
