@@ -166,6 +166,12 @@ at the same time that subcomponent release branches are cut, often well before t
        version: vX.Y
    ```
 
+1. Create the the release notes file. This does not need to be populated now but does need to exist.
+
+   ```
+   touch _includes/release-notes/<VERSION>-release-notes.md
+   ```
+
 1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
 
    - Kubernetes `getting-started/kubernetes/requirements.md`
