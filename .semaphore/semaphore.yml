@@ -34,20 +34,20 @@ blocks:
           # and corresponding separate branches in the
           # networking-calico repo.
           commands:
-            - export REPO_NAME=calico-3.15-python2
+            - export REPO_NAME=calico-latest-python2
             - export VERSION=release-v3.15-python2
-            - export FELIX_CHECKOUT=master
+            - export FELIX_CHECKOUT=release-v3.15
             - export PACKAGE_ETCD3GW=true
             - make release-publish
         - name: 'Current release branch'
           commands:
             - export REPO_NAME=calico-current
-            - export VERSION=release-v3.14
+            - export VERSION=release-v3.15
             - export PACKAGE_ETCD3GW=true
             - make release-publish
         - name: 'Previous release branch'
           commands:
             - export REPO_NAME=calico-previous
-            - export VERSION=release-v3.13
+            - export VERSION=release-v3.14
             - export PACKAGE_ETCD3GW=true
             - make release-publish
