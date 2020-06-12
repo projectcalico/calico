@@ -86,8 +86,7 @@ raise a GitHub issue against our repository. To generate the diags, run:
 /usr/bin/calico-diags
 ```
 
-VMs cannot DHCP
----------------
+### VMs cannot DHCP
 
 This can happen if your iptables is configured to have a default DROP
 behaviour on the INPUT or FORWARD chains. You can test this by running
@@ -155,8 +154,7 @@ the machines hosting each of the VMs (potentially the same machine) have
 routes to both VMs. If they do not, check out the troubleshooting
 section [above](#routes-are-missing-in-the-fib).
 
-Web UI Shows Error Boxes Saying "Error: Unable to get quota info" and/or "Error: Unable to get volume limit"
-------------------------------------------------------------------------------------------------------------
+### Web UI Shows Error Boxes Saying "Error: Unable to get quota info" and/or "Error: Unable to get volume limit"
 
 This is likely a problem encountered with mapping devices in `cinder`,
 OpenStack's logical volume management component. Many of these can be
@@ -168,8 +166,7 @@ service cinder-scheduler restart
 service cinder-api restart
 ```
 
-Cannot create instances, error log says "could not open /dev/net/tun: Operation not permitted"
-----------------------------------------------------------------------------------------------
+### Cannot create instances, error log says "could not open /dev/net/tun: Operation not permitted"
 
 This is caused by having not restarted libvirt after you add lines to
 the end of `/etc/libvirt/qemu.conf`. This can be fixed by either
