@@ -171,6 +171,8 @@ After login you will be prompted to change the default password, you can either 
 
 Congratulation you have arrived at your Felix dashboard.
 
+![]({{ site.baseurl }}/images/grafana-dashboard.png)
+
 In this tutorial we have also prepared a [Typha dashboard](http://localhost:3000/d/calico-typha-dashboard/typha-dashborad-calico?orgId=1) for you, if you are not using Typha in your cluster you can delete it safely via Grafana web-ui.
 
 > **Note**: A more detailed guide about Typha detection and setup can be found [at this link]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics#typha-configuration).
