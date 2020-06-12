@@ -4,11 +4,8 @@ description: Choose a method for installing Calico for OpenStack.
 canonical_url: '/getting-started/openstack/installation/index'
 ---
 
-There are many ways to try out {{site.prodname}} with OpenStack, because OpenStack
-is a sufficiently complex system that there is a small industry
-concerned with deploying it correctly and successfully.
-
-We provide instructions for the following methods:
+There are many ways to try out {{site.prodname}} with OpenStack.  We provide instructions for the
+following methods:
 
 - [Package-based install for Ubuntu]({{ site.baseurl }}/getting-started/openstack/installation/ubuntu)
 

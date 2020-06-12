@@ -60,8 +60,8 @@ These steps are detailed in this section.
     should install it with `pip`.
 
     ```
-    apt-get install -y python-pip
-    pip install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
+    apt-get install -y python3-pip
+    pip3 install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
     ```
 
 1.  Edit `/etc/neutron/neutron.conf`.  Add a `[calico]` section with

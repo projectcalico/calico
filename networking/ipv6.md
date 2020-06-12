@@ -205,7 +205,7 @@ each Neutron network, with:
 
 -   the IPv6 address range that you want your VMs to use
 -   DHCP enabled
--   (from Juno onwards) IPv6 address mode set to DHCPv6 stateful.
+-   IPv6 address mode set to DHCPv6 stateful.
 
 We suggest initially configuring both IPv4 and IPv6 subnets in each
 network. This allows handling VM images that support only IPv4 alongside
