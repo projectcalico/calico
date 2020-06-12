@@ -211,6 +211,8 @@ type Config struct {
 	IpInIpMtu        int    `config:"int;1440;non-zero"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
 
+	AWSSrcDstCheck string `config:"oneof(DoNothing,Enable,Disable);DoNothing;non-zero"`
+
 	ReportingIntervalSecs time.Duration `config:"seconds;30"`
 	ReportingTTLSecs      time.Duration `config:"seconds;90"`
 
