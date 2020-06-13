@@ -4,11 +4,11 @@ go 1.13
 
 require (
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
-	github.com/onsi/ginkgo v1.10.1
-	github.com/onsi/gomega v1.7.0
+	github.com/onsi/ginkgo v1.12.0
+	github.com/onsi/gomega v1.9.0
 	github.com/pkg/errors v0.8.1
-	github.com/projectcalico/felix v0.0.0-20200612131110-4b0d74df1e44
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200611205049-0bcaac1699e3
+	github.com/projectcalico/felix v0.0.0-20200612231407-781f6832b71d
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200612144350-cf86bf004498
 	github.com/projectcalico/typha v0.7.3-0.20200612040757-baef88afacfa
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v1.0.0
@@ -20,7 +20,7 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200612080857-9be4fc757188
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200612144249-d43f0b72e1b1
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
