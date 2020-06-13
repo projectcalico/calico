@@ -6,11 +6,11 @@ require (
 	github.com/apparentlymart/go-cidr v1.0.1
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
-	github.com/onsi/ginkgo v1.10.1
-	github.com/onsi/gomega v1.7.0
+	github.com/onsi/ginkgo v1.12.0
+	github.com/onsi/gomega v1.9.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20200612131110-4b0d74df1e44
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200611205049-0bcaac1699e3
+	github.com/projectcalico/felix v0.0.0-20200612231407-781f6832b71d
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200612144350-cf86bf004498
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
