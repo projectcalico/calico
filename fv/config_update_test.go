@@ -162,6 +162,10 @@ var _ = Context("Config update tests, after starting felix", func() {
 				Eventually(felix.GetFelixPIDs, "5s", "100ms").ShouldNot(ContainElement(felixPID))
 				felixPID = felix.GetSinglePID("calico-felix")
 
+				// Wait for felix to come in to sync; otherwise we may manage to remove the config before
+				// felix loads it.
+				waitForFelixInSync(felix)
+
 				// Then remove the config that we added.
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
