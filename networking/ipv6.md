@@ -48,14 +48,15 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **Kubernetes install**
 - [Enable dual stack, Kubernetes](#enable-dual-stack)
-- [Enable IPv6-only, initial install, Kubernetes](#enable-ipv6-only-initial-manifest-install)
+- [Enable IPv6-only, initial install, Kubernetes](#enable-ipv6-only-initial-install)
 - [Enable IPv6-only, after install, Kubernetes](#enable-ipv6-only-after-install,kubernetes)
 
 **OpenShift install**
 - [Enable dual stack, OpenShift](#enable-dual-stack-openshift)
 - [Enable IPv6-only, OpenShift](#enable-ipv6-only-openshift)
 
-- (Optional)[Configure the Kubernetes control plane to operate over IPv6](#configure-the-kubernetes-control-plane-to-operate-over-ipv6)
+**Optional**
+- [Configure the Kubernetes control plane to operate over IPv6](#configure-the-kubernetes-control-plane-to-operate-over-ipv6)
 
 #### Enable dual stack, Kubernetes
 
@@ -148,9 +149,9 @@ TBD - operator steps
 
 TBD - operator steps  
 
-#### (Optional) Configure the Kubernetes control plane to operate over IPv6
+#### Configure the Kubernetes control plane to operate over IPv6
 
-Depending on your networking set up, you may want to configure the Kubernetes control plane to operate over IPv6 for dual stack or IPv6 only.
+(Optional). Depending on your networking set up, you may want to configure the Kubernetes control plane to operate over IPv6 for dual stack or IPv6 only.
  
 To configure Kubernetes components, enable IPv6 using the following flags.  
 
