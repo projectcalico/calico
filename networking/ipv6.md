@@ -27,7 +27,7 @@ This how-to guide uses the following {{site.prodname}} features:
 - **IPAM**, a CNI plugin configuration with `assign_ipv6` and `assign_ipv4` flags
 - **IPPool**
 
-### Before you begin...
+### Before you begin
 
 **{{site.prodname}} requirements** 
 
@@ -50,8 +50,8 @@ This how-to guide uses the following {{site.prodname}} features:
 {: .alert .alert-info}
 
 **Kubernetes install**
-- [Enable dual stack, Kubernetes](#enable-dual-stack)
-- [Enable IPv6-only, initial install, Kubernetes](#enable-ipv6-only-initial-install)
+- [Enable dual stack, Kubernetes](#enable-dual-stack-kubernetes)
+- [Enable IPv6-only, initial install, Kubernetes](#enable-ipv6-only-initial-install-kubernetes)
 - [Enable IPv6-only, after install, Kubernetes](#enable-ipv6-only-after-install,kubernetes)
 
 **OpenShift install**
@@ -107,10 +107,7 @@ Be sure to set the value for `CALICO_IPV6POOL_CIDR` to the desired IP pool; it s
    ```yaml
    - name: CALICO_IPV6POOL_CIDR
      value: "fd20::0/112"
-   - name: IP6
-     value: "autodetect"
    ```
-
 1. In the `calico.yaml` file, verify that the environment variable `FELIX_IPV6SUPPORT` is set `true` on the calico-node Daemonset.
 1. Apply the `calico.yaml` manifest with `kubectl apply -f calico.yaml`.
 

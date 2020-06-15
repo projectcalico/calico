@@ -42,19 +42,22 @@ The code is a little roundabout for a few reasons:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="docsearch:version" content="{{page.version}}">
+    {% if site.noindex %}<meta name="robots" content="noindex">{% endif %}
     <link rel="shortcut icon" type="image/png" href="{{site.baseurl}}/images/favicon.png">
     <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Poppins:100,100italic,200,200italic,300,300italic,400,400italic,500,500italic,600,600italic,700,700italic,800,800italic,900,900italic&amp;ver=5.3.2" rel="stylesheet" media="all">    
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
     <link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
     {% if page.custom_css %}
     <link rel="stylesheet" href="{{site.baseurl}}/{{ page.custom_css }}"/>
     {% endif %}
-    <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
     <link href="https://www.projectcalico.org/wp-content/plugins/wpfront-notification-bar/css/wpfront-notification-bar.css?ver=1.7.1" rel="stylesheet" type="text/css" media="all">
+    <link rel="stylesheet" href="{{site.baseurl}}/css/font-awesome/font-awesome.min.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/instantsearch/instantsearch.min.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
+    <script src="{{site.baseurl}}/js/algoliasearch/algoliasearch.min.js"></script>
     <script src="{{site.baseurl}}/js/instantsearch/instantsearch.min.js"></script>
     <script src="{{site.baseurl}}/js/script.js"></script>
     <script defer src="{{site.baseurl}}/js/scrollPage.js"></script>
@@ -104,8 +107,9 @@ The code is a little roundabout for a few reasons:
             <ul class="nav navbar-nav navbar-right">
               <li><a data-proofer-ignore href="/releases">Releases</a></li>
               <li><a href="https://www.projectcalico.org/community">Community</a></li>
-              <li><a href="#"><span>Support</span></a>
-                <ul>
+              <li class="dropdown"
+                ><a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span>Support</span><span class="glyphicon glyphicon-triangle-bottom sub-arrow" aria-hidden="true"></span></a>
+                <ul class="dropdown-menu dropdown-menu-left">
                     <!-- <li><a data-proofer-ignore href="/latest/getting-started/"><i class="fa fa-tachometer" aria-hidden="true"></i> &nbsp; Getting Started</a></li> -->
                     <!-- <li><a href="{{site.baseurl}}"><i class="fa fa-book" aria-hidden="true"></i> &nbsp; Documentation</a></li> -->
                     <!--<li><a href="https://www.projectcalico.org/tutorials"><i class="fa fa-file-code-o" aria-hidden="true"></i> &nbsp; Tutorials &amp; Examples</a></li>
@@ -113,15 +117,14 @@ The code is a little roundabout for a few reasons:
                     <li><a href="https://www.projectcalico.org/community">Community Support</a></li>
                     <li><a href="https://www.tigera.io/tigera-products/calico-essentials/" target="_blank">Commercial Support</a></li>
                     <li><a href="https://www.tigera.io/training/" target="_blank">Training</a></li>
-                    <li><a href="https://www.projectcalico.org/security-bulletins" target="_blank">Security Bulletins</a></li>
-                    <li><a href="https://www.projectcalico.org/vulnerability-disclosure" target="_blank">Report Security Issue</a></li>
+                    <li><a href="https://www.projectcalico.org/security-bulletins">Security Bulletins</a></li>
+                    <li><a href="https://www.projectcalico.org/vulnerability-disclosure">Report Security Issue</a></li>
                 </ul>
               </li>
               <li><a href="https://www.projectcalico.org/blog">Blog</a></li>
               <li><a href="https://github.com/projectcalico/calico" target="_blank">Github</a></li>
-              <li class="desktop"><a href="https://tigera.io" target="_blank">
-                <img alt="Tigera" class="desktopImage" style='margin-top: -8px;' height="38" align="absmiddle" src="{{site.baseurl}}/images/tigera-badge.png"></a>
-              </li>              
+              <li><a href="{{site.baseurl}}/calico-enterprise/">Enterprise</a></li>
+              <li><a href="https://www.projectcalico.org/events" class="free-training">Free training</a></li>              
             </ul>
             <form class="navbar-form visible-xs">
               <ul class="nav navbar-nav navbar-right">
@@ -145,6 +148,7 @@ The code is a little roundabout for a few reasons:
                   <div class="search-container__results"></div>
                   <div class="search-container__pagination"></div>
                 </div>
+                <div class="search-powered-by" ></div>
               </div>
               <div id="sidebar">
                 <div class="panel-group" id="sidebar-accordion">
@@ -159,7 +163,7 @@ The code is a little roundabout for a few reasons:
                         aria-controls="{{ navbar_id }}"
                       >
                         <h4 class="panel-title">
-                            <a href="{{site.baseurl}}{{navbar.path}}" class="{% if navbar.section %}navbar-title--not-clickable{% endif %}">
+                            <a href="{{site.baseurl}}{{navbar.path}}" class="navbar-title--{% if navbar.section %}not-clickable{% else %}clickable{% endif %}">
                               <span>{{ navbar.title }}</span>
                             </a>
                         </h4>
@@ -175,6 +179,15 @@ The code is a little roundabout for a few reasons:
                       </div>
                     </div>
                   {% endfor %}
+                  <div class="panel panel-default">
+                    <div class="panel-heading free-training" role="button" aria-controls="navbar-free-training">
+                      <h4 class="panel-title">
+                        <a href="https://www.projectcalico.org/events" target="_blank" class="navbar-title--clickable">
+                          <span>Free training</span>
+                        </a>
+                      </h4>
+                    </div>                    
+                  </div>                  
                 </div>
                 <div class="row">
                   <div class="col-sm-0"></div>
@@ -245,56 +258,9 @@ The code is a little roundabout for a few reasons:
 
     <script src="{{site.baseurl}}/js/searchConfig.js"></script>
 
-    <script type="text/template" id="search-results-template">
-      {% raw %}
-      <div class="search-results">
-        {{#hits}}
-
-        {{#shouldDisplayTopCategory}}
-        {{#hierarchy.lvl0}}
-          <a href="{{url}}" class="search-results__group-header">
-            {{{_highlightResult.hierarchy.lvl0.value}}}
-          </a>
-        {{/hierarchy.lvl0}}
-        {{/shouldDisplayTopCategory}}
-
-        <div class="search-results__search-result search-result columns-layout">
-          <div class="columns-layout__left-column">
-            {{#hierarchy.lvl1}}
-              <a href="{{url}}" class="search-result__subcategory">
-                {{{_highlightResult.hierarchy.lvl1.value}}}
-              </a>
-            {{/hierarchy.lvl1}}
-          </div>
-
-          <div class="columns-layout__right-column">
-            {{#hierarchy.lvl2}}
-              <a href="{{url}}" class="search-result__subsubcategory">
-                {{{_highlightResult.hierarchy.lvl2.value}}}
-              </a>
-            {{/hierarchy.lvl2}}
-
-            {{#hierarchy.lvl3}}
-              <a href="{{url}}" class="search-result__subsubsubcategory">
-                {{{_highlightResult.hierarchy.lvl3.value}}}
-              </a>
-            {{/hierarchy.lvl3}}
-
-            {{#content}}
-              <a href="{{url}}" class="search-result__content">
-                {{{_snippetResult.content.value}}}
-              </a>
-            {{/content}}
-          </div>
-        </div>
-        {{/hits}}
-      </div>
-      {% endraw %}
-    </script>
-
     <script>
       $(document).ready(function() {
-        window.initializeSearch('{{page.version}}', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
+        window.initializeSearch('{{page.version}}', '.search-powered-by', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
       });
     </script>
   </body>

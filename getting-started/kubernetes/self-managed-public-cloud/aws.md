@@ -80,8 +80,11 @@ The geeky details of what you get:
 
 {% include open-new-window.html text='Kubespray' url='https://kubespray.io/' %} is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the {% include open-new-window.html text='Kubespray docs' url='https://kubespray.io/#/?id=network-plugins' %} for more details.
 
-### Above and beyond
+### Next steps
 
+**Required**
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
+
+**Recommended**
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on AWS' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)

@@ -166,6 +166,12 @@ at the same time that subcomponent release branches are cut, often well before t
        version: vX.Y
    ```
 
+1. Create the the release notes file. This does not need to be populated now but does need to exist.
+
+   ```
+   touch _includes/release-notes/<VERSION>-release-notes.md
+   ```
+
 1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
 
    - Kubernetes `getting-started/kubernetes/requirements.md`
@@ -263,6 +269,8 @@ as described in the section above.
 
    1. Update the `CURRENT_RELEASE` environment variable.
 
+1. In [netlify/_redirects](netlify/_redirects), add a new line for the new release.
+
 1. Commit your changes. For example:
 
    ```
@@ -309,13 +317,13 @@ as described in the section above.
    at the newly created commit.
 
    ```
-   make release RELEASE_STREAM=vX.Y
+   make release
    ```
 
    Then, publish the tag and release.
 
    ```
-   make release-publish RELEASE_STREAM=vX.Y
+   make release-publish
    ```
 1. Merge the PR. This will cause the live docs site to be updated (after a few minutes).
 
@@ -341,7 +349,7 @@ release notes for a given version, perform the following steps.
 1. Run the following command to collect all release notes for the given version.
 
    ```
-   make RELEASE_STREAM=vX.Y release-notes
+   make release-notes
    ```
 
    A file called `<VERSION>-release-notes.md` will be created with the raw release note content.

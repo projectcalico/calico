@@ -20,7 +20,7 @@ combined control and compute node, work through all three sections.
 - Ensure that you meet the [requirements](../requirements).
 - Confirm that you have SSH access to and root privileges on one or more Ubuntu hosts
   (your OpenStack compute or control nodes).
-- [Install OpenStack with Neutron and ML2 networking](http://docs.openstack.org)
+- {% include open-new-window.html text='Install OpenStack with Neutron and ML2 networking' url='http://docs.openstack.org' %}
   on the Ubuntu hosts.
 
 ## Common steps
@@ -57,11 +57,11 @@ These steps are detailed in this section.
 
 1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
     needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
-    should install it with `pip`.
+    should install it with `pip3`.
 
     ```
-    apt-get install -y python-pip
-    pip install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
+    apt-get install -y python3-pip
+    pip3 install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
     ```
 
 1.  Edit `/etc/neutron/neutron.conf`.  Add a `[calico]` section with

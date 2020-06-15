@@ -1,43 +1,56 @@
 ---
 title: Quickstart for Calico on Kubernetes
 description: Install Calico on a single-host Kubernetes cluster for testing or development in under 15 minutes.
-canonical_url: '/getting-started/kubernetes/index'
+canonical_url: '/getting-started/kubernetes/quickstart'
 ---
 
-### Overview
+### Big picture
 
-This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
-in approximately 15 minutes. You can use this cluster for testing and
-development.
+This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}} in approximately 15 minutes.
 
-To deploy a cluster suitable for production, refer to [Installation](installation).
+### Value
 
-### Requirements
-
-- x86-64 processor
-- 2CPU
-- 2GB RAM
-- 10GB free disk space
-- RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
+Use this quickstart to quickly and easily try {{side.prodname}} features. To deploy a cluster suitable for production, refer to [{{site.prodname}} on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
 
 ### Before you begin
 
+- Make sure you have a linux host that meets the following requirements:
+  - x86-64 processor
+  - 2CPU
+  - 2GB RAM
+  - 10GB free disk space
+  - RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
+
 - Ensure that {{site.prodname}} can manage `cali` and `tunl` interfaces on the host.
   If NetworkManager is present on the host, refer to
-  [Configure NetworkManager](../../maintenance/troubleshooting#configure-networkmanager).
+  [Configure NetworkManager](../../maintenance/troubleshoot/troubleshooting#configure-networkmanager).
 
-- {% include open-new-window.html text='Follow the Kubernetes instructions to install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}
+### Concepts
+
+#### Operator based installation
+
+This quickstart guide uses the Tigera operator to install {{site.prodname}}. The operator provides lifecycle management for Calico
+exposed via the Kubernetes API defined as a custom resource definition.
+
+> **Note**: It is also possible to install Calico without an operator using Kubernetes manifests directly.
+> For platforms and guides that do not use the Tigera operator, you may notice some differences in the steps and Kubernetes
+> resources compared to those presented in this guide.
+{: .alert .alert-info}
+
+### How to
+
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:kubernetes' %}
+
+#### Create a single-host Kubernetes cluster
+
+1. {% include open-new-window.html text='Follow the Kubernetes instructions to install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}
 
    > **Note**: After installing kubeadm, do not power down or restart
-   the host. Instead, continue directly to the
-   [next section to create your cluster](#create-a-single-host-kubernetes-cluster).
+   the host. Instead, continue directly to the next step.
    {: .alert .alert-info}
 
-
-### Create a single-host Kubernetes cluster
-
-1. As a regular user with sudo privileges, open a terminal on the host that
-   you installed kubeadm on.
+1. As a regular user with sudo privileges, open a terminal on the host that you installed kubeadm on.
 
 1. Initialize the master using the following command.
 
@@ -46,10 +59,10 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    ```
 
    > **Note**: If 192.168.0.0/16 is already in use within your network you must select a different pod network
-   > CIDR, replacing 192.168.0.0/16 in the above command. {: .alert .alert-info}
+   > CIDR, replacing 192.168.0.0/16 in the above command.
+   {: .alert .alert-info}
 
-1. Execute the following commands to configure kubectl (also returned by
-   `kubeadm init`).
+1. Execute the following commands to configure kubectl (also returned by `kubeadm init`).
 
    ```
    mkdir -p $HOME/.kube
@@ -57,70 +70,37 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
    ```
 
-1. Install {{site.prodname}} with the following command.
+#### Install {{site.prodname}}
+
+1. Install the Tigera {{site.prodname}} operator and custom resource definitions.
 
    ```
-   kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
+   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
    ```
 
-   > **Note**: You can also
-   > [view the YAML in a new tab]({{ "/manifests/calico.yaml" | absolute_url }}){:target="_blank"}.
+1. Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
+
+   ```
+   kubectl create -f {{ "/manifests/custom-resources.yaml" | absolute_url }}
+   ```
+
+   > **Note**: Before creating this manifest, read its contents and make sure its settings are correct for your environment. For example,
+   > you may need to change the default IP pool CIDR to match your pod network CIDR.
    {: .alert .alert-info}
-
-   You should see the following output.
-
-   ```
-   configmap "calico-config" created
-   customresourcedefinition.apiextensions.k8s.io "felixconfigurations.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "ipamblocks.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "blockaffinities.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "ipamhandles.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "bgppeers.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "bgpconfigurations.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "ippools.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "hostendpoints.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "clusterinformations.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "globalnetworkpolicies.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "globalnetworksets.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "networksets.crd.projectcalico.org" created
-   customresourcedefinition.apiextensions.k8s.io "networkpolicies.crd.projectcalico.org" created
-   clusterrole.rbac.authorization.k8s.io "calico-kube-controllers" created
-   clusterrolebinding.rbac.authorization.k8s.io "calico-kube-controllers" created
-   clusterrole.rbac.authorization.k8s.io "calico-node" created
-   clusterrolebinding.rbac.authorization.k8s.io "calico-node" created
-   daemonset.extensions "calico-node" created
-   serviceaccount "calico-node" created
-   deployment.extensions "calico-kube-controllers" created
-   serviceaccount "calico-kube-controllers" created
-   ```
-   {: .no-select-button}
 
 1. Confirm that all of the pods are running with the following command.
 
    ```
-   watch kubectl get pods --all-namespaces
+   watch kubectl get pods -n calico-system
    ```
 
    Wait until each pod has the `STATUS` of `Running`.
 
-   ```
-   NAMESPACE    NAME                                       READY  STATUS   RESTARTS  AGE
-   kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m45s
-   kube-system  {{site.noderunning}}-24h85                          1/1    Running  0         2m43s
-   kube-system  coredns-846jhw23g9-9af73                   1/1    Running  0         4m5s
-   kube-system  coredns-846jhw23g9-hmswk                   1/1    Running  0         4m5s
-   kube-system  etcd-jbaker-1                              1/1    Running  0         6m22s
-   kube-system  kube-apiserver-jbaker-1                    1/1    Running  0         6m12s
-   kube-system  kube-controller-manager-jbaker-1           1/1    Running  0         6m16s
-   kube-system  kube-proxy-8fzp2                           1/1    Running  0         5m16s
-   kube-system  kube-scheduler-jbaker-1                    1/1    Running  0         5m41s
-   ```
-   {: .no-select-button}
+   > **Note**: The Tigera operator installs resources in the `calico-system` namespace. Other install methods may use
+   > the `kube-system` namespace instead.
+   {: .alert .alert-info}
 
-1. Press CTRL+C to exit `watch`.
-
-1. Remove the taints on the master so that you can schedule pods
-   on it.
+1. Remove the taints on the master so that you can schedule pods on it.
 
    ```
    kubectl taint nodes --all node-role.kubernetes.io/master-
@@ -133,8 +113,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    ```
    {: .no-select-button}
 
-1. Confirm that you now have a node in your cluster with the
-   following command.
+1. Confirm that you now have a node in your cluster with the following command.
 
    ```
    kubectl get nodes -o wide
@@ -148,12 +127,15 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    ```
    {: .no-select-button}
 
-Congratulations! You now have a single-host Kubernetes cluster
-equipped with {{site.prodname}}.
+Congratulations! You now have a single-host Kubernetes cluster with {{site.prodname}}.
 
 ### Next steps
 
+**Required**
+- [Install and configure calicoctl](../clis/calicoctl/install)
+
+**Recommended tutorials**
 - [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)
 - [Control ingress and egress traffic using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-advanced)
-- [Create a user interface that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
-- [Install and configure calicoctl](../calicoctl/install)
+- [Run a tutorial that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+

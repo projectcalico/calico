@@ -1,5 +1,5 @@
 ---
-title: Decommissioning a node
+title: Decommission a node
 description: Manually remove a node from a cluster that is installed with Calico.
 canonical_url: '/maintenance/decommissioning-a-node'
 ---
@@ -91,4 +91,4 @@ Below is an example of how to create a file of Nodes and delete them.
    ```
 
 [Node resource reference]: {{ site.baseurl }}/reference/resources/node
-[calicoctl setup]: ../getting-started/calicoctl/install
+[calicoctl setup]: ../getting-started/clis/calicoctl/install

@@ -45,6 +45,8 @@ section:
   section:
   - title: Protect hosts
     path: /security/protect-hosts
+  - title: Protect Kubernetes nodes
+    path: /security/kubernetes-nodes
   - title: Protect host tutorial
     path: /security/tutorials/protect-hosts
   - title: Apply policy to host forwarded traffic
@@ -74,12 +76,14 @@ section:
     path: /security/high-connection-workloads
   - title: Defend against DoS attacks
     path: /security/defend-dos-attack
+- title: Try out the pod-to-pod encryption tech preview
+  path: /security/try-node-to-node-encryption
 - title: Secure Calico component communications
   path: /security/comms/
   section:
   - title: Configure encryption and authentication
     path: /security/comms/crypto-auth
-  - title: Schedule to well-known nodes
+  - title: Schedule Typha for scaling to well-known nodes
     path: /security/comms/reduce-nodes
   - title: Secure Calico Prometheus endpoints
     path: /security/comms/secure-metrics

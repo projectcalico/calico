@@ -1,6 +1,6 @@
 ---
-title: Enable application layer policy for Istio
-description: Enable application layer policy for Istio service mesh.
+title: Enable Calico application layer policy for Istio
+description: Enable Calico application layer policy for Istio service mesh.
 canonical_url: '/security/app-layer-policy'
 ---
 
@@ -25,7 +25,7 @@ For a tutorial on how application layer policy provides second-factor authentica
 **Required**
 
 - [{{site.prodname}} is installed]({{site.baseurl}}/getting-started/kubernetes/)
-- [calicoctl is installed and configured]({{site.baseurl}}/getting-started/calicoctl/install)
+- [calicoctl is installed and configured]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
 See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.
 

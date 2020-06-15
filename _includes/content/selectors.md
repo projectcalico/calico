@@ -5,7 +5,8 @@ primitive expressions can be combined using the logical operator `&&` and `||`.
 
 | Syntax              | Meaning                     |
 |---------------------|-----------------------------|
-| all()               | Match all resources.
+| all()               | Match all resources in all namespaces.
+| global()            | Match all non-namespaced resources.
 | k == 'v'            | Matches any resource with the label 'k' and value 'v'.
 | k != 'v'            | Matches any resource with the label 'k' and value that is _not_ 'v'.
 | has(k)              | Matches any resource with label 'k', independent of value.

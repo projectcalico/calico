@@ -70,12 +70,14 @@ rules:
       - globalnetworkpolicies
       - globalnetworksets
       - ippools
+      - kubecontrollersconfigurations
       - networkpolicies
       - networksets
       - hostendpoints
       - ipamblocks
       - blockaffinities
       - ipamhandles
+      - ipamconfigs
     verbs:
       - create
       - get

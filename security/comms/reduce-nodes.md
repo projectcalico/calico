@@ -1,5 +1,5 @@
 ---
-title: Schedule to well-known nodes
+title: Schedule Typha for scaling to well-known nodes
 description: Configure the Calico Typha TCP port.
 canonical_url: '/security/comms/reduce-nodes'
 ---

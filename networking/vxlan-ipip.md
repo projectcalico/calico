@@ -29,9 +29,9 @@ Networks become aware of workload IP addresses through layer 3 routing technique
 
 #### Encapsulation types
 
-Calico supports two types of encapsulation: VXLAN and IP in IP.  VXLAN is supported in some environments where IP in IP is not (for example, Azure). However, VXLAN has a slightly higher per-packet overhead because the header is larger.
+Calico supports two types of encapsulation: VXLAN and IP in IP.  VXLAN is supported in some environments where IP in IP is not (for example, Azure). VXLAN has a slightly higher per-packet overhead because the header is larger, but unless you are running very network intensive workloads the difference is not something you would typically notice. The other small difference between the two types of encapsulation is that Calico's VXLAN implementation does not use BGP, whereas Calico's IP in IP implementation uses BGP between Calico nodes.
 
-#### Cross subnet
+#### Cross-subnet
 
 Encapsulation of workload traffic is typically required only when traffic crosses a router that is unable to route workload IP addresses on its own. Calico can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary.
 
@@ -39,9 +39,9 @@ Encapsulation of workload traffic is typically required only when traffic crosse
 
 You can configure each IP pool with different encapsulation configurations. However, you cannot mix encapsulation types within an IP pool.
 
-- [Configure IP in IP encapsulation for only cross subnet traffic](#configure-ip-in-ip-encapsulation-for-only-cross-subnet-traffic)
+- [Configure IP in IP encapsulation for only cross-subnet traffic](#configure-ip-in-ip-encapsulation-for-only-cross-subnet-traffic)
 - [Configure IP in IP encapsulation for all inter workload traffic](#configure-ip-in-ip-encapsulation-for-all-inter-workload-traffic)
-- [Configure VXLAN encapsulation for only cross subnet traffic](#configure-vxlan-encapsulation-for-only-cross-subnet-traffic)
+- [Configure VXLAN encapsulation for only cross-subnet traffic](#configure-vxlan-encapsulation-for-only-cross-subnet-traffic)
 - [Configure VXLAN encapsulation for all inter workload traffic](#configure-vxlan-encapsulation-for-all-inter-workload-traffic)
 
 #### IPv4/6 address support
@@ -50,11 +50,11 @@ IP in IP and VXLAN support only IPv4 addresses.
 
 #### Best practice
 
-Calico has an option to selectively encapsulate only traffic that crosses subnet boundaries.  We recommend using the **cross subnet** option with IP in IP to minimize encapsulation overhead. Cross subnet mode provides better performance in AWS multi-AZ deployments, and on networks where routers are used to connect pools of nodes with L2 connectivity.
+Calico has an option to selectively encapsulate only traffic that crosses subnet boundaries.  We recommend using the **cross-subnet** option with IP in IP or VXLAN to minimize encapsulation overhead. Cross-subnet mode provides better performance in AWS multi-AZ deployments, Azure VNETs, and on networks where routers are used to connect pools of nodes with L2 connectivity.
 
 Be aware that switching encapsulation modes can cause disruption to in-progress connections. Plan accordingly.
 
-#### Configure IP in IP encapsulation for only cross subnet traffic
+#### Configure IP in IP encapsulation for only cross-subnet traffic
 
 IP in IP encapsulation can be performed selectively, and only for traffic crossing subnet boundaries.
 

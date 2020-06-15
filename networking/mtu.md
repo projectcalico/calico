@@ -74,7 +74,7 @@ When you set the MTU, it applies to new workloads. To apply MTU changes to exist
 Edit the `calico-config` ConfigMap to set values in FelixConfiguration. For example:
 
 ```bash
-kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
+kubectl patch configmap/calico-config -n kube-system --type merge \
   -p '{"data":{"veth_mtu": "1440"}}'
 ```
 
@@ -88,6 +88,10 @@ Edit `calico-config ConfigMap` to set the MTU tunnel values in FelixConfiguratio
 # Configure the MTU to use
 veth_mtu: "1440" 
 ```
+
+#### eBPF mode
+
+Implementation of NodePorts uses VXLAN tunnel to hand off packets from one node to another, therefore VXLAN MTU setting is used to set the MTUs of workloads (veths) and should be “physical network MTU size minus 50” (see above).
 
 #### View current tunnel MTU values
 

@@ -25,6 +25,8 @@ The new eBPF dataplane mode has several advantages over standard linux networkin
   
 Trying out the tech preview will give you a taste of these benefits and an opportunity to give feedback to the {{site.prodname}} team. 
 
+To learn more and see performance metrics from our test environment, see the blog, {% include open-new-window.html text='Introducing the Calico eBPF dataplane' url='https://www.projectcalico.org/introducing-the-calico-ebpf-dataplane/' %}.
+
 ### Features
 
 This how-to guide uses the following {{site.prodname}} features:
@@ -50,9 +52,7 @@ In the tech preview release, eBPF mode has the following pre-requisites:
 - An underlying network that doesn't require Calico to use an overlay.  The instructions below guide you through setting up a cluster in a single AWS subnet; an alternative would be to set up your cluster on-prem with a routed network topology.
 - The network must be configured to allow VXLAN packets between  {{site.prodname}}  hosts.
 - Single-homed hosts; eBPF mode currently assumes a single "main" host IP and interface.
-- Must use the Calico CNI plugin and Calico IPAM.  It is not yet compatible with third-party CNI plugins (AWS CNI/Azure CNI/GKE CNI/flannel etc).
 - IPv4 only.  The tech preview release does not support IPv6.
-- The MTU used by the BPF programs when doing encapsulation is hard coded (with the inner MTU limited to 1410 bytes).
 - Kubernetes API Datastore only.
 - Typha is not supported in the tech preview. 
 - The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
@@ -60,7 +60,8 @@ In the tech preview release, eBPF mode has the following pre-requisites:
 ### How to
 
 - [Set up a suitable cluster](#set-up-a-suitable-cluster)
-- [Install Calico on nodes](#install-calico-on-nodes)
+- [Install {{ site.prodname }} on nodes](#install-{{ site.prodnamedash }}-on-nodes)
+- [Try out DSR mode](#try-out-dsr-mode)
 - [Toggle between eBPF and the standard linux networking pipeline](#toggle-between-ebpf-and-the-standard-linux-networking-pipeline)
 
 #### Set up a suitable cluster
@@ -130,7 +131,7 @@ For the tech preview, only the Kubernetes API Datastore is supported.  Since {{s
    * use the Kubernetes API Datastore
    * turn on BPF mode
    * use no encapsulation (which requires using a single subnet in AWS).
-   
+
 1. Find the real IP and port of your API server.  One way to do this is to run the following command:
    ```bash
    kubectl get endpoints kubernetes
@@ -142,6 +143,7 @@ For the tech preview, only the Kubernetes API Datastore is supported.  Since {{s
    kubernetes   <IP>:<port>         43h
    ```
    Record the `<IP>` and `<port>`.
+
 1. Modify the `kubernetes_service_host` and `kubernetes_service_port` variables in the config map at the top of the manifest.  Set `kubernetes_service_host` to the IP you recorded above.  Set `kubernetes_service_port` to the port.
    ```yaml
    kind: ConfigMap
@@ -153,6 +155,20 @@ For the tech preview, only the Kubernetes API Datastore is supported.  Since {{s
      ...
      kubernetes_service_host: "<IP>"
      kubernetes_service_port: "<port>"
+     ...
+   ```
+
+1. If the underlying network MTU of your cluster is less then 1460, set the `veth_mtu` configuration parameter to your `MTU - 50` (to allow for the VXLAN header).
+
+   ```yaml
+   kind: ConfigMap
+   apiVersion: v1
+   metadata:
+     name: calico-config
+     namespace: kube-system
+   data:
+     ...
+     veth_mtu: "<MTU>"
      ...
    ```
    
@@ -190,6 +206,16 @@ For the tech preview, only the Kubernetes API Datastore is supported.  Since {{s
    kube-scheduler-host-name                        1/1     Running   0          46m
    ``` 
 
+#### Try out DSR mode
+
+Direct return mode skips a hop through the network for traffic to services (such as node ports) from outside the cluster.  This reduces latency and CPU overhead but it requires the underlying network to allow nodes to send traffic with each other's IPs.  In AWS, this requires all your nodes to be in the same subnet and for the source/dest check to be disabled.
+
+DSR mode is disabled by default; to enable it, set the `BPFExternalServiceMode` felix configuration parameter to `"DSR"`.  One way to do that is to set the corresponding environment variable on the calico-node `DaemonSet`:
+
+```bash
+kubectl set env -n kube-system ds/calico-node FELIX_BPFExternalServiceMode="DSR"
+```
+
 #### Toggle between eBPF and the standard linux networking pipeline 
 
 After following the above instructions you'll have a cluster running in eBPF mode.  If you'd like to switch to the standard linux networking pipeline mode for comparison purposes:
@@ -220,16 +246,6 @@ To re-enable BPF mode:
 > **Warning!** Switching between eBPF and standard linux networking can cause long-lived flows to be silently dropped since the two dataplane modes do not share connection-tracking state.
 {: .alert .alert-danger }
 
-### Next steps
+### Send us feedback
 
-**Tools**
-
-- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
-
-**Networking**
-
-- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.baseurl}}/networking/bgp) to get traffic flowing between pods.
-
-**Security**
-
-- [Secure pods with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
+We want to hear about your experience, so please don’t hesitate to connect with us via the {% include open-new-window.html text='Calico Users Slack' url='http://slack.projectcalico.org/' %} group.

@@ -38,7 +38,9 @@ section:
      path: /networking/assign-ip-addresses-topology
    - title: Migrate from one IP pool to another
      path: /networking/migrate-pools
-   - title: Interoperate with legacy firewalls using IP ranges
+   - title: Change IP pool block size
+     path: /networking/change-block-size  
+   - title: Restrict a pod to use an IP address in a specific range
      path: /networking/legacy-firewalls
 - title: Calico networking for OpenStack
   path: /networking/openstack/
