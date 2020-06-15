@@ -57,7 +57,7 @@ These steps are detailed in this section.
 
 1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
     needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
-    should install it with `pip`.
+    should install it with `pip3`.
 
     ```
     apt-get install -y python3-pip
