@@ -28,12 +28,17 @@ combined control and compute node, work through all three sections.
 Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
-{% include ppa_repo_name %}
-
-1.  Configure APT to use the {{site.prodname}} PPA:
+1.  Configure APT to use the {{site.prodname}} `calico-3.15` PPA if your OpenStack install uses
+    Python 3:
 
     ```bash
-    add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
+    add-apt-repository ppa:project-calico/calico-3.15
+    ```
+
+    Or the `calico-3.15-python2` PPA if your OpenStack install uses Python 2:
+
+    ```bash
+    add-apt-repository ppa:project-calico/calico-3.15-python2
     ```
 
 1.  Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
