@@ -28,7 +28,7 @@ section:
      path: /networking/get-started-ip-addresses
    - title: Configure IP autodetection
      path: /networking/ip-autodetection
-   - title: Configure IPv6 only and dual stack
+   - title: Configure dual stack or IPv6 only
      path: /networking/ipv6
    - title: Add a floating IP to a pod
      path: /networking/add-floating-ip
@@ -47,7 +47,7 @@ section:
   section:
   - title: Set up a development machine
     path:  /networking/openstack/dev-machine-setup
-  - title: Configure OpenStack for IPv6 only and dual stack
+  - title: Configure OpenStack for dual stack or IPv6 only
     path: /networking/ipv6-dual-stack
   - title: IP addressing and connectivity
     path: /networking/openstack/connectivity
