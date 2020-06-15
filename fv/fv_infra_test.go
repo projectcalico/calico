@@ -203,9 +203,15 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 				options.ExtraEnvVars["FELIX_DebugSimulateDataRace"] = "true"
 			})
 
-			It("should detect a race", func() {
-				Eventually(felixes[0].DataRaces).ShouldNot(BeEmpty())
-			})
+			if os.Getenv("FV_RACE_DETECTOR_ENABLED") == "true" {
+				It("should detect a race", func() {
+					Eventually(felixes[0].DataRaces).ShouldNot(BeEmpty())
+				})
+			} else {
+				It("should not detect a race because race detector is disabled", func() {
+					Consistently(felixes[0].DataRaces).Should(BeEmpty())
+				})
+			}
 		})
 	},
 )
