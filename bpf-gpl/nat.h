@@ -49,7 +49,7 @@ typedef enum calico_nat_lookup_result {
 	NAT_LOOKUP_ALLOW,
 	NAT_FE_LOOKUP_DROP,
 	NAT_NO_BACKEND,
-}nat_lookup_result;
+} nat_lookup_result;
 
 struct calico_nat_v4 {
         uint32_t addr; // NBO

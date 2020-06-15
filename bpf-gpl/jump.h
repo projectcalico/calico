@@ -75,4 +75,10 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_state *state
 	state->ip_proto = ip->protocol;
 }
 
+/* Add new values to the end as these are program indices */
+enum cali_jump_index {
+	POL_PROG_INDEX,
+	EPILOGUE_PROG_INDEX,
+	ICMP_PROG_INDEX,
+};
 #endif /* __CALI_BPF_JUMP_H__ */

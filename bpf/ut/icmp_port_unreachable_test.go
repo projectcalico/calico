@@ -56,6 +56,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 
 	udp := l4.(*layers.UDP)
 
+	// Test with count as 1 but no backend. This results in a NAT backend lookup failure
 	natkey := nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes()
 	err = natMap.Update(
 		natkey,
@@ -78,6 +79,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 		checkICMPPortUnreachable(pktR, ipv4)
 	})
 
+	// Test with count as 0. This results in a no backend after frontend lookup as count is 0.
 	err = natMap.Update(
 		natkey,
 		nat.NewNATValue(0, 0, 0, 0).AsBytes(),
