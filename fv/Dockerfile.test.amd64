@@ -30,5 +30,7 @@ RUN apt-get update && apt-get install -y \
     ethtool \
     tcpdump
 
+ARG FV_BINARY=calico-felix-amd64
+
 ADD test-connection test-workload pktgen  /
-ADD calico-felix-race-amd64 /code/calico-felix
+ADD $FV_BINARY /code/calico-felix
