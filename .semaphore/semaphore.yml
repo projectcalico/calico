@@ -48,6 +48,8 @@ blocks:
   task:
     prologue:
       commands:
+      # Free up space on the build machine.
+      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - checkout
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
