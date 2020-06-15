@@ -1,6 +1,6 @@
 ---
-title: Configure OpenStack for IPv6 only or dual stack
-description: Configure OpenStack for IPv6 only or dual stack. 
+title: Configure OpenStack for dual stack or IPv6 only
+description: Configure OpenStack for dual stack or IPv6 only. 
 canonical_url: '/networking/openstack/floating-ips'
 ---
 
