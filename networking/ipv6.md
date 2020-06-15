@@ -50,9 +50,9 @@ This how-to guide uses the following {{site.prodname}} features:
 {: .alert .alert-info}
 
 **Kubernetes install**
-- [Enable dual stack, Kubernetes](#enable-dual-stack)
-- [Enable IPv6-only, initial install, Kubernetes](#enable-ipv6-only-initial-install)
-- [Enable IPv6-only, after install, Kubernetes](#enable-ipv6-only-after-install,kubernetes)
+- [Enable dual stack, Kubernetes](#enable-dual-stack-kubernetes)
+- [Enable IPv6-only, initial install, Kubernetes](#enable-ipv6-only-initial-install-kubernetes)
+- [Enable IPv6-only, after install, Kubernetes](#enable-ipv6-only-after-install-kubernetes)
 
 **OpenShift install**
 - [Enable dual stack, OpenShift](#enable-dual-stack-openshift)
