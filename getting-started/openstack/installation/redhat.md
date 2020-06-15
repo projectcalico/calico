@@ -64,8 +64,8 @@ These steps are detailed in this section.
     EOF
     ```
 
-1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
-    needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
+1.  If your OpenStack install uses Python 3, install the `etcd3-gateway` Python package.  A current
+    copy of that code is needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
     should install it with `pip3`.
 
     ```
