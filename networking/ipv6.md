@@ -95,7 +95,7 @@ This how-to guide uses the following {{site.prodname}} features:
 1. Apply the edited manifest with `kubectl apply -f`.
    New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
 
-#### Enable IPv6-only, initial manifest install
+#### Enable IPv6-only, initial install, Kubernetes
 
 To configure IPv6-only support for Kubernetes during {{site.prodname}} installation, follow these steps.
 
@@ -119,7 +119,7 @@ Be sure to set the value for `CALICO_IPV6POOL_CIDR` to the desired IP pool; it s
 1. In the `calico.yaml` file, verify that the environment variable `FELIX_IPV6SUPPORT` is set `true` on the calico-node DaemonSet.
 1. Apply the `calico.yaml` manifest with `kubectl apply -f calico.yaml`.
 
-#### Enable IPv6-only, initial install, Kubernetes
+#### Enable IPv6-only, after install, Kubernetes
 
 If you installed {{site.prodname}} on the cluster using the default IPv4, and you want switch to IPv6-only, or your hosts only have IPv6 addresses, follow these steps.
 
