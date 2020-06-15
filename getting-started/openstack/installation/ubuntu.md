@@ -28,12 +28,17 @@ combined control and compute node, work through all three sections.
 Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
-{% include ppa_repo_name %}
-
-1.  Configure APT to use the {{site.prodname}} PPA:
+1.  Configure APT to use the {{site.prodname}} `calico-3.15` PPA if your OpenStack install uses
+    Python 3:
 
     ```bash
-    add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
+    add-apt-repository ppa:project-calico/calico-3.15
+    ```
+
+    Or the `calico-3.15-python2` PPA if your OpenStack install uses Python 2:
+
+    ```bash
+    add-apt-repository ppa:project-calico/calico-3.15-python2
     ```
 
 1.  Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
@@ -55,13 +60,20 @@ These steps are detailed in this section.
     apt-get update
     ```
 
-1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
-    needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
-    should install it with `pip`.
+1.  Install the `etcd3-gateway` Python package.  A current copy of that code is needed by
+    {{site.prodname}}'s OpenStack driver and DHCP agent, so you should install it with `pip3` or
+    `pip`.  If your OpenStack install uses Python 3:
 
     ```
     apt-get install -y python3-pip
     pip3 install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
+    ```
+
+    Or if your OpenStack install uses Python 2:
+
+    ```
+    apt-get install -y python-pip
+    pip install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
     ```
 
 1.  Edit `/etc/neutron/neutron.conf`.  Add a `[calico]` section with

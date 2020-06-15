@@ -30,28 +30,42 @@ combined control and compute node, work through all three sections.
 Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
-{% include ppa_repo_name %}
-
 1.  {% include open-new-window.html text='Add the EPEL repository' url='https://fedoraproject.org/wiki/EPEL' %}. You may
     have already added this to install OpenStack.
 
-1.  Configure the {{site.prodname}} repository:
+1.  Configure the {{site.prodname}} repository, using the `calico-3.15` name if your OpenStack
+    install uses Python 3:
 
     ```bash
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
+    baseurl=https://binaries.projectcalico.org/rpm/calico-3.15/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
-    gpgkey=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
+    gpgkey=https://binaries.projectcalico.org/rpm/calico-3.15/key
     priority=97
     EOF
     ```
 
-1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
-    needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
+    Or `calico-3.15-python2` if your OpenStack install uses Python 2:
+
+    ```bash
+    cat > /etc/yum.repos.d/calico.repo <<EOF
+    [calico]
+    name=Calico Repository
+    baseurl=https://binaries.projectcalico.org/rpm/calico-3.15-python2/
+    enabled=1
+    skip_if_unavailable=0
+    gpgcheck=1
+    gpgkey=https://binaries.projectcalico.org/rpm/calico-3.15-python2/key
+    priority=97
+    EOF
+    ```
+
+1.  If your OpenStack install uses Python 3, install the `etcd3-gateway` Python package.  A current
+    copy of that code is needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
     should install it with `pip3`.
 
     ```
