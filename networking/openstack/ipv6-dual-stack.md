@@ -10,7 +10,15 @@ Configure {{site.prodname}} IP address allocation to use IPv6 only or dual stack
 
 ### Value
 
-Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it is often a requirement to continue support for IPv4. {{site.prodname}} supports **dual stack**, where new pods get IPv6 and IPv4 addresses, and can communicate with each other and the outside world over IPv6, as well as IPv6-only. 
+Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it is often a requirement to continue support for IPv4. {{site.prodname}} supports:
+
+- **Dual stack**
+
+   New pods get IPv6 addresses as well as IPv4 addresses, and can communicate with each other and the outside world over IPv6. 
+
+- **IPv6 only**
+   
+  Workloads can communicate over IPv6, initiate connections to IPv6 services, and terminate incoming IPv6 connections. 
 
 ### Features
 
