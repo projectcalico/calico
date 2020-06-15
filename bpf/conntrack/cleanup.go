@@ -81,6 +81,11 @@ func (l *LivenessScanner) Scan() {
 			if err != nil && bpf.IsNotExists(err) {
 				// Forward entry exists but no reverse entry. We might have come across the reverse
 				// entry first and removed it. It is useless on its own, so delete it now.
+				//
+				// N.B. BPF code always creates REV entry before FWD entry, therefore if the REV
+				// entry does not exist now, we are not racing with the BPF code, we must have
+				// removed the entry or there is some external inconsistency. In either case, the
+				// FWD entry should be removed.
 				log.Info("Found a forward NAT conntrack entry with no reverse entry, removing...")
 				err := l.ctMap.Delete(k)
 				log.WithError(err).Debug("Deletion result")
