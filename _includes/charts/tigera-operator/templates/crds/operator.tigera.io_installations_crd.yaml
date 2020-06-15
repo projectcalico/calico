@@ -1,0 +1,291 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: installations.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: Installation
+    listKind: InstallationList
+    plural: installations
+    singular: installation
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Installation configures an installation of Calico or Calico Enterprise.
+          At most one instance of this resource is supported. It must be named "default".
+          The Installation API installs core networking and network policy components,
+          and provides general install-time configuration.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Specification of the desired state for the Calico or Calico
+              Enterprise installation.
+            properties:
+              calicoNetwork:
+                description: CalicoNetwork specifies configuration options for Calico
+                  provided pod networking.
+                properties:
+                  hostPorts:
+                    description: 'HostPorts configures whether or not Calico will
+                      support Kubernetes HostPorts. Default: Enabled'
+                    enum:
+                    - Enabled
+                    - Disabled
+                    type: string
+                  ipPools:
+                    description: IPPools contains a list of IP pools to use for allocating
+                      pod IP addresses. At most one IP pool may be specified. If omitted,
+                      a single pool will be configured when needed.
+                    items:
+                      properties:
+                        blockSize:
+                          description: 'BlockSize specifies the CIDR prefex length
+                            to use when allocating per-node IP blocks from the main
+                            IP pool CIDR. Default: 26 (IPv4), 122 (IPv6)'
+                          format: int32
+                          type: integer
+                        cidr:
+                          description: CIDR contains the address range for the IP
+                            Pool in classless inter-domain routing format.
+                          type: string
+                        encapsulation:
+                          description: 'Encapsulation specifies the encapsulation
+                            type that will be used with the IP Pool. Default: IPIP'
+                          enum:
+                          - IPIPCrossSubnet
+                          - IPIP
+                          - VXLAN
+                          - VXLANCrossSubnet
+                          - None
+                          type: string
+                        natOutgoing:
+                          description: 'NATOutgoing specifies if NAT will be enabled
+                            or disabled for outgoing traffic. Default: Enabled'
+                          enum:
+                          - Enabled
+                          - Disabled
+                          type: string
+                        nodeSelector:
+                          description: 'NodeSelector specifies the node selector that
+                            will be set for the IP Pool. Default: ''all()'''
+                          type: string
+                      required:
+                      - cidr
+                      type: object
+                    type: array
+                  mtu:
+                    description: 'MTU specifies the maximum transmission unit to use
+                      for pods on the Calico network. Default: 1410'
+                    format: int32
+                    type: integer
+                  multiInterfaceMode:
+                    description: 'MultiInterfaceMode configures what will configure
+                      multiple interface per pod. Only valid for Calico Enterprise
+                      installations. Default: None'
+                    enum:
+                    - None
+                    - Multus
+                    type: string
+                  nodeAddressAutodetectionV4:
+                    description: NodeAddressAutodetectionV4 specifies an approach
+                      to automatically detect node IPv4 addresses. If not specified,
+                      will use default auto-detection settings to acquire an IPv4
+                      address for each node.
+                    properties:
+                      canReach:
+                        description: CanReach enables IP auto-detection based on which
+                          source address on the node is used to reach the specified
+                          IP or domain.
+                        type: string
+                      firstFound:
+                        description: FirstFound uses default interface matching parameters
+                          to select an interface, performing best-effort filtering
+                          based on well-known interface names.
+                        type: boolean
+                      interface:
+                        description: Interface enables IP auto-detection based on
+                          interfaces that match the given regex.
+                        type: string
+                      skipInterface:
+                        description: SkipInterface enables IP auto-detection based
+                          on interfaces that do not match the given regex.
+                        type: string
+                    type: object
+                  nodeAddressAutodetectionV6:
+                    description: NodeAddressAutodetectionV6 specifies an approach
+                      to automatically detect node IPv4 addresses. If not specified,
+                      IPv6 addresses will not be auto-detected.
+                    properties:
+                      canReach:
+                        description: CanReach enables IP auto-detection based on which
+                          source address on the node is used to reach the specified
+                          IP or domain.
+                        type: string
+                      firstFound:
+                        description: FirstFound uses default interface matching parameters
+                          to select an interface, performing best-effort filtering
+                          based on well-known interface names.
+                        type: boolean
+                      interface:
+                        description: Interface enables IP auto-detection based on
+                          interfaces that match the given regex.
+                        type: string
+                      skipInterface:
+                        description: SkipInterface enables IP auto-detection based
+                          on interfaces that do not match the given regex.
+                        type: string
+                    type: object
+                type: object
+              clusterManagementType:
+                description: 'How the cluster is managed. Valid values for this field
+                  are: Standalone, Management, Managed. Standalone clusters are fully
+                  self-contained installations of Calico Enterprise. Management clusters
+                  provide a single view to manage any number of Managed clusters,
+                  which are a lighter weight installation. This option is applicable
+                  only when variant is TigeraSecureEnterprise. Default: Standalone'
+                enum:
+                - Standalone
+                - Management
+                - Managed
+                type: string
+              controlPlaneNodeSelector:
+                additionalProperties:
+                  type: string
+                description: ControlPlaneNodeSelector is used to select control plane
+                  nodes on which to run specific Calico components. This currently
+                  only applies to kube-controllers and the apiserver.
+                type: object
+              flexVolumePath:
+                description: FlexVolumePath optionally specifies a custom path for
+                  FlexVolume. If not specified, FlexVolume will be enabled by default.
+                  If set to 'None', FlexVolume will be disabled. The default is based
+                  on the kubernetesProvider.
+                type: string
+              imagePath:
+                description: "ImagePath allows for the path part of an image to be
+                  specified. If specified then the specified value will be used as
+                  the image path for each image. If not specified or empty, the default
+                  for each image will be used. \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                  \n This option allows configuring the `<imagePath>` portion of the
+                  above format."
+                type: string
+              imagePullSecrets:
+                description: ImagePullSecrets is an array of references to container
+                  registry pull secrets to use. These are applied to all images to
+                  be pulled.
+                items:
+                  description: LocalObjectReference contains enough information to
+                    let you locate the referenced object inside the same namespace.
+                  properties:
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        TODO: Add other useful fields. apiVersion, kind, uid?'
+                      type: string
+                  type: object
+                type: array
+              kubernetesProvider:
+                description: KubernetesProvider specifies a particular provider of
+                  the Kubernetes platform and enables provider-specific configuration.
+                  If the specified value is empty, the Operator will attempt to automatically
+                  determine the current provider. If the specified value is not empty,
+                  the Operator will still attempt auto-detection, but will additionally
+                  compare the auto-detected value to the specified value to confirm
+                  they match.
+                enum:
+                - EKS
+                - GKE
+                - AKS
+                - OpenShift
+                - DockerEnterprise
+                type: string
+              nodeMetricsPort:
+                description: NodeMetricsPort specifies which port calico/node serves
+                  prometheus metrics on. By default, metrics are not enabled. If specified,
+                  this overrides any FelixConfiguration resources which may exist.
+                  If omitted, then prometheus metrics may still be configured through
+                  FelixConfiguration.
+                format: int32
+                type: integer
+              nodeUpdateStrategy:
+                description: NodeUpdateStrategy can be used to customize the desired
+                  update strategy, such as the MaxUnavailable field.
+                properties:
+                  rollingUpdate:
+                    description: 'Rolling update config params. Present only if type
+                      = "RollingUpdate". --- TODO: Update this to follow our convention
+                      for oneOf, whatever we decide it to be. Same as Deployment `strategy.rollingUpdate`.
+                      See https://github.com/kubernetes/kubernetes/issues/35345'
+                    properties:
+                      maxUnavailable:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: 'The maximum number of DaemonSet pods that can
+                          be unavailable during the update. Value can be an absolute
+                          number (ex: 5) or a percentage of total number of DaemonSet
+                          pods at the start of the update (ex: 10%). Absolute number
+                          is calculated from percentage by rounding up. This cannot
+                          be 0. Default value is 1. Example: when this is set to 30%,
+                          at most 30% of the total number of nodes that should be
+                          running the daemon pod (i.e. status.desiredNumberScheduled)
+                          can have their pods stopped for an update at any given time.
+                          The update starts by stopping at most 30% of those DaemonSet
+                          pods and then brings up new DaemonSet pods in their place.
+                          Once the new pods are available, it then proceeds onto other
+                          DaemonSet pods, thus ensuring that at least 70% of original
+                          number of DaemonSet pods are available at all times during
+                          the update.'
+                        x-kubernetes-int-or-string: true
+                    type: object
+                  type:
+                    description: Type of daemon set update. Can be "RollingUpdate"
+                      or "OnDelete". Default is RollingUpdate.
+                    type: string
+                type: object
+              registry:
+                description: "Registry is the default Docker registry used for component
+                  Docker images. If specified, all images will be pulled from this
+                  registry. If not specified then the default registries will be used.
+                  \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                  \n This option allows configuring the `<registry>` portion of the
+                  above format."
+                type: string
+              variant:
+                description: 'Variant is the product to install - one of Calico or
+                  TigeraSecureEnterprise Default: Calico'
+                enum:
+                - Calico
+                - TigeraSecureEnterprise
+                type: string
+            type: object
+          status:
+            description: Most recently observed state for the Calico or Calico Enterprise
+              installation.
+            properties:
+              variant:
+                description: Variant is the most recently observed installed variant
+                  - one of Calico or TigeraSecureEnterprise
+                enum:
+                - Calico
+                - TigeraSecureEnterprise
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
