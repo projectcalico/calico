@@ -28,23 +28,23 @@ func main() {
 	doc := `Usage:
   calicoctl [options] <command> [<args>...]
 
-    create               Create a resource by filename or stdin.
-    replace              Replace a resource by filename or stdin.
-    apply                Apply a resource by filename or stdin.  This creates a resource
-                         if it does not exist, and replaces a resource if it does exists.
-    patch                Patch a pre-exisiting resource in place.
-    delete               Delete a resource identified by file, stdin or resource type and
-                         name.
-    get                  Get a resource identified by file, stdin or resource type and
-                         name.
-    label                Add or update labels of resources.
-    convert              Convert config files between different API versions.
-    ipam                 IP address management.
-    node                 Calico node management.
-    version              Display the version of calicoctl.
-    export               Export the Calico datastore objects for migration
-    import               Import the Calico datastore objects for migration
-    datastore migrate    Migrate the Calico datastore resources.
+    create       Create a resource by filename or stdin.
+    replace      Replace a resource by filename or stdin.
+    apply        Apply a resource by filename or stdin.  This creates a resource
+                 if it does not exist, and replaces a resource if it does exists.
+    patch        Patch a pre-exisiting resource in place.
+    delete       Delete a resource identified by file, stdin or resource type and
+                 name.
+    get          Get a resource identified by file, stdin or resource type and
+                 name.
+    label        Add or update labels of resources.
+    convert      Convert config files between different API versions.
+    ipam         IP address management.
+    node         Calico node management.
+    version      Display the version of calicoctl.
+    export       Export the Calico datastore objects for migration
+    import       Import the Calico datastore objects for migration
+    datastore    Calico datastore management.
 
 Options:
   -h --help               Show this screen.
