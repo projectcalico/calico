@@ -94,6 +94,7 @@ FV_NUM_BATCHES?=1
 # (with FV_NUM_BATCHES=1) to check that it's not a flake.
 FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
 FV_SLOW_SPEC_THRESH=90
+FV_RACE_DETECTOR_ENABLED?=true
 
 # Linker flags for building Felix.
 #
@@ -246,8 +247,14 @@ ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 
-image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/calico-felix-race-amd64 image-wgtool
-	docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./fv/Dockerfile.test.$(ARCH) bin;
+ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
+FV_BINARY=calico-felix-race-amd64
+else
+FV_BINARY=calico-felix-amd64
+endif
+
+image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY) image-wgtool
+	docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin;
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE)-test:latest-$(ARCH) $(BUILD_IMAGE)-test:latest
 endif
@@ -405,6 +412,7 @@ fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image-test bin/iptables-lock
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
+	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  ./run-batches
 	@if [ -e fv/latency.log ]; then \
 	   echo; \
