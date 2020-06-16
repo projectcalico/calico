@@ -260,6 +260,11 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 		return nil, nil, resources.K8sErrorToCalico(err, nil)
 	}
 
+	// Overwrite the QPS if provided. Default QPS is 5.
+	if ca.K8sClientQPS != float32(0) {
+		config.QPS = ca.K8sClientQPS
+	}
+
 	// Create the clientset. We increase the burst so that the IPAM code performs
 	// efficiently. The IPAM code can create bursts of requests to the API, so
 	// in order to keep pod creation times sensible we allow a higher request rate.
