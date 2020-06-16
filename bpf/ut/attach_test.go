@@ -80,6 +80,8 @@ func TestJumpMapCleanup(t *testing.T) {
 
 		// Remove the program.
 		t.Log("Removing all programs and cleaning up, should return to base state.")
+		err = tc.RemoveQdisc(vethName)
+		Expect(err).NotTo(HaveOccurred())
 		tc.CleanUpJumpMaps()
 		Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps), "unexpected number of jump maps")
 		Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs), "unexpected number of TC dirs")

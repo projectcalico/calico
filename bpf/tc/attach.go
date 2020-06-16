@@ -416,16 +416,38 @@ func CleanUpJumpMaps() {
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface
 func EnsureQdisc(ifaceName string) error {
-	cmd := exec.Command("tc", "qdisc", "show", "dev", ifaceName, "clsact")
-	out, err := cmd.Output()
+	hasQdisc, err := HasQdisc(ifaceName)
 	if err != nil {
 		return err
 	}
-	if strings.Contains(string(out), "qdisc clsact") {
+	if hasQdisc {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return nil
 	}
+	return exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact").Run()
+}
 
-	cmd = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact")
-	return cmd.Run()
+func HasQdisc(ifaceName string) (bool, error) {
+	cmd := exec.Command("tc", "qdisc", "show", "dev", ifaceName, "clsact")
+	out, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	if strings.Contains(string(out), "qdisc clsact") {
+		return true, nil
+	}
+	return false, nil
+}
+
+// RemoveQdisc makes sure that there is no qdisc attached to the given interface
+func RemoveQdisc(ifaceName string) error {
+	hasQdisc, err := HasQdisc(ifaceName)
+	if err != nil {
+		return err
+	}
+	if !hasQdisc {
+		return nil
+	}
+
+	return exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact").Run()
 }
