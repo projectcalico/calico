@@ -200,7 +200,7 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 			}
 		}
 		if len(exp.Error) > 0 {
-			result[i] += exp.Error
+			result[i] += " " + exp.Error
 		}
 	}
 	return result

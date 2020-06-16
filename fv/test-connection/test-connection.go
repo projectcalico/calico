@@ -387,6 +387,7 @@ func (tc *testConn) tryLoopFile(loopFile string) error {
 	res.PrintToStdout()
 	return nil
 }
+
 func (tc *testConn) sendErrorResp(err error) {
 	var resp connectivity.Response
 	mtuPair := connectivity.MTUPair{}
@@ -395,12 +396,13 @@ func (tc *testConn) sendErrorResp(err error) {
 		LastResponse: resp,
 		Stats: connectivity.Stats{
 			RequestsSent:      1,
-			ResponsesReceived: 1,
+			ResponsesReceived: 0,
 		},
 		ClientMTU: mtuPair,
 	}
 	res.PrintToStdout()
 }
+
 func (tc *testConn) tryConnectOnceOff() error {
 	log.Info("Doing single-shot test...")
 
