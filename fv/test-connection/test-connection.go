@@ -308,6 +308,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
 		time.Duration(seconds)*time.Second, sendLen, recvLen)
 	if err != nil {
+		os.Stdout.WriteString(err.Error())
 		log.WithError(err).Fatal("Failed to create TestConn")
 	}
 	defer func() {
@@ -416,6 +417,7 @@ func (tc *testConn) tryConnectOnceOff() error {
 
 	respRaw, err := tc.protocol.Receive()
 	if err != nil {
+		os.Stdout.WriteString(err.Error())
 		log.WithError(err).Fatal("Failed to receive")
 	}
 

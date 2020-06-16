@@ -915,19 +915,20 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					srcIPRange := []string{}
 					testSvcName := "test-lb-service-extip"
 					var port uint16
+					var ip []string
 
 					BeforeEach(func() {
-						if testOpts.connTimeEnabled {
+						if testOpts.connTimeEnabled || testOpts.udpUnConnected {
 							Skip("FIXME externalClient also does conntime balancing")
 						}
 						externalClient.EnsureBinary("test-connection")
-						externalClient.EnsureBinary("pktgen")
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
 						// create a service workload as nil, so that the service has no backend
 						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName, "10.101.0.10", nil, 80, tgtPort,
 							testOpts.protocol, externalIP, srcIPRange)
 						felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
+						ip = testSvc.Spec.ExternalIPs
 						port = uint16(testSvc.Spec.Ports[0].Port)
 						pol.Spec.Ingress = []api.Rule{
 							{
@@ -941,23 +942,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						pol = updatePolicy(pol)
 					})
-					It("should have connectivity from workloads[1][0],[1][1] via external IP to workload 0", func() {
-
-						tcpdump := externalClient.AttachTCPDump("any")
-						tcpdump.SetLogEnabled(true)
-						matcher := fmt.Sprintf("ICMP %s udp port %d unreachable", extIP, port)
-						tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
-						tcpdump.Start()
-						defer tcpdump.Stop()
-
-						// send a packet from the correct workload to create a conntrack entry
-						externalClient.Exec("/pktgen", externalClient.IP, extIP, "udp",
-							"--port-src", "30444", "--port-dst", "80")
-						Eventually(func() int {
-							match_count := tcpdump.MatchCount("ICMP")
-							return (match_count)
-						}).Should(BeNumerically(">", 0))
-
+					It("should not have connectivity from external client, and return connection refused", func() {
+						cc.ExpectNoneWithError(externalClient, TargetIP(ip[0]), "connection refused", port)
+						cc.CheckConnectivity()
 					})
 				})
 
