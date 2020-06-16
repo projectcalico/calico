@@ -80,6 +80,8 @@ type KubeConfig struct {
 	// This is an alternative to Kubeconfig and if specified overrides Kubeconfig.
 	// This contains the contents that would normally be in the file pointed at by Kubeconfig.
 	KubeconfigInline string `json:"kubeconfigInline" ignored:"true"`
+	// K8sClientQPS overrides the QPS for the Kube client.
+	K8sClientQPS float32 `json:"k8sClientQPS"`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the
