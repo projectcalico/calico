@@ -674,6 +674,26 @@ node_name4_rev1 = {
     }
 }
 
+node_name5_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'Node',
+    'metadata': {
+        'name': 'node5',
+    },
+    'spec': {
+        'bgp': {
+            'ipv4Address': '1.2.3.5/24',
+            'ipv6Address': 'aa:bb:cc::ff/120',
+        },
+        'orchRefs': [
+            {
+                'nodeName': 'node5',
+                'orchestrator': 'k8s',
+            },
+        ],
+    }
+}
+
 #
 # BGPConfigs
 #
