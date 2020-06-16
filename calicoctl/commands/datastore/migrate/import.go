@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
@@ -215,7 +216,27 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 		// Loop through the result lists and see if anything exists
 		for _, resource := range results.Resources {
 			if meta.LenList(resource) > 0 {
-				return fmt.Errorf("Found existing Calico %s resource", results.SingleKind)
+				if r == "networkpolicies" {
+					// For networkpolicies, having K8s network policies should not throw an error
+					objs, err := meta.ExtractList(resource)
+					if err != nil {
+						return fmt.Errorf("Error extracting network policies for inspection: %s", err)
+					}
+
+					for _, obj := range objs {
+						metaObj, ok := obj.(v1.ObjectMetaAccessor)
+						if !ok {
+							return fmt.Errorf("Unable to convert Calico network policy for inspection")
+						}
+
+						// Make sure that the network policy is a K8s network policy
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), conversion.K8sNetworkPolicyNamePrefix) {
+							return fmt.Errorf("Found existing Calico %s resource", results.SingleKind)
+						}
+					}
+				} else {
+					return fmt.Errorf("Found existing Calico %s resource", results.SingleKind)
+				}
 			}
 
 			if results.FileInvalid {
