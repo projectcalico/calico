@@ -95,7 +95,7 @@ type NodeBGPSpec struct {
 // NodeWireguardSpec contains the specification for the Node wireguard configuration.
 type NodeWireguardSpec struct {
 	// InterfaceIPv4Address is the IPv4 address for the Wireguard interface.
-	InterfaceIPv4Address string `json:"interfaceIpv4Address,omitempty" validate:"omitempty,ipv4"`
+	InterfaceIPv4Address string `json:"interfaceIPv4Address,omitempty" validate:"omitempty,ipv4"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
