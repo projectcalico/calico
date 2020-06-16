@@ -33,6 +33,8 @@ type Map interface {
 	GetName() string
 	// EnsureExists opens the map, creating and pinning it if needed.
 	EnsureExists() error
+	// Open opens the map, returns error if it does not exist.
+	Open() error
 	// MapFD gets the file descriptor of the map, only valid after calling EnsureExists().
 	MapFD() MapFD
 	// Path returns the path that the map is (to be) pinned to.
@@ -166,25 +168,42 @@ func IterMapCmdOutput(output []byte, f MapIter) error {
 }
 
 func (b *PinnedMap) Iter(f MapIter) error {
-	cmd, err := DumpMapCmd(b)
+	var nilKey []byte
+
+	// Get the first key
+	k, err := GetMapNextKey(b.fd, nilKey, b.KeySize)
 	if err != nil {
-		return err
+		if IsNotExists(err) {
+			return nil
+		}
+		return errors.Errorf("GetMapNextKey failed: %s", err)
 	}
 
-	prog := cmd[0]
-	args := cmd[1:]
+	for {
+		next, nextErr := GetMapNextKey(b.fd, k, b.KeySize)
 
-	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).Output()
-	if err != nil {
-		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.versionedFilename(), err, output)
+		v, err := GetMapEntry(b.fd, k, b.ValueSize)
+		if err != nil {
+			if IsNotExists(err) {
+				return nil
+			}
+			return errors.Errorf("GetMapEntry failed to get key %s: %s", k, err)
+		}
+
+		// We hope we have the next key in case the iterator deleted the current key
+		f(k, v)
+
+		// We check if we really have the next key, if it was a failure, quit
+		if nextErr != nil {
+			if IsNotExists(nextErr) {
+				return nil
+			}
+			return errors.Errorf("GetMapNextKey failed: %s", nextErr)
+		}
+
+		// We have the next key!
+		k = next
 	}
-
-	if err := IterMapCmdOutput(output, f); err != nil {
-		return errors.WithMessagef(err, "map %s", b.versionedFilename())
-	}
-
-	return nil
 }
 
 func (b *PinnedMap) Update(k, v []byte) error {
@@ -210,7 +229,7 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k, b.ValueSize)
 }
 
-func (b *PinnedMap) EnsureExists() error {
+func (b *PinnedMap) Open() error {
 	if b.fdLoaded {
 		return nil
 	}
@@ -249,8 +268,21 @@ func (b *PinnedMap) EnsureExists() error {
 			b.fdLoaded = true
 			logrus.WithField("fd", b.fd).WithField("name", b.versionedFilename()).
 				Info("Loaded map file descriptor.")
+			return nil
 		}
 		return err
+	}
+
+	return err
+}
+
+func (b *PinnedMap) EnsureExists() error {
+	if b.fdLoaded {
+		return nil
+	}
+
+	if err := b.Open(); err == nil {
+		return nil
 	}
 
 	logrus.Debug("Map didn't exist, creating it")

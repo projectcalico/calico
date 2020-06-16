@@ -197,7 +197,7 @@ func (cmd *natFrontend) ArgsSet(c *cobra.Command, args []string) error {
 
 func (cmd *natFrontend) RunSet(c *cobra.Command, _ []string) {
 	natMap := nat.FrontendMap(&bpf.MapContext{})
-	if err := natMap.EnsureExists(); err != nil {
+	if err := natMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
 	k := nat.NewNATKey(cmd.ip, cmd.port, cmd.proto)
@@ -243,7 +243,7 @@ func (cmd *natFrontend) ArgsDel(c *cobra.Command, args []string) error {
 
 func (cmd *natFrontend) RunDel(c *cobra.Command, _ []string) {
 	natMap := nat.FrontendMap(&bpf.MapContext{})
-	if err := natMap.EnsureExists(); err != nil {
+	if err := natMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
 	k := nat.NewNATKey(cmd.ip, cmd.port, cmd.proto)
@@ -329,7 +329,7 @@ func (cmd *natBackend) ArgsSet(c *cobra.Command, args []string) error {
 func (cmd *natBackend) RunSet(c *cobra.Command, _ []string) {
 	mc := &bpf.MapContext{}
 	m := nat.BackendMap(mc)
-	if err := m.EnsureExists(); err != nil {
+	if err := m.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
 	k := nat.NewNATBackendKey(cmd.id, cmd.idx)
@@ -376,7 +376,7 @@ func (cmd *natBackend) ArgsDel(c *cobra.Command, args []string) error {
 func (cmd *natBackend) RunDel(c *cobra.Command, _ []string) {
 	mc := &bpf.MapContext{}
 	m := nat.BackendMap(mc)
-	if err := m.EnsureExists(); err != nil {
+	if err := m.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
 	k := nat.NewNATBackendKey(cmd.id, cmd.idx)
