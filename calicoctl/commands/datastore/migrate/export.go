@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 )
 
 // All of the resources we can retrieve via the v3 API.
@@ -165,7 +166,7 @@ Description:
 			return fmt.Errorf(errStr)
 		}
 
-		for _, resource := range results.Resources {
+		for i, resource := range results.Resources {
 			// Remove relevant metadata because the --export flag does not remove it for lists.
 			err := meta.EachListItem(resource, func(obj runtime.Object) error {
 				rom := obj.(v1.ObjectMetaAccessor).GetObjectMeta()
@@ -179,6 +180,31 @@ Description:
 			})
 			if err != nil {
 				return fmt.Errorf("Unable to clean metadata for export for %s resource: %s", resourceDisplayMap[r], err)
+			}
+
+			// Skip exporting Kubernetes network policies.
+			if r == "networkpolicies" {
+				objs, err := meta.ExtractList(resource)
+				if err != nil {
+					return fmt.Errorf("Error extracting network policies for inspection before exporting: %s", err)
+				}
+
+				filtered := []runtime.Object{}
+				for _, obj := range objs {
+					metaObj, ok := obj.(v1.ObjectMetaAccessor)
+					if !ok {
+						return fmt.Errorf("Unable to convert Calico network policy for inspection")
+					}
+					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), conversion.K8sNetworkPolicyNamePrefix) {
+						filtered = append(filtered, obj)
+					}
+				}
+
+				err = meta.SetList(resource, filtered)
+				if err != nil {
+					return fmt.Errorf("Unable to remove Kubernetes network policies for export: %s", err)
+				}
+				results.Resources[i] = resource
 			}
 
 			// Nodes need to also be modified to move the Orchestrator reference to the name field.
