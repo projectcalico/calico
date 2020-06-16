@@ -397,7 +397,7 @@ Refer to the appropriate guide for your orchestration system for details on how 
 
 ### Can I run {{site.prodname}} in a public cloud environment?
 
-Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between {{site.prodname}} hosts then you can enable IP-in-IP in your {{site.prodname}} IP pool:
+Yes. If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between {{site.prodname}} hosts then you can enable IP-in-IP in your {{site.prodname}} IP pool:
 
 ```bash
 cat <<EOF | calicoctl apply -f -
@@ -414,7 +414,11 @@ EOF
 
 {{site.prodname}} will then route traffic between {{site.prodname}} hosts using IP-in-IP.
 
-In AWS, you disable `Source/Dest. Check` instead of using IP-in-IP as long as all your instances are in the same subnet of your VPC.  This will provide the best performance.  You can disable this with the CLI, or right click the instance in the EC2 console, and select `Change Source/Dest. Check` from the `Networking` submenu.
+To reduce encapsulation overhead, you can set `ipipMode` to `CrossSubnet` to selectively use IP-in-IP. Check [configuring overlay networking]({{ site.baseurl }}/networking/vxlan-ipip) for the details.
+
+For best performance in AWS, you can disable [Source/Destination Check]({{ site.baseurl }}/reference/resources/felixconfig#spec) instead of using IP-in-IP or VXLAN; but only if all your instances are in the same subnet of your VPC. The setting must be `Disable` for the EC2 instance(s) to process traffic not matching the host interface IP address.
+
+You can disable Source/Destination Check using [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig), the AWS CLI, or the EC2 console. For example, using the AWS CLI:
 
 ```bash
 aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-check "{\"Value\": false}"
