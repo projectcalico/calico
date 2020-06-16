@@ -1,832 +1,3117 @@
 <p>Packages:</p>
 <ul>
-<li>
-<a href="#operator.tigera.io%2fv1">operator.tigera.io/v1</a>
-</li>
+    <li>
+        <a href="#operator.tigera.io%2fv1">operator.tigera.io/v1</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io%2fv1beta1">operator.tigera.io/v1beta1</a>
+    </li>
 </ul>
 <h2 id="operator.tigera.io/v1">operator.tigera.io/v1</h2>
 <p>API Schema definitions for configuring the installation of Calico and Calico Enterprise</p>
 Resource Types:
-<ul><li>
-<a href="#operator.tigera.io/v1.Installation">Installation</a>
-</li><li>
-<a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>
-</li></ul>
+<ul>
+    <li>
+        <a href="#operator.tigera.io/v1.APIServer">APIServer</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.Compliance">Compliance</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.Installation">Installation</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.IntrusionDetection">IntrusionDetection</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.LogCollector">LogCollector</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.LogStorage">LogStorage</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.ManagementClusterConnection">ManagementClusterConnection</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.Manager">Manager</a>
+    </li>
+    <li>
+        <a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>
+    </li>
+</ul>
+<h3 id="operator.tigera.io/v1.APIServer">APIServer
+</h3>
+<p>APIServer installs the Tigera API server and related resources. At most one instance
+    of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>APIServer</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.APIServerSpec">
+                    APIServerSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Specification of the desired state for the Tigera API server.</p>
+            <br/>
+            <br/>
+            <table>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.APIServerStatus">
+                    APIServerStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Most recently observed status for the Tigera API server.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.Compliance">Compliance
+</h3>
+<p>Compliance installs the components required for Tigera compliance reporting. At most one instance
+    of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>Compliance</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ComplianceSpec">
+                    ComplianceSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Specification of the desired state for Tigera compliance reporting.</p>
+            <br/>
+            <br/>
+            <table>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ComplianceStatus">
+                    ComplianceStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Most recently observed state for Tigera compliance reporting.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
 <h3 id="operator.tigera.io/v1.Installation">Installation
 </h3>
-<p>Installation configures an installation of Calico or Calico Enterprise. Only one instance
-of this resource is supported, and it must be named, &ldquo;default&rdquo;. The Installation API installs core networking
-and network policy components, and provides general install-time configuration.</p>
+<p>Installation configures an installation of Calico or Calico Enterprise. At most one instance
+    of this resource is supported. It must be named &ldquo;default&rdquo;. The Installation API installs core networking
+    and network policy components, and provides general install-time configuration.</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>apiVersion</code><br>
-string</td>
-<td>
-<code>
-operator.tigera.io/v1
-</code>
-</td>
-</tr>
-<tr>
-<td>
-<code>kind</code><br>
-string
-</td>
-<td><code>Installation</code></td>
-</tr>
-<tr>
-<td>
-<code>metadata</code><br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>spec</code><br>
-<em>
-<a href="#operator.tigera.io/v1.InstallationSpec">
-InstallationSpec
-</a>
-</em>
-</td>
-<td>
-<p>Specification of the desired state for the Calico or Calico Enterprise installation.</p>
-<br/>
-<br/>
-<table>
-<tr>
-<td>
-<code>variant</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ProductVariant">
-ProductVariant
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
-Default: Calico</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>registry</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Registry is the default Docker registry used for component Docker images. If specified,
-all images will be pulled from this registry. If not specified, the default registries
-are used.</p>
-<p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
-<p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>imagePath</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>ImagePath allows for the path part of an image to be specified. If specified,
-the specified value is used as the image path for each image. If not specified
-or empty, the default for each image is used.</p>
-<p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
-<p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>imagePullSecrets</code><br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#localobjectreference-v1-core">
-[]Kubernetes core/v1.LocalObjectReference
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>ImagePullSecrets is an array of references to container registry pull secrets to use. These are
-applied to all images to be pulled.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>kubernetesProvider</code><br>
-<em>
-<a href="#operator.tigera.io/v1.Provider">
-Provider
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>KubernetesProvider specifies a particular provider of the Kubernetes platform. This is often auto-detected.
-If specified, this enables provider-specific configuration and must match the auto-detected value (if any).</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>calicoNetwork</code><br>
-<em>
-<a href="#operator.tigera.io/v1.CalicoNetworkSpec">
-CalicoNetworkSpec
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>clusterManagementType</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ClusterManagementType">
-ClusterManagementType
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
-Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
-a single view to manage any number of Managed clusters, which are a lighter weight installation.
-Default: Standalone</p>
-</td>
-</tr>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>Installation</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.InstallationSpec">
+                    InstallationSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Specification of the desired state for the Calico or Calico Enterprise installation.</p>
+            <br/>
+            <br/>
+            <table>
+                <tr>
+                    <td>
+                        <code>variant</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.ProductVariant">
+                                ProductVariant
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
+                            Default: Calico</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>registry</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Registry is the default Docker registry used for component Docker images. If specified,
+                            all images will be pulled from this registry. If not specified then the default registries
+                            will be used.</p>
+                        <p>Image format:
+                            <code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+                        <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>imagePath</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>ImagePath allows for the path part of an image to be specified. If specified
+                            then the specified value will be used as the image path for each image. If not specified
+                            or empty, the default for each image will be used.</p>
+                        <p>Image format:
+                            <code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+                        <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above
+                            format.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>imagePullSecrets</code><br>
+                        <em>
+                            <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#localobjectreference-v1-core">
+                                []Kubernetes core/v1.LocalObjectReference
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>ImagePullSecrets is an array of references to container registry pull secrets to use. These
+                            are
+                            applied to all images to be pulled.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>kubernetesProvider</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.Provider">
+                                Provider
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>KubernetesProvider specifies a particular provider of the Kubernetes platform and enables
+                            provider-specific configuration.
+                            If the specified value is empty, the Operator will attempt to automatically determine the
+                            current provider.
+                            If the specified value is not empty, the Operator will still attempt auto-detection, but
+                            will additionally compare the auto-detected value to the specified value to confirm they
+                            match.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>calicoNetwork</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.CalicoNetworkSpec">
+                                CalicoNetworkSpec
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>clusterManagementType</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.ClusterManagementType">
+                                ClusterManagementType
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
+                            Standalone clusters are fully self-contained installations of Calico Enterprise. Management
+                            clusters provide
+                            a single view to manage any number of Managed clusters, which are a lighter weight
+                            installation.
+                            This option is applicable only when variant is TigeraSecureEnterprise.
+                            Default: Standalone</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>controlPlaneNodeSelector</code><br>
+                        <em>
+                            map[string]string
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>ControlPlaneNodeSelector is used to select control plane nodes on which to run specific
+                            Calico
+                            components. This currently only applies to kube-controllers and the apiserver.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>nodeMetricsPort</code><br>
+                        <em>
+                            int32
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>NodeMetricsPort specifies which port calico/node serves prometheus metrics on. By default,
+                            metrics are not enabled.
+                            If specified, this overrides any FelixConfiguration resources which may exist. If omitted,
+                            then
+                            prometheus metrics may still be configured through FelixConfiguration.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>flexVolumePath</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified,
+                            FlexVolume will be
+                            enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. The default
+                            is based on the
+                            kubernetesProvider.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>nodeUpdateStrategy</code><br>
+                        <em>
+                            <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#daemonsetupdatestrategy-v1-apps">
+                                Kubernetes apps/v1.DaemonSetUpdateStrategy
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>NodeUpdateStrategy can be used to customize the desired update strategy, such as the
+                            MaxUnavailable
+                            field.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>componentResources</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.*github.com/tigera/operator/pkg/apis/operator/v1.ComponentResource">
+                                []*github.com/tigera/operator/pkg/apis/operator/v1.ComponentResource
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>ComponentResources can be used to customize the resource requirements for each component.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.InstallationStatus">
+                    InstallationStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Most recently observed state for the Calico or Calico Enterprise installation.</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
-</td>
-</tr>
-<tr>
-<td>
-<code>status</code><br>
-<em>
-<a href="#operator.tigera.io/v1.InstallationStatus">
-InstallationStatus
-</a>
-</em>
-</td>
-<td>
-<p>Most recently observed state for the Calico or Calico Enterprise installation.</p>
-</td>
-</tr>
-</tbody>
+<h3 id="operator.tigera.io/v1.IntrusionDetection">IntrusionDetection
+</h3>
+<p>IntrusionDetection installs the components required for Tigera intrusion detection. At most one instance
+    of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>IntrusionDetection</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.IntrusionDetectionSpec">
+                    IntrusionDetectionSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Specification of the desired state for Tigera intrusion detection.</p>
+            <br/>
+            <br/>
+            <table>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.IntrusionDetectionStatus">
+                    IntrusionDetectionStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Most recently observed state for Tigera intrusion detection.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LogCollector">LogCollector
+</h3>
+<p>LogCollector installs the components required for Tigera flow and DNS log collection. At most one instance
+    of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;. When created, this installs fluentd on
+    all nodes
+    configured to collect Tigera log data and export it to Tigera&rsquo;s Elasticsearch cluster as well as any
+    additionally configured destinations.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>LogCollector</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.LogCollectorSpec">
+                    LogCollectorSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Specification of the desired state for Tigera log collection.</p>
+            <br/>
+            <br/>
+            <table>
+                <tr>
+                    <td>
+                        <code>additionalStores</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.AdditionalLogStoreSpec">
+                                AdditionalLogStoreSpec
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Configuration for exporting flow, audit, and DNS logs to external storage.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>additionalSources</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.AdditionalLogSourceSpec">
+                                AdditionalLogSourceSpec
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Configuration for importing audit logs from managed kubernetes cluster log sources.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.LogCollectorStatus">
+                    LogCollectorStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Most recently observed state for Tigera log collection.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LogStorage">LogStorage
+</h3>
+<p>LogStorage installs the components required for Tigera flow and DNS log storage. At most one instance
+    of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;. When created, this installs an
+    Elasticsearch cluster for use by
+    Calico Enterprise.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>LogStorage</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.LogStorageSpec">
+                    LogStorageSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Specification of the desired state for Tigera log storage.</p>
+            <br/>
+            <br/>
+            <table>
+                <tr>
+                    <td>
+                        <code>nodes</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.Nodes">
+                                Nodes
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <p>Nodes defines the configuration for a set of identical Elasticsearch cluster nodes, each of
+                            type master, data, and ingest.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>indices</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.Indices">
+                                Indices
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Index defines the configuration for the indices in the Elasticsearch cluster.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>retention</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.Retention">
+                                Retention
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Retention defines how long data is retained in the Elasticsearch cluster before it is
+                            cleared.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>storageClassName</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>StorageClassName will populate the PersistentVolumeClaim.StorageClassName that is used to
+                            provision disks to the
+                            Tigera Elasticsearch cluster. The StorageClassName should only be modified when no
+                            LogStorage is currently
+                            active. We recommend choosing a storage class dedicated to Tigera LogStorage only.
+                            Otherwise, data retention
+                            cannot be guaranteed during upgrades. See <a
+                                    href="https://docs.tigera.io/maintenance/upgrading">https://docs.tigera.io/maintenance/upgrading</a>
+                            for up-to-date instructions.
+                            Default: tigera-elasticsearch</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>dataNodeSelector</code><br>
+                        <em>
+                            map[string]string
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>DataNodeSelector gives you more control over the node that Elasticsearch will run on. The
+                            contents of DataNodeSelector will
+                            be added to the PodSpec of the Elasticsearch nodes. For the pod to be eligible to run on a
+                            node, the node must have
+                            each of the indicated key-value pairs as labels as well as access to the specified
+                            StorageClassName.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.LogStorageStatus">
+                    LogStorageStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Most recently observed state for Tigera log storage.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ManagementClusterConnection">ManagementClusterConnection
+</h3>
+<p>ManagementClusterConnection represents a link between a managed cluster and a management cluster. At most one
+    instance of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>ManagementClusterConnection</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ManagementClusterConnectionSpec">
+                    ManagementClusterConnectionSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <br/>
+            <br/>
+            <table>
+                <tr>
+                    <td>
+                        <code>managementClusterAddr</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Specify where the managed cluster can reach the management cluster. Ex.: &ldquo;10.128.0.10:30449&rdquo;.
+                            A managed cluster
+                            should be able to access this address. This field is used by managed clusters only.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.Manager">Manager
+</h3>
+<p>Manager installs the Calico Enterprise manager graphical user interface. At most one instance
+    of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>Manager</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ManagerSpec">
+                    ManagerSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Specification of the desired state for the Calico Enterprise manager.</p>
+            <br/>
+            <br/>
+            <table>
+                <tr>
+                    <td>
+                        <code>auth</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1.Auth">
+                                Auth
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>Auth defines the authentication strategy for the Calico Enterprise manager GUI.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ManagerStatus">
+                    ManagerStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Most recently observed state for the Calico Enterprise manager.</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.TigeraStatus">TigeraStatus
 </h3>
 <p>TigeraStatus represents the most recently observed status for Calico or a Calico Enterprise functional area.</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>apiVersion</code><br>
-string</td>
-<td>
-<code>
-operator.tigera.io/v1
-</code>
-</td>
-</tr>
-<tr>
-<td>
-<code>kind</code><br>
-string
-</td>
-<td><code>TigeraStatus</code></td>
-</tr>
-<tr>
-<td>
-<code>metadata</code><br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>spec</code><br>
-<em>
-<a href="#operator.tigera.io/v1.TigeraStatusSpec">
-TigeraStatusSpec
-</a>
-</em>
-</td>
-<td>
-<br/>
-<br/>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>TigeraStatus</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.TigeraStatusSpec">
+                    TigeraStatusSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <br/>
+            <br/>
+            <table>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.TigeraStatusStatus">
+                    TigeraStatusStatus
+                </a>
+            </em>
+        </td>
+        <td>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.APIServerSpec">APIServerSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.APIServer">APIServer</a>)
+</p>
+<p>APIServerSpec defines the desired state of Tigera API server.</p>
+<h3 id="operator.tigera.io/v1.APIServerStatus">APIServerStatus
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.APIServer">APIServer</a>)
+</p>
+<p>APIServerStatus defines the observed state of Tigera API server.</p>
 <table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>state</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>State provides user-readable status.</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
-</td>
-</tr>
-<tr>
-<td>
-<code>status</code><br>
-<em>
-<a href="#operator.tigera.io/v1.TigeraStatusStatus">
-TigeraStatusStatus
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
+<h3 id="operator.tigera.io/v1.AdditionalLogSourceSpec">AdditionalLogSourceSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogCollectorSpec">LogCollectorSpec</a>)
+</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>eksCloudwatchLog</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.EksCloudwatchLogsSpec">
+                    EksCloudwatchLogsSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>If specified with EKS Provider in Installation, enables fetching EKS
+                audit logs.</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.AdditionalLogStoreSpec">AdditionalLogStoreSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogCollectorSpec">LogCollectorSpec</a>)
+</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>s3</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.S3StoreSpec">
+                    S3StoreSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>If specified, enables exporting of flow, audit, and DNS logs to Amazon S3 storage.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>syslog</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.SyslogStoreSpec">
+                    SyslogStoreSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>If specified, enables exporting of flow, audit, and DNS logs to syslog.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>splunk</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.SplunkStoreSpec">
+                    SplunkStoreSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>If specified, enables exporting of flow, audit, and DNS logs to splunk.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.Auth">Auth
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.ManagerSpec">ManagerSpec</a>,
+    <a href="#operator.tigera.io/v1.ManagerStatus">ManagerStatus</a>)
+</p>
+<p>Auth defines authentication configuration.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>type</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.AuthType">
+                    AuthType
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Type configures the type of authentication used by the manager.
+                Default: Token</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>authority</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Authority configures the OAuth2/OIDC authority/issuer when using OAuth2 or OIDC login.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>clientID</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>ClientId configures the OAuth2/OIDC client ID to use for OAuth2 or OIDC login.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.AuthType">AuthType
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Auth">Auth</a>)
+</p>
+<p>AuthType represents the type of authentication to use. Valid
+    options are: Token, Basic, OIDC, OAuth</p>
 <h3 id="operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
-<p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
+<p>CalicoNetworkSpec specifies configuration options for Calico provided pod networking.</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>ipPools</code><br>
-<em>
-<a href="#operator.tigera.io/v1.IPPool">
-[]IPPool
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>IPPools contains a list of IP pools to use for allocating pod IP addresses. At most one IP pool
-may be specified. If omitted, a single pool will be configured when needed.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>mtu</code><br>
-<em>
-int32
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>MTU specifies the maximum transmission unit to use for pods on the Calico network.
-Default: 1410</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>nodeAddressAutodetectionV4</code><br>
-<em>
-<a href="#operator.tigera.io/v1.NodeAddressAutodetection">
-NodeAddressAutodetection
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>NodeAddressAutodetectionV4 specifies an approach to automatically detect node IPv4 addresses. If not specified,
-will use default auto-detection settings to acquire an IPv4 address for each node.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>nodeAddressAutodetectionV6</code><br>
-<em>
-<a href="#operator.tigera.io/v1.NodeAddressAutodetection">
-NodeAddressAutodetection
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv4 addresses. If not specified,
-IPv6 addresses will not be auto-detected.</p>
-</td>
-</tr>
-</tbody>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>ipPools</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.IPPool">
+                    []IPPool
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>IPPools contains a list of IP pools to use for allocating pod IP addresses. At most one IP pool
+                may be specified. If omitted, a single pool will be configured when needed.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>mtu</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>MTU specifies the maximum transmission unit to use for pods on the Calico network.
+                Default: 1410</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeAddressAutodetectionV4</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.NodeAddressAutodetection">
+                    NodeAddressAutodetection
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>NodeAddressAutodetectionV4 specifies an approach to automatically detect node IPv4 addresses. If not
+                specified,
+                will use default auto-detection settings to acquire an IPv4 address for each node.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeAddressAutodetectionV6</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.NodeAddressAutodetection">
+                    NodeAddressAutodetection
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv4 addresses. If not
+                specified,
+                IPv6 addresses will not be auto-detected.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>hostPorts</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.HostPortsType">
+                    HostPortsType
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>HostPorts configures whether or not Calico will support Kubernetes HostPorts.
+                Default: Enabled</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>multiInterfaceMode</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.MultiInterfaceMode">
+                    MultiInterfaceMode
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>MultiInterfaceMode configures what will configure multiple interface per pod. Only valid for Calico
+                Enterprise installations.
+                Default: None</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.ClusterManagementType">ClusterManagementType
-(<code>string</code> alias)</h3>
+    (<code>string</code> alias)</h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
-<p>ClusterManagementType represents the type of multicluster management to use. Valid options for this field are: &ldquo;Standalone&rdquo;,
-&ldquo;Management&rdquo;, &ldquo;Managed&rdquo;.</p>
-<h3 id="operator.tigera.io/v1.ConditionStatus">ConditionStatus
-(<code>string</code> alias)</h3>
+<p>ClusterManagementType represents the type of multicluster management to use. Valid options for this field are:
+    &ldquo;Standalone&rdquo;,
+    &ldquo;Management&rdquo;, &ldquo;Managed&rdquo;.</p>
+<h3 id="operator.tigera.io/v1.ComplianceSpec">ComplianceSpec
+</h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Compliance">Compliance</a>)
+</p>
+<p>ComplianceSpec defines the desired state of Tigera compliance reporting capabilities.</p>
+<h3 id="operator.tigera.io/v1.ComplianceStatus">ComplianceStatus
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Compliance">Compliance</a>)
+</p>
+<p>ComplianceStatus defines the observed state of Tigera compliance reporting capabilities.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>state</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>State provides user-readable status.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ComponentName">ComponentName
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.ComponentResource">ComponentResource</a>)
+</p>
+<p>ComponentName CRD enum</p>
+<h3 id="operator.tigera.io/v1.ComponentResource">ComponentResource
+</h3>
+<p>The ComponentResource struct associates a ResourceRequirements with a component by name</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>componentName</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ComponentName">
+                    ComponentName
+                </a>
+            </em>
+        </td>
+        <td>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>resourceRequirements</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#resourcerequirements-v1-core">
+                    Kubernetes core/v1.ResourceRequirements
+                </a>
+            </em>
+        </td>
+        <td>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ConditionStatus">ConditionStatus
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
 </p>
 <p>ConditionStatus represents the status of a particular condition. A condition may be one of: True, False, Unknown.</p>
-<h3 id="operator.tigera.io/v1.EncapsulationType">EncapsulationType
-(<code>string</code> alias)</h3>
+<h3 id="operator.tigera.io/v1.EksCloudwatchLogsSpec">EksCloudwatchLogsSpec
+</h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.IPPool">IPPool</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.AdditionalLogSourceSpec">AdditionalLogSourceSpec</a>)
+</p>
+<p>EksConfigSpec defines configuration for fetching EKS audit logs.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>region</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>AWS Region EKS cluster is hosted in.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>groupName</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>Cloudwatch log-group name containing EKS audit logs.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>streamPrefix</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Prefix of Cloudwatch log stream containing EKS audit logs in the log-group.
+                Default: kube-apiserver-audit-</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>fetchInterval</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Cloudwatch audit logs fetching interval in seconds.
+                Default: 60</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.EncapsulationType">EncapsulationType
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.IPPool">IPPool</a>)
 </p>
 <p>EncapsulationType is the type of encapsulation to use on an IP pool. Valid
-options are: IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None.</p>
+    options are: IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None.</p>
+<h3 id="operator.tigera.io/v1.HostPortsType">HostPortsType
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>HostPortsType specifies if the HostPorts plugin enabled status.</p>
 <h3 id="operator.tigera.io/v1.IPPool">IPPool
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
 </p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>cidr</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>CIDR contains the address range for the IP Pool in classless inter-domain routing format.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>encapsulation</code><br>
-<em>
-<a href="#operator.tigera.io/v1.EncapsulationType">
-EncapsulationType
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Encapsulation specifies the encapsulation type that will be used with
-the IP Pool.
-Default: IPIP</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>natOutgoing</code><br>
-<em>
-<a href="#operator.tigera.io/v1.NATOutgoingType">
-NATOutgoingType
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>NATOutgoing specifies if NAT will be enabled or disabled for outgoing traffic.
-Default: Enabled</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>nodeSelector</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>NodeSelector specifies the node selector that will be set for the IP Pool.
-Default: &lsquo;all()&rsquo;</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>blockSize</code><br>
-<em>
-int32
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>BlockSize specifies the CIDR prefex length to use when allocating per-node IP blocks from
-the main IP pool CIDR.
-Default: 26 (IPv4), 122 (IPv6)</p>
-</td>
-</tr>
-</tbody>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>cidr</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>CIDR contains the address range for the IP Pool in classless inter-domain routing format.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>encapsulation</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.EncapsulationType">
+                    EncapsulationType
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Encapsulation specifies the encapsulation type that will be used with
+                the IP Pool.
+                Default: IPIP</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>natOutgoing</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.NATOutgoingType">
+                    NATOutgoingType
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>NATOutgoing specifies if NAT will be enabled or disabled for outgoing traffic.
+                Default: Enabled</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeSelector</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>NodeSelector specifies the node selector that will be set for the IP Pool.
+                Default: &lsquo;all()&rsquo;</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>blockSize</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>BlockSize specifies the CIDR prefex length to use when allocating per-node IP blocks from
+                the main IP pool CIDR.
+                Default: 26 (IPv4), 122 (IPv6)</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.Indices">Indices
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogStorageSpec">LogStorageSpec</a>)
+</p>
+<p>Indices defines the configuration for the indices in an Elasticsearch cluster.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>replicas</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Replicas defines how many replicas each index will have. See <a
+                        href="https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html">https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html</a>
+            </p>
+        </td>
+    </tr>
+    </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.InstallationSpec">InstallationSpec
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.Installation">Installation</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Installation">Installation</a>)
 </p>
 <p>InstallationSpec defines configuration for a Calico or Calico Enterprise installation.</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>variant</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ProductVariant">
-ProductVariant
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
-Default: Calico</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>registry</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Registry is the default Docker registry used for component Docker images. If specified,
-all images will be pulled from this registry. If not specified then the default registries
-will be used.</p>
-<p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
-<p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>imagePath</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>ImagePath allows for the path part of an image to be specified. If specified
-then the specified value will be used as the image path for each image. If not specified
-or empty, the default for each image will be used.</p>
-<p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
-<p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>imagePullSecrets</code><br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#localobjectreference-v1-core">
-[]Kubernetes core/v1.LocalObjectReference
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>ImagePullSecrets is an array of references to container registry pull secrets to use. These are
-applied to all images to be pulled.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>kubernetesProvider</code><br>
-<em>
-<a href="#operator.tigera.io/v1.Provider">
-Provider
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>KubernetesProvider specifies a particular provider of the Kubernetes platform. This is often auto-detected.
-If specified, this enables provider-specific configuration and must match the auto-detected value (if any).</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>calicoNetwork</code><br>
-<em>
-<a href="#operator.tigera.io/v1.CalicoNetworkSpec">
-CalicoNetworkSpec
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>clusterManagementType</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ClusterManagementType">
-ClusterManagementType
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
-Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
-a single view to manage any number of Managed clusters, which are a lighter weight installation.
-Default: Standalone</p>
-</td>
-</tr>
-</tbody>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>variant</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ProductVariant">
+                    ProductVariant
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
+                Default: Calico</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>registry</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Registry is the default Docker registry used for component Docker images. If specified,
+                all images will be pulled from this registry. If not specified then the default registries
+                will be used.</p>
+            <p>Image format:
+                <code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+            <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>imagePath</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>ImagePath allows for the path part of an image to be specified. If specified
+                then the specified value will be used as the image path for each image. If not specified
+                or empty, the default for each image will be used.</p>
+            <p>Image format:
+                <code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+            <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>imagePullSecrets</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#localobjectreference-v1-core">
+                    []Kubernetes core/v1.LocalObjectReference
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>ImagePullSecrets is an array of references to container registry pull secrets to use. These are
+                applied to all images to be pulled.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kubernetesProvider</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.Provider">
+                    Provider
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>KubernetesProvider specifies a particular provider of the Kubernetes platform and enables
+                provider-specific configuration.
+                If the specified value is empty, the Operator will attempt to automatically determine the current
+                provider.
+                If the specified value is not empty, the Operator will still attempt auto-detection, but
+                will additionally compare the auto-detected value to the specified value to confirm they match.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>calicoNetwork</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.CalicoNetworkSpec">
+                    CalicoNetworkSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>clusterManagementType</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ClusterManagementType">
+                    ClusterManagementType
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
+                Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters
+                provide
+                a single view to manage any number of Managed clusters, which are a lighter weight installation.
+                This option is applicable only when variant is TigeraSecureEnterprise.
+                Default: Standalone</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>controlPlaneNodeSelector</code><br>
+            <em>
+                map[string]string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>ControlPlaneNodeSelector is used to select control plane nodes on which to run specific Calico
+                components. This currently only applies to kube-controllers and the apiserver.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeMetricsPort</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>NodeMetricsPort specifies which port calico/node serves prometheus metrics on. By default, metrics are
+                not enabled.
+                If specified, this overrides any FelixConfiguration resources which may exist. If omitted, then
+                prometheus metrics may still be configured through FelixConfiguration.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>flexVolumePath</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
+                enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. The default is based on
+                the
+                kubernetesProvider.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeUpdateStrategy</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#daemonsetupdatestrategy-v1-apps">
+                    Kubernetes apps/v1.DaemonSetUpdateStrategy
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>NodeUpdateStrategy can be used to customize the desired update strategy, such as the MaxUnavailable
+                field.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>componentResources</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.*github.com/tigera/operator/pkg/apis/operator/v1.ComponentResource">
+                    []*github.com/tigera/operator/pkg/apis/operator/v1.ComponentResource
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>ComponentResources can be used to customize the resource requirements for each component.</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.InstallationStatus">InstallationStatus
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.Installation">Installation</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Installation">Installation</a>)
 </p>
 <p>InstallationStatus defines the observed state of the Calico or Calico Enterprise installation.</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>variant</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ProductVariant">
-ProductVariant
-</a>
-</em>
-</td>
-<td>
-<p>Variant is the most recently observed installed variant - one of Calico or TigeraSecureEnterprise</p>
-</td>
-</tr>
-</tbody>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>variant</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ProductVariant">
+                    ProductVariant
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Variant is the most recently observed installed variant - one of Calico or TigeraSecureEnterprise</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
-<h3 id="operator.tigera.io/v1.NATOutgoingType">NATOutgoingType
-(<code>string</code> alias)</h3>
+<h3 id="operator.tigera.io/v1.IntrusionDetectionSpec">IntrusionDetectionSpec
+</h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.IPPool">IPPool</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.IntrusionDetection">IntrusionDetection</a>)
+</p>
+<p>IntrusionDetectionSpec defines the desired state of Tigera intrusion detection capabilities.</p>
+<h3 id="operator.tigera.io/v1.IntrusionDetectionStatus">IntrusionDetectionStatus
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.IntrusionDetection">IntrusionDetection</a>)
+</p>
+<p>IntrusionDetectionStatus defines the observed state of Tigera intrusion detection capabilities.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>state</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>State provides user-readable status.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LogCollectorSpec">LogCollectorSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogCollector">LogCollector</a>)
+</p>
+<p>LogCollectorSpec defines the desired state of Tigera flow, audit, and DNS log collection.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>additionalStores</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.AdditionalLogStoreSpec">
+                    AdditionalLogStoreSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Configuration for exporting flow, audit, and DNS logs to external storage.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>additionalSources</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.AdditionalLogSourceSpec">
+                    AdditionalLogSourceSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Configuration for importing audit logs from managed kubernetes cluster log sources.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LogCollectorStatus">LogCollectorStatus
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogCollector">LogCollector</a>)
+</p>
+<p>LogCollectorStatus defines the observed state of Tigera flow and DNS log collection</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>state</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>State provides user-readable status.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LogStorageSpec">LogStorageSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogStorage">LogStorage</a>)
+</p>
+<p>LogStorageSpec defines the desired state of Tigera flow and DNS log storage.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>nodes</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.Nodes">
+                    Nodes
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Nodes defines the configuration for a set of identical Elasticsearch cluster nodes, each of type master,
+                data, and ingest.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>indices</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.Indices">
+                    Indices
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Index defines the configuration for the indices in the Elasticsearch cluster.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>retention</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.Retention">
+                    Retention
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Retention defines how long data is retained in the Elasticsearch cluster before it is cleared.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>storageClassName</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>StorageClassName will populate the PersistentVolumeClaim.StorageClassName that is used to provision disks
+                to the
+                Tigera Elasticsearch cluster. The StorageClassName should only be modified when no LogStorage is
+                currently
+                active. We recommend choosing a storage class dedicated to Tigera LogStorage only. Otherwise, data
+                retention
+                cannot be guaranteed during upgrades. See <a href="https://docs.tigera.io/maintenance/upgrading">https://docs.tigera.io/maintenance/upgrading</a>
+                for up-to-date instructions.
+                Default: tigera-elasticsearch</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>dataNodeSelector</code><br>
+            <em>
+                map[string]string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>DataNodeSelector gives you more control over the node that Elasticsearch will run on. The contents of
+                DataNodeSelector will
+                be added to the PodSpec of the Elasticsearch nodes. For the pod to be eligible to run on a node, the
+                node must have
+                each of the indicated key-value pairs as labels as well as access to the specified StorageClassName.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LogStorageStatus">LogStorageStatus
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogStorage">LogStorage</a>)
+</p>
+<p>LogStorageStatus defines the observed state of Tigera flow and DNS log storage.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>state</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>State provides user-readable status.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>elasticsearchHash</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>ElasticsearchHash represents the current revision and configuration of the installed Elasticsearch
+                cluster. This
+                is an opaque string which can be monitored for changes to perform actions when Elasticsearch is
+                modified.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kibanaHash</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>KibanaHash represents the current revision and configuration of the installed Kibana dashboard. This
+                is an opaque string which can be monitored for changes to perform actions when Kibana is modified.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ManagementClusterConnectionSpec">ManagementClusterConnectionSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.ManagementClusterConnection">ManagementClusterConnection</a>)
+</p>
+<p>ManagementClusterConnectionSpec defines the desired state of ManagementClusterConnection</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>managementClusterAddr</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Specify where the managed cluster can reach the management cluster. Ex.: &ldquo;10.128.0.10:30449&rdquo;.
+                A managed cluster
+                should be able to access this address. This field is used by managed clusters only.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ManagerSpec">ManagerSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Manager">Manager</a>)
+</p>
+<p>ManagerSpec defines configuration for the Calico Enterprise manager GUI.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>auth</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.Auth">
+                    Auth
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Auth defines the authentication strategy for the Calico Enterprise manager GUI.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ManagerStatus">ManagerStatus
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Manager">Manager</a>)
+</p>
+<p>ManagerStatus defines the observed state of the Calico Enterprise manager GUI.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>auth</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.Auth">
+                    Auth
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>The last successfully applied authentication configuration.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.MultiInterfaceMode">MultiInterfaceMode
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<h3 id="operator.tigera.io/v1.NATOutgoingType">NATOutgoingType
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.IPPool">IPPool</a>)
 </p>
 <p>NATOutgoingType describe the type of outgoing NAT to use.</p>
 <h3 id="operator.tigera.io/v1.NodeAddressAutodetection">NodeAddressAutodetection
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
 </p>
 <p>NodeAddressAutodetection provides configuration options for auto-detecting node addresses. At most one option
-can be used. If no detection option is specified, then IP auto detection will be disabled for this address family and IPs
-must be specified directly on the Node resource.</p>
+    can be used. If no detection option is specified, then IP auto detection will be disabled for this address family
+    and IPs
+    must be specified directly on the Node resource.</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>firstFound</code><br>
-<em>
-bool
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>FirstFound uses default interface matching parameters to select an interface, performing best-effort
-filtering based on well-known interface names.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>interface</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Interface enables IP auto-detection based on interfaces that match the given regex.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>skipInterface</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>SkipInterface enables IP auto-detection based on interfaces that do not match
-the given regex.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>canReach</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>CanReach enables IP auto-detection based on which source address on the node is used to reach the
-specified IP or domain.</p>
-</td>
-</tr>
-</tbody>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>firstFound</code><br>
+            <em>
+                bool
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>FirstFound uses default interface matching parameters to select an interface, performing best-effort
+                filtering based on well-known interface names.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>interface</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Interface enables IP auto-detection based on interfaces that match the given regex.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>skipInterface</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>SkipInterface enables IP auto-detection based on interfaces that do not match
+                the given regex.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>canReach</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>CanReach enables IP auto-detection based on which source address on the node is used to reach the
+                specified IP or domain.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.NodeSet">NodeSet
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.Nodes">Nodes</a>)
+</p>
+<p>NodeSets defines configuration specific to each Elasticsearch Node Set</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>selectionAttributes</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.NodeSetSelectionAttribute">
+                    []NodeSetSelectionAttribute
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>SelectionAttributes defines K8s node attributes a NodeSet should use when setting the Node Affinity
+                selectors and
+                Elasticsearch cluster awareness attributes for the Elasticsearch nodes. The list of SelectionAttributes
+                are used
+                to define Node Affinities and set the node awareness configuration in the running Elasticsearch
+                instance.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.NodeSetSelectionAttribute">NodeSetSelectionAttribute
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.NodeSet">NodeSet</a>)
+</p>
+<p>NodeSetSelectionAttribute defines a K8s node &ldquo;attribute&rdquo; the Elasticsearch nodes should be aware of. The
+    &ldquo;Name&rdquo; and &ldquo;Value&rdquo;
+    are used together to set the &ldquo;awareness&rdquo; attributes in Elasticsearch, while the &ldquo;NodeLabel&rdquo;
+    and &ldquo;Value&rdquo; are used together
+    to define Node Affinity for the Pods created for the Elasticsearch nodes.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>name</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeLabel</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>value</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+        </td>
+    </tr>
+    </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.Nodes">Nodes
 </h3>
 <p>
-(<em>Appears on:</em>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogStorageSpec">LogStorageSpec</a>)
+</p>
+<p>Nodes defines the configuration for a set of identical Elasticsearch cluster nodes, each of type master, data, and
+    ingest.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>count</code><br>
+            <em>
+                int64
+            </em>
+        </td>
+        <td>
+            <p>Count defines the number of nodes in the Elasticsearch cluster.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeSets</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.NodeSet">
+                    []NodeSet
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>NodeSets defines configuration specific to each Elasticsearch Node Set</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>resourceRequirements</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#resourcerequirements-v1-core">
+                    Kubernetes core/v1.ResourceRequirements
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>ResourceRequirements defines the resource limits and requirements for the Elasticsearch cluster.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
 <h3 id="operator.tigera.io/v1.ProductVariant">ProductVariant
-(<code>string</code> alias)</h3>
+    (<code>string</code> alias)</h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>, 
-<a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>,
+    <a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
 </p>
 <p>ProductVariant represents the variant of the product. Valid options are: Calico, TigeraSecureEnterprise.</p>
 <h3 id="operator.tigera.io/v1.Provider">Provider
-(<code>string</code> alias)</h3>
+    (<code>string</code> alias)</h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
 <p>Provider represents a particular provider or flavor of Kubernetes. Valid options
-are: EKS, GKE, AKS, OpenShift, DockerEnterprise.</p>
-<h3 id="operator.tigera.io/v1.StatusConditionType">StatusConditionType
-(<code>string</code> alias)</h3>
+    are: EKS, GKE, AKS, OpenShift, DockerEnterprise.</p>
+<h3 id="operator.tigera.io/v1.Retention">Retention
+</h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.LogStorageSpec">LogStorageSpec</a>)
+</p>
+<p>Retention defines how long data is retained in an Elasticsearch cluster before it is cleared.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>flows</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Flows configures the retention period for flow logs, in days. Logs written on a day that started at least
+                this long ago
+                are removed. To keep logs for at least x days, use a retention period of x+1.
+                Default: 8</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>auditReports</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>AuditReports configures the retention period for audit logs, in days. Logs written on a day that started
+                at least this long ago are
+                removed. To keep logs for at least x days, use a retention period of x+1.
+                Default: 367</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>snapshots</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>Snapshots configures the retention period for snapshots, in days. Snapshots are periodic captures
+                of resources which along with audit events are used to generate reports.
+                Consult the Compliance Reporting documentation for more details on snapshots.
+                Logs written on a day that started at least this long ago are
+                removed. To keep logs for at least x days, use a retention period of x+1.
+                Default: 367</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>complianceReports</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>ComplianceReports configures the retention period for compliance reports, in days. Reports are output
+                from the analysis of the system state and audit events for compliance reporting.
+                Consult the Compliance Reporting documentation for more details on reports.
+                Logs written on a day that started at least this long ago are
+                removed. To keep logs for at least x days, use a retention period of x+1.
+                Default: 367</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.S3StoreSpec">S3StoreSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.AdditionalLogStoreSpec">AdditionalLogStoreSpec</a>)
+</p>
+<p>S3StoreSpec defines configuration for exporting logs to Amazon S3.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>region</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>AWS Region of the S3 bucket</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>bucketName</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>Name of the S3 bucket to send logs</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>bucketPath</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>Path in the S3 bucket where to send logs</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.SplunkStoreSpec">SplunkStoreSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.AdditionalLogStoreSpec">AdditionalLogStoreSpec</a>)
+</p>
+<p>SplunkStoreSpec defines configuration for exporting logs to splunk.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>endpoint</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>Location for splunk&rsquo;s http event collector end point. example <a href="https://1.2.3.4:8088">https://1.2.3.4:8088</a>
+            </p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1.StatusConditionType">StatusConditionType
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
 </p>
 <p>StatusConditionType is a type of condition that may apply to a particular component.</p>
+<h3 id="operator.tigera.io/v1.SyslogStoreSpec">SyslogStoreSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.AdditionalLogStoreSpec">AdditionalLogStoreSpec</a>)
+</p>
+<p>SyslogStoreSpec defines configuration for exporting logs to syslog.</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>endpoint</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>Location of the syslog server. example: tcp://1.2.3.4:601</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>packetSize</code><br>
+            <em>
+                int32
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>PacketSize defines the maximum size of packets to send to syslog.
+                In general this is only needed if you notice long logs being truncated.
+                Default: 1024</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
 <h3 id="operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.TigeraStatusStatus">TigeraStatusStatus</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.TigeraStatusStatus">TigeraStatusStatus</a>)
 </p>
 <p>TigeraStatusCondition represents a condition attached to a particular component.</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>type</code><br>
-<em>
-<a href="#operator.tigera.io/v1.StatusConditionType">
-StatusConditionType
-</a>
-</em>
-</td>
-<td>
-<p>The type of condition. May be Available, Progressing, or Degraded.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>status</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ConditionStatus">
-ConditionStatus
-</a>
-</em>
-</td>
-<td>
-<p>The status of the condition. May be True, False, or Unknown.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>lastTransitionTime</code><br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#time-v1-meta">
-Kubernetes meta/v1.Time
-</a>
-</em>
-</td>
-<td>
-<p>The timestamp representing the start time for the current status.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>reason</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>A brief reason explaining the condition.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>message</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>Optionally, a detailed message providing additional context.</p>
-</td>
-</tr>
-</tbody>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>type</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.StatusConditionType">
+                    StatusConditionType
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>The type of condition. May be Available, Progressing, or Degraded.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.ConditionStatus">
+                    ConditionStatus
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>The status of the condition. May be True, False, or Unknown.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>lastTransitionTime</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#time-v1-meta">
+                    Kubernetes meta/v1.Time
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>The timestamp representing the start time for the current status.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>reason</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>A brief reason explaining the condition.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>message</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>Optionally, a detailed message providing additional context.</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.TigeraStatusSpec">TigeraStatusSpec
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>)
 </p>
 <h3 id="operator.tigera.io/v1.TigeraStatusStatus">TigeraStatusStatus
 </h3>
 <p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>)
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>)
 </p>
 <p>TigeraStatusStatus defines the observed state of TigeraStatus</p>
 <table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>conditions</code><br>
-<em>
-<a href="#operator.tigera.io/v1.TigeraStatusCondition">
-[]TigeraStatusCondition
-</a>
-</em>
-</td>
-<td>
-<p>Conditions represents the latest observed set of conditions for this component. A component may be one or more of
-Available, Progressing, or Degraded.</p>
-</td>
-</tr>
-</tbody>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>conditions</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1.TigeraStatusCondition">
+                    []TigeraStatusCondition
+                </a>
+            </em>
+        </td>
+        <td>
+            <p>Conditions represents the latest observed set of conditions for this component. A component may be one or
+                more of
+                Available, Progressing, or Degraded.</p>
+        </td>
+    </tr>
+    </tbody>
 </table>
+<hr/>
+<h2 id="operator.tigera.io/v1beta1">operator.tigera.io/v1beta1</h2>
+<p>Package v1beta1 contains API Schema definitions for the operator v1beta1 API group</p>
+Resource Types:
+<ul>
+    <li>
+        <a href="#operator.tigera.io/v1beta1.AmazonCloudIntegration">AmazonCloudIntegration</a>
+    </li>
+</ul>
+<h3 id="operator.tigera.io/v1beta1.AmazonCloudIntegration">AmazonCloudIntegration
+</h3>
+<p>AmazonCloudIntegration is the Schema for the amazoncloudintegrations API</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>apiVersion</code><br>
+            string
+        </td>
+        <td>
+            <code>
+                operator.tigera.io/v1beta1
+            </code>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>kind</code><br>
+            string
+        </td>
+        <td><code>AmazonCloudIntegration</code></td>
+    </tr>
+    <tr>
+        <td>
+            <code>metadata</code><br>
+            <em>
+                <a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+                    Kubernetes meta/v1.ObjectMeta
+                </a>
+            </em>
+        </td>
+        <td>
+            Refer to the Kubernetes API documentation for the fields of the
+            <code>metadata</code> field.
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>spec</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1beta1.AmazonCloudIntegrationSpec">
+                    AmazonCloudIntegrationSpec
+                </a>
+            </em>
+        </td>
+        <td>
+            <br/>
+            <br/>
+            <table>
+                <tr>
+                    <td>
+                        <code>defaultPodMetadataAccess</code><br>
+                        <em>
+                            <a href="#operator.tigera.io/v1beta1.MetadataAccessAllowedType">
+                                MetadataAccessAllowedType
+                            </a>
+                        </em>
+                    </td>
+                    <td>
+                        <em>(Optional)</em>
+                        <p>DefaultPodMetadataAccess defines what the default behavior will be for accessing
+                            the AWS metadata service from a pod.
+                            Default: Denied</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>nodeSecurityGroupIDs</code><br>
+                        <em>
+                            []string
+                        </em>
+                    </td>
+                    <td>
+                        <p>NodeSecurityGroupIDs is a list of Security Group IDs that all nodes and masters
+                            will be in.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>podSecurityGroupID</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <p>PodSecurityGroupID is the ID of the Security Group which all pods should be placed
+                            in by default.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>vpcs</code><br>
+                        <em>
+                            []string
+                        </em>
+                    </td>
+                    <td>
+                        <p>VPCS is a list of VPC IDs to monitor for ENIs and Security Groups, only one is supported.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>sqsURL</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <p>SQSURL is the SQS URL needed to access the Simple Queue Service.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>awsRegion</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <p>AWSRegion is the region in which your cluster is located.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>enforcedSecurityGroupID</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <p>EnforcedSecurityGroupID is the ID of the Security Group which will be applied to all
+                            ENIs that are on a host that is also part of the Kubernetes cluster.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <code>trustEnforcedSecurityGroupID,omitemtpy</code><br>
+                        <em>
+                            string
+                        </em>
+                    </td>
+                    <td>
+                        <p>TrustEnforcedSecurityGroupID is the ID of the Security Group which will be applied
+                            to all ENIs in the VPC.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>status</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1beta1.AmazonCloudIntegrationStatus">
+                    AmazonCloudIntegrationStatus
+                </a>
+            </em>
+        </td>
+        <td>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1beta1.AmazonCloudIntegrationSpec">AmazonCloudIntegrationSpec
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1beta1.AmazonCloudIntegration">AmazonCloudIntegration</a>)
+</p>
+<p>AmazonCloudIntegrationSpec defines the desired state of AmazonCloudIntegration</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>defaultPodMetadataAccess</code><br>
+            <em>
+                <a href="#operator.tigera.io/v1beta1.MetadataAccessAllowedType">
+                    MetadataAccessAllowedType
+                </a>
+            </em>
+        </td>
+        <td>
+            <em>(Optional)</em>
+            <p>DefaultPodMetadataAccess defines what the default behavior will be for accessing
+                the AWS metadata service from a pod.
+                Default: Denied</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>nodeSecurityGroupIDs</code><br>
+            <em>
+                []string
+            </em>
+        </td>
+        <td>
+            <p>NodeSecurityGroupIDs is a list of Security Group IDs that all nodes and masters
+                will be in.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>podSecurityGroupID</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>PodSecurityGroupID is the ID of the Security Group which all pods should be placed
+                in by default.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>vpcs</code><br>
+            <em>
+                []string
+            </em>
+        </td>
+        <td>
+            <p>VPCS is a list of VPC IDs to monitor for ENIs and Security Groups, only one is supported.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>sqsURL</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>SQSURL is the SQS URL needed to access the Simple Queue Service.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>awsRegion</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>AWSRegion is the region in which your cluster is located.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>enforcedSecurityGroupID</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>EnforcedSecurityGroupID is the ID of the Security Group which will be applied to all
+                ENIs that are on a host that is also part of the Kubernetes cluster.</p>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <code>trustEnforcedSecurityGroupID,omitemtpy</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>TrustEnforcedSecurityGroupID is the ID of the Security Group which will be applied
+                to all ENIs in the VPC.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1beta1.AmazonCloudIntegrationStatus">AmazonCloudIntegrationStatus
+</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1beta1.AmazonCloudIntegration">AmazonCloudIntegration</a>)
+</p>
+<p>AmazonCloudIntegrationStatus defines the observed state of AmazonCloudIntegration</p>
+<table>
+    <thead>
+    <tr>
+        <th>Field</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>
+            <code>state</code><br>
+            <em>
+                string
+            </em>
+        </td>
+        <td>
+            <p>State provides user-readable status.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<h3 id="operator.tigera.io/v1beta1.MetadataAccessAllowedType">MetadataAccessAllowedType
+    (<code>string</code> alias)</h3>
+<p>
+    (<em>Appears on:</em>
+    <a href="#operator.tigera.io/v1beta1.AmazonCloudIntegrationSpec">AmazonCloudIntegrationSpec</a>)
+</p>
+<p>MetadataAccessAllowedType</p>
 <hr/>
