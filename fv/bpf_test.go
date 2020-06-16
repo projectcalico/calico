@@ -919,7 +919,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					BeforeEach(func() {
 						if testOpts.connTimeEnabled || testOpts.udpUnConnected {
-							Skip("FIXME externalClient also does conntime balancing")
+							Skip("Skip UDP unconnected, connectime load balancing cases as externalClient also does conntime balancing")
 						}
 						externalClient.EnsureBinary("test-connection")
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)

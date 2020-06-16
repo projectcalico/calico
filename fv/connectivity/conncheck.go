@@ -479,10 +479,6 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 				if strings.Contains(response.LastResponse.Error, e.Error) {
 					return true
 				}
-			} else if response.LastResponse.Request.ResponseSize == -1 {
-				// Return true to make sure the response is invalid so that
-				// ExpectNone passes.
-				return true
 			}
 			return false
 		}
@@ -606,16 +602,8 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 	logCxt.WithFields(log.Fields{
 		"stdout": string(wOut),
 		"stderr": string(wErr)}).WithError(err).Info(logMsg)
-	var resp Result
-	if err != nil {
-		resp.LastResponse.Error = string(wOut)
-		// set response size to -1 indicating that the response is invalid
-		// except for the error. During Match, a response with response size = -1
-		// will be handled as no response if the expected error string is empty.
-		resp.LastResponse.Request.ResponseSize = -1
-		return &resp
-	}
 
+	var resp Result
 	r := regexp.MustCompile(`RESULT=(.*)\n`)
 	m := r.FindSubmatch(wOut)
 	if len(m) > 0 {
