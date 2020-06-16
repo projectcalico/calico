@@ -1,4 +1,5 @@
 // Copyright 2020 Cisco Systems Inc
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +29,7 @@ import (
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 const (
@@ -55,6 +57,8 @@ func NewGrpcDataplane(conf types.NetConf, logger *logrus.Entry) (*grpcDataplane,
 }
 
 func (d *grpcDataplane) DoNetworking(
+	ctx context.Context,
+	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
 	result *current.Result,
 	desiredVethName string,
@@ -108,7 +112,7 @@ func (d *grpcDataplane) DoNetworking(
 		})
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	reply, err := c.Add(ctx, request)
 	if err != nil {
@@ -144,5 +148,26 @@ func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	if !reply.Successful {
 		return fmt.Errorf("grpc dataplane error: %s", reply.ErrorMessage)
 	}
+	return nil
+}
+
+// This is a dummy function required for Windows
+func (d *grpcDataplane) NetworkApplicationContainer(args *skel.CmdArgs) error {
+	return nil
+}
+
+func (d *grpcDataplane) EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet) error {
+	return nil // No-op on Linux.
+}
+
+func (d *grpcDataplane) MaintainWepDeletionTimestamps(timeout int) error {
+	return nil
+}
+
+func (d *grpcDataplane) CheckWepJustDeleted(containerID string, timeout int) (bool, error) {
+	return false, nil
+}
+
+func (d *grpcDataplane) RegisterDeletedWep(containerID string) error {
 	return nil
 }

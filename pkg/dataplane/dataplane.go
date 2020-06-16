@@ -1,4 +1,5 @@
 // Copyright 2020 Cisco Systems Inc
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
 package dataplane
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -23,13 +25,15 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc"
-	"github.com/projectcalico/cni-plugin/pkg/dataplane/linux"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 type Dataplane interface {
 	DoNetworking(
+		ctx context.Context,
+		calicoClient calicoclient.Interface,
 		args *skel.CmdArgs,
 		result *current.Result,
 		desiredVethName string,
@@ -39,12 +43,17 @@ type Dataplane interface {
 	) (hostVethName, contVethMAC string, err error)
 
 	CleanUpNamespace(args *skel.CmdArgs) error
+	NetworkApplicationContainer(args *skel.CmdArgs) error
+	EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet) error
+	MaintainWepDeletionTimestamps(timeout int) error
+	CheckWepJustDeleted(containerID string, timeout int) (bool, error)
+	RegisterDeletedWep(containerID string) error
 }
 
 func GetDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {
 	name, ok := conf.DataplaneOptions["type"]
 	if !ok {
-		return linux.NewLinuxDataplane(conf, logger), nil
+		return getDefaultSystemDataplane(conf, logger)
 	}
 	switch name {
 	case "grpc":

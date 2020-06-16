@@ -1,0 +1,79 @@
+version: v1.0
+name: CNIPlugin
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+auto_cancel:
+  running:
+    when: "branch != 'master'"
+  queued:
+    when: "branch != 'master'"
+
+promotions:
+- name: Cleanup
+  pipeline_file: cleanup.yml
+  auto_promote:
+    when: "result = 'stopped'"
+
+global_job_config:
+  secrets:
+  # Key for pulling from private github repos.
+  - name: private-repo
+  - name: banzai-secrets
+  # Key for pulling images from GCR.
+  - name: tigera-dev-ci-pull-credentials
+
+  prologue:
+    commands:
+    # Prepare aws configuration.
+    - pip install --upgrade --user awscli
+    # Load the github access secrets.  First fix the permissions.
+    - chmod 0600 ~/.keys/*
+    - ssh-add ~/.keys/*
+    - docker login --username casey@tigera.io -u _json_key -p "$(cat /home/semaphore/tigera-dev-ci.json)" https://gcr.io
+    - export REPORT_DIR=~/report
+    - export LOGS_DIR=~/fv.log
+    - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+    - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
+    - export KEYPAIR_NAME=${CLUSTER_NAME}
+    - echo CLUSTER_NAME=${CLUSTER_NAME}
+
+  epilogue:
+    always:
+      commands:
+        - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+        - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+        - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+        - cd process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+
+blocks:
+- name: Windows FV 
+  task:
+    env_vars:
+    - name: SEMAPHORE_ARTIFACT_EXPIRY
+      value: 2w
+    - name: AWS_DEFAULT_REGION
+      value: us-west-2
+    - name: MASTER_CONNECT_KEY_PUB
+      value: master_ssh_key.pub
+    - name: MASTER_CONNECT_KEY
+      value: master_ssh_key
+    - name: WIN_PPK_KEY
+      value: win_ppk_key 
+
+    prologue:
+      commands:
+      - sudo apt-get install putty-tools
+      - git clone git@github.com:tigera/process.git
+      - checkout
+      - make build && make bin/amd64/win-fv.exe
+    jobs:
+    - name: FV Test matrix
+      commands:
+      - ./.semaphore/run-win-fv.sh
+
+      env_vars:
+      - name: K8S_VERSION
+        value: 1.17.2
