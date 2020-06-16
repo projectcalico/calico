@@ -49,12 +49,12 @@ This how-to guide uses the following {{site.prodname}} features:
 >**Note**: The following tasks work only for new clusters; you cannot migrate existing IPv4 clusters to IPv6.
 {: .alert .alert-info}
 
-**Kubernetes install**
+**Manifest install**
 - [Enable dual stack, Kubernetes](#enable-dual-stack-kubernetes)
 - [Enable IPv6-only, initial install, Kubernetes](#enable-ipv6-only-initial-install-kubernetes)
 - [Enable IPv6-only, after install, Kubernetes](#enable-ipv6-only-after-install-kubernetes)
 
-**OpenShift install**
+**OpenShift or Quickstart operator install**
 - [Enable dual stack, OpenShift](#enable-dual-stack-openshift)
 - [Enable IPv6-only, OpenShift](#enable-ipv6-only-openshift)
 
