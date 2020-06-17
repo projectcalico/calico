@@ -72,5 +72,11 @@ func ReadTyphaConfig(supportedPrefixes []string) TyphaConfig {
 			}
 		}
 	}
+
+	// Perform defaulting of the typha config for any required fields that were not set explicitly.
+	if typhaConfig.K8sNamespace == "" {
+		typhaConfig.K8sNamespace = "kube-system"
+	}
+
 	return *typhaConfig
 }

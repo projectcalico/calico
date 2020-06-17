@@ -96,8 +96,8 @@ func CalculateMaxConnLimit(configParams *config.Config, numTyphas, numNodes int)
 	// We subtract 1 from the number of Typhas when calculating the fraction to allow for one Typha
 	// dying during a rolling upgrade, for example.  That does mean our load will be less even but
 	// it reduces the number of expensive disconnections.  We add 20% to give some further headroom, this
-	// is multiplied by two since confd also uses Typha.
-	candidate := 2 * (1 + numNodes*120/(numTyphas-1)/100)
+	// is multiplied by three since confd and the node IP allocater also use Typha.
+	candidate := 3 * (1 + numNodes*120/(numTyphas-1)/100)
 	if candidate > target {
 		reason = "fraction+20%"
 		target = candidate

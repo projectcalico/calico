@@ -80,34 +80,34 @@ var _ = Describe("Poll loop tests", func() {
 	It("should emit on first tick", func() {
 		tickerC <- time.Now()
 		cancelFn()
-		Eventually(server.MaxConns).Should(Equal([]int{62}))
+		Eventually(server.MaxConns).Should(Equal([]int{93}))
 	})
 	It("should squash dupes", func() {
 		tickerC <- time.Now()
 		tickerC <- time.Now()
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{62}))
+		Eventually(server.MaxConns).Should(Equal([]int{93}))
 	})
 	It("should responds to changes", func() {
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{62}))
+		Eventually(server.MaxConns).Should(Equal([]int{93}))
 		k8sAPI.numNodes = 200
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{62, 101}))
+		Eventually(server.MaxConns).Should(Equal([]int{93, 101}))
 	})
 	It("should increase limit to maximum on GetNumTyphas error", func() {
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{62}))
+		Eventually(server.MaxConns).Should(Equal([]int{93}))
 		k8sAPI.numTyphasErr = errors.New("bad typha!")
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{62, 101}))
+		Eventually(server.MaxConns).Should(Equal([]int{93, 101}))
 	})
 	It("should increase limit to maximum on GetNumNodes error", func() {
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{62}))
+		Eventually(server.MaxConns).Should(Equal([]int{93}))
 		k8sAPI.numNodesErr = errors.New("bad nodes!")
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{62, 101}))
+		Eventually(server.MaxConns).Should(Equal([]int{93, 101}))
 	})
 })
 
