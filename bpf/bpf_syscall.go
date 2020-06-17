@@ -30,6 +30,9 @@ import (
 // #include <linux/bpf.h>
 // #include <stdlib.h>
 // #include <string.h>
+// #include <errno.h>
+// #include <unistd.h>
+// #include <sys/syscall.h>
 //
 // union bpf_attr *bpf_attr_alloc() {
 //    union bpf_attr *attr = malloc(sizeof(union bpf_attr));
@@ -133,6 +136,18 @@ import (
 // __u32 bpf_attr_prog_run_duration(union bpf_attr *attr) {
 //    return attr->test.duration;
 // }
+//
+// int bpf_map_call(int cmd, __u32 map_fd, void *pointer_to_key, void *pointer_to_value, __u64 flags) {
+//    union bpf_attr attr = {};
+//
+//    attr.map_fd = map_fd;
+//    attr.key = (__u64)(unsigned long)pointer_to_key;
+//    attr.value = (__u64)(unsigned long)pointer_to_value;
+//    attr.flags = flags;
+//
+//    return syscall(SYS_bpf, cmd, &attr, sizeof(attr)) == 0 ? 0 : errno;
+// }
+//
 import "C"
 
 func SyscallSupport() bool {
@@ -292,26 +307,15 @@ func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
 		return nil, err
 	}
 
-	bpfAttr := C.bpf_attr_alloc()
-	defer C.free(unsafe.Pointer(bpfAttr))
+	val := make([]byte, valueSize)
 
-	// Have to make C-heap copies here because passing these to the syscalls is done via pointers in an
-	// intermediate struct.
-	cK := C.CBytes(k)
-	defer C.free(cK)
-	cV := C.malloc(C.size_t(valueSize))
-	defer C.free(cV)
-
-	C.bpf_attr_setup_map_elem(bpfAttr, C.uint(mapFD), cK, cV, unix.BPF_ANY)
-
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_LOOKUP_ELEM, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
-
-	v := C.GoBytes(cV, C.int(valueSize))
-
+	errno := C.bpf_map_call(unix.BPF_MAP_LOOKUP_ELEM, C.uint(mapFD),
+		unsafe.Pointer(&k[0]), unsafe.Pointer(&val[0]), 0)
 	if errno != 0 {
-		return nil, errno
+		return nil, unix.Errno(errno)
 	}
-	return v, nil
+
+	return val, nil
 }
 
 func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
@@ -359,21 +363,12 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 		return err
 	}
 
-	bpfAttr := C.bpf_attr_alloc()
-	defer C.free(unsafe.Pointer(bpfAttr))
-
-	// Have to make C-heap copies here because passing these to the syscalls is done via pointers in an
-	// intermediate struct.
-	cK := C.CBytes(k)
-	defer C.free(cK)
-
-	C.bpf_attr_setup_map_elem_for_delete(bpfAttr, C.uint(mapFD), cK)
-
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_DELETE_ELEM, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
-
+	errno := C.bpf_map_call(unix.BPF_MAP_DELETE_ELEM, C.uint(mapFD),
+		unsafe.Pointer(&k[0]), unsafe.Pointer(nil), 0)
 	if errno != 0 {
-		return errno
+		return unix.Errno(errno)
 	}
+
 	return nil
 }
 
@@ -383,39 +378,27 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 //
 // Start iterating by passing a nil key.
 func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
-	log.Debugf("MapNextKey(%v, %v, %v)", mapFD, k, keySize)
+	log.Debugf("GetMapNextKey(%v, %v, %v)", mapFD, k, keySize)
 
+	if log.GetLevel() >= log.DebugLevel && keySize == 0 && len(k) != keySize && len(k) != 0 {
+		log.WithField("keySize", keySize).WithField("keyLen", len(k)).Panic("keySize != len(k)")
+	}
 	err := checkMapIfDebug(mapFD, keySize, -1)
 	if err != nil {
 		return nil, err
 	}
 
-	bpfAttr := C.bpf_attr_alloc()
-	defer C.free(unsafe.Pointer(bpfAttr))
-
 	var cK unsafe.Pointer
-
-	// Have to make C-heap copies here because passing these to the syscalls is done via pointers in an
-	// intermediate struct.
-	//
-	// it is valid to pass a nil key to start the iteration
-	if k != nil {
-		cK = C.CBytes(k)
-		defer C.free(cK)
+	if len(k) > 0 {
+		cK = unsafe.Pointer(&k[0])
 	}
-	cV := C.malloc(C.size_t(keySize)) // value has the size of a key - it is the key!
-	defer C.free(cV)
 
-	C.bpf_attr_setup_map_get_next_key(bpfAttr, C.uint(mapFD), cK, cV, 0)
+	next := make([]byte, keySize)
 
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_GET_NEXT_KEY,
-		uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
-
-	v := C.GoBytes(cV, C.int(keySize))
-
+	errno := C.bpf_map_call(unix.BPF_MAP_GET_NEXT_KEY, C.uint(mapFD), cK, unsafe.Pointer(&next[0]), 0)
 	if errno != 0 {
-		return nil, errno
+		return nil, unix.Errno(errno)
 	}
 
-	return v, nil
+	return next, nil
 }
