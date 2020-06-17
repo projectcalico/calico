@@ -114,6 +114,13 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
         rc.assert_no_error()
 
+        # Create another Node, this node will not be imported because it does not
+        # reference a real k8s node.
+        rc = calicoctl("create", data=node_name5_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("get node %s -o yaml" % name(node_name5_rev1))
+        rc.assert_data(node_name5_rev1)
+
         # TODO: Pull code or modify tests to create IPAM objects for this test
         # since they cannot be created via calicoctl.
 
@@ -150,6 +157,8 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("delete node %s" % name(node_name4_rev1))
         rc.assert_no_error()
+        rc = calicoctl("delete node %s" % name(node_name5_rev1))
+        rc.assert_no_error()
 
         # Attempt and fail to import the data into an etcd datastore
         rc = calicoctl("datastore migrate import -f test-migration")
@@ -180,6 +189,8 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("get node %s -o yaml" % name(node_name4_rev1), kdd=True)
         rc.assert_no_error()
+        rc = calicoctl("get node %s -o yaml" % name(node_name5_rev1), kdd=True)
+        rc.assert_error(text=NOT_FOUND)
         rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1), kdd=True)
         rc.assert_no_error()
 

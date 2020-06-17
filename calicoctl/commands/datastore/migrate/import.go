@@ -34,11 +34,14 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/crds"
+	yaml "github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
@@ -67,20 +70,25 @@ Description:
 		return nil
 	}
 
-	// Get the backend client for updating cluster info and migrating IPAM.
 	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
-	if err != nil {
-		return err
-	}
-
-	// Check that the datastore configured datastore is kubernetes
 	cfg, err := clientmgr.LoadClientConfig(cf)
 	if err != nil {
 		log.Info("Error loading config")
 		return err
 	}
 
+	// Set the Kubernetes client QPS to 50 if not explicitly set.
+	if cfg.Spec.K8sClientQPS != float32(0) {
+		cfg.Spec.K8sClientQPS = float32(50)
+	}
+
+	// Get the backend client for updating cluster info and migrating IPAM.
+	client, err := client.New(*cfg)
+	if err != nil {
+		return err
+	}
+
+	// Check that the datastore configured datastore is kubernetes
 	if cfg.Spec.DatastoreType != apiconfig.Kubernetes {
 		return fmt.Errorf("Invalid datastore type: %s to import to for datastore migration. Datastore type must be kubernetes", cfg.Spec.DatastoreType)
 	}
@@ -122,7 +130,7 @@ Description:
 	}
 
 	// Apply v3 API resources
-	err = updateV3Resources(cf, v3Yaml)
+	err = updateV3Resources(cfg, v3Yaml)
 	if err != nil {
 		return fmt.Errorf("Failed to import v3 resources: %s\n", err)
 	}
@@ -286,7 +294,7 @@ func updateClusterInfo(ctx context.Context, c client.Interface, clusterInfoJson 
 	return nil
 }
 
-func updateV3Resources(cf string, data []byte) error {
+func updateV3Resources(cfg *apiconfig.CalicoAPIConfig, data []byte) error {
 	// Create tempfile so the v3 resources can be created using Apply
 	tempfile, err := ioutil.TempFile("", "v3migration")
 	if err != nil {
@@ -298,8 +306,24 @@ func updateV3Resources(cf string, data []byte) error {
 		return fmt.Errorf("Error while writing to temporary v3 migration file: %s\n", err)
 	}
 
+	// Create a tempfile for the config so QPS will be overwritten
+	tempConfigFile, err := ioutil.TempFile("", "qpsconfig")
+	if err != nil {
+		return fmt.Errorf("Error while creating temporary v3 migration config file: %s\n", err)
+	}
+	defer os.Remove(tempConfigFile.Name())
+
+	cfgData, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("Error while serializing temporary v3 migration config file: %s\n", err)
+	}
+
+	if _, err := tempConfigFile.Write(cfgData); err != nil {
+		return fmt.Errorf("Error while writing to temporary v3 migration config file: %s\n", err)
+	}
+
 	mockArgs := map[string]interface{}{
-		"--config":   cf,
+		"--config":   tempConfigFile.Name(),
 		"--filename": tempfile.Name(),
 		"apply":      true,
 	}
@@ -376,7 +400,27 @@ func applyV3(args map[string]interface{}) error {
 			fmt.Printf("Successfully applied %d resource(s)\n", results.NumHandled)
 		}
 	} else {
-		return fmt.Errorf("Hit error(s): %v", results.ResErrs)
+		// Inspect the errors. If a node does not match an existing k8s node, trigger a warning instead.
+		errors := []error{}
+		for _, err := range results.ResErrs {
+			switch e := err.(type) {
+			case calicoErrors.ErrorResourceDoesNotExist:
+				// Check that the error is for a Node
+				if key, ok := e.Identifier.(model.ResourceKey); ok {
+					if key.Kind == apiv3.KindNode {
+						fmt.Printf("[WARNING] Attempted to import node %v from etcd that references a non-existent Kubernetes node. Skipping that node. Non-Kubernetes nodes are not supported in the Kubernetes datastore and will be skipped.", e.Identifier)
+						continue
+					}
+				}
+				errors = append(errors, err)
+			default:
+				errors = append(errors, err)
+			}
+		}
+
+		if len(errors) > 0 {
+			return fmt.Errorf("Hit error(s): %v", errors)
+		}
 	}
 
 	return nil
