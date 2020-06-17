@@ -40,8 +40,9 @@ import (
 // actual state of the connectivity between the given workloads.  It is expected to be used like so:
 //
 //     var cc = &connectivity.Checker{}
-//     cc.ExpectNone(w[2], w[0], 1234)
-//     cc.ExpectSome(w[1], w[0], 5678)
+//     cc.Expect(None, w[2], w[0], 1234)
+//     cc.Expect(Some, w[1], w[0], 5678)
+//     cc.Expect(Some, w[1], w[0], 4321, ExpectWithABC, ExpectWithXYZ)
 //     cc.CheckConnectivity()
 //
 type Checker struct {
@@ -55,31 +56,36 @@ type Checker struct {
 	OnFail func(msg string)
 }
 
+// Expected defines what connectivity expectations we can have
+type Expected bool
+
+const (
+	// None no connectivity is expected
+	None Expected = false
+	// Some some connectivity, possibly after retries is expected
+	Some Expected = true
+)
+
 func (c *Checker) ExpectSome(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	c.expect(true, from, to, ExpectWithPorts(explicitPort...))
+	c.expect(Some, from, to, ExpectWithPorts(explicitPort...))
 }
 
 func (c *Checker) ExpectSNAT(from ConnectionSource, srcIP string, to ConnectionTarget, explicitPort ...uint16) {
 	c.CheckSNAT = true
-	c.expect(true, from, to, ExpectWithPorts(explicitPort...), ExpectWithSrcIPs(srcIP))
+	c.expect(Some, from, to, ExpectWithPorts(explicitPort...), ExpectWithSrcIPs(srcIP))
 }
 
 func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	c.expect(false, from, to, ExpectWithPorts(explicitPort...))
+	c.expect(None, from, to, ExpectWithPorts(explicitPort...))
 }
 
-// ExpectConnectivity asserts existing connectivity between a ConnectionSource
+// Expect asserts existing connectivity between a ConnectionSource
 // and ConnectionTarget with details configurable with ExpectationOption(s).
 // This is a super set of ExpectSome()
-func (c *Checker) ExpectConnectivity(from ConnectionSource, to ConnectionTarget, opts ...ExpectationOption) {
-	c.expect(true, from, to, opts...)
-}
+func (c *Checker) Expect(expected Expected,
+	from ConnectionSource, to ConnectionTarget, opts ...ExpectationOption) {
 
-// ExpectNoConnectivity checks for no connection between ConnectionSource and target
-// with options such as Error messages.
-func (c *Checker) ExpectNoConnectivity(from ConnectionSource, to ConnectionTarget,
-	opts ...ExpectationOption) {
-	c.expect(false, from, to, opts...)
+	c.expect(expected, from, to, opts...)
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
@@ -88,13 +94,13 @@ func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
 	// Packet loss measurements shouldn't be retried.
 	c.RetriesDisabled = true
 
-	c.expect(true, from, to,
+	c.expect(Some, from, to,
 		ExpectWithPorts(explicitPort...),
 		ExpectWithLoss(duration, maxPacketLossPercent, maxPacketLossNumber),
 	)
 }
 
-func (c *Checker) expect(connectivity bool, from ConnectionSource, to ConnectionTarget,
+func (c *Checker) expect(expected Expected, from ConnectionSource, to ConnectionTarget,
 	opts ...ExpectationOption) {
 
 	UnactivatedCheckers.Add(c)
@@ -104,10 +110,10 @@ func (c *Checker) expect(connectivity bool, from ConnectionSource, to Connection
 
 	e := Expectation{
 		From:     from,
-		Expected: connectivity,
+		Expected: expected,
 	}
 
-	if connectivity {
+	if expected {
 		// we expect the from.SourceIPs() by default
 		e.ExpSrcIPs = from.SourceIPs()
 	}
@@ -428,7 +434,7 @@ func ExpectWithPorts(ports ...uint16) ExpectationOption {
 type Expectation struct {
 	From               ConnectionSource // Workload or Container
 	To                 *Matcher         // Workload or IP, + port
-	Expected           bool
+	Expected           Expected
 	ExpSrcIPs          []string
 	ExpectedPacketLoss ExpPacketLoss
 

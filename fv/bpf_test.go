@@ -944,7 +944,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pol = updatePolicy(pol)
 					})
 					It("should not have connectivity from external client, and return connection refused", func() {
-						cc.ExpectNoConnectivity(externalClient, TargetIP(ip[0]),
+						cc.Expect(None, externalClient, TargetIP(ip[0]),
 							ExpectWithPorts(port),
 							ExpectNoneWithError("connection refused"),
 						)
@@ -1434,10 +1434,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 									// Also try host networked pods, both on a local and remote node.
 									// N.B. it cannot work without the connect time balancer
-									cc.ExpectConnectivity(hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
-									cc.ExpectConnectivity(hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
-									cc.ExpectConnectivity(hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
-									cc.ExpectConnectivity(hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
+									cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
+									cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
+									cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
+									cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
 
 									cc.CheckConnectivity()
 								})
@@ -1645,7 +1645,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										Expect(err).NotTo(HaveOccurred())
 										Expect(pmtu).To(Equal(0)) // nothing specific for this path yet
 
-										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP),
+										cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
 											ExpectWithPorts(npPort),
 											ExpectWithSendLen(sendLen),
 											ExpectWithRecvLen(recvLen),
@@ -1663,7 +1663,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										err := felixes[1].ExecMayFail("ethtool", "-K", "eth0", "gro", "off")
 										Expect(err).NotTo(HaveOccurred())
 
-										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP),
+										cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
 											ExpectWithPorts(npPort),
 											ExpectWithSendLen(sendLen),
 											ExpectWithRecvLen(recvLen),
