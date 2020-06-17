@@ -454,7 +454,7 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 			validateIP(node.Spec.BGP.IPv4Address)
 		}
 	} else if ipv4Env == "none" && node.Spec.BGP.IPv4Address != "" {
-		log.Warnf("Autodetection for IPv4 disabled, keeping existing value: %s", node.Spec.BGP.IPv4Address)
+		log.Infof("Autodetection for IPv4 disabled, keeping existing value: %s", node.Spec.BGP.IPv4Address)
 		validateIP(node.Spec.BGP.IPv4Address)
 	} else if ipv4Env != "none" {
 		if ipv4Env != "" {
@@ -482,7 +482,7 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 			validateIP(node.Spec.BGP.IPv6Address)
 		}
 	} else if ipv6Env == "none" && node.Spec.BGP.IPv6Address!="" {
-		log.Warnf("Autodetection for IPv6 disabled, keeping existing value: %s", node.Spec.BGP.IPv6Address)
+		log.Infof("Autodetection for IPv6 disabled, keeping existing value: %s", node.Spec.BGP.IPv6Address)
 		validateIP(node.Spec.BGP.IPv6Address)	
 	} else if ipv6Env != "none" {
 		if ipv6Env != "" {
