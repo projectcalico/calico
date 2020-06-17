@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1265,7 +1264,7 @@ func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
 
 // ServicePortEqual compares if two k8sp.ServicePort are equal, that is all of
 // their methods return equal values, i.e., they may differ in implementation,
-// but present themselves equaly. String() is not considered as thay may differ
+// but present themselves equally. String() is not considered as it may differ
 // for debugging reasons.
 func ServicePortEqual(a, b k8sp.ServicePort) bool {
 	return a.ClusterIP().Equal(b.ClusterIP()) &&
@@ -1288,11 +1287,18 @@ func stringsEqual(a, b []string) bool {
 		return false
 	}
 
-	sort.Strings(a)
-	sort.Strings(b)
+	// optimize for a common case to avoid allocating a map
+	if len(a) == 1 {
+		return a[0] == b[0]
+	}
 
-	for i := range a {
-		if a[i] != b[i] {
+	m := make(map[string]struct{}, len(a))
+	for _, s := range a {
+		m[s] = struct{}{}
+	}
+
+	for _, s := range b {
+		if _, ok := m[s]; !ok {
 			return false
 		}
 	}
