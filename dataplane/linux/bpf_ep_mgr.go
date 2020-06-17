@@ -47,7 +47,7 @@ import (
 
 type epIface struct {
 	ifacemonitor.State
-	jumpMapFD bpf.MapFD
+	jumpMapFD map[PolDirection]bpf.MapFD
 }
 
 type bpfEndpointManager struct {
@@ -158,8 +158,8 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	if update.State == ifacemonitor.StateUnknown {
 		log.WithField("iface", update.Name).Debug("Interface no longer present.")
 		if iface, ok := m.ifaces[update.Name]; ok {
-			if iface.jumpMapFD != 0 {
-				_ = iface.jumpMapFD.Close()
+			for _, fd := range iface.jumpMapFD {
+				_ = fd.Close()
 			}
 			delete(m.ifaces, update.Name)
 			m.dirtyIfaces.Add(update.Name)
@@ -516,24 +516,25 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	rules := m.extractRules(tier, endpoint.ProfileIds, polDirection)
 
 	iface := m.ifaces[endpoint.Name]
-	if iface.jumpMapFD != 0 {
-		// We've already attached an up-to-date program and saved off the jump map, just update the policy.
-		return m.updatePolicyProgram(iface.jumpMapFD, rules)
+	if iface.jumpMapFD[polDirection] == 0 {
+		// We don't have a program attached to this interface yet, attach one now.
+		err := ap.AttachProgram()
+		if err != nil {
+			return err
+		}
+
+		jumpMapFD, err := FindJumpMap(ap)
+		if err != nil {
+			return errors.Wrap(err, "failed to look up jump map")
+		}
+		if iface.jumpMapFD == nil {
+			iface.jumpMapFD = map[PolDirection]bpf.MapFD{}
+		}
+		iface.jumpMapFD[polDirection] = jumpMapFD
+		m.ifaces[endpoint.Name] = iface
 	}
 
-	err := ap.AttachProgram()
-	if err != nil {
-		return err
-	}
-
-	jumpMapFD, err := FindJumpMap(ap)
-	if err != nil {
-		return errors.Wrap(err, "failed to look up jump map")
-	}
-	iface.jumpMapFD = jumpMapFD
-	m.ifaces[endpoint.Name] = iface
-
-	return m.updatePolicyProgram(jumpMapFD, rules)
+	return m.updatePolicyProgram(iface.jumpMapFD[polDirection], rules)
 }
 
 func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][][]*proto.Rule) error {
