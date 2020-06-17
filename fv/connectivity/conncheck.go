@@ -68,16 +68,19 @@ func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explici
 	c.expect(false, from, to, explicitPort)
 }
 
-func (c *Checker) ExpectNoneWithError(from ConnectionSource, to ConnectionTarget, ErrorStr string, explicitPort ...uint16) {
-	c.expect(false, from, to, explicitPort, ExpectWithError(ErrorStr))
-}
-
 // ExpectConnectivity asserts existing connectivity between a ConnectionSource
 // and ConnectionTarget with details configurable with ExpectationOption(s).
 // This is a super set of ExpectSome()
 func (c *Checker) ExpectConnectivity(from ConnectionSource, to ConnectionTarget,
 	ports []uint16, opts ...ExpectationOption) {
 	c.expect(true, from, to, ports, opts...)
+}
+
+// ExpectNoConnectivity checks for no connection between ConnectionSource and target
+// with options such as Error messages.
+func (c *Checker) ExpectNoConnectivity(from ConnectionSource, to ConnectionTarget,
+	ports []uint16, opts ...ExpectationOption) {
+	c.expect(false, from, to, ports, opts...)
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
@@ -299,8 +302,8 @@ type Response struct {
 	SourceAddr string
 	ServerAddr string
 
-	Request Request
-	ErrorStr   string
+	Request  Request
+	ErrorStr string
 }
 
 func (r *Response) SourceIP() string {
@@ -364,7 +367,7 @@ func ExpectWithSrcIPs(ips ...string) ExpectationOption {
 		e.ExpSrcIPs = ips
 	}
 }
-func ExpectWithError(ErrorStr string) ExpectationOption {
+func ExpectNoneWithError(ErrorStr string) ExpectationOption {
 	return func(e *Expectation) {
 		e.ErrorStr = ErrorStr
 	}
@@ -481,14 +484,14 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 					return true
 				}
 			} else if response.Stats.ResponsesReceived == 0 {
-				// In cases, were we don't expect an error and a response, but still get one, 
-				// return true, if the ResponsesReceived in the stats is 0. This is for 
+				// In cases, were we don't expect an error and a response, but still get one,
+				// return true, if the ResponsesReceived in the stats is 0. This is for
 				// ExpectNone to pass
 				return true
 			}
 			return false
 		} else {
-			// Return false if we expect an error string and we don't get a response 
+			// Return false if we expect an error string and we don't get a response
 			if e.ErrorStr != "" {
 				return false
 			}

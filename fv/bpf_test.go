@@ -914,7 +914,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					externalIP := []string{extIP}
 					srcIPRange := []string{}
 					testSvcName := "test-lb-service-extip"
-					var port uint16
+					var port []uint16
 					var ip []string
 
 					BeforeEach(func() {
@@ -929,7 +929,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						ip = testSvc.Spec.ExternalIPs
-						port = uint16(testSvc.Spec.Ports[0].Port)
+						port = []uint16{uint16(testSvc.Spec.Ports[0].Port)}
 						pol.Spec.Ingress = []api.Rule{
 							{
 								Action: "Allow",
@@ -943,7 +943,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pol = updatePolicy(pol)
 					})
 					It("should not have connectivity from external client, and return connection refused", func() {
-						cc.ExpectNoneWithError(externalClient, TargetIP(ip[0]), "connection refused", port)
+						cc.ExpectNoConnectivity(externalClient, TargetIP(ip[0]), port, ExpectNoneWithError("connection refused"))
 						cc.CheckConnectivity()
 					})
 				})
