@@ -65,6 +65,7 @@ func (e ErrAttachFailed) Error() string {
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
+var	prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap AttachPoint) AttachProgram() error {
@@ -118,7 +119,6 @@ func (ap AttachPoint) AttachProgram() error {
 			continue
 		}
 		// find the pref and the handle
-		prefHandleRe := regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
 			p := progToCleanUp{
 				pref:   sm[1],
