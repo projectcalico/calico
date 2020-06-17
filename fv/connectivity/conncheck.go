@@ -56,31 +56,30 @@ type Checker struct {
 }
 
 func (c *Checker) ExpectSome(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	c.expect(true, from, to, explicitPort)
+	c.expect(true, from, to, ExpectWithPorts(explicitPort...))
 }
 
 func (c *Checker) ExpectSNAT(from ConnectionSource, srcIP string, to ConnectionTarget, explicitPort ...uint16) {
 	c.CheckSNAT = true
-	c.expect(true, from, to, explicitPort, ExpectWithSrcIPs(srcIP))
+	c.expect(true, from, to, ExpectWithPorts(explicitPort...), ExpectWithSrcIPs(srcIP))
 }
 
 func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	c.expect(false, from, to, explicitPort)
+	c.expect(false, from, to, ExpectWithPorts(explicitPort...))
 }
 
 // ExpectConnectivity asserts existing connectivity between a ConnectionSource
 // and ConnectionTarget with details configurable with ExpectationOption(s).
 // This is a super set of ExpectSome()
-func (c *Checker) ExpectConnectivity(from ConnectionSource, to ConnectionTarget,
-	ports []uint16, opts ...ExpectationOption) {
-	c.expect(true, from, to, ports, opts...)
+func (c *Checker) ExpectConnectivity(from ConnectionSource, to ConnectionTarget, opts ...ExpectationOption) {
+	c.expect(true, from, to, opts...)
 }
 
 // ExpectNoConnectivity checks for no connection between ConnectionSource and target
 // with options such as Error messages.
 func (c *Checker) ExpectNoConnectivity(from ConnectionSource, to ConnectionTarget,
-	ports []uint16, opts ...ExpectationOption) {
-	c.expect(false, from, to, ports, opts...)
+	opts ...ExpectationOption) {
+	c.expect(false, from, to, opts...)
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
@@ -89,11 +88,14 @@ func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
 	// Packet loss measurements shouldn't be retried.
 	c.RetriesDisabled = true
 
-	c.expect(true, from, to, explicitPort, ExpectWithLoss(duration, maxPacketLossPercent, maxPacketLossNumber))
+	c.expect(true, from, to,
+		ExpectWithPorts(explicitPort...),
+		ExpectWithLoss(duration, maxPacketLossPercent, maxPacketLossNumber),
+	)
 }
 
 func (c *Checker) expect(connectivity bool, from ConnectionSource, to ConnectionTarget,
-	explicitPort []uint16, opts ...ExpectationOption) {
+	opts ...ExpectationOption) {
 
 	UnactivatedCheckers.Add(c)
 	if c.ReverseDirection {
@@ -102,7 +104,6 @@ func (c *Checker) expect(connectivity bool, from ConnectionSource, to Connection
 
 	e := Expectation{
 		From:     from,
-		To:       to.ToMatcher(explicitPort...),
 		Expected: connectivity,
 	}
 
@@ -114,6 +115,8 @@ func (c *Checker) expect(connectivity bool, from ConnectionSource, to Connection
 	for _, option := range opts {
 		option(&e)
 	}
+
+	e.To = to.ToMatcher(e.explicitPorts...)
 
 	c.expectations = append(c.expectations, e)
 }
@@ -416,12 +419,20 @@ func ExpectWithLoss(duration time.Duration, maxPacketLossPercent float64, maxPac
 	}
 }
 
+func ExpectWithPorts(ports ...uint16) ExpectationOption {
+	return func(e *Expectation) {
+		e.explicitPorts = ports
+	}
+}
+
 type Expectation struct {
 	From               ConnectionSource // Workload or Container
 	To                 *Matcher         // Workload or IP, + port
 	Expected           bool
 	ExpSrcIPs          []string
 	ExpectedPacketLoss ExpPacketLoss
+
+	explicitPorts []uint16
 
 	sendLen int
 	recvLen int
