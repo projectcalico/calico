@@ -185,6 +185,8 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      $(PROTOC_CONTAINER) \
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto
+	# Make sure the generated code won't cause a static-checks failure.
+	$(MAKE) fix
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
