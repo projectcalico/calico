@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/onsi/ginkgo"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
@@ -67,6 +68,8 @@ type K8sDatastoreInfra struct {
 	// needsCleanup is set when we're told to Stop() in order to trigger deferred cleanup
 	// before the next test.  (If there is no next test, we'll skip the cleanup.)
 	needsCleanup bool
+
+	runningTest string
 }
 
 var (
@@ -129,6 +132,9 @@ func createK8sDatastoreInfra() DatastoreInfra {
 
 func GetK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	if K8sInfra != nil {
+		if K8sInfra.runningTest != "" {
+			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra.runningTest))
+		}
 		K8sInfra.EnsureReady()
 		K8sInfra.PerTestSetup()
 		return K8sInfra, nil
@@ -149,6 +155,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup() {
 		kds.bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
 			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 	}
+	K8sInfra.runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
 
 func runK8sApiserver(etcdIp string) *containers.Container {
@@ -448,6 +455,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 	// run, which is a big win when manually running a single test for debugging.)
 	log.Info("K8sDatastoreInfra told to stop, deferring cleanup...")
 	kds.needsCleanup = true
+	kds.runningTest = ""
 }
 
 type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Interface)
