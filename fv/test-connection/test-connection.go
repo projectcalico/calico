@@ -390,15 +390,13 @@ func (tc *testConn) tryLoopFile(loopFile string) error {
 
 func (tc *testConn) sendErrorResp(err error) {
 	var resp connectivity.Response
-	mtuPair := connectivity.MTUPair{}
-	resp.Error = err.Error()
+	resp.ErrorStr = err.Error()
 	res := connectivity.Result{
 		LastResponse: resp,
 		Stats: connectivity.Stats{
 			RequestsSent:      1,
 			ResponsesReceived: 0,
 		},
-		ClientMTU: mtuPair,
 	}
 	res.PrintToStdout()
 }

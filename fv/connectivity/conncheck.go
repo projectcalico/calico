@@ -199,8 +199,8 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 				result[i] += fmt.Sprintf(" (maxLoss: %.1f%%)", exp.ExpectedPacketLoss.MaxPercent)
 			}
 		}
-		if len(exp.Error) > 0 {
-			result[i] += " " + exp.Error
+		if exp.ErrorStr != "" {
+			result[i] += " " + exp.ErrorStr
 		}
 	}
 	return result
@@ -300,7 +300,7 @@ type Response struct {
 	ServerAddr string
 
 	Request Request
-	Error   string
+	ErrorStr   string
 }
 
 func (r *Response) SourceIP() string {
@@ -366,7 +366,7 @@ func ExpectWithSrcIPs(ips ...string) ExpectationOption {
 }
 func ExpectWithError(ErrorStr string) ExpectationOption {
 	return func(e *Expectation) {
-		e.Error = ErrorStr
+		e.ErrorStr = ErrorStr
 	}
 }
 
@@ -426,7 +426,7 @@ type Expectation struct {
 	clientMTUStart int
 	clientMTUEnd   int
 
-	Error string
+	ErrorStr string
 }
 
 type ExpPacketLoss struct {
@@ -475,13 +475,25 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 
 	} else {
 		if response != nil {
-			if len(e.Error) > 0 {
-				if strings.Contains(response.LastResponse.Error, e.Error) {
+			if e.ErrorStr != "" {
+				// Return a match if the error string expected is in the response
+				if strings.Contains(response.LastResponse.ErrorStr, e.ErrorStr) {
 					return true
 				}
+			} else if response.Stats.ResponsesReceived == 0 {
+				// In cases, were we don't expect an error and a response, but still get one, 
+				// return true, if the ResponsesReceived in the stats is 0. This is for 
+				// ExpectNone to pass
+				return true
 			}
 			return false
+		} else {
+			// Return false if we expect an error string and we don't get a response 
+			if e.ErrorStr != "" {
+				return false
+			}
 		}
+
 	}
 
 	return true

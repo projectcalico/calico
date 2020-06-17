@@ -162,9 +162,10 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 	};
 
 	CALI_DEBUG("Sending ICMP too big mtu=%d\n", be16_to_host(frag.mtu));
-
+	
+	/* check to make the verifier happy */
 	if (skb_too_short(skb)) {
-		CALI_DEBUG("ICMP v4 reply: too short before making room\n");
+		CALI_DEBUG("ICMP v4 too big: too short before making room\n");
 		return -1;
 	}
 	struct iphdr *ip = skb_iphdr(skb); 
