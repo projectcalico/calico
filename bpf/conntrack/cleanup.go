@@ -54,7 +54,7 @@ type ScanVerdict int
 const (
 	// ScanVerdictOK means entry is fine and should remain
 	ScanVerdictOK = iota
-	// ScanVerdictDelete meand entry should be deleted
+	// ScanVerdictDelete means entry should be deleted
 	ScanVerdictDelete
 )
 
@@ -66,11 +66,11 @@ type EntryGet func(Key) (Value, error)
 type EntryScanner func(Key, Value, EntryGet) ScanVerdict
 
 // Scanner iterates over a provided conntrack map and call a set of EntryScanner
-// functions on each  entry in the order as they were passed to NewScanner. If
+// functions on each entry in the order as they were passed to NewScanner. If
 // any of the EntryScanner returns ScanVerdictDelete, it deletes the entry, does
 // not call any other EntryScanner and continues the iteration.
 //
-// It provides a delete sae iteration over the conntrack table for multiple
+// It provides a delete-save iteration over the conntrack table for multiple
 // evaluation functions, to keep their implementation simpler.
 type Scanner struct {
 	ctMap    bpf.Map
@@ -91,19 +91,24 @@ func (s *Scanner) Scan() {
 	err := s.ctMap.Iter(func(k, v []byte) {
 		ctKey := KeyFromBytes(k)
 		ctVal := ValueFromBytes(v)
-		log.WithFields(log.Fields{
-			"key":   ctKey,
-			"entry": ctVal,
-		}).Debug("Examining conntrack entry")
+
+		if log.GetLevel() >= log.DebugLevel {
+			log.WithFields(log.Fields{
+				"key":   ctKey,
+				"entry": ctVal,
+			}).Debug("Examining conntrack entry")
+		}
 
 		for _, scanner := range s.scanners {
 			if verdict := scanner(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
 				err := s.ctMap.Delete(k)
-				log.WithError(err).Debug("Deletion result")
-				if err != nil && !bpf.IsNotExists(err) {
-					log.WithError(err).WithField("key", ctKey).Warn("Failed to delete conntrack entry")
+				if err != nil {
+					log.WithError(err).Debug("Deletion result")
+					if !bpf.IsNotExists(err) {
+						log.WithError(err).WithField("key", ctKey).Warn("Failed to delete conntrack entry")
+					}
 				}
-				break // the entry is no more
+				return // the entry is no more
 			}
 		}
 	})

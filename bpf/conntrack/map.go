@@ -439,11 +439,7 @@ func MapMemIter(m MapMem) bpf.MapIter {
 func BytesToKey(bytes []byte) Key {
 	var k Key
 
-	if len(bytes) >= len(k) {
-		copy(k[:], bytes[:len(k)])
-	} else {
-		copy(k[:], bytes[:])
-	}
+	copy(k[:], bytes[:])
 
 	return k
 }
@@ -453,11 +449,11 @@ func StringToKey(str string) Key {
 	return BytesToKey([]byte(str))
 }
 
-// BytesToValue turns a slice of bytes into a Key
+// BytesToValue turns a slice of bytes into a value
 func BytesToValue(bytes []byte) Value {
 	var v Value
 
-	copy(v[:], bytes[:len(v)])
+	copy(v[:], bytes)
 
 	return v
 }
