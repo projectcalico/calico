@@ -65,13 +65,10 @@ func (e ErrAttachFailed) Error() string {
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
-var	prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
+var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap AttachPoint) AttachProgram() error {
-	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
-	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
-	// point).
 	logCxt := log.WithField("attachPoint", ap)
 
 	tempDir, err := ioutil.TempDir("", "calico-tc")
@@ -92,6 +89,9 @@ func (ap AttachPoint) AttachProgram() error {
 		return err
 	}
 
+	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
+	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
+	// point).
 	logCxt.Debug("AttachProgram waiting for lock...")
 	tcLock.Lock()
 	defer tcLock.Unlock()
