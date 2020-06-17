@@ -47,6 +47,7 @@ import (
 
 type epIface struct {
 	ifacemonitor.State
+	jumpMapFD bpf.MapFD
 }
 
 type bpfEndpointManager struct {
@@ -156,7 +157,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	if update.State == ifacemonitor.StateUnknown {
 		log.WithField("iface", update.Name).Debug("Interface no longer present.")
-		if _, ok := m.ifaces[update.Name]; ok {
+		if iface, ok := m.ifaces[update.Name]; ok {
+			if iface.jumpMapFD != 0 {
+				_ = iface.jumpMapFD.Close()
+			}
 			delete(m.ifaces, update.Name)
 			m.dirtyIfaces.Add(update.Name)
 		}
@@ -504,10 +508,6 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
 	//   when we cannot encap the packet - non-GSO & too close to veth MTU
 	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
-	err := ap.AttachProgram()
-	if err != nil {
-		return err
-	}
 
 	var tier *proto.TierInfo
 	if len(endpoint.Tiers) != 0 {
@@ -515,17 +515,28 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	}
 	rules := m.extractRules(tier, endpoint.ProfileIds, polDirection)
 
+	iface := m.ifaces[endpoint.Name]
+	if iface.jumpMapFD != 0 {
+		// We've already attached an up-to-date program and saved off the jump map, just update the policy.
+		return m.updatePolicyProgram(iface.jumpMapFD, rules)
+	}
+
+	err := ap.AttachProgram()
+	if err != nil {
+		return err
+	}
+
 	jumpMapFD, err := FindJumpMap(ap)
 	if err != nil {
 		return errors.Wrap(err, "failed to look up jump map")
 	}
-	defer func() {
-		err := jumpMapFD.Close()
-		if err != nil {
-			log.WithError(err).Panic("Failed to close jump map FD")
-		}
-	}()
+	iface.jumpMapFD = jumpMapFD
+	m.ifaces[endpoint.Name] = iface
 
+	return m.updatePolicyProgram(jumpMapFD, rules)
+}
+
+func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][][]*proto.Rule) error {
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.ipSetMap.MapFD(), m.stateMap.MapFD(), jumpMapFD)
 	insns, err := pg.Instructions(rules)
 	if err != nil {
