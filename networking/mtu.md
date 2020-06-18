@@ -37,65 +37,85 @@ For help using IP in IP and/or VXLAN overlays, see [Configure overlay networking
 ### How to
 
 - [Determine MTU size](#determine-mtu-size)
-- [Configure MTU for workloads](#configure-mtu-for-workloads)
-- [Configure MTU for overlay networking](#configure-mtu-for-overlay-networking)
+- [Configure MTU](#configure-mtu)
 - [View current tunnel MTU values](#view-current-tunnel-mtu-values)
 
 #### Determine MTU size
 
-The following table lists common MTU sizes for {{site.prodname}} environments. Because MTU is a global property of the network path between endpoints, you should set the MTU to the minimum MTU of any path that packets may take. 
+The following table lists common MTU sizes for {{site.prodname}} environments. Because MTU is a global property of the network path between endpoints, you should set the MTU to the minimum MTU of any path that packets may take.
 
 **Common MTU sizes**
 
-| Network MTU            | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP (IPv4) | {{site.prodname}} MTU with VXLAN (IPv4) |
-| ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- |
-| 1500                   | 1500                  | 1480                                       | 1450                                    |
-| 9000                   | 9000                  | 8980                                       | 8950                                    |
-| 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    |
-| 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    |
-| 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    |
+| Network MTU            | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP (IPv4) | {{site.prodname}} MTU with VXLAN (IPv4) | {{site.prodname}} MTU with WireGuard (IPv4) |
+| ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- | ------------------------------------------- |
+| 1500                   | 1500                  | 1480                                       | 1450                                    | 1440                                        |
+| 9000                   | 9000                  | 8980                                       | 8950                                    | 8940                                        |
+| 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    | 1400                                        |
+| 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    | 8941                                        |
+| 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    | 1390                                        |
 
 **Recommended MTU for overlay networking**
 
-The extra overlay header used in IP in IP and VXLAN protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, and VXLAN uses a 50-byte header). Therefore, we recommend the following:
+The extra overlay header used in IP in IP, VXLAN and WireGuard protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, VXLAN uses a 50-byte header, and WireGuard uses a {% include open-new-window.html text='60-byte header' url='https://lists.zx2c4.com/pipermail/wireguard/2017-December/002201.html' %}). Therefore, we recommend the following:
 
-- If you use VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 50”. 
-- If you use only IP in IP, configure MTU size as “physical network MTU size minus 20”
+- If you use WireGuard encryption configure MTU size as “physical network MTU size minus 60”.
+- If you don't use WireGuard, but use VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 50”.
+- If you don't use WireGuard, but use only IP in IP, configure MTU size as “physical network MTU size minus 20”
 - Set the workload endpoint MTU and the tunnel MTUs to the same value (so all paths have the same MTU)
+
+**eBPF mode**
+
+Implementation of NodePorts uses VXLAN tunnel to hand off packets from one node to another, therefore VXLAN MTU setting
+is used to set the MTUs of workloads (veths) and should be “physical network MTU size minus 50” (see above).
 
 **MTU for flannel networking**
 
-When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface. If using flannel with VXLAN, use the “{{site.prodname}} MTU with VXLAN” column in the table above for common sizes. 
+When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface.
+- If using flannel with WireGuard encryption, use the "{{site.prodname}} MTU with WireGuard" column in the table above for common sizes.
+- Otherwise, if using flannel with VXLAN, use the “{{site.prodname}} MTU with VXLAN” column in the table above for common sizes.
 
-#### Configure MTU for workloads
-  
-When you set the MTU, it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods takes values from the ConfigMap and starts rolling updates for any {{site.prodname}} tunnel network interfaces on the node. 
+#### Configure MTU
 
-Edit the `calico-config` ConfigMap to set values in FelixConfiguration. For example:
+> **Note**: The updated MTU used by {{site.prodname}} only applies to new workloads.
+
+Select the appropriate instructions for configuring the MTU.  This is broken down based on installation:
+-  Manifest based installation (if you are not using the quickstart guide, most non-OpenShift installs fall under this
+   category)
+-  Operator
+
+##### **Manifest**
+
+For manifest based installations (i.e. ones that do not use the operator) edit the `calico-config` ConfigMap. For example:
 
 ```bash
 kubectl patch configmap/calico-config -n kube-system --type merge \
   -p '{"data":{"veth_mtu": "1440"}}'
 ```
 
-#### Configure MTU for overlay networking
+After updating the ConfigMap, perform a rolling restart of all calico/node pods. For example:
 
-If you are using IP in IP and/or VXLAN for {{site.prodname}} overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU. 
-
-Edit `calico-config ConfigMap` to set the MTU tunnel values in FelixConfiguration. For example: 
-
-```conf
-# Configure the MTU to use
-veth_mtu: "1440" 
+```bash
+kubectl rollout restart daemonset calico-node -n kube-system
 ```
 
-#### eBPF mode
+##### **Operator**
 
-Implementation of NodePorts uses VXLAN tunnel to hand off packets from one node to another, therefore VXLAN MTU setting is used to set the MTUs of workloads (veths) and should be “physical network MTU size minus 50” (see above).
+For Operator installations, edit the {{site.prodname}} operator `Installation` resource to set the `mtu`
+field in the `calicoNetwork` section of the `spec`.  For example:
+
+```bash
+kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"mtu":1440}}}'
+```
+
+Similarly, for OpenShift:
+
+```bash
+oc patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"mtu":1440}}}'
+```
 
 #### View current tunnel MTU values
 
-To view the current tunnel size, use the following command: 
+To view the current tunnel size, use the following command:
 
 `ip link show`
 
