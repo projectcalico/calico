@@ -202,7 +202,7 @@ If you are using IBM Cloud then we recommend using {% include open-new-window.ht
 
 #### Anywhere
 
-The above list of environments is obviously not an exhaustive list. Understanding the concepts and explanations in this guide hopefully will have helped you figure out what is right for your environment. If you still aren't sure then you can ask for advice through the Calico Users's Slack or Discourse forum. And remember you can run Calico in VXLAN overlay mode in almost any environment if you want to get started without worrying too deeply about the different options.
+The above list of environments is obviously not exhaustive. Understanding the concepts and explanations in this guide hopefully will have helped you figure out what is right for your environment. If you still aren't sure then you can ask for advice through the Calico Users's Slack or Discourse forum. And remember you can run Calico in VXLAN overlay mode in almost any environment if you want to get started without worrying too deeply about the different options.
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:VXLAN,Routing:Calico' %}
 
