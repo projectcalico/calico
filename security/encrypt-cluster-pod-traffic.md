@@ -22,14 +22,14 @@ This how-to guide uses the following {{site.prodname}} features:
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
 
-> **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. This functionality is not supported on platforms with `CALICO_NETWORKING_BACKEND=none`, e.g. managed kubernetes platforms EKS, AKS and GKE.
+> **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. Also, encryption using WireGuard is not supported if `CALICO_NETWORKING_BACKEND=none` (e.g. managed Kubernetes platforms EKS, AKS and GKE).
 {: .alert .alert-info}
 
 ### How to enable WireGuard for the cluster
 
 1. Install WireGuard on cluster nodes using {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}. Note that you may need to reboot your nodes after installing WireGuard to make the kernel modules available on your system.
 
-  > **Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
+    > **Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
    {: .alert .alert-info}
 
 1. Enable WireGuard encryption across all the nodes using the following command.
