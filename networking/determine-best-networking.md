@@ -50,11 +50,13 @@ Just like with a standard overlay network, the underlying network is not aware o
 An important distinguishing feature of different Kubernetes network implementations is whether or not pod IP addresses are routable outside of the cluster across the broader network.
 
 **Not routable**
+
 If the pod IP addresses are not routable outside of the cluster then when a pod tries to establish a network connection to an IP address that is outside of the cluster, Kubernetes uses a technique called SNAT (Source Network Address Translation) to change the source IP address from the IP address of the pod, to the IP address of the node hosting the pod.  Any return packets on the connection get automatically mapped back to the pod IP address.  So the pod is unaware the SNAT is happening, the destination for the connection sees the node as the source of the connection, and the underlying broader network never sees pod IP addresses.
 
 For connections in the opposite direction, where something outside of the cluster needs to connect to a pod, this can only be done via Kubernetes services or Kubernetes ingress. Nothing outside of the cluster can directly connect to a pod IP address, because the broader network doesn’t know how to route packets to pod IP addresses.
 
 **Routable**
+
 If the pod IP addresses are routable outside of the cluster then pods can connect to the outside world without SNAT, and the outside world can connect directly to pods without going via a Kubernetes service or Kubernetes ingress.
 
 The advantage of pod IP addresses that are routable outside the cluster are:
@@ -64,6 +66,7 @@ The advantage of pod IP addresses that are routable outside the cluster are:
 The main disadvantage of pod IP addresses that are routable outside the cluster is that the pod IPs must be unique across the broader network.  So for example, if running multiple clusters you will need to use a different IP address range (CIDR) for pods in each cluster.  This in turn can lead to IP address range exhaustion challenges when running at scale, or if there are other significant existing enterprise demands on IP address space.
 
 **What determines routability?**
+
 If you are using an overlay network for your cluster, then pod IPs are not normally routable outside of the cluster.
 
 If you aren’t using an overlay network, then whether pod IPs are routable outside of the cluster depends on what combination of CNI plugins, cloud provider integrations, or (for on-prem) BGP peering with the physical network, is being used.
@@ -77,33 +80,42 @@ BGP (Border Gateway Protocol) is a standards based networking protocol for shari
 {{site.prodname}}’s flexible modular architecture for networking includes the following.
 
 **{{site.prodname}} CNI network plugin**
+
 The {{site.prodname}} CNI network plugin connects pods to the host network namespace’s L3 routing using a pair of virtual ethernet devices (veth pair). This L3 architecture avoids the unnecessary complexity and performance overheads of additional L2 bridges that feature in many other Kubernetes networking solutions.
 
 **{{site.prodname}} CNI IPAM plugin**
+
 The {{site.prodname}} CNI IPAM plugin allocates IP addresses for pods out of one or more configurable IP address ranges, dynamically allocating small blocks of IPs per node as required.  The result is a more efficient IP address space usage compared to many other CNI IPAM plugins, including the host local IPAM plugin which is used in many networking solutions.
 
 **Overlay network modes**
+
 {{site.prodname}} can provide both VXLAN or IP-in-IP overlay networks, including cross-subnet only modes.
 
 **Non-overlay network modes**
+
 {{site.prodname}} can provide non-overlay networks running on top of any underlying L2 network, or an L3 network that is either a public cloud network with appropriate cloud provider integration, or a BGP capable network (typically an on-prem network with standard Top-of-Rack routers).
 
 **Network policy enforcement**
+
 {{site.prodname}}’s network policy enforcement engine implements the full range of Kubernetes Network Policy features, plus the extended features of {{site.prodname}} Network Policy.  This works in conjunction with {{site.prodname}}’s built in networking modes, or any other {{site.prodname}} compatible network plugins and cloud provider integrations.
 
 ### {{site.prodname}} compatible CNI plugins and cloud provider integrations
 In addition to the {{site.prodname}} CNI plugins and built in networking modes, {{site.prodname}} is also compatible with a number of third party CNI plugins and cloud provider integrations.
 
 **Amazon VPC CNI**
+
 The Amazon VPC CNI plugin allocates pod IPs from the underlying AWS VPC and uses AWS elastic network interfaces to provide VPC native pod networking (pod IPs that are routable outside of the cluster). It is the default networking used in {% include open-new-window.html text='Amazon EKS' url='https://aws.amazon.com/eks/' %}, with Calico for network policy enforcement.
 
 **Azure CNI**
+
 The Azure CNI plugin allocates pod IPs from the underlying Azure VNET configures the Azure virtual network to provide VNET native pod networking (pod IPs that are routable outside of the cluster). It is the default networking used in {% include open-new-window.html text='Microsoft AKS' url='https://azure.microsoft.com/en-us/services/kubernetes-service/' %}, with Calico for network policy enforcement.
 
-**Google cloud networking**
+**Google cloud provider**
+
 The Google cloud provider integration uses host-local IPAM CNI plugin to allocate pod IPs and programs the Google cloud network Alias IP ranges to provide VPC native pod networking on Google cloud (pod IPs that are routable outside of the cluster). It is the default for Google Kubernetes Engine (GKE), with Calico for network policy enforcement.
 
 **Flannel**
+
 Flannel routes pod traffic using static per-node CIDRs obtained from the host-local IPAM CNI plugin. Flannel provides a number of networking backends, but is predominantly used with its VXLAN overlay backend. {{site.prodname}} CNI and {{site.prodname}} network policy can be combined with Flannel and the host-local IPAM plugin to provide a VXLAN network with policy enforcement.  This combination is sometimes referred to as “Canal”.  
 
 >**Note**: {{site.prodname}} now has built in support for VXLAN, which we generally recommend for simplicity in preference to using the Calico+Flannel combination.
@@ -122,11 +134,11 @@ If peering BGP to the physical network is not an option, you can also run non-ov
 
 Alternatively you can run {{site.prodname}} in either VXLAN or IP-in-IP overlay mode, with cross-subnet overlay mode to optimize performance within each L2 subnet.
 
-Recommended:
+*Recommended:*
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:VXLAN,Routing:Calico' %}
 
-Alternative:
+*Alternative:*
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:IPIP,Routing:BGP' %}
 
@@ -163,11 +175,11 @@ If you would like pod IP addresses to be routable outside of the cluster then yo
 
 If you prefer to avoid dependencies on a specific cloud provider, or allocating pod IPs from the underlying VPC is problematic due to IP address range exhaustion challenges, we recommend using {{site.prodname}} networking in overlay mode. As Google cloud network is a pure L3 network, cross-subnet mode is not supported.  Pod IPs will not be routable outside of the cluster, but you can scale the cluster up to the limits of Kubernetes with no dependencies on the underlying cloud network.
 
-Recommended:
+*Recommended:*
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico' %}
 
-Alternative: 
+*Alternative:*
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP' %}
 
