@@ -106,7 +106,7 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 	state->pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src,
 					    state->ip_dst, state->sport, state->dport);
 
-	bpf_tail_call(skb, &cali_jump, 1);
+	bpf_tail_call(skb, &cali_jump, EPILOGUE_PROG_INDEX);
 	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
 
 deny:
@@ -160,6 +160,12 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	}
 
 	return ret;
+}
+
+static CALI_BPF_INLINE int update_state_map(struct cali_tc_state *state)
+{
+	int key = 0;
+	return cali_v4_state_update_elem(&key, state, BPF_EXIST);
 }
 
 static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
@@ -336,7 +342,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		.reason = CALI_REASON_UNKNOWN,
 	};
 	struct calico_nat_dest *nat_dest = NULL;
-	bool nat_lvl1_drop = 0;
+	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
 
 	/* we assume we do FIB and from this point on, we only set it to false
 	 * if we decide not to do it.
@@ -596,9 +602,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* No conntrack entry, check if we should do NAT */
 	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
 					 state.ip_proto, state.dport,
-					 state.tun_ip != 0, &nat_lvl1_drop);
+					 state.tun_ip != 0, &nat_res);
 
-	if (nat_lvl1_drop) {
+	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
 		fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 		goto deny;
@@ -606,6 +612,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (nat_dest != NULL) {
 		state.post_nat_ip_dst = nat_dest->addr;
 		state.post_nat_dport = nat_dest->port;
+	} else if (nat_res == NAT_NO_BACKEND) {
+		/* send icmp port unreachable if there is no backend for a service */
+		state.icmp_type = ICMP_DEST_UNREACH;
+		state.icmp_code = ICMP_PORT_UNREACH;
+		state.tun_ip = 0;
+		goto icmp_send_reply;
 	} else {
 		state.post_nat_ip_dst = state.ip_dst;
 		state.post_nat_dport = state.dport;
@@ -656,7 +668,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 */
 	if (state.ip_proto == IPPROTO_ICMP) {
 		state.icmp_type = icmp_header->type;
-        	state.icmp_code = icmp_header->code;
+		state.icmp_code = icmp_header->code;
 	}
 
 
@@ -687,16 +699,23 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		 * here but that runs out of stack space.
 		 */
 		map_state->pol_rc = CALI_POL_ALLOW;
-		bpf_tail_call(skb, &cali_jump, 1);
+		bpf_tail_call(skb, &cali_jump, EPILOGUE_PROG_INDEX);
 		CALI_DEBUG("Tail call to epilogue program failed: ALLOW\n");
 		return TC_ACT_UNSPEC;
 	}
 
 	CALI_DEBUG("About to jump to policy program; lack of further "
 			"logs means policy dropped the packet...\n");
-	bpf_tail_call(skb, &cali_jump, 0);
+	bpf_tail_call(skb, &cali_jump, POL_PROG_INDEX);
 	CALI_DEBUG("Tail call to policy program failed: DROP\n");
 	return TC_ACT_SHOT;
+
+icmp_send_reply:
+	if (update_state_map(&state) == 0) {
+		bpf_tail_call(skb, &cali_jump, ICMP_PROG_INDEX);
+	}
+	/* should not reach here */
+	goto deny;
 
 skip_policy:
 	fwd = calico_tc_skb_accepted(skb, ip_header, &state, nat_dest);
@@ -757,7 +776,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	uint32_t seen_mark;
 	size_t l4_csum_off = 0, l3_csum_off;
-	uint32_t fib_flags = 0;
 
 	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
 	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
@@ -1183,64 +1201,33 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	goto deny;
 
 icmp_ttl_exceeded:
-	if (skb_too_short(skb)) {
-		reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
-		goto deny;
-	}
-
-	ip_header = skb_iphdr(skb);
-	/* we silently drop the packet if things go wrong */
-
-	/* XXX we should check if it is broadcast or multicast and not respond */
-
-	/* do not respond to IP fragments except the first */
 	if (ip_frag_no(ip_header)) {
 		goto deny;
 	}
-
-	if (icmp_v4_ttl_exceeded(skb)) {
-		goto deny;
-	}
-
-	/* we need to allow the reponse for the IP stack to route it back.
-	 * XXX we might want to send it back the same iface
-	 */
-	goto icmp_allow;
+	state->icmp_type = ICMP_TIME_EXCEEDED;
+	state->icmp_code = ICMP_EXC_TTL;
+	state->tun_ip = 0;
+	goto icmp_send_reply;
 
 icmp_too_big:
-	if (icmp_v4_too_big(skb)) {
-		reason = CALI_REASON_ICMP_DF;
-		goto deny;
+	state->icmp_type = ICMP_DEST_UNREACH;
+	state->icmp_code = ICMP_FRAG_NEEDED;
+
+	struct {
+		__be16  unused;
+		__be16  mtu;
+	} frag = {
+		.mtu = host_to_be16(TUNNEL_MTU),
+	};
+	state->tun_ip = *(__be32 *)&frag;
+
+	goto icmp_send_reply;
+
+icmp_send_reply:
+	if (update_state_map(state) == 0) {
+		bpf_tail_call(skb, &cali_jump, ICMP_PROG_INDEX);
 	}
-
-	/* XXX we might use skb->ifindex to redirect it straight back
-	 * to where it came from if it is guaranteed to be the path
-	 */
-	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
-	if (CALI_F_FROM_WEP) {
-		/* we know it came from workload, just send it back the same way */
-		rc = CALI_RES_REDIR_IFINDEX;
-	}
-
-	goto icmp_allow;
-
-icmp_allow:
-	/* recheck the size of the packet after it was turned into icmp and set
-	 * state so that it can processed further.
-	 */
-	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE)) {
-		reason = CALI_REASON_SHORT;
-		goto deny;
-	}
-	ip_header = skb_iphdr(skb);
-	tc_state_fill_from_iphdr(state, ip_header);
-	state->sport = state->dport = 0;
-
-	/* packet was created because of approved traffic, treat it as related */
-	seen_mark = CALI_SKB_MARK_BYPASS_FWD;
-
-	goto allow;
+	goto deny;
 
 nat_encap:
 	if (vxlan_v4_encap(skb, state->ip_src, state->ip_dst)) {
@@ -1258,7 +1245,6 @@ allow:
 			.mark = seen_mark,
 		};
 		fwd_fib_set(&fwd, fib);
-		fwd_fib_set_flags(&fwd, fib_flags);
 		return fwd;
 	}
 
@@ -1270,6 +1256,61 @@ deny:
 		};
 		return fwd;
 	}
+}
+
+__attribute__((section("1/2")))
+int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
+{
+	uint32_t fib_flags = 0;
+	int rc = TC_ACT_UNSPEC;
+	enum calico_reason reason = CALI_REASON_UNKNOWN;
+	uint32_t seen_mark;
+	struct fwd fwd;
+
+	CALI_DEBUG("Entering calico_tc_skb_send_icmp_replies\n");
+	if (skb_too_short(skb)) {
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+	struct iphdr *ip_header = skb_iphdr(skb);
+	__u32 key = 0;
+	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
+	if (!state) {
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		goto deny;
+	}
+	CALI_DEBUG("ICMP type %d and code %d\n",state->icmp_type, state->icmp_code);
+
+	if (state->icmp_code == ICMP_FRAG_NEEDED) {
+		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+		if (CALI_F_FROM_WEP) {
+			/* we know it came from workload, just send it back the same way */
+			rc = CALI_RES_REDIR_IFINDEX;
+		}
+	}
+
+	if (icmp_v4_reply(skb, ip_header, state->icmp_type, state->icmp_code, state->tun_ip)) {
+		fwd.res = TC_ACT_SHOT;
+		fwd.reason = reason;
+	} else {
+		seen_mark = CALI_SKB_MARK_BYPASS_FWD;
+		fwd.res = rc;
+		fwd.mark = seen_mark;
+
+		fwd_fib_set(&fwd, false);
+		fwd_fib_set_flags(&fwd, fib_flags);
+	}
+
+	if (skb_too_short(skb)) {
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+	ip_header = skb_iphdr(skb);
+	tc_state_fill_from_iphdr(state, ip_header);
+	state->sport = state->dport = 0;
+	return forward_or_drop(skb, state, &fwd);
+deny:
+	return TC_ACT_SHOT;
 }
 
 #ifndef CALI_ENTRYPOINT_NAME

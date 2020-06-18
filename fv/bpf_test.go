@@ -909,6 +909,46 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
+				Context("Test load balancer service with no backend", func() {
+					var testSvc *v1.Service
+					tgtPort := 8055
+					externalIP := []string{extIP}
+					srcIPRange := []string{}
+					testSvcName := "test-lb-service-extip"
+					var port []uint16
+					var ip []string
+
+					BeforeEach(func() {
+						if testOpts.connTimeEnabled || testOpts.udpUnConnected {
+							Skip("Skip UDP unconnected, connectime load balancing cases as externalClient also does conntime balancing")
+						}
+						externalClient.EnsureBinary("test-connection")
+						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
+						// create a service workload as nil, so that the service has no backend
+						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName, "10.101.0.10", nil, 80, tgtPort,
+							testOpts.protocol, externalIP, srcIPRange)
+						felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
+						felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
+						ip = testSvc.Spec.ExternalIPs
+						port = []uint16{uint16(testSvc.Spec.Ports[0].Port)}
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{
+										externalClient.IP + "/32",
+									},
+								},
+							},
+						}
+						pol = updatePolicy(pol)
+					})
+					It("should not have connectivity from external client, and return connection refused", func() {
+						cc.ExpectNoConnectivity(externalClient, TargetIP(ip[0]), port, ExpectNoneWithError("connection refused"))
+						cc.CheckConnectivity()
+					})
+				})
+
 				Describe("Test load balancer service with external Client,src ranges", func() {
 					var testSvc *v1.Service
 					tgtPort := 8055
@@ -964,6 +1004,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					})
 				})
+
 				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
 					var (
 						testSvc          *v1.Service
@@ -1939,7 +1980,7 @@ func k8sService(name, clusterIP string, w *workload.Workload, port,
 	}
 }
 
-func k8sLBService(name, clusterIP string, w *workload.Workload, port,
+func k8sLBService(name, clusterIP string, wname string, port,
 	tgtPort int, protocol string, externalIPs, srcRange []string) *v1.Service {
 	k8sProto := v1.ProtocolTCP
 	if protocol == "udp" {
@@ -1956,7 +1997,7 @@ func k8sLBService(name, clusterIP string, w *workload.Workload, port,
 			LoadBalancerSourceRanges: srcRange,
 			ExternalIPs:              externalIPs,
 			Selector: map[string]string{
-				"name": w.Name,
+				"name": wname,
 			},
 			Ports: []v1.ServicePort{
 				{
@@ -1990,13 +2031,19 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 	var (
 		testSvc          *v1.Service
 		testSvcNamespace string
+		epslen           int
 	)
-
-	testSvc = k8sLBService(name, clusterIP, w, 80, tgtPort, protocol, externalIPs, srcRange)
+	if w != nil {
+		testSvc = k8sLBService(name, clusterIP, w.Name, 80, tgtPort, protocol, externalIPs, srcRange)
+		epslen = 1
+	} else {
+		testSvc = k8sLBService(name, clusterIP, "nobackend", 80, tgtPort, protocol, externalIPs, srcRange)
+		epslen = 0
+	}
 	testSvcNamespace = testSvc.ObjectMeta.Namespace
 	_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")
 	return testSvc
 }
