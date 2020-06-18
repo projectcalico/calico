@@ -46,7 +46,7 @@ section:
     section:
     - title: Install Calico for policy and flannel for networking
       path: /getting-started/kubernetes/flannel/flannel
-    - title: Migrate a cluster from flannel to Calico
+    - title: Migrate a cluster from flannel networking to Calico networking
       path: /getting-started/kubernetes/flannel/migration-from-flannel     
   - title: Calico the hard way
     path: /getting-started/kubernetes/hardway/
