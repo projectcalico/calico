@@ -78,7 +78,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 								FIB:        fibEnabled,
 								DSR:        dsr,
 								LogLevel:   logLevel,
-								IP:         net.ParseIP("10.0.0.1"),
+								HostIP:     net.ParseIP("10.0.0.1"),
 							}
 
 							t.Run(ap.FileName(), func(t *testing.T) {
@@ -88,7 +88,6 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 								vethName, veth := createVeth()
 								defer deleteLink(veth)
 
-								tc.EnsureQdisc(vethName)
 								ap.Iface = vethName
 								err := ap.AttachProgram()
 								Expect(err).NotTo(HaveOccurred())

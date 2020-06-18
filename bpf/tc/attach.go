@@ -46,7 +46,7 @@ type AttachPoint struct {
 	Hook       Hook
 	Iface      string
 	LogLevel   string
-	IP         net.IP
+	HostIP     net.IP
 	FIB        bool
 	ToHostDrop bool
 	DSR        bool
@@ -65,26 +65,11 @@ func (e ErrAttachFailed) Error() string {
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
+var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap AttachPoint) AttachProgram() error {
-	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
-	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
-	// point).
 	logCxt := log.WithField("attachPoint", ap)
-	logCxt.Debug("AttachProgram waiting for lock...")
-	tcLock.Lock()
-	defer tcLock.Unlock()
-	logCxt.Debug("AttachProgram got lock.")
-
-	// Work around tc map name collision: when we load two identical BPF programs onto different interfaces, tc
-	// pins object-local maps to a namespace based on the hash of the BPF program, which is the same for both
-	// interfaces.  Since we want one map per interface instead, we search for such maps and rename them before we
-	// release the tc lock.
-	//
-	// For our purposes, it should work to simply delete the map.  However, when we tried that, the contents of the
-	// map get deleted even though it is in use by a BPF program.
-	defer repinJumpMaps()
 
 	tempDir, err := ioutil.TempDir("", "calico-tc")
 	if err != nil {
@@ -104,13 +89,62 @@ func (ap AttachPoint) AttachProgram() error {
 		return err
 	}
 
-	tcCmd := exec.Command("tc",
+	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
+	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
+	// point).
+	logCxt.Debug("AttachProgram waiting for lock...")
+	tcLock.Lock()
+	defer tcLock.Unlock()
+	logCxt.Debug("AttachProgram got lock.")
+
+	err = EnsureQdisc(ap.Iface)
+	if err != nil {
+		return err
+	}
+
+	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
+	out, err := tcCmd.Output()
+	if err != nil {
+		return errors.WithMessage(err, "failed to list tc filters on interface "+ap.Iface)
+	}
+	// Lines look like this; the section name always includes calico.
+	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
+	type progToCleanUp struct {
+		pref   string
+		handle string
+	}
+	var progsToClean []progToCleanUp
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "calico") {
+			continue
+		}
+		// find the pref and the handle
+		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
+			p := progToCleanUp{
+				pref:   sm[1],
+				handle: sm[2],
+			}
+			log.WithField("prog", p).Debug("Found old calico program")
+			progsToClean = append(progsToClean, p)
+		}
+	}
+
+	// Work around tc map name collision: when we load two identical BPF programs onto different interfaces, tc
+	// pins object-local maps to a namespace based on the hash of the BPF program, which is the same for both
+	// interfaces.  Since we want one map per interface instead, we search for such maps and rename them before we
+	// release the tc lock.
+	//
+	// For our purposes, it should work to simply delete the map.  However, when we tried that, the contents of the
+	// map get deleted even though it is in use by a BPF program.
+	defer repinJumpMaps()
+
+	tcCmd = exec.Command("tc",
 		"filter", "add", "dev", ap.Iface,
 		string(ap.Hook),
 		"bpf", "da", "obj", tempBinary,
 		"sec", SectionName(ap.Type, ap.ToOrFrom))
 
-	out, err := tcCmd.Output()
+	out, err = tcCmd.Output()
 	if err != nil {
 		if err, ok := err.(*exec.ExitError); ok {
 			stderr := string(err.Stderr)
@@ -130,7 +164,24 @@ func (ap AttachPoint) AttachProgram() error {
 				Stderr:   string(err.Stderr),
 			}
 		}
-		return errors.Wrap(err, "failed to attach TC program")
+		return errors.WithMessage(err, "failed to attach TC program")
+	}
+
+	// Success: clean up the old programs.
+	var progErrs []error
+	for _, p := range progsToClean {
+		log.WithField("prog", p).Debug("Cleaning up old calico program")
+		tcCmd := exec.Command("tc", "filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
+		err := tcCmd.Run()
+		if err != nil {
+			// TODO: filter error to avoid spam if interface is gone.
+			log.WithError(err).WithField("prog", p).Warn("Failed to clean up old calico program.")
+			progErrs = append(progErrs, err)
+		}
+	}
+
+	if len(progErrs) != 0 {
+		return fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
 	}
 
 	return nil
@@ -142,8 +193,8 @@ func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error 
 		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
 	}
 
-	logCtx.WithField("ip", ap.IP).Debug("Patching in IP")
-	err = b.PatchIPv4(ap.IP)
+	logCtx.WithField("ip", ap.HostIP).Debug("Patching in IP")
+	err = b.PatchIPv4(ap.HostIP)
 	if err != nil {
 		return errors.WithMessage(err, "patching in IPv4")
 	}
@@ -342,8 +393,10 @@ func CleanUpJumpMaps() {
 			emptyAutoDirs.Add(p)
 		} else {
 			dirPath := path.Clean(path.Dir(p))
-			log.WithField("path", dirPath).Debug("tc dir is not empty.")
-			emptyAutoDirs.Discard(dirPath)
+			if emptyAutoDirs.Contains(dirPath) {
+				log.WithField("path", dirPath).Debug("tc dir is not empty.")
+				emptyAutoDirs.Discard(dirPath)
+			}
 		}
 		return nil
 	})
@@ -367,10 +420,39 @@ func CleanUpJumpMaps() {
 }
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface
-func EnsureQdisc(ifaceName string) {
-	// FIXME Avoid flapping the tc program and qdisc
-	cmd := exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact")
-	_ = cmd.Run()
-	cmd = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact")
-	_ = cmd.Run()
+func EnsureQdisc(ifaceName string) error {
+	hasQdisc, err := HasQdisc(ifaceName)
+	if err != nil {
+		return err
+	}
+	if hasQdisc {
+		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
+		return nil
+	}
+	return exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact").Run()
+}
+
+func HasQdisc(ifaceName string) (bool, error) {
+	cmd := exec.Command("tc", "qdisc", "show", "dev", ifaceName, "clsact")
+	out, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	if strings.Contains(string(out), "qdisc clsact") {
+		return true, nil
+	}
+	return false, nil
+}
+
+// RemoveQdisc makes sure that there is no qdisc attached to the given interface
+func RemoveQdisc(ifaceName string) error {
+	hasQdisc, err := HasQdisc(ifaceName)
+	if err != nil {
+		return err
+	}
+	if !hasQdisc {
+		return nil
+	}
+
+	return exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact").Run()
 }

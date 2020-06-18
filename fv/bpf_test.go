@@ -1501,7 +1501,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								if testOpts.connTimeEnabled {
 									Skip("FIXME externalClient also does conntime balancing")
 								}
-
 								cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
 								cc.CheckConnectivity()
 							})

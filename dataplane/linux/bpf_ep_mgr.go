@@ -47,6 +47,7 @@ import (
 
 type epIface struct {
 	ifacemonitor.State
+	jumpMapFD map[PolDirection]bpf.MapFD
 }
 
 type bpfEndpointManager struct {
@@ -156,7 +157,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	if update.State == ifacemonitor.StateUnknown {
 		log.WithField("iface", update.Name).Debug("Interface no longer present.")
-		if _, ok := m.ifaces[update.Name]; ok {
+		if iface, ok := m.ifaces[update.Name]; ok {
+			for _, fd := range iface.jumpMapFD {
+				_ = fd.Close()
+			}
 			delete(m.ifaces, update.Name)
 			m.dirtyIfaces.Add(update.Name)
 		}
@@ -384,7 +388,6 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			m.ensureQdisc(iface)
 			err := m.attachDataIfaceProgram(iface, PolDirnIngress)
 			if err == nil {
 				err = m.attachDataIfaceProgram(iface, PolDirnEgress)
@@ -466,9 +469,6 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 		// TODO clean up old workloads
 		return nil
 	}
-	ifaceName := wep.Name
-
-	m.ensureQdisc(ifaceName)
 
 	var ingressErr, egressErr error
 	var wg sync.WaitGroup
@@ -496,26 +496,18 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	return nil
 }
 
-func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
-	tc.EnsureQdisc(ifaceName)
-}
-
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
 func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
 	// Host side of the veth is always configured as 169.254.1.1.
-	ap.IP = calicoRouterIP
+	ap.HostIP = calicoRouterIP
 	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
 	// * We also expect that to be the MTU used on veths.
 	// * We do encap on the veths, and there's a bogus kernel MTU check in the BPF helper
 	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
 	//   when we cannot encap the packet - non-GSO & too close to veth MTU
 	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
-	err := ap.AttachProgram()
-	if err != nil {
-		return err
-	}
 
 	var tier *proto.TierInfo
 	if len(endpoint.Tiers) != 0 {
@@ -523,17 +515,29 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	}
 	rules := m.extractRules(tier, endpoint.ProfileIds, polDirection)
 
-	jumpMapFD, err := FindJumpMap(ap)
-	if err != nil {
-		return errors.Wrap(err, "failed to look up jump map")
-	}
-	defer func() {
-		err := jumpMapFD.Close()
+	iface := m.ifaces[endpoint.Name]
+	if iface.jumpMapFD[polDirection] == 0 {
+		// We don't have a program attached to this interface yet, attach one now.
+		err := ap.AttachProgram()
 		if err != nil {
-			log.WithError(err).Panic("Failed to close jump map FD")
+			return err
 		}
-	}()
 
+		jumpMapFD, err := FindJumpMap(ap)
+		if err != nil {
+			return errors.Wrap(err, "failed to look up jump map")
+		}
+		if iface.jumpMapFD == nil {
+			iface.jumpMapFD = map[PolDirection]bpf.MapFD{}
+		}
+		iface.jumpMapFD[polDirection] = jumpMapFD
+		m.ifaces[endpoint.Name] = iface
+	}
+
+	return m.updatePolicyProgram(iface.jumpMapFD[polDirection], rules)
+}
+
+func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][][]*proto.Rule) error {
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.ipSetMap.MapFD(), m.stateMap.MapFD(), jumpMapFD)
 	insns, err := pg.Instructions(rules)
 	if err != nil {
@@ -612,7 +616,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 		epType = tc.EpTypeTunnel
 	}
 	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
-	ap.IP = m.hostIP
+	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	return ap.AttachProgram()
 }
