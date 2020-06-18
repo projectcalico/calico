@@ -32,6 +32,9 @@ CNI (Container Network Interface) is a standard API which allows different netwo
 #### Cloud provider integrations
 Kubernetes cloud provider integrations are cloud specific controllers that can configure the underlying cloud network to help provide Kuberenetes networking.  Depending on the cloud provider, this could include automatically programming routes into the underlying cloud network so it knows natively how to route pod traffic.
 
+#### Kubenet
+Kubenet is an extremely basic network plugin built into Kubernetes. It does not implement cross-node networking or network policy. It is typically used together with a cloud provider integration that sets up routes in the cloud provider network for communication between nodes, or in single node environments. Kubenet is not compatible with Calico.
+
 #### Overlay networks
 An overlay network is a network that is layered on top of another network.  In the context of Kubernetes an overlay network can be used to handle pod-to-pod traffic between nodes on top of an underlying network that is not aware of pod IP addresses or which pods are running on which nodes. Overlay networks work by encapsulating network packets that an underlying network doesn’t know how to handle (for example using pod IP addresses) within an outer packet which the underlying network does know how to handle (for example node IP addresses). Two common network protocols used for encapsulation are VXLAN and IP-in-IP.
 
@@ -162,7 +165,10 @@ If you would like pod IP addresses to be routable outside of the cluster then yo
 
 {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native' %}
 
-If you want to use AKS but allocating pod IPs from the underlying VNET is problematic due to IP address range exhaustion challenges, you can use {{site.prodname}} in conjunction with the Azure cloud provider integration. This uses host-local IPAM to allocate /24 per node, and programs routes within the cluster’s underlying VNET subnet for those /24.  Pod IPs are not routable outside of the cluster / VNET subnet, so the same pod IP address range (CIDR) can be used across multiple clusters if desired.
+If you want to use AKS but allocating pod IPs from the underlying VNET is problematic due to IP address range exhaustion challenges, you can use {{site.prodname}} in conjunction with the Azure cloud provider integration. This uses host-local IPAM to allocate /24 per node, and programs routes within the cluster’s underlying VNET subnet for those /24.  Pod IPs are not routable outside of the cluster / VNET subnet, so the same pod IP address range (CIDR) can be used across multiple clusters if desired. 
+
+>**Note**: This is referred to as kubenet + Calico in some AKS docs, but it is actually Calico CNI with Azure cloud provider, and does not use the kubenet plugin.
+{: .alert .alert-info}
 
 {% include geek-details.html details='Policy:Calico,IPAM:Host Local,CNI:Calico,Overlay:No,Routing:VPC Native' %}
 
