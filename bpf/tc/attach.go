@@ -168,6 +168,7 @@ func (ap AttachPoint) AttachProgram() error {
 	}
 
 	// Success: clean up the old programs.
+	var progErrs []error
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
 		tcCmd := exec.Command("tc", "filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
@@ -175,8 +176,12 @@ func (ap AttachPoint) AttachProgram() error {
 		if err != nil {
 			// TODO: filter error to avoid spam if interface is gone.
 			log.WithError(err).WithField("prog", p).Warn("Failed to clean up old calico program.")
-			return errors.WithMessage(err, "failed to clean up old program")
+			progErrs = append(progErrs, err)
 		}
+	}
+
+	if len(progErrs) != 0 {
+		return fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
 	}
 
 	return nil
