@@ -807,7 +807,18 @@ var _ = Describe("BPF Syncer", func() {
 	})
 })
 
+type mockMapDummy struct{}
+
+func (m *mockMapDummy) Open() error {
+	return nil
+}
+
+func (m *mockMapDummy) EnsureExists() error {
+	return nil
+}
+
 type mockNATMap struct {
+	mockMapDummy
 	sync.Mutex
 	m map[nat.FrontendKey]nat.FrontendValue
 }
@@ -820,10 +831,6 @@ func newMockNATMap() *mockNATMap {
 	return &mockNATMap{
 		m: make(map[nat.FrontendKey]nat.FrontendValue),
 	}
-}
-
-func (m *mockNATMap) EnsureExists() error {
-	return nil
 }
 
 func (m *mockNATMap) GetName() string {
@@ -893,6 +900,7 @@ func (m *mockNATMap) Delete(k []byte) error {
 }
 
 type mockNATBackendMap struct {
+	mockMapDummy
 	sync.Mutex
 	m map[nat.BackendKey]nat.BackendValue
 }
@@ -905,10 +913,6 @@ func newMockNATBackendMap() *mockNATBackendMap {
 	return &mockNATBackendMap{
 		m: make(map[nat.BackendKey]nat.BackendValue),
 	}
-}
-
-func (m *mockNATBackendMap) EnsureExists() error {
-	return nil
 }
 
 func (m *mockNATBackendMap) GetName() string {
@@ -978,6 +982,7 @@ func (m *mockNATBackendMap) Delete(k []byte) error {
 }
 
 type mockAffinityMap struct {
+	mockMapDummy
 	sync.Mutex
 	m map[nat.AffinityKey]nat.AffinityValue
 }
@@ -986,10 +991,6 @@ func newMockAffinityMap() *mockAffinityMap {
 	return &mockAffinityMap{
 		m: make(map[nat.AffinityKey]nat.AffinityValue),
 	}
-}
-
-func (m *mockAffinityMap) EnsureExists() error {
-	return nil
 }
 
 func (m *mockAffinityMap) GetName() string {

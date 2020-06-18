@@ -560,6 +560,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200612144350-cf86bf004498 h1:Ev
 github.com/projectcalico/libcalico-go v1.7.2-0.20200612144350-cf86bf004498/go.mod h1:1RxboTOZJzpDYDvE03hMlf13b7gR0DPNcO7J/9uv6iY=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200615154232-dfe3bf9034f6 h1:49wl9GhIk+PnwLHQ3AJ5F9dpLItgU2lj+BbGNmZGho8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200615154232-dfe3bf9034f6/go.mod h1:1RxboTOZJzpDYDvE03hMlf13b7gR0DPNcO7J/9uv6iY=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200616235442-553c09af3043 h1:XnYPVNvkSP+91ZsLmg6TyekvQ9iSf1G6KqIurwoGBAk=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200616235442-553c09af3043/go.mod h1:1RxboTOZJzpDYDvE03hMlf13b7gR0DPNcO7J/9uv6iY=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799 h1:9jp4YoHqZvEKDW3Z9464x/whSRCWEinIo4/JifaKR+g=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271 h1:AOFOckD83tAIMQob6I1FpzSVs+Rn5Td701Q3/aQFqe8=
@@ -572,6 +574,8 @@ github.com/projectcalico/typha v0.7.3-0.20200613040728-2701a071aa71 h1:FUTQXTy5q
 github.com/projectcalico/typha v0.7.3-0.20200613040728-2701a071aa71/go.mod h1:YxyyfzYcIELt/Agz1yhFYzCOua/U2PKNw3UHB5+dPog=
 github.com/projectcalico/typha v0.7.3-0.20200616040820-4a79532fcecf h1:IcpiO50Or5merPCNrdUKttyRs+1CKD8G5CtTj4H7bAo=
 github.com/projectcalico/typha v0.7.3-0.20200616040820-4a79532fcecf/go.mod h1:5uAZkl2tV1iDY5EyEzYyrrgSh/HPWj685tgrdhwRMFk=
+github.com/projectcalico/typha v0.7.3-0.20200617040736-8be068576bc6 h1:joDPI/cvkbYCPx7zRcaSDjPeTNa0XZwRwLAp46wjKwI=
+github.com/projectcalico/typha v0.7.3-0.20200617040736-8be068576bc6/go.mod h1:i35DJ3Ez/xGyGO/VrvE7bu11Stc6hDnF/6Vf+79k6wo=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
 github.com/prometheus/client_golang v1.0.0 h1:vrDKnkGzuGvhNAL56c7DBz29ZL+KxnoR0x7enabFceM=

@@ -235,6 +235,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options = infrastructure.DefaultTopologyOptions()
 			options.FelixLogSeverity = "debug"
 			options.NATOutgoingEnabled = true
+			options.AutoHEPsEnabled = true
 			switch testOpts.tunnel {
 			case "none":
 				options.IPIPEnabled = false
@@ -1028,19 +1029,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									{
 										Action: "Allow",
 										Source: api.EntityRule{
-											Nets: []string{
-												felixes[0].IP + "/32",
-												felixes[1].IP + "/32",
-											},
+											Selector: "ep-type == 'host'",
 										},
 									},
-								}
-								switch testOpts.tunnel {
-								case "ipip":
-									pol.Spec.Ingress[0].Source.Nets = append(pol.Spec.Ingress[0].Source.Nets,
-										felixes[0].ExpectedIPIPTunnelAddr+"/32",
-										felixes[1].ExpectedIPIPTunnelAddr+"/32",
-									)
 								}
 								pol = updatePolicy(pol)
 							})
@@ -1349,13 +1340,66 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					} else {
 						It("should have connectivity from all workloads via a nodeport to workload 0", func() {
+							node0IP := felixes[0].IP
 							node1IP := felixes[1].IP
+
+							cc.ExpectSome(w[0][1], TargetIP(node0IP), npPort)
+							cc.ExpectSome(w[1][0], TargetIP(node0IP), npPort)
+							cc.ExpectSome(w[1][1], TargetIP(node0IP), npPort)
 
 							cc.ExpectSome(w[0][1], TargetIP(node1IP), npPort)
 							cc.ExpectSome(w[1][0], TargetIP(node1IP), npPort)
 							cc.ExpectSome(w[1][1], TargetIP(node1IP), npPort)
+
 							cc.CheckConnectivity()
 						})
+
+						if testOpts.connTimeEnabled {
+							Describe("with policy enabling ingress to w[0][0] from host endpoints", func() {
+								BeforeEach(func() {
+									pol = api.NewGlobalNetworkPolicy()
+									pol.Namespace = "fv"
+									pol.Name = "policy-host-eps"
+									pol.Spec.Ingress = []api.Rule{
+										{
+											Action: "Allow",
+											Source: api.EntityRule{
+												Selector: "ep-type=='host'",
+											},
+										},
+									}
+									w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+									pol.Spec.Selector = w00Slector
+
+									pol = createPolicy(pol)
+								})
+
+								It("should have connectivity from all host-networked workloads to workload 0", func() {
+									node0IP := felixes[0].IP
+									node1IP := felixes[1].IP
+
+									hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+									hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+									if testOpts.tunnel == "ipip" {
+										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+									}
+
+									ports := []uint16{npPort}
+
+									// Also try host networked pods, both on a local and remote node.
+									// N.B. it cannot work without the connect time balancer
+									cc.ExpectConnectivity(hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
+									cc.ExpectConnectivity(hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
+									cc.ExpectConnectivity(hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
+									cc.ExpectConnectivity(hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
+
+									cc.CheckConnectivity()
+								})
+							})
+						}
+
 					}
 
 					if !localOnly {

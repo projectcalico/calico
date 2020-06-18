@@ -59,3 +59,7 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 	panic("BPF syscall stub")
 }
+
+func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
+	panic("BPF syscall stub")
+}

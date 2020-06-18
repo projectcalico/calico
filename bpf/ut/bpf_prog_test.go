@@ -45,6 +45,7 @@ import (
 	. "github.com/onsi/gomega/types"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
@@ -637,4 +638,51 @@ func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopa
 func resetBPFMaps() {
 	resetCTMap(ctMap)
 	resetRTMap(rtMap)
+}
+
+func TestMapIterWithDelete(t *testing.T) {
+	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
+		Type:       "hash",
+		KeySize:    8,
+		ValueSize:  8,
+		MaxEntries: 1000,
+		Name:       "cali_tmap",
+		Flags:      unix.BPF_F_NO_PREALLOC,
+	})
+
+	err := m.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 10; i++ {
+		var k, v [8]byte
+
+		binary.LittleEndian.PutUint64(k[:], uint64(i))
+		binary.LittleEndian.PutUint64(v[:], uint64(i*7))
+
+		err := m.Update(k[:], v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	out := make(map[uint64]uint64)
+
+	cnt := 0
+	err = m.Iter(func(K, V []byte) {
+		k := binary.LittleEndian.Uint64(K)
+		v := binary.LittleEndian.Uint64(V)
+
+		out[k] = v
+
+		err := m.Delete(K)
+		Expect(err).NotTo(HaveOccurred())
+		cnt++
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(cnt).To(Equal(10))
+
+	for i := 0; i < 10; i++ {
+		Expect(out).To(HaveKey(uint64(i)))
+		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
+	}
 }

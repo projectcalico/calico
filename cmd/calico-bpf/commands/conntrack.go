@@ -77,7 +77,7 @@ func (cmd *conntrackDumpCmd) Args(c *cobra.Command, args []string) error {
 func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	mc := &bpf.MapContext{}
 	ctMap := conntrack.Map(mc)
-	if err := ctMap.EnsureExists(); err != nil {
+	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
 	err := ctMap.Iter(func(k, v []byte) {
@@ -193,7 +193,7 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 	mc := &bpf.MapContext{}
 	ctMap := conntrack.Map(mc)
-	if err := ctMap.EnsureExists(); err != nil {
+	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
 	var keysToRemove []conntrack.Key

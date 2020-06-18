@@ -122,6 +122,8 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfRouteManager) CompleteDeferredWork() error {
+	m.ensureDataplaneInitialised()
+
 	startTime := time.Now()
 
 	// Step 1: calculate any updates to the _desired_ state of the BPF map.
@@ -275,7 +277,6 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
 }
 
 func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
-	m.ensureDataplaneInitialised()
 
 	debug := log.GetLevel() >= log.DebugLevel
 

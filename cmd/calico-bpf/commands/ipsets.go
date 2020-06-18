@@ -19,9 +19,9 @@ import (
 	"sort"
 
 	"github.com/projectcalico/felix/bpf"
-
 	"github.com/projectcalico/felix/bpf/ipsets"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -49,6 +49,11 @@ var ipsetsCmd = &cobra.Command{
 
 func dumpIPSets() error {
 	ipsetMap := ipsets.Map(&bpf.MapContext{})
+
+	if err := ipsetMap.Open(); err != nil {
+		return errors.WithMessage(err, "failed to open map")
+	}
+
 	membersBySet := map[uint64][]string{}
 	err := ipsetMap.Iter(func(k, v []byte) {
 		var entry ipsets.IPSetEntry
