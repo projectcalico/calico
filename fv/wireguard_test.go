@@ -19,11 +19,12 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
