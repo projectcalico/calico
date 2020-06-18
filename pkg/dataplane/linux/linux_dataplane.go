@@ -72,9 +72,8 @@ func (d *linuxDataplane) DoNetworking(
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
-				Name:  contVethName,
-				Flags: net.FlagUp,
-				MTU:   d.mtu,
+				Name: contVethName,
+				MTU:  d.mtu,
 			},
 			PeerName: hostVethName,
 		}
@@ -100,16 +99,36 @@ func (d *linuxDataplane) DoNetworking(
 			}
 		}
 
-		// Explicitly set the veth to UP state, because netlink doesn't always do that on all the platforms with net.FlagUp.
-		// veth won't get a link local address unless it's set to UP state.
+		if hasIPv6 {
+			// By default, the kernel does duplicate address detection for the IPv6 address. DAD delays use of the
+			// IP for up to a second and we don't need it because it's a point-to-point link.
+			//
+			// This must be done before we set the links UP.
+			logrus.Debug("Interface has IPv6 address, disabling DAD.")
+			err = disableDAD(contVethName)
+			if err != nil {
+				return err
+			}
+			err = disableDAD(hostVethName)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Explicitly set the veth to UP state; the veth won't get a link local address unless it's set to UP state.
 		if err = netlink.LinkSetUp(hostVeth); err != nil {
-			return fmt.Errorf("failed to set %q up: %v", hostVethName, err)
+			return fmt.Errorf("failed to set %q up: %w", hostVethName, err)
 		}
 
 		contVeth, err := netlink.LinkByName(contVethName)
 		if err != nil {
 			err = fmt.Errorf("failed to lookup %q: %v", contVethName, err)
 			return err
+		}
+
+		// Explicitly set the veth to UP state; the veth won't get a link local address unless it's set to UP state.
+		if err = netlink.LinkSetUp(contVeth); err != nil {
+			return fmt.Errorf("failed to set %q up: %w", contVethName, err)
 		}
 
 		// Fetch the MAC from the container Veth. This is needed by Calico.
@@ -266,6 +285,14 @@ func (d *linuxDataplane) DoNetworking(
 	}
 
 	return hostVethName, contVethMAC, err
+}
+
+func disableDAD(contVethName string) error {
+	dadSysctl := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", contVethName)
+	if err := writeProcSys(dadSysctl, "0"); err != nil {
+		return fmt.Errorf("failed to disable DAD for %s: %w", contVethName, err)
+	}
+	return nil
 }
 
 // SetupRoutes sets up the routes for the host side of the veth pair.
