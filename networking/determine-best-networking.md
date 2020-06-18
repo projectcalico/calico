@@ -114,6 +114,10 @@ The Azure CNI plugin allocates pod IPs from the underlying Azure VNET configures
 
 The Google cloud provider integration uses host-local IPAM CNI plugin to allocate pod IPs and programs the Google cloud network Alias IP ranges to provide VPC native pod networking on Google cloud (pod IPs that are routable outside of the cluster). It is the default for Google Kubernetes Engine (GKE), with Calico for network policy enforcement.
 
+**Host local IPAM**
+
+The host local CNI IPAM plugin is a commonly used IP address management CNI plugin, which allocates a fixed size IP address range (CIDR) to each node, and then allocates pod IP addresses from within that range.  The default address range size is 256 IP addresses (a /24), though 2 of those IP addresses are reserved for special purposes and not assigned to pods. The simplicity of host local CNI IPAM plugin makes it easy to understand, but results in less efficient IP address space usage compared to Calico CNI IPAM plugin.
+
 **Flannel**
 
 Flannel routes pod traffic using static per-node CIDRs obtained from the host-local IPAM CNI plugin. Flannel provides a number of networking backends, but is predominantly used with its VXLAN overlay backend. {{site.prodname}} CNI and {{site.prodname}} network policy can be combined with Flannel and the host-local IPAM plugin to provide a VXLAN network with policy enforcement.  This combination is sometimes referred to as “Canal”.  
