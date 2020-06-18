@@ -208,6 +208,6 @@ If you are using IBM Cloud then we recommend using {% include open-new-window.ht
 - [Advertise Kubernetes service IP addresses]({{ site.baseurl }}/networking/advertise-service-ips)
 - [Customize IP address management]({{ site.baseurl }}/networking/ipam)
 - [Interoperate with legacy firewalls using IP ranges]({{ site.baseurl }}/networking/legacy-firewalls)
-- {% include enterprise_icon.html %}[Network visibility with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/network-visibility)
-- {% include enterprise_icon.html %}[Federation]({{ site.baseurl }}/security/calico-enterprise/federation)
+- {% include enterprise_icon.html %}[Calico Enterprise network visibility]({{ site.baseurl }}/security/calico-enterprise/network-visibility)
+- {% include enterprise_icon.html %}[Calico Enterprise federation]({{ site.baseurl }}/security/calico-enterprise/federation)
 - {% include enterprise_icon.html %}[Calico Enterprise user console]({{ site.baseurl }}/security/calico-enterprise/user-console)
