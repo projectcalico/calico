@@ -255,6 +255,7 @@
 /security/host-endpoints/tutorial /security/tutorials/protect-hosts 301
 /security/simple-policy /security/tutorials/kubernetes-policy-basic 301
 /security/stars-policy/ /security/tutorials/kubernetes-policy-demo/kubernetes-demo 301
+/security/try-node-to-node-encryption /security/encrypt-cluster-pod-traffic 301
 /usage/ /security/ 301
 /usage/assigning-ip-addresses-topology /networking/assign-ip-addresses-topology 301
 /usage/bird-rr-config /reference/architecture/overview 301
