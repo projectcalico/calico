@@ -109,7 +109,7 @@ Flannel routes pod traffic using static per-node CIDRs obtained from the host-lo
 >**Note**: {{site.prodname}} now has built in support for VXLAN, which we generally recommend for simplicity in preference to using the Calico+Flannel combination.
 {: .alert .alert-info}
 
-### Network Options
+### Networking Options
 
 #### On-prem
 The most common network setup for {{site.prodname}} on-prem is non-overlay mode using [BGP to peer]({{ site.baseurl }}/networking/bgp) with the physical network (typically top of rack routers) to make pod IPs routable outside of the cluster.  (You can of course configure the rest of your on-prem network to limit the scope of pod IP routing outside of the cluster if desired.)  This setup provides a rich range of advanced {{site.prodname}} features, including the ability to advertise Kubernetes service IPs (cluster IPs or external IPs), and the ability to control IP address management at the pod, namespace, or node level, to support a wide range of possibilities for integrating with existing enterprise network and security requirements.
