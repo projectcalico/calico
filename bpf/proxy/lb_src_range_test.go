@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	proxy "github.com/projectcalico/felix/bpf/proxy"
+	"github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/ip"
 )
 
@@ -82,11 +82,11 @@ var _ = Describe("BPF Load Balancer source range", func() {
 
 	extIP := net.IPv4(35, 0, 0, 2)
 	proto := proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)
-	key_with_saddr1 := nat.NewNATKeySrc(extIP, 2222, proto, saddr1)
-	key_with_saddr2 := nat.NewNATKeySrc(extIP, 2222, proto, saddr2)
-	key_with_saddr3 := nat.NewNATKeySrc(extIP, 2222, proto, saddr3)
-	key_with_extip := nat.NewNATKey(extIP, 2222, proto)
-	blackhole_nat_val := nat.NewNATValue(uint32(0), uint32(nat.BlackHoleCount), 0, 0)
+	keyWithSaddr1 := nat.NewNATKeySrc(extIP, 2222, proto, saddr1)
+	keyWithSaddr2 := nat.NewNATKeySrc(extIP, 2222, proto, saddr2)
+	keyWithSaddr3 := nat.NewNATKeySrc(extIP, 2222, proto, saddr3)
+	keyWithExtIP := nat.NewNATKey(extIP, 2222, proto)
+	BlackholeNATVal := nat.NewNATValue(0, nat.BlackHoleCount, 0, 0)
 
 	It("should make the right test transitions", func() {
 
@@ -106,13 +106,13 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			key = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proto)
 			Expect(svcs.m).To(HaveKey(key))
 
-			Expect(svcs.m).To(HaveKey(key_with_saddr1))
-			Expect(svcs.m).To(HaveKey(key_with_saddr2))
-			Expect(svcs.m).To(HaveKey(key_with_extip))
+			Expect(svcs.m).To(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).To(HaveKey(keyWithSaddr2))
+			Expect(svcs.m).To(HaveKey(keyWithExtIP))
 
-			val, ok := svcs.m[key_with_extip]
+			val, ok := svcs.m[keyWithExtIP]
 			Expect(ok).To(BeTrue())
-			Expect(val).To(Equal(blackhole_nat_val))
+			Expect(val).To(Equal(BlackholeNATVal))
 
 		}))
 
@@ -130,9 +130,9 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(4))
 
-			Expect(svcs.m).To(HaveKey(key_with_saddr1))
-			Expect(svcs.m).To(HaveKey(key_with_saddr3))
-			Expect(svcs.m).NotTo(HaveKey(key_with_saddr2))
+			Expect(svcs.m).To(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).To(HaveKey(keyWithSaddr3))
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr2))
 
 		}))
 
@@ -149,8 +149,8 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
 
-			Expect(svcs.m).To(HaveKey(key_with_saddr1))
-			Expect(svcs.m).NotTo(HaveKey(key_with_saddr3))
+			Expect(svcs.m).To(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr3))
 
 		}))
 
@@ -167,8 +167,8 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(2))
 
-			Expect(svcs.m).NotTo(HaveKey(key_with_saddr1))
-			Expect(svcs.m).NotTo(HaveKey(key_with_saddr3))
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr3))
 
 		}))
 

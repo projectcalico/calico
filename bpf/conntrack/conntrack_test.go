@@ -71,14 +71,16 @@ func tcpEntry(created time.Duration, lastSeen time.Duration, legA conntrack.Leg,
 
 var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 	var lc *conntrack.LivenessScanner
+	var scanner *conntrack.Scanner
 	var ctMap *mock.Map
 
 	BeforeEach(func() {
 		ctMap = mock.NewMockMap(conntrack.MapParams)
-		lc = conntrack.NewLivenessScanner(timeouts, false, ctMap)
+		lc = conntrack.NewLivenessScanner(timeouts, false)
 		lc.NowNanos = func() int64 {
 			return int64(now)
 		}
+		scanner = conntrack.NewScanner(ctMap, lc.ScanEntry)
 	})
 
 	DescribeTable(
@@ -106,7 +108,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			err := ctMap.Update(key.AsBytes(), entry[:])
 			Expect(err).NotTo(HaveOccurred())
 
-			lc.Scan()
+			scanner.Scan()
 			_, err = ctMap.Get(key.AsBytes())
 			if expExpired {
 				Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
@@ -120,7 +122,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			lc.NowNanos = func() int64 {
 				return int64(now + 2*time.Hour)
 			}
-			lc.Scan()
+			scanner.Scan()
 			_, err = ctMap.Get(key.AsBytes())
 			Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
 		},

@@ -23,6 +23,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/mock"
 	proxy "github.com/projectcalico/felix/bpf/proxy"
 )
 
@@ -72,7 +74,8 @@ var _ = Describe("BPF kube-proxy", func() {
 	front := newMockNATMap()
 	back := newMockNATBackendMap()
 	aff := newMockAffinityMap()
-	p, _ := proxy.StartKubeProxy(k8s, "test-node", front, back, aff, proxy.WithImmediateSync())
+	ct := mock.NewMockMap(conntrack.MapParams)
+	p, _ := proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
 
 	AfterEach(func() {
 		p.Stop()

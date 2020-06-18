@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -67,8 +68,8 @@ func (k Key) String() string {
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
 	var k Key
 	binary.LittleEndian.PutUint32(k[:4], uint32(proto))
-	copy(k[4:8], ipA)
-	copy(k[8:12], ipB)
+	copy(k[4:8], ipA.To4())
+	copy(k[8:12], ipB.To4())
 	binary.LittleEndian.PutUint16(k[12:14], portA)
 	binary.LittleEndian.PutUint16(k[14:16], portB)
 	return k
@@ -92,11 +93,11 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 //      struct calico_ct_leg b_to_a; // 36
 //
 //      // CALI_CT_TYPE_NAT_REV only.
-//      __u32 orig_dst;                    // 44
-//      __u16 orig_port;                   // 48
-//      __u8 pad1[2];                      // 50
-//      __u32 tun_ip;                      // 52
-//      __u32 pad3;                        // 56
+//      __u32 orig_dst;                    // 48
+//      __u16 orig_port;                   // 52
+//      __u8 pad1[2];                      // 54
+//      __u32 tun_ip;                      // 56
+//      __u32 pad3;                        // 60
 //    };
 //
 //    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -124,6 +125,16 @@ func (e Value) Flags() uint8 {
 	return e[17]
 }
 
+// OrigIP returns the original destination IP, valid only if Type() is TypeNormal or TypeNATReverse
+func (e Value) OrigIP() net.IP {
+	return e[48:52]
+}
+
+// OrigPort returns the original destination port, valid only if Type() is TypeNormal or TypeNATReverse
+func (e Value) OrigPort() uint16 {
+	return binary.LittleEndian.Uint16(e[52:54])
+}
+
 const (
 	TypeNormal uint8 = iota
 	TypeNATForward
@@ -143,6 +154,61 @@ func (e Value) ReverseNATKey() Key {
 	return ret
 }
 
+// AsBytes returns the value as slice of bytes
+func (e Value) AsBytes() []byte {
+	return e[:]
+}
+
+func initValue(v *Value, created, lastSeen time.Duration, typ, flags uint8) {
+	binary.LittleEndian.PutUint64(v[:8], uint64(created))
+	binary.LittleEndian.PutUint64(v[8:16], uint64(lastSeen))
+	v[16] = typ
+	v[17] = flags
+}
+
+// NewValueNormal creates a new Value of type TypeNormal based on the given parameters
+func NewValueNormal(created, lastSeen time.Duration, flags uint8, legA, legB Leg) Value {
+	v := Value{}
+
+	initValue(&v, created, lastSeen, TypeNormal, flags)
+
+	copy(v[24:36], legA.AsBytes())
+	copy(v[36:48], legA.AsBytes())
+
+	return v
+}
+
+// NewValueNATForward creates a new Value of type TypeNATForward for the given
+// arguments and the reverse key
+func NewValueNATForward(created, lastSeen time.Duration, flags uint8, revKey Key) Value {
+	v := Value{}
+
+	initValue(&v, created, lastSeen, TypeNATForward, flags)
+
+	copy(v[24:24+conntrackKeySize], revKey.AsBytes())
+
+	return v
+}
+
+// NewValueNATReverse creates a new Value of type TypeNATReverse for the given
+// arguments and reverse parameters
+func NewValueNATReverse(created, lastSeen time.Duration, flags uint8, legA, legB Leg,
+	tunnelIP, origIP net.IP, origPort uint16) Value {
+	v := Value{}
+
+	initValue(&v, created, lastSeen, TypeNATReverse, flags)
+
+	copy(v[24:36], legA.AsBytes())
+	copy(v[36:48], legA.AsBytes())
+
+	copy(v[48:52], origIP.To4())
+	binary.LittleEndian.PutUint16(v[52:54], origPort)
+
+	copy(v[56:60], tunnelIP.To4())
+
+	return v
+}
+
 type Leg struct {
 	Seqno       uint32
 	SynSeen     bool
@@ -152,6 +218,32 @@ type Leg struct {
 	Whitelisted bool
 	Opener      bool
 	Ifindex     uint32
+}
+
+func setBit(bits *uint32, bit uint8, val bool) {
+	if val {
+		*bits |= (1 << bit)
+	}
+}
+
+// AsBytes returns Leg serialized as a slice of bytes
+func (leg Leg) AsBytes() []byte {
+	bytes := make([]byte, 12)
+
+	bits := uint32(0)
+
+	setBit(&bits, 0, leg.SynSeen)
+	setBit(&bits, 1, leg.AckSeen)
+	setBit(&bits, 2, leg.FinSeen)
+	setBit(&bits, 3, leg.RstSeen)
+	setBit(&bits, 4, leg.Whitelisted)
+	setBit(&bits, 5, leg.Opener)
+
+	binary.LittleEndian.PutUint32(bytes[0:4], leg.Seqno)
+	binary.LittleEndian.PutUint32(bytes[4:8], bits)
+	binary.LittleEndian.PutUint32(bytes[8:12], leg.Ifindex)
+
+	return bytes
 }
 
 func (leg Leg) Flags() uint32 {
@@ -287,7 +379,7 @@ const (
 	ProtoUDP  = 17
 )
 
-func keyFromBytes(k []byte) Key {
+func KeyFromBytes(k []byte) Key {
 	var ctKey Key
 	if len(k) != len(ctKey) {
 		log.Panic("Key has unexpected length")
@@ -296,7 +388,7 @@ func keyFromBytes(k []byte) Key {
 	return ctKey
 }
 
-func entryFromBytes(v []byte) Value {
+func ValueFromBytes(v []byte) Value {
 	var ctVal Value
 	if len(v) != len(ctVal) {
 		log.Panic("Value has unexpected length")
@@ -341,4 +433,32 @@ func MapMemIter(m MapMem) bpf.MapIter {
 
 		m[key] = val
 	}
+}
+
+// BytesToKey turns a slice of bytes into a Key
+func BytesToKey(bytes []byte) Key {
+	var k Key
+
+	copy(k[:], bytes[:])
+
+	return k
+}
+
+// StringToKey turns a string into a Key
+func StringToKey(str string) Key {
+	return BytesToKey([]byte(str))
+}
+
+// BytesToValue turns a slice of bytes into a value
+func BytesToValue(bytes []byte) Value {
+	var v Value
+
+	copy(v[:], bytes)
+
+	return v
+}
+
+// StringToValue turns a string into a Value
+func StringToValue(str string) Value {
+	return BytesToValue([]byte(str))
 }

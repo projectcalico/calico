@@ -497,8 +497,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator, ipSetsMap))
 		bpfRTMgr := newBPFRouteManager(config.Hostname, bpfMapContext)
 		dp.RegisterManager(bpfRTMgr)
-		dp.RegisterManager(newBPFConntrackManager(
-			config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled, bpfMapContext))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
@@ -543,12 +541,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create routes BPF map.")
 		}
 
+		ctMap := conntrack.Map(bpfMapContext)
+		err = ctMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create conntrack BPF map.")
+		}
+
 		bpfproxyOpts := []bpfproxy.Option{
 			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+			bpfproxy.WithConntrackTimeouts(config.BPFConntrackTimeouts),
 		}
 
 		if config.KubeProxyEndpointSlicesEnabled {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithEndpointsSlices())
+		}
+
+		if config.BPFNodePortDSREnabled {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithDSREnabled())
 		}
 
 		if config.KubeClientSet != nil {
@@ -559,6 +568,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				frontendMap,
 				backendMap,
 				backendAffinityMap,
+				ctMap,
 				bpfproxyOpts...,
 			)
 			if err != nil {

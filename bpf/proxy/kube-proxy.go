@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/routes"
 )
 
@@ -42,13 +43,17 @@ type KubeProxy struct {
 	frontendMap bpf.Map
 	backendMap  bpf.Map
 	affinityMap bpf.Map
+	ctMap       bpf.Map
 	rt          *RTCache
 	opts        []Option
+
+	conntrackTimeouts conntrack.Timeouts
+	dsrEnabled        bool
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	frontendMap, backendMap, affinityMap bpf.Map, opts ...Option) (*KubeProxy, error) {
+	frontendMap, backendMap, affinityMap, ctMap bpf.Map, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
 		k8s:         k8s,
@@ -56,11 +61,18 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 		frontendMap: frontendMap,
 		backendMap:  backendMap,
 		affinityMap: affinityMap,
+		ctMap:       ctMap,
 		opts:        opts,
 		rt:          NewRTCache(),
 
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
+	}
+
+	for _, o := range opts {
+		if err := o(kp); err != nil {
+			return nil, errors.WithMessage(err, "applying option to kube-proxy")
+		}
 	}
 
 	go func() {
@@ -100,7 +112,13 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
-	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
+	lc := conntrack.NewLivenessScanner(kp.conntrackTimeouts, kp.dsrEnabled)
+	connScan := conntrack.NewScanner(kp.ctMap,
+		lc.ScanEntry,
+		conntrack.NewStaleNATScanner(syncer.ConntrackFrontendHasBackend),
+	)
+
+	proxy, err := New(kp.k8s, syncer, connScan, kp.hostname, kp.opts...)
 	if err != nil {
 		return errors.WithMessage(err, "new proxy")
 	}
