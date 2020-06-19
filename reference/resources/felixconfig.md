@@ -62,11 +62,11 @@ spec:
 | iptablesPostWriteCheckInterval     | Period after Felix has done a write to the dataplane that it schedules an extra read back in order to check the write was not clobbered by another process.  This should only occur if another application on the system doesn't respect the iptables lock. | `5s`, `10s`, `1m` etc. | duration | `1s` |
 | iptablesRefreshInterval            | Period at which Felix re-checks all iptables state to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable iptables refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | ipv6Support                        | IPv6 support for Felix | true, false | boolean | `true` |
-| logFilePath                        | The full path to the Felix log. Set to `""` to disable file logging. | string | string | `/var/log/calico/felix.log` |
+| logFilePath                        | The full path to the Felix log. Set to `none` to disable file logging. | string | string | `/var/log/calico/felix.log` |
 | logPrefix                          | The log prefix that Felix uses when rendering LOG rules. | string | string | `calico-packet` |
 | logSeverityFile                    | The log severity above which logs are sent to the log file. | Same as `logSeveritySys` | string | `Info` |
 | logSeverityScreen                  | The log severity above which logs are sent to the stdout. | Same as LogSeveritySys | string | `Info` |
-| logSeveritySys                     | The log severity above which logs are sent to the syslog. Set to `""` for no logging to syslog. | Debug, Info, Warning, Error, Fatal | string | `Info` |
+| logSeveritySys                     | The log severity above which logs are sent to the syslog. Set to `none` for no logging to syslog. | Debug, Info, Warning, Error, Fatal | string | `Info` |
 | maxIpsetSize                       | Maximum size for the ipsets used by Felix to implement tags. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a tag. | int | int | `1048576` |
 | metadataAddr                       | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of `none` (case insensitive) means that Felix should not set up any NAT rule for the metadata path.  | IPv4, hostname, none | string | `127.0.0.1` |
 | metadataPort                       | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed. | int | int | `8775` |
