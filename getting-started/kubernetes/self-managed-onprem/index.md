@@ -7,8 +7,8 @@ show_toc: false
 
 {{ page.description }}
 
-Calico can be configured to provide newtworking for just Kuberenetes, or to integrate with other infrastructure or
-on-premises cloud services.
+While Calico can be configured to provide newtworking for just Kubernetes, it can also be integrated with other infrastructure 
+or self-hosted cloud services.
 
 {% capture content %}{% include index.html %}{% endcapture %}
 {{ content | replace: "    ", "" }}
