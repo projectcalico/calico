@@ -17,35 +17,35 @@ If you want to fully understand the network choices available to you, we recomme
 
 #### Kubernetes networking basics
 The Kubernetes network model defines a “flat” network in which:
-- every pod get its own IP address
-- pods on any node can communicate with all pods on all other nodes without NAT.
+- Every pod get its own IP address.
+- Pods on any node can communicate with all pods on all other nodes without NAT.
 
-This creates a clean, backwards-compatible model where Pods can be treated much like VMs or physical hosts from the perspectives of port allocation, naming, service discovery, load balancing, application configuration, and migration.  Network segmentation can be defined using Network Policies to restrict traffic within this base networking capabilities.
+This creates a clean, backwards-compatible model where pods can be treated much like VMs or physical hosts from the perspectives of port allocation, naming, service discovery, load balancing, application configuration, and migration.  Network segmentation can be defined using network policies to restrict traffic within these base networking capabilities.
 
-Within this model there’s quite a lot of flexibility for supporting different networking approaches and environments.  The details of exactly how the network is implemented depend on the combination of CNI, network, and cloud-provider plugins being used.
+Within this model there’s quite a lot of flexibility for supporting different networking approaches and environments.  The details of exactly how the network is implemented depend on the combination of CNI, network, and cloud provider plugins being used.
 
 #### CNI plugins
-CNI (Container Network Interface) is a standard API which allows different network implementations to plug into Kubernetes. Kubernetes calls the API any time a pod is being created or destroyed.  There are 2 types of CNI plugins:
+CNI (Container Network Interface) is a standard API which allows different network implementations to plug into Kubernetes. Kubernetes calls the API any time a pod is being created or destroyed.  There are two types of CNI plugins:
 - CNI network plugins: responsible for adding or deleting pods to/from the Kubernetes pod network. This includes creating/deleting each pod’s network interface and connecting/disconnecting it to the rest of the network implementation.
 - CNI IPAM plugins: responsible for allocating and releasing IP addresses for pods as they are created or deleted. Depending on the plugin, this may include allocating one or more ranges of IP addresses (CIDRs) to each node, or obtaining IP addresses from an underlying public cloud’s network to allocate to pods.
 
 #### Cloud provider integrations
-Kubernetes cloud provider integrations are cloud specific controllers that can configure the underlying cloud network to help provide Kuberenetes networking.  Depending on the cloud provider, this could include automatically programming routes into the underlying cloud network so it knows natively how to route pod traffic.
+Kubernetes cloud provider integrations are cloud-specific controllers that can configure the underlying cloud network to help provide Kuberenetes networking.  Depending on the cloud provider, this could include automatically programming routes into the underlying cloud network so it knows natively how to route pod traffic.
 
 #### Kubenet
-Kubenet is an extremely basic network plugin built into Kubernetes. It does not implement cross-node networking or network policy. It is typically used together with a cloud provider integration that sets up routes in the cloud provider network for communication between nodes, or in single node environments. Kubenet is not compatible with Calico.
+Kubenet is an extremely basic network plugin built into Kubernetes. It does not implement cross-node networking or network policy. It is typically used together with a cloud provider integration that sets up routes in the cloud provider network for communication between nodes, or in single node environments. Kubenet is not compatible with {{site.prodname}}.
 
 #### Overlay networks
-An overlay network is a network that is layered on top of another network.  In the context of Kubernetes an overlay network can be used to handle pod-to-pod traffic between nodes on top of an underlying network that is not aware of pod IP addresses or which pods are running on which nodes. Overlay networks work by encapsulating network packets that an underlying network doesn’t know how to handle (for example using pod IP addresses) within an outer packet which the underlying network does know how to handle (for example node IP addresses). Two common network protocols used for encapsulation are VXLAN and IP-in-IP.
+An overlay network is a network that is layered on top of another network.  In the context of Kubernetes, an overlay network can be used to handle pod-to-pod traffic between nodes on top of an underlying network that is not aware of pod IP addresses or which pods are running on which nodes. Overlay networks work by encapsulating network packets that an underlying network doesn’t know how to handle (for example using pod IP addresses) within an outer packet which the underlying network does know how to handle (for example node IP addresses). Two common network protocols used for encapsulation are VXLAN and IP-in-IP.
 
 The main advantage of using an overlay network is that it reduces dependencies on the underlying network.  For example, you can run a VXLAN overlay on top of almost any underlying network, without needing to integrate with or make any changes to the underlying network.
 
 The main disadvantages of using an overlay network are:
-- A slight performance impact. The process of encapsulating packets takes a small amount of CPU, and the extra bytes required in the packet to encode the encapsulation (VXLAN or IP-in-IP headers) reduces the maximum size of inner packet that can be sent, which in turn can mean needing to sending more packets for the same amount of total data.
+- A slight performance impact. The process of encapsulating packets takes a small amount of CPU, and the extra bytes required in the packet to encode the encapsulation (VXLAN or IP-in-IP headers) reduces the maximum size of inner packet that can be sent, which in turn can mean needing to send more packets for the same amount of total data.
 - The pod IP addresses are not routable outside of the cluster.  More on this below! 
 
 #### Cross-subnet overlays
-In addition to standard VXLAN or IP-in-IP overlays, {{site.prodname}} also supports “cross-subnet” modes for VXLAN and IP-in-IP.  In this mode, within each subnet, the underlying network acts as an L2 network. Packets being sent within a single subnet are not encapsulated, so you get the performance of a non-overlay network.  Packets being sent across subnets are encapsulated, like a normal overlay network, reducing dependencies on the underlying network (without the need to integrate with or make any changes to the underlying network).
+In addition to standard VXLAN or IP-in-IP overlays, {{site.prodname}} also supports “cross-subnet” modes for VXLAN and IP-in-IP.  In this mode, within each subnet, the underlying network acts as an L2 network. Packets sent within a single subnet are not encapsulated, so you get the performance of a non-overlay network.  Packets sent across subnets are encapsulated, like a normal overlay network, reducing dependencies on the underlying network (without the need to integrate with or make any changes to the underlying network).
 
 Just like with a standard overlay network, the underlying network is not aware of pod IP addresses and the pod IP addresses are not routable outside of the cluster.
 
@@ -115,15 +115,15 @@ The Azure CNI plugin allocates pod IPs from the underlying Azure VNET configures
 
 **Google cloud provider**
 
-The Google cloud provider integration uses host-local IPAM CNI plugin to allocate pod IPs and programs the Google cloud network Alias IP ranges to provide VPC native pod networking on Google cloud (pod IPs that are routable outside of the cluster). It is the default for Google Kubernetes Engine (GKE), with Calico for network policy enforcement.
+The Google cloud provider integration uses host-local IPAM CNI plugin to allocate pod IPs, and programs the Google cloud network Alias IP ranges to provide VPC native pod networking on Google cloud (pod IPs that are routable outside of the cluster). It is the default for Google Kubernetes Engine (GKE), with Calico for network policy enforcement.
 
 **Host local IPAM**
 
-The host local CNI IPAM plugin is a commonly used IP address management CNI plugin, which allocates a fixed size IP address range (CIDR) to each node, and then allocates pod IP addresses from within that range.  The default address range size is 256 IP addresses (a /24), though 2 of those IP addresses are reserved for special purposes and not assigned to pods. The simplicity of host local CNI IPAM plugin makes it easy to understand, but results in less efficient IP address space usage compared to Calico CNI IPAM plugin.
+The host local CNI IPAM plugin is a commonly used IP address management CNI plugin, which allocates a fixed size IP address range (CIDR) to each node, and then allocates pod IP addresses from within that range.  The default address range size is 256 IP addresses (a /24), though two of those IP addresses are reserved for special purposes and not assigned to pods. The simplicity of host local CNI IPAM plugin makes it easy to understand, but results in less efficient IP address space usage compared to {{site.prodname}} CNI IPAM plugin.
 
 **Flannel**
 
-Flannel routes pod traffic using static per-node CIDRs obtained from the host-local IPAM CNI plugin. Flannel provides a number of networking backends, but is predominantly used with its VXLAN overlay backend. {{site.prodname}} CNI and {{site.prodname}} network policy can be combined with Flannel and the host-local IPAM plugin to provide a VXLAN network with policy enforcement.  This combination is sometimes referred to as “Canal”.  
+Flannel routes pod traffic using static per-node CIDRs obtained from the host-local IPAM CNI plugin. Flannel provides a number of networking backends, but is predominantly used with its VXLAN overlay backend. {{site.prodname}} CNI and {{site.prodname}} network policy can be combined with flannel and the host-local IPAM plugin to provide a VXLAN network with policy enforcement.  This combination is sometimes referred to as “Canal”.  
 
 >**Note**: {{site.prodname}} now has built in support for VXLAN, which we generally recommend for simplicity in preference to using the Calico+Flannel combination.
 {: .alert .alert-info}
@@ -202,7 +202,7 @@ If you are using IBM Cloud then we recommend using {% include open-new-window.ht
 
 #### Anywhere
 
-The above list of environments is obviously not exhaustive. Understanding the concepts and explanations in this guide hopefully will have helped you figure out what is right for your environment. If you still aren't sure then you can ask for advice through the Calico Users's Slack or Discourse forum. And remember you can run Calico in VXLAN overlay mode in almost any environment if you want to get started without worrying too deeply about the different options.
+The above list of environments is obviously not exhaustive. Understanding the concepts and explanations in this guide has hopefully helped you figure out what is right for your environment. If you still aren't sure then you can ask for advice through the Calico Users's Slack or Discourse forum. And remember you can run Calico in VXLAN overlay mode in almost any environment if you want to get started without worrying too deeply about the different options.
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:VXLAN,Routing:Calico' %}
 
