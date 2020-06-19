@@ -113,6 +113,10 @@ The Amazon VPC CNI plugin allocates pod IPs from the underlying AWS VPC and uses
 
 The Azure CNI plugin allocates pod IPs from the underlying Azure VNET configures the Azure virtual network to provide VNET native pod networking (pod IPs that are routable outside of the cluster). It is the default networking used in {% include open-new-window.html text='Microsoft AKS' url='https://azure.microsoft.com/en-us/services/kubernetes-service/' %}, with Calico for network policy enforcement.
 
+**Azure cloud provider**
+
+The Azure cloud provider integration can be used as an alternative to the Azure CNI plugin. It uses the host-local IPAM CNI plugin to allocate pod IPs, and programs the underlying Azure VNET subnet with corresponding routes. Pod IPs are only routable within the VNET subnet (which often equates to meaning they are not routable outside of the cluster).
+
 **Google cloud provider**
 
 The Google cloud provider integration uses host-local IPAM CNI plugin to allocate pod IPs, and programs the Google cloud network Alias IP ranges to provide VPC native pod networking on Google cloud (pod IPs that are routable outside of the cluster). It is the default for Google Kubernetes Engine (GKE), with Calico for network policy enforcement.
