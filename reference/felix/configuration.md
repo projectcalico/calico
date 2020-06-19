@@ -4,10 +4,8 @@ description: Configure Felix, the daemon that runs on every machine the provide 
 canonical_url: '/reference/felix/configuration'
 ---
 
-This article is valid only if you are:
-
-- Configuring Felix through environment variables, and are not using the operator installation method (which does not support using environment variables). For operator install users, see [Felix Configuration Resource]({{site.baseurl}}/referrence/resources/felixconfig).
-- Updating the Felix configuration file (`felix.cfg`).
+> **Note**: If you have installed Calico using the operator, you cannot modify the environment provided to felix directly. To configure felix, see the [FelixConfiguration](../resources/felixconfig) resource instead.
+{: .alert .alert-info}
 
 Configuration for Felix is read from one of four possible locations, in
 order, as follows.
