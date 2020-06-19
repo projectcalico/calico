@@ -73,7 +73,7 @@ You may want to provide Calico with additional configuration at install-time. Fo
 You can use a Kubernetes ConfigMap with your desired Calico resources in order to set configuration as part of the installation.
 If you do not need to provide additional configuration, you can skip this section.
 
-To include [Calico resources]({{site.baseurl}}/reference/resources) during installation, edit `manifests/02-configmap-calico-resources.yaml in order to add your own configuration.
+To include [Calico resources]({{site.baseurl}}/reference/resources) during installation, edit `manifests/02-configmap-calico-resources.yaml` in order to add your own configuration.
 
 > **Note**: If you have a directory with the Calico resources, you can create the file with the command:
 > ```
