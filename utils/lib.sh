@@ -60,7 +60,7 @@ function git_version_to_deb {
 }
 
 function git_version_to_rpm {
-    echo $1 | sed 's/\([0-9]\)-\?\(0.dev\)/\1_\2/'
+    echo $1 | sed 's/\([0-9]\)-\?\(0.dev\)/\1_\2/' | sed 's/\([0-9]\)-python2/\1python2/'
 }
 
 # Check that version is valid.
