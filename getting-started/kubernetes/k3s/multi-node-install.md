@@ -6,8 +6,8 @@ canonical_url: '/getting-started/kubernetes/k3s/multi-node-install'
 
 ### Overview
 
-This tutorial will guide you thorough setting up multiple-node K3S culster with {{site.prodname}}.
-It will also go into detail about choices that you have when setting up K3S with Calico.
+This tutorial will guide you thorough setting up multiple-node K3s culster with {{site.prodname}}.
+It will also go into detail about choices that you have when setting up K3s with Calico.
 
 ### Requirements
 
@@ -16,7 +16,7 @@ It will also go into detail about choices that you have when setting up K3S with
 - 1GB Ram
 - 10GB free disk space
 - Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64)
-   > **Note**: K3S supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
+   > **Note**: K3s supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
    > For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
    {: .alert .alert-info}
 
@@ -24,10 +24,10 @@ It will also go into detail about choices that you have when setting up K3S with
 
 We assume you have at least two instances of Linux (meeting the requirements) with root or sudo privileges up and running.
 
-### Create K3S Cluster using multiple nodes
+### Create K3s cluster using multiple nodes
 
 #### Initializing master instance
-   K3S installation script can be modified by {% include open-new-window.html text='environment variables' url='https://rancher.com/docs/k3s/latest/en/installation/install-options/#options-for-installation-with-script' %}. Here you are providing some extra arguments in order to disable `flannel` and change the pod ip CIDR.
+   K3s installation script can be modified by {% include open-new-window.html text='environment variables' url='https://rancher.com/docs/k3s/latest/en/installation/install-options/#options-for-installation-with-script' %}. Here you are providing some extra arguments in order to disable `flannel` and change the pod ip CIDR.
 
    > **Note**: Full list of arguments can be viewed {% include open-new-window.html text='at this link' url='https://rancher.com/docs/k3s/latest/en/installation/install-options/server-config/' %}.
    {: .alert .alert-info}
@@ -38,16 +38,16 @@ We assume you have at least two instances of Linux (meeting the requirements) wi
    > CIDR by replacing 192.168.0.0/16 in the above command. 
    {: .alert .alert-danger}
 
-#### Enable remote access to your K3S instance
+#### Enable remote access to your K3s instance
 
    In order to setup remote access to your cluster first ensure you have installed `kubectl` on your system.
 
    > **Note**: If you are not sure how to install kubectl in your OS {% include open-new-window.html text='visit this link' url='https://kubernetes.io/docs/tasks/tools/install-kubectl/' %}.
    {: .alert .alert-info}
 
-   K3S stores a kubeconfig file in your server at `/etc/rancher/k3s/k3s.yaml`, copy all the content of `k3s.yaml` from your server into `~/.kube/config` on the system that you like to have remote access to the cluster.
+   K3s stores a kubeconfig file in your server at `/etc/rancher/k3s/k3s.yaml`, copy all the content of `k3s.yaml` from your server into `~/.kube/config` on the system that you like to have remote access to the cluster.
 
-#### Add extra nodes to K3S cluster
+#### Add extra nodes to K3s cluster
    
    In order to add additional nodes to your cluster you need two piece of information.
    - `K3S_URL` which is going to be your main node ip address. 
@@ -140,7 +140,7 @@ We assume you have at least two instances of Linux (meeting the requirements) wi
    ```
    {: .no-select-button}
 
-Congratulations! You now have a multi node K3S cluster
+Congratulations! You now have a multi node K3s cluster
 equipped with {{site.prodname}} and Traefik.
 
 ### Next steps
