@@ -9,7 +9,9 @@ Use Grafana dashboard to view {{ site.prodname }} component metrics.
 
 ### Value
 
-Using Grafana can be beneficial by providing a means to visualize metrics through graphs that can help you quickly identify unusual activity.
+Using Grafana can be beneficial by providing a means to visualize metrics through graphs that can help you quickly identify unusual activity, following image shows some of the graphs and metrics that are available for you to leverage in order to achieve this goal.
+
+![]({{ site.baseurl }}/images/grafana-dashboard.png)
 
 ### Features
 
