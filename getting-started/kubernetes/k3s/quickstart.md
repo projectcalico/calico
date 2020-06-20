@@ -1,12 +1,12 @@
 ---
-title: Quickstart for Calico on K3S
-description: Install Calico on a single-host K3S cluster for testing or development in under 5 minutes.
+title: Quickstart for Calico on K3s
+description: Install Calico on a single-host K3s cluster for testing or development in under 5 minutes.
 canonical_url: '/getting-started/kubernetes/k3s/quickstart'
 ---
 
 ### Overview
 
-This quickstart gets you a single-host K3S cluster with {{site.prodname}}
+This quickstart gets you a single-host K3s cluster with {{site.prodname}}
 in approximately 5 minutes. You can use this cluster for testing and
 development.
 
@@ -17,17 +17,17 @@ development.
 - 1GB Ram
 - 10GB free disk space
 - Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64)
-   > **Note**: K3S supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
+   > **Note**: K3s supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
    > For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
    {: .alert .alert-info}
 
 ### Before you begin
 
 - We assume you have a running instance of Linux (meeting the requirement) with root or sudo privileges up and running.
-- In this tutorial we will guide you to implement a minimal `K3S` cluster with {{ site.prodname}}.
+- In this tutorial we will guide you to implement a minimal K3s cluster with {{ site.prodname}}.
 
 
-### Create a single-host K3S cluster
+### Create a single-host K3s cluster
 
 1. Initialize the master using the following command.
 
@@ -118,7 +118,7 @@ development.
    ```
    {: .no-select-button}
 
-Congratulations! You now have a single-node K3S cluster
+Congratulations! You now have a single-node K3s cluster
 equipped with {{site.prodname}}.
 
 ### Next steps
