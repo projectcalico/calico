@@ -1,6 +1,6 @@
 ---
-title: K3S
-description: Get Calico up and running in your K3S cluster. 
+title: K3s
+description: Get Calico up and running in your K3s cluster. 
 show_read_time: false
 show_toc: false
 ---
