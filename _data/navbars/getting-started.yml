@@ -84,8 +84,8 @@ section:
     section:
       - title: Quickstart
         path: /getting-started/kubernetes/k3s/quickstart
-      - title: Deep Dive
-        path: /getting-started/kubernetes/k3s/dive
+      - title: Multi-Node Install
+        path: /getting-started/kubernetes/k3s/multi-node-install
 - title: OpenStack
   path: /getting-started/openstack/
   section:
