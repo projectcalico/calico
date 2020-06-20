@@ -1,6 +1,6 @@
 ---
-title: K3S Multi-Node Install  
-description: Install Calico on a multi node K3S cluster for testing or development.
+title: K3s multi-node install  
+description: Install Calico on a multi node K3s cluster for testing or development.
 canonical_url: '/getting-started/kubernetes/k3s/multi-node-install'
 ---
 
