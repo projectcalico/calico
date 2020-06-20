@@ -18,7 +18,7 @@ development.
 - 10GB free disk space
 - Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64)
    > **Note**: K3S supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
-   > For more detail please visit [this link](https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems).
+   > For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
    {: .alert .alert-info}
 
 ### Before you begin
@@ -118,7 +118,7 @@ development.
    ```
    {: .no-select-button}
 
-Congratulations! You now have a single-host K3S cluster
+Congratulations! You now have a single-node K3S cluster
 equipped with {{site.prodname}}.
 
 ### Next steps
