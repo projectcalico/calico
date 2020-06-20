@@ -48,6 +48,13 @@ section:
       path: /getting-started/kubernetes/flannel/flannel
     - title: Migrate a cluster from flannel networking to Calico networking
       path: /getting-started/kubernetes/flannel/migration-from-flannel     
+  - title: K3s
+    path: /getting-started/kubernetes/k3s/
+    section:
+      - title: Quickstart
+        path: /getting-started/kubernetes/k3s/quickstart
+      - title: Multi-node install
+        path: /getting-started/kubernetes/k3s/multi-node-install
   - title: Calico the hard way
     path: /getting-started/kubernetes/hardway/
     section:
