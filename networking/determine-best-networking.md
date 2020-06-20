@@ -1,6 +1,7 @@
 ---
 title: Determine best networking option
 description: Learn about the different networking options {{site.prodname}} supports so you can choose the best option for your needs.
+read_time: 8
 ---
 
 ### Big picture

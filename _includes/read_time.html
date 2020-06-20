@@ -1,5 +1,9 @@
 {% assign words = content | number_of_words %}
-{% assign readTime = words | divided_by:180 | round %}
+{% if page.read_time -%}
+  {% assign readTime = page.read_time %}
+{% else %}
+  {% assign readTime = words | divided_by:180 | round %}
+{% endif -%}
 <div class="read-time">
   <span class="glyphicon glyphicon-time read-time__icon"></span>
   <span class="read-time__caption">
