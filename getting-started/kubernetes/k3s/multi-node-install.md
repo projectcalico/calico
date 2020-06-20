@@ -145,3 +145,4 @@ equipped with {{site.prodname}} and Traefik.
 
 ### Next steps
 - [Create a user interface that shows blocked and allowed connections in real time]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+
