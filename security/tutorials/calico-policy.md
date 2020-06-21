@@ -4,19 +4,17 @@ description: Learn how to create more advanced Calico network policies (namespac
 canonical_url: "/security/tutorials/calico-policy"
 ---
 
-Calico network policies **extend** the functionalities of Kubernetes network policies. To demonstrate this, this tutorial takes the Kubernetes Advanced NetworkPolicy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policy.
+Calico network policies **extend** the functionalities of Kubernetes network policies. To demonstrate this, this tutorial takes the Kubernetes Advanced NetworkPolicy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policies.
 
 ### Requirements
 
 - Calico v2.6.1+ with Kubernetes 1.8+
 - calicoctl and kubectl
 - A working Kubernetes cluster and access to it using kubectl and calicoctl
-- Your Kubernetes nodes have connectivity to the public internet
-- You are familiar with [Kubernetes NetworkPolicy](kubernetes-policy-basic) or [Kubernetes NetworkPolicy Advanced](kubernetes-policy-advanced)
 
 ### Tutorial flow
 
-1. Create the Namespace and Nginx Service
+1. Create the Namespace, Nginx Service and Busybox
 1. Deny all Ingress traffic
 1. Allow Ingress traffic to Nginx
 1. Deny all Egress traffic
@@ -25,11 +23,11 @@ Calico network policies **extend** the functionalities of Kubernetes network pol
 
 ### 1. Create the namespace and nginx service
 
-We'll use a new namespace for this guide. Run the following commands to create it and a plain nginx service listening on port 80.
+We'll use a new namespace for this guide. Run the following commands to create the namespace and a plain nginx service listening on port 80.
 
 ```bash
 kubectl create ns advanced-policy-demo
-kubectl run --namespace=advanced-policy-demo nginx --replicas=2 --image=nginx
+kubectl create deployment --namespace=advanced-policy-demo nginx --image=nginx
 kubectl expose --namespace=advanced-policy-demo deployment nginx --port=80
 ```
 
@@ -41,7 +39,7 @@ Open up a second shell session which has `kubectl` connectivity to the Kubernete
 kubectl run --namespace=advanced-policy-demo access --rm -ti --image busybox /bin/sh
 ```
 
-This will open up a shell session inside the `access` pod, as shown below.
+This will open up a shell session inside the `busybox` pod, as shown below.
 
 ```
 Waiting for pod advanced-policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
@@ -68,25 +66,25 @@ wget -q --timeout=5 google.com -O -
 
 It returns the HTML of the google.com home page.
 
-### 2. Deny all ingress traffic
+### 2. Lock down all traffic
 
-Enable ingress isolation on the namespace by deploying a [default deny all ingress traffic policy](https://docs.projectcalico.org/security/kubernetes-default-deny).
+We will begin by using a default deny [Global Calico Network Policy](https://docs.projectcalico.org/reference/resources/globalnetworkpolicy) (which you can only do using Calico) that will help us adopt best practices in using a [zero trust network model](https://docs.projectcalico.org/security/adopt-zero-trust) to secure our workloads. Note that Global Calico Network Policies don't need a namespace, this will effect all resources that match the selector. Kubernetes Network Policies cannot achieve this by themselves.
 
 ```bash
 calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
+kind: GlobalNetworkPolicy
 metadata:
-  name: default-deny-ingress
-  namespace: advanced-policy-demo
+  name: default-deny
 spec:
   selector: all()
-  ingress:
-  - action: Deny
+  types:
+  - Ingress
+  - Egress
 EOF
 ```
 
-#### Verify access - denied all ingress and allowed all egress
+#### Verify access - denied all ingress and egress
 
 Because all pods in the namespace are now selected, any ingress traffic which is not explicitly allowed by a policy will be denied.
 
@@ -99,104 +97,7 @@ wget -q --timeout=5 nginx -O -
 It will return:
 
 ```
-wget: download timed out
-```
-
-{: .no-select-button}
-
-Next, try to access google.com.
-
-```bash
-wget -q --timeout=5 google.com -O -
-```
-
-It will return:
-
-```
-<!doctype html><html itemscope="" item....
-```
-
-{: .no-select-button}
-
-We can see that the ingress access to the nginx service is denied while egress access to outbound internet is still allowed.
-
-### 3. Allow ingress traffic to Nginx
-
-Run the following to create a `NetworkPolicy` which allows traffic to nginx pods from any pods in the `advanced-policy-demo` namespace.
-
-```bash
-calicoctl create -f - <<EOF
-apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
-metadata:
-  name: access-nginx
-  namespace: advanced-policy-demo
-spec:
-  selector: run == 'nginx'
-  ingress:
-  - action: Allow
-    source:
-      selector: all()
-EOF
-```
-
-#### Verify access - allowed nginx ingress
-
-Now ingress traffic to nginx will be allowed. We can see that this is the case by switching over to our "access" pod in the namespace and attempting to access the nginx service.
-
-```bash
-wget -q --timeout=5 nginx -O -
-```
-
-It will return:
-
-```
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>...
-```
-
-{: .no-select-button}
-
-After creating the policy, we can now access the nginx Service.
-
-### 4. Deny all egress traffic
-
-Enable egress isolation on the namespace by deploying a [default deny all egress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#4-deny-all-egress-traffic).
-
-```bash
-calicoctl create -f - <<EOF
-apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
-metadata:
-  name: default-deny-egress
-  namespace: advanced-policy-demo
-spec:
-  selector: all()
-  egress:
-  - action: Deny
-EOF
-```
-
-#### Verify access - denied all egress
-
-Now any ingress or egress traffic **that** is not explicitly allowed by a policy will be denied.
-
-We can see that this is the case by switching over to our "access" pod in the
-namespace and attempting to `nslookup` nginx or `wget` google.com.
-
-```bash
-nslookup nginx
-```
-
-It will return something like the following.
-
-```
-Server:    10.96.0.10
-Address 1: 10.96.0.10
-
-nslookup: can't resolve 'nginx'
+wget: bad address 'google.com'
 ```
 
 {: .no-select-button}
@@ -215,96 +116,61 @@ wget: bad address 'google.com'
 
 {: .no-select-button}
 
-> **Note**: The `nslookup` command can take a minute or more to timeout.
-> {: .alert .alert-info}
+Now that we have the defalt deny Global Calico Network Policy, all ingress / egress traffic is denied _everywhere_.
 
-### 5. Allow DNS egress traffic
+### 3. Allow kube-system pods to communicate
 
-Run the following to create a label of `name: kube-system` on the `kube-system` namespace and a `NetworkPolicy` which allows DNS egress traffic
-from any pods in the `advanced-policy-demo` namespace to the `kube-system` namespace.
-
-```bash
-kubectl label namespace kube-system name=kube-system
-calicoctl create -f - <<EOF
-apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
-metadata:
-  name: allow-dns-access
-  namespace: advanced-policy-demo
-spec:
-  selector: all()
-  egress:
-  - action: Allow
-    protocol: UDP
-    destination:
-      namespaceSelector: name == 'kube-system'
-      ports:
-      - 53
-
-EOF
-```
-
-#### Verify access - allowed DNS access
-
-Now egress traffic to DNS will be allowed.
-
-We can see that this is the case by switching over to our "access" pod in the namespace and attempting to lookup nginx and google.com.
-
-```bash
-nslookup nginx
-```
-
-It will return something like the following.
-
-```
-Server:    10.0.0.10
-Address 1: 10.0.0.10 kube-dns.kube-system.svc.cluster.local
-```
-
-{: .no-select-button}
-
-Next, try to look up google.com.
-
-```bash
-nslookup google.com
-```
-
-It will return something like the following.
-
-```
-Name:      google.com
-Address 1: 2607:f8b0:4005:807::200e sfo07s16-in-x0e.1e100.net
-Address 2: 216.58.195.78 sfo07s16-in-f14.1e100.net
-```
-
-{: .no-select-button}
-
-Therefore, even though DNS egress traffic is now working, all other egress traffic from all pods in the advanced-policy-demo namespace is still blocked. Therefore the HTTP egress traffic from the `wget` calls will still fail.
-
-### 6. Allow egress traffic to nginx
-
-Run the following to create a `NetworkPolicy` which allows egress traffic from any pods in the `advanced-policy-demo` namespace to pods with labels matching `run: nginx` in the same namespace.
+Kubernetes uses the kube-system namespace to create pods for the kubernetes cluster to function properly. Let's give this namespace wide permissions to allow these specific pods to function normally. It's important to note here that specific Calico Network Policies are namespaced resources that applies to workloads in that namespace whereas the Calico Global Network Policy is a non-namespaced resource and can be applied to any kind of endpoint (pods, VMs, host interfaces) independent of namespace.
 
 ```bash
 calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
-  name: allow-egress-to-advanced-policy-ns
-  namespace: advanced-policy-demo
+  name: allow-kube-system
+  namespace: kube-system
 spec:
   selector: all()
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Allow
   egress:
   - action: Allow
-    destination:
-      selector: run == 'nginx'
 EOF
 ```
 
-#### Verify access - allowed egress access to nginx
+### 4. Allow traffic to Nginx from Busybox
 
-We can see that this is the case by switching over to our "access" pod in the
-namespace and attempting to access `nginx`.
+Create another Calico Network Policy which allows traffic from the nginx pod from the busybox "access" pod.
+
+```bash
+calicoctl create -f - <<EOF
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-busybox-nginx
+  namespace: advanced-policy-demo
+spec:
+  selector: all()
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Allow
+    source:
+      selector: run == 'access'
+    destination:
+      selector: app == 'nginx'
+  egress:
+  - action: Allow
+EOF
+```
+
+#### Verify access - allowed traffic to nginx from "access" pod
+
+Now run the command to verify that we can access the nginx service.
 
 ```bash
 wget -q --timeout=5 nginx -O -
@@ -335,7 +201,7 @@ wget: download timed out
 
 {: .no-select-button}
 
-Access to `google.com` times out because it can resolve DNS, but has no egress access to anything other than pods with labels matching `run: nginx` in the `advanced-policy-demo` namespace.
+Access to `google.com` times out because we have not allowed that in our network policy the default deny still applies here, only the traffic that we have specified through policies are allowed through.
 
 ## 7. Clean up namespace
 
