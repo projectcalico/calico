@@ -4,22 +4,22 @@ description: Learn how to create more advanced Calico network policies (namespac
 canonical_url: "/security/tutorials/calico-policy"
 ---
 
-Calico network policies **extend** the functionalities of Kubernetes network policies. To demonstrate this, this tutorial takes the Kubernetes Advanced NetworkPolicy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policies.
+Calico network policies **extend** the functionalities of Kubernetes network policies. To demonstrate this, this tutorial follows a similar approach to the Kubernetes Advanced Network Policy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policies.
 
 ### Requirements
 
 - Calico v2.6.1+ with Kubernetes 1.8+
 - calicoctl and kubectl
 - A working Kubernetes cluster and access to it using kubectl and calicoctl
+- Your Kubernetes nodes have connectivity to the public internet
 
 ### Tutorial flow
 
-1. Create the Namespace, Nginx Service and Busybox
-1. Deny all Ingress traffic
-1. Allow Ingress traffic to Nginx
-1. Deny all Egress traffic
-1. Allow Egress traffic to kube-dns
-1. Clean up Namespace
+1. Create the Namespace, Nginx Service
+2. Default Deny
+3. Allow Kube-System
+4. Allow Access to Nginx
+5. Clean up Namespace
 
 ### 1. Create the namespace and nginx service
 
