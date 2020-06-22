@@ -51,6 +51,7 @@ type TopologyOptions struct {
 	NATOutgoingEnabled        bool
 	DelayFelixStart           bool
 	AutoHEPsEnabled           bool
+	TriggerDelayedFelixStart  bool
 }
 
 func DefaultTopologyOptions() TopologyOptions {
@@ -250,6 +251,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			_, err := client.HostEndpoints().Create(context.Background(), hep, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 		}
+
+		if opts.TriggerDelayedFelixStart {
+			felix.TriggerDelayedStart()
+		}
+
 	}
 
 	// Set up routes between the hosts, note: we're not using IPAM here but we set up similar
@@ -265,8 +271,12 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 				defer ginkgo.GinkgoRecover()
 				jBlock := fmt.Sprintf("10.65.%d.0/24", j)
 				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
-					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
-					Expect(err).ToNot(HaveOccurred())
+					// Can get "Nexthop device is not up" error here if tunl0 device is
+					// not ready yet, which can happen especially if Felix start was
+					// delayed.
+					Eventually(func() error {
+						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+					}, "10s", "1s").ShouldNot(HaveOccurred())
 				} else if opts.VXLANMode == api.VXLANModeNever {
 					// If VXLAN is enabled, Felix will program these routes itself.
 					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")

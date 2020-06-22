@@ -77,6 +77,7 @@ var _ = describeBPFTests(withProto("tcp"), withDSR())
 var _ = describeBPFTests(withProto("udp"), withDSR())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
+var _ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
 // with debug disabled and that can lead to verifier issues.
@@ -155,7 +156,7 @@ FELIX_0/32: local host idx -
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
-const expectedRouteDumpIPIP = `10.65.0.0/16: remote in-pool nat-out
+const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.1/32: local host
 10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
@@ -206,7 +207,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			bpfLog         *containers.Container
 			options        infrastructure.TopologyOptions
 			numericProto   uint8
-			expectedRoutes string
 		)
 
 		switch testOpts.protocol {
@@ -242,11 +242,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			case "none":
 				options.IPIPEnabled = false
 				options.IPIPRoutesEnabled = false
-				expectedRoutes = expectedRouteDump
 			case "ipip":
 				options.IPIPEnabled = true
 				options.IPIPRoutesEnabled = true
-				expectedRoutes = expectedRouteDumpIPIP
+			case "wireguard":
+				// Delay running Felix until Node resource has been created.
+				options.DelayFelixStart = true
+				options.TriggerDelayedFelixStart = true
+				// Wireguard doesn't support IPv6, disable it.
+				options.EnableIPv6 = false
+				// Allocate tunnel address for Wireguard.
+				options.WireguardEnabled = true
+				// Enable Wireguard.
+				options.ExtraEnvVars["FELIX_WIREGUARDENABLED"] = "true"
 			default:
 				Fail("bad tunnel option")
 			}
@@ -544,6 +552,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			It("should have correct routes", func() {
+				expectedRoutes := expectedRouteDump
+				if felixes[0].ExpectedIPIPTunnelAddr != "" || felixes[0].ExpectedVXLANTunnelAddr != "" || felixes[0].ExpectedWireguardTunnelAddr != "" {
+					expectedRoutes = expectedRouteDumpWithTunnelAddr
+				}
 				dumpRoutes := func() string {
 					out, err := felixes[0].ExecOutput("calico-bpf", "routes", "dump")
 					if err != nil {
