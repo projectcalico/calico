@@ -1,4 +1,4 @@
-{% assign words = content | number_of_words %}
+{% assign words = content | strip_html | number_of_words %}
 {% assign readTime = words | divided_by:180 | round %}
 <div class="read-time">
   <span class="glyphicon glyphicon-time read-time__icon"></span>
