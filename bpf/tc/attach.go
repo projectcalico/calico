@@ -215,7 +215,7 @@ func (ap AttachPoint) ProgramName() string {
 	return SectionName(ap.Type, ap.ToOrFrom)
 }
 
-// FileName returnthe file the AttachPoint will load the program from
+// FileName return the file the AttachPoint will load the program from
 func (ap AttachPoint) FileName() string {
 	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel)
 }

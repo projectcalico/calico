@@ -614,6 +614,8 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 	epType := tc.EpTypeHost
 	if ifaceName == "tunl0" {
 		epType = tc.EpTypeTunnel
+	} else if ifaceName == "wireguard.cali" {
+		epType = tc.EpTypeWireguard
 	}
 	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
 	ap.HostIP = m.hostIP

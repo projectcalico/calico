@@ -42,9 +42,10 @@ const (
 type EndpointType string
 
 const (
-	EpTypeWorkload EndpointType = "workload"
-	EpTypeHost     EndpointType = "host"
-	EpTypeTunnel   EndpointType = "tunnel"
+	EpTypeWorkload  EndpointType = "workload"
+	EpTypeHost      EndpointType = "host"
+	EpTypeTunnel    EndpointType = "tunnel"
+	EpTypeWireguard EndpointType = "wireguard"
 )
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
@@ -87,6 +88,8 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		epTypeShort = "hep"
 	case EpTypeTunnel:
 		epTypeShort = "tnl"
+	case EpTypeWireguard:
+		epTypeShort = "wg"
 	}
 	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v.o",
 		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel)

@@ -106,11 +106,12 @@ struct bpf_map_def_extended {
 };
 
 /* These constants must be kept in sync with the calculate-flags script. */
-#define CALI_TC_HOST_EP	(1<<0)
-#define CALI_TC_INGRESS	(1<<1)
-#define CALI_TC_TUNNEL	(1<<2)
-#define CALI_CGROUP	(1<<3)
-#define CALI_TC_DSR	(1<<4)
+#define CALI_TC_HOST_EP		(1<<0)
+#define CALI_TC_INGRESS		(1<<1)
+#define CALI_TC_TUNNEL		(1<<2)
+#define CALI_CGROUP		(1<<3)
+#define CALI_TC_DSR		(1<<4)
+#define CALI_TC_WIREGUARD	(1<<5)
 
 #ifndef CALI_COMPILE_FLAGS
 #define CALI_COMPILE_FLAGS 0
@@ -119,9 +120,10 @@ struct bpf_map_def_extended {
 #define CALI_F_INGRESS ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)
 #define CALI_F_EGRESS  (!CALI_F_INGRESS)
 
-#define CALI_F_HEP     ((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP)
-#define CALI_F_WEP     (!CALI_F_HEP)
-#define CALI_F_TUNNEL  ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
+#define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP)
+#define CALI_F_WEP     	 (!CALI_F_HEP)
+#define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
+#define CALI_F_WIREGUARD ((CALI_COMPILE_FLAGS) & CALI_TC_WIREGUARD)
 
 #define CALI_F_FROM_HEP (CALI_F_HEP && CALI_F_INGRESS)
 #define CALI_F_TO_HEP   (CALI_F_HEP && !CALI_F_INGRESS)
@@ -133,6 +135,7 @@ struct bpf_map_def_extended {
 #define CALI_F_FROM_HOST     (!CALI_F_TO_HOST)
 #define CALI_F_L3            (CALI_F_TO_HEP && CALI_F_TUNNEL)
 #define CALI_F_IPIP_ENCAPPED (CALI_F_INGRESS && CALI_F_TUNNEL)
+#define CALI_F_WG_INGRESS    (CALI_F_INGRESS && CALI_F_WIREGUARD)
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	(CALI_COMPILE_FLAGS & CALI_TC_DSR)
