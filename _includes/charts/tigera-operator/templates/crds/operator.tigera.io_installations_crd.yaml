@@ -127,7 +127,7 @@ spec:
                     type: object
                   nodeAddressAutodetectionV6:
                     description: NodeAddressAutodetectionV6 specifies an approach
-                      to automatically detect node IPv4 addresses. If not specified,
+                      to automatically detect node IPv6 addresses. If not specified,
                       IPv6 addresses will not be auto-detected.
                     properties:
                       canReach:
