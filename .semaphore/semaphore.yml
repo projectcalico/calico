@@ -86,7 +86,7 @@ blocks:
     - name: UT on newer kernel
       commands:
       - ./.semaphore/on-test-vm make --directory=${REPO_NAME} ut-bpf
-      - ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-wireguard FORCE_WIREGUARD_FV="1"
+      - ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-wireguard
     - name: FV on newer kernel
       commands:
       - ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
