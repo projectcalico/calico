@@ -28,6 +28,8 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -36,7 +38,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/sirupsen/logrus"
 )
 
 func Min(a, b int) int {

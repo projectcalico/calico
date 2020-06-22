@@ -26,10 +26,11 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/projectcalico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 )
 
 type linuxDataplane struct {

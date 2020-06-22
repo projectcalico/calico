@@ -19,12 +19,17 @@ It has these top-level messages:
 */
 package proto
 
-import proto1 "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
 
-import context "golang.org/x/net/context"
-import grpc "google.golang.org/grpc"
+	proto1 "github.com/gogo/protobuf/proto"
+
+	math "math"
+
+	context "golang.org/x/net/context"
+
+	grpc "google.golang.org/grpc"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto1.Marshal
