@@ -1,4 +1,5 @@
-{% assign words = content | number_of_words %}
+<!-- We do not need consider html-tags and modal dialogs content when calculate the total number of words -->
+{% assign words = content | regex_replace: '<div class="modal-body">(.|\n)*?<\/div>', '' | strip_html | number_of_words %}
 {% assign readTime = words | divided_by:180 | round %}
 <div class="read-time">
   <span class="glyphicon glyphicon-time read-time__icon"></span>
