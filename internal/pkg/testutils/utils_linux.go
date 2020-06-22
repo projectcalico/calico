@@ -440,7 +440,7 @@ func CheckSysctlValue(sysctlPath, value string) error {
 
 	f := bufio.NewReader(fh)
 
-	// Ignoring second output (isPrefix) since it's not necessory
+	// Ignoring second output (isPrefix) since it's not necessary
 	buf, _, err := f.ReadLine()
 	if err != nil {
 		// EOF without a match
