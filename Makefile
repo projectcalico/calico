@@ -427,18 +427,9 @@ fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
 
 KO_DIR := "/lib/modules/$(shell uname -r)/"
-WIREGUARD_KO_PATH := $(shell find $(KO_DIR) -name "wireguard.ko")
 fv-wireguard:
-ifndef FORCE_WIREGUARD_FV
-	@if test -z $(WIREGUARD_KO_PATH); then \
-		echo "WireGuard not available."; \
-		exit 1; \
-	else \
-		$(MAKE) fv FELIX_FV_WIREGUARD_AVAILABLE=true GINKGO_FOCUS="WireGuard-Supported"; \
-	fi
-else
+	test "`find $(KO_DIR) -name wireguard.ko`" || ( echo "WireGuard not available."; exit 1 )
 	$(MAKE) fv FELIX_FV_WIREGUARD_AVAILABLE=true GINKGO_FOCUS="WireGuard-Supported"
-endif
 
 ###############################################################################
 # K8SFV Tests

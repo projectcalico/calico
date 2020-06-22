@@ -20,7 +20,7 @@ blocks:
       - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}
       - echo VM_PREFIX=${VM_PREFIX}
     jobs:
-    - name: Clean up GCE insances
+    - name: Clean up GCE instances
       commands:
       - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
