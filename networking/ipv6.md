@@ -73,7 +73,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
-1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the right {{site.prodname}} manifest for the cluster and datastore type. 
+1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type. 
 
 1. Edit the CNI config (`calico-config` ConfigMap in the manifest), and enable IPv4 and IPv6 address allocation by setting both fields to true.
 
@@ -101,9 +101,9 @@ This how-to guide uses the following {{site.prodname}} features:
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
-1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the appropriate {{site.prodname}} manifest for IPv6 deployment and save it as `calico.yaml`.
+1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type. 
 
-1. Edit the CNI config (calico-config ConfigMap in the manifest), to disable IPv4 assignments and enable IPv6 assignments.
+1. Edit the CNI config (calico-config ConfigMap in the manifest) to disable IPv4 assignments and enable IPv6 assignments.
    ```
        "ipam": {
            "type": "calico-ipam",
@@ -131,7 +131,7 @@ To switch the host to use IPv6 only, follow these additional steps.
 1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
 1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
    - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.     
-     This configures {{site.prodname}} to calculate the router ID based on the hostname, or 
+     This configures {{site.prodname}} to calculate the router ID based on the hostname.
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually. 
 
 #### Enable dual stack, operator install
@@ -144,4 +144,4 @@ TBD - operator steps
 
 ### Above and beyond
 
-- [Configure the Kubernetes control plane to operate over IPv6]({{site.baseurl}}/networking/ipv6-control-plane)
+- [Configure Kubernetes control plane to operate over IPv6]({{site.baseurl}}/networking/ipv6-control-plane)
