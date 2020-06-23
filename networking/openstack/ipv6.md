@@ -1,47 +1,12 @@
 ---
-title: Configure OpenStack for dual stack or IPv6 only
-description: Configure OpenStack for dual stack or IPv6 only. 
+title: Prepare a VM guest OS for IPv6
+description: Prepare a VM guest OS for IPv6. 
 canonical_url: '/networking/openstack/floating-ips'
 ---
 
 ### Big picture
 
-Configure {{site.prodname}} IP address allocation to use IPv6 only or dual stack for workload communications.
-
-### Value
-
-Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it is often a requirement to continue support for IPv4. {{site.prodname}} supports:
-
-- **Dual stack**
-
-   New pods get IPv6 addresses as well as IPv4 addresses, and can communicate with each other and the outside world over IPv6. 
-
-- **IPv6 only**
-   
-  Workloads can communicate over IPv6, initiate connections to IPv6 services, and terminate incoming IPv6 connections. 
-
-### Features
-
-This how-to guide uses the following {{site.prodname}} features:
-
-- **IPAM**, a {{site.prodname}} CNI plugin configured with `assign_ipv6` and `assign_ipv4` flags
-
-### Before you begin...
-
-**{{site.prodname}} requirements** 
-
-  {{site.prodname}} IPAM.  
-  The defaut mode is **IPv4**.
-
-**Kubernetes version requirements**
-  - For dual stack (alpha level), 1.16 and 1.17 
-  - For one IP stack at a time (IPv6 or IPv4), 1.15 and earlier 
-
-**Kubernetes IPv6 host requirements**
-  - An IPv6 address that is reachable from the other hosts
-  - The sysctl setting, `net.ipv6.conf.all.forwarding`, is set to `1`.    
-    This ensures both Kubernetes service traffic and {{site.prodname}} traffic is forwarded appropriately.
-  - A default IPv6 route
+Prepare a VM guest OS for IPv6.
 
 ### How to
 
