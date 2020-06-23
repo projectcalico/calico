@@ -10,7 +10,7 @@ Configure {{site.prodname}} IP address allocation to use dual stack or IPv6 only
 
 ### Value
 
-Workload communication over IPv6 is increasingly desirable, as well as, or instead of IPv4. {{site.prodname}} supports:
+Workload communication over IPv6 is increasingly desirable, as well as or instead of IPv4. {{site.prodname}} supports:
 
 - **IPv4 only** (default)
 
@@ -55,7 +55,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
->**Note**: The following tasks work only for new clusters; you cannot migrate existing IPv4 clusters to IPv6.
+>**Note**: The following tasks are for new clusters.
 {: .alert .alert-info}
 
 **Manifest install**
