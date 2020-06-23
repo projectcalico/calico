@@ -31,14 +31,5 @@ The following table provides a high-level summary of what is not supported in {{
 
 More granular restrictions and limitations for Calico networking and network policy are noted in:
 
-<<<<<<< HEAD
 - [Known issues and limitations]({{site.baseurl}}/getting-started/calico-windows/known-issues)
 - [Determine networking plugin and datastore]({{site.baseurl}}/getting-started/calico-windows/determine-networking)
-
-#### Use Calico open-source documentation
-
-To install the Linux cluster for {{site.prodNameWindows}}, you must use the Calico open-source documentation. You cannot install the Linux master node using {{site.prodname}} documentation or TBD? (will license stop user from mistake?). Windows nodes have their own installation.
-=======
-- [Known issues and limitations]({{site.baseurl}}/getting-started/windows-calico/known-issues)
-- [Determine networking plugin and datastore]({{site.baseurl}}/getting-started/windows-calico/determine-networking)
->>>>>>> 2a424ea2e739b743ab28c7039bbc1bf23eea1dba
