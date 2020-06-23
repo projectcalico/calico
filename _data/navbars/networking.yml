@@ -49,8 +49,8 @@ section:
   section:
   - title: Set up a development machine
     path:  /networking/openstack/dev-machine-setup
-  - title: Configure OpenStack for dual stack or IPv6 only
-    path: /networking/openstack/ipv6-dual-stack
+  - title: Prepare a VM guest OS for IPv6
+    path: /networking/openstack/ipv6
   - title: IP addressing and connectivity
     path: /networking/openstack/connectivity
   - title: Endpoint labels and operator policy
