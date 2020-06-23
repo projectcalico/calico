@@ -10,7 +10,7 @@ Prepare a VM guest OS for IPv6.
 
 ### How to
 
-OpenStack (not {{site.prodname}}) controls whether a VM gets IPv4, IPv6, or both addresses. Calico simply honors the addresses that OpenStack specifies. The following extra steps are required for **IPv6-only** and **dual stack** deployments -- so the guest OS can learn its IPv6 address (if assigned by OpenStack).
+OpenStack (not {{site.prodname}}) controls whether a VM gets IPv4, IPv6, or both addresses. Calico simply honors the addresses that OpenStack specifies. The following extra steps are required for **IPv6 only** and **dual stack** deployments -- so the guest OS can learn its IPv6 address (if assigned by OpenStack).
 
 1. Verify that the guest VM image meets these requirements for IPv6 connectivity.   
 
@@ -49,4 +49,5 @@ OpenStack (not {{site.prodname}}) controls whether a VM gets IPv4, IPv6, or both
    - DHCP enabled
    - From Juno onwards, IPv6 address mode set to DHCPv6 stateful
 
+   
    We suggest that you initially configure both IPv4 and IPv6 subnets in each network. This allows handling VM images that support only IPv4 alongside those that support both IPv4 and IPv6, and allows a VM to be accessed over IPv4 in case this is needed to troubleshoot any issues with its IPv6 configuration. In principle, though, we are not aware of any problems with configuring and using IPv6-only networks in OpenStack.
