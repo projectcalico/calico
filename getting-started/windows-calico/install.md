@@ -2,7 +2,7 @@
 title: Install Calico for Windows
 description: Install Calico for Windows and enable a workload-to-workload Zero Trust model that protects modern
 business and legacy applications.
-canonical_url: TBD
+canonical_url: 
 ---
 
 ### Big picture
