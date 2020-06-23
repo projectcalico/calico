@@ -67,7 +67,7 @@ This how-to guide uses the following {{site.prodname}} features:
 - [Enable IPv6-only, operator install](#enable-ipv6-only-operator-install)
 
 **Optional**
-- [Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
+- [Change host IPv4 addresses to IPv6-only](#change-host-ipv4-addresses-to-ipv6-only)
 
 #### Enable dual stack, manifest install
 
@@ -124,7 +124,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
    New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
-#### (Optional) Change host IPv4 addresses to IPv6 only
+#### Change host IPv4 addresses to IPv6-only
 
 If you want switch the host to IPv6-only, follow these additional steps.
 
