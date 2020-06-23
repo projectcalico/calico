@@ -64,7 +64,6 @@ var _ = Describe("BPF Proxy", func() {
 		dp.checkState(func(s proxy.DPSyncerState) {
 			Expect(len(s.SvcMap)).To(Equal(0))
 			Expect(len(s.EpsMap)).To(Equal(0))
-			Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 		})
 	})
 
@@ -193,7 +192,6 @@ var _ = Describe("BPF Proxy", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(2))
 					Expect(len(s.EpsMap)).To(Equal(2))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 				})
 			})
 
@@ -222,7 +220,6 @@ var _ = Describe("BPF Proxy", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(3))
 					Expect(len(s.EpsMap)).To(Equal(2))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 				})
 			})
 
@@ -233,7 +230,6 @@ var _ = Describe("BPF Proxy", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(2))
 					Expect(len(s.EpsMap)).To(Equal(2))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 				})
 			})
 
@@ -283,7 +279,6 @@ var _ = Describe("BPF Proxy", func() {
 					Expect(len(s.SvcMap)).To(Equal(2))
 					Expect(len(s.EpsMap)).To(Equal(2))
 					Expect(len(s.EpsMap[secondSvcEpsKey])).To(Equal(1))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 				})
 			})
 
@@ -295,7 +290,6 @@ var _ = Describe("BPF Proxy", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(1))
 					Expect(len(s.EpsMap)).To(Equal(2))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(1))
 				})
 			})
 
@@ -348,7 +342,6 @@ var _ = Describe("BPF Proxy", func() {
 					for _, port := range httpSvcEps.Subsets[0].Ports {
 						Expect(len(s.SvcMap)).To(Equal(1))
 						Expect(len(s.EpsMap)).To(Equal(5))
-						Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 
 						ep := s.EpsMap[k8sp.ServicePortName{
 							NamespacedName: types.NamespacedName{
@@ -396,7 +389,6 @@ var _ = Describe("BPF Proxy", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(1))
 					Expect(len(s.EpsMap)).To(Equal(6))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 				})
 			})
 
@@ -454,7 +446,6 @@ var _ = Describe("BPF Proxy", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(2))
 					Expect(len(s.EpsMap)).To(Equal(7))
-					Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 
 					npKey := k8sp.ServicePortName{
 						NamespacedName: types.NamespacedName{
