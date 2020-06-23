@@ -1,28 +1,39 @@
 ---
-title: Get started with Tigera Calico for Windows
-description: 
+title: Get started with Calico for Windows
+description: What you should know about the Calico for Windows at the highest level.
 canonical_url: 
 ---
 
 ### Big picture
 
-Understand the basics of a Tigera Calico for Windows implementation.
+Understand the {{site.prodNameWindows}} implementation.
 
 ### Concepts
 
 #### A hybrid implementation
 
-The Tigera Calico for Windows is a hybrid implementation that requires a Linux master node for Calico components, and a Windows cluster for Windows nodes. The implementation is based on the Calico open-source product; you install and upgrade the Linux cluster using the Calico open source product and documentation. However, the product is licensed through Calico Enterprise.
+The {{site.prodNameWindows}} is a hybrid implementation that requires a Linux master node for Calico components, and a Windows cluster for Windows nodes.
 
-### Before you begin
+### Feature limitations
 
-Tigera Calico for Windows supports all of the following Calico open-source features except:
+The following table provides a high-level summary of what is not supported in {{site.prodNameWindows}} at this time. 
 
-- Non-cluster hosts 
-- Automatic host endpoints
-- Service IP advertisement
+| **Main feature** | **Not supported**                                         |
+| ---------------- | --------------------------------------------------------- |
+| Install          | Installing Windows in privileged container (like docker). |
+| Security         | Non-cluster hosts, including automatic host endpoints     |
+|                  | Application layer policy (ALP)                            |
+| Networking       | Service IP advertisement                                  |
+|                  | IPv6 and dual stack                                       |
+|                  | VXLAN encapsulation, with cross-subnet                    |
+|                  | Setting VXLAN MTU                                         |
+|                  | IP-in-IP encapsulation                                    |
 
-More granular restrictions and limitations are noted in:
+More granular restrictions and limitations for Calico networking and network policy are noted in:
 
-- [Known issues and limitations]
-- [Determine networking plugin and datastore]
+- [Known issues and limitations]({{site.baseurl}}/getting-started/calico-windows/known-issues)
+- [Determine networking plugin and datastore]({{site.baseurl}}/getting-started/calico-windows/determine-networking)
+
+#### Use Calico open-source documentation
+
+To install the Linux cluster for {{site.prodNameWindows}}, you must use the Calico open-source documentation. You cannot install the Linux master node using {{site.prodname}} documentation or TBD? (will license stop user from mistake?). Windows nodes have their own installation.

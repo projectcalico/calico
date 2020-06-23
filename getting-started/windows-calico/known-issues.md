@@ -7,6 +7,7 @@ canonical_url:
 #### Pod-to-pod connections are dropped with TCP reset packets
 
 Restarting Felix or changes to policy (including changes to endpoints referred to in policy), can cause pod-to-pod connections to be dropped with TCP reset packets. When one of the following occurs:
+
 - The policy that applies to a pod is updated
 - Some ingress or egress policy that applies to a pod contains selectors and the set of endpoints that those selectors match changes,
 
@@ -18,60 +19,60 @@ Microsoft has confirmed this is a HNS issue, and they are investigating.
 
 On Windows nodes, kube-proxy unconditionally applies source NAT to traffic from local pods to service ClusterIPs. This means that, at the destination pod, where policy is applied, the traffic appears to come from the source host rather than the source pod. In turn, this means that a network policy with a source selector matching the source pod will not match the expected traffic.
 
-#### Calico BGP networking limitations
+#### {{site.prodname}} BGP networking limitations
 
 | **User**                 | **Permissions**                                              |
 | ------------------------ | ------------------------------------------------------------ |
-| IP mobility/borrowing    | Calico IPAM allocates IPs to host in blocks for aggregation<br/>purposes.
+| IP mobility/borrowing    | {{site.prodname}} IPAM allocates IPs to host in blocks for aggregation<br/>purposes.
 If the IP pool is full, nodes can also "borrow" IPs from another node's block. In BGP terms, the borrower then advertises a more specific "/32" route for the borrowed IP and traffic for that IP only is routed to the borrowing host.
-(This also allows for IP mobility in the Calico OpenStack integration.) |
-| IPs reserved for Windows | Calico IPAM allocates IPs in CIDR blocks. Due to networking<br/>requirements on Windows, four IPs per Windows node-owned block must be reserved for internal purposes.<br /><br />For example, with the default block size of /26, each block contains 64 IP addresses, 4 are reserved for Windows, leaving 60 for pod networking.<br /><br />
+(This also allows for IP mobility in the {{site.prodname}} OpenStack integration.) |
+| IPs reserved for Windows | C{{site.prodname}} IPAM allocates IPs in CIDR blocks. Due to networking<br/>requirements on Windows, four IPs per Windows node-owned block must be reserved for internal purposes.<br /><br />For example, with the default block size of /26, each block contains 64 IP addresses, 4 are reserved for Windows, leaving 60 for pod networking.<br /><br />
 To reduce the impact of these reservations, a larger block size can be configured at the IP pool scope (before any pods are created). |
-| Single IP block per host | Calico IPAM is designed to allocate blocks of IPs (default size /26) to hosts on demand. While the Calico CNI plugin was written to do the same, kube-proxy currently only supports a single IP block per host.<br /><br />
+| Single IP block per host | {{site.prodname}}IPAM is designed to allocate blocks of IPs (default size /26) to hosts on demand. While the {{site.prodname}} CNI plugin was written to do the same, kube-proxy currently only supports a single IP block per host.<br /><br />
 Tigera is working with Microsoft to find a resolution.
 To work around the default limit of one /26 per host there are a few options:
-- With Calico BGP networking and the etcd datastore:
+- With {{site.prodname}} BGP networking and the etcd datastore:
 before creating any blocks, change the block size
 used by the IP pool so that it is sufficient for the
 largest number of Pods that are to be used on a
 single Windows host.
-- Use Calico BGP networking with the kubernetes
-datastore. In that mode, Calico IPAM is not used and
+- Use {{site.prodname}} BGP networking with the kubernetes
+datastore. In that mode, {{site.prodname}} IPAM is not used and
 the CNI host-local IPAM plugin is used with the node's
 Pod CIDR.<br /><br />
 To allow multiple IPAM blocks per host (at the expense of
 kube-proxy compatibility), set the
 windows_use_single_network flag to false in the
-cni.conf.template before installing Calico. Changing that
+cni.conf.template before installing {{site.prodname}}. Changing that
 setting after pods have been networked is not
 recommended since it may leak HNS endpoints |
-| IPIP overlay             | Tigera Calico's IPIP overlay mode cannot be used in clusters<br/>that contain Windows nodes. This is because Windows has
+| IPIP overlay             | {{site.prodname}}'s IPIP overlay mode cannot be used in clusters<br/>that contain Windows nodes. This is because Windows has
 no support for IPIP. |
-| NAT-outgoing             | Calico IP pools support a "NAT outgoing" setting with the following behaviour:
-- Traffic between Calico workloads (in any IP pools) is not NATted.
+| NAT-outgoing             | {{site.prodname}} IP pools support a "NAT outgoing" setting with the following behaviour:
+- Traffic between {{site.prodname}} workloads (in any IP pools) is not NATted.
 - Traffic leaving the configured IP pools is NATted if the workload has an IP within an IP pool that has NAT outgoing enabled.<br /><br />
-Tigera Calico for Windows honors the above setting but it is only applied at pod creation time. If the IP pool configuration is updated after a pod is created, the pod's traffic will continue to be NATted (or not) as before. NAT policy for newly networked pods will honor the new configuration.<br /><br />
-Tigera Calico for Windows automatically adds the host itself and its subnet to the NAT exclusion list. This behaviour can be disabled by setting flag windows_disable_host_subnet_nat_exclusion to true in cni.conf.template before running the install script. |
+Tigera {{site.prodname}} for Windows honors the above setting but it is only applied at pod creation time. If the IP pool configuration is updated after a pod is created, the pod's traffic will continue to be NATted (or not) as before. NAT policy for newly networked pods will honor the new configuration.<br /><br />
+Tigera {{site.prodname}} for Windows automatically adds the host itself and its subnet to the NAT exclusion list. This behaviour can be disabled by setting flag windows_disable_host_subnet_nat_exclusion to true in cni.conf.template before running the install script. |
 | Service IP advertisement | This feature is not supported on Windows.       |
 
 #### Network policy limitations
 
-Because of differences between the Linux and Windows dataplane feature sets, some Calico features are not supported on Windows.
+Because of differences between the Linux and Windows dataplane feature sets, some {{site.prodname}} features are not supported on Windows.
 
 | **Feature**                     | **Notes**                                                    |
 | ------------------------------- | ------------------------------------------------------------ |
 | IPv6                            | IPv6 is not supported on Windows. Any IPv6-specific policy will be ignored. |
 | Application Layer Policy        | Matching on HTTP fields and paths and service account<br/>credentials (via the integration with Envoy) is not supported. |
-| Negated match criteria          | The negated variants of rule match criteria are not supported. Any rules that contain negated match criteria will be skipped and Felix will log a warning. In Calico network policies, the negated match criteria are prefixed with "not": "notProtocol", "notNets", "notSelector", "notPorts", and, "notICMP". |
+| Negated match criteria          | The negated variants of rule match criteria are not supported. Any rules that contain negated match criteria will be skipped and Felix will log a warning. In {{site.prodname}} network policies, the negated match criteria are prefixed with "not": "notProtocol", "notNets", "notSelector", "notPorts", and, "notICMP". |
 | ICMP type/code matches          | While matching ICMP packets by protocol is supported, matching on the precise ICMP type and code are not supported. Felix will ignore rules with ICMP type/code matches with a warning. |
 | "Pass" action not<br/>supported | Rules containing the "Pass" action are skipped on Windows. This is because "Pass" requires some way to "skip ahead" to a later rule, which is not supported in the Windows
 dataplane. |
 
 #### Network policy efficiency
 
-Calico v3.4+ uses new features of the Windows dataplane released in 1803/RS4 to significantly improve the worst-case performance in the cases described below. However, the general advice on how to use selectors efficiently still applies:
+{{site.prodname}} v3.4+ uses new features of the Windows dataplane released in 1803/RS4 to significantly improve the worst-case performance in the cases described below. However, the general advice on how to use selectors efficiently still applies:
 
-Under certain conditions, relatively simple Calico policies can require significant Windows dataplane resources to represent, causing significant CPU and memory usage and large policy programming latency.
+Under certain conditions, relatively simple {{site.prodname}} policies can require significant Windows dataplane resources to represent, causing significant CPU and memory usage and large policy programming latency.
 
 We recommends avoiding policies that contain rules with both a source and destination selector. For example, the following (fairly contrived) policy applies to all workloads, but then it only allows traffic from workloads labeled as clients to workloads labeled as servers:
 
@@ -119,7 +120,7 @@ Kubernetes issue: https://github.com/kubernetes/kubernetes/issues/68511
 
 #### Routes are lost in cloud providers
 
-If you create a Windows host with a cloud provider (AWS for example), the creation of the vSwitch at Calico install time can remove the cloud provider's metadata route. If your application relies on the metadata service, you may need to examine the routing table before and after installing Calico in order to reinstate any lost routes.
+If you create a Windows host with a cloud provider (AWS for example), the creation of the vSwitch at {{site.prodname}} install time can remove the cloud provider's metadata route. If your application relies on the metadata service, you may need to examine the routing table before and after installing {{site.prodname}} in order to reinstate any lost routes.
 
 **VXLAN limitations**
 
@@ -134,17 +135,17 @@ Certain configuration changes will not be honored after the first pod is network
 
 For example the VXLAN VNI setting. To change such parameters:
 - Drain the node of all pods
-- Delete the Calico HNS network:
+- Delete the {{site.prodname}} HNS network:
 
    ```
    PS C:\> Import-Module C:\TigeraCalico\libs\hns\hns.psm1
-   PS C:\> Get-HNSNetwork | ? Name -EQ "Calico" | Remove-HNSNetwork
+   PS C:\> Get-HNSNetwork | ? Name -EQ "{{site.prodname}}" | Remove-HNSNetwork
    ```
 - Update the configuration in `config.ps1`, run `uninstall-calico.ps1` and then `install-calico.ps1` to regenerate the CNI configuration.
 
 **No support for setting MTU**
 
-On Windows, the VXLAN MTU is derived from the host's interface MTU so Calico cannot control it.
+On Windows, the VXLAN MTU is derived from the host's interface MTU so {{site.prodname}} cannot control it.
 
 **No support for cross-subnet VXLAN**
 
@@ -152,4 +153,4 @@ On Windows, VXLAN encapsulation is not supported.
 
 #### Kubernetes-hosted install 
 
-Windows does not support privileged containers at this time. On Windows, Calico must be installed manually rather than as a Kubernetes-managed DaemonSet.
+Windows does not support installing {{site.prodname}} using privileged containers at this time (like Docker). {{site.prodname}} must be installed manually rather than as a Kubernetes-managed DaemonSet.

@@ -27,20 +27,15 @@ PS C:\> Get-HNSEndpoint
 
 #### kubectl exec fails with timeout for Windows pods
 
-Ensure that the Windows firewall (and any network firewall or cloud security group) allows
-traffic to the host on port 10250.
+Ensure that the Windows firewall (and any network firewall or cloud security group) allows traffic to the host on port 10250.
 
 #### kubelet fails to register, complains of node not found in logs
 
-This can be caused by a mismatch between a cloud provider (such as the AWS cloud
-provider) and the configuration of the node. For example, the AWS cloud provider requires
-that the node has a nodename matching its private domain name.
+This can be caused by a mismatch between a cloud provider (such as the AWS cloud provider) and the configuration of the node. For example, the AWS cloud provider requires that the node has a nodename matching its private domain name.
 
 #### After initialising Calico, AWS metadata server is no longer reachable
 
-This is a known Windows issue that Microsoft are working on. The route to the metadata
-server is lost when the vSwitch is created. As a workaround, the route can be added back
-manually by running:
+This is a known Windows issue that Microsoft are working on. The route to the metadata server is lost when the vSwitch is created. As a workaround, the route can be added back manually by running:
 
 ```
 PS C:\> New-NetRoute -DestinationPrefix 169.254.169.254/32
@@ -54,14 +49,11 @@ PS C:\> Get-NetAdapter
 ```
 #### Installation stalls at "Waiting for Calico initialisation to finish"
 
-This can be caused by Window's Execution protection feature. Exit the install using Ctrl-C,
-unblock the scripts, and then run uninstall-calico.ps1 followed by
-install-calico.ps1.
+This can be caused by Window's Execution protection feature. Exit the install using Ctrl-C, unblock the scripts, and then run uninstall-calico.ps1 followed by install-calico.ps1.
 
 #### Windows Server 2019 insider preview: after rebooting a node, Calico fails to start, the tigera-node.err.log file contains errors.
 
-Tigera believe that we understand this issue and we plan to resolve it in a patch release. As
-a workaround, stopping and then starting Calico (using the stop-calico.ps1 and start-calico.ps1 scripts) resolves the problem.
+Tigera believe that we understand this issue and we plan to resolve it in a patch release. As a workaround, stop and then start Calico using the stop-calico.ps1 and start-calico.ps1 scripts.
 
 After reboot of Windows node, pods fail to schedule, kubelet log has CNI errors "timed out waiting for interface matching the management IP (169.254.57.5) of network" (where the IP address may vary but will always be a 169.254.x.x address)
 
@@ -105,7 +97,6 @@ ipipMode: Never
 natOutgoing: true
 ```
 The ipipMode setting should be "Never". To change the value, follow the instructions in this section.
-If using flannel VXLAN, verify that the VXLAN port is set to 4789 and the VSID is >=4096.
 
 #### Felix logs "Failed to create datastore client"
 
@@ -115,9 +106,7 @@ path of your kubeconfig file.
 
 #### Felix starts but logs no output
 
-At its default log level Felix waits to connect to the datastore before logging (in case the
-datastore contains configuration that intentionally disables logging). To diagnose issues in
-early startup, follow the instructions in Updating Configuration to update the FELIX_LOGSEVERITYSCREEN environment variable to "info" or "debug" level.
+At its default log level Felix waits to connect to the datastore before logging (in case the datastore contains configuration that intentionally disables logging). To diagnose issues in early startup, follow the instructions in Updating Configuration to update the FELIX_LOGSEVERITYSCREEN environment variable to "info" or "debug" level.
 
 #### DNS fails (possibly intermittently) in Windows pods
 
