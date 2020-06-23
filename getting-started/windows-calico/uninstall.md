@@ -1,7 +1,7 @@
 ---
 title: Uninstall Calico for Windows
 description: 
-canonical_url: TBD
+canonical_url: 
 ---
 
 ### Big picture
