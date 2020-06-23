@@ -60,14 +60,14 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **Manifest install**
 - [Enable dual stack, manifest install](#enable-dual-stack-manifest-install)
-- [Enable IPv6-only, manifest install](#enable-ipv6-only-manifest-install)
+- [Enable IPv6 only, manifest install](#enable-ipv6-only-manifest-install)
 
 **Operator install**
 - [Enable dual stack, operator install](#enable-dual-stack-operator-install)
-- [Enable IPv6-only, operator install](#enable-ipv6-only-operator-install)
+- [Enable IPv6 only, operator install](#enable-ipv6-only-operator-install)
 
 **Optional**
-- [Change host IPv4 addresses to IPv6-only](#change-host-ipv4-addresses-to-ipv6-only)
+- [Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
 
 #### Enable dual stack, manifest install
 
@@ -104,7 +104,7 @@ This how-to guide uses the following {{site.prodname}} features:
 1. Apply the edited manifest with `kubectl apply -f`.
    New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
 
-#### Enable IPv6-only, manifest install
+#### Enable IPv6 only, manifest install
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
@@ -131,7 +131,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
    New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
-#### Change host IPv4 addresses to IPv6-only
+#### Change host IPv4 addresses to IPv6 only
 
 If you want switch the host to IPv6-only, follow these additional steps.
 
@@ -145,7 +145,7 @@ If you want switch the host to IPv6-only, follow these additional steps.
 
 TBD - operator steps
 
-#### Enable IPv6-only, operator install
+#### Enable IPv6 only, operator install
 
 TBD - operator steps
 
