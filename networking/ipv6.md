@@ -124,6 +124,14 @@ This how-to guide uses the following {{site.prodname}} features:
 
    New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
+#### Enable dual stack, operator install
+
+TBD - operator steps  
+
+#### Enable IPv6 only, operator install
+
+TBD - operator steps  
+
 #### Change host IPv4 addresses to IPv6 only
 
 To switch the host to use IPv6 only, follow these additional steps.
@@ -133,14 +141,6 @@ To switch the host to use IPv6 only, follow these additional steps.
    - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.     
      This configures {{site.prodname}} to calculate the router ID based on the hostname.
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually. 
-
-#### Enable dual stack, operator install
-
-TBD - operator steps  
-
-#### Enable IPv6 only, operator install
-
-TBD - operator steps  
 
 ### Above and beyond
 
