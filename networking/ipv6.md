@@ -133,7 +133,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Change host IPv4 addresses to IPv6 only
 
-If you want switch the host to IPv6-only, follow these additional steps.
+To switch the host to IPv6-only, follow these additional steps.
 
 1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
 1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
