@@ -136,3 +136,20 @@ section:
       path: /getting-started/clis/calicoctl/configure/etcd
     - title: Configure calicoctl to connect to the Kubernetes API datastore
       path: /getting-started/clis/calicoctl/configure/kdd
+- title: Calico for Windows
+  path: /getting-started/windows-calico
+  section: 
+  - title: Get started with Calico for Windows
+    path: /getting-started/windows-calico/get-started
+  - title: Known issues and limitations
+    path: /getting-started/windows-calico/known-issues
+  - title: Determine networking plugin and datastore
+    path: /getting-started/windows-calico/determine-networking
+  - title: Requirements
+    path: /getting-started/windows-calico/requirements
+  - title: Install Calico for Windows
+    path: /getting-started/windows-calico/install 
+  - title: Uninstall Calico for Windows
+    path: /getting-started/windows-calico/uninstall
+  - title: Troubleshoot
+    path: /getting-started/windows-calico/troubleshoot
