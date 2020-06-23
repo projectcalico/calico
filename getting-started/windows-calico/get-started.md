@@ -24,5 +24,5 @@ Tigera Calico for Windows supports all of the following Calico open-source featu
 
 More granular restrictions and limitations are noted in:
 
-- [Known issues and limitations]
-- [Determine networking plugin and datastore]
+- [Known issues and limitations]({{site.baseurl}}/getting-started/windows-calico/known-issues)
+- [Determine networking plugin and datastore]({{site.baseurl}}/getting-started/windows-calico/determine-networking)
