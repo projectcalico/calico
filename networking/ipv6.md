@@ -1,6 +1,6 @@
 ---
 title: Configure dual stack or IPv6 only
-description: Configure dual stack or IPv6 onlyk for workloads.
+description: Configure dual stack or IPv6 only for workloads.
 canonical_url: '/networking/ipv6'
 ---
 
@@ -35,7 +35,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **{{site.prodname}} requirements**
 
-  {{site.prodname}} IPAM
+- {{site.prodname}} IPAM
 
 **Kubernetes version requirements**
   - For dual stack, 1.16 and later
@@ -59,7 +59,7 @@ This how-to guide uses the following {{site.prodname}} features:
 {: .alert .alert-info}
 
 **Manifest install**
-- [Enable dual stack, manifest install](#enable-dual-stack-manifest)
+- [Enable dual stack, manifest install](#enable-dual-stack-manifest-install)
 - [Enable IPv6-only, manifest install](#enable-ipv6-only-manifest-install)
 
 **Operator install**
@@ -67,7 +67,7 @@ This how-to guide uses the following {{site.prodname}} features:
 - [Enable IPv6-only, operator install](#enable-ipv6-only-operator-install)
 
 **Optional**
-- [Change host IPv4 address to IPv6 only](#change-host-ipv4-address-to-ipv6-only)
+- [Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
 
 #### Enable dual stack, manifest install
 
@@ -131,14 +131,14 @@ Be sure to set the value for `CALICO_IPV6POOL_CIDR` to the desired IP pool; it s
 
    New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
-#### (Optional) Change host IPv4 address to IPv6 only
+#### (Optional) Change host IPv4 addresses to IPv6 only
 
 If you installed {{site.prodname}} on the cluster using the default IPv4, and you want switch the host to IPv6-only, follow these additional steps.
 
 1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
 1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
    - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.
-  This configures {{site.prodname}} to calculate the router ID based on the hostname, or
+     This configures {{site.prodname}} to calculate the router ID based on the hostname, or
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
 
 #### Enable dual stack, operator install
