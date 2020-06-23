@@ -67,8 +67,7 @@ This how-to guide uses the following {{site.prodname}} features:
 - [Enable IPv6-only, operator install](#enable-ipv6-only-operator-install)
 
 **Optional**
-- []()Change host IPv4 address to IPv6
-- [Configure the Kubernetes control plane to operate over IPv6](#configure-the-kubernetes-control-plane-to-operate-over-ipv6)
+- [Change host IPv4 address to IPv6 only](#change-host-ipv4-address-to-ipv6-only)
 
 #### Enable dual stack, manifest install
 
