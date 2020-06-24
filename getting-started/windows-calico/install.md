@@ -17,7 +17,7 @@ Because the Kubernetes and {{site.prodname}} control components do not yet run o
 **Required**
 
 - [calicoctl is installed and configured]({{site.baseurl}}/getting-started/clis/calicoctl/)
-- You have [determined your network plugin]({site.baseurl}}/getting-started/windows-calico/determine-networking) and Linux and Windows nodes [meet requirements]({site.baseurl}}/getting-started/windows-calico/requirements)
+- You have [determined your network plugin]({{site.baseurl}}/getting-started/windows-calico/determine-networking) and Linux and Windows nodes [meet requirements]({{site.baseurl}}/getting-started/windows-calico/requirements)
 - Copy the .zip files (provided by your support representative) to each Windows nodes to prepare for install:
 
   On each of your Windows nodes, copy the release .zip archive, **tigera-calico-windows-<version>.zip** and unpack it. For example, using PowerShell:
@@ -29,7 +29,7 @@ Because the Kubernetes and {{site.prodname}} control components do not yet run o
 
 ### How to
 
-Because the Kubernetes and {{site.prodname}} control components do not yet run on Windows, a hybrid Linux/Windows cluster is required. First you create a Linux cluster for {{site.prodname}} components, then you add Windows nodes to the Linux cluster.
+Because the Kubernetes and {{site.prodname}} control components do not yet run on Windows, a hybrid Linux/Windows cluster is required. First you create a Linux cluster for {{site.prodname}} components, then you join Windows nodes to the Linux cluster.
 
 **Kubernetes**
 - [Create a Linux cluster](#create-a-linux-cluster)
@@ -51,7 +51,6 @@ There are many ways to create a Linux Kubernetes cluster. The Tigera team regula
 #### Ensure pods run on the correct nodes
 
 A primary issue of running a hybrid Kubernetes cluster is that many Kubernetes manifests do not specify a **node selector** to restrict where their pods can run. For example, `kubeadm` installs `kube-proxy` (Kubernetes per-host NAT daemon) using a DaemonSet that does not include a node selector. This means that the kube-proxy pod, which only supports Linux, will be scheduled to both Linux and Windows nodes. Services/pods that should run only on Linux nodes (such as the `kube-proxy` DaemonSet) should be started with a node selector to avoid attempting to schedule them to Windows nodes.
-{: .alert .alert-info}
 
 To get around this for `kube-proxy`:
 
@@ -101,12 +100,13 @@ A similar change may be needed for other Kubernetes services (such as `kube-dns`
    ```
    docker version
    ```
-If you see an error, try manually starting the docker service and its dependencies:
+   If you see an error, try manually starting the docker service and its dependencies:
 
    ```
    PS C:\>Start-Service VMSP
    PS C:\>Start-Service docker
    ```
+
 **Step 2: Install docker base images**
 
 To start most containers on Windows, docker requires a set of base images that match the {% include open-new-window.html text='host operating system' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/version-compatibility#matching-container-host-version-with-container-image-versions' %}
@@ -196,7 +196,7 @@ After unpacking the binaries, the c:\k directory should contain `kube-proxy.exe`
 
 Copy the Kubernetes kubeconfig/certificate file to c:\k\config. If using kubeadm, the file will have been emitted to /etc/kubernetes/admin.conf on the master.
 
->**Note**: the admin.conf file contains the administrator credentials for the cluster; using that file provides the simplest configuration. However, for a production cluster, we recommend running with per-node credentials instead.
+>**Note**: The admin.conf file contains the administrator credentials for the cluster; using that file provides the simplest configuration. However, for a production cluster, we recommend running with per-node credentials instead.
 
 Test the kubeconfig file by running `kubectl`:
 
@@ -259,7 +259,7 @@ In addition, it's important that `kubelet` is started after the vSwitch has been
 **As a quickstart**, the {{site.prodname}} package includes a sample script at `TigeraCalico\kubernetes\start-kubelet.ps1` that:
 
 - Waits for {{site.prodname}} to initialise the vSwitch
-- Atarts `kubelet` with
+- Starts `kubelet` with
   - CNI enabled
   - --hostname-override set to match {{site.prodname}}'s nodename
   - --node-ip set to the IP of the default vEthernet device
@@ -290,6 +290,7 @@ See the README in the same directory for more details. Feel free to modify the s
 adjust other kube-proxy parameters.
 
 >**Note**: The script will pause at the first stage until {{site.prodname}} is installed by following the instructions in the next section.
+{: .alert .alert-info}
 
 #### Install Calico on Linux master and worker nodes
 
@@ -308,10 +309,11 @@ Select instructions for BGP or VXLAN in this section.
    ```
    $ calicoctl apply -f ippool.yaml
    ```
+
 **If using {{site.prodname}} VXLAN networking**
 
-1. [Install {{site.prodname}} for policy and networking](h{{site.baseurl}}//getting-started/kubernetes/self-managed-onprem/) for etcd or kdd.
-1. Modify VXLAN as described in [Customizing the manifests] guide.
+1. [Install {{site.prodname}} for policy and networking]({{site.baseurl}}//getting-started/kubernetes/self-managed-onprem/) for etcd or kdd.
+1. Modify VXLAN as described in [Customize the manifests] guide.
 
 **Note**: Windows can only support a single type of IP pool so it is important that you use only a single VXLAN IP pool in this mode. After applying the manifest using  `calicoctl`,
 
@@ -365,7 +367,7 @@ If using a non-{{site.prodname}} network plugin for networking, it must be insta
 - Set $env:CALICO_DATASTORE_TYPE to the {{site.prodname}} datastore you want to use. 
   **Note**: "etcdv3" can only be used with {{site.prodname}} BGP networking. 
 - Set $env:KUBECONFIG to the location of the kubeconfig file {{site.prodname}} should use to access the Kubernetes API server. For instructions on setting up a secure kubeconfig with the correct permissions for
-{{site.prodNameWindows}}, see "Create a cluster role" and kubeconfig for {{site.prodNameWindows}}.
+{{site.prodNameWindows}}, see [Create a cluster role](#create-cluster-role-for-windows-nodes) and kubeconfig for {{site.prodNameWindows}}.
 - If using etcd as the datastore, set the $env:ETCD_ parameters accordingly. 
   **Note**: Due to a limitation of the Windows dataplane, a Kubernetes service ClusterIP cannot be used for the etcd endpoint (the host compartment cannot reach Kubernetes services).
 - Set $env:NODENAME to match the hostname used by kubelet. The default is to use the node's hostname.
@@ -375,7 +377,10 @@ If using a non-{{site.prodname}} network plugin for networking, it must be insta
   **Note**: Prior to Kubernetes v1.13, Kubernetes lacked support for setting the correct DNS configuration on each pod. To work around that limitation, the CNI configuration includes DNS settings that are applied to pods whenever the kubelet fails to pass DNS configuration to the CNI plugin. For v1.13 and above, the DNS configuration of the template is ignored in favour of correct per-pod values learned from the kubelet.
 
 **Run the installer**
-  **Note**: After you run the installer, the directory should not be moved because the service registration will refer to the path of the directory.
+  
+>**Note**: After you run the installer, the directory should not be moved because the service registration will refer to the path of the directory.
+{: .alert .alert-info}
+
 - Change directory to the location that you unpacked the archive. For example:
 
   ```
@@ -404,18 +409,19 @@ On the kubernetes master:
 
 - **If using the Kubernetes API datastore**:
 
-```
-$ kubectl apply -f
-```
-  https://docs.tigera.io/v2.8/getting-started/kubernetes/installation/hos
-ted/kubernetes-datastore/policy-only/1.7/win-cluster-role.yaml
+  ```
+  $ kubectl apply -f
+  ```
+  [cluster role](https://docs.tigera.io/v2.8/getting-started/kubernetes/installation/hos
+ted/kubernetes-datastore/policy-only/1.7/win-cluster-role.yaml)
 
 - **If using the etcd datastore**:
-```
-$ kubectl apply -f
-```
-  https://docs.tigera.io/v2.8/getting-started/kubernetes/installation/hos
-ted/policy-only/1.7/win-cluster-role.yaml
+
+  ```
+  $ kubectl apply -f
+  ```
+  [cluster role](https://docs.tigera.io/v2.8/getting-started/kubernetes/installation/hos
+ted/policy-only/1.7/win-cluster-role.yaml)
 
 Then, to make the kube-config file, you'll need the URL of your Kubernetes API server.
 
