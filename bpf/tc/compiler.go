@@ -32,13 +32,6 @@ const (
 	HookEgress  Hook = "egress"
 )
 
-const (
-	CompileFlagHostEp  = 1
-	CompileFlagIngress = 2
-	CompileFlagTunnel  = 4
-	CompileFlagCgroup  = 8
-)
-
 type ToOrFromEp string
 
 const (
@@ -56,17 +49,6 @@ const (
 
 func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
-}
-
-var sectionToFlags = map[string]int{}
-
-func init() {
-	sectionToFlags[SectionName(EpTypeWorkload, FromEp)] = 0
-	sectionToFlags[SectionName(EpTypeWorkload, ToEp)] = CompileFlagIngress
-	sectionToFlags[SectionName(EpTypeHost, FromEp)] = CompileFlagHostEp | CompileFlagIngress
-	sectionToFlags[SectionName(EpTypeHost, ToEp)] = CompileFlagHostEp
-	sectionToFlags[SectionName(EpTypeTunnel, FromEp)] = CompileFlagHostEp | CompileFlagIngress | CompileFlagTunnel
-	sectionToFlags[SectionName(EpTypeTunnel, ToEp)] = CompileFlagHostEp | CompileFlagTunnel
 }
 
 func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string) string {
