@@ -1,16 +1,16 @@
 ---
 title: Configure outgoing NAT
-description: Configure Calico Enterprise networking to perform outbound NAT for connections from pods to outside of the cluster, NATing the source IP from the pod IP to the node IP of the node hosting the pod.
+description: Configure Calico Enterprise networking to perform outbound NAT for connections from pods to outside of the cluster.
 canonical_url: '/networking/workloads-outside-cluster'
 ---
 
 ### Big picture
 
-Configure {{site.prodname}} networking to perform outbound NAT for connections from pods to outside of the cluster, NATing the source IP from the pod IP to the node IP of the node hosting the pod.
+Configure {{site.prodname}} networking to perform outbound NAT for connections from pods to outside of the cluster. {{site.prodname}} optionally source NATs the pod IP to the node IP.
 
 ### Value
 
-When to enable outgoing NAT on connections for pods, depends on your networking implementation and what you are trying to accomplish. The {{site.prodname}} NAT outbound connection option is flexible; it can be enabled, disabled, and applied to {{site.prodname}} IP pools with public IPs, private IPs, or a specific range of IP addresses. This article describes some use cases for enabling and disabling outgoing NAT.
+The {{site.prodname}} NAT outbound connection option is flexible; it can be enabled, disabled, and applied to {{site.prodname}} IP pools with public IPs, private IPs, or a specific range of IP addresses. This article describes some use cases for enabling and disabling outgoing NAT.
 
 ### Features
 
