@@ -453,6 +453,9 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 			log.Warnf("Autodetection of IPv4 address failed, keeping existing value: %s", node.Spec.BGP.IPv4Address)
 			validateIP(node.Spec.BGP.IPv4Address)
 		}
+	} else if ipv4Env == "none" && node.Spec.BGP.IPv4Address != "" {
+		log.Infof("Autodetection for IPv4 disabled, keeping existing value: %s", node.Spec.BGP.IPv4Address)
+		validateIP(node.Spec.BGP.IPv4Address)
 	} else if ipv4Env != "none" {
 		if ipv4Env != "" {
 			node.Spec.BGP.IPv4Address = parseIPEnvironment("IP", ipv4Env, 4)
@@ -478,6 +481,9 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 			log.Warnf("Autodetection of IPv6 address failed, keeping existing value: %s", node.Spec.BGP.IPv6Address)
 			validateIP(node.Spec.BGP.IPv6Address)
 		}
+	} else if ipv6Env == "none" && node.Spec.BGP.IPv6Address!="" {
+		log.Infof("Autodetection for IPv6 disabled, keeping existing value: %s", node.Spec.BGP.IPv6Address)
+		validateIP(node.Spec.BGP.IPv6Address)	
 	} else if ipv6Env != "none" {
 		if ipv6Env != "" {
 			node.Spec.BGP.IPv6Address = parseIPEnvironment("IP6", ipv6Env, 6)
@@ -485,7 +491,7 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 		validateIP(node.Spec.BGP.IPv6Address)
 	}
 
-	if ipv4Env == "none" && (ipv6Env == "" || ipv6Env == "none") {
+	if ipv4Env == "none" && (ipv6Env == "" || ipv6Env == "none") && node.Spec.BGP.IPv4Address == "" && node.Spec.BGP.IPv6Address == "" {
 		log.Warn("No IP Addresses configured, and autodetection is not enabled")
 		terminate()
 	}
