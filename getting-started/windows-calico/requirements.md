@@ -4,7 +4,7 @@ description: Review requirements for installing Calico for Windows.
 canonical_url: '/getting-started/kubernetes/windows-calico/requirements'
 ---
 
-### License and distribution 
+### Distribution 
 
 {{site.prodNameWindows}} is distributed as a **.zip archive**.  
 
