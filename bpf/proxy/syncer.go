@@ -221,9 +221,62 @@ func (s *Syncer) loadOrigs() error {
 	return nil
 }
 
+type syncRef struct {
+	svc  k8sp.ServicePortName
+	info k8sp.ServicePort
+}
+
+func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServiceMap) map[nat.FrontendKey]syncRef {
+	ref := make(map[nat.FrontendKey]syncRef, len(svcs))
+
+	for key, svc := range svcs {
+		clusterIP := svc.ClusterIP()
+		proto := uint8(ProtoV1ToIntPanic(svc.Protocol()))
+		port := uint16(svc.Port())
+
+		xref := syncRef{key, svc}
+
+		ref[nat.NewNATKey(clusterIP, port, proto)] = xref
+
+		np := uint16(0)
+
+		if svc.NodePort() != 0 {
+			np = uint16(svc.NodePort())
+
+			ref[nat.NewNATKey(clusterIP, np, proto)] = xref
+
+			for _, npIP := range s.nodePortIPs {
+				ref[nat.NewNATKey(npIP, np, proto)] = xref
+			}
+		}
+
+		for _, extIP := range svc.ExternalIPStrings() {
+			ref[nat.NewNATKey(net.ParseIP(extIP), port, proto)] = xref
+
+			// FIXME we do not create these, not sure if we should create np for
+			// external ip and so consider it here as well
+			//
+			/*
+				if np != 0 {
+					ref[NewNATKey(extIP, np, svc.Protocol())] = xref
+				}
+			*/
+		}
+	}
+
+	return ref
+}
+
 func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
+	svcRef := s.svcMapToIPPortProtoMap(state.SvcMap)
+
 	for svck, svcv := range s.origSvcs {
-		svckey := s.matchBpfSvc(svck, state.SvcMap)
+		xref, ok := svcRef[svck]
+		if !ok {
+			continue
+		}
+
+		svckey := s.matchBpfSvc(svck, xref.svc, xref.info)
 		if svckey == nil {
 			continue
 		}
@@ -888,75 +941,14 @@ func (s *Syncer) newSvcID() uint32 {
 	return id
 }
 
-func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey {
-	for svc, info := range svcs {
-		if bsvc.Proto() != ProtoV1ToIntPanic(info.Protocol()) {
-			continue
-		}
-
-		matchNP := func() *svcKey {
-			if bsvc.Port() == uint16(info.NodePort()) {
-				for _, nip := range s.nodePortIPs {
-					if bsvc.Addr().String() == nip.String() {
-						skey := &svcKey{
-							sname: svc,
-							extra: getSvcKeyExtra(svcTypeNodePort, nip.String()),
-						}
-						log.Debugf("resolved %s as %s", bsvc, skey)
-						return skey
-					}
-				}
-			}
-
-			return nil
-		}
-
-		if bsvc.Port() != uint16(info.Port()) {
-			if sk := matchNP(); sk != nil {
-				return sk
-			}
-			continue
-		}
-		matchLBSrcIp := func() bool {
-			// External IP with zero Src CIDR is a valid entry and should not be considered
-			// as stale
-			if bsvc.SrcCIDR() == nat.ZeroCIDR {
-				return true
-			}
-			// If the service does not have any source address range, treat all the entries with
-			// src cidr as stale.
-			if len(info.LoadBalancerSourceRanges()) == 0 {
-				return false
-			}
-			// If the service does have source range specified, look for a match
-			for _, srcip := range info.LoadBalancerSourceRanges() {
-				if strings.Contains(srcip, ":") {
-					continue
-				}
-				cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
-				if cidr == bsvc.SrcCIDR() {
-					return true
-				}
-			}
-			return false
-		}
-
-		if bsvc.Addr().String() == info.ClusterIP().String() {
-			if bsvc.SrcCIDR() == nat.ZeroCIDR {
-				skey := &svcKey{
-					sname: svc,
-				}
-				log.Debugf("resolved %s as %s", bsvc, skey)
-				return skey
-			}
-		}
-
-		for _, eip := range info.ExternalIPStrings() {
-			if bsvc.Addr().String() == eip {
-				if matchLBSrcIp() {
+func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svc k8sp.ServicePortName, info k8sp.ServicePort) *svcKey {
+	matchNP := func() *svcKey {
+		if bsvc.Port() == uint16(info.NodePort()) {
+			for _, nip := range s.nodePortIPs {
+				if bsvc.Addr().String() == nip.String() {
 					skey := &svcKey{
 						sname: svc,
-						extra: getSvcKeyExtra(svcTypeExternalIP, eip),
+						extra: getSvcKeyExtra(svcTypeNodePort, nip.String()),
 					}
 					log.Debugf("resolved %s as %s", bsvc, skey)
 					return skey
@@ -964,10 +956,65 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 			}
 		}
 
-		// just in case the NodePort port is the same as the Port
+		return nil
+	}
+
+	if bsvc.Port() != uint16(info.Port()) {
 		if sk := matchNP(); sk != nil {
 			return sk
 		}
+		return nil
+	}
+	matchLBSrcIP := func() bool {
+		// External IP with zero Src CIDR is a valid entry and should not be considered
+		// as stale
+		if bsvc.SrcCIDR() == nat.ZeroCIDR {
+			return true
+		}
+		// If the service does not have any source address range, treat all the entries with
+		// src cidr as stale.
+		if len(info.LoadBalancerSourceRanges()) == 0 {
+			return false
+		}
+		// If the service does have source range specified, look for a match
+		for _, srcip := range info.LoadBalancerSourceRanges() {
+			if strings.Contains(srcip, ":") {
+				continue
+			}
+			cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
+			if cidr == bsvc.SrcCIDR() {
+				return true
+			}
+		}
+		return false
+	}
+
+	if bsvc.Addr().String() == info.ClusterIP().String() {
+		if bsvc.SrcCIDR() == nat.ZeroCIDR {
+			skey := &svcKey{
+				sname: svc,
+			}
+			log.Debugf("resolved %s as %s", bsvc, skey)
+			return skey
+		}
+	}
+
+	for _, eip := range info.ExternalIPStrings() {
+		if bsvc.Addr().String() == eip {
+			if matchLBSrcIP() {
+				skey := &svcKey{
+					sname: svc,
+					extra: getSvcKeyExtra(svcTypeExternalIP, eip),
+				}
+				log.Debugf("resolved %s as %s", bsvc, skey)
+				return skey
+			}
+		}
+	}
+
+	// just in case the NodePort port is the same as the Port
+	if sk := matchNP(); sk != nil {
+		return sk
 	}
 
 	return nil
@@ -1106,7 +1153,7 @@ func (s *Syncer) cleanupSticky() error {
 	return nil
 }
 
-// ConntrackFrontenddHasBackend returns true if the given front-backend pair exists
+// ConntrackFrontendHasBackend returns true if the given front-backend pair exists
 func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 	backendIP net.IP, backendPort uint16, proto uint8) bool {
 
