@@ -1,6 +1,6 @@
 ---
 title: Uninstall Calico for Windows
-description: 
+description: Remove Calico for Windows from the cluster.
 canonical_url: 
 ---
 
@@ -18,7 +18,7 @@ If are spinning down your cluster, you do not need to complete this procedure. I
    ```
    PS C:\TigeraCalico > .\uninstall-calico.ps1
    ```
-   >**Note**: If you are uninstalling to change configuration, make sure that you run the uninstall
+   > **Note**: If you are uninstalling to change configuration, make sure that you run the uninstall
 script with the old configuration file.
 {: .alert .alert-info}
 
