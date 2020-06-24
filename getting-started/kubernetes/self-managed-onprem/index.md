@@ -7,7 +7,5 @@ show_toc: false
 
 {{ page.description }}
 
-Install Calico for on-premises deployments to provide networking and network policy, in either overlay or non-overlay networking modes.
-
 {% capture content %}{% include index.html %}{% endcapture %}
 {{ content | replace: "    ", "" }}
