@@ -40,4 +40,4 @@ Earlier versions may have known issues and incompatibilities and may work, but w
   ```
 ### Next steps
 
-[Install {{site.prodNameWindows}}]({site.baseurl}}/getting-started/windows-calico/install)
+[Install {{site.prodNameWindows}}]({{site.baseurl}}/getting-started/windows-calico/install)
