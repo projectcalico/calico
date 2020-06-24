@@ -1,7 +1,6 @@
 ---
 title: Install Calico for Windows
-description: Install Calico for Windows and enable a workload-to-workload Zero Trust model that protects modern
-business and legacy applications.
+description: Install Calico for Windows and enable a workload-to-workload Zero Trust model that protects modern business and legacy applications.
 canonical_url: 
 ---
 
@@ -292,7 +291,7 @@ adjust other kube-proxy parameters.
 
 >**Note**: The script will pause at the first stage until {{site.prodname}} is installed by following the instructions in the next section.
 
-#### Install {{site.prodname}} on Linux master and worker nodes
+#### Install Calico on Linux master and worker nodes
 
 Select instructions for BGP or VXLAN in this section.
 
@@ -327,7 +326,7 @@ should show a single pool with `VXLANMODE Always`.
 
 **If using static routes** follow the "Installing Calico for policy (advanced)" (https://docs.projectcalico.org/getting-started/kubernetes/installation/other) section of the {{site.prodname}} documentation.
 
-#### Install Calico and Kubernetes on each Windows nodes
+#### Install Calico and Kubernetes on each Windows node
 
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
 
