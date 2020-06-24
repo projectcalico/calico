@@ -38,6 +38,7 @@ Earlier versions may have known issues and incompatibilities and may work, but w
   PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
                                [Net.SecurityProtocolType]::Tls12
   ```
+
 ### Next steps
 
-[Install {{site.prodNameWindows}}]({{site.baseurl}}/getting-started/windows-calico/install)
+- [Install {{site.prodNameWindows}}]({{site.baseurl}}/getting-started/windows-calico/install)
