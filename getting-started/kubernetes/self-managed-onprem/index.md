@@ -1,14 +1,13 @@
 ---
 title: Self-managed on-premises
-description: Install both Calico networking and network policy for the most flexibility for on-premises deployments.  
+description: Install Calico for on-premises deployments to provide networking and network policy, in either overlay or non-overlay networking modes.  
 show_read_time: false
 show_toc: false
 ---
 
 {{ page.description }}
 
-While Calico can be configured to provide newtworking for just Kubernetes, it can also be integrated with other infrastructure 
-or self-hosted cloud services.
+Install Calico for on-premises deployments to provide networking and network policy, in either overlay or non-overlay networking modes.
 
 {% capture content %}{% include index.html %}{% endcapture %}
 {{ content | replace: "    ", "" }}
