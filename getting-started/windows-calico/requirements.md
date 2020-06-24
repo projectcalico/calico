@@ -27,7 +27,7 @@ Earlier versions may have known issues and incompatibilities and may work, but w
 ### Windows platform requirements
 
 - Windows version:
-  - Windows Server 2019 / 1809 (RS5) or greater, with [some limitations]({site.baseurl}}/getting-started/windows-calico/determine-networking)
+  - Windows Server 2019 / 1809 (RS5) or greater, with [some limitations]({{site.baseurl}}/getting-started/windows-calico/determine-networking)
   - Windows Server 1903 (AKA 19H1) build 18317 or greater
 - Powershell for the installer
 - {{site.prodname}}'s BGP networking mode requires the **RemoteAccess service** to be installed to provide the Windows BGP Router
