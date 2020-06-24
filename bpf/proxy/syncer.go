@@ -221,7 +221,7 @@ func (s *Syncer) loadOrigs() error {
 	return nil
 }
 
-func (s *Syncer) startupSync(state DPSyncerState) error {
+func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 	for svck, svcv := range s.origSvcs {
 		svckey := s.matchBpfSvc(svck, state.SvcMap)
 		if svckey == nil {
@@ -264,6 +264,10 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 		}
 	}
 
+	return nil
+}
+
+func (s *Syncer) startupRemoveStale() error {
 	for k := range s.origSvcs {
 		log.Debugf("removing stale %s", k)
 		if err := s.bpfSvcs.Delete(k[:]); err != nil {
@@ -279,6 +283,14 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 	}
 
 	return nil
+}
+
+func (s *Syncer) startupSync(state DPSyncerState) error {
+	if err := s.startupBuildPrev(state); err != nil {
+		return err
+	}
+
+	return s.startupRemoveStale()
 }
 
 func (s *Syncer) cleanupDerived(id uint32) error {
