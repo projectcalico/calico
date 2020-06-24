@@ -1005,6 +1005,173 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
+				Context("Test Service type transitions", func() {
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+					)
+					clusterIP := "10.101.0.10"
+					testSvcName := "test-service"
+					tgtPort := 8055
+
+					BeforeEach(func() {
+						testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0, testOpts.protocol)
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+						felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
+						felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
+					})
+
+					It("should have connectivity from all workloads via a service to workload 0", func() {
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ExpectSome(w[0][1], TargetIP(ip), port)
+						cc.ExpectSome(w[1][0], TargetIP(ip), port)
+						cc.ExpectSome(w[1][1], TargetIP(ip), port)
+
+						cc.CheckConnectivity()
+					})
+
+					Context("change service by adding external IP", func() {
+						var testSvcUpdated *v1.Service
+						externalIP := []string{extIP}
+
+						BeforeEach(func() {
+							testSvcUpdated = k8sServiceWithExtIP(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0, testOpts.protocol, externalIP)
+							svc, err := k8sClient.CoreV1().
+								Services(testSvcNamespace).
+								Get(testSvcName, metav1.GetOptions{})
+							testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+							_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcUpdated)
+							Expect(err).NotTo(HaveOccurred())
+							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+								"Service endpoints didn't get created? Is controller-manager happy?")
+						})
+						It("should have connectivity from all workloads via external IP to workload 0", func() {
+							ip := testSvcUpdated.Spec.ExternalIPs
+							port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+							cc.ExpectSome(w[1][0], TargetIP(ip[0]), port)
+							cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
+							cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
+							cc.CheckConnectivity()
+						})
+
+						Context("change service by removing external IP", func() {
+							var testSvcWithoutExtIP *v1.Service
+							BeforeEach(func() {
+								testSvcWithoutExtIP = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort, 0, testOpts.protocol)
+								svc, err := k8sClient.CoreV1().
+									Services(testSvcNamespace).
+									Get(testSvcName, metav1.GetOptions{})
+								testSvcWithoutExtIP.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+								_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcWithoutExtIP)
+								Expect(err).NotTo(HaveOccurred())
+								Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+									"Service endpoints didn't get created? Is controller-manager happy?")
+							})
+							It("should not have connectivity to workload 0 via external IP", func() {
+								ip := testSvcUpdated.Spec.ExternalIPs
+								port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+								cc.ExpectNone(w[1][0], TargetIP(ip[0]), port)
+								cc.ExpectNone(w[1][1], TargetIP(ip[0]), port)
+								cc.ExpectNone(w[0][1], TargetIP(ip[0]), port)
+
+								clusterIP = testSvc.Spec.ClusterIP
+
+								cc.ExpectSome(w[0][1], TargetIP(clusterIP), port)
+								cc.ExpectSome(w[1][0], TargetIP(clusterIP), port)
+								cc.ExpectSome(w[1][1], TargetIP(clusterIP), port)
+								cc.CheckConnectivity()
+							})
+						})
+					})
+
+					Context("service type changes to load balancer", func() {
+						var testSvcUpdated *v1.Service
+						externalIP := []string{extIP}
+						srcIPRange := []string{}
+
+						BeforeEach(func() {
+							testSvcUpdated = k8sLBService(testSvcName, "10.101.0.10", w[0][0].Name, 80, tgtPort, testOpts.protocol,
+								externalIP, srcIPRange)
+							svc, err := k8sClient.CoreV1().
+								Services(testSvcNamespace).
+								Get(testSvcName, metav1.GetOptions{})
+							testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+							_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcUpdated)
+							Expect(err).NotTo(HaveOccurred())
+							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+								"Service endpoints didn't get created? Is controller-manager happy?")
+						})
+						It("should have connectivity from workload 0 to service via external IP", func() {
+							ip := testSvcUpdated.Spec.ExternalIPs
+							port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+							cc.ExpectSome(w[1][0], TargetIP(ip[0]), port)
+							cc.ExpectSome(w[1][1], TargetIP(ip[0]), port)
+							cc.ExpectSome(w[0][1], TargetIP(ip[0]), port)
+							cc.CheckConnectivity()
+						})
+
+						Context("Change service type to cluster IP", func() {
+							var testSvcClusterIP *v1.Service
+							BeforeEach(func() {
+								testSvcClusterIP = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort,0, testOpts.protocol)
+								svc, err := k8sClient.CoreV1().
+									Services(testSvcNamespace).
+									Get(testSvcName, metav1.GetOptions{})
+								testSvcClusterIP.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+								_,err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcClusterIP)
+								Expect(err).NotTo(HaveOccurred())
+								Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+									"Service endpoints didn't get created? Is controller-manager happy?")
+							})
+							It("should not have connectivity to workload 0 via external IP", func() {
+								ip := testSvcUpdated.Spec.ExternalIPs
+								port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+								cc.ExpectNone(w[1][0], TargetIP(ip[0]), port)
+								cc.ExpectNone(w[1][1], TargetIP(ip[0]), port)
+								cc.ExpectNone(w[0][1], TargetIP(ip[0]), port)
+
+								clusterIP = testSvcClusterIP.Spec.ClusterIP
+
+								cc.ExpectSome(w[0][1], TargetIP(clusterIP), port)
+								cc.ExpectSome(w[1][0], TargetIP(clusterIP), port)
+								cc.ExpectSome(w[1][1], TargetIP(clusterIP), port)
+								cc.CheckConnectivity()
+							})
+
+						})
+					})
+
+					Context("change Service type to nodeport", func() {
+						var testSvcUpdated *v1.Service
+						npPort := uint16(30333)
+						BeforeEach(func() {
+							testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort, int32(npPort), testOpts.protocol)
+							svc, err := k8sClient.CoreV1().
+								Services(testSvcNamespace).
+								Get(testSvcName, metav1.GetOptions{})
+
+							testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+							_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcUpdated)
+							Expect(err).NotTo(HaveOccurred())
+							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+								"Service endpoints didn't get created? Is controller-manager happy?")
+						})
+						It("should have connectivity via the node port to workload 0", func() {
+							node1IP := felixes[1].IP
+							cc.ExpectSome(w[0][1], TargetIP(node1IP), npPort)
+							cc.ExpectSome(w[1][0], TargetIP(node1IP), npPort)
+							cc.ExpectSome(w[1][1], TargetIP(node1IP), npPort)
+							cc.CheckConnectivity()
+						})
+
+					})
+				})
 				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
 					var (
 						testSvc          *v1.Service
@@ -2002,6 +2169,40 @@ func k8sLBService(name, clusterIP string, wname string, port,
 				{
 					Protocol:   k8sProto,
 					Port:       int32(port),
+					Name:       fmt.Sprintf("port-%d", tgtPort),
+					TargetPort: intstr.FromInt(tgtPort),
+				},
+			},
+		},
+	}
+}
+
+func k8sServiceWithExtIP(name, clusterIP string, w *workload.Workload, port,
+	tgtPort int, nodePort int32, protocol string, externalIPs []string) *v1.Service {
+	k8sProto := v1.ProtocolTCP
+	if protocol == "udp" {
+		k8sProto = v1.ProtocolUDP
+	}
+
+	svcType := v1.ServiceTypeClusterIP
+	if nodePort != 0 {
+		svcType = v1.ServiceTypeNodePort
+	}
+	return &v1.Service{
+		TypeMeta:   typeMetaV1("Service"),
+		ObjectMeta: objectMetaV1(name),
+		Spec: v1.ServiceSpec{
+			ClusterIP:   clusterIP,
+			Type:        svcType,
+			ExternalIPs: externalIPs,
+			Selector: map[string]string{
+				"name": w.Name,
+			},
+			Ports: []v1.ServicePort{
+				{
+					Protocol:   k8sProto,
+					Port:       int32(port),
+					NodePort:   nodePort,
 					Name:       fmt.Sprintf("port-%d", tgtPort),
 					TargetPort: intstr.FromInt(tgtPort),
 				},
