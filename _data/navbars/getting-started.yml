@@ -137,7 +137,7 @@ section:
     - title: Configure calicoctl to connect to the Kubernetes API datastore
       path: /getting-started/clis/calicoctl/configure/kdd
 - title: Calico for Windows
-  path: /getting-started/windows-calico
+  path: /getting-started/windows-calico/
   section: 
   - title: Get started with Calico for Windows
     path: /getting-started/windows-calico/get-started
