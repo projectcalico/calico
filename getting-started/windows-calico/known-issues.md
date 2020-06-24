@@ -21,52 +21,20 @@ On Windows nodes, kube-proxy unconditionally applies source NAT to traffic from 
 
 #### {{site.prodname}} BGP networking limitations
 
-| **User**                 | **Permissions**                                              |
-| ------------------------ | ------------------------------------------------------------ |
-| IP mobility/borrowing    | {{site.prodname}} IPAM allocates IPs to host in blocks for aggregation<br/>purposes.
-If the IP pool is full, nodes can also "borrow" IPs from another node's block. In BGP terms, the borrower then advertises a more specific "/32" route for the borrowed IP and traffic for that IP only is routed to the borrowing host.
-(This also allows for IP mobility in the {{site.prodname}} OpenStack integration.) |
-| IPs reserved for Windows | C{{site.prodname}} IPAM allocates IPs in CIDR blocks. Due to networking<br/>requirements on Windows, four IPs per Windows node-owned block must be reserved for internal purposes.<br /><br />For example, with the default block size of /26, each block contains 64 IP addresses, 4 are reserved for Windows, leaving 60 for pod networking.<br /><br />
-To reduce the impact of these reservations, a larger block size can be configured at the IP pool scope (before any pods are created). |
-| Single IP block per host | {{site.prodname}}IPAM is designed to allocate blocks of IPs (default size /26) to hosts on demand. While the {{site.prodname}} CNI plugin was written to do the same, kube-proxy currently only supports a single IP block per host.<br /><br />
-Tigera is working with Microsoft to find a resolution.
-To work around the default limit of one /26 per host there are a few options:
-- With {{site.prodname}} BGP networking and the etcd datastore:
-before creating any blocks, change the block size
-used by the IP pool so that it is sufficient for the
-largest number of Pods that are to be used on a
-single Windows host.
-- Use {{site.prodname}} BGP networking with the kubernetes
-datastore. In that mode, {{site.prodname}} IPAM is not used and
-the CNI host-local IPAM plugin is used with the node's
-Pod CIDR.<br /><br />
-To allow multiple IPAM blocks per host (at the expense of
-kube-proxy compatibility), set the
-windows_use_single_network flag to false in the
-cni.conf.template before installing {{site.prodname}}. Changing that
-setting after pods have been networked is not
-recommended since it may leak HNS endpoints |
-| IPIP overlay             | {{site.prodname}}'s IPIP overlay mode cannot be used in clusters<br/>that contain Windows nodes. This is because Windows has
-no support for IPIP. |
-| NAT-outgoing             | {{site.prodname}} IP pools support a "NAT outgoing" setting with the following behaviour:
-- Traffic between {{site.prodname}} workloads (in any IP pools) is not NATted.
-- Traffic leaving the configured IP pools is NATted if the workload has an IP within an IP pool that has NAT outgoing enabled.<br /><br />
-Tigera {{site.prodname}} for Windows honors the above setting but it is only applied at pod creation time. If the IP pool configuration is updated after a pod is created, the pod's traffic will continue to be NATted (or not) as before. NAT policy for newly networked pods will honor the new configuration.<br /><br />
-Tigera {{site.prodname}} for Windows automatically adds the host itself and its subnet to the NAT exclusion list. This behaviour can be disabled by setting flag windows_disable_host_subnet_nat_exclusion to true in cni.conf.template before running the install script. |
-| Service IP advertisement | This feature is not supported on Windows.       |
+
 
 #### Network policy limitations
 
 Because of differences between the Linux and Windows dataplane feature sets, some {{site.prodname}} features are not supported on Windows.
 
-| **Feature**                     | **Notes**                                                    |
-| ------------------------------- | ------------------------------------------------------------ |
-| IPv6                            | IPv6 is not supported on Windows. Any IPv6-specific policy will be ignored. |
-| Application Layer Policy        | Matching on HTTP fields and paths and service account<br/>credentials (via the integration with Envoy) is not supported. |
-| Negated match criteria          | The negated variants of rule match criteria are not supported. Any rules that contain negated match criteria will be skipped and Felix will log a warning. In {{site.prodname}} network policies, the negated match criteria are prefixed with "not": "notProtocol", "notNets", "notSelector", "notPorts", and, "notICMP". |
-| ICMP type/code matches          | While matching ICMP packets by protocol is supported, matching on the precise ICMP type and code are not supported. Felix will ignore rules with ICMP type/code matches with a warning. |
-| "Pass" action not<br/>supported | Rules containing the "Pass" action are skipped on Windows. This is because "Pass" requires some way to "skip ahead" to a later rule, which is not supported in the Windows
-dataplane. |
+| Feature                                                      | Limitation                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| IP mobility/ borrowing                                       | {{site.prodname}} IPAM allocates IPs to host in blocks for aggregation purposes.<br/>If the IP pool is full, nodes can also "borrow" IPs from another node's block. In BGP terms, the borrower then advertises a more specific "/32" route for the borrowed IP and traffic for that IP only is routed to the borrowing host. (This also allows for IP mobility in the {{site.prodname}} OpenStack integration.)<br/><br />Windows nodes do not support this borrowing mechanism; they will not borrow IPs even if the IP pool is full and they mark their blocks so that Linux nodes will not borrow from them. |
+| IPs reserved for<br/>Windows<br /><br /><br /><br /><br />   | {{site.prodname}} IPAM allocates IPs in CIDR blocks. Due to networking requirements on Windows, four IPs per Windows node-owned block must be reserved for internal purposes.<br /><br/>For example, with the default block size of /26, each block contains 64 IP addresses, 4 are reserved for Windows, leaving 60 for pod networking.<br /><br />To reduce the impact of these reservations, a larger block size can be configured at the IP pool scope (before any pods are created). |
+| Single IP block per host<br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /><br /> | {{site.prodname}} IPAM is designed to allocate blocks of IPs (default size /26) to hosts on demand. While the {{site.prodname}} CNI plugin was written to do the same, kube-proxy currently only supports a single IP block per host. Tigera is working with Microsoft to find a resolution.<br/><br />To work around the default limit of one /26 per host there some options:<br/><br />- With {{site.prodname}} BGP networking and the etcd datastore before creating any blocks, change the block size used by the IP pool so that it is sufficient for the largest number of Pods that are to be used on a single Windows host.<br/>- Use {{site.prodname}} BGP networking with the kubernetes datastore. In that mode, {{site.prodname}} IPAM is not used and the CNI host-local IPAM plugin is used with the node's Pod CIDR.<br/><br />To allow multiple IPAM blocks per host (at the expense of kube-proxy compatibility), set the `windows_use_single_network` flag to `false` in the `cni.conf.template` before installing {{site.prodname}}. Changing that setting after pods are networked is not recommended because it may leak HNS endpoints. |
+| IP-in-IP overlay                                             | {{site.prodname}}'s IPIP overlay mode cannot be used in clusters that contain Windows nodes because Windows does not support IP-in-IP. |
+| NAT-outgoing<br /><br /><br /><br /><br /><br /><br /><br /> | {{site.prodname}} IP pools support a "NAT outgoing" setting with the following behaviour: <br />- Traffic between {{site.prodname}} workloads (in any IP pools) is not NATted. <br />- Traffic leaving the configured IP pools is NATted if the workload has an IP within an IP pool that has NAT outgoing enabled. {{ site.prodNameWindows }} honors the above setting but it is only applied at pod creation time. If the IP pool configuration is updated after a pod is created, the pod's traffic will continue to be NATted (or not) as before. NAT policy for newly-networked pods will honor the new configuration. {{ site.prodNameWindows }} automatically adds the host itself and its subnet to the NAT exclusion list. This behaviour can be disabled by setting flag `windows_disable_host_subnet_nat_exclusion` to `true` in `cni.conf.template` before running the install script. |
+| Service IP advertisement                                     | This {{site.prodname}} feature is not supported on Windows.  |
 
 #### Network policy efficiency
 
