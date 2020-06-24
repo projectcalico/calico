@@ -6,11 +6,11 @@ canonical_url:
 
 ### Big picture
 
-Understand networking plugin and datastore options before installing {{ site.prodNameWindows }}. Because of the varied networking options available, your deployment platform, and Windows limitations, it is important to decide your networking first. 
+Understand networking plugin and datastore options before installing {{site.prodNameWindows}}. Because of the varied networking options available, your deployment platform, and Windows limitations, it is important to decide your networking first. 
 
 ### Concepts
 
-The {{ site.prodNameWindows }} deployment requires a hybrid Linux/Windows Kubernetes cluster; the Linux cluster contains the {{site.prodname}} cluster-wide components, and Windows nodes are joined to that cluster. Kubernetes currently requires a Linux master node (which may also be used as the required Linux worker node).
+The {{site.prodNameWindows}} deployment requires a hybrid Linux/Windows Kubernetes cluster; the Linux cluster contains the {{site.prodname}} cluster-wide components, and Windows nodes are joined to that cluster. Kubernetes currently requires a Linux master node (which may also be used as the required Linux worker node).
 
 Linux and Windows dataplanes have different requirements:
 
