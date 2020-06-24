@@ -31,5 +31,5 @@ The following table provides a high-level summary of what is not supported in {{
 
 More granular restrictions and limitations for Calico networking and network policy are noted in:
 
-- [Known issues and limitations]({{site.baseurl}}/getting-started/calico-windows/known-issues)
-- [Determine networking plugin and datastore]({{site.baseurl}}/getting-started/calico-windows/determine-networking)
+- [Known issues and limitations]({{site.baseurl}}/getting-started/windows-calico/known-issues)
+- [Determine networking plugin and datastore]({{site.baseurl}}/getting-started/windows-calico/determine-networking)
