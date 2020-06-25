@@ -915,7 +915,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					externalIP := []string{extIP}
 					srcIPRange := []string{}
 					testSvcName := "test-lb-service-extip"
-					var port []uint16
+					var port uint16
 					var ip []string
 
 					BeforeEach(func() {
@@ -930,7 +930,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
 						ip = testSvc.Spec.ExternalIPs
-						port = []uint16{uint16(testSvc.Spec.Ports[0].Port)}
+						port = uint16(testSvc.Spec.Ports[0].Port)
 						pol.Spec.Ingress = []api.Rule{
 							{
 								Action: "Allow",
@@ -944,7 +944,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pol = updatePolicy(pol)
 					})
 					It("should not have connectivity from external client, and return connection refused", func() {
-						cc.ExpectNoConnectivity(externalClient, TargetIP(ip[0]), port, ExpectNoneWithError("connection refused"))
+						cc.Expect(None, externalClient, TargetIP(ip[0]),
+							ExpectWithPorts(port),
+							ExpectNoneWithError("connection refused"),
+						)
 						cc.CheckConnectivity()
 					})
 				})
@@ -1427,14 +1430,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
 									}
 
-									ports := []uint16{npPort}
+									ports := ExpectWithPorts(npPort)
 
 									// Also try host networked pods, both on a local and remote node.
 									// N.B. it cannot work without the connect time balancer
-									cc.ExpectConnectivity(hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
-									cc.ExpectConnectivity(hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
-									cc.ExpectConnectivity(hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
-									cc.ExpectConnectivity(hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
+									cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
+									cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
+									cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
+									cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
 
 									cc.CheckConnectivity()
 								})
@@ -1642,8 +1645,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										Expect(err).NotTo(HaveOccurred())
 										Expect(pmtu).To(Equal(0)) // nothing specific for this path yet
 
-										port := []uint16{npPort}
-										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP), port,
+										cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
+											ExpectWithPorts(npPort),
 											ExpectWithSendLen(sendLen),
 											ExpectWithRecvLen(recvLen),
 											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),
@@ -1660,8 +1663,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										err := felixes[1].ExecMayFail("ethtool", "-K", "eth0", "gro", "off")
 										Expect(err).NotTo(HaveOccurred())
 
-										port := []uint16{npPort}
-										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP), port,
+										cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
+											ExpectWithPorts(npPort),
 											ExpectWithSendLen(sendLen),
 											ExpectWithRecvLen(recvLen),
 											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),
