@@ -28,7 +28,6 @@ This how-to guide uses the following {{site.prodname}} features:
 
 - Ensure that your Kubernetes cluster meets [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements).
   If you do not have a cluster, see {% include open-new-window.html text='Installing kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}.
-- If you are using CoreOS, [make this required change to manifests]({{site.baseurl}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
 
 ### How to
 
@@ -37,7 +36,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Determine your datastore
 
-{{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is recommended for on-premises deployments, and supports only Kubernetes workloads; **etcd** is the best datastore for hybrid deployments.
+{{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is recommended for on-premises deployments, and supports only Kubernetes workloads; **etcd** is the best datastore for hybrid deployments. An example of a hybrid deployment is running Calico as the network plugin for both Kubernetes and OpenStack.
 
 #### Install Calico on nodes
 
@@ -64,6 +63,9 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```bash
    kubectl apply -f calico.yaml
    ```
+
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
 
 ##### Install Calico with Kubernetes API datastore, more than 50 nodes
 
@@ -105,6 +107,9 @@ Based on your datastore and number of nodes, select a link below to install {{si
    kubectl apply -f calico.yaml
    ```
 
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
+
 ##### Install Calico with etcd datastore
 
 1. Download the {{site.prodname}} networking manifest for etcd.
@@ -122,6 +127,9 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```bash
    kubectl apply -f calico.yaml
    ```
+
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:etcd' %}
 
 ### Next steps
 
