@@ -61,6 +61,7 @@ flags=0
 ((CALI_TC_TUNNEL = 1 << 2))
 ((CALI_CGROUP = 1 << 3))
 ((CALI_TC_DSR = 1 << 4))
+((CALI_TC_WIREGUARD = 1 << 5))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
@@ -72,6 +73,11 @@ elif [[ "${filename}" =~ .*tnl.* ]]; then
   ((flags |= CALI_TC_TUNNEL | CALI_TC_HOST_EP))
   args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="tunnel"
+elif [[ "${filename}" =~ .*wg.* ]]; then
+  # Wireguard.
+  ((flags |= CALI_TC_WIREGUARD | CALI_TC_HOST_EP))
+  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
+  ep_type="wireguard"
 elif [[ "${filename}" =~ .*connect.* ]]; then
   # Connect-time load balancer (CGROUP attached).
   ((flags |= CALI_CGROUP))

@@ -46,7 +46,7 @@ static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
 {
 	if (CALI_F_IPIP_ENCAPPED) {
 		return skb_shorter(skb, ETH_IPV4_UDP_SIZE + sizeof(struct iphdr));
-	} else if (CALI_F_L3) {
+	} else if (CALI_F_L3 | CALI_F_WIREGUARD) {
 		return skb_shorter(skb, IPV4_UDP_SIZE);
 	} else {
 		return skb_shorter(skb, ETH_IPV4_UDP_SIZE);
@@ -59,8 +59,9 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
 	if (CALI_F_IPIP_ENCAPPED) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
 		return sizeof(struct ethhdr) + sizeof(struct iphdr);
-	} else if (CALI_F_L3) {
-		// Egress on an IPIP tunnel: skb is [inner IP|payload]
+	} else if (CALI_F_L3 | CALI_F_WIREGUARD) {
+		// Egress on an IPIP tunnel, or Wireguard both directions:
+		// skb is [inner IP|payload]
 		return 0;
 	} else {
 		// Normal L2 interface: skb is [ether|IP|payload]

@@ -211,6 +211,14 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 #if FIB_ENABLED
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(fwd)) {
+		if (CALI_F_WG_INGRESS) {
+			// Don't try redirect from Wireguard ingress, because it doesn't work.
+			// Wireguard SKBs are L3 and we think we need to add on an Ethernet header
+			// before redirecting to a local cali* veth, so that the veth doesn't drop
+			// the packet.
+			goto cancel_fib;
+		}
+
 		/* XXX we might include the tot_len in the fwd, set it once when
 		 * we get the ip_header the first time and only adjust the value
 		 * when we modify the packet - to avoid geting the header here
