@@ -343,7 +343,8 @@ func setSvcTypeToClusterIP(testSvc *v1.Service, k8s *fake.Clientset) {
 	testSvc.Spec.LoadBalancerSourceRanges = []string{}
 	testSvc.Spec.Type = v1.ServiceTypeClusterIP
 	testSvc.Spec.Ports[0].NodePort = 0
-	k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func setSvcTypeToExternalIP(testSvc *v1.Service, extIP []string, k8s *fake.Clientset) {
@@ -351,7 +352,8 @@ func setSvcTypeToExternalIP(testSvc *v1.Service, extIP []string, k8s *fake.Clien
 	testSvc.Spec.LoadBalancerSourceRanges = []string{}
 	testSvc.Spec.Type = v1.ServiceTypeClusterIP
 	testSvc.Spec.Ports[0].NodePort = 0
-	k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func setSvcTypeToLoadBalancer(testSvc *v1.Service, extIP, srcRange []string, k8s *fake.Clientset) {
@@ -359,7 +361,8 @@ func setSvcTypeToLoadBalancer(testSvc *v1.Service, extIP, srcRange []string, k8s
 	testSvc.Spec.LoadBalancerSourceRanges = srcRange
 	testSvc.Spec.Ports[0].NodePort = 0
 	testSvc.Spec.Type = v1.ServiceTypeLoadBalancer
-	k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func setSvcTypeToNodePort(testSvc *v1.Service, npPort int32, k8s *fake.Clientset) {
@@ -367,5 +370,6 @@ func setSvcTypeToNodePort(testSvc *v1.Service, npPort int32, k8s *fake.Clientset
 	testSvc.Spec.LoadBalancerSourceRanges = []string{}
 	testSvc.Spec.Ports[0].NodePort = npPort
 	testSvc.Spec.Type = v1.ServiceTypeNodePort
-	k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	Expect(err).NotTo(HaveOccurred())
 }
