@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/markbits"
 	"github.com/projectcalico/felix/rules"
@@ -270,6 +271,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			RouteTableManager:                  routeTableIndexAllocator,
 
 			KubeClientSet: k8sClientSet,
+
+			FeatureDetectOverrides: iptables.ParseFeatureDetectOverrides(configParams.IptablesFeatureDetectOverride),
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

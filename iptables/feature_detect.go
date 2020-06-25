@@ -288,3 +288,28 @@ func findBestBinary(lookPath func(file string) (string, error), ipVersion uint8,
 	logCxt.Panic("Failed to find iptables command")
 	return ""
 }
+
+// Parse a comma separated list of overrides, example;
+// "SNATFullyRandom=true,MASQFullyRandom=false"
+func ParseFeatureDetectOverrides(param string) *FeatureDetectOverrides {
+	if param == "" {
+		return nil
+	}
+	var overrides FeatureDetectOverrides
+    for _, s := range strings.Split(param, ",") {
+		if strings.HasPrefix(s, "SNATFullyRandom=") {
+			overrides.SNATFullyRandom = strings.Split(s, "=")[1]
+			continue
+		}
+		if strings.HasPrefix(s, "MASQFullyRandom=") {
+			overrides.MASQFullyRandom = strings.Split(s, "=")[1]
+			continue
+		}
+		if strings.HasPrefix(s, "RestoreSupportsLock=") {
+			overrides.RestoreSupportsLock = strings.Split(s, "=")[1]
+			continue
+		}
+		log.Info("Unknown override", s)
+	}
+	return &overrides
+}

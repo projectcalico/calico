@@ -174,6 +174,8 @@ type Config struct {
 	LookPathOverride func(file string) (string, error)
 
 	KubeClientSet *kubernetes.Clientset
+
+	FeatureDetectOverrides *iptables.FeatureDetectOverrides
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -323,7 +325,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	featureDetector := iptables.NewFeatureDetector(nil)
+	featureDetector := iptables.NewFeatureDetector(config.FeatureDetectOverrides)
 	iptablesFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker
