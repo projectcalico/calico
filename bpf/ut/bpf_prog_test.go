@@ -270,6 +270,7 @@ func cleanUpMaps() {
 		if m == stateMap || m == testStateMap || m == jumpMap {
 			continue // Can't clean up array maps
 		}
+		log.WithField("map", m.GetName()).Debug("Cleaning")
 		var allKeys [][]byte
 		err := m.Iter(func(k, v []byte) {
 			allKeys = append(allKeys, k)
@@ -645,6 +646,8 @@ func resetBPFMaps() {
 }
 
 func TestMapIterWithDelete(t *testing.T) {
+	RegisterTestingT(t)
+
 	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
 		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
 		Type:       "hash",
