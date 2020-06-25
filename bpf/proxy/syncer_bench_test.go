@@ -15,6 +15,8 @@
 // We keep the benchmarks in the proxy package to be able to bench unexported
 // partial functionality.
 
+// +build benchmark
+
 package proxy
 
 import (
