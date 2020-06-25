@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1-407
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.2-301.1592810506 AS ubi
 
 ARG GIT_VERSION=unknown
 
@@ -30,6 +30,35 @@ ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
 RUN microdnf install hostname && mkdir /licenses
 COPY LICENSE /licenses
+
+RUN microdnf update
+
+# Remove packages currently known to have vulnerabilities and dependencies
+# Remove packages deemed known to be unsafe by threat defense team
+RUN microdnf remove cyrus-sasl-lib \
+    openldap gnupg2 libcurl gpgme curl librepo libdnf rpm microdnf rpm-lib libsolv rpm-libs \
+    libdb-utils \
+    libdb \
+    bzip2-libs \
+    python3-libs platform-python libarchive crypto-policies platform-python-setuptools gnutls libssh glib2 openssl-libs \
+    krb5-libs librhsm libpeas libtirpc libmodulemd1 libnsl2 gobject-introspection json-glib \
+    expat \
+    libmetalink \
+    libarchive \
+    libssh-config \
+    libtasn1 \
+    p11-kit-trust ca-certificates \
+    openldap \
+    libgcrypt \
+    systemd-libs libusbx \
+    libidn2 \
+    libpsl \
+    libnghttp2 \
+    libcrypto  glibc-langpack-en glibc-minimal-langpack  json-c libcom_err \
+    libgcc libstdc++ libstdc libpcap libxml2 lz4-libs openssl platform-python-pip python3-pip-wheel systemd sqlite-libs \
+    libuuid \
+    libblkid libmount \
+    libsmartcols
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
