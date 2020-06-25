@@ -56,9 +56,18 @@ type Features struct {
 	RestoreSupportsLock bool
 }
 
+// Values; ""|true|false.
+// "" means "detect" and is default. true|false overrides.
+type FeatureDetectOverrides struct {
+	SNATFullyRandom     string
+	MASQFullyRandom     string
+	RestoreSupportsLock string
+}
+
 type FeatureDetector struct {
-	lock         sync.Mutex
-	featureCache *Features
+	lock            sync.Mutex
+	featureCache    *Features
+	featureOverride *FeatureDetectOverrides
 
 	// Path to file with kernel version
 	GetKernelVersionReader func() (io.Reader, error)
@@ -66,10 +75,11 @@ type FeatureDetector struct {
 	NewCmd cmdFactory
 }
 
-func NewFeatureDetector() *FeatureDetector {
+func NewFeatureDetector(overrides *FeatureDetectOverrides) *FeatureDetector {
 	return &FeatureDetector{
 		GetKernelVersionReader: versionparse.GetKernelVersionReader,
 		NewCmd:                 NewRealCmd,
+		featureOverride:        overrides,
 	}
 }
 

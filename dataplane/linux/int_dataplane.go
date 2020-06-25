@@ -323,7 +323,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	featureDetector := iptables.NewFeatureDetector()
+	featureDetector := iptables.NewFeatureDetector(nil)
 	iptablesFeatures := featureDetector.GetFeatures()
 
 	var iptablesLock sync.Locker

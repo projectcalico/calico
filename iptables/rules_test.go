@@ -70,7 +70,7 @@ var _ = Describe("Hash extraction tests", func() {
 	var table *Table
 
 	BeforeEach(func() {
-		fd := NewFeatureDetector()
+		fd := NewFeatureDetector(nil)
 		fd.GetKernelVersionReader = func() (io.Reader, error) {
 			return nil, errors.New("not implemented")
 		}
@@ -98,10 +98,10 @@ var _ = Describe("Hash extraction tests", func() {
 		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": []string{"OLD INSERT RULE"},
+			"FORWARD": {"OLD INSERT RULE"},
 		}))
 		Expect(rules).To(Equal(map[string][]string{
-			"FORWARD": []string{"-A FORWARD -j felix-FORWARD"},
+			"FORWARD": {"-A FORWARD -j felix-FORWARD"},
 		}))
 	})
 	It("should extract an old felix rule by special case", func() {
@@ -111,7 +111,7 @@ var _ = Describe("Hash extraction tests", func() {
 		))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": []string{
+			"FORWARD": {
 				"OLD INSERT RULE",
 				"",
 			},
@@ -128,7 +128,7 @@ var _ = Describe("Hash extraction tests", func() {
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": []string{"wUHhoiAYhphO9Mso"},
+			"FORWARD": {"wUHhoiAYhphO9Mso"},
 		}))
 		Expect(rules).To(Equal(map[string][]string{
 			"FORWARD": {
@@ -144,7 +144,7 @@ var _ = Describe("Hash extraction tests", func() {
 				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": []string{
+			"FORWARD": {
 				"wUHhoiAYhphO9Mso",
 				"abcdefghij1234-_",
 				"",
@@ -169,11 +169,11 @@ var _ = Describe("Hash extraction tests", func() {
 				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
-			"cali-abcd": []string{
+			"cali-abcd": {
 				"wUHhoiAYhphO9Mso",
 				"abcdefghij1234-_",
 			},
-			"FORWARD": []string{
+			"FORWARD": {
 				"",
 				"1234567890093213",
 			},
@@ -191,7 +191,7 @@ var _ = Describe("Hash extraction tests", func() {
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -m comment --comment \"key=value\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
-			"FORWARD": []string{"wUHhoiAYhphO9Mso"},
+			"FORWARD": {"wUHhoiAYhphO9Mso"},
 		}))
 		Expect(rules).To(Equal(map[string][]string{
 			"FORWARD": {

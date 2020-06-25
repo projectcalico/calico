@@ -112,7 +112,7 @@ func TestFeatureDetection(t *testing.T) {
 		t.Run("iptables version "+tst.iptablesVersion+" kernel "+tst.kernelVersion, func(t *testing.T) {
 			RegisterTestingT(t)
 			dataplane := newMockDataplane("filter", map[string][]string{}, "legacy")
-			featureDetector := NewFeatureDetector()
+			featureDetector := NewFeatureDetector(nil)
 			featureDetector.NewCmd = dataplane.newCmd
 			featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 
