@@ -87,6 +87,7 @@ var _ = Describe("BPF service type change", func() {
 	aff := newMockAffinityMap()
 	ct := mock.NewMockMap(conntrack.MapParams)
 	p, _ := proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
+	p.OnHostIPsUpdate([]net.IP{initIP})
 
 	key_clusterIP := nat.NewNATKey(clusterIP, port, proxy.ProtoV1ToIntPanic(proto))
 	key_extIP := nat.NewNATKey(extIP, port, proxy.ProtoV1ToIntPanic(proto))
@@ -99,7 +100,6 @@ var _ = Describe("BPF service type change", func() {
 
 	It("should update service after host ip changes", func() {
 		By("check if nat map has the cluster IP", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 
 			Eventually(func() bool {
 				front.Lock()
@@ -113,7 +113,6 @@ var _ = Describe("BPF service type change", func() {
 		})
 		// cluster IP -> external IP
 		By("Update the service type from ClusterIP to ExternalIP", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToExternalIP(testSvc, []string{extIPstr}, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -130,7 +129,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// External IP -> Cluster IP
 		By("Update the service type from ExternalIP to ClusterIP", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToClusterIP(testSvc, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -147,7 +145,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// Cluster IP -> Load balancer
 		By("Update the service type from ClusterIP to LoadBalancer", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToLoadBalancer(testSvc, []string{extIPstr}, []string{"30.1.0.1/32"}, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -165,7 +162,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// LoadBalancer -> ClusterIP
 		By("Update the service type from LoadBalancer to ClusterIP", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToClusterIP(testSvc, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -183,7 +179,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// ClusterIP -> NodePort
 		By("Update the service type from ClusterIP to NodePort", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToNodePort(testSvc, npPort, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -199,7 +194,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// NodePort -> ClusterIP
 		By("Update the service type from NodePort to ClusterIP", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToClusterIP(testSvc, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -216,7 +210,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// ClusterIP -> NodePort
 		By("Update the service type from ClusterIP to NodePort", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToNodePort(testSvc, npPort, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -232,7 +225,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// NodePort -> ExternalIP
 		By("Update the service type from NodePort to ExternalIP", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToExternalIP(testSvc, []string{extIPstr}, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -250,7 +242,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// ExternalIP -> NodePort
 		By("Update the service type from ExternalIP to NodePort", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToNodePort(testSvc, npPort, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -267,7 +258,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// NodePort -> LoadBalancer
 		By("Update the service type from NodePort to LoadBalancer", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToLoadBalancer(testSvc, []string{extIPstr}, []string{"30.1.0.1"}, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -285,7 +275,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// LoadBalancer -> ExternalIP
 		By("Update the service type from LoadBalancer to ExternalIP", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToExternalIP(testSvc, []string{extIPstr}, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -303,7 +292,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// External IP -> LoadBalancer
 		By("Update the service type from ExternalIP to LoadBalancer", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToLoadBalancer(testSvc, []string{extIPstr}, []string{"30.1.0.1"}, k8s)
 			Eventually(func() bool {
 				front.Lock()
@@ -320,7 +308,6 @@ var _ = Describe("BPF service type change", func() {
 
 		// LoadBalancer -> NodePort
 		By("Update the service type from LoadBalancer to NodePort", func() {
-			p.OnHostIPsUpdate([]net.IP{initIP})
 			setSvcTypeToNodePort(testSvc, npPort, k8s)
 			Eventually(func() bool {
 				front.Lock()
