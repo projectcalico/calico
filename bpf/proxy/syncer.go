@@ -148,6 +148,8 @@ type ipPortProto struct {
 	proto uint8
 }
 
+// servicePortToIPPortProto is a simple way how to turn a k8sp.ServicePort into
+// an ipPortProto
 func servicePortToIPPortProto(sp k8sp.ServicePort) ipPortProto {
 	return ipPortProto{
 		ipPort: ipPort{
@@ -226,6 +228,8 @@ type syncRef struct {
 	info k8sp.ServicePort
 }
 
+// svcMapToIPPortProtoMap takes the kubernetes service representation and makes an index
+// so we can cross reference with the values we learn from the dataplane.
 func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServiceMap) map[nat.FrontendKey]syncRef {
 	ref := make(map[nat.FrontendKey]syncRef, len(svcs))
 
@@ -252,15 +256,6 @@ func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServiceMap) map[nat.FrontendKe
 
 		for _, extIP := range svc.ExternalIPStrings() {
 			ref[nat.NewNATKey(net.ParseIP(extIP), port, proto)] = xref
-
-			// FIXME we do not create these, not sure if we should create np for
-			// external ip and so consider it here as well
-			//
-			/*
-				if np != 0 {
-					ref[NewNATKey(extIP, np, svc.Protocol())] = xref
-				}
-			*/
 		}
 	}
 
@@ -268,14 +263,22 @@ func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServiceMap) map[nat.FrontendKe
 }
 
 func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
+	// Build a map keyed by nat.FrontendKey of services to be generated from the
+	// state. The map values contains references to both ServicePortName keys of
+	// the state map as well as the ServicePort values.
 	svcRef := s.svcMapToIPPortProtoMap(state.SvcMap)
 
+	// Walk the frontend bpf map that was read into memory and match it against the
+	// references build from the state
 	for svck, svcv := range s.origSvcs {
 		xref, ok := svcRef[svck]
 		if !ok {
 			continue
 		}
 
+		// If there is a cross-reference with the current state, try to match
+		// what is in the bpf map with what was supposed to be a service that
+		// created it - based on the current state.
 		svckey := s.matchBpfSvc(svck, xref.svc, xref.info)
 		if svckey == nil {
 			continue
@@ -290,6 +293,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 			svc:        state.SvcMap[svckey.sname],
 		}
 
+		// there was a match, delete it from the in-mem bpf map to mark is as resolved.
 		delete(s.origSvcs, svck)
 
 		if id >= s.nextSvcID {
@@ -313,6 +317,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 					Endpoint: net.JoinHostPort(ep.Addr().String(), strconv.Itoa(int(ep.Port()))),
 					// IsLocal is not importatnt here
 				})
+			// mark as resolved the endpoint
 			delete(s.origEps, epk)
 		}
 	}
@@ -339,10 +344,14 @@ func (s *Syncer) startupRemoveStale() error {
 }
 
 func (s *Syncer) startupSync(state DPSyncerState) error {
+	// Try to build the previous maps based on the current state and what is in bpf maps.
+	// Once we have the previous map, we can apply the the current state as if we never
+	// restarted and apply only the diff using the regular code path.
 	if err := s.startupBuildPrev(state); err != nil {
 		return err
 	}
 
+	// cleanup from BPF maps anything that wasn't marked as resolved.
 	return s.startupRemoveStale()
 }
 
@@ -945,7 +954,7 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svc k8sp.ServicePortName, inf
 	matchNP := func() *svcKey {
 		if bsvc.Port() == uint16(info.NodePort()) {
 			for _, nip := range s.nodePortIPs {
-				if bsvc.Addr().String() == nip.String() {
+				if bsvc.Addr().Equal(nip) {
 					skey := &svcKey{
 						sname: svc,
 						extra: getSvcKeyExtra(svcTypeNodePort, nip.String()),
