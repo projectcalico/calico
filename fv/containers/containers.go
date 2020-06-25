@@ -340,7 +340,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		log.Info(c.Name, "[", streamName, "] ", line)
+		fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, line)
 
 		// Capture data race warnings and log to file.
 		if strings.Contains(line, "WARNING: DATA RACE") {
