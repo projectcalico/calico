@@ -89,7 +89,7 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 }
 
 // findUnclaimedBlock finds a block cidr which does not yet exist within the given list of pools. The provided pools
-// should already be sanitized and only enclude existing, enabled pools. Note that the block may become claimed
+// should already be sanitized and only include existing, enabled pools. Note that the block may become claimed
 // between receiving the cidr from this function and attempting to claim the corresponding block as this function
 // does not reserve the returned IPNet.
 func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string, version int, pools []v3.IPPool, config IPAMConfig) (*cnet.IPNet, error) {

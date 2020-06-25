@@ -165,7 +165,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 		node, err := c.Nodes().Get(ctx, name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Wit no Wireguard config, wireguard spec should be nil.
+		// With no Wireguard config, wireguard spec should be nil.
 		Expect(node.Spec.Wireguard).To(BeNil())
 
 		// Update the Wireguard spec.

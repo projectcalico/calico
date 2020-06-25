@@ -180,7 +180,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 
 	if !ca.K8sUsePodCIDR {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
-		log.Debug("Calico is configued to use calico-ipam")
+		log.Debug("Calico is configured to use calico-ipam")
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.BlockAffinityKey{}),
 			reflect.TypeOf(model.BlockAffinityListOptions{}),

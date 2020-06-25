@@ -29,7 +29,7 @@ func (e ErrorDatastoreError) Error() string {
 }
 
 // Error indicating a resource does not exist.  Used when attempting to delete or
-// udpate a non-existent resource.
+// update a non-existent resource.
 type ErrorResourceDoesNotExist struct {
 	Err        error
 	Identifier interface{}

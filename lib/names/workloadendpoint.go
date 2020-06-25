@@ -236,7 +236,7 @@ var (
 // instance with fields populated according to the WorkloadEndpoint name format.
 func ParseWorkloadEndpointName(wepName string) (WorkloadEndpointIdentifiers, error) {
 	if len(wepName) == 0 {
-		return WorkloadEndpointIdentifiers{}, errors.New("Cannot parse emty string")
+		return WorkloadEndpointIdentifiers{}, errors.New("Cannot parse empty string")
 	}
 	parts := extractParts(wepName)
 	if parts == nil || len(parts) == 0 {

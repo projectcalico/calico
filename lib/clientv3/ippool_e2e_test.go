@@ -803,7 +803,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Attempting to change te CIDR")
+			By("Attempting to change the CIDR")
 			pool.Spec.CIDR = "1.2.4.0/24"
 			_, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
 			Expect(err).To(HaveOccurred())

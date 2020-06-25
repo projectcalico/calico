@@ -38,7 +38,7 @@ import (
 
 // These tests validate that the various resources that the BGP watches are
 // handled correctly by the syncer.  We don't validate in detail the behavior of
-// each of udpate handlers that are invoked, since these are tested more thoroughly
+// each of update handlers that are invoked, since these are tested more thoroughly
 // elsewhere.
 var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 

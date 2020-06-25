@@ -44,11 +44,11 @@ type IPPoolSpec struct {
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool. If not specified,
-	// then this is defaulted to "Never" (i.e. VXLAN tunelling is disabled).
+	// then this is defaulted to "Never" (i.e. VXLAN tunneling is disabled).
 	VXLANMode VXLANMode `json:"vxlanMode,omitempty" validate:"omitempty,vxlanMode"`
 
 	// Contains configuration for IPIP tunneling for this pool. If not specified,
-	// then this is defaulted to "Never" (i.e. IPIP tunelling is disabled).
+	// then this is defaulted to "Never" (i.e. IPIP tunneling is disabled).
 	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipIpMode"`
 
 	// When nat-outgoing is true, packets sent from Calico networked containers in
