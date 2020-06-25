@@ -950,16 +950,16 @@ func (s *Syncer) newSvcID() uint32 {
 	return id
 }
 
-func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svc k8sp.ServicePortName, info k8sp.ServicePort) *svcKey {
+func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKey, k8sSvc k8sp.ServicePortName, k8sInfo k8sp.ServicePort) *svcKey {
 	matchNP := func() *svcKey {
-		if bsvc.Port() == uint16(info.NodePort()) {
+		if bpfSvc.Port() == uint16(k8sInfo.NodePort()) {
 			for _, nip := range s.nodePortIPs {
-				if bsvc.Addr().Equal(nip) {
+				if bpfSvc.Addr().Equal(nip) {
 					skey := &svcKey{
-						sname: svc,
+						sname: k8sSvc,
 						extra: getSvcKeyExtra(svcTypeNodePort, nip.String()),
 					}
-					log.Debugf("resolved %s as %s", bsvc, skey)
+					log.Debugf("resolved %s as %s", bpfSvc, skey)
 					return skey
 				}
 			}
@@ -968,7 +968,7 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svc k8sp.ServicePortName, inf
 		return nil
 	}
 
-	if bsvc.Port() != uint16(info.Port()) {
+	if bpfSvc.Port() != uint16(k8sInfo.Port()) {
 		if sk := matchNP(); sk != nil {
 			return sk
 		}
@@ -977,45 +977,45 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svc k8sp.ServicePortName, inf
 	matchLBSrcIP := func() bool {
 		// External IP with zero Src CIDR is a valid entry and should not be considered
 		// as stale
-		if bsvc.SrcCIDR() == nat.ZeroCIDR {
+		if bpfSvc.SrcCIDR() == nat.ZeroCIDR {
 			return true
 		}
 		// If the service does not have any source address range, treat all the entries with
 		// src cidr as stale.
-		if len(info.LoadBalancerSourceRanges()) == 0 {
+		if len(k8sInfo.LoadBalancerSourceRanges()) == 0 {
 			return false
 		}
 		// If the service does have source range specified, look for a match
-		for _, srcip := range info.LoadBalancerSourceRanges() {
+		for _, srcip := range k8sInfo.LoadBalancerSourceRanges() {
 			if strings.Contains(srcip, ":") {
 				continue
 			}
 			cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
-			if cidr == bsvc.SrcCIDR() {
+			if cidr == bpfSvc.SrcCIDR() {
 				return true
 			}
 		}
 		return false
 	}
 
-	if bsvc.Addr().String() == info.ClusterIP().String() {
-		if bsvc.SrcCIDR() == nat.ZeroCIDR {
+	if bpfSvc.Addr().String() == k8sInfo.ClusterIP().String() {
+		if bpfSvc.SrcCIDR() == nat.ZeroCIDR {
 			skey := &svcKey{
-				sname: svc,
+				sname: k8sSvc,
 			}
-			log.Debugf("resolved %s as %s", bsvc, skey)
+			log.Debugf("resolved %s as %s", bpfSvc, skey)
 			return skey
 		}
 	}
 
-	for _, eip := range info.ExternalIPStrings() {
-		if bsvc.Addr().String() == eip {
+	for _, eip := range k8sInfo.ExternalIPStrings() {
+		if bpfSvc.Addr().String() == eip {
 			if matchLBSrcIP() {
 				skey := &svcKey{
-					sname: svc,
+					sname: k8sSvc,
 					extra: getSvcKeyExtra(svcTypeExternalIP, eip),
 				}
-				log.Debugf("resolved %s as %s", bsvc, skey)
+				log.Debugf("resolved %s as %s", bpfSvc, skey)
 				return skey
 			}
 		}
