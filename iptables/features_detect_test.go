@@ -133,6 +133,77 @@ func TestFeatureDetection(t *testing.T) {
 	}
 }
 
+func TestFeatureDetectionOverride(t *testing.T) {
+	RegisterTestingT(t)
+
+	type test struct {
+		iptablesVersion, kernelVersion string
+		features                       Features
+		override                       FeatureDetectOverrides
+	}
+	for _, tst := range []test{
+		{
+			"iptables v1.6.2",
+			"Linux version 3.14.0",
+			Features{
+				RestoreSupportsLock: true,
+				SNATFullyRandom:     true,
+				MASQFullyRandom:     true,
+			},
+			FeatureDetectOverrides{},
+		},
+		{
+			"iptables v1.6.1",
+			"Linux version 3.14.0",
+			Features{
+				RestoreSupportsLock: true,
+				SNATFullyRandom:     true,
+				MASQFullyRandom:     false,
+			},
+			FeatureDetectOverrides{
+				RestoreSupportsLock: "true",
+			},
+		},
+		{
+			"error",
+			"error",
+			Features{
+				RestoreSupportsLock: true,
+				SNATFullyRandom:     true,
+				MASQFullyRandom:     false,
+			},
+			FeatureDetectOverrides{
+				RestoreSupportsLock: "true",
+				SNATFullyRandom:     "true",
+				MASQFullyRandom:     "false",
+			},
+		},
+	} {
+		tst := tst
+		t.Run("iptables version "+tst.iptablesVersion+" kernel "+tst.kernelVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			dataplane := newMockDataplane("filter", map[string][]string{}, "legacy")
+			featureDetector := NewFeatureDetector(&tst.override)
+			featureDetector.NewCmd = dataplane.newCmd
+			featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
+
+			if tst.iptablesVersion == "error" {
+				dataplane.FailNextVersion = true
+			} else {
+				dataplane.Version = tst.iptablesVersion
+			}
+
+			if tst.kernelVersion == "error" {
+				dataplane.FailNextGetKernelVersionReader = true
+			} else {
+				dataplane.KernelVersion = tst.kernelVersion
+			}
+
+			Expect(featureDetector.GetFeatures()).To(Equal(&tst.features))
+		})
+	}
+}
+
 func TestIptablesBackendDetection(t *testing.T) {
 	RegisterTestingT(t)
 
