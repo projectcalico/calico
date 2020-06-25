@@ -304,6 +304,9 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 			continue
 		}
 
+		if count > 0 {
+			s.prevEpsMap[svckey.sname] = make([]k8sp.Endpoint, 0, count)
+		}
 		for i := 0; i < count; i++ {
 			epk := nat.NewNATBackendKey(id, uint32(i))
 			ep, ok := s.origEps[epk]
