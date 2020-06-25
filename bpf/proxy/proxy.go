@@ -19,7 +19,6 @@ package proxy
 
 import (
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
@@ -54,9 +52,8 @@ type Proxy interface {
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
 type DPSyncerState struct {
-	SvcMap       k8sp.ServiceMap
-	EpsMap       k8sp.EndpointsMap
-	StaleUDPSvcs sets.String
+	SvcMap k8sp.ServiceMap
+	EpsMap k8sp.EndpointsMap
 }
 
 // DPSyncer is an interface representing the dataplane syncer that applies the
@@ -245,20 +242,6 @@ func (p *proxy) invokeDPSyncer() {
 	svcUpdateResult := k8sp.UpdateServiceMap(p.svcMap, p.svcChanges)
 	epsUpdateResult := p.epsMap.Update(p.epsChanges)
 
-	staleUDPSvcs := svcUpdateResult.UDPStaleClusterIP
-
-	// merge stale UDP services
-	for _, svcPortName := range epsUpdateResult.StaleServiceNames {
-		if svcInfo, ok := p.svcMap[svcPortName]; ok && svcInfo != nil && svcInfo.Protocol() == v1.ProtocolUDP {
-			log.Infof("Stale %s service %v -> %s",
-				strings.ToLower(string(svcInfo.Protocol())), svcPortName, svcInfo.ClusterIP().String())
-			staleUDPSvcs.Insert(svcInfo.ClusterIP().String())
-			for _, extIP := range svcInfo.ExternalIPStrings() {
-				staleUDPSvcs.Insert(extIP)
-			}
-		}
-	}
-
 	if err := p.svcHealthServer.SyncServices(svcUpdateResult.HCServiceNodePorts); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck services")
 	}
@@ -266,9 +249,8 @@ func (p *proxy) invokeDPSyncer() {
 		log.WithError(err).Error("Error syncing healthcheck endpoints")
 	}
 	err := p.dpSyncer.Apply(DPSyncerState{
-		SvcMap:       p.svcMap,
-		EpsMap:       p.epsMap,
-		StaleUDPSvcs: staleUDPSvcs,
+		SvcMap: p.svcMap,
+		EpsMap: p.epsMap,
 	})
 
 	if err != nil {
