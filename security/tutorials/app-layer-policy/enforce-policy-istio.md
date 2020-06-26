@@ -12,15 +12,20 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 2. Install Calico on Kubernetes:
   - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
   - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/networking/) (or a non-Calico CNI) and Calico network policy are installed.
-3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install).   
-  **Note**: Ensure calicoctl is configured to connect with your datastore.  
-4. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).  
+3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install).
+  **Note**: Ensure calicoctl is configured to connect with your datastore.
+4. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).
   **Note**: Label the default namespace for the Istio sidecar injection (`istio-injection=enabled`).
   `kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
 
-We will use a simple microservice application to demonstrate {{site.prodname}} application layer policy.  The [YAO Bank](https://github.com/spikecurtis/yaobank) application creates a customer-facing web application, a microservice that serves up account summaries, and an [etcd](https://github.com/coreos/etcd) datastore.
+We will use a simple microservice application to demonstrate {{site.prodname}}
+application layer policy.  The {% include open-new-window.html text='YAO Bank'
+url='https://github.com/projectcalico/yaobank' %} application creates a
+customer-facing web application, a microservice that serves up account
+summaries, and an {% include open-new-window.html text='etcd'
+url='https://github.com/coreos/etcd' %} datastore.
 
 ```bash
 kubectl apply -f \
@@ -86,9 +91,12 @@ traffic in the Istio service mesh, and the corresponding service account identit
 
 ### Determining ingress IP and port
 
-You will use the `istio-ingressgateway` service to access the YAO Bank application. Determine your
-ingress host and port [following the Istio instructions][ingress host port]. Once you have the
-`INGRESS_HOST` and `INGRESS_PORT` variables set, you can set the `GATEWAY_URL` as follows.
+You will use the `istio-ingressgateway` service to access the YAO Bank
+application. Determine your ingress host and port {% include
+open-new-window.html text='following the Istio instructions'
+url='https://istio.io/docs/tasks/traffic-management/ingress/ingress-control/#determining-the-ingress-ip-and-ports'
+%}. Once you have the `INGRESS_HOST` and `INGRESS_PORT` variables set, you can
+set the `GATEWAY_URL` as follows.
 
    ```bash
    export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
@@ -119,14 +127,18 @@ not be as trusted as others.  They may be operated by different users or teams w
 security requirements.  We don't want our secure financial application microservices accessible from
 some hacky prototype another developer is cooking up.
 
-Even within our own application, the best practice is to limit access as much as possible.  Only
-pods that need access to a service should get it.  Consider the YAO Bank application.  The customer
-web service does not need, and should not have direct access to the backend database.  The customer
-web service needs to directly interact with clients outside the cluster, some of whom may be
-malicious.  Unfortunately, vulnerabilities in web applications are all too common.  For example, an
-[unpatched vulnerability in Apache Struts][struts cve] is what allowed attackers their initial
-access into the Equifax network where they then launched a devastating attack to steal millions of
-people's financial information.
+Even within our own application, the best practice is to limit access as much
+as possible.  Only pods that need access to a service should get it.  Consider
+the YAO Bank application.  The customer web service does not need, and should
+not have direct access to the backend database.  The customer web service needs
+to directly interact with clients outside the cluster, some of whom may be
+malicious.  Unfortunately, vulnerabilities in web applications are all too
+common.  For example, an {% include open-new-window.html text='unpatched
+vulnerability in Apache Struts'
+url='https://nvd.nist.gov/vuln/detail/CVE-2017-5638' %} is what allowed
+attackers their initial access into the Equifax network where they then
+launched a devastating attack to steal millions of people's financial
+information.
 
 Imagine what would happen if an attacker were to gain control of the customer web pod in our
 application. Let's simulate this by executing a remote shell inside that pod.
@@ -141,15 +153,19 @@ Notice that from here, we get direct access to the backend database.  For exampl
 
 #### Single-factor authentication
 
-The possession of a key and certificate pair is a very strong assertion that a connection is
-authentic because it is based on cryptographic proofs that are believed to be nearly impossible to
-forge.  When we authenticate connections this way we can say with extremely high confidence that the
-party on the other end is in possession of the corresponding key. However, this is only a proxy for
-what we actually want to be confident of: that the party on the other end really is the authorized
-workload we want to communicate with.  Keeping the private key a secret is vital to this confidence,
-and occasionally attackers can find ways to trick applications into giving up secrets they should
-not.  For example, the [Heartbleed] vulnerability in OpenSSL allowed attackers to trick an affected
-application into reading out portions of its memory, compromising private keys.
+The possession of a key and certificate pair is a very strong assertion that a
+connection is authentic because it is based on cryptographic proofs that are
+believed to be nearly impossible to forge.  When we authenticate connections
+this way we can say with extremely high confidence that the party on the other
+end is in possession of the corresponding key. However, this is only a proxy
+for what we actually want to be confident of: that the party on the other end
+really is the authorized workload we want to communicate with.  Keeping the
+private key a secret is vital to this confidence, and occasionally attackers
+can find ways to trick applications into giving up secrets they should not.
+For example, the {% include open-new-window.html text='Heartbleed'
+url='http://heartbleed.com' %} vulnerability in OpenSSL allowed attackers to
+trick an affected application into reading out portions of its memory,
+compromising private keys.
 
 Let's simulate an attacker who has stolen the private keys of another pod.  Since the keys are
 stored as Kubernetes secrets, we won't exploit a vulnerability in a service, but instead just mount
@@ -291,9 +307,3 @@ authentication checks.  Although our attack pod had the keys to fool the X.509 c
 {{site.prodname}} also monitors the Kubernetes API Server for which IP addresses are associated with which
 service accounts.  Since our attack pod has an IP not associated with the account summary service
 account we disallow the connection.
-
- [yao bank]: https://github.com/spikecurtis/yaobank
- [etcd]: https://github.com/coreos/etcd
- [struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638
- [heartbleed]: http://heartbleed.com/
- [ingress host port]: https://istio.io/docs/tasks/traffic-management/ingress/ingress-control/#determining-the-ingress-ip-and-ports
