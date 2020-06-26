@@ -106,25 +106,6 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	// Get the versions.  If we fail to detect a version for some reason, we use a safe default.
 	log.Debug("Refreshing detected iptables features")
 
-	// Disable checks if all features are overidden (fallback if detection
-	// fails)
-	if d.featureOverride != nil {
-		var features Features
-		var err error
-		features.SNATFullyRandom, err = strconv.ParseBool(d.featureOverride.SNATFullyRandom)
-		if err == nil {
-			features.MASQFullyRandom, err = strconv.ParseBool(d.featureOverride.MASQFullyRandom)
-		}
-		if err == nil {
-			features.RestoreSupportsLock, err = strconv.ParseBool(d.featureOverride.RestoreSupportsLock)
-		}
-		if err == nil {
-			// All features overidden
-			d.featureCache = &features
-			log.Info("All features overidden. Feature detect disabled")
-			return
-		}
-	}
 	iptV := d.getIptablesVersion()
 	kerV := d.getKernelVersion()
 
@@ -138,17 +119,17 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	if d.featureOverride != nil {
 		value, err := strconv.ParseBool(d.featureOverride.SNATFullyRandom)
 		if err == nil {
-			log.Info("Override feature SNATFullyRandom", value)
+			log.WithField("override", value).Info("Override feature SNATFullyRandom")
 			features.SNATFullyRandom = value
 		}
 		value, err = strconv.ParseBool(d.featureOverride.MASQFullyRandom)
 		if err == nil {
-			log.Info("Override feature MASQFullyRandom", value)
+			log.WithField("override", value).Info("Override feature MASQFullyRandom")
 			features.MASQFullyRandom = value
 		}
 		value, err = strconv.ParseBool(d.featureOverride.RestoreSupportsLock)
 		if err == nil {
-			log.Info("Override feature RestoreSupportsLock", value)
+			log.WithField("override", value).Info("Override feature RestoreSupportsLock")
 			features.RestoreSupportsLock = value
 		}
 	}
