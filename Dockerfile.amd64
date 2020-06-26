@@ -93,20 +93,14 @@ RUN wget -P /tmp http://smarden.org/runit/runit-${RUNIT_VER}.tar.gz && \
     cd /tmp/admin/runit-${RUNIT_VER}/ && \
     package/install
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1-407
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1 as ubi
 ARG ARCH
 ARG GIT_VERSION
 ARG IPTABLES_VER
 ARG RUNIT_VER
 
-# Required labels for certification
-LABEL name="Calico node" \
-      vendor="Project Calico" \
-      version=$GIT_VERSION \
-      release="1" \
-      summary="Calico node handles networking and policy for Calico" \
-      description="Calico node handles networking and policy for Calico" \
-      maintainer="laurence@tigera.io"
+# Update base packages to pick up security updates.  Must do this before adding the centos repo.
+RUN microdnf update
 
 # Copy in runit binaries
 COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
@@ -118,9 +112,14 @@ COPY --from=centos  /root/rpmbuild/RPMS/${ARCH}/* /tmp/rpms/
 # Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
 # we're using CentOS repos for all our packages. Using packages from a single source (CentOS) makes
 # it less likely we'll run into package dependency version mismatches.
+#
+# NOTE: new packages need to be added to the keep-list in clean-up-filesystem.sh.
 COPY centos.repo /etc/yum.repos.d/
 RUN rm /etc/yum.repos.d/ubi.repo && \
+    touch /in-the-container && \
     microdnf install \
+    # Don't install copious docs.
+    --setopt=tsflags=nodocs \
     # Needed for iptables
     libpcap libmnl libnfnetlink libnftnl libnetfilter_conntrack \
     ipset \
@@ -137,7 +136,9 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
     conntrack-tools \
     # Needed for runit startup script
-    which && \
+    which \
+    # Needed for the cleanup script
+    findutils && \
     microdnf clean all && \
     # Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
     # version '9.el8_0.1' while the existing iptables-libs (pulled in by the iputils package) has version '9.el8.1'.
@@ -157,16 +158,38 @@ COPY --from=bird /bird* /bin/
 # Copy in the filesystem - this contains felix, calico-bgp-daemon, licenses, etc...
 COPY filesystem/ /
 
-# Add symlink to modprobe where iptables expects it to be.
-# This has to come after copying over filesystem/, since that may overwrite /sbin depending on the base image.
-RUN ln -s /usr/sbin/modprobe /sbin/modprobe
+# On UBI, /sbin/ is a symlink so the above copy clobbers it; restore /sbin as symlinks (some binaries and
+# scripts hard-code /sbin/xyz, for example.
+RUN ln -s /usr/sbin/* /sbin/
 
-# Add in top-level license file
-COPY LICENSE /licenses
+COPY --from=bpftool /bpftool /bin
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-amd64 /bin/calico-node
 
-COPY --from=bpftool /bpftool /bin
+# Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
+# or any of its dependencies.
+ADD clean-up-filesystem.sh /
+RUN /clean-up-filesystem.sh
+
+# Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
+# that have been removed in our later layers.
+FROM scratch
+COPY --from=ubi / /
+
+# Add in top-level license file
+COPY LICENSE /licenses
 
 CMD ["start_runit"]
+
+# Required labels for certification
+LABEL name="Calico node" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico node handles networking and policy for Calico" \
+      description="Calico node handles networking and policy for Calico" \
+      maintainer="laurence@tigera.io"
+
+# Tell sv where to find the services.
+ENV SVDIR=/etc/service/enabled
