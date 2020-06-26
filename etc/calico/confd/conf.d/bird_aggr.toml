@@ -5,4 +5,4 @@ keys = [
     "/calico/ipam/v2/host//NODENAME/ipv4/block",
     "/calico/staticroutes",
 ]
-reload_cmd = "pkill -HUP bird || true"
+reload_cmd = "sv hup bird || true"

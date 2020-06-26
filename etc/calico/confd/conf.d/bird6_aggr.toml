@@ -5,4 +5,4 @@ keys = [
     "/calico/ipam/v2/host//NODENAME/ipv6/block",
     "/calico/staticroutesv6",
 ]
-reload_cmd = "pkill -HUP bird6 || true"
+reload_cmd = "sv hup bird6 || true"
