@@ -188,7 +188,9 @@ dev-versions-yaml:
 "     calico/dikastes:\\n"\
 "      version: $$APP_POLICY_VER\\n"\
 "     flexvol:\\n"\
-"      version: $$POD2DAEMON_VER\\n" > pinned_versions.yml;
+"      version: $$POD2DAEMON_VER\\n" 
+"     tigera-operator:\\n"\
+"      version: master\\n"\ > pinned_versions.yml;
 
 ###############################################################################
 # CI / test targets
