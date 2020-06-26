@@ -3,6 +3,7 @@ package install
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -269,10 +270,15 @@ func Install() error {
 	return nil
 }
 
+func isValidJSON(s string) error {
+	var js map[string]interface{}
+	return json.Unmarshal([]byte(s), &js)
+}
+
 func writeCNIConfig(c config) {
 	netconf := `{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1", 
+  "cniVersion": "0.3.1",
   "plugins": [
     {
       "type": "calico",
@@ -289,7 +295,7 @@ func writeCNIConfig(c config) {
       "snat": true,
       "capabilities": {"portMappings": true}
     }
-  ],
+  ]
 }`
 
 	// Pick the config template to use. This can either be through an env var,
@@ -349,6 +355,11 @@ func writeCNIConfig(c config) {
 	}
 	netconf = strings.Replace(netconf, "__ETCD_ENDPOINTS__", getEnv("ETCD_ENDPOINTS", ""), -1)
 	netconf = strings.Replace(netconf, "__ETCD_DISCOVERY_SRV__", getEnv("ETCD_DISCOVERY_SRV", ""), -1)
+
+	err = isValidJSON(netconf)
+	if err != nil {
+		log.Fatalf("%s is not a valid json object\nerror: %s", netconf, err)
+	}
 
 	// Write out the file.
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")

@@ -14,4 +14,4 @@ COPY --from=base /opt/cni/bin /opt/cni/bin
 ADD bin/s390x/ /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
-WORKDIR /opt/cni/bin]
+WORKDIR /opt/cni/bin

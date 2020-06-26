@@ -16,7 +16,7 @@ import (
 
 var expectedDefaultConfig string = `{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1", 
+  "cniVersion": "0.3.1",
   "plugins": [
     {
       "type": "calico",
@@ -33,7 +33,7 @@ var expectedDefaultConfig string = `{
       "snat": true,
       "capabilities": {"portMappings": true}
     }
-  ],
+  ]
 }`
 
 var expectedAlternateConfig string = `{
@@ -194,11 +194,16 @@ PuB/TL+u2y+iQUyXxLy3
 	})
 
 	It("should support a custom CNI_NETWORK_CONFIG", func() {
-		err := runCniContainer(tempDir, "-e", "CNI_NETWORK_CONFIG=filecontents")
+		err := runCniContainer(tempDir, "-e", "CNI_NETWORK_CONFIG={}")
 		Expect(err).NotTo(HaveOccurred())
 		actual, err := ioutil.ReadFile(tempDir + "/net.d/10-calico.conflist")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(actual)).To(Equal("filecontents"))
+		Expect(string(actual)).To(Equal("{}"))
+	})
+
+	It("should check if the custom CNI_NETWORK_CONFIG is valid json", func() {
+		err := runCniContainer(tempDir, "-e", "CNI_NETWORK_CONFIG={\"missing quote}")
+		Expect(err).To(HaveOccurred())
 	})
 
 	It("should use CNI_NETWORK_CONFIG_FILE over CNI_NETWORK_CONFIG", func() {
