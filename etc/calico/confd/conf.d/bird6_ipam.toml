@@ -7,4 +7,4 @@ keys = [
     "/staticroutesv6",
     "/rejectcidrsv6",
 ]
-reload_cmd = "pkill -HUP bird6 || true"
+reload_cmd = "sv hup bird6 || true"
