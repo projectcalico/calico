@@ -272,7 +272,7 @@ func StartDataplaneDriver(configParams *config.Config,
 
 			KubeClientSet: k8sClientSet,
 
-			FeatureDetectOverrides: iptables.ParseFeatureDetectOverrides(configParams.IptablesFeatureDetectOverride),
+			FeatureDetectOverrides: iptables.ParseFeatureDetectOverrides(configParams.FeatureDetectOverride),
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

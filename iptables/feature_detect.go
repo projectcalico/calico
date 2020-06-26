@@ -296,7 +296,7 @@ func ParseFeatureDetectOverrides(param string) *FeatureDetectOverrides {
 		return nil
 	}
 	var overrides FeatureDetectOverrides
-    for _, s := range strings.Split(param, ",") {
+	for _, s := range strings.Split(param, ",") {
 		if strings.HasPrefix(s, "SNATFullyRandom=") {
 			overrides.SNATFullyRandom = strings.Split(s, "=")[1]
 			continue
