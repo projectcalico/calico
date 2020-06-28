@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ type Interface interface {
 	// AutoAssign automatically assigns one or more IP addresses as specified by the
 	// provided AutoAssignArgs.  AutoAssign returns the list of the assigned IPv4 addresses,
 	// and the list of the assigned IPv6 addresses in IPNet format.
+	// The returned IPNet represents the allocation block from which the IP was allocated,
+	// which is useful for dataplanes that need to know the subnet (such as Windows).
 	//
 	// In case of error, returns the IPs allocated so far along with the error.
 	AutoAssign(ctx context.Context, args AutoAssignArgs) ([]cnet.IPNet, []cnet.IPNet, error)
@@ -93,4 +95,10 @@ type Interface interface {
 
 	// GetUtilization returns IP utilization info for the specified pools, or for all pools.
 	GetUtilization(ctx context.Context, args GetUtilizationArgs) ([]*PoolUtilization, error)
+
+	// EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.
+	// If there is no block allocated already for this host, allocate one and return its' CIDR.
+	// Otherwise, return the CIDR of the IPAM block allocated for this host.
+	// It returns IPv4, IPv6 block CIDR and any error encountered.
+	EnsureBlock(ctx context.Context, args BlockArgs) (*cnet.IPNet, *cnet.IPNet, error)
 }

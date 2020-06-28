@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/bits"
+	"runtime"
 
 	log "github.com/sirupsen/logrus"
 
@@ -49,7 +51,8 @@ const (
 )
 
 var (
-	ErrBlockLimit = errors.New("cannot allocate new block due to per host block limit")
+	ErrBlockLimit      = errors.New("cannot allocate new block due to per host block limit")
+	ErrNoQualifiedPool = errors.New("cannot find a qualified ippool")
 )
 
 // NewIPAMClient returns a new ipamClient, which implements Interface.
@@ -97,7 +100,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) ([]net.
 				return nil, nil, fmt.Errorf("provided IPv4 IPPools list contains one or more IPv6 IPPools")
 			}
 		}
-		v4list, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost)
+		v4list, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv4s)
 		if err != nil {
 			log.Errorf("Error assigning IPV4 addresses: %v", err)
 			return v4list, nil, err
@@ -112,7 +115,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) ([]net.
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6list, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost)
+		v6list, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv6s)
 		if err != nil {
 			log.Errorf("Error assigning IPV6 addresses: %v", err)
 			return v4list, v6list, err
@@ -125,7 +128,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) ([]net.
 // getBlockFromAffinity returns the block referenced by the given affinity, attempting to create it if
 // it does not exist. getBlockFromAffinity will delete the provided affinity if it does not match the actual
 // affinity of the block.
-func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair) (*model.KVPair, error) {
+func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair, rsvdAttr *HostReservedAttr) (*model.KVPair, error) {
 	// Parse out affinity data.
 	cidr := aff.Key.(model.BlockAffinityKey).CIDR
 	host := aff.Key.(model.BlockAffinityKey).Host
@@ -155,7 +158,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 
 			// Claim the block, which will also confirm the affinity.
 			logCtx.Info("Attempting to claim the block")
-			b, err := c.blockReaderWriter.claimAffineBlock(ctx, aff, *cfg)
+			b, err := c.blockReaderWriter.claimAffineBlock(ctx, aff, *cfg, rsvdAttr)
 			if err != nil {
 				logCtx.WithError(err).Warn("Error claiming block")
 				return nil, err
@@ -214,12 +217,21 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 	return b, nil
 }
 
+// function to check if context has associated OS parameter
+// fallback to GOOS in other case
+func detectOS(ctx context.Context) string {
+	if osOverride := ctx.Value("windowsHost"); osOverride != nil {
+		return osOverride.(string)
+	}
+	return runtime.GOOS
+}
+
 // determinePools compares a list of requested pools with the enabled pools and returns the intersect.
 // If any requested pool does not exist, or is not enabled, an error is returned.
 // If no pools are requested, all enabled pools are returned.
 // Also applies selector logic on node labels to determine if the pool is a match.
 // Returns the set of matching pools as well as the full set of ip pools.
-func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, node v3.Node) (matchingPools, enabledPools []v3.IPPool, err error) {
+func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node v3.Node, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
 	// Get all the enabled IP pools from the datastore.
 	enabledPools, err = c.pools.GetEnabledPools(version)
 	if err != nil {
@@ -229,10 +241,21 @@ func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, n
 	log.Debugf("enabled pools: %v", enabledPools)
 	log.Debugf("requested pools: %v", requestedPoolNets)
 
-	// Build a map so we can lookup existing pools by their CIDR.
+	// Build a map so we can lookup existing pools.
 	pm := map[string]v3.IPPool{}
+
 	for _, p := range enabledPools {
+		if p.Spec.BlockSize > maxPrefixLen {
+			log.Warningf("skipping pool %v due to blockSize %d bigger than %d", p, p.Spec.BlockSize, maxPrefixLen)
+			continue
+		}
 		pm[p.Spec.CIDR] = p
+	}
+
+	if len(pm) == 0 {
+		// None of the enabled pools are qualified.
+		err = ErrNoQualifiedPool
+		return
 	}
 
 	// Build a list of requested IP pool objects based on the provided CIDRs, validating
@@ -279,42 +302,50 @@ func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, n
 	return
 }
 
-func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int) ([]net.IPNet, error) {
+// prepareAffinityBlocksForHost returns a list of blocks affine to a node based on requested ippools.
+// It also release any emptied blocks still affine to this host but no longer part of an IP Pool which
+// selects this node. It returns matching pools, list of host-affine blocks and any error encountered.
+func (c ipamClient) prepareAffinityBlocksForHost(
+	ctx context.Context,
+	requestedPools []net.IPNet,
+	version int,
+	host string,
+	rsvdAttr *HostReservedAttr) ([]v3.IPPool, []net.IPNet, error) {
 	// Retrieve node for given hostname to use for ip pool node selection
 	node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
 	if err != nil {
 		log.WithError(err).WithField("node", host).Error("failed to get node for host")
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Make sure the returned value is OK.
 	v3n, ok := node.Value.(*v3.Node)
 	if !ok {
-		return nil, fmt.Errorf("Datastore returned malformed node object")
+		return nil, nil, fmt.Errorf("Datastore returned malformed node object")
+	}
+
+	maxPrefixLen, err := getMaxPrefixLen(version, rsvdAttr)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Determine the correct set of IP pools to use for this request.
-	pools, allPools, err := c.determinePools(requestedPools, version, *v3n)
+	pools, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, maxPrefixLen)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
-		return nil, fmt.Errorf("no configured Calico pools for node %v", host)
+		return nil, nil, fmt.Errorf("no configured Calico pools for node %v", host)
 	}
 
-	// First, we try to assign addresses from one of the existing host-affine blocks.  We
-	// always do strict checking at this stage, so it doesn't matter whether
-	// globally we have strict_affinity or not.
 	logCtx := log.WithFields(log.Fields{"host": host})
-	if handleID != nil {
-		logCtx = logCtx.WithField("handle", *handleID)
-	}
+
 	logCtx.Info("Looking up existing affinities for host")
 	affBlocks, affBlocksToRelease, err := c.blockReaderWriter.getAffineBlocks(ctx, host, version, pools)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Release any emptied blocks still affine to this host but no longer part of an IP Pool which selects this node.
@@ -360,34 +391,49 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		}
 	}
 
-	logCtx.Debugf("Found %d affine IPv%d blocks for host: %v", len(affBlocks), version, affBlocks)
-	ips := []net.IPNet{}
-	newIPs := []net.IPNet{}
+	return pools, affBlocks, nil
+}
 
-	// Record how many blocks we own so we can check against the limit later.
-	numBlocksOwned := len(affBlocks)
+// blockAssignState manages the state in relation to the request of finding or claiming a block for a host.
+type blockAssignState struct {
+	client                ipamClient
+	version               int
+	host                  string
+	pools                 []v3.IPPool
+	remainingAffineBlocks []net.IPNet
+	hostReservedAttr      *HostReservedAttr
+	allowNewClaim         bool
 
-	for len(ips) < num {
-		if len(affBlocks) == 0 {
-			logCtx.Infof("Ran out of existing affine blocks for host")
-			break
-		}
-		cidr := affBlocks[0]
-		affBlocks = affBlocks[1:]
+	// For UT purpose, how many times datastore retry has been triggered.
+	datastoreRetryCount   int
+}
 
-		// Try to assign from this block - if we hit a CAS error, we'll try this block again.
+// Given a list of host-affine blocks, findOrClaimBlock returns one block with minimum free ips.
+// It tries to use one of the current host-affine blocks first and if not found, it will claim a new block
+// and assign affinity.
+// It returns a block, a boolean if block is newly claimed and any error encountered.
+func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int) (*model.KVPair, bool, error) {
+	logCtx := log.WithFields(log.Fields{"host": s.host})
+
+	// First, we try to find a block from one of the existing host-affine blocks.
+	for len(s.remainingAffineBlocks) > 0 {
+		// Pop first cidr.
+		cidr := s.remainingAffineBlocks[0]
+		s.remainingAffineBlocks = s.remainingAffineBlocks[1:]
+
+		// Checking this block - if we hit a CAS error, we'll try this block again.
 		// For any other error, we'll break out and try the next affine block.
 		for i := 0; i < datastoreRetries; i++ {
 			// Get the affinity.
 			logCtx.Infof("Trying affinity for %s", cidr)
-			aff, err := c.blockReaderWriter.queryAffinity(ctx, host, cidr, "")
+			aff, err := s.client.blockReaderWriter.queryAffinity(ctx, s.host, cidr, "")
 			if err != nil {
 				logCtx.WithError(err).Warnf("Error getting affinity")
 				break
 			}
 
 			// Get the block which is referenced by the affinity, creating it if necessary.
-			b, err := c.getBlockFromAffinity(ctx, aff)
+			b, err := s.client.getBlockFromAffinity(ctx, aff, s.hostReservedAttr)
 			if err != nil {
 				// Couldn't get a block for this affinity.
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
@@ -398,74 +444,66 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 				break
 			}
 
-			// Assign IPs from the block.
-			newIPs, err = c.assignFromExistingBlock(ctx, b, num, handleID, attrs, host, true)
-			if err != nil {
-				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
-					logCtx.WithError(err).Debug("CAS error assigning from affine block - retry")
-					continue
-				}
-				logCtx.WithError(err).Warn("Couldn't assign from affine block, try next one")
+			// Pull out the block.
+			block := allocationBlock{b.Value.(*model.AllocationBlock)}
+			if block.NumFreeAddresses() >= minFreeIps {
+				logCtx.Debugf("Block '%s' has %d free ips which is more than %d ips required.", cidr.String(), block.NumFreeAddresses(), minFreeIps)
+				return b, false, nil
+			} else {
+				logCtx.Debugf("Block '%s' has %d free ips which is less than %d ips required.", cidr.String(), block.NumFreeAddresses(), minFreeIps)
 				break
 			}
-			ips = append(ips, newIPs...)
-			break
+
+			s.datastoreRetryCount ++
 		}
-		logCtx.Infof("Block '%s' provided addresses: %v", cidr.String(), newIPs)
 	}
 
-	// If there are still addresses to allocate, then we've run out of
-	// existing blocks with affinity to this host.  Before we can assign new blocks or assign in
-	// non-affine blocks, we need to check that our IPAM configuration
-	// allows that.
-	config, err := c.GetIPAMConfig(ctx)
+	logCtx.Infof("Ran out of existing affine blocks for host")
+
+	if !s.allowNewClaim {
+		return nil, false, ErrBlockLimit
+	}
+
+	// Find unclaimed block if AutoAllocateBlocks is true.
+	config, err := s.client.GetIPAMConfig(ctx)
 	if err != nil {
-		return ips, err
+		return nil, false, err
 	}
 	logCtx.Debugf("Allocate new blocks? Config: %+v", config)
-	if config.AutoAllocateBlocks == true {
-		rem := num - len(ips)
-		retries := datastoreRetries
-		for rem > 0 && retries > 0 {
-			if maxNumBlocks > 0 && numBlocksOwned >= maxNumBlocks {
-				log.Warnf("Unable to allocate a new IPAM block; host already has %v blocks but "+
-					"blocks per host limit is %v", numBlocksOwned, maxNumBlocks)
-				return ips, ErrBlockLimit
-			}
-
+	if config.AutoAllocateBlocks {
+		for i := 0; i < datastoreRetries; i++ {
 			// Claim a new block.
-			logCtx.Infof("No more affine blocks, but need to allocate %d more addresses - allocate another block", rem)
-			retries = retries - 1
+			logCtx.Infof("No more affine blocks, but need to claim more block -- allocate another block")
 
 			// First, try to find an unclaimed block.
 			logCtx.Info("Looking for an unclaimed block")
-			subnet, err := c.blockReaderWriter.findUnclaimedBlock(ctx, host, version, pools, *config)
+			subnet, err := s.client.blockReaderWriter.findUnclaimedBlock(ctx, s.host, s.version, s.pools, *config)
 			if err != nil {
 				if _, ok := err.(noFreeBlocksError); ok {
 					// No free blocks.  Break.
 					logCtx.Info("No free blocks available for allocation")
-					break
+				} else {
+					log.WithError(err).Error("Failed to find an unclaimed block")
 				}
-				log.WithError(err).Error("Failed to find an unclaimed block")
-				return ips, err
+				return nil, false, err
 			}
-			logCtx := log.WithFields(log.Fields{"host": host, "subnet": subnet})
+			logCtx := log.WithFields(log.Fields{"host": s.host, "subnet": subnet})
 			logCtx.Info("Found unclaimed block")
 
-			for i := 0; i < datastoreRetries; i++ {
+			for j := 0; j < datastoreRetries; j++ {
 				// We found an unclaimed block - claim affinity for it.
-				pa, err := c.blockReaderWriter.getPendingAffinity(ctx, host, *subnet)
+				pa, err := s.client.blockReaderWriter.getPendingAffinity(ctx, s.host, *subnet)
 				if err != nil {
 					if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 						logCtx.WithError(err).Debug("CAS error claiming pending affinity, retry")
 						continue
 					}
 					logCtx.WithError(err).Errorf("Error claiming pending affinity")
-					return ips, err
+					return nil, false, err
 				}
 
 				// We have an affinity - try to get the block.
-				b, err := c.getBlockFromAffinity(ctx, pa)
+				b, err := s.client.getBlockFromAffinity(ctx, pa, s.hostReservedAttr)
 				if err != nil {
 					if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 						logCtx.WithError(err).Debug("CAS error getting block, retry")
@@ -478,30 +516,117 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 						break
 					}
 					logCtx.WithError(err).Errorf("Error getting block for affinity")
-					return ips, err
+					return nil, false, err
 				}
 
-				// Claim successful.  Assign addresses from the new block.
-				logCtx.Infof("Claimed new block %v - assigning %d addresses", b, rem)
-				numBlocksOwned++
-				newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, config.StrictAffinity)
-				if err != nil {
-					if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
-						log.WithError(err).Debug("CAS Error assigning from new block - retry")
-						continue
-					}
-					logCtx.WithError(err).Warningf("Failed to assign IPs in newly allocated block")
-					break
+				// Claim successful.
+				block := allocationBlock{b.Value.(*model.AllocationBlock)}
+				if block.NumFreeAddresses() >= minFreeIps {
+					logCtx.Infof("Block '%s' has %d free ips which is more than %d ips required.", b.Key.(model.BlockKey).CIDR, block.NumFreeAddresses(), minFreeIps)
+					return b, true, nil
+				} else {
+					errString := fmt.Sprintf("Block '%s' has %d free ips which is less than %d ips required.", b.Key.(model.BlockKey).CIDR, block.NumFreeAddresses(), minFreeIps)
+					logCtx.Errorf(errString)
+					return nil, false, errors.New(errString)
 				}
-				logCtx.Debugf("Assigned IPs from new block: %s", newIPs)
-				ips = append(ips, newIPs...)
-				rem = num - len(ips)
-				break
+				s.datastoreRetryCount ++
 			}
+			s.datastoreRetryCount ++
+		}
+		return nil, false, errors.New("Max retries hit - excessive concurrent IPAM requests")
+	}
+
+	return nil, false, errors.New("failed to find or claim a block")
+}
+
+func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr) ([]net.IPNet, error) {
+
+	// First, get the existing host-affine blocks.
+	logCtx := log.WithFields(log.Fields{"host": host})
+	if handleID != nil {
+		logCtx = logCtx.WithField("handle", *handleID)
+	}
+	logCtx.Info("Looking up existing affinities for host")
+	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr)
+	if err != nil {
+		return nil, err
+	}
+
+	logCtx.Debugf("Found %d affine IPv%d blocks for host: %v", len(affBlocks), version, affBlocks)
+	ips := []net.IPNet{}
+
+	// Record how many blocks we own so we can check against the limit later.
+	numBlocksOwned := len(affBlocks)
+
+	config, err := c.GetIPAMConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	s := &blockAssignState{
+		client:                c,
+		version:               version,
+		host:                  host,
+		pools:                 pools,
+		remainingAffineBlocks: affBlocks,
+		hostReservedAttr:      rsvdAttr,
+		allowNewClaim:         true,
+	}
+
+assignLoop:
+	// Allocate the IPs.
+	for len(ips) < num {
+		var b *model.KVPair
+
+		rem := num - len(ips)
+		if maxNumBlocks > 0 && numBlocksOwned >= maxNumBlocks {
+			s.allowNewClaim = false
 		}
 
-		if retries == 0 {
-			return ips, errors.New("Max retries hit - excessive concurrent IPAM requests")
+		b, newlyClaimed, err := s.findOrClaimBlock(ctx, 1)
+		if err != nil {
+			if _, ok := err.(noFreeBlocksError); ok {
+				break assignLoop
+			}
+			if errors.Is(err, ErrBlockLimit) {
+				log.Warnf("Unable to allocate a new IPAM block; host already has %v blocks but "+
+					"blocks per host limit is %v", numBlocksOwned, maxNumBlocks)
+				return ips, ErrBlockLimit
+			}
+			return nil, err
+		}
+
+		if newlyClaimed {
+			numBlocksOwned++
+		}
+
+	retryLoop:
+		// We have got a block b.
+		for i := 0; i < datastoreRetries; i++ {
+			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, config.StrictAffinity)
+			if err != nil {
+				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+					log.WithError(err).Debug("CAS Error assigning from new block - retry")
+
+					// At this point, block b's Unallocated field has been reduced already.
+					// We should get the original block from datastore again.
+					blockCIDR := b.Key.(model.BlockKey).CIDR
+					b, err = c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
+					if err != nil {
+						logCtx.WithError(err).Warn("Failed to get block again after update conflict")
+						break retryLoop
+					}
+
+					// Block b is in sync with datastore. Retry assigning IP.
+					continue retryLoop
+				}
+				logCtx.WithError(err).Warningf("Failed to assign IPs in newly allocated block")
+				break retryLoop
+			}
+			logCtx.Debugf("Assigned IPs from new block: %s", newIPs)
+			ips = append(ips, newIPs...)
+			rem = num - len(ips)
+			break retryLoop
 		}
 	}
 
@@ -623,7 +748,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 				return err
 			}
 
-			obj, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg)
+			obj, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, args.HostReservedAttr)
 			if err != nil {
 				if _, ok := err.(*errBlockClaimConflict); ok {
 					log.Warningf("Someone else claimed block %s before us", blockCIDR.String())
@@ -731,6 +856,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 }
 
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
+	windowsHost := detectOS(ctx) == "windows"
 	logCtx := log.WithField("cidr", blockCIDR)
 	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Info("Getting block so we can release IPs")
@@ -765,7 +891,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 		// the Value since we have updated the structure pointed to in the
 		// KVPair.
 		var updateErr error
-		if b.empty() && b.Affinity == nil {
+		if b.empty(windowsHost) && b.Affinity == nil {
 			logCtx.Info("Deleting non-affine block")
 			updateErr = c.blockReaderWriter.deleteBlock(ctx, obj)
 		} else {
@@ -903,7 +1029,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 			}
 
 			// Once we have the affinity, claim the block, which will confirm the affinity.
-			_, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg)
+			_, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, nil)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					logCtx.WithError(err).Debug("CAS error claiming affine block - retry")
@@ -1187,6 +1313,7 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 }
 
 func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockCIDR net.IPNet) error {
+	windowsHost := detectOS(ctx) == "windows"
 	logCtx := log.WithFields(log.Fields{"handle": handleID, "cidr": blockCIDR})
 	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Debug("Querying block so we can release IPs by handle")
@@ -1213,7 +1340,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 		}
 		logCtx.Debugf("Block has %d IPs with the given handle", num)
 
-		if block.empty() && block.Affinity == nil {
+		if block.empty(windowsHost) && block.Affinity == nil {
 			logCtx.Info("Deleting block because it is now empty and has no affinity")
 			err = c.blockReaderWriter.deleteBlock(ctx, obj)
 			if err != nil {
@@ -1391,18 +1518,31 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (m
 // GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
-func (c ipamClient) GetIPAMConfig(ctx context.Context) (*IPAMConfig, error) {
+func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err error) {
 	obj, err := c.client.Get(ctx, model.IPAMConfigKey{}, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// IPAMConfig has not been explicitly set.  Return
 			// a default IPAM configuration.
-			return &IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: false}, nil
+			config = &IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: false}
+			err = nil
+		} else {
+			log.Errorf("Error getting IPAMConfig: %v", err)
+			return nil, err
 		}
-		log.Errorf("Error getting IPAMConfig: %v", err)
-		return nil, err
+	} else {
+		config = c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
 	}
-	return c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig)), nil
+	if detectOS(ctx) == "windows" {
+		// When a Windows node owns a block, it creates a local /26 subnet object and as far as we know, it can't
+		// do a longest-prefix-match between the subnet CIDR and a remote /32.  This means that we can't allow
+		// remote hosts to borrow IPs from a Windows-owned block; and Windows hosts can't borrow IPs either.
+		// Force Windows nodes to always behave as if StrictAffinity is enabled.  This means that they won't borrow
+		// and they'll mark any blocks that they allocate as Strict so others can't borrow from them.
+		log.Info("On Windows, forcing IPAM StrictAffinity.")
+		config.StrictAffinity = true
+	}
+	return
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only
@@ -1609,4 +1749,115 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 		}
 	}
 	return usage, nil
+}
+
+// EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.
+// If there is no block allocated already for this host, allocate one and return its' CIDR.
+// Otherwise, return the CIDR of the IPAM block allocated for this host.
+func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet, *net.IPNet, error) {
+	// Determine the hostname to use - prefer the provided hostname if
+	// non-nil, otherwise use the hostname reported by os.
+	hostname, err := decideHostname(args.Hostname)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Infof("Ensure block for host %s, ipv4 attr %v ipv6 attr %v", hostname, args.HostReservedAttrIPv4s, args.HostReservedAttrIPv6s)
+
+	var v4Net, v6Net *net.IPNet
+
+	if args.HostReservedAttrIPv4s != nil {
+		for _, pool := range args.IPv4Pools {
+			if pool.IP.To4() == nil {
+				return nil, nil, fmt.Errorf("provided IPv4 IPPools list contains one or more IPv6 IPPools")
+			}
+		}
+		v4Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv4s, args.IPv4Pools, 4, hostname)
+		if err != nil {
+			log.Errorf("Error ensure IPv4 block: %v", err)
+			return nil, nil, err
+		}
+	}
+
+	if args.HostReservedAttrIPv6s != nil {
+		for _, pool := range args.IPv6Pools {
+			if pool.IP.To4() != nil {
+				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
+			}
+		}
+		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv4Pools, 6, hostname)
+		if err != nil {
+			log.Errorf("Error ensure IPv6 block: %v", err)
+			return nil, nil, err
+		}
+	}
+
+	return v4Net, v6Net, nil
+}
+
+// getMaxPrefixLen returns maximum block size with given host reserved address range.
+func getMaxPrefixLen(version int, attrs *HostReservedAttr) (int, error) {
+	if attrs == nil {
+		if version == 4 {
+			return 32, nil
+		} else {
+			return 128, nil
+		}
+	}
+
+	// Caclulate how may addresses we should reserve in the block.
+	numOfReserved := (uint)(attrs.StartOfBlock + attrs.EndOfBlock)
+
+	// For example, with windows OS, IPs x.0, x.1, x.2 and x.<bcast> are
+	// reserved. so, minimum 4 IPs are needed for network
+	// creation. As a result, don't allow a block size
+	// 30, 31, 32 (for IPv4) and 126, 127, 128 (for IPv6).
+	var maxPrefixLen int
+	if numOfReserved > 0 {
+		if version == 4 {
+			maxPrefixLen = 32 - bits.Len(numOfReserved)
+		} else {
+			maxPrefixLen = 128 - bits.Len(numOfReserved)
+		}
+	}
+
+	if maxPrefixLen <= 0 {
+		return 0, fmt.Errorf("HostReservedAttr has wrong parameters")
+	}
+
+	return maxPrefixLen, nil
+}
+
+func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr, requestedPools []net.IPNet, version int, host string) (*net.IPNet, error) {
+	// This function is similar to autoAssign except it does not allocate ips.
+
+	logCtx := log.WithFields(log.Fields{"host": host})
+
+	logCtx.Info("Looking up existing affinities for host")
+	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr)
+	if err != nil {
+		return nil, err
+	}
+
+	logCtx.Debugf("Found %d affine IPv%d blocks for host: %v", len(affBlocks), version, affBlocks)
+
+	s := &blockAssignState{
+		client:                c,
+		version:               version,
+		host:                  host,
+		pools:                 pools,
+		remainingAffineBlocks: affBlocks,
+		hostReservedAttr:      rsvdAttr,
+		allowNewClaim:         true,
+	}
+
+	// Ensure a block
+	b, _, err := s.findOrClaimBlock(ctx, 0)
+	if err != nil {
+		log.WithError(err).Error("Failed to ensure a block")
+		return nil, err
+	}
+
+	blockCIDR := b.Key.(model.BlockKey).CIDR
+	logCtx.Infof("Host's block '%s' ", blockCIDR.String())
+	return &blockCIDR, nil
 }
