@@ -153,7 +153,7 @@ update-pod2daemon-pin:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: bin/calico-felix build-bpf
+build: bin/calico-felix build-bpf bin/calico-felix.exe
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -758,6 +758,15 @@ cover-report: combined.coverprofile
 
 bin/calico-felix.transfer-url: bin/calico-felix
 	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
+
+# Cross-compile Felix for Windows
+bin/calico-felix.exe: $(SRC_FILES)
+	@echo Building felix for Windows...
+	mkdir -p bin
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	   	GOOS=windows go build -v -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
+		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program\|not a dynamic executable" || \
+		( echo "Error: $@ was not statically linked"; false ) )'
 
 .PHONY: patch-script
 patch-script: bin/calico-felix.transfer-url

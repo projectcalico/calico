@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017, 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		ticker.Stop()
 	})
 	It("should never tick before minDelay", func() {
-		<-ticker.C
+		<-ticker.Channel()
 		now := time.Now()
 		duration := now.Sub(startTime)
 		Expect(duration).To(BeNumerically(">=", 20*time.Millisecond))
@@ -45,7 +45,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		foundLT5 := false
 		foundGT5 := false
 		for i := 0; i < 40; i++ {
-			<-ticker.C
+			<-ticker.Channel()
 			now := time.Now()
 			duration := time.Since(lastTime)
 			logrus.WithField("duration", duration).Debug("Tick")
