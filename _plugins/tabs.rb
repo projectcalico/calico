@@ -48,7 +48,7 @@ module Jekyll
             text = super
 
             # tab global header
-            result = "<ul class=\"nav nav-#{@header["type"]}  flex-column general-tab-header\" "
+            result = "<ul class=\"nav nav-#{@header["type"]} flex-column general-tab-header\" "
             result += "aria-orientation=\"vertical\" id=\"#{@header['id']}\" role=\"tablist\">"
 
             # user input should follow this format
@@ -65,7 +65,7 @@ module Jekyll
                 dict = createHash(item[0])
                 checkMandatories(dict)
                 # monkey patch to fix visual bug if user provided multiple active panes.
-                if headers.match(/active">/)
+                if headers.scan(/(active)">/m).length() > 1
                     dict["active"] = false
                     print("\t** WARN: Detected multiple active tabs. **\n")
                 end
