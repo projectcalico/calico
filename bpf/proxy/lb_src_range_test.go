@@ -187,7 +187,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			s.Stop()
 		}))
 
-		By("Recreate the service with stale entries", makestep(func() {
+		By("Remove stale src range entries after syncer restarts", makestep(func() {
 			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -201,7 +201,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(svcs.m).To(HaveLen(3))
 		}))
 
-		By("Recreate the service with stale entries and no lb source IPs", makestep(func() {
+		By("Remove all stale src ranges after syncer restarts", makestep(func() {
 			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
