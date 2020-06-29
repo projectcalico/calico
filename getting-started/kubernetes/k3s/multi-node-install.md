@@ -177,5 +177,6 @@ Congratulations! You now have a multi node K3s cluster
 equipped with {{site.prodname}} and Traefik.
 
 ### Next steps
-- [Create a user interface that shows blocked and allowed connections in real time]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+- Try running the [Kubernetes Network policy demo]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo) to see live graphical view of network policy in action
+
 
