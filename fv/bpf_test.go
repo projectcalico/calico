@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -1176,9 +1177,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									}
 								}
 
+								log.Infof("NAT maps converge took %v", time.Since(startTime))
 								break
 							retry:
 								time.Sleep(100 * time.Millisecond)
+								log.Info("NAT maps converge retry")
 							}
 							log.Info("NAT maps converged.")
 
@@ -1887,9 +1890,18 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 	bpfsvcs := make([]nat.MapMem, len(felixes))
 	bpfeps := make([]nat.BackendMapMem, len(felixes))
 
-	for i, felix := range felixes {
-		bpfsvcs[i], bpfeps[i] = dumpNATMaps(felix)
+	// Felixes are independent, we can dump the maps  concurrently
+	var wg sync.WaitGroup
+
+	for i := range felixes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			bpfsvcs[i], bpfeps[i] = dumpNATMaps(felixes[i])
+		}(i)
 	}
+
+	wg.Wait()
 
 	return bpfsvcs, bpfeps
 }
