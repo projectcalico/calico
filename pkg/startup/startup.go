@@ -239,6 +239,11 @@ func Run() {
 
 	// Tell the user what the name of the node is.
 	log.Infof("Using node name: %s", nodeName)
+
+	if err := ensureNetworkForOS(ctx, cli, nodeName); err != nil {
+		log.WithError(err).Errorf("Unable to ensure network for os")
+		terminate()
+	}
 }
 
 // configureNodeRef will attempt to discover the cluster type it is running on, check to ensure we
