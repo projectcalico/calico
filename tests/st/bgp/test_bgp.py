@@ -185,8 +185,8 @@ class TestReadiness(TestBase):
             # Block bgp connectivity between hosts
             host1.execute("iptables -t raw -I PREROUTING  -p tcp -m multiport --dport 179 -j DROP")
             host2.execute("iptables -t raw -I PREROUTING -p tcp -m multiport --dport 179 -j DROP")
-            host1.execute("docker exec -it calico-node pkill -9 bird")
-            host2.execute("docker exec -it calico-node pkill -9 bird")
+            host1.execute("docker exec -it calico-node sv kill bird")
+            host2.execute("docker exec -it calico-node sv kill bird")
 
             # Check that the readiness script is reporting 'not ready'
             self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: BIRD is not ready: BGP not established with",
