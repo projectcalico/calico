@@ -202,6 +202,8 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		kds.K8sClient, err = kubernetes.NewForConfig(&rest.Config{
 			Transport: insecureTransport,
 			Host:      "https://" + kds.k8sApiContainer.IP + ":6443",
+			QPS:       100,
+			Burst:     100,
 		})
 		if err == nil {
 			break
@@ -328,6 +330,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 				KubeConfig: apiconfig.KubeConfig{
 					K8sAPIEndpoint:           kds.Endpoint,
 					K8sInsecureSkipTLSVerify: true,
+					K8sClientQPS:             100,
 				},
 			},
 		})
@@ -409,6 +412,7 @@ type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Inter
 
 func (kds *K8sDatastoreInfra) CleanUp() {
 	log.Info("Cleaning up kubernetes datastore")
+	startTime := time.Now()
 
 	var wg sync.WaitGroup
 	for _, f := range []cleanupFunc{
@@ -740,6 +744,7 @@ func cleanupAllNodes(clientset *kubernetes.Clientset, calicoClient client.Interf
 	}
 	log.Info("Cleaned up all nodes")
 }
+
 func cleanupAllPods(clientset *kubernetes.Clientset, calicoClient client.Interface) {
 	log.Info("Cleaning up Pods")
 	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
@@ -795,6 +800,7 @@ func cleanupAllPools(clientset *kubernetes.Clientset, client client.Interface) {
 }
 
 func cleanupAllGlobalNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up GNPs")
 	ctx := context.Background()
 	gnps, err := client.GlobalNetworkPolicies().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -807,6 +813,7 @@ func cleanupAllGlobalNetworkPolicies(clientset *kubernetes.Clientset, client cli
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up GNPs")
 }
 
 func cleanupAllNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
