@@ -87,7 +87,11 @@ func run(checkNoError bool, command string, args ...string) error {
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
 			command, args, string(outputBytes)))
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v\n\nOrig error: %w",
+			command, args, string(outputBytes), err)
+	}
+	return nil
 }
 
 func AddToTestOutput(args ...string) {
