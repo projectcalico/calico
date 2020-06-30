@@ -42,15 +42,10 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --cluste
 
 #### Install {{site.prodname}}
 
-   > **Note**: As v3.15, manifest installation will gradually be replaced by {% include open-new-window.html text='Tigera operator' url='https://github.com/tigera/operator' %}.
-   > Tigera operator is another open source solution from Tigera that delivers a better experience when you install or upgrade your
-   > {{site.prodname}} instance.
-   {: .alert .alert-info}
-
    {% tabs id:installation-method %}
    <id:operator,name:Operator,active:true>
    <%
-Install the Tigera {{site.prodname}} operator and custom resource definitions.
+Install the {{site.prodname}} operator and custom resource definitions.
 
    ```bash
    sudo kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
