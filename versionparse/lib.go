@@ -27,7 +27,8 @@ import (
 )
 
 var (
-	kernelVersionRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+)`)
+	kernelVersionRegexp     = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+)`)
+	kernelVersionRHELRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d-\d+)`)
 )
 
 func MustParseVersion(v string) *version.Version {
@@ -42,15 +43,16 @@ func GetKernelVersionReader() (io.Reader, error) {
 	return os.Open("/proc/version")
 }
 
-func GetKernelVersion(reader io.Reader) (*version.Version, error) {
-	kernVersion, err := ioutil.ReadAll(reader)
-	if err != nil {
-		log.WithError(err).Warn("Failed to read kernel version from reader")
-		return nil, err
-	}
-	s := string(kernVersion)
+func GetVersionFromString(s string) (*version.Version, error) {
+	var matches []string
 	log.WithField("rawVersion", s).Debug("Raw kernel version")
-	matches := kernelVersionRegexp.FindStringSubmatch(s)
+	// Match the build version for Red Hat
+	if strings.Contains(s, "Red Hat") {
+		matches = kernelVersionRHELRegexp.FindStringSubmatch(s)
+	} else {
+		matches = kernelVersionRegexp.FindStringSubmatch(s)
+	}
+
 	if len(matches) == 0 {
 		msg := "Failed to parse kernel version string"
 		log.WithField("rawVersion", s).Warn(msg)
@@ -66,24 +68,38 @@ func GetKernelVersion(reader io.Reader) (*version.Version, error) {
 	return parsedVersion, nil
 }
 
-func GetDistributionName() string {
+func GetDistFromString(s string) string {
 	distName := "default"
-	reader, err := GetKernelVersionReader()
-	if err != nil {
-		log.WithError(err).Warn("Failed to get kernel version reader")
-		return distName
-	}
-	kernVersion, err := ioutil.ReadAll(reader)
-	if err != nil {
-		log.WithError(err).Warn("Failed to read kernel version from reader")
-		return distName
-	}
-	s := string(kernVersion)
-
 	if strings.Contains(s, "Ubuntu") {
 		distName = "ubuntu"
 	} else if strings.Contains(s, "Red Hat") {
 		distName = "rhel"
 	}
 	return distName
+}
+
+func GetKernelVersion(reader io.Reader) (*version.Version, error) {
+	kernVersion, err := ioutil.ReadAll(reader)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read kernel version from reader")
+		return nil, err
+	}
+	s := string(kernVersion)
+	return GetVersionFromString(s)
+}
+
+func GetDistributionName() string {
+	reader, err := GetKernelVersionReader()
+	if err != nil {
+		log.WithError(err).Warn("Failed to get kernel version reader")
+		return "default"
+	}
+	kernVersion, err := ioutil.ReadAll(reader)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read kernel version from reader")
+		return "default"
+	}
+	s := string(kernVersion)
+
+	return GetDistFromString(s)
 }

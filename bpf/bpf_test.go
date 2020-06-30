@@ -30,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/felix/versionparse"
 )
 
 const (
@@ -759,5 +760,48 @@ func TestIPv6NotSupported(t *testing.T) {
 	_, err := bpfDP.NewCIDRMap("myiface2", IPFamilyV6)
 	if err == nil {
 		t.Fatalf("creating an IPv6 blacklist should have failed")
+	}
+}
+
+func TestVersionParse(t *testing.T) {
+	t.Log("Test version parsing")
+	ubuntuVersionStr := "Linux version 5.3.0-39-generic (buildd@lcy01-amd64-016) (gcc version 9.3.0 (Ubuntu 9.3.0-10ubuntu2)) #43-Ubuntu SMP Fri Jun 19 10:28:31 UTC 2020"
+	rhelVersionStr := "Linux version 4.18.0-193.el8.x86_64 (mockbuild@x86-vm-08.build.eng.bos.redhat.com) (gcc version 8.3.1 20191121 (Red Hat 8.3.1-5) (GCC)) #1 SMP Fri Mar 27 14:35:58 UTC 2020"
+	fedVersionStr := "Linux version 5.3.0-193.el8.x86_64 (mockbuild@x86-vm-08.build.eng.bos.redhat.com) (gcc version 8.3.1 20191121 (Fedora 8.3.1-5) (GCC)) #1 SMP Fri Mar 27 14:35:58 UTC 2020"
+	distName := versionparse.GetDistFromString(ubuntuVersionStr)
+	if distName != "ubuntu" {
+		t.Fatalf("Parsing distribution name failed")
+	}
+	parsedVer, err := versionparse.GetVersionFromString(ubuntuVersionStr)
+	if err != nil {
+		t.Fatalf("Parsing kernel version failed")
+	}
+	expVer := GetExpectedVersionFromMap(distName)
+	if parsedVer.Compare(expVer) != 0 {
+		t.Fatalf("Parsed version not same as expected version")
+	}
+	distName = versionparse.GetDistFromString(rhelVersionStr)
+	if distName != "rhel" {
+		t.Fatalf("Parsing distribution name failed")
+	}
+	parsedVer, err = versionparse.GetVersionFromString(rhelVersionStr)
+	if err != nil {
+		t.Fatalf("Parsing kernel version failed")
+	}
+	expVer = GetExpectedVersionFromMap(distName)
+	if parsedVer.Compare(expVer) != 0 {
+		t.Fatalf("Parsed version not same as expected version")
+	}
+	distName = versionparse.GetDistFromString(fedVersionStr)
+	if distName != "default" {
+		t.Fatalf("Parsing distribution name failed")
+	}
+	parsedVer, err = versionparse.GetVersionFromString(fedVersionStr)
+	if err != nil {
+		t.Fatalf("Parsing kernel version failed")
+	}
+	expVer = GetExpectedVersionFromMap(distName)
+	if parsedVer.Compare(expVer) != 0 {
+		t.Fatalf("Parsed version not same as expected version")
 	}
 }
