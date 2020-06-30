@@ -135,6 +135,8 @@ func runK8sApiserver(etcdIp string) *containers.Container {
 		"--insecure-bind-address=0.0.0.0",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdIp),
 		"--service-account-key-file=/private.key",
+		"--max-mutating-requests-inflight=0",
+		"--max-requests-inflight=0",
 	)
 }
 
@@ -153,8 +155,10 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 		// Disable node CIDRs since the controller manager stalls for 10s if
 		// they are enabled.
 		"--allocate-node-cidrs=false",
+		"--leader-elect=false",
 		"--v=3",
 		"--service-account-private-key-file=/private.key",
+		"--concurrent-gc-syncs=50",
 	)
 	return c
 }
