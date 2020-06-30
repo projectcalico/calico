@@ -1,50 +1,73 @@
 ---
 title: Quickstart for Calico on K3s
-description: Install Calico on a single-host K3s cluster for testing or development in under 5 minutes.
+description: Install Calico on a single-node K3s cluster for testing or development in under 5 minutes.
 canonical_url: '/getting-started/kubernetes/k3s/quickstart'
 ---
 
-### Overview
+### Big picture
 
-This quickstart gets you a single-host K3s cluster with {{site.prodname}}
+This quickstart gets you a single-node K3s cluster with {{site.prodname}}
 in approximately 5 minutes. You can use this cluster for testing and
 development.
 
-### Requirements
+### Value
 
-- x86-64 processor
-- 1CPU
-- 1GB Ram
-- 10GB free disk space
-- Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64)
-   > **Note**: K3s supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
-   > For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
-   {: .alert .alert-info}
+Use this quickstart to quickly and easily try {{side.prodname}} features. To deploy a cluster suitable for production, refer to [Multi-node install]({{ site.baseurl }}/getting-started/kubernetes/k3s/multi-node-install).
 
 ### Before you begin
 
-- We assume you have a running instance of Linux (meeting the requirement) with root or sudo privileges up and running.
-- In this tutorial we will guide you to implement a minimal K3s cluster with {{ site.prodname}}.
+- Make sure you have a linux host that meets the following requirements
+   - x86-64 processor
+   - 1CPU
+   - 1GB Ram
+   - 10GB free disk space
+   - Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64), Ubuntu 20.04 (amd64)
 
+> **Note**: K3s supports ARM proccessors too, this quickstart was tested against x86-64 processor environment.
+> For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
+{: .alert .alert-info}
 
-### Create a single-host K3s cluster
+### How to
+#### Create a single-node K3s cluster
 
-1. Initialize the master using the following command.
+- Initialize the master using the following command.
 
-    ```
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --cluster-cidr=192.168.0.0/16 --disable=traefik" sh -
-    ```
+```bash
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --cluster-cidr=192.168.0.0/16 --disable=traefik" sh -
+```
 
-   > **Note**: If 192.168.0.0/16 is already in use within your network you must select a different pod network
-   > CIDR by replacing 192.168.0.0/16 in the above command. 
-   {: .alert .alert-danger}
+> **Note**: If 192.168.0.0/16 is already in use within your network you must select a different pod network
+> CIDR by replacing 192.168.0.0/16 in the above command. 
+{: .alert .alert-danger}
 
+#### Install {{site.prodname}}
 
+   {% tabs id:installation-method %}
+   <id:operator,name:Operator,active:true>
+   <%
+Install the {{site.prodname}} operator and custom resource definitions.
 
-2. Install {{site.prodname}} with the following command.
-
+   ```bash
+   sudo kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
    ```
-   kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
+
+Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
+
+   ```bash
+   sudo kubectl create -f {{ "/manifests/custom-resources.yaml" | absolute_url }}
+   ```
+
+   > **Note**: Before creating this manifest, read its contents and make sure its settings are correct for your environment. For example,
+   > you may need to change the default IP pool CIDR to match your pod network CIDR.
+   {: .alert .alert-info}
+   
+   %>
+   <id:manifest,name:Manifest>
+   <%
+   Install {{site.prodname}} by using the following command.
+
+   ```bash
+   sudo kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
    ```
 
    > **Note**: You can also
@@ -81,11 +104,15 @@ development.
    ```
    {: .no-select-button}
 
-3. Confirm that all of the pods are running with the following command.
+   %>
+   {% endtabs %}
 
+#### Final checks   
 
-   ```
-   watch kubectl get pods --all-namespaces
+3. Confirm that all of the pods are running using the following command.
+
+   ```bash
+   sudo watch kubectl get pods --all-namespaces
    ```
 
    Wait until each pod shows the `STATUS` of `Running`.
@@ -106,8 +133,8 @@ development.
 5. Confirm that you now have a node in your cluster with the
    following command.
 
-   ```
-   kubectl get nodes -o wide
+   ```bash
+   sudo kubectl get nodes -o wide
    ```
 
    It should return something like the following.
@@ -122,4 +149,4 @@ Congratulations! You now have a single-node K3s cluster
 equipped with {{site.prodname}}.
 
 ### Next steps
-- [Create a user interface that shows blocked and allowed connections in real time]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+- Try running the [Kubernetes Network policy demo]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo) to see live graphical view of network policy in action
