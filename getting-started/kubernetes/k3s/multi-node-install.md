@@ -64,15 +64,10 @@ K3s is a lightweight implementation of Kubernetes packeged as a single binary.
 
 #### Install {{site.prodname}}
 
-   > **Note**: As of v3.15, manifest installation will gradually be replaced by {% include open-new-window.html text='Tigera operator' url='https://github.com/tigera/operator' %}.
-   > Tigera operator is another opensource solution from Tigera team which will deliver a better experience when you install or upgrade your
-   > {{site.prodname}} instance.
-   {: .alert .alert-info}
-
    {% tabs id:installation-method %}
    <id:operator,name:Operator,active:true>
    <%
-Install the Tigera {{site.prodname}} operator and custom resource definitions.
+Install the {{site.prodname}} operator and custom resource definitions.
 
    ```bash
    kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
