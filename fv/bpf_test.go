@@ -1017,6 +1017,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					// Create a service of type clusterIP
 					BeforeEach(func() {
+						if testOpts.protocol != "tcp" {
+							Skip("Skip tests for UDP, UDP-Unconnected")
+						}
 						testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)

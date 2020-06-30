@@ -89,10 +89,10 @@ var _ = Describe("BPF service type change", func() {
 	p, _ := proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
 	p.OnHostIPsUpdate([]net.IP{initIP})
 
-	key_clusterIP := nat.NewNATKey(clusterIP, port, proxy.ProtoV1ToIntPanic(proto))
-	key_extIP := nat.NewNATKey(extIP, port, proxy.ProtoV1ToIntPanic(proto))
-	key_extIP_with_src := nat.NewNATKeySrc(extIP, port, proxy.ProtoV1ToIntPanic(proto), ip.MustParseCIDROrIP("30.1.0.1/32").(ip.V4CIDR))
-	key_hostIP := nat.NewNATKey(initIP, uint16(npPort), proxy.ProtoV1ToIntPanic(proto))
+	keyClusterIP := nat.NewNATKey(clusterIP, port, proxy.ProtoV1ToIntPanic(proto))
+	keyExtIP := nat.NewNATKey(extIP, port, proxy.ProtoV1ToIntPanic(proto))
+	keyExtIPWithSrc := nat.NewNATKeySrc(extIP, port, proxy.ProtoV1ToIntPanic(proto), ip.MustParseCIDROrIP("30.1.0.1/32").(ip.V4CIDR))
+	keyHostIP := nat.NewNATKey(initIP, uint16(npPort), proxy.ProtoV1ToIntPanic(proto))
 
 	AfterEach(func() {
 		p.Stop()
@@ -104,22 +104,22 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				if len(front.m) == 1 && ret1 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				if len(front.m) == 1 && keyClusterIPExists {
 					return true
 				}
 				return false
 			}).Should(BeTrue())
 		})
-		// cluster IP -> external IP
-		By("Update the service type from ClusterIP to ExternalIP", func() {
+
+		By("Add ExternalIP", func() {
 			setSvcTypeToExternalIP(testSvc, []string{extIPstr}, k8s)
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
-				if len(front.m) == 2 && ret1 && ret2 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				if len(front.m) == 2 && keyClusterIPExists && keyExtIPExists {
 					return true
 				}
 				return false
@@ -127,16 +127,15 @@ var _ = Describe("BPF service type change", func() {
 
 		})
 
-		// External IP -> Cluster IP
-		By("Update the service type from ExternalIP to ClusterIP", func() {
+		By("Remove ExternalIP", func() {
 			setSvcTypeToClusterIP(testSvc, k8s)
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
 
-				if len(front.m) == 1 && ret1 && !ret2 {
+				if len(front.m) == 1 && keyClusterIPExists && !keyExtIPExists {
 					return true
 				}
 				return false
@@ -149,11 +148,11 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
-				_, ret3 := front.m[key_extIP_with_src]
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				_, keyExtIPWithSrcExists := front.m[keyExtIPWithSrc]
 
-				if len(front.m) == 3 && ret1 && ret2 && ret3 {
+				if len(front.m) == 3 && keyClusterIPExists && keyExtIPExists && keyExtIPWithSrcExists {
 					return true
 				}
 				return false
@@ -166,11 +165,11 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
-				_, ret3 := front.m[key_extIP_with_src]
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				_, keyExtIPWithSrcExists := front.m[keyExtIPWithSrc]
 
-				if len(front.m) == 1 && ret1 && !ret2 && !ret3 {
+				if len(front.m) == 1 && keyClusterIPExists && !keyExtIPExists && !keyExtIPWithSrcExists {
 					return true
 				}
 				return false
@@ -183,9 +182,9 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_hostIP]
-				if ret1 && ret2 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyHostIPExists := front.m[keyHostIP]
+				if keyClusterIPExists && keyHostIPExists {
 					return true
 				}
 				return false
@@ -198,10 +197,10 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_hostIP]
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyHostIPExists := front.m[keyHostIP]
 
-				if len(front.m) == 1 && ret1 && !ret2 {
+				if len(front.m) == 1 && keyClusterIPExists && !keyHostIPExists {
 					return true
 				}
 				return false
@@ -214,9 +213,9 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_hostIP]
-				if ret1 && ret2 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyHostIPExists := front.m[keyHostIP]
+				if keyClusterIPExists && keyHostIPExists {
 					return true
 				}
 				return false
@@ -229,10 +228,10 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
-				_, ret3 := front.m[key_hostIP]
-				if len(front.m) == 2 && ret1 && ret2 && !ret3 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				_, keyHostIPExists := front.m[keyHostIP]
+				if len(front.m) == 2 && keyClusterIPExists && keyExtIPExists && !keyHostIPExists {
 					return true
 				}
 				return false
@@ -246,10 +245,10 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_hostIP]
-				_, ret3 := front.m[key_extIP]
-				if ret1 && ret2 && !ret3 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyHostIPExists := front.m[keyHostIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				if keyClusterIPExists && keyHostIPExists && !keyExtIPExists {
 					return true
 				}
 				return false
@@ -258,15 +257,15 @@ var _ = Describe("BPF service type change", func() {
 
 		// NodePort -> LoadBalancer
 		By("Update the service type from NodePort to LoadBalancer", func() {
-			setSvcTypeToLoadBalancer(testSvc, []string{extIPstr}, []string{"30.1.0.1"}, k8s)
+			setSvcTypeToLoadBalancer(testSvc, []string{extIPstr}, []string{"30.1.0.1/32"}, k8s)
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
-				_, ret3 := front.m[key_extIP_with_src]
-				_, ret4 := front.m[key_hostIP]
-				if len(front.m) == 3 && ret1 && ret2 && ret3 && !ret4 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				_, keyExtIPWithSrcExists := front.m[keyExtIPWithSrc]
+				_, keyHostIPExists := front.m[keyHostIP]
+				if len(front.m) == 3 && keyClusterIPExists && keyExtIPExists &&	keyExtIPWithSrcExists && !keyHostIPExists {
 					return true
 				}
 				return false
@@ -279,10 +278,10 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
-				_, ret3 := front.m[key_extIP_with_src]
-				if len(front.m) == 2 && ret1 && ret2 && !ret3 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				_, keyExtIPWithSrcExists := front.m[keyExtIPWithSrc]
+				if len(front.m) == 2 && keyClusterIPExists && keyExtIPExists && !keyExtIPWithSrcExists {
 					return true
 				}
 				return false
@@ -292,14 +291,14 @@ var _ = Describe("BPF service type change", func() {
 
 		// External IP -> LoadBalancer
 		By("Update the service type from ExternalIP to LoadBalancer", func() {
-			setSvcTypeToLoadBalancer(testSvc, []string{extIPstr}, []string{"30.1.0.1"}, k8s)
+			setSvcTypeToLoadBalancer(testSvc, []string{extIPstr}, []string{"30.1.0.1/32"}, k8s)
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_extIP]
-				_, ret3 := front.m[key_extIP_with_src]
-				if len(front.m) == 3 && ret1 && ret2 && ret3 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				_, keyExtIPWithSrcExists := front.m[keyExtIPWithSrc]
+				if len(front.m) == 3 && keyClusterIPExists && keyExtIPExists && keyExtIPWithSrcExists {
 					return true
 				}
 				return false
@@ -312,11 +311,11 @@ var _ = Describe("BPF service type change", func() {
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
-				_, ret1 := front.m[key_clusterIP]
-				_, ret2 := front.m[key_hostIP]
-				_, ret3 := front.m[key_extIP]
-				_, ret4 := front.m[key_extIP_with_src]
-				if ret1 && ret2 && !ret3 && !ret4 {
+				_, keyClusterIPExists := front.m[keyClusterIP]
+				_, keyHostIPExists := front.m[keyHostIP]
+				_, keyExtIPExists := front.m[keyExtIP]
+				_, keyExtIPWithSrcExists := front.m[keyExtIPWithSrc]
+				if keyClusterIPExists && keyHostIPExists && !keyExtIPExists && !keyExtIPWithSrcExists {
 					return true
 				}
 				return false
@@ -360,3 +359,4 @@ func setSvcTypeToNodePort(testSvc *v1.Service, npPort int32, k8s *fake.Clientset
 	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
 	Expect(err).NotTo(HaveOccurred())
 }
+
