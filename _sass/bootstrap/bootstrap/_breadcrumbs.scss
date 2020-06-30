@@ -5,7 +5,6 @@
 
 .breadcrumb {
   padding: $breadcrumb-padding-vertical $breadcrumb-padding-horizontal;
-  margin-bottom: $line-height-computed;
   list-style: none;
   background-color: $breadcrumb-bg;
   border-radius: $border-radius-base;
@@ -17,7 +16,7 @@
       // [converter] Workaround for https://github.com/sass/libsass/issues/1115
       $nbsp: "\00a0";
       content: "#{$breadcrumb-separator}#{$nbsp}"; // Unicode space added since inline-block means non-collapsing white-space
-      padding: 0 5px;
+      padding: 0 3px;
       color: $breadcrumb-color;
     }
   }
