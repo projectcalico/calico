@@ -230,6 +230,9 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		if err == nil {
 			break
 		}
+		if strings.Contains(err.Error(), "already exists") {
+			break
+		}
 		if time.Since(start) > 90*time.Second {
 			log.WithError(err).Error("Failed to install role binding")
 			TearDownK8sInfra(kds)
