@@ -45,6 +45,12 @@ h4 {
   font-size: 20px;
 }
 
+// Default blockquotes are too big in Bootstrap.
+// Shrink them down
+blockquote {
+  font-size: inherit;
+}
+
 // Set height to prevent weird bug where sidebar is clipped at bottom.
 html {
   overflow-y: scroll;
