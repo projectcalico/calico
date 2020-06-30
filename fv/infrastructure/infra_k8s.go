@@ -402,6 +402,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 
 func (kds *K8sDatastoreInfra) CleanUp() {
 	log.Info("Cleaning up kubernetes datastore")
+	startTime := time.Now()
 	cleanupAllPods(kds.K8sClient)
 	cleanupAllNodes(kds.K8sClient)
 	cleanupAllNamespaces(kds.K8sClient)
@@ -413,6 +414,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 	cleanupAllFelixConfigurations(kds.calicoClient)
 	cleanupAllServices(kds.K8sClient)
 	kds.needsCleanup = false
+	log.WithField("time", time.Since(startTime)).Info("Cleaned up kubernetes datastore")
 }
 
 func cleanupIPAM(calicoClient client.Interface) {
