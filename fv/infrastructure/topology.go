@@ -18,8 +18,10 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sync"
 	"time"
 
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -113,6 +115,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	log.Infof("Starting a %d-node topology.", n)
 	success := false
 	var err error
+	startTime := time.Now()
 	defer func() {
 		if !success {
 			log.WithError(err).Error("Failed to start topology, tearing down containers")
@@ -120,7 +123,9 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 				felix.Stop()
 			}
 			infra.Stop()
+			return
 		}
+		log.WithField("time", time.Since(startTime)).Info("Started topology.")
 	}()
 
 	if opts.VXLANMode == "" {
@@ -176,11 +181,24 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		typhaIP = typha.IP
 	}
 
+	felixes = make([]*Felix, n)
+	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		// Then start Felix and create a node for it.
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = fmt.Sprintf("%d-", i)
-		felix := RunFelix(infra, i, opts)
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			defer ginkgo.GinkgoRecover()
+			felix := RunFelix(infra, i, opts)
+			felixes[i] = felix
+		}(i)
+	}
+	wg.Wait()
+
+	for i := 0; i < n; i++ {
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
+		felix := felixes[i]
 		felix.TyphaIP = typhaIP
 
 		expectedIPs := []string{felix.IP}
@@ -232,8 +250,6 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			_, err := client.HostEndpoints().Create(context.Background(), hep, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 		}
-
-		felixes = append(felixes, felix)
 	}
 
 	// Set up routes between the hosts, note: we're not using IPAM here but we set up similar
@@ -243,18 +259,23 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			if i == j {
 				continue
 			}
-
-			jBlock := fmt.Sprintf("10.65.%d.0/24", j)
-			if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
-				err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
-				Expect(err).ToNot(HaveOccurred())
-			} else if opts.VXLANMode == api.VXLANModeNever {
-				// If VXLAN is enabled, Felix will program these routes itself.
-				err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
-				Expect(err).ToNot(HaveOccurred())
-			}
+			wg.Add(1)
+			go func(i, j int, iFelix, jFelix *Felix) {
+				defer wg.Done()
+				defer ginkgo.GinkgoRecover()
+				jBlock := fmt.Sprintf("10.65.%d.0/24", j)
+				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
+					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+					Expect(err).ToNot(HaveOccurred())
+				} else if opts.VXLANMode == api.VXLANModeNever {
+					// If VXLAN is enabled, Felix will program these routes itself.
+					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
+					Expect(err).ToNot(HaveOccurred())
+				}
+			}(i, j, iFelix, jFelix)
 		}
 	}
+	wg.Wait()
 	success = true
 	return
 }
