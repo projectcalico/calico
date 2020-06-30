@@ -115,7 +115,33 @@ custom_css: css/intro.css
     <img class="img-responsive center-block" src="/images/intro/tigera.png">
   </div>
   <div class="col-md-6">
-    <h3 id="contributor-community" style="margin-top: 5px">A contributor community backed by the Tigera team</h3>
-    <p>The {{site.prodname}} open source project has been supported by 150+ contributors across a broad range of companies.  In addition {{site.prodname}} is backed by Tigera, founded by the original {{site.prodname}} engineering team, and committed to maintaining {{site.prodname}} as the leading standard for Kubernetes network security.</p>
+    <h3 id="contributor-community" style="margin-top: 5px">Strong contributor community</h3>
+    <p>The Calico open source project has been supported by 200+ contributors across a broad range of companies.  In addition {{site.prodname}} is backed by Tigera, founded by the original Calico engineering team, and committed to maintaining {{site.prodname}} as the leading standard for Kubernetes network security.</p>
   </div>
 </div>
+
+<hr/>
+
+<div id="why-use-calico-10" class="row">
+  <div class="col-md-6">
+    <h3 id="contributor-community" style="margin-top: 5px">Calico Enterprise compatible</h3>
+    <p>Calico Enterprise builds on top of open source Calico to provide additional higher-level features and capabilities:</p>
+    <ul style="">
+        <li>Hierarchical network policy</li>
+        <li>Advanced egress access controls (FQDN/DNS policies, egress gateways)</li>
+        <li>Network visualization and troubleshooting</li>
+        <li>Network policy recommendations</li>
+        <li>Network policy preview and staging</li>
+        <li>Compliance controls and reporting</li>
+        <li>Intrusion detection (suspicious activity, anomaly detection)</li>
+        <li>Multi-cluster management with multi-cloud federation</li>
+    </ul>
+  </div>
+  <div class="col-md-6">
+    <img class="img-responsive center-block" src="/images/intro/community.png">
+  </div>
+</div>
+
+
+
+
