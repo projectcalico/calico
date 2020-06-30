@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
+	"strings"
 
 	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
@@ -63,4 +64,26 @@ func GetKernelVersion(reader io.Reader) (*version.Version, error) {
 	}
 	log.WithField("version", parsedVersion).Debug("Parsed kernel version")
 	return parsedVersion, nil
+}
+
+func GetDistributionName() string {
+	distName := "default"
+	reader, err := GetKernelVersionReader()
+	if err != nil {
+		log.WithError(err).Warn("Failed to get kernel version reader")
+		return distName
+	}
+	kernVersion, err := ioutil.ReadAll(reader)
+	if err != nil {
+		log.WithError(err).Warn("Failed to read kernel version from reader")
+		return distName
+	}
+	s := string(kernVersion)
+
+	if strings.Contains(s, "Ubuntu") {
+		distName = "ubuntu"
+	} else if strings.Contains(s, "Red Hat") {
+		distName = "rhel"
+	}
+	return distName
 }
