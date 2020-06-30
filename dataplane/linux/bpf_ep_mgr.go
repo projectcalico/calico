@@ -388,9 +388,18 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := m.attachDataIfaceProgram(iface, PolDirnIngress)
+
+			var ingressWG sync.WaitGroup
+			var ingressErr error
+			ingressWG.Add(1)
+			go func() {
+				defer ingressWG.Done()
+				ingressErr = m.attachDataIfaceProgram(iface, PolDirnIngress)
+			}()
+			err := m.attachDataIfaceProgram(iface, PolDirnEgress)
+			ingressWG.Wait()
 			if err == nil {
-				err = m.attachDataIfaceProgram(iface, PolDirnEgress)
+				err = ingressErr
 			}
 			if err == nil {
 				// This is required to allow NodePort forwarding with
