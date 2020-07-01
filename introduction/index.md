@@ -116,7 +116,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <h3 id="contributor-community" style="margin-top: 5px">Contributor community</h3>
-    <p>The Calico open source project has been supported by 200+ contributors across a broad range of companies.  In addition {{site.prodname}} is backed by Tigera, founded by the original Calico engineering team, and committed to maintaining {{site.prodname}} as the leading standard for Kubernetes network security.</p>
+    <p>The Calico open source project is what it is today thanks to 200+ contributors across a broad range of companies.  In addition {{site.prodname}} is backed by Tigera, founded by the original Calico engineering team, and committed to maintaining {{site.prodname}} as the leading standard for Kubernetes network security.</p>
   </div>
 </div>
 
