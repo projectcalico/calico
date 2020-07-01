@@ -169,6 +169,11 @@ FELIX_2/32: remote host`
 const extIP = "10.1.2.3"
 
 func describeBPFTests(opts ...bpfTestOpt) bool {
+	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+		// Non-BPF run.
+		return true
+	}
+
 	testOpts := bpfTestOptions{
 		bpfLogLevel: "debug",
 		tunnel:      "none",
@@ -191,7 +196,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	)
 
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 		var (
 			infra          infrastructure.DatastoreInfra
 			felixes        []*infrastructure.Felix
@@ -215,9 +219,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		}
 
 		BeforeEach(func() {
-			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
-				Skip("Skipping BPF test in non-BPF run.")
-			}
 			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
 				"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 			infra = getInfra()
@@ -840,6 +841,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 
 				Describe("Test Load balancer service with external IP", func() {
+					if testOpts.connTimeEnabled {
+						// FIXME externalClient also does conntime balancing
+						return
+					}
+
 					srcIPRange := []string{}
 					externalIP := []string{extIP}
 					testSvcName := "test-lb-service-extip"
@@ -848,9 +854,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var ip []string
 					var port uint16
 					BeforeEach(func() {
-						if testOpts.connTimeEnabled {
-							Skip("FIXME externalClient also does conntime balancing")
-						}
 						externalClient.EnsureBinary("test-connection")
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
 						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName, "10.101.0.10", w[0][0], 80, tgtPort,
@@ -911,6 +914,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 
 				Context("Test load balancer service with no backend", func() {
+					if testOpts.connTimeEnabled || testOpts.udpUnConnected {
+						// Skip UDP unconnected, connectime load balancing cases as externalClient also does conntime balancing
+						return
+					}
+
 					var testSvc *v1.Service
 					tgtPort := 8055
 					externalIP := []string{extIP}
@@ -920,9 +928,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var ip []string
 
 					BeforeEach(func() {
-						if testOpts.connTimeEnabled || testOpts.udpUnConnected {
-							Skip("Skip UDP unconnected, connectime load balancing cases as externalClient also does conntime balancing")
-						}
 						externalClient.EnsureBinary("test-connection")
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
 						// create a service workload as nil, so that the service has no backend
@@ -954,6 +959,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 
 				Describe("Test load balancer service with external Client,src ranges", func() {
+					if testOpts.connTimeEnabled {
+						// FIXME externalClient also does conntime balancing
+						return
+					}
+
 					var testSvc *v1.Service
 					tgtPort := 8055
 					externalIP := []string{extIP}
@@ -962,9 +972,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var port uint16
 					var srcIPRange []string
 					BeforeEach(func() {
-						if testOpts.connTimeEnabled {
-							Skip("FIXME externalClient also does conntime balancing")
-						}
 						externalClient.Exec("ip", "route", "add", extIP, "via", felixes[0].IP)
 						externalClient.EnsureBinary("test-connection")
 						pol.Spec.Ingress = []api.Rule{
@@ -1010,6 +1017,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 
 				Context("Test Service type transitions", func() {
+					if testOpts.protocol != "tcp" {
+						// Skip tests for UDP, UDP-Unconnected
+						return
+					}
+
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
@@ -1021,9 +1033,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					// Create a service of type clusterIP
 					BeforeEach(func() {
-						if testOpts.protocol != "tcp" {
-							Skip("Skip tests for UDP, UDP-Unconnected")
-						}
 						testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
@@ -1747,14 +1756,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 					}
 
-					It("workload should have connectivity to self via local/remote node", func() {
-						if !testOpts.connTimeEnabled {
-							Skip("FIXME pod cannot connect to self without connect time lb")
-						}
-						cc.ExpectSome(w[0][0], TargetIP(felixes[1].IP), npPort)
-						cc.ExpectSome(w[0][0], TargetIP(felixes[0].IP), npPort)
-						cc.CheckConnectivity()
-					})
+					if testOpts.connTimeEnabled {
+						It("workload should have connectivity to self via local/remote node", func() {
+							cc.ExpectSome(w[0][0], TargetIP(felixes[1].IP), npPort)
+							cc.ExpectSome(w[0][0], TargetIP(felixes[0].IP), npPort)
+							cc.CheckConnectivity()
+						})
+					}
 
 					It("should not have connectivity from external to w[0] via local/remote node", func() {
 						cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
@@ -1779,134 +1787,122 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pol = updatePolicy(pol)
 						})
 
-						if localOnly {
+						if localOnly && !testOpts.connTimeEnabled {
 							It("should not have connectivity from external to w[0] via node1->node0 fwd", func() {
-								if testOpts.connTimeEnabled {
-									Skip("FIXME externalClient also does conntime balancing")
-								}
-
 								cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
 								// Include a check that goes via the nodeport with a local backing pod to make sure the dataplane has converged.
 								cc.ExpectSome(externalClient, TargetIP(felixes[0].IP), npPort)
 								cc.CheckConnectivity()
 							})
-						} else {
+						} else if !testOpts.connTimeEnabled {
 							It("should have connectivity from external to w[0] via node1->node0 fwd", func() {
-								if testOpts.connTimeEnabled {
-									Skip("FIXME externalClient also does conntime balancing")
-								}
 								cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
 								cc.CheckConnectivity()
 							})
 
-							It("should have connectivity from external to w[0] via node1IP2 -> nodeIP1 -> node0 fwd", func() {
-								// 192.168.20.1              +----------|---------+
-								//      |                    |          |         |
-								//      v                    |          |         V
-								//    eth20                 eth0        |       eth0
-								//  10.0.0.20:30333 --> felixes[1].IP   |   felixes[0].IP
-								//                                      |        |
-								//                                      |        V
-								//                                      |     caliXYZ
-								//                                      |    w[0][0].IP:8055
-								//                                      |
-								//                node1                 |      node0
+							if !testOpts.dsr {
+								// When DSR is enabled, we need to have away how to pass the
+								// original traffic back.
+								//
+								// felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "via", felixes[1].IP)
+								//
+								// This does not work since the other node would treat it as
+								// DNAT due to the existing CT entries and NodePort traffix
+								// otherwise :-/
 
-								if testOpts.dsr {
-									return
-									// When DSR is enabled, we need to have away how to pass the
-									// original traffic back.
-									//
-									// felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "via", felixes[1].IP)
-									//
-									// This does not work since the other node would treat it as
-									// DNAT due to the existing CT entries and NodePort traffix
-									// otherwise :-/
-								}
+								It("should have connectivity from external to w[0] via node1IP2 -> nodeIP1 -> node0 fwd", func() {
+									// 192.168.20.1              +----------|---------+
+									//      |                    |          |         |
+									//      v                    |          |         V
+									//    eth20                 eth0        |       eth0
+									//  10.0.0.20:30333 --> felixes[1].IP   |   felixes[0].IP
+									//                                      |        |
+									//                                      |        V
+									//                                      |     caliXYZ
+									//                                      |    w[0][0].IP:8055
+									//                                      |
+									//                node1                 |      node0
 
-								if testOpts.connTimeEnabled {
-									Skip("FIXME externalClient also does conntime balancing")
-								}
+									var eth20 *workload.Workload
 
-								var eth20 *workload.Workload
+									defer func() {
+										if eth20 != nil {
+											eth20.Stop()
+										}
+									}()
 
-								defer func() {
-									if eth20 != nil {
-										eth20.Stop()
-									}
-								}()
+									By("setting up node's fake external iface", func() {
+										// We name the iface eth20 since such ifaces are
+										// treated by felix as external to the node
+										//
+										// Using a test-workload creates the namespaces and the
+										// interfaces to emulate the host NICs
 
-								By("setting up node's fake external iface", func() {
-									// We name the iface eth20 since such ifaces are
-									// treated by felix as external to the node
-									//
-									// Using a test-workload creates the namespaces and the
-									// interfaces to emulate the host NICs
+										eth20 = &workload.Workload{
+											Name:          "eth20",
+											C:             felixes[1].Container,
+											IP:            "192.168.20.1",
+											Ports:         "57005", // 0xdead
+											Protocol:      testOpts.protocol,
+											InterfaceName: "eth20",
+										}
+										eth20.Start()
 
-									eth20 = &workload.Workload{
-										Name:          "eth20",
-										C:             felixes[1].Container,
-										IP:            "192.168.20.1",
-										Ports:         "57005", // 0xdead
-										Protocol:      testOpts.protocol,
-										InterfaceName: "eth20",
-									}
-									eth20.Start()
+										// assign address to eth20 and add route to the .20 network
+										felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
+										felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
+										_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+										Expect(err).NotTo(HaveOccurred())
+										// Add a route to felix[1] to be able to reach the nodeport
+										_, err = eth20.RunCmd("ip", "route", "add", felixes[1].IP+"/32", "via", "10.0.0.20")
+										Expect(err).NotTo(HaveOccurred())
+										// This multi-NIC scenario works only if the kernel's RPF check
+										// is not strict so we need to override it for the test and must
+										// be set properly when product is deployed. We reply on
+										// iptables to do require check for us.
+										felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+										felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth20.rp_filter=2")
+									})
 
-									// assign address to eth20 and add route to the .20 network
-									felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
-									felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
-									_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
-									Expect(err).NotTo(HaveOccurred())
-									// Add a route to felix[1] to be able to reach the nodeport
-									_, err = eth20.RunCmd("ip", "route", "add", felixes[1].IP+"/32", "via", "10.0.0.20")
-									Expect(err).NotTo(HaveOccurred())
-									// This multi-NIC scenario works only if the kernel's RPF check
-									// is not strict so we need to override it for the test and must
-									// be set properly when product is deployed. We reply on
-									// iptables to do require check for us.
-									felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
-									felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth20.rp_filter=2")
-								})
+									By("setting up routes to .20 net on dest node to trigger RPF check", func() {
+										// set up a dummy interface just for the routing purpose
+										felixes[0].Exec("ip", "link", "add", "dummy1", "type", "dummy")
+										felixes[0].Exec("ip", "link", "set", "dummy1", "up")
+										// set up route to the .20 net through the dummy iface. This
+										// makes the .20 a universaly reachable external world from the
+										// internal/private eth0 network
+										felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "dummy1")
+										// This multi-NIC scenario works only if the kernel's RPF check
+										// is not strict so we need to override it for the test and must
+										// be set properly when product is deployed. We reply on
+										// iptables to do require check for us.
+										felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+										felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.dummy1.rp_filter=2")
+									})
 
-								By("setting up routes to .20 net on dest node to trigger RPF check", func() {
-									// set up a dummy interface just for the routing purpose
-									felixes[0].Exec("ip", "link", "add", "dummy1", "type", "dummy")
-									felixes[0].Exec("ip", "link", "set", "dummy1", "up")
-									// set up route to the .20 net through the dummy iface. This
-									// makes the .20 a universaly reachable external world from the
-									// internal/private eth0 network
-									felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "dummy1")
-									// This multi-NIC scenario works only if the kernel's RPF check
-									// is not strict so we need to override it for the test and must
-									// be set properly when product is deployed. We reply on
-									// iptables to do require check for us.
-									felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
-									felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.dummy1.rp_filter=2")
-								})
-
-								By("Allowing traffic from the eth20 network", func() {
-									pol.Spec.Ingress = []api.Rule{
-										{
-											Action: "Allow",
-											Source: api.EntityRule{
-												Nets: []string{
-													eth20.IP + "/32",
+									By("Allowing traffic from the eth20 network", func() {
+										pol.Spec.Ingress = []api.Rule{
+											{
+												Action: "Allow",
+												Source: api.EntityRule{
+													Nets: []string{
+														eth20.IP + "/32",
+													},
 												},
 											},
-										},
-									}
-									pol = updatePolicy(pol)
+										}
+										pol = updatePolicy(pol)
+									})
+
+									By("Checking that there is connectivity from eth20 network", func() {
+
+										cc.ExpectSome(eth20, TargetIP(felixes[1].IP), npPort)
+										cc.CheckConnectivity()
+									})
 								})
+							}
 
-								By("Checking that there is connectivity from eth20 network", func() {
-
-									cc.ExpectSome(eth20, TargetIP(felixes[1].IP), npPort)
-									cc.CheckConnectivity()
-								})
-							})
-
-							if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled {
+							if testOpts.protocol == "tcp" {
 
 								const (
 									npEncapOverhead = 50
@@ -1966,19 +1962,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 						}
 
-						It("should have connectivity from external to w[0] via node0", func() {
-							if testOpts.connTimeEnabled {
-								Skip("FIXME externalClient also does conntime balancing")
-							}
+						if !testOpts.connTimeEnabled {
+							It("should have connectivity from external to w[0] via node0", func() {
+								log.WithFields(log.Fields{
+									"externalClientIP": externalClient.IP,
+									"nodePortIP":       felixes[1].IP,
+								}).Infof("external->nodeport connection")
 
-							log.WithFields(log.Fields{
-								"externalClientIP": externalClient.IP,
-								"nodePortIP":       felixes[1].IP,
-							}).Infof("external->nodeport connection")
-
-							cc.ExpectSome(externalClient, TargetIP(felixes[0].IP), npPort)
-							cc.CheckConnectivity()
-						})
+								cc.ExpectSome(externalClient, TargetIP(felixes[0].IP), npPort)
+								cc.CheckConnectivity()
+							})
+						}
 					})
 				}
 
@@ -2054,16 +2048,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 
 					Describe("with dead workload", func() {
+						if testOpts.connTimeEnabled {
+							// FIXME externalClient also does conntime balancing
+							return
+						}
+
 						BeforeEach(func() {
 							tgtPort = 8057
 							tgtWorkload = deadWorkload
 						})
 
 						It("should get host unreachable from nodeport via node1->node0 fwd", func() {
-							if testOpts.connTimeEnabled {
-								Skip("FIXME externalClient also does conntime balancing")
-							}
-
 							err := felixes[0].ExecMayFail("ip", "route", "add", "unreachable", deadWorkload.IP)
 							Expect(err).NotTo(HaveOccurred())
 
@@ -2095,24 +2090,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							tgtWorkload = w[0][0]
 						})
 
-						It("should get port unreachable via node1->node0 fwd", func() {
-							if testOpts.connTimeEnabled {
-								Skip("FIXME externalClient also does conntime balancing")
-							}
+						if !testOpts.connTimeEnabled {
+							It("should get port unreachable via node1->node0 fwd", func() {
+								tcpdump := externalClient.AttachTCPDump("any")
+								tcpdump.SetLogEnabled(true)
+								matcher := fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
+									felixes[1].IP, externalClient.IP, felixes[1].IP, npPort)
+								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+								defer tcpdump.Stop()
 
-							tcpdump := externalClient.AttachTCPDump("any")
-							tcpdump.SetLogEnabled(true)
-							matcher := fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
-								felixes[1].IP, externalClient.IP, felixes[1].IP, npPort)
-							tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
-							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
-							defer tcpdump.Stop()
-
-							cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
-							cc.CheckConnectivity()
-							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
-								Should(BeNumerically(">", 0), matcher)
-						})
+								cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
+								cc.CheckConnectivity()
+								Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+									Should(BeNumerically(">", 0), matcher)
+							})
+						}
 
 						It("should get port unreachable workload to workload", func() {
 							tcpdump := w[1][1].AttachTCPDump()
