@@ -34,4 +34,7 @@ var _ = DescribeTable("ParseKeyValueList tests",
 		"key": "key = value",
 		"v2":  "7",
 	}),
+	Entry("Empty item, tailing ','", ",  key=value,", false, map[string]string{
+		"key": "value",
+	}),
 )

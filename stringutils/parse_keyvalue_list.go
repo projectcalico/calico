@@ -21,6 +21,10 @@ func ParseKeyValueList(param string) (*map[string]string, error) {
 	}
 	var invalidItems []string
 	for _, item := range strings.Split(param, ",") {
+		if item == "" {
+			// Accept empty items (e.g tailing ",")
+			continue
+		}
 		kv := rex.FindStringSubmatch(item)
 		if kv == nil {
 			invalidItems = append(invalidItems, item)
