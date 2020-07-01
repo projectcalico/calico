@@ -778,6 +778,10 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported 3 node cluster", [
 				tcpdump.AddMatcher("numTunnelPackets01", regexp.MustCompile(tunnelPackets01Pattern))
 				tunnelPackets10Pattern := fmt.Sprintf("IP %s\\.51820 > %s\\.51820: UDP", felixes[1].IP, felixes[0].IP)
 				tcpdump.AddMatcher("numTunnelPackets10", regexp.MustCompile(tunnelPackets10Pattern))
+				tunnelPackets02Pattern := fmt.Sprintf("IP %s\\.51820 > %s\\.51820: UDP", felixes[0].IP, felixes[2].IP)
+				tcpdump.AddMatcher("numTunnelPackets02", regexp.MustCompile(tunnelPackets02Pattern))
+				tunnelPackets20Pattern := fmt.Sprintf("IP %s\\.51820 > %s\\.51820: UDP", felixes[2].IP, felixes[0].IP)
+				tcpdump.AddMatcher("numTunnelPackets20", regexp.MustCompile(tunnelPackets20Pattern))
 				// direct workload packets.
 				outWorkloadPacketsPattern := fmt.Sprintf("IP %s\\.\\d+ > %s\\.\\d+:", wls[0].IP, wls[2].IP)
 				tcpdump.AddMatcher("numOutWorkloadPackets", regexp.MustCompile(outWorkloadPacketsPattern))
@@ -818,6 +822,37 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported 3 node cluster", [
 				Eventually(func() int {
 					return tcpdumps[f].MatchCount("numOutWorkloadPackets")
 				}, "10s", "100ms").Should(BeNumerically(">", 0))
+			}
+		})
+
+		It("WireGuard should be used for host to workload connections on WireGuard enabled nodes", func() {
+			cc.ExpectSome(felixes[0], wls[1])
+			cc.CheckConnectivity()
+
+			By("verifying packets between felix-0 and felix-1 is encrypted")
+			for _, i := range []int{0, 1} {
+				Eventually(func() int {
+					return tcpdumps[i].MatchCount("numTunnelPackets01")
+				}, "10s", "100ms").Should(BeNumerically(">", 0))
+				Eventually(func() int {
+					return tcpdumps[i].MatchCount("numTunnelPackets10")
+				}, "10s", "100ms").Should(BeNumerically(">", 0))
+			}
+		})
+
+		It("WireGuard should not be used for host to workload connections when WireGuard disabled on either node", func() {
+			cc.ExpectSome(felixes[0], wls[2])
+			cc.ExpectSome(felixes[2], wls[0])
+			cc.CheckConnectivity()
+
+			By("verifying packets between felix-0 and felix-2 are not encrypted")
+			for _, i := range []int{0, 2} {
+				Eventually(func() int {
+					return tcpdumps[i].MatchCount("numTunnelPackets02")
+				}, "10s", "100ms").Should(BeNumerically("==", 0))
+				Eventually(func() int {
+					return tcpdumps[i].MatchCount("numTunnelPackets20")
+				}, "10s", "100ms").Should(BeNumerically("==", 0))
 			}
 		})
 	})
