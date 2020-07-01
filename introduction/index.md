@@ -115,7 +115,7 @@ custom_css: css/intro.css
     <img class="img-responsive center-block" src="{{ site.baseurl }}/images/intro/community.png">
   </div>
   <div class="col-md-6">
-    <h3 id="contributor-community" style="margin-top: 5px">Strong contributor community</h3>
+    <h3 id="contributor-community" style="margin-top: 5px">Contributor community</h3>
     <p>The Calico open source project has been supported by 200+ contributors across a broad range of companies.  In addition {{site.prodname}} is backed by Tigera, founded by the original Calico engineering team, and committed to maintaining {{site.prodname}} as the leading standard for Kubernetes network security.</p>
   </div>
 </div>
