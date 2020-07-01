@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	version "github.com/hashicorp/go-version"
@@ -39,6 +40,38 @@ func MustParseVersion(v string) *version.Version {
 	return ver
 }
 
+func convertVersionToIntSlice(ver *version.Version) []int {
+	intSlice := []int{0, 0, 0, 0}
+	sliceIndex := 0
+	for index, outer := range strings.Split(ver.String(), "-") {
+		if index == 0 {
+			for _, inner := range strings.Split(outer, ".") {
+				intSlice[sliceIndex], _ = strconv.Atoi(inner)
+				sliceIndex++
+			}
+		} else if index == 1 {
+			intSlice[sliceIndex], _ = strconv.Atoi(outer)
+		}
+	}
+	return intSlice
+}
+
+func Compare(version1, version2 *version.Version) int {
+	ver1Slice := convertVersionToIntSlice(version1)
+	ver2Slice := convertVersionToIntSlice(version2)
+	for index := range ver1Slice {
+		if ver1Slice[index] == ver2Slice[index] {
+			continue
+		}
+		if ver1Slice[index] < ver2Slice[index] {
+			return -1
+		}
+		if ver1Slice[index] > ver2Slice[index] {
+			return 1
+		}
+	}
+	return 0
+}
 func GetKernelVersionReader() (io.Reader, error) {
 	return os.Open("/proc/version")
 }

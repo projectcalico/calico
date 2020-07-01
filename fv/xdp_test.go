@@ -369,8 +369,8 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 				kernelVersion, err := versionparse.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(versionparse.MustParseVersion("4.18.0-193")) < 0 {
-					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.18.0-193)", kernelVersion))
+				if kernelVersion.Compare(versionparse.MustParseVersion("4.19.0")) < 0 {
+					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
 
@@ -494,8 +494,8 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 				kernelVersion, err := versionparse.GetKernelVersion(versionReader)
 				Expect(err).NotTo(HaveOccurred())
 
-				if kernelVersion.Compare(versionparse.MustParseVersion("4.18.0-193")) < 0 {
-					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.18.0-193)", kernelVersion))
+				if kernelVersion.Compare(versionparse.MustParseVersion("4.19.0")) < 0 {
+					Skip(fmt.Sprintf("Skipping TCP test on Linux %v (needs 4.19)", kernelVersion))
 					return
 				}
 
