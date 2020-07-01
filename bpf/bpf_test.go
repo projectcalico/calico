@@ -777,7 +777,7 @@ func TestVersionParse(t *testing.T) {
 		t.Fatalf("Parsing kernel version failed")
 	}
 	expVer := GetMinKernelVersionForDistro(distName)
-	if versionparse.Compare(parsedVer, expVer) != 0 {
+	if parsedVer.Compare(expVer) != 0 {
 		t.Fatalf("Parsed version not same as expected version")
 	}
 
@@ -790,7 +790,7 @@ func TestVersionParse(t *testing.T) {
 		t.Fatalf("Parsing kernel version failed")
 	}
 	expVer = GetMinKernelVersionForDistro(distName)
-	if versionparse.Compare(parsedVer, expVer) != 0 {
+	if parsedVer.Compare(expVer) != 0 {
 		t.Fatalf("Parsed version not same as expected version")
 	}
 
@@ -803,34 +803,34 @@ func TestVersionParse(t *testing.T) {
 		t.Fatalf("Parsing kernel version failed")
 	}
 	expVer = GetMinKernelVersionForDistro(distName)
-	if versionparse.Compare(parsedVer, expVer) != 0 {
+	if parsedVer.Compare(expVer) != 0 {
 		t.Fatalf("Parsed version not same as expected version")
 	}
 
 	// Tests to verify the compare function in versionparse
 	ver1 := versionparse.MustParseVersion("4.18.0-193")
 	ver2 := versionparse.MustParseVersion("4.18.0-194")
-	if versionparse.Compare(ver1, ver2) != -1 {
+	if ver1.Compare(ver2) != -1 {
 		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.18.0-194 failed")
 	}
 	ver2 = versionparse.MustParseVersion("4.18.0-192")
-	if versionparse.Compare(ver1, ver2) != 1 {
+	if ver1.Compare(ver2) != 1 {
 		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.18.0-192 failed")
 	}
 	ver2 = versionparse.MustParseVersion("4.18.0-193")
-	if versionparse.Compare(ver1, ver2) != 0 {
+	if ver1.Compare(ver2) != 0 {
 		t.Fatalf("Comparing same kernel versions failed")
 	}
 	ver2 = versionparse.MustParseVersion("4.18.0")
-	if versionparse.Compare(ver1, ver2) != 1 {
+	if ver1.Compare(ver2) != 1 {
 		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.18.0 failed")
 	}
 	ver2 = versionparse.MustParseVersion("5.3.0")
-	if versionparse.Compare(ver1, ver2) != -1 {
+	if ver1.Compare(ver2) != -1 {
 		t.Fatalf("Comparing kernel versions 4.18.0-193 and 5.3.0 failed")
 	}
 	ver2 = versionparse.MustParseVersion("4.19.0")
-	if versionparse.Compare(ver1, ver2) != -1 {
+	if ver1.Compare(ver2) != -1 {
 		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.19.0 failed")
 	}
 }

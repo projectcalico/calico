@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -32,51 +31,96 @@ var (
 	kernelVersionRHELRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d-\d+)`)
 )
 
-func MustParseVersion(v string) *version.Version {
-	ver, err := version.NewVersion(v)
+type Version struct {
+	versionSlice []int
+	versionStr   string
+}
+
+func (v *Version) String() string {
+	return v.versionStr
+}
+
+func NewVersion(ver string) (*Version, error) {
+	var v Version
+	var err error
+	v.versionSlice, err = convertVersionToIntSlice(ver)
+	v.versionStr = ver
+	return &v, err
+}
+
+func MustParseVersion(v string) *Version {
+	ver, err := NewVersion(v)
 	if err != nil {
 		log.WithError(err).Panic("Failed to parse version.")
 	}
 	return ver
 }
 
-func convertVersionToIntSlice(ver *version.Version) []int {
-	intSlice := []int{0, 0, 0, 0}
-	sliceIndex := 0
-	for index, outer := range strings.Split(ver.String(), "-") {
-		if index == 0 {
-			for _, inner := range strings.Split(outer, ".") {
-				intSlice[sliceIndex], _ = strconv.Atoi(inner)
-				sliceIndex++
-			}
-		} else if index == 1 {
-			intSlice[sliceIndex], _ = strconv.Atoi(outer)
-		}
+func (v *Version) Compare(other *Version) int {
+	vlen := len(v.versionSlice)
+	olen := len(other.versionSlice)
+	compLen := vlen
+	if compLen > olen {
+		compLen = olen
 	}
-	return intSlice
-}
-
-func Compare(version1, version2 *version.Version) int {
-	ver1Slice := convertVersionToIntSlice(version1)
-	ver2Slice := convertVersionToIntSlice(version2)
-	for index := range ver1Slice {
-		if ver1Slice[index] == ver2Slice[index] {
+	for index := 0; index < compLen; index++ {
+		if v.versionSlice[index] == other.versionSlice[index] {
 			continue
 		}
-		if ver1Slice[index] < ver2Slice[index] {
-			return -1
-		}
-		if ver1Slice[index] > ver2Slice[index] {
+		if v.versionSlice[index] > other.versionSlice[index] {
 			return 1
 		}
+		if v.versionSlice[index] < other.versionSlice[index] {
+			return -1
+		}
+	}
+	if vlen < olen {
+		return -1
+	}
+	if vlen > olen {
+		return 1
 	}
 	return 0
 }
+
+func convertVersionToIntSlice(s string) ([]int, error) {
+	splitStrDash := strings.Split(s, "-")
+	splitStrDot := strings.Split(splitStrDash[0], ".")
+	versionLen := len(splitStrDot)
+	if len(splitStrDash) == 2 {
+		versionLen++
+	}
+	intSlice := make([]int, versionLen)
+	sliceIndex := 0
+	for index, outer := range splitStrDash {
+		if index == 0 {
+			for _, inner := range splitStrDot {
+				val, err := strconv.Atoi(inner)
+				if err != nil {
+					return nil, fmt.Errorf(
+						"Error parsing version: %s", err)
+				}
+				intSlice[sliceIndex] = val
+				sliceIndex++
+			}
+		} else if index == 1 {
+			val, err := strconv.Atoi(outer)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"Error parsing version: %s", err)
+			}
+			intSlice[sliceIndex] = val
+
+		}
+	}
+	return intSlice, nil
+}
+
 func GetKernelVersionReader() (io.Reader, error) {
 	return os.Open("/proc/version")
 }
 
-func GetVersionFromString(s string) (*version.Version, error) {
+func GetVersionFromString(s string) (*Version, error) {
 	var matches []string
 	log.WithField("rawVersion", s).Debug("Raw kernel version")
 	// Match the build version for Red Hat
@@ -91,14 +135,9 @@ func GetVersionFromString(s string) (*version.Version, error) {
 		log.WithField("rawVersion", s).Warn(msg)
 		return nil, fmt.Errorf("%s", msg)
 	}
-	parsedVersion, err := version.NewVersion(matches[1])
-	if err != nil {
-		msg := "Failed to parse kernel version"
-		log.WithField("rawVersion", s).WithError(err).Warn(msg)
-		return nil, fmt.Errorf("%s", msg)
-	}
+	parsedVersion, err := NewVersion(matches[1])
 	log.WithField("version", parsedVersion).Debug("Parsed kernel version")
-	return parsedVersion, nil
+	return parsedVersion, err
 }
 
 func GetDistFromString(s string) string {
@@ -111,7 +150,7 @@ func GetDistFromString(s string) string {
 	return distName
 }
 
-func GetKernelVersion(reader io.Reader) (*version.Version, error) {
+func GetKernelVersion(reader io.Reader) (*Version, error) {
 	kernVersion, err := ioutil.ReadAll(reader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to read kernel version from reader")

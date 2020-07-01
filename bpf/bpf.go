@@ -37,7 +37,6 @@ import (
 	"strings"
 	"syscall"
 
-	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -102,7 +101,7 @@ var (
 	v5Dot3Dot0 = versionparse.MustParseVersion("5.3.0")
 )
 
-var distToVersionMap = map[string]*version.Version{
+var distToVersionMap = map[string]*versionparse.Version{
 	"ubuntu":  v5Dot3Dot0,
 	"rhel":    v4Dot18Dot0,
 	"default": v5Dot3Dot0,
@@ -2169,7 +2168,7 @@ func (b *BPFLib) RemoveSockmapEndpointsMap() error {
 	return os.Remove(mapPath)
 }
 
-func isAtLeastKernel(v *version.Version) error {
+func isAtLeastKernel(v *versionparse.Version) error {
 	versionReader, err := versionparse.GetKernelVersionReader()
 	if err != nil {
 		return fmt.Errorf("failed to get kernel version reader: %v", err)
@@ -2180,7 +2179,7 @@ func isAtLeastKernel(v *version.Version) error {
 		return fmt.Errorf("failed to get kernel version: %v", err)
 	}
 
-	if versionparse.Compare(kernelVersion, v) < 0 {
+	if kernelVersion.Compare(v) < 0 {
 		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
 	}
 
@@ -2200,7 +2199,7 @@ func SupportsSockmap() error {
 	return nil
 }
 
-func GetMinKernelVersionForDistro(distName string) *version.Version {
+func GetMinKernelVersionForDistro(distName string) *versionparse.Version {
 	return distToVersionMap[distName]
 }
 

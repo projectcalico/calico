@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,10 +22,9 @@ import (
 	"strings"
 	"sync"
 
-	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/versionparse"
+	version "github.com/projectcalico/felix/versionparse"
 )
 
 var (
@@ -33,17 +32,17 @@ var (
 
 	// iptables versions:
 	// v1Dot4Dot7 is the oldest version we've ever supported.
-	v1Dot4Dot7 = versionparse.MustParseVersion("1.4.7")
+	v1Dot4Dot7, _ = version.NewVersion("1.4.7")
 	// v1Dot6Dot0 added --random-fully to SNAT.
-	v1Dot6Dot0 = versionparse.MustParseVersion("1.6.0")
+	v1Dot6Dot0, _ = version.NewVersion("1.6.0")
 	// v1Dot6Dot2 added --random-fully to MASQUERADE and the xtables lock to iptables-restore.
-	v1Dot6Dot2 = versionparse.MustParseVersion("1.6.2")
+	v1Dot6Dot2, _ = version.NewVersion("1.6.2")
 
 	// Linux kernel versions:
 	// v3Dot10Dot0 is the oldest version we support at time of writing.
-	v3Dot10Dot0 = versionparse.MustParseVersion("3.10.0")
+	v3Dot10Dot0, _ = version.NewVersion("3.10.0")
 	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
-	v3Dot14Dot0 = versionparse.MustParseVersion("3.14.0")
+	v3Dot14Dot0, _ = version.NewVersion("3.14.0")
 )
 
 type Features struct {
@@ -68,7 +67,7 @@ type FeatureDetector struct {
 
 func NewFeatureDetector() *FeatureDetector {
 	return &FeatureDetector{
-		GetKernelVersionReader: versionparse.GetKernelVersionReader,
+		GetKernelVersionReader: version.GetKernelVersionReader,
 		NewCmd:                 NewRealCmd,
 	}
 }
@@ -145,7 +144,7 @@ func (d *FeatureDetector) getKernelVersion() *version.Version {
 		log.WithError(err).Warn("Failed to get the kernel version reader, assuming old version with no optional features")
 		return v3Dot10Dot0
 	}
-	kernVersion, err := versionparse.GetKernelVersion(reader)
+	kernVersion, err := version.GetKernelVersion(reader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to get kernel version, assuming old version with no optional features")
 		return v3Dot10Dot0
