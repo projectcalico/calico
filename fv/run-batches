@@ -28,6 +28,7 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.parallel.total ${FV_NUM_BATCHES} \
                -ginkgo.seed 1 \
                -ginkgo.randomizeAllSpecs=true \
+               -ginkgo.noisySkippings=false \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
                -ginkgo.focus="${GINKGO_FOCUS}" \
                ${GINKGO_ARGS}
