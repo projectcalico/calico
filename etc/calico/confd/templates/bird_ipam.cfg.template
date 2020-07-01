@@ -24,12 +24,11 @@ filter calico_kernel_programming {
 {{- $reject_key := "/rejectcidrs"}}
 {{- if ls $reject_key}}
 
-  # Don't program static routes into kernel, except for the full reject CIDRs.
-  # This prevents route loops with the ToR for non-existent service IPs.
+  # Don't program static routes into kernel.
   {{- range ls $reject_key}}
     {{- $parts := split . "-"}}
     {{- $cidr := join $parts "/"}}
-  if ( net ~ {{$cidr}} ) && ( net != {{$cidr}} ) then { reject; }
+  if ( net ~ {{$cidr}} ) then { reject; }
   {{- end}}
 
 {{- end}}
