@@ -139,7 +139,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 	type test struct {
 		iptablesVersion, kernelVersion string
 		features                       Features
-		override                       FeatureDetectOverrides
+		override                       map[string]string
 	}
 	for _, tst := range []test{
 		{
@@ -150,7 +150,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				SNATFullyRandom:     true,
 				MASQFullyRandom:     true,
 			},
-			FeatureDetectOverrides{},
+			map[string]string{},
 		},
 		{
 			"iptables v1.6.1",
@@ -160,8 +160,8 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				SNATFullyRandom:     true,
 				MASQFullyRandom:     false,
 			},
-			FeatureDetectOverrides{
-				RestoreSupportsLock: "true",
+			map[string]string{
+				"RestoreSupportsLock": "true",
 			},
 		},
 		{
@@ -172,10 +172,10 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				SNATFullyRandom:     true,
 				MASQFullyRandom:     false,
 			},
-			FeatureDetectOverrides{
-				RestoreSupportsLock: "true",
-				SNATFullyRandom:     "true",
-				MASQFullyRandom:     "false",
+			map[string]string{
+				"RestoreSupportsLock": "true",
+				"SNATFullyRandom":     "true",
+				"MASQFullyRandom":     "false",
 			},
 		},
 	} {

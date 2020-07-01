@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/versionparse"
+	"github.com/projectcalico/felix/stringutils"
 )
 
 var (
@@ -57,18 +58,10 @@ type Features struct {
 	RestoreSupportsLock bool
 }
 
-// Values; ""|true|false.
-// "" means "detect" and is default. true|false overrides.
-type FeatureDetectOverrides struct {
-	SNATFullyRandom     string
-	MASQFullyRandom     string
-	RestoreSupportsLock string
-}
-
 type FeatureDetector struct {
 	lock            sync.Mutex
 	featureCache    *Features
-	featureOverride *FeatureDetectOverrides
+	featureOverride *map[string]string
 
 	// Path to file with kernel version
 	GetKernelVersionReader func() (io.Reader, error)
@@ -76,7 +69,7 @@ type FeatureDetector struct {
 	NewCmd cmdFactory
 }
 
-func NewFeatureDetector(overrides *FeatureDetectOverrides) *FeatureDetector {
+func NewFeatureDetector(overrides *map[string]string) *FeatureDetector {
 	return &FeatureDetector{
 		GetKernelVersionReader: versionparse.GetKernelVersionReader,
 		NewCmd:                 NewRealCmd,
@@ -117,20 +110,26 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 
 	if d.featureOverride != nil {
-		value, err := strconv.ParseBool(d.featureOverride.SNATFullyRandom)
-		if err == nil {
-			log.WithField("override", value).Info("Override feature SNATFullyRandom")
-			features.SNATFullyRandom = value
+		if value, ok := (*d.featureOverride)["SNATFullyRandom"]; ok {
+			ovr, err := strconv.ParseBool(value)
+			if err == nil {
+				log.WithField("override", ovr).Info("Override feature SNATFullyRandom")
+				features.SNATFullyRandom = ovr
+			}
 		}
-		value, err = strconv.ParseBool(d.featureOverride.MASQFullyRandom)
-		if err == nil {
-			log.WithField("override", value).Info("Override feature MASQFullyRandom")
-			features.MASQFullyRandom = value
+		if value, ok := (*d.featureOverride)["MASQFullyRandom"]; ok {
+			ovr, err := strconv.ParseBool(value)
+			if err == nil {
+				log.WithField("override", ovr).Info("Override feature MASQFullyRandom")
+				features.MASQFullyRandom = ovr
+			}
 		}
-		value, err = strconv.ParseBool(d.featureOverride.RestoreSupportsLock)
-		if err == nil {
-			log.WithField("override", value).Info("Override feature RestoreSupportsLock")
-			features.RestoreSupportsLock = value
+		if value, ok := (*d.featureOverride)["RestoreSupportsLock"]; ok {
+			ovr, err := strconv.ParseBool(value)
+			if err == nil {
+				log.WithField("override", ovr).Info("Override feature RestoreSupportsLock")
+				features.RestoreSupportsLock = ovr
+			}
 		}
 	}
 
@@ -270,27 +269,11 @@ func findBestBinary(lookPath func(file string) (string, error), ipVersion uint8,
 	return ""
 }
 
-// Parse a comma separated list of overrides, example;
-// "SNATFullyRandom=true,MASQFullyRandom=false"
-func ParseFeatureDetectOverrides(param string) *FeatureDetectOverrides {
+// Allow "nil" as return and ignore parse errors.
+func ParseFeatureDetectOverrides(param string) *map[string]string {
 	if param == "" {
 		return nil
 	}
-	var overrides FeatureDetectOverrides
-	for _, s := range strings.Split(param, ",") {
-		if strings.HasPrefix(s, "SNATFullyRandom=") {
-			overrides.SNATFullyRandom = strings.Split(s, "=")[1]
-			continue
-		}
-		if strings.HasPrefix(s, "MASQFullyRandom=") {
-			overrides.MASQFullyRandom = strings.Split(s, "=")[1]
-			continue
-		}
-		if strings.HasPrefix(s, "RestoreSupportsLock=") {
-			overrides.RestoreSupportsLock = strings.Split(s, "=")[1]
-			continue
-		}
-		log.Info("Unknown override", s)
-	}
-	return &overrides
+	ovr, _ := stringutils.ParseKeyValueList(param)
+	return ovr
 }

@@ -175,7 +175,7 @@ type Config struct {
 
 	KubeClientSet *kubernetes.Clientset
 
-	FeatureDetectOverrides *iptables.FeatureDetectOverrides
+	FeatureDetectOverrides *map[string]string
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
