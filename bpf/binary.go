@@ -18,9 +18,11 @@ package bpf
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"io/ioutil"
 	"net"
+	"os"
 
 	"github.com/pkg/errors"
 )
@@ -44,7 +46,34 @@ func BinaryFromFile(ifile string) (*Binary, error) {
 
 // WriteToFile writes the binary to a file
 func (b *Binary) WriteToFile(ofile string) error {
-	return ioutil.WriteFile(ofile, b.raw, 0600)
+	err := ioutil.WriteFile(ofile, b.raw, 0600)
+	if err != nil {
+		return err
+	}
+
+	// Append a UUID to the file.  We want each attachment point to get its own jump map
+	// but tc names jump maps by hash of the binary, which means they can clash if we load
+	// the same binary onto multiple interfaces.
+	f, err := os.OpenFile(ofile, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+	uuid := make([]byte, 16)
+	_, err = rand.Read(uuid)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(uuid)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // ReplaceAll replaces all non-overlapping instance of orig with replacements.
