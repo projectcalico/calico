@@ -26,7 +26,6 @@ import (
 	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/stringutils"
 	"github.com/projectcalico/felix/versionparse"
 )
 
@@ -267,13 +266,4 @@ func findBestBinary(lookPath func(file string) (string, error), ipVersion uint8,
 
 	logCxt.Panic("Failed to find iptables command")
 	return ""
-}
-
-// Allow "nil" as return and ignore parse errors.
-func ParseFeatureDetectOverrides(param string) *map[string]string {
-	if param == "" {
-		return nil
-	}
-	ovr, _ := stringutils.ParseKeyValueList(param)
-	return ovr
 }
