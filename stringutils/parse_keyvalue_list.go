@@ -14,10 +14,10 @@ var rex = regexp.MustCompile("\\s*(\\w+)=(.+)")
 // Keys must contain only word characters (leading spaces ignored).
 // A valid map is always returned even when the error is != nil.
 // Spaces in the value are preserved.
-func ParseKeyValueList(param string) (*map[string]string, error) {
+func ParseKeyValueList(param string) (map[string]string, error) {
 	res := make(map[string]string)
 	if len(strings.TrimSpace(param)) == 0 {
-		return &res, nil
+		return res, nil
 	}
 	var invalidItems []string
 	for _, item := range strings.Split(param, ",") {
@@ -33,7 +33,7 @@ func ParseKeyValueList(param string) (*map[string]string, error) {
 		res[kv[1]] = kv[2]
 	}
 	if len(invalidItems) > 0 {
-		return &res, fmt.Errorf("Invalid items %v", invalidItems)
+		return nil, fmt.Errorf("Invalid items %v", invalidItems)
 	}
-	return &res, nil
+	return res, nil
 }

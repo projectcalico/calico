@@ -60,7 +60,7 @@ type Features struct {
 type FeatureDetector struct {
 	lock            sync.Mutex
 	featureCache    *Features
-	featureOverride *map[string]string
+	featureOverride map[string]string
 
 	// Path to file with kernel version
 	GetKernelVersionReader func() (io.Reader, error)
@@ -68,7 +68,7 @@ type FeatureDetector struct {
 	NewCmd cmdFactory
 }
 
-func NewFeatureDetector(overrides *map[string]string) *FeatureDetector {
+func NewFeatureDetector(overrides map[string]string) *FeatureDetector {
 	return &FeatureDetector{
 		GetKernelVersionReader: versionparse.GetKernelVersionReader,
 		NewCmd:                 NewRealCmd,
@@ -108,27 +108,25 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		RestoreSupportsLock: iptV.Compare(v1Dot6Dot2) >= 0,
 	}
 
-	if d.featureOverride != nil {
-		if value, ok := (*d.featureOverride)["SNATFullyRandom"]; ok {
-			ovr, err := strconv.ParseBool(value)
-			if err == nil {
-				log.WithField("override", ovr).Info("Override feature SNATFullyRandom")
-				features.SNATFullyRandom = ovr
-			}
+	if value, ok := (d.featureOverride)["SNATFullyRandom"]; ok {
+		ovr, err := strconv.ParseBool(value)
+		if err == nil {
+			log.WithField("override", ovr).Info("Override feature SNATFullyRandom")
+			features.SNATFullyRandom = ovr
 		}
-		if value, ok := (*d.featureOverride)["MASQFullyRandom"]; ok {
-			ovr, err := strconv.ParseBool(value)
-			if err == nil {
-				log.WithField("override", ovr).Info("Override feature MASQFullyRandom")
-				features.MASQFullyRandom = ovr
-			}
+	}
+	if value, ok := (d.featureOverride)["MASQFullyRandom"]; ok {
+		ovr, err := strconv.ParseBool(value)
+		if err == nil {
+			log.WithField("override", ovr).Info("Override feature MASQFullyRandom")
+			features.MASQFullyRandom = ovr
 		}
-		if value, ok := (*d.featureOverride)["RestoreSupportsLock"]; ok {
-			ovr, err := strconv.ParseBool(value)
-			if err == nil {
-				log.WithField("override", ovr).Info("Override feature RestoreSupportsLock")
-				features.RestoreSupportsLock = ovr
-			}
+	}
+	if value, ok := (d.featureOverride)["RestoreSupportsLock"]; ok {
+		ovr, err := strconv.ParseBool(value)
+		if err == nil {
+			log.WithField("override", ovr).Info("Override feature RestoreSupportsLock")
+			features.RestoreSupportsLock = ovr
 		}
 	}
 

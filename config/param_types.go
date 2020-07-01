@@ -540,9 +540,6 @@ type KeyValueListParam struct {
 }
 
 func (p *KeyValueListParam) Parse(raw string) (result interface{}, err error) {
-	if raw == "" {
-		return nil, nil
-	}
 	result, err = stringutils.ParseKeyValueList(raw)
 	return
 }

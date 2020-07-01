@@ -61,30 +61,24 @@ var _ = DescribeTable("CIDR list parameter parsing",
 )
 
 var _ = DescribeTable("KeyValue list parameter parsing",
-	func(raw string, expectSuccess bool, expected *map[string]string) {
+	func(raw string, expected map[string]string) {
 		p := KeyValueListParam{Metadata{
 			Name: "FeatureOverride",
 		}}
 		actual, err := p.Parse(raw)
-		if expectSuccess {
-			Expect(err).To(BeNil())
-			if raw == "" {
-				Expect(actual).To(BeNil())
-			} else {
-				Expect(actual).To(Equal(expected))
-			}
-		} else {
+		if expected == nil {
 			Expect(err).NotTo(BeNil())
+		} else {
+			Expect(err).To(BeNil())
+			Expect(actual).To(Equal(expected))
 		}
 	},
-	Entry("Empty", "", true, nil),
-	Entry("Single value", "key=value", true, &map[string]string{
+	Entry("Empty", "  ", map[string]string{}),
+	Entry("Single value", "key=value", map[string]string{
 		"key": "value",
 	}),
-	Entry("Malformed", "key=value,malformed", false, &map[string]string{
-		"key": "value",
-	}),
-	Entry("Spaces", "  key=value,  v2= x ,,,,", true, &map[string]string{
+	Entry("Malformed", "key=value,malformed", nil),
+	Entry("Spaces", "  key=value,  v2= x ,,,,", map[string]string{
 		"key": "value",
 		"v2":  " x ",
 	}),
