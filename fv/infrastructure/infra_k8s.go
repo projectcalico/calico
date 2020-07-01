@@ -231,6 +231,8 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 			break
 		}
 		if strings.Contains(err.Error(), "already exists") {
+			// Sometimes hit an "already exists" error here; I suspect the account we create is
+			// also added by the controller manager.  It doesn't matter who wins.
 			break
 		}
 		if time.Since(start) > 90*time.Second {
