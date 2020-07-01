@@ -20,7 +20,7 @@ func ParseKeyValueList(param string) (*map[string]string, error) {
 		return &res, nil
 	}
 	var invalidItems []string
-	for _, item := range strings.Split(param,",") {
+	for _, item := range strings.Split(param, ",") {
 		kv := rex.FindStringSubmatch(item)
 		if kv == nil {
 			invalidItems = append(invalidItems, item)

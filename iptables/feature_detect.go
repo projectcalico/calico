@@ -26,8 +26,8 @@ import (
 	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/versionparse"
 	"github.com/projectcalico/felix/stringutils"
+	"github.com/projectcalico/felix/versionparse"
 )
 
 var (

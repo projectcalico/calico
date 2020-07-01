@@ -28,10 +28,10 @@ var _ = DescribeTable("ParseKeyValueList tests",
 	}),
 	Entry("Values with spaces", "key=   ,  v2= x ", false, map[string]string{
 		"key": "   ",
-		"v2": " x ",
+		"v2":  " x ",
 	}),
 	Entry("Value with an equal sign (=)", "key=key = value,v2=7", false, map[string]string{
 		"key": "key = value",
-		"v2": "7",
+		"v2":  "7",
 	}),
 )
