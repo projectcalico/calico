@@ -128,7 +128,7 @@ custom_css: css/intro.css
     <p>Calico Enterprise builds on top of open source Calico to provide additional higher-level features and capabilities:</p>
     <ul style="">
         <li>Hierarchical network policy</li>
-        <li>Advanced egress access controls (FQDN/DNS policies, egress gateways)</li>
+        <li>Egress access controls (DNS policies, egress gateways)</li>
         <li>Network visualization and troubleshooting</li>
         <li>Network policy recommendations</li>
         <li>Network policy preview and staging</li>
