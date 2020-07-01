@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var rex = regexp.MustCompile("\\s*(\\w+)=(.+)")
+var rex = regexp.MustCompile("\\s*(\\w+)=(.*)")
 
 // ParseKeyValueList parses a comma-separated key=value list to a map.
 // Keys must contain only word characters (leading spaces ignored).

@@ -12,7 +12,7 @@ var _ = DescribeTable("ParseKeyValueList tests",
 		values, err := ParseKeyValueList(input)
 		if expected == nil {
 			// An error is expected
-			Expect(err).To(Not(BeNil()))
+			Expect(err).NotTo(BeNil())
 			Expect(values).To(BeNil())
 		} else {
 			Expect(err).To(BeNil())
@@ -24,7 +24,10 @@ var _ = DescribeTable("ParseKeyValueList tests",
 		"key": "value",
 	}),
 	Entry("A faulty entry", "key=value, none", nil),
-	Entry("An empty entry", "key=value, none=", nil),
+	Entry("An empty entry", "key=value, none=", map[string]string{
+		"key":  "value",
+		"none": "",
+	}),
 	Entry("Values with spaces", "key=   ,  v2= x ", map[string]string{
 		"key": "   ",
 		"v2":  " x ",
