@@ -124,7 +124,7 @@ custom_css: css/intro.css
 
 <div id="why-use-calico-10" class="row">
   <div class="col-md-6">
-    <h3 id="contributor-community" style="margin-top: 5px">Calico Enterprise compatible</h3>
+    <h3 id="enterprise-compatible" style="margin-top: 5px">Calico Enterprise compatible</h3>
     <p>Calico Enterprise builds on top of open source Calico to provide additional higher-level features and capabilities:</p>
     <ul style="">
         <li>Hierarchical network policy</li>
