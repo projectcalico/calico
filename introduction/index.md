@@ -112,7 +112,7 @@ custom_css: css/intro.css
 
 <div id="why-use-calico-9" class="row">
   <div class="col-md-6">
-    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/intro/tigera.png">
+    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/intro/community.png">
   </div>
   <div class="col-md-6">
     <h3 id="contributor-community" style="margin-top: 5px">Strong contributor community</h3>
@@ -138,7 +138,7 @@ custom_css: css/intro.css
     </ul>
   </div>
   <div class="col-md-6">
-    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/intro/community.png">
+    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/calico-enterprise-logo-128px.png">
   </div>
 </div>
 
