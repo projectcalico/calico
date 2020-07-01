@@ -207,6 +207,12 @@ spec:
                   - protocol
                   type: object
                 type: array
+              featureDetectOverride:
+                description: FeatureDetectOverride is used to override the feature
+                  detection. Values are specified in a comma separated list. A value
+                  of "true" or "false" will force the feature, empty or omitted values
+                  are auto-detected. Features; SNATFullyRandom, MASQFullyRandom, RestoreSupportsLock
+                type: string
               genericXDPEnabled:
                 description: 'GenericXDPEnabled enables Generic XDP so network cards
                   that don''t support XDP offload or driver modes can use XDP. This
@@ -511,6 +517,7 @@ spec:
                 type: string
             required:
             - bpfLogLevel
+            - featureDetectOverride
             type: object
         type: object
     served: true
