@@ -830,7 +830,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported 3 node cluster", [
 			cc.CheckConnectivity()
 
 			By("verifying packets between felix-0 and felix-1 is encrypted")
-			for i := range []int{0, 1} {
+			for _, i := range []int{0, 1} {
 				Eventually(func() int {
 					return tcpdumps[i].MatchCount("numTunnelPackets01")
 				}, "10s", "100ms").Should(BeNumerically(">", 0))
@@ -846,7 +846,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported 3 node cluster", [
 			cc.CheckConnectivity()
 
 			By("verifying packets between felix-0 and felix-2 are not encrypted")
-			for i := range []int{0, 2} {
+			for _, i := range []int{0, 2} {
 				Eventually(func() int {
 					return tcpdumps[i].MatchCount("numTunnelPackets02")
 				}, "10s", "100ms").Should(BeNumerically("==", 0))
