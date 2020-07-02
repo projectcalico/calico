@@ -4,27 +4,28 @@ description: Install Calico on a multi node K3s cluster for testing or developme
 canonical_url: '/getting-started/kubernetes/k3s/multi-node-install'
 ---
 
-### Overview
+### Big picture
 
-This tutorial will guide you thorough setting up multiple-node K3s culster with {{site.prodname}}.
-It will also go into detail about choices that you have when setting up K3s with Calico.
+This tutorial gets you a multi node K3s cluster with {{site.prodname}} in approximately 10 minutes. 
 
-### Requirements
+### Value
 
-- x86-64 processor
-- 1CPU
-- 1GB Ram
-- 10GB free disk space
-- Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64)
-   > **Note**: K3s supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
-   > For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
-   {: .alert .alert-info}
+K3s is a lightweight implementation of Kubernetes packeged as a single binary.
 
 ### Before you begin
 
-We assume you have at least two instances of Linux (meeting the requirements) with root or sudo privileges up and running.
+- Make sure you have a linux host that meets the following requirements
+   - x86-64 processor
+   - 1CPU
+   - 1GB Ram
+   - 10GB free disk space
+   - Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64), Ubuntu 20.04 (amd64)
+   
+> **Note**: K3s supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
+> For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
+{: .alert .alert-info}
 
-### Create K3s cluster using multiple nodes
+### How to
 
 #### Initializing master instance
    K3s installation script can be modified by {% include open-new-window.html text='environment variables' url='https://rancher.com/docs/k3s/latest/en/installation/install-options/#options-for-installation-with-script' %}. Here you are providing some extra arguments in order to disable `flannel` and change the pod ip CIDR.
@@ -54,18 +55,40 @@ We assume you have at least two instances of Linux (meeting the requirements) wi
    - `K3S_TOKEN` which is stored in `/var/lib/rancher/k3s/server/node-token` file in main Node [(Step 1)](#initializing-master-instance).
    Execute following command in your node instance and join it to the cluster.
 
-   > **Note**: Remeber to change `serverip` and `mytoken`.
+   > **Note**: Remember to change `serverip` and `mytoken`.
    {: .alert .alert-info}
 
-   ```
+   ```bash
    curl -sfL https://get.k3s.io | K3S_URL=https://serverip:6443 K3S_TOKEN=mytoken sh -
    ```
 
-#### {{site.prodname}} Installation procedure
+#### Install {{site.prodname}}
 
+   {% tabs id:installation-method %}
+   <id:operator,name:Operator,active:true>
+   <%
+Install the {{site.prodname}} operator and custom resource definitions.
+
+   ```bash
+   kubectl create -f {{ "/manifests/tigera-operator.yaml" | absolute_url }}
+   ```
+
+Install {{site.prodname}} by creating the necessary custom resource. For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
+
+   ```bash
+   kubectl create -f {{ "/manifests/custom-resources.yaml" | absolute_url }}
+   ```
+
+   > **Note**: Before creating this manifest, read its contents and make sure its settings are correct for your environment. For example,
+   > you may need to change the default IP pool CIDR to match your pod network CIDR.
+   {: .alert .alert-info}
+   
+   %>
+   <id:manifest,name:Manifest>
+   <%
    Install {{site.prodname}} by using the following command.
 
-   ```
+   ```bash
    kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
    ```
 
@@ -103,11 +126,16 @@ We assume you have at least two instances of Linux (meeting the requirements) wi
    ```
    {: .no-select-button}
 
+   %>
+   {% endtabs %}
+
+
+   
 #### Check the installation
    
-1. Confirm that all of the pods are running with the following command.
+1. Confirm that all of the pods are running using the following command.
 
-   ```
+   ```bash
    watch kubectl get pods --all-namespaces
    ```
 
@@ -127,7 +155,7 @@ We assume you have at least two instances of Linux (meeting the requirements) wi
 
 2. Confirm that you now have two nodes in your cluster with the following command.
 
-   ```
+   ```bash
    kubectl get nodes -o wide
    ```
 
@@ -144,5 +172,6 @@ Congratulations! You now have a multi node K3s cluster
 equipped with {{site.prodname}} and Traefik.
 
 ### Next steps
-- [Create a user interface that shows blocked and allowed connections in real time]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+- Try running the [Kubernetes Network policy demo]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo) to see live graphical view of network policy in action
+
 
