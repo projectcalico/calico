@@ -418,8 +418,6 @@ type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Inter
 func (kds *K8sDatastoreInfra) CleanUp() {
 	log.Info("Cleaning up kubernetes datastore")
 	startTime := time.Now()
-
-	var wg sync.WaitGroup
 	for _, f := range []cleanupFunc{
 		cleanupAllPods,
 		cleanupAllNodes,
@@ -432,13 +430,8 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
 	} {
-		wg.Add(1)
-		go func(f cleanupFunc) {
-			defer wg.Done()
-			f(kds.K8sClient, kds.calicoClient)
-		}(f)
+		f(kds.K8sClient, kds.calicoClient)
 	}
-	wg.Wait()
 	kds.needsCleanup = false
 	log.WithField("time", time.Since(startTime)).Info("Cleaned up kubernetes datastore")
 }
@@ -515,7 +508,7 @@ func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx i
 }
 
 func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
-	node_in := &v1.Node{
+	nodeIn := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: felix.Hostname,
 			Annotations: map[string]string{
@@ -525,17 +518,17 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 		Spec: v1.NodeSpec{PodCIDR: fmt.Sprintf("10.65.%d.0/24", idx)},
 	}
 	if felix.ExpectedIPIPTunnelAddr != "" {
-		node_in.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"] = felix.ExpectedIPIPTunnelAddr
+		nodeIn.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"] = felix.ExpectedIPIPTunnelAddr
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
-		node_in.Annotations["projectcalico.org/IPv4VXLANTunnelAddr"] = felix.ExpectedVXLANTunnelAddr
+		nodeIn.Annotations["projectcalico.org/IPv4VXLANTunnelAddr"] = felix.ExpectedVXLANTunnelAddr
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
-		node_in.Annotations["projectcalico.org/IPv4WireguardInterfaceAddr"] = felix.ExpectedWireguardTunnelAddr
+		nodeIn.Annotations["projectcalico.org/IPv4WireguardInterfaceAddr"] = felix.ExpectedWireguardTunnelAddr
 	}
-	log.WithField("node_in", node_in).Debug("Node defined")
-	node_out, err := kds.K8sClient.CoreV1().Nodes().Create(node_in)
-	log.WithField("node_out", node_out).Debug("Created node")
+	log.WithField("nodeIn", nodeIn).Debug("Node defined")
+	nodeOut, err := kds.K8sClient.CoreV1().Nodes().Create(nodeIn)
+	log.WithField("nodeOut", nodeOut).Debug("Created node")
 	if err != nil {
 		panic(err)
 	}
