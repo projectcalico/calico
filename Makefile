@@ -190,7 +190,7 @@ dev-versions-yaml:
 "     flexvol:\\n"\
 "      version: $$POD2DAEMON_VER\\n" 
 "     tigera-operator:\\n"\
-"      version: release-v1.3\\n"\ > pinned_versions.yml;
+"      version: release-v1.3\\n" > pinned_versions.yml;
 
 ###############################################################################
 # CI / test targets
