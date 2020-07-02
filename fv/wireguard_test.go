@@ -51,7 +51,7 @@ const (
 	fakeWireguardPubKey = "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="
 )
 
-var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const nodeCount = 2
 
 	var (
@@ -573,6 +573,11 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 	)
 
 	BeforeEach(func() {
+		// Run these tests only when the Host does not have Wireguard available.
+		if os.Getenv("FELIX_FV_WIREGUARD_AVAILABLE") == "true" {
+			Skip("Skipping Wireguard unsupported tests.")
+		}
+
 		// Setup a single node cluster.
 		const nodeCount = 1
 
@@ -616,7 +621,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("WireGuard-Supported 3 node cluster", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard 3 node cluster", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const nodeCount = 3
 
 	var (
