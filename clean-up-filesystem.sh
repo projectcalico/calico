@@ -264,6 +264,7 @@ packages_to_keep=(
   rootfiles
   rpm
   sed
+  setup
   shadow-utils
   shared-mime-info
   systemd-libs
