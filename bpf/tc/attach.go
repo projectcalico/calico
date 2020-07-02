@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"os"
 	"os/exec"
@@ -53,7 +52,7 @@ type AttachPoint struct {
 	TunnelMTU  uint16
 }
 
-var tcLock sync.Mutex
+var tcLock sync.RWMutex
 
 type ErrAttachFailed struct {
 	ExitCode int
@@ -89,12 +88,11 @@ func (ap AttachPoint) AttachProgram() error {
 		return err
 	}
 
-	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
-	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
-	// point).
+	// Using the RLock allows multiple attach calls to proceed in parallel unless
+	// CleanUpJumpMaps() (which takes the writer lock) is running.
 	logCxt.Debug("AttachProgram waiting for lock...")
-	tcLock.Lock()
-	defer tcLock.Unlock()
+	tcLock.RLock()
+	defer tcLock.RUnlock()
 	logCxt.Debug("AttachProgram got lock.")
 
 	err = EnsureQdisc(ap.Iface)
@@ -128,15 +126,6 @@ func (ap AttachPoint) AttachProgram() error {
 			progsToClean = append(progsToClean, p)
 		}
 	}
-
-	// Work around tc map name collision: when we load two identical BPF programs onto different interfaces, tc
-	// pins object-local maps to a namespace based on the hash of the BPF program, which is the same for both
-	// interfaces.  Since we want one map per interface instead, we search for such maps and rename them before we
-	// release the tc lock.
-	//
-	// For our purposes, it should work to simply delete the map.  However, when we tried that, the contents of the
-	// map get deleted even though it is in use by a BPF program.
-	defer repinJumpMaps()
 
 	tcCmd = exec.Command("tc",
 		"filter", "add", "dev", ap.Iface,
@@ -218,62 +207,6 @@ func (ap AttachPoint) ProgramName() string {
 // FileName return the file the AttachPoint will load the program from
 func (ap AttachPoint) FileName() string {
 	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel)
-}
-
-func repinJumpMaps() {
-	// Find the maps we care about by walking the BPF filesystem.
-	err := filepath.Walk("/sys/fs/bpf/tc", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.Name() == "cali_jump" {
-			log.WithField("path", path).Debug("Queueing deletion of map")
-
-			if log.GetLevel() >= log.DebugLevel {
-				out, err := exec.Command("bpftool", "map", "dump", "pinned", path).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to dump map")
-				}
-				log.WithField("dump", string(out)).Debug("Map dump before deletion")
-			}
-
-			out, err := exec.Command("bpftool", "map", "show", "pinned", path).Output()
-			if err != nil {
-				log.WithError(err).Panic("Failed to show map")
-			}
-			log.WithField("dump", string(out)).Debug("Map show before deletion")
-			id := string(bytes.Split(out, []byte(":"))[0])
-
-			newPath := path + fmt.Sprint(rand.Uint32())
-			out, err = exec.Command("bpftool", "map", "pin", "id", id, newPath).Output()
-			if err != nil {
-				log.WithError(err).Panic("Failed to repin map")
-			}
-			log.WithField("dump", string(out)).Debug("Repin output")
-
-			err = os.Remove(path)
-			if err != nil {
-				log.WithError(err).Panic("Failed to remove old map pin")
-			}
-
-			if log.GetLevel() >= log.DebugLevel {
-				out, err = exec.Command("bpftool", "map", "dump", "pinned", newPath).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to show map")
-				}
-				log.WithField("dump", string(out)).Debug("Map show after repin")
-			}
-		}
-		return nil
-	})
-	if os.IsNotExist(err) {
-		log.WithError(err).Warn("tc directory missing from BPF file system?")
-		return
-	}
-	if err != nil {
-		log.WithError(err).Panic("Failed to walk BPF filesystem")
-	}
-	log.Debug("Finished moving map pins that we don't need.")
 }
 
 // tcDirRegex matches tc's auto-created directory names so we can clean them up when removing maps without accidentally
