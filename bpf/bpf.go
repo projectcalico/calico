@@ -37,7 +37,6 @@ import (
 	"strings"
 	"syscall"
 
-	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -91,6 +90,9 @@ var (
 	// v4Dot16Dot0 is the first kernel version that has all the
 	// required features we use for XDP filtering
 	v4Dot16Dot0 = versionparse.MustParseVersion("4.16.0")
+	// v4Dot18Dot0 is the kernel version in RHEL that has all the
+	// required features for BPF dataplane, sidecar acceleration
+	v4Dot18Dot0 = versionparse.MustParseVersion("4.18.0-193")
 	// v4Dot20Dot0 is the first kernel version that has all the
 	// required features we use for sidecar acceleration
 	v4Dot20Dot0 = versionparse.MustParseVersion("4.20.0")
@@ -98,6 +100,12 @@ var (
 	// required features we use for BPF dataplane mode
 	v5Dot3Dot0 = versionparse.MustParseVersion("5.3.0")
 )
+
+var distToVersionMap = map[string]*versionparse.Version{
+	"ubuntu":  v5Dot3Dot0,
+	"rhel":    v4Dot18Dot0,
+	"default": v5Dot3Dot0,
+}
 
 func (m XDPMode) String() string {
 	switch m {
@@ -2160,7 +2168,7 @@ func (b *BPFLib) RemoveSockmapEndpointsMap() error {
 	return os.Remove(mapPath)
 }
 
-func isAtLeastKernel(v *version.Version) error {
+func isAtLeastKernel(v *versionparse.Version) error {
 	versionReader, err := versionparse.GetKernelVersionReader()
 	if err != nil {
 		return fmt.Errorf("failed to get kernel version reader: %v", err)
@@ -2191,8 +2199,13 @@ func SupportsSockmap() error {
 	return nil
 }
 
+func GetMinKernelVersionForDistro(distName string) *versionparse.Version {
+	return distToVersionMap[distName]
+}
+
 func SupportsBPFDataplane() error {
-	if err := isAtLeastKernel(v5Dot3Dot0); err != nil {
+	distName := versionparse.GetDistributionName()
+	if err := isAtLeastKernel(GetMinKernelVersionForDistro(distName)); err != nil {
 		return err
 	}
 

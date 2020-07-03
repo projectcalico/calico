@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 
-	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/versionparse"
@@ -114,7 +113,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 }
 
-func (d *FeatureDetector) getIptablesVersion() *version.Version {
+func (d *FeatureDetector) getIptablesVersion() *versionparse.Version {
 	cmd := d.NewCmd("iptables", "--version")
 	out, err := cmd.Output()
 	if err != nil {
@@ -129,7 +128,7 @@ func (d *FeatureDetector) getIptablesVersion() *version.Version {
 			"Failed to parse iptables version, assuming old version with no optional features")
 		return v1Dot4Dot7
 	}
-	parsedVersion, err := version.NewVersion(matches[1])
+	parsedVersion, err := versionparse.NewVersion(matches[1])
 	if err != nil {
 		log.WithField("rawVersion", s).WithError(err).Warn(
 			"Failed to parse iptables version, assuming old version with no optional features")
@@ -139,7 +138,7 @@ func (d *FeatureDetector) getIptablesVersion() *version.Version {
 	return parsedVersion
 }
 
-func (d *FeatureDetector) getKernelVersion() *version.Version {
+func (d *FeatureDetector) getKernelVersion() *versionparse.Version {
 	reader, err := d.GetKernelVersionReader()
 	if err != nil {
 		log.WithError(err).Warn("Failed to get the kernel version reader, assuming old version with no optional features")

@@ -25,11 +25,14 @@ import (
 	"os/exec"
 	"testing"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/logutils"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/felix/versionparse"
 )
 
 const (
@@ -759,5 +762,47 @@ func TestIPv6NotSupported(t *testing.T) {
 	_, err := bpfDP.NewCIDRMap("myiface2", IPFamilyV6)
 	if err == nil {
 		t.Fatalf("creating an IPv6 blacklist should have failed")
+	}
+}
+
+func TestVersionParse(t *testing.T) {
+	RegisterTestingT(t)
+	t.Log("Test version parsing")
+	ubuntuVersionStr := "Linux version 5.3.0-39-generic (buildd@lcy01-amd64-016) (gcc version 9.3.0 (Ubuntu 9.3.0-10ubuntu2)) #43-Ubuntu SMP Fri Jun 19 10:28:31 UTC 2020"
+	rhelVersionStr := "Linux version 4.18.0-193.el8.x86_64 (mockbuild@x86-vm-08.build.eng.bos.redhat.com) (gcc version 8.3.1 20191121 (Red Hat 8.3.1-5) (GCC)) #1 SMP Fri Mar 27 14:35:58 UTC 2020"
+	fedVersionStr := "Linux version 5.3.0-193.el8.x86_64 (mockbuild@x86-vm-08.build.eng.bos.redhat.com) (gcc version 8.3.1 20191121 (Fedora 8.3.1-5) (GCC)) #1 SMP Fri Mar 27 14:35:58 UTC 2020"
+	type comparisonTest struct {
+		a, b     string
+		expected int
+	}
+
+	versionStrTest := func(versionStr, distStr string, expected int) {
+		distName := versionparse.GetDistFromString(versionStr)
+		Expect(distName).To(Equal(distStr))
+		parsedVer, err := versionparse.GetVersionFromString(versionStr)
+		Expect(err).NotTo(HaveOccurred())
+		expVer := GetMinKernelVersionForDistro(distName)
+		Expect(parsedVer.Compare(expVer)).To(Equal(expected))
+	}
+
+	versionStrTest(ubuntuVersionStr, "ubuntu", 1)
+	versionStrTest(rhelVersionStr, "rhel", 0)
+	versionStrTest(fedVersionStr, "default", 1)
+
+	// Tests to verify the compare function in versionparse
+	tests := []comparisonTest{
+		{a: "4.18.0-193", b: "4.18.0-194", expected: -1},
+		{a: "4.18.0-193", b: "4.18.0-192", expected: 1},
+		{a: "4.18.0-193", b: "4.18.0-193", expected: 0},
+		{a: "4.18.0-193", b: "4.18.0", expected: 1},
+		{a: "4.18.0-193", b: "4.19.0", expected: -1},
+		{a: "4.18.0-193", b: "5.3.0", expected: -1},
+	}
+
+	for _, test := range tests {
+		t.Log("Comparing ", test.a, " to ", test.b)
+		ver1 := versionparse.MustParseVersion(test.a)
+		ver2 := versionparse.MustParseVersion(test.b)
+		Expect(ver1.Compare(ver2)).To(Equal(test.expected))
 	}
 }
