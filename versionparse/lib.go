@@ -28,6 +28,7 @@ import (
 
 var (
 	kernelVersionRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+(?:-\d+)?)`)
+	splitRe             = regexp.MustCompile(`[\.-]`)
 )
 
 type Version struct {
@@ -83,7 +84,6 @@ func (v *Version) Compare(other *Version) int {
 }
 
 func convertVersionToIntSlice(s string) ([]int, error) {
-	var splitRe = regexp.MustCompile(`[\.-]`)
 	parts := splitRe.Split(s, 4)
 	intSlice := make([]int, len(parts))
 	for index, element := range parts {
