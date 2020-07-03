@@ -27,8 +27,7 @@ import (
 )
 
 var (
-	kernelVersionRegexp     = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+)`)
-	kernelVersionRHELRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d-\d+)`)
+	kernelVersionRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+(?:-\d+)?)`)
 )
 
 type Version struct {
@@ -84,34 +83,16 @@ func (v *Version) Compare(other *Version) int {
 }
 
 func convertVersionToIntSlice(s string) ([]int, error) {
-	splitStrDash := strings.Split(s, "-")
-	splitStrDot := strings.Split(splitStrDash[0], ".")
-	versionLen := len(splitStrDot)
-	if len(splitStrDash) == 2 {
-		versionLen++
-	}
-	intSlice := make([]int, versionLen)
-	sliceIndex := 0
-	for index, outer := range splitStrDash {
-		if index == 0 {
-			for _, inner := range splitStrDot {
-				val, err := strconv.Atoi(inner)
-				if err != nil {
-					return nil, fmt.Errorf(
-						"Error parsing version: %s", err)
-				}
-				intSlice[sliceIndex] = val
-				sliceIndex++
-			}
-		} else if index == 1 {
-			val, err := strconv.Atoi(outer)
-			if err != nil {
-				return nil, fmt.Errorf(
-					"Error parsing version: %s", err)
-			}
-			intSlice[sliceIndex] = val
-
+	var splitRe = regexp.MustCompile(`[\.-]`)
+	parts := splitRe.Split(s, 4)
+	intSlice := make([]int, len(parts))
+	for index, element := range parts {
+		val, err := strconv.Atoi(element)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"Error parsing version: %s", err)
 		}
+		intSlice[index] = val
 	}
 	return intSlice, nil
 }
@@ -121,15 +102,8 @@ func GetKernelVersionReader() (io.Reader, error) {
 }
 
 func GetVersionFromString(s string) (*Version, error) {
-	var matches []string
 	log.WithField("rawVersion", s).Debug("Raw kernel version")
-	// Match the build version for Red Hat
-	if strings.Contains(s, "Red Hat") {
-		matches = kernelVersionRHELRegexp.FindStringSubmatch(s)
-	} else {
-		matches = kernelVersionRegexp.FindStringSubmatch(s)
-	}
-
+	matches := kernelVersionRegexp.FindStringSubmatch(s)
 	if len(matches) == 0 {
 		msg := "Failed to parse kernel version string"
 		log.WithField("rawVersion", s).Warn(msg)

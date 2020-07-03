@@ -25,6 +25,8 @@ import (
 	"os/exec"
 	"testing"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/logutils"
 
 	log "github.com/sirupsen/logrus"
@@ -764,73 +766,43 @@ func TestIPv6NotSupported(t *testing.T) {
 }
 
 func TestVersionParse(t *testing.T) {
+	RegisterTestingT(t)
 	t.Log("Test version parsing")
 	ubuntuVersionStr := "Linux version 5.3.0-39-generic (buildd@lcy01-amd64-016) (gcc version 9.3.0 (Ubuntu 9.3.0-10ubuntu2)) #43-Ubuntu SMP Fri Jun 19 10:28:31 UTC 2020"
 	rhelVersionStr := "Linux version 4.18.0-193.el8.x86_64 (mockbuild@x86-vm-08.build.eng.bos.redhat.com) (gcc version 8.3.1 20191121 (Red Hat 8.3.1-5) (GCC)) #1 SMP Fri Mar 27 14:35:58 UTC 2020"
 	fedVersionStr := "Linux version 5.3.0-193.el8.x86_64 (mockbuild@x86-vm-08.build.eng.bos.redhat.com) (gcc version 8.3.1 20191121 (Fedora 8.3.1-5) (GCC)) #1 SMP Fri Mar 27 14:35:58 UTC 2020"
-	distName := versionparse.GetDistFromString(ubuntuVersionStr)
-	if distName != "ubuntu" {
-		t.Fatalf("Parsing distribution name failed")
-	}
-	parsedVer, err := versionparse.GetVersionFromString(ubuntuVersionStr)
-	if err != nil {
-		t.Fatalf("Parsing kernel version failed")
-	}
-	expVer := GetMinKernelVersionForDistro(distName)
-	if parsedVer.Compare(expVer) != 0 {
-		t.Fatalf("Parsed version not same as expected version")
+	type comparisonTest struct {
+		a, b     string
+		expected int
 	}
 
-	distName = versionparse.GetDistFromString(rhelVersionStr)
-	if distName != "rhel" {
-		t.Fatalf("Parsing distribution name failed")
-	}
-	parsedVer, err = versionparse.GetVersionFromString(rhelVersionStr)
-	if err != nil {
-		t.Fatalf("Parsing kernel version failed")
-	}
-	expVer = GetMinKernelVersionForDistro(distName)
-	if parsedVer.Compare(expVer) != 0 {
-		t.Fatalf("Parsed version not same as expected version")
+	versionStrTest := func(versionStr, distStr string, expected int) {
+		distName := versionparse.GetDistFromString(versionStr)
+		Expect(distName).To(Equal(distStr))
+		parsedVer, err := versionparse.GetVersionFromString(versionStr)
+		Expect(err).NotTo(HaveOccurred())
+		expVer := GetMinKernelVersionForDistro(distName)
+		Expect(parsedVer.Compare(expVer)).To(Equal(expected))
 	}
 
-	distName = versionparse.GetDistFromString(fedVersionStr)
-	if distName != "default" {
-		t.Fatalf("Parsing distribution name failed")
-	}
-	parsedVer, err = versionparse.GetVersionFromString(fedVersionStr)
-	if err != nil {
-		t.Fatalf("Parsing kernel version failed")
-	}
-	expVer = GetMinKernelVersionForDistro(distName)
-	if parsedVer.Compare(expVer) != 0 {
-		t.Fatalf("Parsed version not same as expected version")
-	}
+	versionStrTest(ubuntuVersionStr, "ubuntu", 1)
+	versionStrTest(rhelVersionStr, "rhel", 0)
+	versionStrTest(fedVersionStr, "default", 1)
 
 	// Tests to verify the compare function in versionparse
-	ver1 := versionparse.MustParseVersion("4.18.0-193")
-	ver2 := versionparse.MustParseVersion("4.18.0-194")
-	if ver1.Compare(ver2) != -1 {
-		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.18.0-194 failed")
+	tests := []comparisonTest{
+		{a: "4.18.0-193", b: "4.18.0-194", expected: -1},
+		{a: "4.18.0-193", b: "4.18.0-192", expected: 1},
+		{a: "4.18.0-193", b: "4.18.0-193", expected: 0},
+		{a: "4.18.0-193", b: "4.18.0", expected: 1},
+		{a: "4.18.0-193", b: "4.19.0", expected: -1},
+		{a: "4.18.0-193", b: "5.3.0", expected: -1},
 	}
-	ver2 = versionparse.MustParseVersion("4.18.0-192")
-	if ver1.Compare(ver2) != 1 {
-		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.18.0-192 failed")
-	}
-	ver2 = versionparse.MustParseVersion("4.18.0-193")
-	if ver1.Compare(ver2) != 0 {
-		t.Fatalf("Comparing same kernel versions failed")
-	}
-	ver2 = versionparse.MustParseVersion("4.18.0")
-	if ver1.Compare(ver2) != 1 {
-		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.18.0 failed")
-	}
-	ver2 = versionparse.MustParseVersion("5.3.0")
-	if ver1.Compare(ver2) != -1 {
-		t.Fatalf("Comparing kernel versions 4.18.0-193 and 5.3.0 failed")
-	}
-	ver2 = versionparse.MustParseVersion("4.19.0")
-	if ver1.Compare(ver2) != -1 {
-		t.Fatalf("Comparing kernel versions 4.18.0-193 and 4.19.0 failed")
+
+	for _, test := range tests {
+		t.Log("Comparing ", test.a, " to ", test.b)
+		ver1 := versionparse.MustParseVersion(test.a)
+		ver2 := versionparse.MustParseVersion(test.b)
+		Expect(ver1.Compare(ver2)).To(Equal(test.expected))
 	}
 }
