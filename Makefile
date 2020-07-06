@@ -415,6 +415,7 @@ fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image-test bin/iptables-lock
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
+	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
 	  ./run-batches
 	@if [ -e fv/latency.log ]; then \
 	   echo; \
@@ -426,10 +427,8 @@ fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image-test bin/iptables-lock
 fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
 
-KO_DIR := "/lib/modules/$(shell uname -r)/"
-fv-wireguard:
-	test "`find $(KO_DIR) -name wireguard.ko`" || ( echo "WireGuard not available."; exit 1 )
-	$(MAKE) fv FELIX_FV_WIREGUARD_AVAILABLE=true GINKGO_FOCUS="WireGuard-Supported"
+check-wireguard:
+	fv/wireguard-available || ( echo "WireGuard not available."; exit 1 )
 
 ###############################################################################
 # K8SFV Tests
