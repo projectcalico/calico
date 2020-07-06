@@ -495,6 +495,8 @@ github.com/projectcalico/confd v1.0.1-0.20200612080857-9be4fc757188 h1:ozi56GIZ8
 github.com/projectcalico/confd v1.0.1-0.20200612080857-9be4fc757188/go.mod h1:J9osb47ujMJXVktly5OEE5vgt02Yc5v0+OGGgJ/g1X4=
 github.com/projectcalico/confd v1.0.1-0.20200617170058-a077924e7ecb h1:jxxVYSIvQ0iry/J83sfI0kEdTJXWeNmoTzQaR8vdPW0=
 github.com/projectcalico/confd v1.0.1-0.20200617170058-a077924e7ecb/go.mod h1:4A5WEhzP2wVA/IHKTiwFDS8ixMuuT03tLEjT0pqyDIU=
+github.com/projectcalico/confd v1.0.1-0.20200701184828-75b7e9b20d05 h1:mtzg+CtaogZdjhZ50epgQy7Uh6udbIbJlcqo+O30e7c=
+github.com/projectcalico/confd v1.0.1-0.20200701184828-75b7e9b20d05/go.mod h1:4A5WEhzP2wVA/IHKTiwFDS8ixMuuT03tLEjT0pqyDIU=
 github.com/projectcalico/felix v0.0.0-20200611144157-d4d227ee6ea9 h1:jdOUNFsxWkeZXOYreaXXrCDBSXkeFFICNieYH9bUuYs=
 github.com/projectcalico/felix v0.0.0-20200611144157-d4d227ee6ea9/go.mod h1:4yvmYJ4+kgYQ+P74MLQjTqj8v3qSQ1VQI/YJ7J0TCmo=
 github.com/projectcalico/felix v0.0.0-20200612003414-17921cc56a95 h1:m9swjqTW67Tuis8vr6xiL+yb7vEjLOs2tvT1Hf0sciw=
@@ -503,6 +505,8 @@ github.com/projectcalico/felix v0.0.0-20200612131110-4b0d74df1e44 h1:KyivN1Ttctc
 github.com/projectcalico/felix v0.0.0-20200612131110-4b0d74df1e44/go.mod h1:+onbBnjIdx/AcIb4oCBb9sUWuqWU1wJqPvulPaKSxp4=
 github.com/projectcalico/felix v0.0.0-20200617174547-62430f1d7049 h1:WDV+hWP4x5j0Ijlv36PguK+b2Ey7TvddwziMNp/YiO0=
 github.com/projectcalico/felix v0.0.0-20200617174547-62430f1d7049/go.mod h1:y9adt+q6niFchB0dA5XTWkfbHoX/z1ObY+siT5NvCv4=
+github.com/projectcalico/felix v0.0.0-20200617183622-75f7e6aa0069 h1:Z2T9EWBnFWmJfdtsQm1muwHYbwj9LsFfrEYfdqt0vQE=
+github.com/projectcalico/felix v0.0.0-20200617183622-75f7e6aa0069/go.mod h1:y9adt+q6niFchB0dA5XTWkfbHoX/z1ObY+siT5NvCv4=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
