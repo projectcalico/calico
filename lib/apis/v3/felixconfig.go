@@ -92,7 +92,7 @@ type FelixConfigurationSpec struct {
 	// "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".
 	// "true" or "false" will force the feature, empty or omitted values are
 	// auto-detected.
-	FeatureDetectOverride string `json:"featureDetectOverride,omitempty"`
+	FeatureDetectOverride string `json:"featureDetectOverride,omitempty" validate:"omitempty,keyValueList"`
 	// IpsetsRefreshInterval is the period at which Felix re-checks all iptables
 	// state to ensure that no other process has accidentally broken Calico’s rules. Set to 0 to
 	// disable iptables refresh. [Default: 90s]
