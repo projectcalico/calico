@@ -67,13 +67,13 @@ This how-to guide uses the following {{site.prodname}} features:
 #### Enable IPv6 only
 
 {% tabs id:installation-method %}
-<id:operator,name:Operator,active:true>
+<id:op1,name:Operator,active:true>
 <%
 1. TBD.
 1. TBD.
 
 %>
-<id:manifest,name:Manifest>
+<id:man1,name:Manifest>
 <%
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
@@ -115,13 +115,13 @@ This how-to guide uses the following {{site.prodname}} features:
 #### Enable dual stack
 
 {% tabs id:installation-method %}
-<id:operator,name:Operator,active:true>
+<id:op2,name:Operator,active:true>
 <%
 1. TBD.
 1. TBD.
 
 %>
-<id:manifest,name:Manifest>
+<id:man2,name:Manifest>
 <%
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
