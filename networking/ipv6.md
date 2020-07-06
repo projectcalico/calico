@@ -55,32 +55,36 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
->**Note**: The following tasks are for new clusters.
+>**Note**: The following tasks are only for new clusters.
 {: .alert .alert-info}
 
-**Manifest install**
-- [Enable dual stack, manifest install](#enable-dual-stack-manifest-install)
-- [Enable IPv6 only, manifest install](#enable-ipv6-only-manifest-install)
-
-**Operator install**
-- [Enable dual stack, operator install](#enable-dual-stack-operator-install)
-- [Enable IPv6 only, operator install](#enable-ipv6-only-operator-install)
+- [Enable IPv6 only](#enable-ipv6-only)
+- [Enable dual stack, operator install](#enable-dual-stack)
 
 **Optional**
 - [Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
 
-#### Enable dual stack, manifest install
+#### Enable IPv6 only
+
+{% tabs id:installation-method %}
+   <id:operator,name:Operator,active:true>
+   <%
+1. TBD.
+1. TBD.
+
+%>
+   <id:manifest,name:Manifest>
+   <%
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
 1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type.
 
-1. Edit the CNI config (`calico-config` ConfigMap in the manifest), and enable IPv4 and IPv6 address allocation by setting both fields to true.
-
+1. Edit the CNI config (calico-config ConfigMap in the manifest) to disable IPv4 assignments and enable IPv6 assignments.
    ```
        "ipam": {
            "type": "calico-ipam",
-           "assign_ipv4": "true",
+           "assign_ipv4": "false",
            "assign_ipv6": "true"
        },
    ```
@@ -102,19 +106,34 @@ This how-to guide uses the following {{site.prodname}} features:
    {: .alert .alert-info}
 
 1. Apply the edited manifest with `kubectl apply -f`.
-   New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
 
-#### Enable IPv6 only, manifest install
+   New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
+
+%>
+   {% endtabs %}
+
+#### Enable dual stack
+
+{% tabs id:installation-method %}
+   <id:operator,name:Operator,active:true>
+   <%
+1. TBD.
+1. TBD.
+
+%>
+   <id:manifest,name:Manifest>
+   <%
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
 1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type.
 
-1. Edit the CNI config (calico-config ConfigMap in the manifest) to disable IPv4 assignments and enable IPv6 assignments.
+1. Edit the CNI config (`calico-config` ConfigMap in the manifest), and enable IPv4 and IPv6 address allocation by setting both fields to true.
+
    ```
        "ipam": {
            "type": "calico-ipam",
-           "assign_ipv4": "false",
+           "assign_ipv4": "true",
            "assign_ipv6": "true"
        },
    ```
@@ -129,15 +148,11 @@ This how-to guide uses the following {{site.prodname}} features:
 
 1. Apply the edited manifest with `kubectl apply -f`.
 
-   New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
+   New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
 
-#### Enable dual stack, operator install
+%>
+   {% endtabs %}
 
-TBD - operator steps
-
-#### Enable IPv6 only, operator install
-
-TBD - operator steps
 
 #### Change host IPv4 addresses to IPv6 only
 
