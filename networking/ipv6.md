@@ -67,8 +67,8 @@ This how-to guide uses the following {{site.prodname}} features:
 #### Enable IPv6 only
 
 {% tabs id:installation-method %}
-   <id:operator,name:Operator,active:true>
-   <%
+<id:operator,name:Operator,active:true>
+<%
 1. TBD.
 1. TBD.
 
@@ -106,9 +106,9 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Enable dual stack
 
-   {% tabs id:installation-method %}
-   <id:operator,name:Operator,active:true>
-   <%
+{% tabs id:installation-method %}
+<id:operator,name:Operator,active:true>
+<%
 1. TBD.
 1. TBD.
 
