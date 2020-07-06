@@ -172,7 +172,7 @@ type Config struct {
 	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
 	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"`
 	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"`
-	FeatureDetectOverride              map[string]string `config:"keyvaluelist;"";;local"`
+	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;local"`
 	IpsetsRefreshInterval              time.Duration     `config:"seconds;10"`
 	MaxIpsetSize                       int               `config:"int;1048576;non-zero"`
 	XDPRefreshInterval                 time.Duration     `config:"seconds;90"`
