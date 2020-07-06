@@ -59,7 +59,7 @@ This how-to guide uses the following {{site.prodname}} features:
 {: .alert .alert-info}
 
 - [Enable IPv6 only](#enable-ipv6-only)
-- [Enable dual stack, operator install](#enable-dual-stack)
+- [Enable dual stack](#enable-dual-stack)
 
 **Optional**
 - [Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
@@ -73,8 +73,8 @@ This how-to guide uses the following {{site.prodname}} features:
 1. TBD.
 
 %>
-   <id:manifest,name:Manifest>
-   <%
+<id:manifest,name:Manifest>
+<%
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
@@ -102,19 +102,19 @@ This how-to guide uses the following {{site.prodname}} features:
    New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
 %>
-   {% endtabs %}
+{% endtabs %}
 
 #### Enable dual stack
 
-{% tabs id:installation-method %}
+   {% tabs id:installation-method %}
    <id:operator,name:Operator,active:true>
    <%
 1. TBD.
 1. TBD.
 
 %>
-   <id:manifest,name:Manifest>
-   <%
+<id:manifest,name:Manifest>
+<%
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
@@ -143,7 +143,7 @@ This how-to guide uses the following {{site.prodname}} features:
    New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
 
 %>
-   {% endtabs %}
+{% endtabs %}
 
 
 #### Change host IPv4 addresses to IPv6 only
