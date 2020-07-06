@@ -99,6 +99,15 @@ func (d *linuxDataplane) DoNetworking(
 			}
 		}
 
+		// Figure out whether we have IPv4 and/or IPv6 addresses.
+		for _, addr := range result.IPs {
+			if addr.Version == "4" {
+				hasIPv4 = true
+			} else if addr.Version == "6" {
+				hasIPv6 = true
+			}
+		}
+
 		if hasIPv6 {
 			// By default, the kernel does duplicate address detection for the IPv6 address. DAD delays use of the
 			// IP for up to a second and we don't need it because it's a point-to-point link.
@@ -137,15 +146,6 @@ func (d *linuxDataplane) DoNetworking(
 
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
 		// Both ends of the veth are still in the container's network namespace.
-
-		// Figure out whether we have IPv4 and/or IPv6 addresses.
-		for _, addr := range result.IPs {
-			if addr.Version == "4" {
-				hasIPv4 = true
-			} else if addr.Version == "6" {
-				hasIPv6 = true
-			}
-		}
 
 		// Do the per-IP version set-up.  Add gateway routes etc.
 		if hasIPv4 {
@@ -288,6 +288,7 @@ func (d *linuxDataplane) DoNetworking(
 }
 
 func disableDAD(contVethName string) error {
+	logrus.WithField("interface", contVethName).Info("Disabling DAD on interface.")
 	dadSysctl := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", contVethName)
 	if err := writeProcSys(dadSysctl, "0"); err != nil {
 		return fmt.Errorf("failed to disable DAD for %s: %w", contVethName, err)
