@@ -100,7 +100,7 @@ The docs are divided into the following sections:
 - [Security](#security)
 - [Reference](#reference)
 
-With the except of Introduction and Reference, content should be tasked-based or "how to". All top-level titles in topics should use a transitive verb (configure, enable, modify) with initial caps. For example:
+With the except of Introduction and Reference, content should be tasked-based or "how to". All top-level titles in topics should use an action verb (e.g. configure, enable, modify) with initial caps. For example:
 
 - Configure BGP peers
 - Enable overlay networking
