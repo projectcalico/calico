@@ -670,10 +670,12 @@ func (r *DefaultRuleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chai
 		})
 	}
 
-	return []*Chain{{
+	chains := []*Chain{{
 		Name:  ChainNATPrerouting,
 		Rules: rules,
 	}}
+
+	return chains
 }
 
 func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
@@ -752,11 +754,15 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
 	}}
 }
 
-func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) (chains []*Chain) {
-	return []*Chain{
+func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*Chain {
+	var chains []*Chain
+
+	chains = append(chains,
 		r.failsafeInChain("mangle"),
 		r.StaticManglePreroutingChain(ipVersion),
-	}
+	)
+
+	return chains
 }
 
 func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chain {

@@ -40,10 +40,10 @@ const (
 var (
 	// List of all the top-level kernel-created chains by iptables table.
 	tableToKernelChains = map[string][]string{
-		"filter": []string{"INPUT", "FORWARD", "OUTPUT"},
-		"nat":    []string{"PREROUTING", "INPUT", "OUTPUT", "POSTROUTING"},
-		"mangle": []string{"PREROUTING", "INPUT", "FORWARD", "OUTPUT", "POSTROUTING"},
-		"raw":    []string{"PREROUTING", "OUTPUT"},
+		"filter": {"INPUT", "FORWARD", "OUTPUT"},
+		"nat":    {"PREROUTING", "INPUT", "OUTPUT", "POSTROUTING"},
+		"mangle": {"PREROUTING", "INPUT", "FORWARD", "OUTPUT", "POSTROUTING"},
+		"raw":    {"PREROUTING", "OUTPUT"},
 	}
 
 	// chainCreateRegexp matches iptables-save output lines for chain forward reference lines.
@@ -189,7 +189,10 @@ type Table struct {
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
 	// rules with unknown hashes.
 	chainToInsertedRules map[string][]Rule
-	dirtyInserts         set.Set
+	// chainToAppendRules maps from chain name to a list of rules to be appended at the end
+	// of that chain.
+	chainToAppendedRules map[string][]Rule
+	dirtyInsertAppend    set.Set
 
 	// chainToRuleFragments contains the desired state of our iptables chains, indexed by
 	// chain name.  The values are slices of iptables fragments, such as
@@ -322,14 +325,16 @@ func NewTable(
 	log.WithField("pattern", oldInsertPattern).Info("Calculated old-insert detection regex.")
 	oldInsertRegexp := regexp.MustCompile(oldInsertPattern)
 
-	// Pre-populate the insert table with empty lists for each kernel chain.  Ensures that we
+	// Pre-populate the insert and append table with empty lists for each kernel chain.  Ensures that we
 	// clean up any chains that we hooked on a previous run.
 	inserts := map[string][]Rule{}
-	dirtyInserts := set.New()
+	appends := map[string][]Rule{}
+	dirtyInsertAppend := set.New()
 	refcounts := map[string]int{}
 	for _, kernelChain := range tableToKernelChains[name] {
 		inserts[kernelChain] = []Rule{}
-		dirtyInserts.Add(kernelChain)
+		appends[kernelChain] = []Rule{}
+		dirtyInsertAppend.Add(kernelChain)
 		// Kernel chains are referred to by definition.
 		refcounts[kernelChain] += 1
 	}
@@ -375,7 +380,8 @@ func NewTable(
 		IPVersion:              ipVersion,
 		featureDetector:        detector,
 		chainToInsertedRules:   inserts,
-		dirtyInserts:           dirtyInserts,
+		chainToAppendedRules:   appends,
+		dirtyInsertAppend:      dirtyInsertAppend,
 		chainNameToChain:       map[string]*Chain{},
 		chainRefCounts:         refcounts,
 		dirtyChains:            set.New(),
@@ -438,13 +444,35 @@ func NewTable(
 	return table
 }
 
-func (t *Table) SetRuleInsertions(chainName string, rules []Rule) {
+// Insert or Append rules based on insert mode configuration.
+func (t *Table) InsertOrAppendRules(chainName string, rules []Rule) {
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
 	oldRules := t.chainToInsertedRules[chainName]
 	t.chainToInsertedRules[chainName] = rules
 	numRulesDelta := len(rules) - len(oldRules)
 	t.gaugeNumRules.Add(float64(numRulesDelta))
-	t.dirtyInserts.Add(chainName)
+	t.dirtyInsertAppend.Add(chainName)
+
+	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
+	// avoid marking a still-referenced chain as dirty.
+	t.increfReferredChains(rules)
+	t.decrefReferredChains(oldRules)
+
+	// Defensive: make sure we re-read the dataplane state before we make updates.  While the
+	// code was originally designed not to need this, we found that other users of
+	// iptables-restore can still clobber our updates so it's safest to re-read the state before
+	// each write.
+	t.InvalidateDataplaneCache("insertion")
+}
+
+// Append rules.
+func (t *Table) AppendRules(chainName string, rules []Rule) {
+	t.logCxt.WithField("chainName", chainName).Debug("Updating rule appends")
+	oldRules := t.chainToAppendedRules[chainName]
+	t.chainToAppendedRules[chainName] = rules
+	numRulesDelta := len(rules) - len(oldRules)
+	t.gaugeNumRules.Add(float64(numRulesDelta))
+	t.dirtyInsertAppend.Add(chainName)
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
@@ -569,7 +597,7 @@ func (t *Table) loadDataplaneState() {
 	// chains for refresh.
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) || t.dirtyInserts.Contains(chainName) {
+		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {
 			// Already an update pending for this chain; no point in flagging it as
 			// out-of-sync.
 			logCxt.Debug("Skipping known-dirty chain")
@@ -593,7 +621,7 @@ func (t *Table) loadDataplaneState() {
 				if dataplaneHasInserts {
 					logCxt.WithField("actualRuleIDs", dpHashes).Warn(
 						"Chain had unexpected inserts, marking for resync")
-					t.dirtyInserts.Add(chainName)
+					t.dirtyInsertAppend.Add(chainName)
 				}
 				continue
 			}
@@ -601,7 +629,7 @@ func (t *Table) loadDataplaneState() {
 			// Re-calculate the expected rule insertions based on the current length
 			// of the chain (since other processes may have inserted/removed rules
 			// from the chain, throwing off the numbers).
-			expectedHashes, _ = t.expectedHashesForInsertChain(
+			expectedHashes, _, _ = t.expectedHashesForInsertAppendChain(
 				chainName,
 				numEmptyStrings(dpHashes),
 			)
@@ -610,7 +638,7 @@ func (t *Table) loadDataplaneState() {
 					"expectedRuleIDs": expectedHashes,
 					"actualRuleIDs":   dpHashes,
 				}).Warn("Detected out-of-sync inserts, marking for resync")
-				t.dirtyInserts.Add(chainName)
+				t.dirtyInsertAppend.Add(chainName)
 			}
 		} else {
 			// One of our chains, should match exactly.
@@ -625,7 +653,7 @@ func (t *Table) loadDataplaneState() {
 	t.logCxt.Debug("Scanning for unexpected iptables chains")
 	for chainName, dataplaneHashes := range dataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) || t.dirtyInserts.Contains(chainName) {
+		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {
 			// Already an update pending for this chain.
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
@@ -643,7 +671,7 @@ func (t *Table) loadDataplaneState() {
 			for _, hash := range dataplaneHashes {
 				if hash != "" {
 					logCxt.Info("Found unexpected insert, marking for cleanup")
-					t.dirtyInserts.Add(chainName)
+					t.dirtyInsertAppend.Add(chainName)
 					break
 				}
 			}
@@ -660,24 +688,40 @@ func (t *Table) loadDataplaneState() {
 	t.inSyncWithDataPlane = true
 }
 
-// expectedHashesForInsertChain calculates the expected hashes for a whole top-level chain
-// given our inserts.  If we're in append mode, that consists of numNonCalicoRules empty strings
-// followed by our hashes; in insert mode, the opposite way round.  To avoid recalculation, it
-// returns the rule hashes as a second output.
-func (t *Table) expectedHashesForInsertChain(
+// expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
+// given our inserts and appends.
+// Hashes for inserted rules are caculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
+// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are caculated and
+// appended at the end.
+// To avoid recalculation, it returns the inserted rule hashes as a second output and appended rule hashes
+// a third output.
+func (t *Table) expectedHashesForInsertAppendChain(
 	chainName string,
 	numNonCalicoRules int,
-) (allHashes, ourHashes []string) {
+) (allHashes, ourInsertedHashes, ourAppendedHashes []string) {
 	insertedRules := t.chainToInsertedRules[chainName]
-	allHashes = make([]string, len(insertedRules)+numNonCalicoRules)
+	appendedRules := t.chainToAppendedRules[chainName]
+	allHashes = make([]string, len(insertedRules)+len(appendedRules)+numNonCalicoRules)
 	features := t.featureDetector.GetFeatures()
-	ourHashes = calculateRuleInsertHashes(chainName, insertedRules, features)
+	if len(insertedRules) > 0 {
+		ourInsertedHashes = calculateRuleHashes(chainName, insertedRules, features)
+	}
+	if len(appendedRules) > 0 {
+		// Add *append* to chainName to produce a unique hash in case append chain/rules are same
+		// as insert chain/rules above.
+		ourAppendedHashes = calculateRuleHashes(chainName+"*appends*", appendedRules, features)
+	}
 	offset := 0
 	if t.insertMode == "append" {
 		log.Debug("In append mode, returning our hashes at end.")
 		offset = numNonCalicoRules
 	}
-	for i, hash := range ourHashes {
+	for i, hash := range ourInsertedHashes {
+		allHashes[i+offset] = hash
+	}
+
+	offset = len(insertedRules) + numNonCalicoRules
+	for i, hash := range ourAppendedHashes {
 		allHashes[i+offset] = hash
 	}
 	return
@@ -1062,7 +1106,7 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
-	// Make a copy of our full rules map and keep track of all changes made while processing dirtyInserts.
+	// Make a copy of our full rules map and keep track of all changes made while processing dirtyInsertAppend.
 	// When we've successfully updated iptables, we'll update our cache of chainToFullRules with this map.
 	newChainToFullRules := map[string][]string{}
 	for chain, rules := range t.chainToFullRules {
@@ -1070,16 +1114,16 @@ func (t *Table) applyUpdates() error {
 		copy(newChainToFullRules[chain], rules)
 	}
 
-	// Now calculate iptables updates for our inserted rules, which are used to hook top-level chains.
+	// Now calculate iptables updates for our inserted and appended rules, which are used to hook top-level chains.
 	var deleteRenderingErr error
 	var line string
-	t.dirtyInserts.Iter(func(item interface{}) error {
+	t.dirtyInsertAppend.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		previousHashes := t.chainToDataplaneHashes[chainName]
 		newRules := newChainToFullRules[chainName]
 
-		// Calculate the hashes for our inserted rules.
-		newChainHashes, newRuleHashes := t.expectedHashesForInsertChain(
+		// Calculate the hashes for our inserted and appended rules.
+		newChainHashes, newInsertedRuleHashes, newAppendedRuleHashes := t.expectedHashesForInsertAppendChain(
 			chainName, numEmptyStrings(previousHashes))
 
 		if reflect.DeepEqual(newChainHashes, previousHashes) {
@@ -1110,27 +1154,45 @@ func (t *Table) applyUpdates() error {
 		rules := t.chainToInsertedRules[chainName]
 		insertRuleLines := make([]string, len(rules))
 
-		if t.insertMode == "insert" {
-			t.logCxt.Debug("Rendering insert rules.")
-			// Since each insert is pushed onto the top of the chain, do the inserts in
-			// reverse order so that they end up in the correct order in the final
-			// state of the chain.
-			for i := len(rules) - 1; i >= 0; i-- {
-				prefixFrag := t.commentFrag(newRuleHashes[i])
-				line := rules[i].RenderInsert(chainName, prefixFrag, features)
-				buf.WriteLine(line)
-				insertRuleLines[i] = line
+		// Add inserted rules if there is any
+		if len(rules) > 0 {
+			if t.insertMode == "insert" {
+				t.logCxt.Debug("Rendering insert rules.")
+				// Since each insert is pushed onto the top of the chain, do the inserts in
+				// reverse order so that they end up in the correct order in the final
+				// state of the chain.
+				for i := len(rules) - 1; i >= 0; i-- {
+					prefixFrag := t.commentFrag(newInsertedRuleHashes[i])
+					line := rules[i].RenderInsert(chainName, prefixFrag, features)
+					buf.WriteLine(line)
+					insertRuleLines[i] = line
+				}
+				newRules = append(insertRuleLines, newRules...)
+			} else {
+				t.logCxt.Debug("Rendering append rules.")
+				for i := 0; i < len(rules); i++ {
+					prefixFrag := t.commentFrag(newInsertedRuleHashes[i])
+					line := rules[i].RenderAppend(chainName, prefixFrag, features)
+					buf.WriteLine(line)
+					insertRuleLines[i] = line
+				}
+				newRules = append(newRules, insertRuleLines...)
 			}
-			newRules = append(insertRuleLines, newRules...)
-		} else {
-			t.logCxt.Debug("Rendering append rules.")
+		}
+
+		// Add appended rules if there is any
+		rules = t.chainToAppendedRules[chainName]
+		appendRuleLines := make([]string, len(rules))
+
+		if len(rules) > 0 {
+			t.logCxt.Debug("Rendering specific append rules.")
 			for i := 0; i < len(rules); i++ {
-				prefixFrag := t.commentFrag(newRuleHashes[i])
+				prefixFrag := t.commentFrag(newAppendedRuleHashes[i])
 				line := rules[i].RenderAppend(chainName, prefixFrag, features)
 				buf.WriteLine(line)
-				insertRuleLines[i] = line
+				appendRuleLines[i] = line
 			}
-			newRules = append(newRules, insertRuleLines...)
+			newRules = append(newRules, appendRuleLines...)
 		}
 
 		newHashes[chainName] = newChainHashes
@@ -1249,7 +1311,7 @@ func (t *Table) applyUpdates() error {
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
 	t.dirtyChains = set.New()
-	t.dirtyInserts = set.New()
+	t.dirtyInsertAppend = set.New()
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {
@@ -1298,7 +1360,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
-func calculateRuleInsertHashes(chainName string, rules []Rule, features *Features) []string {
+func calculateRuleHashes(chainName string, rules []Rule, features *Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,
