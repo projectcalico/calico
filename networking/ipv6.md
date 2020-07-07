@@ -66,7 +66,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Enable IPv6 only
 
-{% tabs id:installation-method %}
+{% tabs id:installation-method1 %}
 <id:op1,name:Operator,active:true>
 <%
 1. TBD.
@@ -114,7 +114,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Enable dual stack
 
-{% tabs id:installation-method %}
+{% tabs id:installation-method2 %}
 <id:op2,name:Operator,active:true>
 <%
 1. TBD.
