@@ -34,7 +34,7 @@ The code is a little roundabout for a few reasons:
   {% endif %}
 {% endfor %}
 {% assign navbars = unsorted_navbars | sort:"order" %}
-
+{% assign tabs_linked_group = false %}
 
 <!Doctype html>
 <html lang="en">
@@ -261,9 +261,10 @@ The code is a little roundabout for a few reasons:
         </div>
       </div>
     </section>
-
     <script src="{{site.baseurl}}/js/searchConfig.js"></script>
-
+    {% if page.tab_group %}
+    <script src="{{site.baseurl}}/js/tabs.js"></script>
+    {% endif %}
     <script>
       $(document).ready(function() {
         window.initializeSearch('{{page.version}}', '.search-powered-by', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
