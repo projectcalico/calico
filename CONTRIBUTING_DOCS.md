@@ -146,7 +146,7 @@ Examples:
 
 - To create a top level splash page for a URL path, name the file `index.md`. 
 
-  Each new index.md must have the following code to display children topics. The `description` field must be lowercase or you will get an error during the build. For example:
+  If the index.md has child topics, add the following. The `description` field must be lowercase or you will get an error during the build. For example:
 
   ```
   ---
