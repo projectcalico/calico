@@ -1,12 +1,92 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 [build]
-  command = './netlify/build.sh'
+  command = 'jekyll build'
+  publish = "_site/"
 
 [build.environment]
   RUBY_VERSION = "2.5.4"
-  CANDIDATE_RELEASE = ""
-  CURRENT_RELEASE = "v3.14"
-  CUSTOM_ARCHIVE_PATH = "/archive"
+  RELEASE_VERSION = "v3.15"
+
+[context.production]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_latest.yml --destination _site
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
+
+  mv _site/sitemap.xml _site/release-legacy-sitemap.xml
+  mv _site/sitemap.xml _site/latest-sitemap.xml
+  mv netlify/sitemap-index.xml _site/sitemap.xml
+  mv netlify/_redirects _site/_redirects
+  '''
+
+# Deploys branches specified in netlify UI as seperate individual sites (all release branches)
+
+[context.branch-deploy]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
+  '''
+
+[context.deploy-preview]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
+  jekyll build --config _config.yml,_config_url.yml
+  '''
+
+# Deploys master branch as a seperate individual sites (all release branches)
+# Master is to have baseurl set as /master in the _config.yml
+[context.master]
+  command = '''
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  # build for website
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master
+  '''
+
+[[redirects]]
+  from = "/archive/v3.14/*"
+  to = "https://release-v3-14--calico-test.netlify.app/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/archive/v3.13/*"
+  to = "https://release-v3-13--calico-test.netlify.app/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/archive/v3.12/*"
+  to = "https://release-v3-12--calico-test.netlify.app/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/master/*"
+  to = "https://master--calico-test.netlify.app/:splat"
+  status = 200
+  force = true
+  headers = {X-From = "Netlify"}
+
+[[redirects]]
+  from = "/archive/*"
+  to = "https://release-legacy--calico-test.netlify.app/:splat"
+  status = 200
+  force = false
+  headers = {X-From = "Netlify"}
 
 [[headers]]
   for = "/*.yaml"
