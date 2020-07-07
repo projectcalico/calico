@@ -91,7 +91,7 @@ Let's say there's a single commit that makes changes to the `master` directory w
 
 ## Doc site organization
 
-The docs are divided in to the following sections:
+The docs are divided into the following sections:
 
 - [Introduction](#introduction)
 - [Install](#install)
@@ -116,9 +116,7 @@ This page describes Calico and the primary reasons for using it.
 
 ### Install
 
-Calico can be installed in many types of deployments including on-premises and in cloud providers. This tab includes how to install a standalone Calico cluster for workloads, and how to install Calico on non-cluster hosts. Quickstart and OpenShift installs currently use operator, while Kubernetes uses manifest install. Because Calico is migrating to operator install for greater efficiency and flexibility, we encourage you to migrate to operator as soon as possible. 
-
-This section should reflect steps to an "up and running" state. Operator installation assumes that you will customize your installation over time, so every task beyond "up and running" should be added to other tabs. 
+Calico can be installed in many types of deployments including on-premises and in cloud providers. This section includes how to install a standalone Calico cluster for workloads, and how to install Calico on non-cluster hosts. This section reflects steps to an "up and running" state. Every task beyond "up and running" should be added to other tabs. 
 
 ### Operations
 
