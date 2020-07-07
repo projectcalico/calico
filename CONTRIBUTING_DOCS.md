@@ -27,7 +27,6 @@ The doc contribution process works as follows.
 
 We also encourage you to review [Doc site organization](#doc-site-organization), [Organizational changes](#organizational-changes), [Link syntax](#link-syntax), and [RELEASING.md](RELEASING.md) for additional information.
 
-
 ## Previewing your changes
 
 ### Building the doc site locally
@@ -41,7 +40,6 @@ Navigate into the root of the repo and issue the following command from a termin
 ```
 make serve
 ```
-
 
 Once the build completes, it returns a URL as the value of `Server address:`. Copy and paste this URL into your browser to view the site.
 
@@ -93,43 +91,50 @@ Let's say there's a single commit that makes changes to the `master` directory w
 
 ## Doc site organization
 
-### Overview
-
-The docs (currently) are split into four main sections.
+The docs are divided in to the following sections:
 
 - [Introduction](#introduction)
-- [Getting started](#getting-started)
-- [Usage](#usage)
+- [Install](#install)
+- [Operations](#operations)
+- [Networking](#networking)
+- [Security](#security)
 - [Reference](#reference)
+
+With the except of Introduction and Reference, content should be tasked-based or "how to". All top-level titles in topics should use a transitive verb (configure, enable, modify) with initial caps. For example:
+
+- Configure BGP peers
+- Enable overlay networking
+- Troubleshoot Calico
+- Use calicoctl in a Kubernetes deployment
+- Configure egress policy in Kubernetes
+
+Detailed description of components or tabulated configuration information should go in the [Reference](#reference) section.
 
 ### Introduction
 
-Landing page for new users covering Calico's purpose and high-level topics.
+This page describes Calico and the primary reasons for using it.
 
-### Getting started
+### Install
 
-This should be where new users go. It includes quick-start guides, some basic tutorials to show off Calico's capabilities, and links to more advanced topics once users are comfortable with the basics.
+Calico can be installed in many types of deployments including on-premises and in cloud providers. This tab includes how to install a standalone Calico cluster for workloads, and how to install Calico on non-cluster hosts. Quickstart and OpenShift installs currently use operator, while Kubernetes uses manifest install. Because Calico is migrating to operator install for greater efficiency and flexibility, we encourage you to migrate to operator as soon as possible. 
 
-Each orchestrator has a landing page that is targeted at people who are coming to see Calico for the first time. It's a transition from the "marketing" type material (why is Calico great) to some quick commands people can run to see it firsthand, and then funnels people off to the Usage section for more details.
+This section should reflect steps to an "up and running" state. Operator installation assumes that you will customize your installation over time, so every task beyond "up and running" should be added to other tabs. 
 
-### Usage
+### Operations
 
-This section contains task-based information. All top-level titles in this section should start with a gerund. Each topic should include why you want to perform the task, a goal, and a set of steps you can follow to achieve it.
+This section contains post-install, task-based content.  
 
-Examples:
+### Networking
 
-- Configuring BGP peers
-- Enabling IP-in-IP in AWS
-- Troubleshooting Calico
-- Using calicoctl in a Kubernetes deployment
-- Configuring egress policy in Kubernetes
+This section contains task-based content for networking using the Calico CNI and Calico IPAM.
 
-Do not include detailed description of components or tabulated
-configuration information in this section. This type of content should be located in the [Reference](#reference) section.
+### Security
+
+This section contains task-based content for securing Calico components, workloads, and non-cluster hosts using Calico network policy.
 
 ### Reference
 
-These docs contain complete reference information for Calico. If there's a configuration option you're looking for, it goes here in one of the per-component references. Not every option has a "how to" guide, but has enough description. The caveats and considerations when enabling options should be listed here.
+This section contain reference content including APIs and Resources. Add configuration options in one of the per-component references, and list any caveats and considerations when enabling options.
 
 Examples:
 
@@ -137,13 +142,28 @@ Examples:
 - `calicoctl` help text
 - Calico API schema reference (policy, ip pool, etcd)
 
-
 ## Organizational changes
 
 ### Creating new pages
 
-- To create a top level splash page for a URL path, simply name the file `index.md`.
+- To create a top level splash page for a URL path, name the file `index.md`. 
 
+  Each new index.md must have the following code to display children topics. The `description` field must be lowercase or you will get an error during the build. For example:
+
+  ```
+  ---
+  title: Install Calico
+  description: Install Calico on nodes and hosts for popular orchestrators, and install the calicoctl command line interface (CLI) tool. 
+  canonical_url: '/getting-started/index'
+  show_read_time: false
+  show_toc: false
+  ---
+
+  {{ page.description }}
+
+  {% capture content %}{% include index.html %}{% endcapture %}
+  {{ content | replace: "    ", "" }}
+  ```
 
 - [Add the new page to the side navigation bar](#linking-content).
 
