@@ -2,9 +2,19 @@
 # The cp, bundle install and bundle exec parts are only required to work around not being able to put the Gemfile int he root directory. It can't go in the root because that breaks the jekyll/jekyll container.
 [build]
   command = 'jekyll build'
+  publish = "_site/"
 
 [build.environment]
   RUBY_VERSION = "2.5.4"
+
+# this command is slightly diffrent from other branch deploy commands
+[context.branch-deploy]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive
+  '''
 
 [context.deploy-preview]
   command = '''
@@ -13,14 +23,6 @@
   export PATH=$PATH:$(pwd)/bin
   echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
   jekyll build --config _config.yml,_config_url.yml
-  '''
-
-[context.release-legacy]
-  command = '''
-  cp netlify/Gemfile Gemfile && bundle install
-  make bin/helm
-  export PATH=$PATH:$(pwd)/bin
-  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive
   '''
 
 [[headers]]
