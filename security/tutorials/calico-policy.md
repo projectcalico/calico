@@ -4,26 +4,25 @@ description: Learn how to create more advanced Calico network policies (namespac
 canonical_url: "/security/tutorials/calico-policy"
 ---
 
-Calico network policies **extend** the functionalities of Kubernetes network policies. To demonstrate this, this tutorial follows a similar approach to the Kubernetes Advanced Network Policy tutorial, and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policies.
+Calico network policies **extend** the functionalities of Kubernetes network policies. To demonstrate this, this tutorial follows a similar approach to the [Kubernetes Advanced Network Policy Tutorial]({{ site.baseurl }}/security/tutorials/kubernetes-policy-advanced), and implements it using Calico network policies. It not only highlights the syntactical differences between the two policy types, but also demonstrates the flexibility of Calico network policies.
 
 ### Requirements
 
-- Calico v2.6.1+ with Kubernetes 1.8+
-- calicoctl and kubectl
 - A working Kubernetes cluster and access to it using kubectl and calicoctl
 - Your Kubernetes nodes have connectivity to the public internet
+- You are familiar with [Calico NetworkPolicy]({{ site.baseurl }}/security/calico-network-policy)
 
 ### Tutorial flow
 
-1. Create the Namespace, Nginx Service
-2. Default Deny
-3. Allow Kube-System
-4. Allow Access to Nginx
-5. Clean up Namespace
+1. Create the namespace and NGINX service
+2. Configure default deny
+3. Allow kube-system
+4. Allow access to NGINX
+5. Clean up
 
 ### 1. Create the namespace and nginx service
 
-We'll use a new namespace for this guide. Run the following commands to create the namespace and a plain nginx service listening on port 80.
+We'll use a new namespace for this guide. Run the following commands to create the namespace and a plain NGINX service listening on port 80.
 
 ```bash
 kubectl create ns advanced-policy-demo
