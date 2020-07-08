@@ -60,9 +60,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 - [Enable IPv6 only](#enable-ipv6-only)
 - [Enable dual stack](#enable-dual-stack)
-
-**Optional**
-- [Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
+- (Optional)[Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
 
 #### Enable IPv6 only
 
