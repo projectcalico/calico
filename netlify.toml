@@ -1,11 +1,29 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 [build]
-  command = './netlify/build.sh'
+  command = 'jekyll build'
+  publish = "_site/"
 
 [build.environment]
   RUBY_VERSION = "2.5.4"
-  CANDIDATE_RELEASE = ""
-  CURRENT_RELEASE = "v3.11"
+  RELEASE_VERSION = "v3.12"
+
+[context.branch-deploy]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
+  '''
+
+[context.deploy-preview]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
+  jekyll build --config _config.yml,_config_url.yml
+  '''
 
 [[headers]]
   for = "/*.yaml"
