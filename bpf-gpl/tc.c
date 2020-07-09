@@ -805,7 +805,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		// to trigger that and leave the fib lookup disabled.
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
-		// Non-SNAT case, see if we can do the FIB lookup.  Note: tried to pass in
+		// Non-SNAT case, allow FIB lookup only if RPF check passed.  Note: tried to pass in
 		// the calculated value from calico_tc but hit verifier issues so recalculate it
 		// here.
 		if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
