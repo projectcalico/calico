@@ -145,7 +145,7 @@ Examples:
 
 - To create a top level splash page for a URL path, name the file `index.md`. 
 
-  If the index.md has child topics, copy content from an existing index.md file as follows. All name/keys should be lowercase for consistency.
+  If the index.md has child topics, copy the following content and update. All name/keys should be lowercase for consistency. Descriptions should be approximately 50-160 words.
 
   ```
   ---
