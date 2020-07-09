@@ -13,24 +13,24 @@ To create individual tab use <name:Mytab,active:true>
 @input active optional, adds active class to tab
 @input name optional, tab visual name
 ```
-   Normal tab                 |    Linked "Numerical index"    |   Linked tab "Identical names"                    
-------------------------------|:------------------------------:|-----------------------------------------:
-   {% tabs %}                 |    {% tabs tab-group:1 %}      |   {% tabs tab-group:name %}                             
-   <name:Mytab,active:true>   |    <name:Mytab,active:true>    |   <name:Mytab,active:true>  
-   <% Content %>              |    <% Content %>               |   <% Content %>                          
-   {% endtabs %}              |    <name:Mytab>                |   <name:Mytab>              
-                              |    <% Content %>               |   <% Content %>                          
-                              |    <name:Mytab>                |   {% endtabs %}                          
-                              |    <% Content %>               |   {% tabs tab-group:name %}                             
-                              |    {% endtabs %}               |   <name:Mytab>              
-                              |    {% tabs tab-group:1 %}      |   <% Content %>                          
-                              |    <name:Mytab,active:true>    |   {% endtabs %}                          
-                              |    <% Content %>               |                                          
-                              |    <name:Mytab>                |                                          
-                              |    <% Content %>               |                                          
-                              |    <name:Mytab>                |                                          
-                              |    <% Content %>               |                                          
-                              |    {% endtabs %}               |          
+   Normal tab                  |    Linked "Numerical index"            |   Linked tab "Identical names"                    
+------------------------------ |:--------------------------------------:|-----------------------------------------:
+   {% tabs %}                  |    {% tabs tab-group:1 %}              |   {% tabs tab-group:name %}                             
+   <name:Mytab,active:true>    |    <name:Non unique name,active:true>  |   <name:unique tab y,active:true>  
+   <% Content %>               |    <% Content for tab1 %>              |   <% Content for tab y %>                          
+   <name:Mytab>                |    <name:Non unique name>              |   <name:unique tab x>             
+   <% Content %>               |    <% Content for tab2 %>              |   <% Content for tab x %>                          
+   <>                          |    <>                                  |   {% endtabs %}                          
+   <% Tab with random name  %> |    <% Tab with random name  %>         |   {% tabs tab-group:name %}                             
+   {% endtabs %}               |    {% endtabs %}                       |   <name:unique tab x>
+                               |    {% tabs tab-group:1 %}              |   <% Content for tab x %>                          
+                               |    <name:Non unique name,active:true>  |   <name:unique tab y> 
+                               |    <% Content for tab1 %>              |   <% Content for tab y %>                                        
+                               |    <name:Non unique name>              |   {% endtabs %}                                        
+                               |    <% Content for tab2 %>              |                                          
+                               |    <>                                  |                                          
+                               |    <% Tab with random name  %>         |                                          
+                               |    {% endtabs %}                       |          
 ```                               
 EXAMPLE
 ###
