@@ -575,7 +575,7 @@ func (w *Wireguard) Apply() (err error) {
 
 	// If wireguard is not enabled, then short-circuit the processing - ensure config is deleted.
 	if !w.config.Enabled {
-		log.Info("Wireguard is not enabled")
+		log.Debug("Wireguard is not enabled, skipping sync")
 		if !w.inSyncWireguard {
 			log.Debug("Wireguard is not in-sync - verifying wireguard configuration is removed")
 			if err := w.ensureDisabled(netlinkClient); err != nil {
