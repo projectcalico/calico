@@ -352,10 +352,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	struct calico_nat_dest *nat_dest = NULL;
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
 
-	/* we assume we do FIB and from this point on, we only set it to false
-	 * if we decide not to do it.
+	/* We only try a FIB lookup and redirect for packets that are towards the host.
+	 * For packets that are leaving the host namespace, routing has already been done.
 	 */
-	fwd_fib_set(&fwd, true);
+	fwd_fib_set(&fwd, CALI_F_TO_HOST);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		state.prog_start_time = bpf_ktime_get_ns();
@@ -586,9 +586,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	/* We are possibly past (D)NAT, but that is ok, we need to let the IP
-	 * stack do the RPF check on the source, dest is not importatnt.
+	 * stack do the RPF check on the source, dest is not important.
 	 */
-	if (CALI_F_TO_HOST && ct_result_rpf_failed(state.ct_result.rc)) {
+	if (ct_result_rpf_failed(state.ct_result.rc)) {
 		fwd_fib_set(&fwd, false);
 	}
 
@@ -801,12 +801,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	}
 
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
+		// We are going to SNAT this traffic, using iptables SNAT so set the mark
+		// to trigger that and leave the fib lookup disabled.
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
-		/* XXX we do it here again because doing it in one place only
-		 * XXX in calico_tc() irritates the verifier :'(
-		 */
-		if (!CALI_F_TO_HOST || !ct_result_rpf_failed(state->ct_result.rc)) {
+		// Non-SNAT case, allow FIB lookup only if RPF check passed.  Note: tried to pass in
+		// the calculated value from calico_tc but hit verifier issues so recalculate it
+		// here.
+		if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
 			fib = true;
 		}
 		seen_mark = CALI_SKB_MARK_SEEN;
