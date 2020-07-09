@@ -100,7 +100,7 @@ The docs are divided into the following sections:
 - [Security](#security)
 - [Reference](#reference)
 
-With the except of Introduction and Reference, content should be tasked-based or "how to". All top-level titles in topics should use an action verb (e.g. configure, enable, modify) with initial caps. For example:
+Except for Introduction and Reference, content should be tasked-based. All top-level titles in topics should use an action verb (e.g. configure, enable, modify) with initial caps. For example:
 
 - Configure BGP peers
 - Enable overlay networking
@@ -116,7 +116,7 @@ This page describes Calico and the primary reasons for using it.
 
 ### Install
 
-Calico can be installed in many types of deployments including on-premises and in cloud providers. This section includes how to install a standalone Calico cluster for workloads, and how to install Calico on non-cluster hosts. This section reflects steps to an "up and running" state. Every task beyond "up and running" should be added to other tabs. 
+Calico can be installed in many different deployments including on-premises and cloud providers. This section includes how to install a standalone Calico cluster for workloads, and how to install Calico on non-cluster hosts. This section covers steps to an "up and running" state. Any task beyond "up and running" should be added to other tabs. 
 
 ### Operations
 
@@ -132,7 +132,7 @@ This section contains task-based content for securing Calico components, workloa
 
 ### Reference
 
-This section contain reference content including APIs and Resources. Add configuration options in one of the per-component references, and list any caveats and considerations when enabling options.
+This section contain reference content including full details of APIs and Resources. Add configuration options in one of the per-component references, and list any caveats and considerations when enabling options.
 
 Examples:
 
@@ -146,7 +146,7 @@ Examples:
 
 - To create a top level splash page for a URL path, name the file `index.md`. 
 
-  If the index.md has child topics, add the following. The `description` field must be lowercase or you will get an error during the build. For example:
+  If the index.md has child topics, copy content from an existing index.md file as follows. Note that the `description:` prefix must be lowercase; using `Description:` causes an error during the build.
 
   ```
   ---
