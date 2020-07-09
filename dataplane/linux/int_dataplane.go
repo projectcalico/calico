@@ -992,6 +992,9 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainFilterOutput},
 		}})
+
+		// Include rules which should be appended to the filter table forward chain.
+		t.AppendRules("FORWARD", d.ruleRenderer.StaticFilterForwardAppendRules())
 	}
 	for _, t := range d.iptablesNATTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion))
