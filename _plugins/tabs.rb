@@ -2,36 +2,24 @@
 # Authour : Reza R <54559947+frozenprocess@users.noreply.github.com>
 # This plugin adds bootstrap predefined tab block in Jekyll
 <<-EXAMPLE
-You can generate tabs by using {% tabs type:pills %}
-@input id optional, html id
-You can link pane by their index position if you provide an integer for `tab-group` or 
-link panes using identical pane names
-@input tab-group optional, int|"name"
+tabs can be generated using 
+{% tabs %}
+**Note: tabs are linked to a predifined group named `default`, using `tab-group`
+you can define multiple linked tab groups.**
+@input tab-group optional, string
 @input type optional, pill|tabs
-To create individual tab use <name:Mytab,active:true>
-@input id optional, tab HTML id
+
+Create individual pane in your tab using
+<label:Mytab,active:true>
 @input active optional, adds active class to tab
-@input name optional, tab visual name
-```
-   Normal tab                  |    Linked "Numerical index"            |   Linked tab "Identical names"                    
------------------------------- |:--------------------------------------:|-----------------------------------------:
-   {% tabs %}                  |    {% tabs tab-group:1 %}              |   {% tabs tab-group:name %}                             
-   <name:pane1,active:true>    |    <name:Non unique name,active:true>  |   <name:unique pane y,active:true>  
-   <% Content for pane 1 %>    |    <% Content for pane1 %>             |   <% Content for pane y %>                          
-   <name:pane2>                |    <name:Non unique name>              |   <name:unique pane x>             
-   <% Content for pane 2 %>    |    <% Content for pane2 %>             |   <% Content for pane x %>                          
-   <>                          |    <>                                  |   {% endtabs %}                          
-   <% pane with random name  %>|    <% pane with random name  %>        |   {% tabs tab-group:name %}                             
-   {% endtabs %}               |    {% endtabs %}                       |   <name:unique pane x>
-                               |    {% tabs tab-group:1 %}              |   <% Content for pane x %>                          
-                               |    <name:Non unique name,active:true>  |   <name:unique pane y> 
-                               |    <% Content for pane1 %>             |   <% Content for pane y %>                                        
-                               |    <name:Non unique name>              |   {% endtabs %}                                        
-                               |    <% Content for pane2 %>             |                                          
-                               |    <>                                  |                                          
-                               |    <% pane with random name  %>        |                                          
-                               |    {% endtabs %}                       |          
-```                               
+@input label optional, tab visual label
+
+Pane contents should come after each corresponding pane.
+<% My pane content %>
+<label:anotherpane>
+<%Awesome content for second pane!%>
+use end block when you are finished with your tab
+{% endtabs %}
 EXAMPLE
 ###
 # Gloabl scope variable in order to eliminate chance of accidental tab id
@@ -79,18 +67,16 @@ module Jekyll
                         
             # tab global header
             result = "<ul class=\"nav nav-#{@header["type"]} flex-column general-tab-header\" "
-            result += "aria-orientation=\"vertical\" id=\"#{@header['id']}\""
-            result += "#{@header["tab-group"] ? " tab-group=\"#{@header["tab-group"]}\" " : ""} role=\"tablist\">"
+            result += "aria-orientation=\"vertical\" id=\"#{@header['id']}\" "
+            result += "tab-group=\"#{@header["tab-group"] ? @header["tab-group"] : "default"}\" role=\"tablist\">"
             # user input should follow this format
             # tabs : <key:value>
             # content: <% content %>
             tmpdata = text.scan(/<(.*?)>(?:.*?)<\%(.*?)\%>/m)            
 
-            if @header["tab-group"]
-                # registering tab_group flag used in `_layouts/docwithnav.html` to decied
-                # when to include js/tabs.js in a page.
-                context.registers[:page]["tab_group"] = true
-            end
+            # registering tab_group flag used in `_layouts/docwithnav.html` to decied
+            # when to include js/tabs.js in a page.
+            context.registers[:page]["tab_group"] = true
 
             # headers and contents are two temporary variables used to generate last result
             headers = ""
@@ -105,20 +91,16 @@ module Jekyll
                     dict["active"] = false
                     print("\t** WARN: Detected multiple active tabs. **\n")
                 end
-                # To perevent empty tabs if name was not provided use id as tab name.
-                if dict.key?("name") == false
-                    dict["name"] = dict["id"]
-                end
 
                 headers += "<li class=\"nav-item#{dict["active"]? " active" : ""}\">"
                 headers += "<a class=\"nav-link \" id=\"#{dict["id"]}-tab\" data-toggle=\"tab\" "
                 headers += "href=\"#tab-#{dict["id"]}\" role=\"tab\" aria-controls=\"tab-#{dict["id"]}\" "
-                headers += "aria-selected=\"#{dict["active"]}\">#{dict["name"]}</a></li>"
+                headers += "aria-selected=\"#{dict["active"]}\">#{dict["label"]}</a></li>"
 
                 contents += "<div class=\"tab-pane#{dict["active"]? " active" : ""}\" "
                 contents += "id=\"tab-#{dict["id"]}\" role=\"tabpanel\" "
-                # there is a bug if user decides to create a one line content \n at the end of variable
-                # address this bug
+                # If user decides to create a one line content can cause a bug, \n after
+                # item variable resolves this issue.
                 contents += "aria-labelledby=\"#{dict["id"]}-tab\" markdown=\"1\" >#{item[1]}\n</div>"
 
             end
