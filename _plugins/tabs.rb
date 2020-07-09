@@ -16,20 +16,20 @@ To create individual tab use <name:Mytab,active:true>
    Normal tab                  |    Linked "Numerical index"            |   Linked tab "Identical names"                    
 ------------------------------ |:--------------------------------------:|-----------------------------------------:
    {% tabs %}                  |    {% tabs tab-group:1 %}              |   {% tabs tab-group:name %}                             
-   <name:Mytab,active:true>    |    <name:Non unique name,active:true>  |   <name:unique tab y,active:true>  
-   <% Content %>               |    <% Content for tab1 %>              |   <% Content for tab y %>                          
-   <name:Mytab>                |    <name:Non unique name>              |   <name:unique tab x>             
-   <% Content %>               |    <% Content for tab2 %>              |   <% Content for tab x %>                          
+   <name:pane1,active:true>    |    <name:Non unique name,active:true>  |   <name:unique pane y,active:true>  
+   <% Content for pane 1 %>    |    <% Content for pane1 %>             |   <% Content for pane y %>                          
+   <name:pane2>                |    <name:Non unique name>              |   <name:unique pane x>             
+   <% Content for pane 2 %>    |    <% Content for pane2 %>             |   <% Content for pane x %>                          
    <>                          |    <>                                  |   {% endtabs %}                          
-   <% Tab with random name  %> |    <% Tab with random name  %>         |   {% tabs tab-group:name %}                             
-   {% endtabs %}               |    {% endtabs %}                       |   <name:unique tab x>
-                               |    {% tabs tab-group:1 %}              |   <% Content for tab x %>                          
-                               |    <name:Non unique name,active:true>  |   <name:unique tab y> 
-                               |    <% Content for tab1 %>              |   <% Content for tab y %>                                        
+   <% pane with random name  %>|    <% pane with random name  %>        |   {% tabs tab-group:name %}                             
+   {% endtabs %}               |    {% endtabs %}                       |   <name:unique pane x>
+                               |    {% tabs tab-group:1 %}              |   <% Content for pane x %>                          
+                               |    <name:Non unique name,active:true>  |   <name:unique pane y> 
+                               |    <% Content for pane1 %>             |   <% Content for pane y %>                                        
                                |    <name:Non unique name>              |   {% endtabs %}                                        
-                               |    <% Content for tab2 %>              |                                          
+                               |    <% Content for pane2 %>             |                                          
                                |    <>                                  |                                          
-                               |    <% Tab with random name  %>         |                                          
+                               |    <% pane with random name  %>        |                                          
                                |    {% endtabs %}                       |          
 ```                               
 EXAMPLE
