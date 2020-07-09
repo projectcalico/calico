@@ -254,7 +254,9 @@ Use the following syntax for any link that takes the user outside the docs site;
 ```
 **Example**
 
+```
 {% include open-new-window.html text='Create an AKS cluster and enable network policy' url='https://docs.microsoft.com/en-us/azure/aks/use-network-policies' %}
+```
 
 ### Case sensitivity
 
