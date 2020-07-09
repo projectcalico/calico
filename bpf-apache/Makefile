@@ -27,6 +27,7 @@ CFLAGS +=  \
 	-Werror \
 	-fno-stack-protector \
 	-O2 \
+	-target bpf \
 	-emit-llvm
 
 CC := clang
