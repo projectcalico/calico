@@ -63,8 +63,8 @@ K3s is a lightweight implementation of Kubernetes packaged as a single binary.
    ```
 
 #### Install {{site.prodname}}
-   {% tabs tab-group:1 %}
-   <name:Operator,active:true>
+   {% tabs tab-group:grp1 %}
+   <label:Operator,active:true>
    <%
 Install the {{site.prodname}} operator and custom resource definitions.
 
@@ -83,7 +83,7 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
    {: .alert .alert-info}
    
    %>
-   <name:Manifest>
+   <label:Manifest>
    <%
    Install {{site.prodname}} by using the following command.
 
@@ -134,8 +134,8 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
    
 1. Confirm that all of the pods are running using the following command.
 
-{% tabs tab-group:1 %}
-<name:Operator,active:true>
+{% tabs tab-group:grp1 %}
+<label:Operator,active:true>
 <%
 
 ```
@@ -150,7 +150,7 @@ calico-system     calico-kube-controllers-89df8c6f8-7hxc5   1/1     Running   0 
 ```
 {: .no-select-button}
 %>
-<name:Manifest>
+<label:Manifest>
 <%
 
 ```

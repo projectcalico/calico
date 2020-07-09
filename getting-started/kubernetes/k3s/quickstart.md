@@ -45,8 +45,8 @@ curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--fla
 
 #### Install {{site.prodname}}
 
-   {% tabs tab-group:name %}
-   <name:Operator,active:true>
+   {% tabs %}
+   <label:Operator,active:true>
    <%
 Install the {{site.prodname}} operator and custom resource definitions.
 
@@ -65,7 +65,7 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
    {: .alert .alert-info}
    
    %>
-   <name:Manifest>
+   <label:Manifest>
    <%
    Install {{site.prodname}} by using the following command.
 
@@ -120,8 +120,8 @@ watch kubectl get pods --all-namespaces
 
 Wait until each pod shows the `STATUS` of `Running`.
 
-{% tabs tab-group:name %}
-<name:Operator,active:true>
+{% tabs %}
+<label:Operator,active:true>
 <%
 
 ```
@@ -136,7 +136,7 @@ calico-system     calico-kube-controllers-89df8c6f8-7hxc5   1/1     Running   0 
 ```
 {: .no-select-button}
 %>
-<name:Manifest>
+<label:Manifest>
 <%
 
 ```
