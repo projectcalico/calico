@@ -67,7 +67,6 @@ The submission of a PR kicks off a continuous integration process which includes
 
 However, you can also run this after submitting your PR and experiencing an `htmlproofer` failure from the Semaphore job.
 
-
 ## How to quickly apply changes in master to a previous release
 
 Let's say there's a single commit that makes changes to the `master` directory which I want to apply to the `v1.5` directory.
@@ -167,7 +166,6 @@ Examples:
 
 - Within the copies of the page in the `master` and previous release directories, add a `canonical_url` line below the `title` line in the metadata of the page. This should contain the absolute path to the page in the current latest directory. Example: `canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/'`. For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
 
-
 ### Deleting or renaming pages
 
 If you need to delete or rename a directory or file:
@@ -247,6 +245,16 @@ Will render as:
 ```
 kubectl apply -f `https://docs.tigera.io/v3.4/manifests/calicoctl.yaml`
 ```
+### Syntax for links outside the doc site
+
+Use the following syntax for any link that takes the user outside the docs site; so the link opens in a separate window.
+
+```
+{% include open-new-window.html text='NAME' url='URL' %}
+```
+**Example**
+
+{% include open-new-window.html text='Create an AKS cluster and enable network policy' url='https://docs.microsoft.com/en-us/azure/aks/use-network-policies' %}
 
 ### Case sensitivity
 
