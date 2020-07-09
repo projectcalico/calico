@@ -31,7 +31,7 @@ section:
    - title: Configure dual stack or IPv6 only
      path: /networking/ipv6
    - title: Configure Kubernetes control plane to operate over IPv6
-     path: //networking/ipv6-control-plane  
+     path: /networking/ipv6-control-plane  
    - title: Add a floating IP to a pod
      path: /networking/add-floating-ip
    - title: Use specific IP address for a pod
