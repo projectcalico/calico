@@ -71,7 +71,7 @@ blocks:
       # them in CI, as they only do anything when WireGuard is NOT available.
       - "! make check-wireguard"
       - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
-      parallelism: 5
+      parallelism: 3
     epilogue:
       always:
         commands:
@@ -100,7 +100,7 @@ blocks:
     - name: FV on newer kernel
       commands:
       - ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
-      parallelism: 5
+      parallelism: 8
     epilogue:
       always:
         commands:
