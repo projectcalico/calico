@@ -21,7 +21,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### About Prometheus
 
-The Prometheus monitoring tool scrapes metrics from instrumented jobs and displays time series data in a visualizer (such as Grafana). For {{site.prodname}}, the “jobs” that Prometheus can harvest metrics from are the Felix and Typha components. 
+The Prometheus monitoring tool scrapes metrics from instrumented jobs and displays time series data in a visualizer (such as Grafana). For {{site.prodname}}, the "jobs" that Prometheus can harvest metrics from are the Felix and Typha components. 
 
 #### About {{site.prodname}} Felix and Typha components
 

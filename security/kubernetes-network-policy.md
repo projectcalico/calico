@@ -26,7 +26,7 @@ The Kubernetes Network Policy API provides a standard way for users to define ne
 
 #### Ingress and egress
 
-The bulk of securing network traffic typically revolves around defining egress and ingress rules. From the point of view of a Kubernetes pod, **ingress** is incoming traffic to the pod, and **egress** is outgoing traffic from the pod. In Kubernetes network policy, you create ingress and egress “allow” rules independently (egress, ingress, or both).
+The bulk of securing network traffic typically revolves around defining egress and ingress rules. From the point of view of a Kubernetes pod, **ingress** is incoming traffic to the pod, and **egress** is outgoing traffic from the pod. In Kubernetes network policy, you create ingress and egress "allow" rules independently (egress, ingress, or both).
 
 #### Default deny/allow behavior
 

@@ -78,7 +78,7 @@ spec:
   - 203.0.113.0/24
 ```
 
-Next, we create two {{site.prodname}} **GlobalNetworkPolicy** objects. The first is a high “order” policy that allows traffic as a default for things that don’t match our second policy, which is low “order” and uses the **GlobalNetworkSet** label as a selector to deny ingress traffic (IP-blacklist in the previous step). In the label selector, we also include the term **!has(projectcalico.org/namespace)**, which prevents this policy from matching pods or NetworkSets that also have this label. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
+Next, we create two {{site.prodname}} **GlobalNetworkPolicy** objects. The first is a high "order" policy that allows traffic as a default for things that don’t match our second policy, which is low "order" and uses the **GlobalNetworkSet** label as a selector to deny ingress traffic (IP-blacklist in the previous step). In the label selector, we also include the term **!has(projectcalico.org/namespace)**, which prevents this policy from matching pods or NetworkSets that also have this label. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
 
 ```yaml
 apiVersion: projectcalico.org/v3

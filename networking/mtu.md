@@ -58,21 +58,21 @@ The following table lists common MTU sizes for {{site.prodname}} environments. B
 
 The extra overlay header used in IP in IP, VXLAN and WireGuard protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, VXLAN uses a 50-byte header, and WireGuard uses a {% include open-new-window.html text='60-byte header' url='https://lists.zx2c4.com/pipermail/wireguard/2017-December/002201.html' %}). Therefore, we recommend the following:
 
-- If you use WireGuard encryption configure MTU size as “physical network MTU size minus 60”.
-- If you don't use WireGuard, but use VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 50”.
-- If you don't use WireGuard, but use only IP in IP, configure MTU size as “physical network MTU size minus 20”
+- If you use WireGuard encryption configure MTU size as "physical network MTU size minus 60".
+- If you don't use WireGuard, but use VXLAN anywhere in your pod network, configure MTU size as "physical network MTU size minus 50".
+- If you don't use WireGuard, but use only IP in IP, configure MTU size as "physical network MTU size minus 20"
 - Set the workload endpoint MTU and the tunnel MTUs to the same value (so all paths have the same MTU)
 
 **eBPF mode**
 
 Implementation of NodePorts uses VXLAN tunnel to hand off packets from one node to another, therefore VXLAN MTU setting
-is used to set the MTUs of workloads (veths) and should be “physical network MTU size minus 50” (see above).
+is used to set the MTUs of workloads (veths) and should be "physical network MTU size minus 50" (see above).
 
 **MTU for flannel networking**
 
 When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface.
 - If using flannel with WireGuard encryption, use the "{{site.prodname}} MTU with WireGuard" column in the table above for common sizes.
-- Otherwise, if using flannel with VXLAN, use the “{{site.prodname}} MTU with VXLAN” column in the table above for common sizes.
+- Otherwise, if using flannel with VXLAN, use the "{{site.prodname}} MTU with VXLAN" column in the table above for common sizes.
 
 #### Configure MTU
 

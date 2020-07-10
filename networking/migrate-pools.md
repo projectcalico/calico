@@ -42,7 +42,7 @@ Look for the "type" entry:
     }, 
 </pre>
 
-If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+If the type is "calico-ipam", you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
 **Verify orchestrator support for changing the pod network CIDR**.
 

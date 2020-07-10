@@ -16,7 +16,7 @@ Learn about the different networking options {{site.prodname}} supports so you c
 If you want to fully understand the network choices available to you, we recommend you make sure you are familiar with and understand the following concepts.  If you would prefer to skip the learning and get straight to the choices and recommendations, you can jump ahead to [Networking Options](#networking-options).
 
 #### Kubernetes networking basics
-The Kubernetes network model defines a “flat” network in which:
+The Kubernetes network model defines a "flat" network in which:
 - Every pod get its own IP address.
 - Pods on any node can communicate with all pods on all other nodes without NAT.
 
@@ -45,7 +45,7 @@ The main disadvantages of using an overlay network are:
 - The pod IP addresses are not routable outside of the cluster.  More on this below! 
 
 #### Cross-subnet overlays
-In addition to standard VXLAN or IP-in-IP overlays, {{site.prodname}} also supports “cross-subnet” modes for VXLAN and IP-in-IP.  In this mode, within each subnet, the underlying network acts as an L2 network. Packets sent within a single subnet are not encapsulated, so you get the performance of a non-overlay network.  Packets sent across subnets are encapsulated, like a normal overlay network, reducing dependencies on the underlying network (without the need to integrate with or make any changes to the underlying network).
+In addition to standard VXLAN or IP-in-IP overlays, {{site.prodname}} also supports "cross-subnet" modes for VXLAN and IP-in-IP.  In this mode, within each subnet, the underlying network acts as an L2 network. Packets sent within a single subnet are not encapsulated, so you get the performance of a non-overlay network.  Packets sent across subnets are encapsulated, like a normal overlay network, reducing dependencies on the underlying network (without the need to integrate with or make any changes to the underlying network).
 
 Just like with a standard overlay network, the underlying network is not aware of pod IP addresses and the pod IP addresses are not routable outside of the cluster.
 
@@ -127,7 +127,7 @@ The host local CNI IPAM plugin is a commonly used IP address management CNI plug
 
 **Flannel**
 
-Flannel routes pod traffic using static per-node CIDRs obtained from the host-local IPAM CNI plugin. Flannel provides a number of networking backends, but is predominantly used with its VXLAN overlay backend. {{site.prodname}} CNI and {{site.prodname}} network policy can be combined with flannel and the host-local IPAM plugin to provide a VXLAN network with policy enforcement.  This combination is sometimes referred to as “Canal”.  
+Flannel routes pod traffic using static per-node CIDRs obtained from the host-local IPAM CNI plugin. Flannel provides a number of networking backends, but is predominantly used with its VXLAN overlay backend. {{site.prodname}} CNI and {{site.prodname}} network policy can be combined with flannel and the host-local IPAM plugin to provide a VXLAN network with policy enforcement.  This combination is sometimes referred to as "Canal".  
 
 >**Note**: {{site.prodname}} now has built in support for VXLAN, which we generally recommend for simplicity in preference to using the Calico+Flannel combination.
 {: .alert .alert-info}

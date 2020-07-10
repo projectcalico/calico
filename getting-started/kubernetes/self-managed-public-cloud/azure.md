@@ -60,7 +60,7 @@ Unfortunately, aks-engine does not support this mode, so you must use a differen
 
 #### Terraform
 
-Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform “provisioners.” See the {% include open-new-window.html text='Terraform documentation' url='https://www.terraform.io/docs/index.html' %} for more details.
+Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform "provisioners." See the {% include open-new-window.html text='Terraform documentation' url='https://www.terraform.io/docs/index.html' %} for more details.
 
 ##### kubeadm
 

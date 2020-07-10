@@ -21,7 +21,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Linux conntrack
 
-Connection tracking (“conntrack”) is a core feature of the Linux kernel’s networking stack. It allows the kernel to keep track of all logical network connections or flows, and thereby identify all of the packets that make up each flow so they can be handled consistently together. Conntrack is an essential part of the mainline Linux network processing pipeline, normally improving performance, and enabling NAT and stateful access control.
+Connection tracking ("conntrack") is a core feature of the Linux kernel’s networking stack. It allows the kernel to keep track of all logical network connections or flows, and thereby identify all of the packets that make up each flow so they can be handled consistently together. Conntrack is an essential part of the mainline Linux network processing pipeline, normally improving performance, and enabling NAT and stateful access control.
 
 #### Extreme high-connection workloads
 

@@ -46,7 +46,7 @@ Because the `blockSize` field cannot be edited directly after {{site.prodname}} 
       }, 
   </pre>
 
-  If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+  If the type is "calico-ipam", you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
 ### How to
 
@@ -111,7 +111,7 @@ temporary-pool        10.0.0.0/16      true   Always     false
 Disable allocations in the default pool.
 
 ```
-calicoctl patch ippool default-ipv4-ippool -p '{"spec": {"disabled": “true”}}'
+calicoctl patch ippool default-ipv4-ippool -p '{"spec": {"disabled": "true"}}'
 ```
 
 Verify the changes.
@@ -175,7 +175,7 @@ calicoctl apply -f pool.yaml
 #### Disable the temporary IP pool
 
 ```
-calicoctl patch ippool temporary-pool -p '{"spec": {"disabled": “true”}}'
+calicoctl patch ippool temporary-pool -p '{"spec": {"disabled": "true"}}'
 ```
 
 #### Delete pods from the temporary IP pool

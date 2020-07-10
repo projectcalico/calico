@@ -29,13 +29,13 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### The network is always hostile
 
-**Zero Trust Networking** is an approach to network security that is unified by the principle that the network is always assumed to be hostile. This is in direct contrast to perimeter and “segmentation” approaches that focus on separating the world into trusted and untrusted network segments.
+**Zero Trust Networking** is an approach to network security that is unified by the principle that the network is always assumed to be hostile. This is in direct contrast to perimeter and "segmentation" approaches that focus on separating the world into trusted and untrusted network segments.
 
 Why assume the network is hostile? In many attack scenarios, it is.
 
-- Attackers may compromise “trusted” parts of your network infrastructure: routers, switches, links, etc.
+- Attackers may compromise "trusted" parts of your network infrastructure: routers, switches, links, etc.
 - Deliberate or accidental misconfiguration can route sensitive traffic over untrusted networks, like the public Internet.
-- Other endpoints on a “trusted” network may be compromised: your application may share a network with thousands of other servers, tens of thousands of other containers, thousands of personal laptops, phones, etc.
+- Other endpoints on a "trusted" network may be compromised: your application may share a network with thousands of other servers, tens of thousands of other containers, thousands of personal laptops, phones, etc.
 
 Major breaches typically start as a minor compromise of as little as a single component, but attackers then use the network to move laterally toward high value targets: your company’s or customers’ data. In a zone or perimeter model, attackers can move freely inside the perimeter or zone after they have compromised a single endpoint. A Zero Trust Network is resilient to this threat because it enforces strong, cryptographic authentication and access control on each and every network connection.
 
@@ -112,7 +112,7 @@ Follow the [install instructions]({{ site.baseurl }}/getting-started/kubernetes/
 
 Follow the instructions to [Enable application layer policy[Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).
 
-The instructions include a “demo” install of Istio for quickly testing out functionality. For a production installation to support a Zero Trust Network, you should instead follow the official Istio install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled to true**.
+The instructions include a "demo" install of Istio for quickly testing out functionality. For a production installation to support a Zero Trust Network, you should instead follow the official Istio install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled to true**.
 
 #### Establish workload identity by using Service Accounts
 
@@ -157,8 +157,8 @@ If this is difficult to do from memory, you have several options.
     a. Process the flow logs to determine the set of flows.    
     b. Review the logged flows and add rules for each expected flow.
 1. Use Tigera Secure Enterprise Edition for policy, and put it into logging-only mode.    
-    a. In this mode “denied” connections are logged instead of dropped.    
-    b. Review the “denied” logs and add rules for each expected flow.
+    a. In this mode "denied" connections are logged instead of dropped.    
+    b. Review the "denied" logs and add rules for each expected flow.
 
 When determining flows from a running application instance, be sure to review each rule you add with application developers to determine if it is legitimate and expected. The last thing you want is for a breach-in-progress to be enshrined as expected flows in policy!
 
@@ -290,7 +290,7 @@ It is difficult to overstate how important the last point is. If your change con
 
 The size of the security team is often relatively small compared with application development and operations teams in most organizations. Fortunately, most application changes will not require changes in security policy, but even a small proportion of changes can lead to a large absolute number when dealing with large application teams. For this reason, it is often not feasible for a member of the security team to make every policy change. A classic complaint in large enterprises is that it takes weeks to change a firewall rule---this is often not because the actual workflow is time consuming but because the security team is swamped with a large backlog.
 
-Therefore, we recommend that the authors of the policy changes be developers/devops (i.e. authorship should “shift left”). This allows your change control process to scale naturally as your applications do. When application authors make changes that require policy changes (say, adding a new microservice), they also make the required policy changes to authorize the network activity associated with it.
+Therefore, we recommend that the authors of the policy changes be developers/devops (i.e. authorship should "shift left"). This allows your change control process to scale naturally as your applications do. When application authors make changes that require policy changes (say, adding a new microservice), they also make the required policy changes to authorize the network activity associated with it.
 
 Here is a simplified application delivery pipeline flow.
 

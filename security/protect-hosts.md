@@ -25,7 +25,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Hosts and workloads
 
-In the context of {{site.prodname}} configuration, a **workload** is a virtualized compute instance, like a VM or container. A **host** is the computer that runs the hypervisor (for VMs), or container runtime (for containers). We say it “hosts” the workloads as guests.
+In the context of {{site.prodname}} configuration, a **workload** is a virtualized compute instance, like a VM or container. A **host** is the computer that runs the hypervisor (for VMs), or container runtime (for containers). We say it "hosts" the workloads as guests.
 
 #### Host endpoints
 
@@ -157,7 +157,7 @@ The default {{site.prodname}} behavior blocks all connections from workloads to 
 
 This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return**.
 
-To change this parameter for all hosts, edit the **FelixConfiguration** object named “default.”
+To change this parameter for all hosts, edit the **FelixConfiguration** object named "default."
 
 1. Get a copy of the object to edit.
 

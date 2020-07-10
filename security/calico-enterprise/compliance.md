@@ -46,7 +46,7 @@ With Calico Enterprise flow logs, you can prove to security and auditors that yo
 
 ### Audit logs
 
-Your security team or auditor may not be satisfied with a “current point in time” compliance audit and may want to see historical data, including what changes have occurred to your policies over time.
+Your security team or auditor may not be satisfied with a "current point in time" compliance audit and may want to see historical data, including what changes have occurred to your policies over time.
 
 Audit logs, when combined with flow logs, demonstrate ongoing compliance with your security requirements over time.
 
@@ -66,7 +66,7 @@ The specific findings can be downloaded as a CSV file that provides detailed inf
 
 ### Compliance reports
 
-Your security team or auditor will need to see that your security policies are covering all “in scope” workloads. In scope workloads are those pods that are governed by your security policy. For example, you may have some pods that are in scope for PCI compliance and others that are not.
+Your security team or auditor will need to see that your security policies are covering all "in scope" workloads. In scope workloads are those pods that are governed by your security policy. For example, you may have some pods that are in scope for PCI compliance and others that are not.
 
 Calico Enterprise periodically generates compliance reports that show you:
 

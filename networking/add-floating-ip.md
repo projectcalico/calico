@@ -19,7 +19,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Concepts
 
-A **floating IP** is an additional IP address assigned to a workload endpoint. These IPs “float” in the sense that they can be moved around the cluster and front different workload endpoints at different times.  The workload itself is generally unaware of the floating IP; the host uses network address translation (NAT) on incoming traffic to change the floating IP to the workload’s real IP before delivering packets to the workload.
+A **floating IP** is an additional IP address assigned to a workload endpoint. These IPs "float" in the sense that they can be moved around the cluster and front different workload endpoints at different times.  The workload itself is generally unaware of the floating IP; the host uses network address translation (NAT) on incoming traffic to change the floating IP to the workload’s real IP before delivering packets to the workload.
 
 A Kubernetes Service assigns a **cluster IP** that allows other endpoints on the network (and may also assign a nodePort and/or an external load balancer IP) to access a set of pods, using network address translation. In many circumstances, a Kubernetes Service can handle similar use cases as a floating IP, and is generally recommended for Kubernetes users because it is a native Kubernetes concept.  One thing you cannot do with Kubernetes Services is use protocols other than UDP, TCP, and SCTP (use of such protocols is fairly rare).
 
@@ -40,7 +40,7 @@ To verify, ssh to one of the Kubernetes nodes and look for at the CNI plugin con
 
 By default, floating IPs are disabled. To enable floating IPs, follow these steps.
 
-Modify the calico-config ConfigMap in the kube-system namespace. In the `cni_network_config` section, add the following stanza to the “calico” plugin config section.
+Modify the calico-config ConfigMap in the kube-system namespace. In the `cni_network_config` section, add the following stanza to the "calico" plugin config section.
 
 <pre>
     "feature_control": {

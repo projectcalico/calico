@@ -30,6 +30,6 @@ You can preview the effects of any policy change using Calico Enterprise. The pr
 
 ### Policy stages
 
-Calico Enterprise policies can be run in either a “committed” or “staged” mode. Policies running in a staged mode will report on traffic that would have been allowed or denied by the policy, but will not enforce its rule. This enables policy changes to be safely rolled out to your cluster and observed until you feel comfortable committing and enforcing the change.
+Calico Enterprise policies can be run in either a "committed" or "staged" mode. Policies running in a staged mode will report on traffic that would have been allowed or denied by the policy, but will not enforce its rule. This enables policy changes to be safely rolled out to your cluster and observed until you feel comfortable committing and enforcing the change.
 
 ![policy-options]({{site.baseurl}}/images/policy-options.png)

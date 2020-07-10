@@ -41,7 +41,7 @@ Once you've agreed on a design for your bugfix or new feature, development again
 1. When you receive feedback:
     1. Address code review issues on your feature branch.
     1. Push the changes to your fork's feature branch on GitHub _in a new commit - do not squash!_ This automatically updates the pull request.
-    1. If necessary, make a top-level comment along the lines of “Please re-review”, notifying your reviewer, and repeat the above.
+    1. If necessary, make a top-level comment along the lines of "Please re-review", notifying your reviewer, and repeat the above.
     1. Once all the requested changes have been made, your reviewer may ask you to squash your commits. If so, combine the commits into one with a single descriptive message.
     1. Once your PR has been approved and the commits have been squashed, your reviewer will merge the PR. If you have the necessary permissions, you may merge the PR yourself.
 

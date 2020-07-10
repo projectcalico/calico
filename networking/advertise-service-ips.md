@@ -42,9 +42,9 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 #### Tips for success
 
-- Generally, we recommend using “Local” for the following reasons:
+- Generally, we recommend using "Local" for the following reasons:
   - If any of your network policy uses rules to match by specific source IP addresses, using Local is the obvious choice because the source IP address is not altered, and the policy will still work.
-  - Return traffic is routed directly to the source IP because “Local” services do not require undoing the source NAT (unlike “Cluster” services).
+  - Return traffic is routed directly to the source IP because "Local" services do not require undoing the source NAT (unlike "Cluster" services).
 - Cluster IP advertisement works best with a ToR that supports ECMP. Otherwise, all traffic for a given route is directed to a single node.
 
 ### Before you begin...
@@ -52,7 +52,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 - [Configure BGP peering]({{ site.baseurl }}/networking/bgp) between {{site.prodname}} and your network infrastructure
 - For ECMP load balancing to services, the upstream routers must be configured to use BGP multipath.
 - You need at least one external node outside the cluster that acts as a router, route reflector, or ToR that is peered with calico nodes inside the cluster.
-- Services must be configured with the correct service type (“Cluster” or “Local”) for your implementation. For `externalTrafficPolicy: Local`, the service must be type `LoadBalancer` or `NodePort`.
+- Services must be configured with the correct service type ("Cluster" or "Local") for your implementation. For `externalTrafficPolicy: Local`, the service must be type `LoadBalancer` or `NodePort`.
 
 ### How to
 
