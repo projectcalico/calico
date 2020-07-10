@@ -27,7 +27,7 @@ While Azure does not support {{site.prodname}} networking, you can use
 To configure Azure user-defined routes (UDR):
 
 - Create an [Azure route table][AzureUDRCreate]{:target="_blank"} and
-  associatе it with the VMs subnet.
+  associate it with the VMs subnet.
 
 - Enable [IP forwarding enabled][AzureIPForward]{:target="_blank"} in your
   VM network interfaces.
