@@ -64,15 +64,15 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Enable IPv6 only
 
-{% tabs id:installation-method-new %}
-  <id:op-new,name:Operator,active:true>
-  <%
+{% tabs %}
+   <label:Operator,active:true>
+   <%
 1. TBD.
 1. TBD.
 
 %>
- <id:man-new,name:Manifest>
- <%
+<label:Manifest>
+<%
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
