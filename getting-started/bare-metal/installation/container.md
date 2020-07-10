@@ -18,6 +18,6 @@ Installing {{site.prodname}} with a Docker container includes everything you nee
 
 ### How to
 
-The `{{site.nodecontainer}}` container should be started at boot time by your init system and the init system must be configured to restart it if stopped. {{site.prodname}} relies on that behavior for certain configuration changes.
+The `{{site.nodecontainer}}` container should be started at boot time by your init system and the init system must be configured to restart it if stopped. {{site.prodname}} relies on that behavior for certain configuration changes.
 {% include content/docker-container-service.md %}
 
