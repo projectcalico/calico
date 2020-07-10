@@ -1353,28 +1353,28 @@ canonical_url: '/reference/legal/calicoctl'
 
 		1\. Definitions
 
-		1.1. "Contributor"
+		1.1. “Contributor”
 
 		     means each individual or legal entity that creates, contributes to the
 		     creation of, or owns Covered Software.
 
-		1.2. "Contributor Version"
+		1.2. “Contributor Version”
 
 		     means the combination of the Contributions of others (if any) used by a
 		     Contributor and that particular Contributor’s Contribution.
 
-		1.3. "Contribution"
+		1.3. “Contribution”
 
 		     means Covered Software of a particular Contributor.
 
-		1.4. "Covered Software"
+		1.4. “Covered Software”
 
 		     means Source Code Form to which the initial Contributor has attached the
 		     notice in Exhibit A, the Executable Form of such Source Code Form, and
 		     Modifications of such Source Code Form, in each case including portions
 		     thereof.
 
-		1.5. "Incompatible With Secondary Licenses"
+		1.5. “Incompatible With Secondary Licenses”
 		     means
 
 		     a. that the initial Contributor has attached the notice described in
@@ -1384,26 +1384,26 @@ canonical_url: '/reference/legal/calicoctl'
 		        1.1 or earlier of the License, but not also under the terms of a
 		        Secondary License.
 
-		1.6. "Executable Form"
+		1.6. “Executable Form”
 
 		     means any form of the work other than Source Code Form.
 
-		1.7. "Larger Work"
+		1.7. “Larger Work”
 
 		     means a work that combines Covered Software with other material, in a separate
 		     file or files, that is not Covered Software.
 
-		1.8. "License"
+		1.8. “License”
 
 		     means this document.
 
-		1.9. "Licensable"
+		1.9. “Licensable”
 
 		     means having the right to grant, to the maximum extent possible, whether at the
 		     time of the initial grant or subsequently, any and all of the rights conveyed by
 		     this License.
 
-		1.10. "Modifications"
+		1.10. “Modifications”
 
 		     means any of the following:
 
@@ -1412,7 +1412,7 @@ canonical_url: '/reference/legal/calicoctl'
 
 		     b. any new file in Source Code Form that contains any Covered Software.
 
-		1.11. "Patent Claims" of a Contributor
+		1.11. “Patent Claims” of a Contributor
 
 		      means any patent claim(s), including without limitation, method, process,
 		      and apparatus claims, in any patent Licensable by such Contributor that
@@ -1420,22 +1420,22 @@ canonical_url: '/reference/legal/calicoctl'
 		      using, selling, offering for sale, having made, import, or transfer of
 		      either its Contributions or its Contributor Version.
 
-		1.12. "Secondary License"
+		1.12. “Secondary License”
 
 		      means either the GNU General Public License, Version 2.0, the GNU Lesser
 		      General Public License, Version 2.1, the GNU Affero General Public
 		      License, Version 3.0, or any later versions of those licenses.
 
-		1.13. "Source Code Form"
+		1.13. “Source Code Form”
 
 		      means the form of the work preferred for making modifications.
 
-		1.14. "You" (or "Your")
+		1.14. “You” (or “Your”)
 
 		      means an individual or a legal entity exercising rights under this
-		      License. For legal entities, "You" includes any entity that controls, is
+		      License. For legal entities, “You” includes any entity that controls, is
 		      controlled by, or is under common control with You. For purposes of this
-		      definition, "control" means (a) the power, direct or indirect, to cause
+		      definition, “control” means (a) the power, direct or indirect, to cause
 		      the direction or management of such entity, whether by contract or
 		      otherwise, or (b) ownership of more than fifty percent (50%) of the
 		      outstanding shares or beneficial ownership of such entity.
@@ -1609,7 +1609,7 @@ canonical_url: '/reference/legal/calicoctl'
 
 		6\. Disclaimer of Warranty
 
-		   Covered Software is provided under this License on an "as is" basis, without
+		   Covered Software is provided under this License on an “as is” basis, without
 		   warranty of any kind, either expressed, implied, or statutory, including,
 		   without limitation, warranties that the Covered Software is free of defects,
 		   merchantable, fit for a particular purpose or non-infringing. The entire
@@ -1697,10 +1697,10 @@ canonical_url: '/reference/legal/calicoctl'
 
 		You may add additional accurate notices of copyright ownership.
 
-		Exhibit B - "Incompatible With Secondary Licenses" Notice
+		Exhibit B - “Incompatible With Secondary Licenses” Notice
 
-		      This Source Code Form is "Incompatible
-		      With Secondary Licenses", as defined by
+		      This Source Code Form is “Incompatible
+		      With Secondary Licenses”, as defined by
 		      the Mozilla Public License, v. 2.0.
 
 
@@ -6104,28 +6104,28 @@ Mozilla Public License, version 2.0
 
 1. Definitions
 
-1.1. "Contributor"
+1.1. “Contributor”
 
      means each individual or legal entity that creates, contributes to the
      creation of, or owns Covered Software.
 
-1.2. "Contributor Version"
+1.2. “Contributor Version”
 
      means the combination of the Contributions of others (if any) used by a
      Contributor and that particular Contributor’s Contribution.
 
-1.3. "Contribution"
+1.3. “Contribution”
 
      means Covered Software of a particular Contributor.
 
-1.4. "Covered Software"
+1.4. “Covered Software”
 
      means Source Code Form to which the initial Contributor has attached the
      notice in Exhibit A, the Executable Form of such Source Code Form, and
      Modifications of such Source Code Form, in each case including portions
      thereof.
 
-1.5. "Incompatible With Secondary Licenses"
+1.5. “Incompatible With Secondary Licenses”
      means
 
      a. that the initial Contributor has attached the notice described in
@@ -6135,26 +6135,26 @@ Mozilla Public License, version 2.0
         1.1 or earlier of the License, but not also under the terms of a
         Secondary License.
 
-1.6. "Executable Form"
+1.6. “Executable Form”
 
      means any form of the work other than Source Code Form.
 
-1.7. "Larger Work"
+1.7. “Larger Work”
 
      means a work that combines Covered Software with other material, in a separate
      file or files, that is not Covered Software.
 
-1.8. "License"
+1.8. “License”
 
      means this document.
 
-1.9. "Licensable"
+1.9. “Licensable”
 
      means having the right to grant, to the maximum extent possible, whether at the
      time of the initial grant or subsequently, any and all of the rights conveyed by
      this License.
 
-1.10. "Modifications"
+1.10. “Modifications”
 
      means any of the following:
 
@@ -6163,7 +6163,7 @@ Mozilla Public License, version 2.0
 
      b. any new file in Source Code Form that contains any Covered Software.
 
-1.11. "Patent Claims" of a Contributor
+1.11. “Patent Claims” of a Contributor
 
       means any patent claim(s), including without limitation, method, process,
       and apparatus claims, in any patent Licensable by such Contributor that
@@ -6171,22 +6171,22 @@ Mozilla Public License, version 2.0
       using, selling, offering for sale, having made, import, or transfer of
       either its Contributions or its Contributor Version.
 
-1.12. "Secondary License"
+1.12. “Secondary License”
 
       means either the GNU General Public License, Version 2.0, the GNU Lesser
       General Public License, Version 2.1, the GNU Affero General Public
       License, Version 3.0, or any later versions of those licenses.
 
-1.13. "Source Code Form"
+1.13. “Source Code Form”
 
       means the form of the work preferred for making modifications.
 
-1.14. "You" (or "Your")
+1.14. “You” (or “Your”)
 
       means an individual or a legal entity exercising rights under this
-      License. For legal entities, "You" includes any entity that controls, is
+      License. For legal entities, “You” includes any entity that controls, is
       controlled by, or is under common control with You. For purposes of this
-      definition, "control" means (a) the power, direct or indirect, to cause
+      definition, “control” means (a) the power, direct or indirect, to cause
       the direction or management of such entity, whether by contract or
       otherwise, or (b) ownership of more than fifty percent (50%) of the
       outstanding shares or beneficial ownership of such entity.
@@ -6360,7 +6360,7 @@ Mozilla Public License, version 2.0
 
 6. Disclaimer of Warranty
 
-   Covered Software is provided under this License on an "as is" basis, without
+   Covered Software is provided under this License on an “as is” basis, without
    warranty of any kind, either expressed, implied, or statutory, including,
    without limitation, warranties that the Covered Software is free of defects,
    merchantable, fit for a particular purpose or non-infringing. The entire
@@ -6448,10 +6448,10 @@ directory) where a recipient would be likely to look for such a notice.
 
 You may add additional accurate notices of copyright ownership.
 
-Exhibit B - "Incompatible With Secondary Licenses" Notice
+Exhibit B - “Incompatible With Secondary Licenses” Notice
 
-      This Source Code Form is "Incompatible
-      With Secondary Licenses", as defined by
+      This Source Code Form is “Incompatible
+      With Secondary Licenses”, as defined by
       the Mozilla Public License, v. 2.0.
 
 
