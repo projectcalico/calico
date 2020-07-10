@@ -3496,7 +3496,7 @@ canonical_url: '/reference/legal/felix'
 		1.2. "Contributor Version"
 
 		     means the combination of the Contributions of others (if any) used by a
-		     Contributor and that particular Contributor's Contribution.
+		     Contributor and that particular Contributor’s Contribution.
 
 		1.3. "Contribution"
 
@@ -3608,7 +3608,7 @@ canonical_url: '/reference/legal/felix'
 
 		     a. for any code that a Contributor has removed from Covered Software; or
 
-		     b. for infringements caused by: (i) Your and any other third party's
+		     b. for infringements caused by: (i) Your and any other third party’s
 		        modifications of Covered Software, or (ii) the combination of its
 		        Contributions with other software (except as part of its Contributor
 		        Version); or
@@ -3653,7 +3653,7 @@ canonical_url: '/reference/legal/felix'
 		     terms of this License. You must inform recipients that the Source Code Form
 		     of the Covered Software is governed by the terms of this License, and how
 		     they can obtain a copy of this License. You may not attempt to alter or
-		     restrict the recipients' rights in the Source Code Form.
+		     restrict the recipients’ rights in the Source Code Form.
 
 		3.2. Distribution of Executable Form
 
@@ -3667,7 +3667,7 @@ canonical_url: '/reference/legal/felix'
 
 		     b. You may distribute such Executable Form under the terms of this License,
 		        or sublicense it under different terms, provided that the license for
-		        the Executable Form does not attempt to limit or alter the recipients'
+		        the Executable Form does not attempt to limit or alter the recipients’
 		        rights in the Source Code Form under this License.
 
 		3.3. Distribution of a Larger Work
@@ -3766,7 +3766,7 @@ canonical_url: '/reference/legal/felix'
 		   other commercial damages or losses, even if such party shall have been
 		   informed of the possibility of such damages. This limitation of liability
 		   shall not apply to liability for death or personal injury resulting from such
-		   party's negligence to the extent applicable law prohibits such limitation.
+		   party’s negligence to the extent applicable law prohibits such limitation.
 		   Some jurisdictions do not allow the exclusion or limitation of incidental or
 		   consequential damages, so this exclusion and limitation may not apply to You.
 
@@ -3776,7 +3776,7 @@ canonical_url: '/reference/legal/felix'
 		   a jurisdiction where the defendant maintains its principal place of business
 		   and such litigation shall be governed by laws of that jurisdiction, without
 		   reference to its conflict-of-law provisions. Nothing in this Section shall
-		   prevent a party's ability to bring cross-claims or counter-claims.
+		   prevent a party’s ability to bring cross-claims or counter-claims.
 
 		9\. Miscellaneous
 
@@ -7275,7 +7275,7 @@ Mozilla Public License, version 2.0
 1.2. "Contributor Version"
 
      means the combination of the Contributions of others (if any) used by a
-     Contributor and that particular Contributor's Contribution.
+     Contributor and that particular Contributor’s Contribution.
 
 1.3. "Contribution"
 
@@ -7387,7 +7387,7 @@ Mozilla Public License, version 2.0
 
      a. for any code that a Contributor has removed from Covered Software; or
 
-     b. for infringements caused by: (i) Your and any other third party's
+     b. for infringements caused by: (i) Your and any other third party’s
         modifications of Covered Software, or (ii) the combination of its
         Contributions with other software (except as part of its Contributor
         Version); or
@@ -7432,7 +7432,7 @@ Mozilla Public License, version 2.0
      terms of this License. You must inform recipients that the Source Code Form
      of the Covered Software is governed by the terms of this License, and how
      they can obtain a copy of this License. You may not attempt to alter or
-     restrict the recipients' rights in the Source Code Form.
+     restrict the recipients’ rights in the Source Code Form.
 
 3.2. Distribution of Executable Form
 
@@ -7446,7 +7446,7 @@ Mozilla Public License, version 2.0
 
      b. You may distribute such Executable Form under the terms of this License,
         or sublicense it under different terms, provided that the license for
-        the Executable Form does not attempt to limit or alter the recipients'
+        the Executable Form does not attempt to limit or alter the recipients’
         rights in the Source Code Form under this License.
 
 3.3. Distribution of a Larger Work
@@ -7545,7 +7545,7 @@ Mozilla Public License, version 2.0
    other commercial damages or losses, even if such party shall have been
    informed of the possibility of such damages. This limitation of liability
    shall not apply to liability for death or personal injury resulting from such
-   party's negligence to the extent applicable law prohibits such limitation.
+   party’s negligence to the extent applicable law prohibits such limitation.
    Some jurisdictions do not allow the exclusion or limitation of incidental or
    consequential damages, so this exclusion and limitation may not apply to You.
 
@@ -7555,7 +7555,7 @@ Mozilla Public License, version 2.0
    a jurisdiction where the defendant maintains its principal place of business
    and such litigation shall be governed by laws of that jurisdiction, without
    reference to its conflict-of-law provisions. Nothing in this Section shall
-   prevent a party's ability to bring cross-claims or counter-claims.
+   prevent a party’s ability to bring cross-claims or counter-claims.
 
 9. Miscellaneous
 
