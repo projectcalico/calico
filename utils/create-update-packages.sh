@@ -57,12 +57,13 @@ function require_version {
 	: ${REPO_NAME:=testing}
 	: ${NETWORKING_CALICO_CHECKOUT:=${VERSION}}
 	: ${FELIX_CHECKOUT:=${VERSION}}
-    elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-python2)?$ ]]; then
 	MAJOR=${BASH_REMATCH[1]}
 	MINOR=${BASH_REMATCH[2]}
 	PATCH=${BASH_REMATCH[3]}
-	: ${REPO_NAME:=calico-${MAJOR}.${MINOR}}
-	: ${NETWORKING_CALICO_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}}
+	PY2SUFFIX=${BASH_REMATCH[4]}
+	: ${REPO_NAME:=calico-${MAJOR}.${MINOR}${PY2SUFFIX}}
+	: ${NETWORKING_CALICO_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}${PY2SUFFIX}}
 	: ${FELIX_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}}
     else
 	echo "ERROR: Unhandled VERSION \"${VERSION}\""
