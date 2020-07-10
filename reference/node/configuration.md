@@ -8,7 +8,7 @@ The `{{site.nodecontainer}}` container is deployed to every node (on Kubernetes,
 
 * Felix, the Calico daemon that runs on every node and provides endpoints.
 * BIRD, the BGP daemon that distributes routing information to other nodes.
-* confd, a daemon that watches the Calico datastore for config changes and updates BIRD’s config files.
+* confd, a daemon that watches the Calico datastore for config changes and updates BIRD's config files.
 
 For manifest-based installations, `{{site.nodecontainer}}` is primarily configured through environment
 variables, typically set in the deployment manifest. Individual nodes may also be updated through the Node

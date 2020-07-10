@@ -12,7 +12,7 @@ Calico Enterprise provides visibility into all ingress, egress, and pod-to-pod n
 
 ### Flow logs 
 
-Flow logs are a common requirement for any compliance framework. An auditor will generally need proof that your security controls are being enforced, and Calico Enterprise’s rich flow logs provide the evidence needed.
+Flow logs are a common requirement for any compliance framework. An auditor will generally need proof that your security controls are being enforced, and Calico Enterprise's rich flow logs provide the evidence needed.
 
 Flow logs also simplify debugging network policies and connectivity issues.
 
@@ -43,4 +43,4 @@ Calico Enterprise detects and alerts on unexpected network behavior that can ind
 - Attempted connections to botnets and command & control servers
 - Abnormal flow volumes or flow patterns using machine learning
 
-The Tigera threat research team keeps Calico Enterprise’s threat detection capabilities up to date, searching for new and known vulnerabilities.
+The Tigera threat research team keeps Calico Enterprise's threat detection capabilities up to date, searching for new and known vulnerabilities.

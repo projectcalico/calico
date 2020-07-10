@@ -70,7 +70,7 @@ Follow these steps to migrate pods from one IP pool to another pool.
 
 In the following example, we created a Kubernetes cluster using **kubeadm**. But we accidentially assigned the CIDR for pods to be: **192.168.0.0/16**. We now want to change the CIDR to: **10.0.0.0/16** (within the cluster CIDR). 
 
-Let’s run `calicoctl get ippool -o wide` to see the IP pool, **default-ipv4-ippool**.
+Let's run `calicoctl get ippool -o wide` to see the IP pool, **default-ipv4-ippool**.
 
 <pre>
 NAME                  CIDR             NAT    IPIPMODE   VXLANMODE   DISABLED
@@ -84,7 +84,7 @@ NAMESPACE     WORKLOAD                   NODE      NETWORKS            INTERFACE
 kube-system   coredns-6f4fd4bdf-8q7zp   vagrant   192.168.52.130/32   cali800a63073ed
 </pre>
 
-Let’s get started changing this pod to the new IP pool (10.0.0.0/16).
+Let's get started changing this pod to the new IP pool (10.0.0.0/16).
 
 #### Step 1: Add a new IP pool
 
@@ -101,7 +101,7 @@ spec:
   natOutgoing: true
 </pre>
 
-Let’s verify the new IP pool.
+Let's verify the new IP pool.
 
 ```bash
 calicoctl get ippool -o wide

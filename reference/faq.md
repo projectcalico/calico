@@ -260,10 +260,10 @@ them. We use BGP to distribute the topology of the network, telling
 every node how to get to every endpoint in case two endpoints need to
 communicate. We use policy to decide *if* those two nodes should
 communicate, and if so, how. If policy changes and two endpoints should
-now communicate, where before they shouldn’t have, all we have to do is
+now communicate, where before they shouldn't have, all we have to do is
 update policy: the reachability information does not change. If later
 they should be denied the ability to communicate, the policy is updated
-again, and again the reachability doesn’t have to change.
+again, and again the reachability doesn't have to change.
 
 ## How does {{site.prodname}} interact with the Neutron API?
 

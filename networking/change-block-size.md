@@ -94,7 +94,7 @@ Apply the changes.
 calicoctl apply -f temporary-pool.yaml
 ```
 
-Let’s verify the temporary IP pool.
+Let's verify the temporary IP pool.
 
 ```
 calicoctl get ippool -o wide
@@ -144,7 +144,7 @@ kubectl delete pod -A --all
 
 #### Delete the existing IP pool
 
-Now that you’ve verified that pods are getting IPs from the new range, you can safely delete the existing pool.
+Now that you've verified that pods are getting IPs from the new range, you can safely delete the existing pool.
 
 ```
 calicoctl delete ippool default-ipv4-ippool

@@ -9,7 +9,7 @@ Use {{site.prodname}} network policy to extend security beyond OpenStack securit
 
 ### Value
 
-For **deployment users**, OpenStack security groups provides enough features and flexibility. But for **deployment administrators**, limited labeling in VM security groups makes it difficult to address all security use cases that arise. {{site.prodname}} network policy provides special VM labels so you can identify VMs and impose additional restrictions that cannot be bypassed by users’ security group configuration. 
+For **deployment users**, OpenStack security groups provides enough features and flexibility. But for **deployment administrators**, limited labeling in VM security groups makes it difficult to address all security use cases that arise. {{site.prodname}} network policy provides special VM labels so you can identify VMs and impose additional restrictions that cannot be bypassed by users' security group configuration. 
 
 ### Features
 

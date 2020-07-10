@@ -37,7 +37,7 @@ Why assume the network is hostile? In many attack scenarios, it is.
 - Deliberate or accidental misconfiguration can route sensitive traffic over untrusted networks, like the public Internet.
 - Other endpoints on a "trusted" network may be compromised: your application may share a network with thousands of other servers, tens of thousands of other containers, thousands of personal laptops, phones, etc.
 
-Major breaches typically start as a minor compromise of as little as a single component, but attackers then use the network to move laterally toward high value targets: your company’s or customers’ data. In a zone or perimeter model, attackers can move freely inside the perimeter or zone after they have compromised a single endpoint. A Zero Trust Network is resilient to this threat because it enforces strong, cryptographic authentication and access control on each and every network connection.
+Major breaches typically start as a minor compromise of as little as a single component, but attackers then use the network to move laterally toward high value targets: your company's or customers' data. In a zone or perimeter model, attackers can move freely inside the perimeter or zone after they have compromised a single endpoint. A Zero Trust Network is resilient to this threat because it enforces strong, cryptographic authentication and access control on each and every network connection.
 
 #### Requirements of a Zero Trust Network
 
@@ -118,7 +118,7 @@ The instructions include a "demo" install of Istio for quickly testing out funct
 
 Our eventual goal is to write access control policy that authorizes individual expected network flows. We want these flows to be scoped as tightly as practical.  In a {{site.prodname}} Zero Trust Network, the cryptographic identities are Kubernetes Service Accounts. Istio handles crypto-key management for you so that each workload can assert its Service Account identity in a secure manner.
 
-You have some flexibility in how you assign identities for the purpose of your Zero Trust Network policy. The right balance for most people is to use a unique identity for each Kubernetes Service in your application (or Deployment if you have workloads that don’t accept any incoming connections). Assigning identity to entire applications or namespaces is probably too granular, since applications usually consist of multiple services (or dozens of microservices) with different actual access needs.
+You have some flexibility in how you assign identities for the purpose of your Zero Trust Network policy. The right balance for most people is to use a unique identity for each Kubernetes Service in your application (or Deployment if you have workloads that don't accept any incoming connections). Assigning identity to entire applications or namespaces is probably too granular, since applications usually consist of multiple services (or dozens of microservices) with different actual access needs.
 
 You should assign unique identities to microservices even if you happen to know that they access the same things. Your policy will be more readable if the identities correspond to logical components of the application. You can grant them the same permissions easily, and if in the future they need different permissions it will be easier to handle.
 
@@ -139,7 +139,7 @@ After a pod is selected by at least one policy, any traffic not explicitly allow
 
 There are several approaches to determining the set of identities that should access a service. Work with the developers of the application to generate this list and ensure it is correct. One approach is to create a flow diagram of your entire application. A flow diagram is a kind of graph where each identity is a node, and each expected flow is an edge.
 
-Let’s look at an example application.
+Let's look at an example application.
 
 ![zero-trust-app]({{site.baseurl}}/images/zero-trust-app.png)
 
@@ -166,7 +166,7 @@ When determining flows from a running application instance, be sure to review ea
 
 After you have the set of expected flows for each service, you are ready to write {{site.prodname}} network policy to whitelist those flows and deny all others.
 
-Returning to the example flow graph in the previous section, let’s write the policy for the post service. For the purpose of this example, assume all the services in the application run in a Kubernetes Namespace called microblog.  We see from the flow graph that the post service is accessed by the api and search services.
+Returning to the example flow graph in the previous section, let's write the policy for the post service. For the purpose of this example, assume all the services in the application run in a Kubernetes Namespace called microblog.  We see from the flow graph that the post service is accessed by the api and search services.
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -249,7 +249,7 @@ Things to notice in this example:
 
 The above example lists the identities that need access to the post service by name. This style of whitelist works best when the developers responsible for a service have explicit knowledge of who needs access to their service.
 
-However, some development teams don’t explicitly know who needs access to their service, and don’t need to know. The service might be very generic and used by lots of different applications across the organization---for example: a logging service. Instead of listing the Service Accounts that get access to the service explicitly one-by-one, you can use a label selector that selects on Service Accounts.
+However, some development teams don't explicitly know who needs access to their service, and don't need to know. The service might be very generic and used by lots of different applications across the organization---for example: a logging service. Instead of listing the Service Accounts that get access to the service explicitly one-by-one, you can use a label selector that selects on Service Accounts.
 
 In the following example, we have changed the **serviceAccount** clause. Instead of a name, we use a label selector. The **selector: svc-post = access** label grants access to the post service. 
 
@@ -300,7 +300,7 @@ Developers, DevOps, and/or Operators make changes to applications primarily by m
 
 What you should do is include the NetworkPolicy as part of those deployment config artifacts. In some organizations, these artifacts are in the same repo as the source code, and in others they reside in a separate repo, but the principle is the same: you manage policy change control as commits to the deployment configuration. This config then works its way through the delivery pipeline and is finally applied to the running Kubernetes cluster.
 
-Your developers will likely require training and support from the security team in order to get policy correct at first. Many trained developers are not used to thinking about network security. The logical controls expressed in network policy are simple compared with the flexibility they have in source code, so the primary support they will need from you is around the proper security mindset and principles of Zero Trust Networks. You can apply a default deny policy in your cluster to ensure that developers can’t simply forget to apply their own whitelisted policy.
+Your developers will likely require training and support from the security team in order to get policy correct at first. Many trained developers are not used to thinking about network security. The logical controls expressed in network policy are simple compared with the flexibility they have in source code, so the primary support they will need from you is around the proper security mindset and principles of Zero Trust Networks. You can apply a default deny policy in your cluster to ensure that developers can't simply forget to apply their own whitelisted policy.
 
 You may wish to review every security policy change request (aka pull request in git workflows) at first. If you do, then be sure you have time allotted, and consider rolling out Zero Trust Network policies incrementally, one application or service at a time. As development teams gain confidence you can pull back and have them do their own reviews. Security professionals can do spot checks on change requests or entire policies to ensure quality remains high in the long term.
 

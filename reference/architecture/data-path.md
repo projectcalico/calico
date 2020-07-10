@@ -5,17 +5,17 @@ canonical_url: '/reference/architecture/data-path'
 ---
 
 
-One of Calico’s key features is how packets flow between workloads in a
+One of Calico's key features is how packets flow between workloads in a
 data center, or between a workload and the Internet, without additional
 encapsulation.
 
 In the Calico approach, IP packets to or from a workload are routed and
 firewalled by the Linux routing table and iptables infrastructure on the
-workload’s host. For a workload that is sending packets, Calico ensures
+workload's host. For a workload that is sending packets, Calico ensures
 that the host is always returned as the next hop MAC address regardless
 of whatever routing the workload itself might configure. For packets
 addressed to a workload, the last IP hop is that from the destination
-workload’s host to the workload itself.
+workload's host to the workload itself.
 
 ![Calico datapath]({{site.baseurl}}/images/calico-datapath.png)
 
@@ -59,21 +59,21 @@ indirect routes appear also.
 
 The routing above in principle allows any workload in a data center to
 communicate with any other – but in general, an operator will want to
-restrict that; for example, so as to isolate customer A’s workloads from
+restrict that; for example, so as to isolate customer A's workloads from
 those of customer B. Therefore Calico also programs iptables on each
 host, to specify the IP addresses (and optionally ports etc.) that each
 workload is allowed to send to or receive from. This programming is
-‘bookended’ in that the traffic between workloads X and Y will be
-firewalled by both X’s host and Y’s host – this helps to keep unwanted
-traffic off the data center’s core network, and as a secondary defense
+‘bookended' in that the traffic between workloads X and Y will be
+firewalled by both X's host and Y's host – this helps to keep unwanted
+traffic off the data center's core network, and as a secondary defense
 in case it is possible for a rogue workload to compromise its local
 host.
 
 ## Is that all?
 
-As far as the static data path is concerned, yes. It’s just a
+As far as the static data path is concerned, yes. It's just a
 combination of responding to workload ARP requests with the host MAC, IP
-routing and iptables. There’s a great deal more to Calico in terms of
+routing and iptables. There's a great deal more to Calico in terms of
 how the required routing and security information is managed, and for
 handling dynamic things such as workload migration – but the basic data
 path really is that simple.

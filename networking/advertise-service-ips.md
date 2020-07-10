@@ -5,11 +5,11 @@ description: Configure Calico to advertise Kubernetes service cluster IPs and ex
 
 ### Big picture
 
-Enable {{site.prodname}} to advertise Kubernetes service IPs outside a cluster. {{site.prodname}} supports advertising a service’s cluster IPs and external IPs.
+Enable {{site.prodname}} to advertise Kubernetes service IPs outside a cluster. {{site.prodname}} supports advertising a service's cluster IPs and external IPs.
 
 ### Value
 
-Typically, Kubernetes service cluster IPs are accessible only within the cluster, so external access to the service requires a dedicated load balancer or ingress controller. In cases where a service’s cluster IP is not routable, the service can be accessed using its external IP.
+Typically, Kubernetes service cluster IPs are accessible only within the cluster, so external access to the service requires a dedicated load balancer or ingress controller. In cases where a service's cluster IP is not routable, the service can be accessed using its external IP.
 
 Just as {{site.prodname}} supports advertising **pod IPs** over BGP, it also supports advertising Kubernetes **service IPs** outside a cluster over BGP. This avoids the need for a dedicated load balancer. This feature also supports equal cost multi-path (ECMP) load balancing across nodes in the cluster, as well as source IP address preservation for local services when you need more control.
 

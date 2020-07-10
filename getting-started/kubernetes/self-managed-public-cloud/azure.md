@@ -13,7 +13,7 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 ### Concepts
 
-**aks-engine** is an open-source tool for creating and managing Kubernetes clusters in Microsoft Azure. It is the core technology for Microsoft’s Azure Kubernetes Service (AKS), but allows you to manage the cluster yourself.
+**aks-engine** is an open-source tool for creating and managing Kubernetes clusters in Microsoft Azure. It is the core technology for Microsoft's Azure Kubernetes Service (AKS), but allows you to manage the cluster yourself.
 
 ### Before you begin...
 
@@ -22,7 +22,7 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 ### How to
 
-There are many ways to install and manage Kubernetes in Azure. This guide shows how to use **aks-engine** to deploy a cluster with **Azure’s CNI plugin for networking** and **{{site.prodname}} for network policy enforcement**. The advantage of this approach is that pods are assigned IP addresses associated with Azure Network Interfaces on worker nodes. The IPs come from the VNET network pool and therefore do not require NAT to access resources outside the Kubernetes cluster. However, there are other options that may work better for your environment.
+There are many ways to install and manage Kubernetes in Azure. This guide shows how to use **aks-engine** to deploy a cluster with **Azure's CNI plugin for networking** and **{{site.prodname}} for network policy enforcement**. The advantage of this approach is that pods are assigned IP addresses associated with Azure Network Interfaces on worker nodes. The IPs come from the VNET network pool and therefore do not require NAT to access resources outside the Kubernetes cluster. However, there are other options that may work better for your environment.
 
 - [aks-engine for Azure networking and Calico network policy](#aks-engine-for-azure-networking-and-calico-network-policy)
 - [Other options and tools](#other-options-and-tools)

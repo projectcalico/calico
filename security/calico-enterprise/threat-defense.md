@@ -19,7 +19,7 @@ Calico Enterprise detects suspicious network traffic within your cluster and can
 - Detecting known attack vectors such as port scans and IP sweeps
 - Baselining network behaviour and alerting on deviance from that behavior
 
-When suspicious traffic is detected, Calico Enterprise can be aligned or integrated into your security team’s workflow to resolve the issue. Common examples are isolating the pod from the network or sending an alert to your security team’s Security Incident and Event Management (SIEM) system such as Splunk or Sumo for further investigation by your security operations center.
+When suspicious traffic is detected, Calico Enterprise can be aligned or integrated into your security team's workflow to resolve the issue. Common examples are isolating the pod from the network or sending an alert to your security team's Security Incident and Event Management (SIEM) system such as Splunk or Sumo for further investigation by your security operations center.
 
 ![anomaly-detection]({{site.baseurl}}/images/anomaly-detection.png)
 

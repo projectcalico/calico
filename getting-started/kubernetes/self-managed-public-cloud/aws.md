@@ -22,7 +22,7 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 
 ### How to
 
-There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Operations (kops) is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
+There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Operations (kops) is a good default choice for most people, as it gives you access to all of {{site.prodname}}'s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
 
 - [Kubernetes Operations for Calico networking and network policy](#kubernetes-operations-for-calico-networking-and-network-policy)
 - [Other options and tools](#other-options-and-tools)
@@ -63,7 +63,7 @@ You can further customize the {{site.prodname}} install with {% include open-new
 
 ##### Amazon VPC CNI plugin
 
-As an alternative to {{site.prodname}} for both networking and network policy, you can use Amazon’s VPC CNI plugin for networking, and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
+As an alternative to {{site.prodname}} for both networking and network policy, you can use Amazon`s VPC CNI plugin for networking, and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
 
 Set your kops cluster configuration to:
 

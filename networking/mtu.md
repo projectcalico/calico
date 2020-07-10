@@ -28,7 +28,7 @@ The maximum transmission unit (MTU) setting determines the largest packet size t
 
 In general, maximum performance is achieved by using the highest MTU value that does not cause fragmentation or drop packets on the path.  Maximum bandwidth increases and CPU consumption may drop for a given traffic rate.  The improvement is often more significant when pod to pod traffic is being encapsulated (IP in IP or VXLAN), and splitting and combining such traffic cannot be offloaded to your NICs.
 
-For example, if you are using AWS, you may be able to use jumbo frames up to 9000 bytes. If you are using {{site.prodname}} overlay networks, you may need to adjust the MTU settings to ensure packets aren’t lost or dropped from the size is being too high.
+For example, if you are using AWS, you may be able to use jumbo frames up to 9000 bytes. If you are using {{site.prodname}} overlay networks, you may need to adjust the MTU settings to ensure packets aren't lost or dropped from the size is being too high.
 
 ### Before you begin...
 

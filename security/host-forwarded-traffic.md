@@ -28,7 +28,7 @@ The following figure shows a host with two network interfaces: eth0 and eth1. We
 
 The `HostEndpoint API` object is optional, and Calico does not enforce any policy on the HEP if the API object is missing. The `WorkloadEndpoint API` object is required, and is automatically managed by the cluster orchestrator plugin (for example, Kubernetes or OpenStack).
 
-Several connections are shown in the figure, numbered 1 through 4. For example, connection 1 ingresses over HEP eth0, is forwarded, and then ingresses Workload A’s WEP. Calico policies select which WEPs or HEPs they apply to. So, for example an ingress policy that selects Workload A’s WEP will apply to connections as shown in number 1.
+Several connections are shown in the figure, numbered 1 through 4. For example, connection 1 ingresses over HEP eth0, is forwarded, and then ingresses Workload A's WEP. Calico policies select which WEPs or HEPs they apply to. So, for example an ingress policy that selects Workload A's WEP will apply to connections as shown in number 1.
 
 ![Host-forward-traffic]({{site.baseurl}}/images/host-forward-traffic.png)
 
@@ -85,7 +85,7 @@ This is particularly relevant when you want to enforce policy for a host that al
 
 ### Tutorial
 
-Let’s say I have a host that has two network interfaces:
+Let's say I have a host that has two network interfaces:
 
 - eth0 -  connects to the main datacenter network for application traffic
 - eth1 -  connects to a special maintenance network

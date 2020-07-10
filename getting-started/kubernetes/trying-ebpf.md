@@ -38,7 +38,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### eBPF
 
-eBPF (or "extended Berkeley Packet Filter"), is a technology that allows you to write mini programs that can be attached to various low-level hooks in the Linux kernel, for a wide variety of uses including networking, security, and tracing. You’ll see a lot of non-networking projects leveraging eBPF, but for {{site.prodname}} our focus is on networking, and in particular, pushing the networking capabilities of the latest Linux kernels to the limit.
+eBPF (or "extended Berkeley Packet Filter"), is a technology that allows you to write mini programs that can be attached to various low-level hooks in the Linux kernel, for a wide variety of uses including networking, security, and tracing. You'll see a lot of non-networking projects leveraging eBPF, but for {{site.prodname}} our focus is on networking, and in particular, pushing the networking capabilities of the latest Linux kernels to the limit.
 
 #### eBPF mode manifest
 
@@ -248,4 +248,4 @@ To re-enable BPF mode:
 
 ### Send us feedback
 
-We want to hear about your experience, so please don’t hesitate to connect with us via the {% include open-new-window.html text='Calico Users Slack' url='http://slack.projectcalico.org/' %} group.
+We want to hear about your experience, so please don't hesitate to connect with us via the {% include open-new-window.html text='Calico Users Slack' url='http://slack.projectcalico.org/' %} group.

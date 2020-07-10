@@ -43,7 +43,7 @@ To securely expose a Kubernetes service to external clients, you must implement 
 
 #### Allow cluster ingress traffic but deny general ingress traffic
 
-In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes’ IP addresses (**1.2.3.4/16**), and for pod IP addresses assigned by Kubernetes (**100.100.100.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster. 
+In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes' IP addresses (**1.2.3.4/16**), and for pod IP addresses assigned by Kubernetes (**100.100.100.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster. 
 
 In this example, we use the **selector: has(kubernetes-host)** -- so the policy is applicable to any endpoint with a **kubernetes-host** label (but you can easily specify particular nodes). 
 
@@ -84,7 +84,7 @@ spec:
 
 #### Create host endpoints with appropriate network policy
 
-In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn’t want a host endpoint with a "default deny all traffic to/from this host" network policy because that is counter to the goal of allowing/denying specific traffic.) For help, see [host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint).
+In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn't want a host endpoint with a "default deny all traffic to/from this host" network policy because that is counter to the goal of allowing/denying specific traffic.) For help, see [host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint).
 
 All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host label**; so we will include that label in our definitions. For example, for **eth0** on **node1**.
 

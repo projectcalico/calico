@@ -9,7 +9,7 @@ Your security team may ask you to implement certain security controls. A simple 
 For most security teams, setting up and enforcing Calico policy is not sufficient to meet their needs.
 Security teams need additional controls to ensure their policies have precedence and are evaluated first before other policies. They need to see proof that the controls are in place, being enforced, and working as expected (logs, evidence reports, version history).
 
-Calico Enterprise adds several features that satisfy the security team’s requirements including:
+Calico Enterprise adds several features that satisfy the security team's requirements including:
 
 - Policy tiers
 - Flow logs
@@ -19,7 +19,7 @@ Calico Enterprise adds several features that satisfy the security team’s requi
 
 ### Policy tiers
 
-Policy tiers are ordered collections of Calico policies. Policy tiers enable privileged users to define security policies that take precedence over other user’s policies. A couple of common use cases include:
+Policy tiers are ordered collections of Calico policies. Policy tiers enable privileged users to define security policies that take precedence over other user's policies. A couple of common use cases include:
 
 - A security team needs to define policies that must be evaluated before any other policies - e.g. ensuring dev cannot connect to communicate with prod
 - The Kubernetes platform owner may define rules that limit which Kubernetes APIs or other management interfaces pods can connect to

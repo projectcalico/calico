@@ -9,7 +9,7 @@ Learn about the different networking options {{site.prodname}} supports so you c
 
 ### Value
 
-{{site.prodname}}’s flexible modular architecture supports a wide range of deployment options, so you can select the best networking approach for your specific environment and needs. This includes the ability to run with a variety of CNI and IPAM plugins, and underlying network types, in non-overlay or overlay modes, with or without BGP.
+{{site.prodname}}'s flexible modular architecture supports a wide range of deployment options, so you can select the best networking approach for your specific environment and needs. This includes the ability to run with a variety of CNI and IPAM plugins, and underlying network types, in non-overlay or overlay modes, with or without BGP.
 
 ### Concepts
 
@@ -22,12 +22,12 @@ The Kubernetes network model defines a "flat" network in which:
 
 This creates a clean, backwards-compatible model where pods can be treated much like VMs or physical hosts from the perspectives of port allocation, naming, service discovery, load balancing, application configuration, and migration.  Network segmentation can be defined using network policies to restrict traffic within these base networking capabilities.
 
-Within this model there’s quite a lot of flexibility for supporting different networking approaches and environments.  The details of exactly how the network is implemented depend on the combination of CNI, network, and cloud provider plugins being used.
+Within this model there's quite a lot of flexibility for supporting different networking approaches and environments.  The details of exactly how the network is implemented depend on the combination of CNI, network, and cloud provider plugins being used.
 
 #### CNI plugins
 CNI (Container Network Interface) is a standard API which allows different network implementations to plug into Kubernetes. Kubernetes calls the API any time a pod is being created or destroyed.  There are two types of CNI plugins:
-- CNI network plugins: responsible for adding or deleting pods to/from the Kubernetes pod network. This includes creating/deleting each pod’s network interface and connecting/disconnecting it to the rest of the network implementation.
-- CNI IPAM plugins: responsible for allocating and releasing IP addresses for pods as they are created or deleted. Depending on the plugin, this may include allocating one or more ranges of IP addresses (CIDRs) to each node, or obtaining IP addresses from an underlying public cloud’s network to allocate to pods.
+- CNI network plugins: responsible for adding or deleting pods to/from the Kubernetes pod network. This includes creating/deleting each pod's network interface and connecting/disconnecting it to the rest of the network implementation.
+- CNI IPAM plugins: responsible for allocating and releasing IP addresses for pods as they are created or deleted. Depending on the plugin, this may include allocating one or more ranges of IP addresses (CIDRs) to each node, or obtaining IP addresses from an underlying public cloud's network to allocate to pods.
 
 #### Cloud provider integrations
 Kubernetes cloud provider integrations are cloud-specific controllers that can configure the underlying cloud network to help provide Kuberenetes networking.  Depending on the cloud provider, this could include automatically programming routes into the underlying cloud network so it knows natively how to route pod traffic.
@@ -36,7 +36,7 @@ Kubernetes cloud provider integrations are cloud-specific controllers that can c
 Kubenet is an extremely basic network plugin built into Kubernetes. It does not implement cross-node networking or network policy. It is typically used together with a cloud provider integration that sets up routes in the cloud provider network for communication between nodes, or in single node environments. Kubenet is not compatible with {{site.prodname}}.
 
 #### Overlay networks
-An overlay network is a network that is layered on top of another network.  In the context of Kubernetes, an overlay network can be used to handle pod-to-pod traffic between nodes on top of an underlying network that is not aware of pod IP addresses or which pods are running on which nodes. Overlay networks work by encapsulating network packets that an underlying network doesn’t know how to handle (for example using pod IP addresses) within an outer packet which the underlying network does know how to handle (for example node IP addresses). Two common network protocols used for encapsulation are VXLAN and IP-in-IP.
+An overlay network is a network that is layered on top of another network.  In the context of Kubernetes, an overlay network can be used to handle pod-to-pod traffic between nodes on top of an underlying network that is not aware of pod IP addresses or which pods are running on which nodes. Overlay networks work by encapsulating network packets that an underlying network doesn't know how to handle (for example using pod IP addresses) within an outer packet which the underlying network does know how to handle (for example node IP addresses). Two common network protocols used for encapsulation are VXLAN and IP-in-IP.
 
 The main advantage of using an overlay network is that it reduces dependencies on the underlying network.  For example, you can run a VXLAN overlay on top of almost any underlying network, without needing to integrate with or make any changes to the underlying network.
 
@@ -56,7 +56,7 @@ An important distinguishing feature of different Kubernetes network implementati
 
 If the pod IP addresses are not routable outside of the cluster then when a pod tries to establish a network connection to an IP address that is outside of the cluster, Kubernetes uses a technique called SNAT (Source Network Address Translation) to change the source IP address from the IP address of the pod, to the IP address of the node hosting the pod.  Any return packets on the connection get automatically mapped back to the pod IP address.  So the pod is unaware the SNAT is happening, the destination for the connection sees the node as the source of the connection, and the underlying broader network never sees pod IP addresses.
 
-For connections in the opposite direction, where something outside of the cluster needs to connect to a pod, this can only be done via Kubernetes services or Kubernetes ingress. Nothing outside of the cluster can directly connect to a pod IP address, because the broader network doesn’t know how to route packets to pod IP addresses.
+For connections in the opposite direction, where something outside of the cluster needs to connect to a pod, this can only be done via Kubernetes services or Kubernetes ingress. Nothing outside of the cluster can directly connect to a pod IP address, because the broader network doesn't know how to route packets to pod IP addresses.
 
 **Routable**
 
@@ -72,19 +72,19 @@ The main disadvantage of pod IP addresses that are routable outside the cluster 
 
 If you are using an overlay network for your cluster, then pod IPs are not normally routable outside of the cluster.
 
-If you aren’t using an overlay network, then whether pod IPs are routable outside of the cluster depends on what combination of CNI plugins, cloud provider integrations, or (for on-prem) BGP peering with the physical network, is being used.
+If you aren't using an overlay network, then whether pod IPs are routable outside of the cluster depends on what combination of CNI plugins, cloud provider integrations, or (for on-prem) BGP peering with the physical network, is being used.
 
 #### BGP
-BGP (Border Gateway Protocol) is a standards based networking protocol for sharing routes across a network.  It’s one of the fundamental building blocks of the internet, with exceptional scaling characteristics.
+BGP (Border Gateway Protocol) is a standards based networking protocol for sharing routes across a network.  It's one of the fundamental building blocks of the internet, with exceptional scaling characteristics.
 
 {{site.prodname}} has built in support for BGP.  In an on-prem deployment, this allows {{site.prodname}} to peer with the physical network (typically to Top or Rack routers) to exchange routes, making a non-overlay network where pod IP addresses routable across the broader network, just like any other workload attached to the network.
 
 ### About {{site.prodname}} Networking
-{{site.prodname}}’s flexible modular architecture for networking includes the following.
+{{site.prodname}}'s flexible modular architecture for networking includes the following.
 
 **{{site.prodname}} CNI network plugin**
 
-The {{site.prodname}} CNI network plugin connects pods to the host network namespace’s L3 routing using a pair of virtual ethernet devices (veth pair). This L3 architecture avoids the unnecessary complexity and performance overheads of additional L2 bridges that feature in many other Kubernetes networking solutions.
+The {{site.prodname}} CNI network plugin connects pods to the host network namespace's L3 routing using a pair of virtual ethernet devices (veth pair). This L3 architecture avoids the unnecessary complexity and performance overheads of additional L2 bridges that feature in many other Kubernetes networking solutions.
 
 **{{site.prodname}} CNI IPAM plugin**
 
@@ -100,7 +100,7 @@ The {{site.prodname}} CNI IPAM plugin allocates IP addresses for pods out of one
 
 **Network policy enforcement**
 
-{{site.prodname}}’s network policy enforcement engine implements the full range of Kubernetes Network Policy features, plus the extended features of {{site.prodname}} Network Policy.  This works in conjunction with {{site.prodname}}’s built in networking modes, or any other {{site.prodname}} compatible network plugins and cloud provider integrations.
+{{site.prodname}}'s network policy enforcement engine implements the full range of Kubernetes Network Policy features, plus the extended features of {{site.prodname}} Network Policy.  This works in conjunction with {{site.prodname}}'s built in networking modes, or any other {{site.prodname}} compatible network plugins and cloud provider integrations.
 
 ### {{site.prodname}} compatible CNI plugins and cloud provider integrations
 In addition to the {{site.prodname}} CNI plugins and built in networking modes, {{site.prodname}} is also compatible with a number of third party CNI plugins and cloud provider integrations.
@@ -169,14 +169,14 @@ If you would like pod IP addresses to be routable outside of the cluster then yo
 
 {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native' %}
 
-If you want to use AKS but allocating pod IPs from the underlying VNET is problematic due to IP address range exhaustion challenges, you can use {{site.prodname}} in conjunction with the Azure cloud provider integration. This uses host-local IPAM to allocate /24 per node, and programs routes within the cluster’s underlying VNET subnet for those /24.  Pod IPs are not routable outside of the cluster / VNET subnet, so the same pod IP address range (CIDR) can be used across multiple clusters if desired. 
+If you want to use AKS but allocating pod IPs from the underlying VNET is problematic due to IP address range exhaustion challenges, you can use {{site.prodname}} in conjunction with the Azure cloud provider integration. This uses host-local IPAM to allocate /24 per node, and programs routes within the cluster's underlying VNET subnet for those /24.  Pod IPs are not routable outside of the cluster / VNET subnet, so the same pod IP address range (CIDR) can be used across multiple clusters if desired. 
 
 >**Note**: This is referred to as kubenet + Calico in some AKS docs, but it is actually Calico CNI with Azure cloud provider, and does not use the kubenet plugin.
 {: .alert .alert-info}
 
 {% include geek-details.html details='Policy:Calico,IPAM:Host Local,CNI:Calico,Overlay:No,Routing:VPC Native' %}
 
-If you aren’t using AKS, and prefer to avoid dependencies on a specific cloud provider or allocating pod IPs from the underlying VNET is problematic due to IP address range exhaustion challenges, we recommend using {{site.prodname}} networking in cross-subnet overlay mode. Pod IPs will not be routable outside of the cluster, but you can scale the cluster up to the limits of Kubernetes with no dependencies on the underlying cloud network.
+If you aren't using AKS, and prefer to avoid dependencies on a specific cloud provider or allocating pod IPs from the underlying VNET is problematic due to IP address range exhaustion challenges, we recommend using {{site.prodname}} networking in cross-subnet overlay mode. Pod IPs will not be routable outside of the cluster, but you can scale the cluster up to the limits of Kubernetes with no dependencies on the underlying cloud network.
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:VXLAN,Routing:Calico' %}
 

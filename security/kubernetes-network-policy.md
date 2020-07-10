@@ -159,7 +159,7 @@ spec:
 
 #### Best practice: create deny-all default network policy
 
-To ensure that all pods in the namespace are secure, a best practice is to create a default network policy. This avoids accidentally exposing an app or version that doesn’t have policy defined.
+To ensure that all pods in the namespace are secure, a best practice is to create a default network policy. This avoids accidentally exposing an app or version that doesn't have policy defined.
 
 ##### Create deny-all default ingress and egress network policy
 

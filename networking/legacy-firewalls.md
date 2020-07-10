@@ -26,7 +26,7 @@ The **Kubernetes pod CIDR** is the range of IPs Kubernetes expects pod IPs to be
 
 #### IP Pool
 
-**IP pools** are ranges of IP addresses from which {{site.prodname}} assigns pod IPs. By default, {{site.prodname}} creates an IP pool for the entire Kubernetes pod CIDR, but you can change this to break the pod CIDR up into several pools. You can control which pool {{site.prodname}} uses for each pod using node selectors, or annotations on the pod or the pod’s namespace.
+**IP pools** are ranges of IP addresses from which {{site.prodname}} assigns pod IPs. By default, {{site.prodname}} creates an IP pool for the entire Kubernetes pod CIDR, but you can change this to break the pod CIDR up into several pools. You can control which pool {{site.prodname}} uses for each pod using node selectors, or annotations on the pod or the pod's namespace.
 
 ### Before you begin...
 
@@ -70,7 +70,7 @@ Note the use of the escaped \" for the inner double quotes around the pool names
 
 Note the use of the escaped `\"` for the inner double quotes around the pool names.
 
-If both the pod and the pod’s namespace have the annotation, the pod annotation takes precedence.
+If both the pod and the pod's namespace have the annotation, the pod annotation takes precedence.
 
 The annotation must be present at the time the pod is created. Adding it to an existing pod has no effect. 
 

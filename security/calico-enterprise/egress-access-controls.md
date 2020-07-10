@@ -8,7 +8,7 @@ calico_enterprise: true
 
 Fine-grained access control between a pod and external service outside the cluster generally requires a firewall rule or equivalent between your pod and the services you need to connect to. Since traditional firewall rules are defined using static IP addresses, the dynamic nature of pod IP assignment creates challenges in defining firewall rules. Kubernetes/Calico network policies are designed to abstract away from IP addresses in favor of label selectors, but still require external services outside of the cluster to be identified by IP address.
 
-Calico Enterprise extends Calico’s policy model so that domain names (FQDN / DNS) can be used to whitelist access from a pod or set of pods (via label selector) to external resources outside of your cluster. Common use cases for domain name based policy include:
+Calico Enterprise extends Calico's policy model so that domain names (FQDN / DNS) can be used to whitelist access from a pod or set of pods (via label selector) to external resources outside of your cluster. Common use cases for domain name based policy include:
 
 - Your application may be stateful and require pod-level access to a database running outside of the cluster
 - Your application may use cloud services (database services, caching services, file storage, etc.) and require access pod-level to those services

@@ -11,7 +11,7 @@ Calico uses standard Linux networking tools to provide two major services for Cl
 - Network connectivity between workloads.
 - Network security policy enforcement between workloads.
 
-Calico’s flexible architecture supports a wide range of deployment options, using modular components, including:
+Calico's flexible architecture supports a wide range of deployment options, using modular components, including:
 
 - [CNI](https://github.com/projectcalico/cni-plugin) plugins for Kubernetes to provide highly efficient pod networking and IP
   Address Management (IPAM).

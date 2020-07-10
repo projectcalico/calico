@@ -22,7 +22,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} IP pools and NAT
 
-When a pod with an IP address in the pool initiates a network connection to an IP address to outside of {{site.prodname}}’s IP pools, the outgoing packets will have their source IP address changed from the pod IP address to the node IP address using SNAT (Source Network Address Translation). Any return packets on the connection automatically get this change reversed before being passed back to the pod.
+When a pod with an IP address in the pool initiates a network connection to an IP address to outside of {{site.prodname}}'s IP pools, the outgoing packets will have their source IP address changed from the pod IP address to the node IP address using SNAT (Source Network Address Translation). Any return packets on the connection automatically get this change reversed before being passed back to the pod.
 
 #### Enable NAT: for pods with IP addresses that are not routable beyond the cluster
 

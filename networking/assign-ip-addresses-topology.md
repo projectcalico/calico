@@ -23,7 +23,7 @@ This how-to guide uses the following {{site.prodname}} features:
 #### IP address assignment
 
 Topology-based IP address assignment requires addresses to be per-host (node). 
-As such, Kubernetes annotations cannot be used because annotations are only per-namespace and per-pod. And although you can configure IP addresses for nodes in the CNI configuration, you are making changes within the host’s file system. The best option is to use node-selection IP address assignment using IP pools.
+As such, Kubernetes annotations cannot be used because annotations are only per-namespace and per-pod. And although you can configure IP addresses for nodes in the CNI configuration, you are making changes within the host's file system. The best option is to use node-selection IP address assignment using IP pools.
 
 #### Node-selection IP address management
 

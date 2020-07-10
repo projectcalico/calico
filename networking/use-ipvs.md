@@ -10,7 +10,7 @@ Use IPVS kube-proxy mode for load balancing traffic across pods.
 
 ### Value
 
-No matter where you are on your journey with container networking, iptables will serve you well. However, if you are scaling above 1,000 services, it’s worth looking at potential performance improvements using kube-proxy IPVS mode.
+No matter where you are on your journey with container networking, iptables will serve you well. However, if you are scaling above 1,000 services, it's worth looking at potential performance improvements using kube-proxy IPVS mode.
 
 ### Features
 
@@ -24,14 +24,14 @@ This how-to guide uses the following {{site.prodname}} features:
 
 Kube-proxy process handles everything related to Services on each node. It ensures that connections to the service cluster IP and port go to a pod that backs the service. If backed by more than one service, kube-proxy load-balances traffic across pods.
 
-Kube-proxy runs in three modes: **userspace**, **iptables**, and **ipvs**. (Userspace is old, slow and not recommended.) Here’s a quick summary of iptables and ipvs modes.
+Kube-proxy runs in three modes: **userspace**, **iptables**, and **ipvs**. (Userspace is old, slow and not recommended.) Here's a quick summary of iptables and ipvs modes.
 
 | **kube-proxy mode** | **Designed to be...**                                        | **Linux kernel hooks**                 | **Connection processing overhead...**       |
 | ------------------- | ------------------------------------------------------------ | -------------------------------------- | ------------------------------------------- |
 | iptables            | An efficient firewall                                        | NAT pre-routing using sequential rules | Grows proportional to cluster size          |
 | ipvs                | A load balancer with scheduling options like round-robin, shortest-expected delay, least connections, etc. | Optimized lookup routine               | Stays constant, independent of cluster size |
 
-If you are wondering about the performance differences between iptables and ipvs, the answers are definitely not straightforward. For a comparison between iptables (including {{site.prodname}}’s own use of iptables) and ipvs modes, see {% include open-new-window.html text='Comparing kube-proxy modes: iptables or IPVS?' url='https://www.projectcalico.org/comparing-kube-proxy-modes-iptables-or-ipvs/' %}.
+If you are wondering about the performance differences between iptables and ipvs, the answers are definitely not straightforward. For a comparison between iptables (including {{site.prodname}}'s own use of iptables) and ipvs modes, see {% include open-new-window.html text='Comparing kube-proxy modes: iptables or IPVS?' url='https://www.projectcalico.org/comparing-kube-proxy-modes-iptables-or-ipvs/' %}.
 
 #### IPVS mode and NodePort ranges
 

@@ -1,6 +1,6 @@
 ---
 title: Overlay networking
-description: Configure Calico to use IP in IP or VXLAN overlay networking so the underlying network doesn’t need to understand pod addresses.
+description: Configure Calico to use IP in IP or VXLAN overlay networking so the underlying network doesn't need to understand pod addresses.
 ---
 
 ### Big picture
@@ -25,7 +25,7 @@ This how-to guide uses the following features:
 
 #### Routing workload IP addresses
 
-Networks become aware of workload IP addresses through layer 3 routing techniques like static routes or BGP route distribution, or layer 2 address learning. As such, they can route unencapsulated traffic to the right host for the endpoint that is the ultimate destination. However, not all networks are able to route workload IP addresses. For example, public cloud environments where you don’t own the hardware, AWS across VPC subnet boundaries, and other scenarios where you cannot peer Calico over BGP to the underlay, or easily configure static routes. This is why Calico supports encapsulation, so you can send traffic between workloads without requiring the underlying network to be aware of workload IP addresses.
+Networks become aware of workload IP addresses through layer 3 routing techniques like static routes or BGP route distribution, or layer 2 address learning. As such, they can route unencapsulated traffic to the right host for the endpoint that is the ultimate destination. However, not all networks are able to route workload IP addresses. For example, public cloud environments where you don't own the hardware, AWS across VPC subnet boundaries, and other scenarios where you cannot peer Calico over BGP to the underlay, or easily configure static routes. This is why Calico supports encapsulation, so you can send traffic between workloads without requiring the underlying network to be aware of workload IP addresses.
 
 #### Encapsulation types
 

@@ -34,15 +34,15 @@ There are many ways to configure a BGP network depending on your environment. He
 
 #### Topologies for public cloud
 
-{{site.prodname}}’s default behavior is to create a **full-mesh** of internal BGP (iBGP) connections where each node peers with each other. This design works great for small and medium-size deployments (< 100 nodes) in public cloud, but you can hit performance bottlenecks at around 100 nodes.
+{{site.prodname}}'s default behavior is to create a **full-mesh** of internal BGP (iBGP) connections where each node peers with each other. This design works great for small and medium-size deployments (< 100 nodes) in public cloud, but you can hit performance bottlenecks at around 100 nodes.
 
 To build large clusters in public cloud, **BGP route reflectors** can be used to reduce the number of BGP peerings used on each node. In this model, some nodes act as route reflectors and are configured to establish a full mesh amongst themselves. Other nodes are then configured to peer with a subset of those route reflectors.
 
-You can also run {{site.prodname}} on public cloud without BGP or route reflectors using {{site.prodname}}’s **VXLAN cross subnet capabilities**. For more information, see [Configure overlay networking]({{ site.baseurl }}/networking/vxlan-ipip).
+You can also run {{site.prodname}} on public cloud without BGP or route reflectors using {{site.prodname}}'s **VXLAN cross subnet capabilities**. For more information, see [Configure overlay networking]({{ site.baseurl }}/networking/vxlan-ipip).
 
 #### Topologies for on-premises deployments
 
-In **on-premises deployments**, you control the physical infrastructure, so you can configure {{site.prodname}} to peer directly with it. Typically, this involves disabling {{site.prodname}}’s default full-mesh behavior, and instead peer {{site.prodname}} with your L3 ToR router. There are many ways to build an on-premises BGP network. How you configure your autonomous systems is up to you - {{site.prodname}} works well with both iBGP and eBGP configurations. 
+In **on-premises deployments**, you control the physical infrastructure, so you can configure {{site.prodname}} to peer directly with it. Typically, this involves disabling {{site.prodname}}'s default full-mesh behavior, and instead peer {{site.prodname}} with your L3 ToR router. There are many ways to build an on-premises BGP network. How you configure your autonomous systems is up to you - {{site.prodname}} works well with both iBGP and eBGP configurations. 
 
 Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically needed only if the number of nodes in each L2 domain is large (> 100).
 
@@ -92,7 +92,7 @@ spec:
 ```
 #### Configure a per-node BGP peer
 
-Per-node BGP peers apply to one or more nodes in the cluster. You can choose which nodes by specifying the node’s name exactly, or using a label selector.
+Per-node BGP peers apply to one or more nodes in the cluster. You can choose which nodes by specifying the node's name exactly, or using a label selector.
 
 The following example creates a BGPPeer that configures every {{site.prodname}} node with the label, **rack: rack-1** to peer with **192.20.30.40** in AS **64567**.
 
@@ -104,7 +104,7 @@ metadata:
 spec:
   peerIP: 192.20.30.40
   asNumber: 64567
-  nodeSelector: rack == ‘rack-1’
+  nodeSelector: rack == ‘rack-1'
 ```
 #### Configure a node to act as a route reflector
 
@@ -130,12 +130,12 @@ metadata:
   name: peer-with-route-reflectors
 spec:
   nodeSelector: all()
-  peerSelector: route-reflector == ‘true’
+  peerSelector: route-reflector == ‘true'
 ```
 
 #### View BGP peering status for a node
 
-You can use `calicoctl` to view the current status of a particular node’s BGP connections. This is useful for confirming that your configuration is behaving as desired.
+You can use `calicoctl` to view the current status of a particular node's BGP connections. This is useful for confirming that your configuration is behaving as desired.
 
 Run the following command on the node you want to view the current state:
 

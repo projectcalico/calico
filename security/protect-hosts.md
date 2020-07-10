@@ -43,7 +43,7 @@ By default, {{site.prodname}} blocks all connections from a workload to its loca
 
 #### Default behavior of external traffic to/from host
 
-If a host endpoint is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
+If a host endpoint is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it's been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
 
 #### Other host protection
 

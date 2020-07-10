@@ -15,7 +15,7 @@ Calico network policy provides a richer set of policy capabilities than Kubernet
 
 #### Write once, works everywhere
 
-No matter which cloud provider you use now, adopting Calico network policy means you write the policy once and it is portable. If you move to a different cloud provider, you don’t need to rewrite your Calico network policy. Calico network policy is a key feature to avoid cloud provider lock-in. 
+No matter which cloud provider you use now, adopting Calico network policy means you write the policy once and it is portable. If you move to a different cloud provider, you don't need to rewrite your Calico network policy. Calico network policy is a key feature to avoid cloud provider lock-in. 
 
 #### Works seamlessly with Kubernetes network policies
 

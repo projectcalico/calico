@@ -21,7 +21,7 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 ### How to
 
-There are many ways to install and manage Kubernetes in GCE. Using kubeadm is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
+There are many ways to install and manage Kubernetes in GCE. Using kubeadm is a good default choice for most people, as it gives you access to all of {{site.prodname}}'s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
 
 - [kubeadm for Calico networking and network policy](#kubeadm-for-calico-networking-and-network-policy)
 - [Other tools and options](#other-tools-and-options)
