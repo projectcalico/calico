@@ -41,7 +41,7 @@ pass ingress policy on the first host endpoint and egress policy on the second h
 > - It will not apply at all to forwarded traffic, by default. If you have an existing
 > policy and you want it to apply to forwarded traffic, you need to add `applyOnForward: true` to the policy.
 > - Even with `applyOnForward: true`, the treatment is not quite the same in
-> Calico v3.0 as in previous releases, because–once a host endpoint is configured–
+> Calico v3.0 as in previous releases, because-once a host endpoint is configured-
 > Calico v3.0 allows forwarded traffic through that endpoint by default, whereas
 > previous releases denied forwarded traffic through that endpoint by default.
 > If you want to maintain the default-deny behavior for all host-endpoint forwarded
