@@ -104,7 +104,7 @@ metadata:
 spec:
   peerIP: 192.20.30.40
   asNumber: 64567
-  nodeSelector: rack == ‘rack-1'
+  nodeSelector: rack == 'rack-1'
 ```
 #### Configure a node to act as a route reflector
 
@@ -130,7 +130,7 @@ metadata:
   name: peer-with-route-reflectors
 spec:
   nodeSelector: all()
-  peerSelector: route-reflector == ‘true'
+  peerSelector: route-reflector == 'true'
 ```
 
 #### View BGP peering status for a node

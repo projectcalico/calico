@@ -36,7 +36,7 @@ You should not grant broad permissions to the default service account for a name
 
 #### Service account labels
 
-Like all other Kubernetes objects, service accounts have labels. You can use labels to create ‘groups' of service accounts. {{site.prodname}} network policy lets you select workloads by their service account using:
+Like all other Kubernetes objects, service accounts have labels. You can use labels to create 'groups' of service accounts. {{site.prodname}} network policy lets you select workloads by their service account using:
 
 - An exact match on service account name
 - A service account label selector expression

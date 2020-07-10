@@ -63,7 +63,7 @@ restrict that; for example, so as to isolate customer A's workloads from
 those of customer B. Therefore Calico also programs iptables on each
 host, to specify the IP addresses (and optionally ports etc.) that each
 workload is allowed to send to or receive from. This programming is
-‘bookended' in that the traffic between workloads X and Y will be
+'bookended' in that the traffic between workloads X and Y will be
 firewalled by both X's host and Y's host - this helps to keep unwanted
 traffic off the data center's core network, and as a secondary defense
 in case it is possible for a rogue workload to compromise its local
