@@ -80,7 +80,7 @@ are in use in your own cluster.
 >
 > The explicit `drop-other-ingress` policy is needed because there is no
 > automatic default-drop semantic for pre-DNAT policy. There _is_ a
-> default-drop semantic for normal host endpoint policy but—as noted above—normal
+> default-drop semantic for normal host endpoint policy but-as noted above-normal
 > host endpoint policy is not always enforced.
 {: .alert .alert-info}
 
@@ -140,9 +140,9 @@ EOF
 ```
 
 After defining host endpoints for each node, you should find that internal
-cluster communications are all still working as normal—for example, that you
+cluster communications are all still working as normal-for example, that you
 can successfully execute commands like `calicoctl get hep` and `calicoctl get
-pol`—but that it is impossible to connect into the cluster from outside
+pol`-but that it is impossible to connect into the cluster from outside
 (except for any [failsafe rules]({{ site.baseurl }}/reference/host-endpoints/failsafe).  
 For example, if the
 cluster includes a Kubernetes Service that is exposed as NodePort 31852, you

@@ -75,7 +75,7 @@ below.
 | K8S_CA_FILE | Location of a CA for accessing the Kubernetes API.                            | string |
 
 > **Note**: When {{site.prodname}} is configured to use the Kubernetes API as the datastore, the environments
-> used for BGP configuration are ignored—this includes selection of the node AS number (AS)
+> used for BGP configuration are ignored-this includes selection of the node AS number (AS)
 > and all of the IP selection options (IP, IP6, IP_AUTODETECTION_METHOD, IP6_AUTODETECTION_METHOD).
 >
 {: .alert .alert-info}

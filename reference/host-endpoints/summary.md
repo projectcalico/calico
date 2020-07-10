@@ -30,7 +30,7 @@ workload, i.e., a locally-hosted pod, container or VM:
   > the packet to the workload without any connection tracking. But then, in
   > the reverse direction, there will be no conntrack state for the return
   > packets to match, and there is no application of any egress rules that may
-  > be defined by the untracked policy—so unless the workload's policy
+  > be defined by the untracked policy-so unless the workload's policy
   > specifically allows the relevant source IP, the return packet will be
   > dropped. That is the same overall result as if there was no untracked
   > policy at all, so in practice it is as if untracked policies do not apply

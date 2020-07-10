@@ -79,7 +79,7 @@ We prefer Markdown for readability.
 
 ### Line wraps
 
-Wrap lines at 80 characters—except [URLs](#line-breaks).
+Wrap lines at 80 characters-except [URLs](#line-breaks).
 
 
 ## Punctuation

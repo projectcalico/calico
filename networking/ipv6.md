@@ -167,7 +167,7 @@ connectivity requires certain configuration in the guest VM image:
    have a fix or workaround for {% include open-new-window.html text='this known
    issue' url='https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html' %}.
 
-These requirements are not yet all met in common cloud images—but it
+These requirements are not yet all met in common cloud images-but it
 is easy to remedy that by launching an image, making appropriate changes
 to its configuration files, taking a snapshot, and then using that
 snapshot thereafter instead of the original image.

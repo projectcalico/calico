@@ -301,7 +301,7 @@ value="99999.99" -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
 
 You should get no response, and refreshing your browser should not show an increased balance.
 
-You might wonder how {{site.prodname}} was able to detect and prevent this attack—the attacker was
+You might wonder how {{site.prodname}} was able to detect and prevent this attack-the attacker was
 able to steal the keys which prove identity in our system.  This highlights the value of multi-layer
 authentication checks.  Although our attack pod had the keys to fool the X.509 certificate check,
 {{site.prodname}} also monitors the Kubernetes API Server for which IP addresses are associated with which

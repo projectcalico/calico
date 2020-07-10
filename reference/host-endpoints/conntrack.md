@@ -7,8 +7,8 @@ canonical_url: '/reference/host-endpoints/conntrack'
 
 {{site.prodname}} uses Linux's connection tracking ('conntrack') as an important
 optimization to its processing.  It generally means that {{site.prodname}} only needs to
-check its policies for the first packet in an allowed flow—between a pair of
-IP addresses and ports—and then conntrack automatically allows further
+check its policies for the first packet in an allowed flow-between a pair of
+IP addresses and ports-and then conntrack automatically allows further
 packets in the same flow, without {{site.prodname}} rechecking every packet.
 
 This can, however, make it look like a {{site.prodname}} policy is not working as it

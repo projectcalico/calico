@@ -130,6 +130,6 @@ EOF
 
 > **Note**: If you plan to edit the resource to configure the IP addresses, make sure
 > you are not specifying the IP address options or environment variables when starting the
->`{{site.nodecontainer}}` container—otherwise those values will overwrite the values
+>`{{site.nodecontainer}}` container-otherwise those values will overwrite the values
 > configured through the resource.
 {: .alert .alert-info}
