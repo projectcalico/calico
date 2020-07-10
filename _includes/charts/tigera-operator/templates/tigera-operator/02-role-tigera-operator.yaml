@@ -16,7 +16,12 @@ rules:
       - secrets
       - serviceaccounts
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - ""
     resources:
@@ -36,7 +41,14 @@ rules:
       - rolebindings
       - roles
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
+      - bind
+      - escalate
   - apiGroups:
       - apps
     resources:
@@ -44,13 +56,12 @@ rules:
       - daemonsets
       - statefulsets
     verbs:
-      - '*'
-  - apiGroups:
-      - apiextensions.k8s.io
-    resources:
-      - customresourcedefinitions
-    verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - apps
     resourceNames:
@@ -64,13 +75,24 @@ rules:
     resources:
       - '*'
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - patch
+      - delete
+      - watch
   - apiGroups:
       - scheduling.k8s.io
     resources:
       - priorityclasses
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - monitoring.coreos.com
     resources:
@@ -79,11 +101,16 @@ rules:
       - get
       - create
   - apiGroups:
-    - policy
+      - policy
     resources:
-    - poddisruptionbudgets
+      - poddisruptionbudgets
     verbs:
-    - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
 {{- if eq .Values.installation.kubernetesProvider "openshift" }}
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
@@ -91,23 +118,40 @@ rules:
     resources:
       - networks/status
     verbs:
-      - 'update'
-      - '*'
+      - get
+      - list
+      - update
   - apiGroups:
       - config.openshift.io
     resources:
       - networks
       - infrastructures
     verbs:
-      - 'get'
-      - '*'
+      - get
+      - list
+      - patch
+      - watch
   # On OpenShift, we need to modify SCCs.
   - apiGroups:
       - security.openshift.io
     resources:
       - securitycontextconstraints
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
+  # For host network access.
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    resourceNames:
+      - hostnetwork
+    verbs:
+      - use
   # Need these permissions for the calicoctl init container.
   - apiGroups:
       - crd.projectcalico.org
@@ -125,42 +169,98 @@ rules:
     verbs:
       - create
 {{- end }}
-    # Permissions below this point are required for TSEE only.
+  # Permissions below this point are required for TSEE only.
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - globalalerts
+      - globalalerttemplates
+      - globalreports
+      - globalreporttypes
+      - globalthreatfeeds
+      - licensekeys
+      - managedclusters
+      - remoteclusterconfigurations
+      - tiers
+    verbs:
+      - create
   - apiGroups:
       - apiregistration.k8s.io
     resources:
       - apiservices
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - "batch"
     resources:
       - jobs
       - cronjobs
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - projectcalico.org
     resources:
       - globalreporttypes
       - licensekeys
+      - globalalerttemplates
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - elasticsearch.k8s.elastic.co
     resources:
       - elasticsearches
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - storage.k8s.io
     resources:
       - storageclasses
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
   - apiGroups:
       - kibana.k8s.elastic.co
     resources:
       - kibanas
     verbs:
-      - '*'
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
