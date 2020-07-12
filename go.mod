@@ -9,7 +9,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/projectcalico/felix v0.0.0-20200709140443-e898abfcdc88
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200709141311-ef7c3bc8fea0
-	github.com/projectcalico/typha v0.7.3-0.20200617040736-8be068576bc6
+	github.com/projectcalico/typha v0.7.3-0.20200710040658-524b784b9017
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v1.0.0
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
@@ -20,7 +20,7 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200701184824-0dc95f8ffdaa
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200711080657-af59191225ad
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 

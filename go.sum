@@ -544,6 +544,8 @@ github.com/projectcalico/confd v1.0.1-0.20200626131600-30019b51f87c h1:hfEl0XeS0
 github.com/projectcalico/confd v1.0.1-0.20200626131600-30019b51f87c/go.mod h1:4SdywFVDRLJguQKXBwi1Iw7ddp+l5CRJJlxFauhrtNc=
 github.com/projectcalico/confd v1.0.1-0.20200701184824-0dc95f8ffdaa h1:0A6XyX9/K/KSsSx5JNkJweXdp2beE0z7sYNgKEQLuJM=
 github.com/projectcalico/confd v1.0.1-0.20200701184824-0dc95f8ffdaa/go.mod h1:4SdywFVDRLJguQKXBwi1Iw7ddp+l5CRJJlxFauhrtNc=
+github.com/projectcalico/confd v1.0.1-0.20200711080657-af59191225ad h1:pHlDZc5W9l+XF1ul2RTX1IJQl+DQVaIvd4f4JtHZA1s=
+github.com/projectcalico/confd v1.0.1-0.20200711080657-af59191225ad/go.mod h1:s9IHD4M3Jt3k+SSEYXAvUBElTbhmcMQRD/bIsD2DWw0=
 github.com/projectcalico/felix v0.0.0-20200611144157-d4d227ee6ea9 h1:jdOUNFsxWkeZXOYreaXXrCDBSXkeFFICNieYH9bUuYs=
 github.com/projectcalico/felix v0.0.0-20200611144157-d4d227ee6ea9/go.mod h1:4yvmYJ4+kgYQ+P74MLQjTqj8v3qSQ1VQI/YJ7J0TCmo=
 github.com/projectcalico/felix v0.0.0-20200612003414-17921cc56a95 h1:m9swjqTW67Tuis8vr6xiL+yb7vEjLOs2tvT1Hf0sciw=
@@ -619,6 +621,8 @@ github.com/projectcalico/typha v0.7.3-0.20200616040820-4a79532fcecf h1:IcpiO50Or
 github.com/projectcalico/typha v0.7.3-0.20200616040820-4a79532fcecf/go.mod h1:5uAZkl2tV1iDY5EyEzYyrrgSh/HPWj685tgrdhwRMFk=
 github.com/projectcalico/typha v0.7.3-0.20200617040736-8be068576bc6 h1:joDPI/cvkbYCPx7zRcaSDjPeTNa0XZwRwLAp46wjKwI=
 github.com/projectcalico/typha v0.7.3-0.20200617040736-8be068576bc6/go.mod h1:i35DJ3Ez/xGyGO/VrvE7bu11Stc6hDnF/6Vf+79k6wo=
+github.com/projectcalico/typha v0.7.3-0.20200710040658-524b784b9017 h1:bON1zHHL5SAGyEP9P7RN5NYuPjT0Us4TfTYxweZs/iA=
+github.com/projectcalico/typha v0.7.3-0.20200710040658-524b784b9017/go.mod h1:v6menMubjXf4p2+oVKQz5J6y0SdGKbqiUcVttg9VMyo=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
