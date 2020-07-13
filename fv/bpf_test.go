@@ -579,6 +579,70 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
+				It("should have no connectivity to a pod before it is added to the datamodel", func() {
+					// Above BeforeEach adds a default-deny but for this test we want policy to be open
+					// so that it's only the lack of datastore configuration that blocks traffic.
+					policy := api.NewNetworkPolicy()
+					policy.Name = "allow-all"
+					policy.Namespace = "default"
+					one := float64(1)
+					policy.Spec.Order = &one
+					policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+					policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+					policy.Spec.Selector = "all()"
+					_, err := calicoClient.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+
+					// The hardest path to secure with BPF is packets to the newly-added workload.  We can't block
+					// the traffic with BPF until we have a BPF program in place so we rely on iptables catch-alls.
+
+					// Set up a workload but do not add it to the datastore.
+					dpOnlyWorkload := workload.New(felixes[1], "w-dp", "default", "10.65.1.5", "8057", testOpts.protocol)
+					err = dpOnlyWorkload.Start()
+					Expect(err).NotTo(HaveOccurred())
+					felixes[1].Exec("ip", "route", "add", dpOnlyWorkload.IP, "dev", dpOnlyWorkload.InterfaceName, "scope", "link")
+
+					// Attach tcpdump to the workload so we can verify that we don't see any packets at all.  We need
+					// to verify ingress and egress separately since a round-trip test would be blocked by either.
+					tcpdump := dpOnlyWorkload.AttachTCPDump()
+					tcpdump.SetLogEnabled(true)
+					pattern := fmt.Sprintf(`IP .* %s\.8057: UDP`, dpOnlyWorkload.IP)
+					tcpdump.AddMatcher("UDP-8057", regexp.MustCompile(pattern))
+					tcpdump.Start()
+					defer tcpdump.Stop()
+
+					// Send packets in the background.
+					var wg sync.WaitGroup
+					wg.Add(1)
+					ctx, cancelFn := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancelFn()
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						for {
+							if ctx.Err() != nil {
+								return
+							}
+							_, err = w[1][0].RunCmd("/pktgen", w[1][0].IP, dpOnlyWorkload.IP, "udp",
+								"--port-src", "30444", "--port-dst", "8057")
+							Expect(err).NotTo(HaveOccurred())
+							time.Sleep(100*(time.Millisecond))
+						}
+					}()
+					defer wg.Wait()
+
+					Consistently(tcpdump.MatchCountFn("UDP-8057"), "5s").Should(
+						BeNumerically("==", 0),
+						"Traffic to the workload should be blocked before datastore is configured")
+
+					dpOnlyWorkload.ConfigureInDatastore(infra)
+
+					Eventually(tcpdump.MatchCountFn("UDP-8057"), "5s").Should(
+						BeNumerically(">", 0),
+						"Traffic to the workload should be allowed after datastore is configured")
+				})
+			}
+
 			It("should have correct routes", func() {
 				expectedRoutes := expectedRouteDump
 				if felixes[0].ExpectedIPIPTunnelAddr != "" || felixes[0].ExpectedVXLANTunnelAddr != "" || felixes[0].ExpectedWireguardTunnelAddr != "" {
