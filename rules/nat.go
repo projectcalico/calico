@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/iptables"
 )
 
@@ -30,7 +31,7 @@ func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptabl
 }
 
 func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol string, action iptables.Action) iptables.Rule {
-	match := iptables.Match().MarkMatchesWithMask(0xca180000, 0xfff80000)
+	match := iptables.Match().MarkMatchesWithMask(tc.MarkSeenNATOutgoing, tc.MarkSeenNATOutgoingMask)
 
 	if protocol != "" {
 		match = match.Protocol(protocol)

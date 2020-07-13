@@ -911,13 +911,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// Only need to worry about ACCEPT here.  Drop gets compiled into the BPF program and
 				// RETURN would be a no-op since there's nothing to RETURN from.
 				inputRules = append(inputRules, iptables.Rule{
-					Match:  iptables.Match().InInterface(prefix+"+").MarkMatchesWithMask(0xca100000, 0xfffe0000),
+					Match:  iptables.Match().InInterface(prefix+"+").MarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenAndFlagsMask),
 					Action: iptables.AcceptAction{},
 				})
 			}
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
-				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(0xca100000, 0xfff00000),
+				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
 				Action: iptables.DropAction{},
 			})
 		}
@@ -942,11 +942,11 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 	for _, t := range d.iptablesRawTables {
 		rpfRules := []iptables.Rule{{
-			Match:  iptables.Match().MarkMatchesWithMask(0xca140000, 0xffff0000),
+			Match:  iptables.Match().MarkMatchesWithMask(tc.MarkSeenBypassSkipRPF, tc.MarkSeenBypassSkipRPFMask),
 			Action: iptables.ReturnAction{},
 		}}
 
-		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, 0xca100000, 0xfff00000,
+		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, tc.MarkSeen, tc.MarkSeenMask,
 			d.config.RulesConfig.OpenStackSpecialCasesEnabled, true)...)
 
 		rpfChain := []*iptables.Chain{{
