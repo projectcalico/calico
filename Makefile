@@ -59,8 +59,10 @@ gen-files: gen-crds
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds: bin/controller-gen
+	rm -rf config
 	@./bin/controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/
 	@rm config/crd/_.yaml
+	patch -s -p0 < ./config.patch
 
 # Used for generating CRD files.
 bin/controller-gen:

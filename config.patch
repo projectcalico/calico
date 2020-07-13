@@ -1,0 +1,13 @@
+diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.projectcalico.org_ipamblocks.yaml
+--- config.orig/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:30:08.454690094 -0700
++++ config/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:28:42.742835462 -0700
+@@ -41,6 +41,9 @@
+               allocations:
+                 items:
+                   type: integer
++                  # TODO: This nullable is manually added in. We should update controller-gen
++                  # to handle []*int properly itself.
++                  nullable: true
+                 type: array
+               attributes:
+                 items:
