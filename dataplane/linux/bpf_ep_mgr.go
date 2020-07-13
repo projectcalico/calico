@@ -33,12 +33,12 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/polprog"
+	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/ratelimited"
-
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -51,9 +51,11 @@ type epIface struct {
 
 type bpfEndpointManager struct {
 	// Caches.  Updated immediately for now.
-	wlEps    map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	policies map[proto.PolicyID]*proto.Policy
-	profiles map[proto.ProfileID]*proto.Profile
+	allWEPs        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	happyWEPs      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	happyWEPsDirty bool
+	policies       map[proto.PolicyID]*proto.Policy
+	profiles       map[proto.ProfileID]*proto.Profile
 
 	ifacesLock sync.Mutex
 	ifaces     map[string]epIface
@@ -77,9 +79,15 @@ type bpfEndpointManager struct {
 
 	ipSetMap bpf.Map
 	stateMap bpf.Map
+	ruleRenderer        bpfAllowChainRenderer
+	iptablesFilterTable *iptables.Table
 
 	startupOnce      sync.Once
 	mapCleanupRunner *ratelimited.Runner
+}
+
+type bpfAllowChainRenderer interface {
+	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 }
 
 func newBPFEndpointManager(
@@ -93,9 +101,13 @@ func newBPFEndpointManager(
 	dsrEnabled bool,
 	ipSetMap bpf.Map,
 	stateMap bpf.Map,
+	iptablesRuleRenderer bpfAllowChainRenderer,
+	iptablesFilterTable *iptables.Table,
 ) *bpfEndpointManager {
 	return &bpfEndpointManager{
-		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		allWEPs:             map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		happyWEPs:           map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		happyWEPsDirty:      true,
 		policies:            map[proto.PolicyID]*proto.Policy{},
 		profiles:            map[proto.ProfileID]*proto.Profile{},
 		ifaces:              map[string]epIface{},
@@ -113,6 +125,8 @@ func newBPFEndpointManager(
 		dsrEnabled:          dsrEnabled,
 		ipSetMap:            ipSetMap,
 		stateMap:            stateMap,
+		ruleRenderer:        iptablesRuleRenderer,
+		iptablesFilterTable: iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
 			log.Debug("Jump map cleanup triggered.")
 			tc.CleanUpJumpMaps()
@@ -200,7 +214,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpointUpdate) {
 	log.WithField("wep", msg.Endpoint).Debug("Workload endpoint update")
 	wlID := *msg.Id
-	oldWL := m.wlEps[wlID]
+	oldWL := m.allWEPs[wlID]
 	wl := msg.Endpoint
 	if oldWL != nil {
 		for _, t := range oldWL.Tiers {
@@ -235,7 +249,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 			profSet.Discard(wlID)
 		}
 	}
-	m.wlEps[wlID] = msg.Endpoint
+	m.allWEPs[wlID] = msg.Endpoint
 	for _, t := range wl.Tiers {
 		for _, pol := range t.IngressPolicies {
 			polID := proto.PolicyID{
@@ -274,7 +288,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpointRemove) {
 	wlID := *msg.Id
 	log.WithField("id", wlID).Debug("Workload endpoint removed")
-	wl := m.wlEps[wlID]
+	wl := m.allWEPs[wlID]
 	for _, t := range wl.Tiers {
 		for _, pol := range t.IngressPolicies {
 			polSet := m.policiesToWorkloads[proto.PolicyID{
@@ -297,7 +311,9 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 			polSet.Discard(wlID)
 		}
 	}
-	delete(m.wlEps, wlID)
+	delete(m.allWEPs, wlID)
+	delete(m.happyWEPs, wlID)
+	m.happyWEPsDirty = true
 	m.dirtyWorkloads.Add(wlID)
 }
 
@@ -368,7 +384,12 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.applyProgramsToDirtyDataInterfaces()
 	m.applyProgramsToDirtyWorkloadEndpoints()
 
-	// TODO: handle cali interfaces with no WEP
+	if m.happyWEPsDirty {
+		chains := m.ruleRenderer.WorkloadInterfaceAllowChains(m.happyWEPs)
+		m.iptablesFilterTable.UpdateChains(chains)
+		m.happyWEPsDirty = false
+	}
+
 	return nil
 }
 
@@ -485,14 +506,26 @@ func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 		err := errs[wlID]
 		if err == nil {
 			log.WithField("id", wlID).Info("Applied policy to workload")
+			if _, ok := m.happyWEPs[wlID]; !ok {
+				log.WithField("id", wlID).Info("Adding workload interface to iptables allow list.")
+				m.happyWEPsDirty = true
+			}
+			m.happyWEPs[wlID] = m.allWEPs[wlID]
 			return set.RemoveItem
+		} else {
+			if _, ok := m.happyWEPs[wlID]; ok {
+				log.WithField("id", wlID).WithError(err).Error(
+					"Failed to add policy to workload, removing from iptables allow list")
+				delete(m.happyWEPs, wlID)
+				m.happyWEPsDirty = true
+			}
 		}
 		if err == tc.ErrDeviceNotFound {
 			log.WithField("wep", wlID).Debug(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
 		}
-		log.WithError(err).Warn("Failed to apply policy to endpoint")
+		log.WithError(err).WithField("id", wlID).Warn("Failed to apply policy to endpoint")
 		return nil
 	})
 }
@@ -500,7 +533,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 // applyPolicy actually applies the policy to the given workload.
 func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	startTime := time.Now()
-	wep := m.wlEps[wlID]
+	wep := m.allWEPs[wlID]
 	if wep == nil {
 		// TODO clean up old workloads
 		return nil

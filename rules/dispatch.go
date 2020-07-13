@@ -43,21 +43,58 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 			Comment: []string{"Unknown interface"},
 		},
 	}
-	result := []*Chain{}
-	result = append(result,
-		// Assemble a from-workload and to-workload dispatch chain.
-		r.interfaceNameDispatchChains(
-			names,
-			WorkloadFromEndpointPfx,
-			WorkloadToEndpointPfx,
-			ChainFromWorkloadDispatch,
-			ChainToWorkloadDispatch,
-			endRules,
-			endRules,
-		)...,
+	return r.interfaceNameDispatchChains(
+		names,
+		WorkloadFromEndpointPfx,
+		WorkloadToEndpointPfx,
+		ChainFromWorkloadDispatch,
+		ChainToWorkloadDispatch,
+		endRules,
+		endRules,
 	)
+}
 
-	return result
+func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
+	endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
+) []*Chain {
+	// Extract endpoint names.
+	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload interface allow chain")
+	names := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		names = append(names, endpoint.Name)
+	}
+
+	// If workload endpoint is unknown, drop.
+	endRules := []Rule{
+		{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: []string{"Unknown interface"},
+		},
+	}
+
+	// Since there can be >100 endpoints, putting them in a single list adds some latency to
+	// endpoints that are later in the chain.  To reduce that impact, we build a shallow tree of
+	// chains based on the prefixes of the chains.
+	commonPrefix, prefixes, prefixToNames := r.sortAndDivideEndpointNamesToPrefixTree(names)
+	var chains []*Chain
+	// Build to endpoint chains.
+	toChildChains, toRootChain, _ := r.buildSingleDispatchChains(
+		ChainToWorkloadDispatch,
+		commonPrefix,
+		prefixes,
+		prefixToNames,
+		WorkloadPfxSpecialAllow,
+		func(name string) MatchCriteria { return Match().OutInterface(name) },
+		func(pfx, name string) Action {
+			return AcceptAction{}
+		},
+		endRules,
+	)
+	chains = append(chains, toChildChains...)
+	chains = append(chains, toRootChain)
+
+	return chains
 }
 
 // In some scenario, e.g. packet goes to an kubernetes ipvs service ip. Traffic goes through input/output filter chain

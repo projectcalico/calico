@@ -518,6 +518,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.BPFNodePortDSREnabled,
 			ipSetsMap,
 			stateMap,
+			ruleRenderer,
+			filterTableV4,
 		))
 
 		// Pre-create the NAT maps so that later operations can assume access.
@@ -887,48 +889,70 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 }
 
 func (d *InternalDataplane) setUpIptablesBPF() {
-	// TODO have raw table mark for notrack
-	// TODO Any BPF SNAT we need to do
+	// TODO Make make bits configurable.
 
 	for _, t := range d.iptablesFilterTables {
 		fwdRules := []iptables.Rule{
 			{
-				// TODO Make "from workload" mark configurable
-				Match:  iptables.Match().MarkMatchesWithMask(0xca100000, 0xfff00000),
-				Action: iptables.AcceptAction{},
+				// Bypass is a strong signal from the BPF program, it means that the flow is approved
+				// by the program at both ingress and egress.
+				Comment: []string{"Pre-approved by BPF programs."},
+				Match:   iptables.Match().MarkMatchesWithMask(tc.MarkSeenBypass, tc.MarkSeenBypassMask),
+				Action:  iptables.AcceptAction{},
 			},
 		}
+
 		var inputRules []iptables.Rule
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
 				iptables.Rule{
-					Match:   iptables.Match().InInterface(prefix + "+"),
+					Match:   iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
 					Action:  iptables.DropAction{},
-					Comment: []string{"From workload without BPF ACCEPT mark"},
+					Comment: []string{"From workload without BPF seen mark"},
+				}, iptables.Rule{
+					Match:   iptables.Match().InInterface(prefix + "+"),
+					Action:  iptables.AcceptAction{},
+					Comment: []string{"From workload without BPF seen mark"},
 				})
 
 			if d.config.RulesConfig.EndpointToHostAction == "ACCEPT" {
 				// Only need to worry about ACCEPT here.  Drop gets compiled into the BPF program and
 				// RETURN would be a no-op since there's nothing to RETURN from.
 				inputRules = append(inputRules, iptables.Rule{
-					Match:  iptables.Match().InInterface(prefix+"+").MarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenAndFlagsMask),
+					Match:  iptables.Match().InInterface(prefix+"+").MarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
 					Action: iptables.AcceptAction{},
 				})
 			}
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
-				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
+				Match:  iptables.Match().InInterface(prefix + "+"),
 				Action: iptables.DropAction{},
 			})
 		}
-		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
-			// Make sure iptables rules don't drop packets that we're about to process through BPF.
-			fwdRules = append(fwdRules, iptables.Rule{
-				Match:   iptables.Match().OutInterface(prefix + "+"),
-				Action:  iptables.AcceptAction{},
-				Comment: []string{"To workload, BPF will handle."},
-			})
+
+		if t.IPVersion == 6 {
+			for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
+				// In BPF mode, we don't support IPv6 yet.  Drop it.
+				fwdRules = append(fwdRules, iptables.Rule{
+					Match:   iptables.Match().OutInterface(prefix + "+"),
+					Action:  iptables.DropAction{},
+					Comment: []string{"To workload, drop IPv6."},
+				})
+			}
+		} else {
+			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF
+			// program attached (yet).  To catch that case, we send the packet through a dispatch chain.  We only
+			// add interfaces to the dispatch chain if the BPF program is in place.
+			for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
+				// Make sure iptables rules don't drop packets that we're about to process through BPF.
+				fwdRules = append(fwdRules, iptables.Rule{
+					Match:   iptables.Match().OutInterface(prefix + "+"),
+					Action:  iptables.JumpAction{Target: rules.ChainToWorkloadDispatch},
+					Comment: []string{"To workload, check workload is known."},
+				})
+			}
 		}
+
 		t.InsertOrAppendRules("INPUT", inputRules)
 		t.InsertOrAppendRules("FORWARD", fwdRules)
 	}

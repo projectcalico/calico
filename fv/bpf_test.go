@@ -626,18 +626,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							_, err = w[1][0].RunCmd("/pktgen", w[1][0].IP, dpOnlyWorkload.IP, "udp",
 								"--port-src", "30444", "--port-dst", "8057")
 							Expect(err).NotTo(HaveOccurred())
-							time.Sleep(100*(time.Millisecond))
+							time.Sleep(100 * (time.Millisecond))
 						}
 					}()
 					defer wg.Wait()
 
-					Consistently(tcpdump.MatchCountFn("UDP-8057"), "5s").Should(
+					Consistently(tcpdump.MatchCountFn("UDP-8057"), "5s", "200ms").Should(
 						BeNumerically("==", 0),
 						"Traffic to the workload should be blocked before datastore is configured")
 
 					dpOnlyWorkload.ConfigureInDatastore(infra)
 
-					Eventually(tcpdump.MatchCountFn("UDP-8057"), "5s").Should(
+					Eventually(tcpdump.MatchCountFn("UDP-8057"), "5s", "200ms").Should(
 						BeNumerically(">", 0),
 						"Traffic to the workload should be allowed after datastore is configured")
 				})

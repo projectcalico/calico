@@ -84,6 +84,7 @@ const (
 	ChainForwardEndpointMark = ChainNamePrefix + "forward-endpoint-mark"
 
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
+	WorkloadPfxSpecialAllow = "ALLOW"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
 
 	SetEndPointMarkPfx = ChainNamePrefix + "sm-"
@@ -171,6 +172,8 @@ type RuleRenderer interface {
 		egressPolicies []string,
 		profileIDs []string,
 	) []*iptables.Chain
+
+	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 
 	EndpointMarkDispatchChains(
 		epMarkMapper EndpointMarkMapper,
