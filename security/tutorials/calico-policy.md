@@ -67,7 +67,7 @@ It returns the HTML of the google.com home page.
 
 ### 2. Lock down all traffic
 
-We will begin by using a default deny [Global Calico Network Policy](https://docs.projectcalico.org/reference/resources/globalnetworkpolicy) (which you can only do using Calico) that will help us adopt best practices in using a [zero trust network model](https://docs.projectcalico.org/security/adopt-zero-trust) to secure our workloads. Note that Global Calico Network Policies don't need a namespace, this will effect all resources that match the selector. Kubernetes Network Policies cannot achieve this by themselves.
+We will begin by using a default deny [Global Calico Network Policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) (which you can only do using Calico) that will help us adopt best practices in using a [zero trust network model]({{ site.baseurl }}/security/adopt-zero-trust) to secure our workloads. Note that Global Calico Network Policies don't need a namespace, this will effect all resources that match the selector. Kubernetes Network Policies cannot achieve this by themselves.
 
 ```bash
 calicoctl create -f - <<EOF
