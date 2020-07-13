@@ -61,7 +61,7 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 			},
 		)
 
-		table.SetRuleInsertions("FORWARD", []Rule{
+		table.InsertOrAppendRules("FORWARD", []Rule{
 			{Action: DropAction{}},
 		})
 		table.Apply()
@@ -125,7 +125,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 	})
 
 	It("Should defer updates until Apply is called", func() {
-		table.SetRuleInsertions("FORWARD", []Rule{
+		table.InsertOrAppendRules("FORWARD", []Rule{
 			{Action: DropAction{}},
 		})
 		table.UpdateChains([]*Chain{
@@ -178,7 +178,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 	Describe("after inserting a rule", func() {
 		BeforeEach(func() {
-			table.SetRuleInsertions("FORWARD", []Rule{
+			table.InsertOrAppendRules("FORWARD", []Rule{
 				{Action: DropAction{}},
 			})
 			table.Apply()
@@ -197,7 +197,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			}))
 		})
 		It("further inserts should be idempotent", func() {
-			table.SetRuleInsertions("FORWARD", []Rule{
+			table.InsertOrAppendRules("FORWARD", []Rule{
 				{Action: DropAction{}},
 			})
 			dataplane.ResetCmds()
@@ -217,7 +217,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 		Describe("after inserting a rule then updating the insertions", func() {
 			BeforeEach(func() {
-				table.SetRuleInsertions("FORWARD", []Rule{
+				table.InsertOrAppendRules("FORWARD", []Rule{
 					{Action: DropAction{}},
 					{Action: AcceptAction{}},
 					{Action: DropAction{}},
@@ -339,7 +339,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 		Describe("after adding a reference from another chain", func() {
 			BeforeEach(func() {
-				table.SetRuleInsertions("FORWARD", []Rule{
+				table.InsertOrAppendRules("FORWARD", []Rule{
 					{Action: JumpAction{Target: "cali-FORWARD"}},
 				})
 				table.UpdateChain(&Chain{
@@ -368,7 +368,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 			Describe("after adding a reference from an insert", func() {
 				BeforeEach(func() {
-					table.SetRuleInsertions("FORWARD", []Rule{
+					table.InsertOrAppendRules("FORWARD", []Rule{
 						{Action: JumpAction{Target: "cali-foobar"}},
 					})
 					table.Apply()
@@ -408,7 +408,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 					Describe("after removing the insert", func() {
 						BeforeEach(func() {
-							table.SetRuleInsertions("FORWARD", []Rule{})
+							table.InsertOrAppendRules("FORWARD", []Rule{})
 							table.Apply()
 						})
 						It("chain should be removed", func() {
@@ -425,7 +425,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 		Describe("after adding a reference from an insert", func() {
 			BeforeEach(func() {
-				table.SetRuleInsertions("FORWARD", []Rule{
+				table.InsertOrAppendRules("FORWARD", []Rule{
 					{Action: JumpAction{Target: "cali-foobar"}},
 				})
 				table.Apply()
@@ -446,7 +446,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 			Describe("after removing the reference", func() {
 				BeforeEach(func() {
-					table.SetRuleInsertions("FORWARD", []Rule{})
+					table.InsertOrAppendRules("FORWARD", []Rule{})
 					table.Apply()
 				})
 				It("it should get removed", func() {
@@ -616,7 +616,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 	Describe("applying updates when underlying iptables have changed in a whitelisted chain", func() {
 		BeforeEach(func() {
-			table.SetRuleInsertions("FORWARD", []Rule{
+			table.InsertOrAppendRules("FORWARD", []Rule{
 				{Action: AcceptAction{}},
 				{Action: DropAction{}},
 				{Action: JumpAction{Target: "cali-foobar"}},
@@ -655,7 +655,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					}
 				}
 
-				table.SetRuleInsertions("FORWARD", []Rule{
+				table.InsertOrAppendRules("FORWARD", []Rule{
 					{Action: DropAction{}, Comment: []string{"new drop rule"}},
 					{Action: JumpAction{Target: "cali-foobar"}},
 				})
@@ -681,7 +681,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 	Describe("applying updates when underlying iptables have changed in a non-whitelisted chain", func() {
 		BeforeEach(func() {
-			table.SetRuleInsertions("FORWARD", []Rule{
+			table.InsertOrAppendRules("FORWARD", []Rule{
 				{Action: JumpAction{Target: "non-cali-chain"}},
 				{Action: JumpAction{Target: "cali-foobar"}},
 			})
@@ -726,7 +726,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					}
 				}
 
-				table.SetRuleInsertions("non-cali-chain", []Rule{
+				table.InsertOrAppendRules("non-cali-chain", []Rule{
 					{Action: DropAction{}, Comment: []string{"new drop rule"}},
 				})
 				table.Apply()
@@ -753,7 +753,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 
 	Describe("inserting into a non-Calico chain results in the expected writes", func() {
 		BeforeEach(func() {
-			table.SetRuleInsertions("FORWARD", []Rule{
+			table.InsertOrAppendRules("FORWARD", []Rule{
 				{Action: DropAction{}, Comment: []string{"a drop rule"}},
 				{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
 			})
@@ -776,7 +776,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		})
 		Describe("then inserting the same rules", func() {
 			BeforeEach(func() {
-				table.SetRuleInsertions("FORWARD", []Rule{
+				table.InsertOrAppendRules("FORWARD", []Rule{
 					{Action: DropAction{}, Comment: []string{"a drop rule"}},
 					{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
 				})
@@ -803,7 +803,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		})
 		Describe("then inserting different rules", func() {
 			BeforeEach(func() {
-				table.SetRuleInsertions("FORWARD", []Rule{
+				table.InsertOrAppendRules("FORWARD", []Rule{
 					{Action: DropAction{}, Comment: []string{"a drop rule"}},
 					{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
 					{Action: DropAction{}, Comment: []string{"a second drop rule"}},
@@ -824,6 +824,87 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 						"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
 						"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
 						"-m comment --comment \"cali:-rA8o5kyVSTHJMe8\" -m comment --comment \"a second drop rule\" --jump DROP",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}))
+			})
+		})
+	})
+
+	Describe("inserting and appending into a non-Calico chain results in the expected writes", func() {
+		BeforeEach(func() {
+			table.AppendRules("FORWARD", []Rule{
+				{Action: DropAction{}, Comment: []string{"append drop rule"}},
+				{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+			})
+			table.InsertOrAppendRules("FORWARD", []Rule{
+				{Action: DropAction{}, Comment: []string{"insert drop rule"}},
+				{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
+			})
+
+			table.Apply()
+		})
+		It("should update the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {
+					"-m comment --comment \"cali:sP8Ctm6vRqum19h-\" -m comment --comment \"insert drop rule\" --jump DROP",
+					"-m comment --comment \"cali:b-zvHycxSRrp53xL\" -m comment --comment \"insert accept rule\" --jump ACCEPT",
+					"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
+					"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
+				},
+				"INPUT":  {},
+				"OUTPUT": {},
+			}))
+		})
+
+		Describe("then appending the same rules", func() {
+			BeforeEach(func() {
+				table.AppendRules("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: []string{"append drop rule"}},
+					{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+				})
+				dataplane.ResetCmds()
+				table.Apply()
+			})
+			It("should result in no inserts", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:sP8Ctm6vRqum19h-\" -m comment --comment \"insert drop rule\" --jump DROP",
+						"-m comment --comment \"cali:b-zvHycxSRrp53xL\" -m comment --comment \"insert accept rule\" --jump ACCEPT",
+						"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
+						"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}))
+			})
+		})
+
+		Describe("then inserting and appending different rules", func() {
+			BeforeEach(func() {
+				table.InsertOrAppendRules("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: []string{"insert drop rule"}},
+					{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
+					{Action: DropAction{}, Comment: []string{"second insert drop rule"}},
+				})
+				table.AppendRules("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: []string{"append drop rule"}},
+					{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+					{Action: DropAction{}, Comment: []string{"second append drop rule"}},
+				})
+				dataplane.ResetCmds()
+				table.Apply()
+			})
+			It("should result in modifications", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:sP8Ctm6vRqum19h-\" -m comment --comment \"insert drop rule\" --jump DROP",
+						"-m comment --comment \"cali:b-zvHycxSRrp53xL\" -m comment --comment \"insert accept rule\" --jump ACCEPT",
+						"-m comment --comment \"cali:qvt6MzuJGZqS1aQt\" -m comment --comment \"second insert drop rule\" --jump DROP",
+						"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
+						"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
+						"-m comment --comment \"cali:Ss37kzq4-zQ2tbFp\" -m comment --comment \"second append drop rule\" --jump DROP",
 					},
 					"INPUT":  {},
 					"OUTPUT": {},
@@ -879,7 +960,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 			featureDetector,
 			options,
 		)
-		table.SetRuleInsertions("FORWARD", []Rule{
+		table.InsertOrAppendRules("FORWARD", []Rule{
 			{Action: DropAction{}},
 		})
 		table.Apply()
@@ -1115,17 +1196,21 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 		}))
 	})
 
-	Describe("with pre-cleanup inserts and updates", func() {
+	Describe("with pre-cleanup inserts, appends and updates", func() {
 		// These tests inject some chains and insertions before the first call to Apply().
 		// That should mean that the Table does a sync operation, avoiding updates to
 		// chains/rules that haven't changed, for example.
 		BeforeEach(func() {
-			table.SetRuleInsertions("FORWARD", []Rule{
+			table.InsertOrAppendRules("FORWARD", []Rule{
 				{Action: DropAction{}},
 				{Action: AcceptAction{}},
 				{Action: GotoAction{Target: "cali-foobar"}},
 			})
-			table.SetRuleInsertions("OUTPUT", []Rule{
+			table.AppendRules("FORWARD", []Rule{
+				{Action: ReturnAction{}},
+				{Action: DropAction{}},
+			})
+			table.InsertOrAppendRules("OUTPUT", []Rule{
 				{Action: DropAction{}},
 				{Action: JumpAction{Target: "cali-correct"}},
 			})
@@ -1174,6 +1259,8 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 					"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
 					"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
 					"-m comment --comment \"cali:vKEEfdy_QeXafpRE\" --goto cali-foobar",
+					"-m comment --comment \"cali:TQaqIrW2HQal-sdp\" --jump RETURN",
+					"-m comment --comment \"cali:EDon0sGIntr1CQga\" --jump DROP",
 				}
 			} else {
 				expChains["FORWARD"] = []string{
@@ -1183,6 +1270,8 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 					"--jump RETURN",
 					"--jump ACCEPT",
 					"--jump foo-bar",
+					"-m comment --comment \"cali:TQaqIrW2HQal-sdp\" --jump RETURN",
+					"-m comment --comment \"cali:EDon0sGIntr1CQga\" --jump DROP",
 				}
 			}
 
@@ -1354,6 +1443,8 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
 						"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
 						"-m comment --comment \"cali:vKEEfdy_QeXafpRE\" --goto cali-foobar",
+						"-m comment --comment \"cali:TQaqIrW2HQal-sdp\" --jump RETURN",
+						"-m comment --comment \"cali:EDon0sGIntr1CQga\" --jump DROP",
 					},
 					"cali-foobar": {
 						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
@@ -1401,7 +1492,7 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 			})
 			It("and pending updates, should get to correct state", func() {
 				// And we make some updates in the same batch.
-				table.SetRuleInsertions("OUTPUT", []Rule{
+				table.InsertOrAppendRules("OUTPUT", []Rule{
 					{Action: AcceptAction{}},
 					{Action: JumpAction{Target: "cali-correct"}},
 				})
@@ -1444,6 +1535,8 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
 						"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
 						"-m comment --comment \"cali:vKEEfdy_QeXafpRE\" --goto cali-foobar",
+						"-m comment --comment \"cali:TQaqIrW2HQal-sdp\" --jump RETURN",
+						"-m comment --comment \"cali:EDon0sGIntr1CQga\" --jump DROP",
 					}
 				} else {
 					expChains["FORWARD"] = []string{
@@ -1453,6 +1546,8 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 						"--jump RETURN",
 						"--jump ACCEPT",
 						"--jump foo-bar",
+						"-m comment --comment \"cali:TQaqIrW2HQal-sdp\" --jump RETURN",
+						"-m comment --comment \"cali:EDon0sGIntr1CQga\" --jump DROP",
 					}
 				}
 
@@ -1497,7 +1592,7 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 				LookPathOverride:      lookPathNoLegacy,
 			},
 		)
-		table.SetRuleInsertions("FORWARD", []Rule{
+		table.InsertOrAppendRules("FORWARD", []Rule{
 			{Action: DropAction{}},
 		})
 		table.Apply()

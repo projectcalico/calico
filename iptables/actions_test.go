@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,4 +42,8 @@ var _ = DescribeTable("Actions",
 		Mark: 0x1000,
 		Mask: 0xf000,
 	}, "--jump MARK --set-mark 0x1000/0xf000"),
+	Entry("SaveConnMarkAction", Features{}, SaveConnMarkAction{SaveMask: 0x100}, "--jump CONNMARK --save-mark --mark 0x100"),
+	Entry("RestoreConnMarkAction", Features{}, RestoreConnMarkAction{RestoreMask: 0x100}, "--jump CONNMARK --restore-mark --mark 0x100"),
+	Entry("SaveConnMarkAction", Features{}, SaveConnMarkAction{}, "--jump CONNMARK --save-mark --mark 0xffffffff"),
+	Entry("RestoreConnMarkAction", Features{}, RestoreConnMarkAction{}, "--jump CONNMARK --restore-mark --mark 0xffffffff"),
 )
