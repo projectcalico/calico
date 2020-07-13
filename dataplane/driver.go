@@ -270,6 +270,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			RouteTableManager:                  routeTableIndexAllocator,
 
 			KubeClientSet: k8sClientSet,
+
+			FeatureDetectOverrides: configParams.FeatureDetectOverride,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

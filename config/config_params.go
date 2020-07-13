@@ -162,19 +162,20 @@ type Config struct {
 
 	Ipv6Support bool `config:"bool;true"`
 
-	IptablesBackend                    string        `config:"oneof(legacy,nft,auto);legacy"`
-	RouteRefreshInterval               time.Duration `config:"seconds;90"`
-	DeviceRouteSourceAddress           net.IP        `config:"ipv4;"`
-	DeviceRouteProtocol                int           `config:"int;3"`
-	RemoveExternalRoutes               bool          `config:"bool;true"`
-	IptablesRefreshInterval            time.Duration `config:"seconds;90"`
-	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;1"`
-	IptablesLockFilePath               string        `config:"file;/run/xtables.lock"`
-	IptablesLockTimeoutSecs            time.Duration `config:"seconds;0"`
-	IptablesLockProbeIntervalMillis    time.Duration `config:"millis;50"`
-	IpsetsRefreshInterval              time.Duration `config:"seconds;10"`
-	MaxIpsetSize                       int           `config:"int;1048576;non-zero"`
-	XDPRefreshInterval                 time.Duration `config:"seconds;90"`
+	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);legacy"`
+	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
+	DeviceRouteSourceAddress           net.IP            `config:"ipv4;"`
+	DeviceRouteProtocol                int               `config:"int;3"`
+	RemoveExternalRoutes               bool              `config:"bool;true"`
+	IptablesRefreshInterval            time.Duration     `config:"seconds;90"`
+	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;1"`
+	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
+	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"`
+	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"`
+	FeatureDetectOverride              map[string]string `config:"keyvaluelist;;"`
+	IpsetsRefreshInterval              time.Duration     `config:"seconds;10"`
+	MaxIpsetSize                       int               `config:"int;1048576;non-zero"`
+	XDPRefreshInterval                 time.Duration     `config:"seconds;90"`
 
 	PolicySyncPathPrefix string `config:"file;;"`
 
@@ -690,6 +691,8 @@ func loadParams() {
 			param = &CIDRListParam{}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}
+		case "keyvaluelist":
+			param = &KeyValueListParam{}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 		}

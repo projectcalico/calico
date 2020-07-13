@@ -59,3 +59,27 @@ var _ = DescribeTable("CIDR list parameter parsing",
 	Entry("Mix of IP and CIDRs", "1.1.1.1/24, 2.2.2.2", []string{"1.1.1.0/24", "2.2.2.2/32"}, true),
 	Entry("Reject IPv6", "aabc::1111/32", []string{}, false),
 )
+
+var _ = DescribeTable("KeyValue list parameter parsing",
+	func(raw string, expected map[string]string) {
+		p := KeyValueListParam{Metadata{
+			Name: "FeatureOverride",
+		}}
+		actual, err := p.Parse(raw)
+		if expected == nil {
+			Expect(err).NotTo(BeNil())
+		} else {
+			Expect(err).To(BeNil())
+			Expect(actual).To(Equal(expected))
+		}
+	},
+	Entry("Empty", "  ", map[string]string{}),
+	Entry("Single value", "key=value", map[string]string{
+		"key": "value",
+	}),
+	Entry("Malformed", "key=value,malformed", nil),
+	Entry("Spaces", "  key=value,  v2= x ,,,,", map[string]string{
+		"key": "value",
+		"v2":  " x ",
+	}),
+)
