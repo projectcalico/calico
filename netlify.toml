@@ -7,6 +7,8 @@
   RUBY_VERSION = "2.5.4"
   RELEASE_VERSION = "v3.12"
 
+# One jekyll build here generates the website which is served at /archive/v3.12/ other build generates only manifests
+# served on /v3.12/ path, order of the build matters since destination folders are cleaned on each builds
 [context.branch-deploy]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
@@ -26,8 +28,8 @@
   jekyll build --config _config.yml,_config_url.yml
   '''
 
-# unforced redirect - This will allow manifests to be collected on /<version> generated in the first build
-# but redirects anything else that's not inside /<version> to /
+# unforced redirect will allow manifests to be collected on /<version>/ generated in above build
+# but redirects anything else that's not inside /<version> to root at /
 [[redirects]]
   from = "/v3.12/*"
   to = "/:splat"
