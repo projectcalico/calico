@@ -584,6 +584,8 @@ github.com/projectcalico/felix v0.0.0-20200706105820-a2896584a9da h1:cdsy3C5/qLs
 github.com/projectcalico/felix v0.0.0-20200706105820-a2896584a9da/go.mod h1:Ee89j4XjBz2VKsX91wLPMx55asD45kSsqzBn7Ryz0dY=
 github.com/projectcalico/felix v0.0.0-20200709140443-e898abfcdc88 h1:/psQzniqVcjeUgvOcBv+rbloW7f+GuWOn3ZvJiV1XV0=
 github.com/projectcalico/felix v0.0.0-20200709140443-e898abfcdc88/go.mod h1:Ee89j4XjBz2VKsX91wLPMx55asD45kSsqzBn7Ryz0dY=
+github.com/projectcalico/felix v0.0.0-20200713183847-9536684af6e0 h1:PxVTg2kUWgWszUXEIgirwjgvbETkZVkHhE3Aag2ETtk=
+github.com/projectcalico/felix v0.0.0-20200713183847-9536684af6e0/go.mod h1:MuxoaIEHB309+hXLF7rMn94S16sJnRZAiY0ww/Oq2Xc=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
@@ -603,6 +605,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200616235442-553c09af3043 h1:Xn
 github.com/projectcalico/libcalico-go v1.7.2-0.20200616235442-553c09af3043/go.mod h1:1RxboTOZJzpDYDvE03hMlf13b7gR0DPNcO7J/9uv6iY=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200709141311-ef7c3bc8fea0 h1:Jllqmfp0v2EzbgJrVFgocpoMpgl40JTUfk+A9jx37cs=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200709141311-ef7c3bc8fea0/go.mod h1:1RxboTOZJzpDYDvE03hMlf13b7gR0DPNcO7J/9uv6iY=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200713202632-8964eb1510ff h1:c9EmQPzn4e4jrJJdwjQkomYintPr2+eaksmphzld278=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200713202632-8964eb1510ff/go.mod h1:1RxboTOZJzpDYDvE03hMlf13b7gR0DPNcO7J/9uv6iY=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271 h1:AOFOckD83tAIMQob6I1FpzSVs+Rn5Td701Q3/aQFqe8=
