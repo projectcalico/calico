@@ -31,6 +31,7 @@ import (
 
 	"runtime/debug"
 
+	"github.com/projectcalico/felix/aws"
 	"github.com/projectcalico/felix/config"
 	extdataplane "github.com/projectcalico/felix/dataplane/external"
 	"github.com/projectcalico/felix/dataplane/inactive"
@@ -41,6 +42,7 @@ import (
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/markbits"
 	"github.com/projectcalico/felix/rules"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
@@ -280,6 +282,20 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
+
+		const healthName = "aws-source-destination-check"
+		// Set source-destination-check on AWS EC2 instance.
+		if configParams.AWSSrcDstCheck != string(apiv3.AWSSrcDstCheckOptionDoNothing) {
+			go func(check, healthName string, healthAgg *health.HealthAggregator) {
+				log.Infof("Setting AWS EC2 source-destination-check to %s", check)
+				err := aws.UpdateSrcDstCheck(check)
+				if err != nil {
+					log.WithField("src-dst-check", check).Errorf("Failed to set source-destination-check: %v", err)
+					// set not-ready.
+					healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+				}
+			}(configParams.AWSSrcDstCheck, healthName, healthAggregator)
+		}
 
 		return intDP, nil
 	} else {
