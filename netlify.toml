@@ -7,6 +7,9 @@
   RUBY_VERSION = "2.5.4"
   RELEASE_VERSION = "v3.13"
 
+# One jekyll build here generates the website which is served at /archive/v3.13/ other build generates only manifests
+# served on /v3.13/ path, order of the build matters since destination folders are cleaned on each builds
+# 404 page moved to root of the site so that netlify shows it automatically
 [context.branch-deploy]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
