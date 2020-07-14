@@ -54,7 +54,7 @@ spec:
                   cluster IPs are allocated. If specified, Calico will advertise these
                   blocks, as well as any cluster IPs within them.
                 items:
-                  description: ServiceClusterIPBlock represents a single allow-listed
+                  description: ServiceClusterIPBlock represents a single
                     CIDR block for ClusterIPs.
                   properties:
                     cidr:
@@ -66,7 +66,7 @@ spec:
                   Service External IPs. Kubernetes Service ExternalIPs will only be
                   advertised if they are within one of these blocks.
                 items:
-                  description: ServiceExternalIPBlock represents a single allow-listed
+                  description: ServiceExternalIPBlock represents a single
                     CIDR External IP block.
                   properties:
                     cidr:

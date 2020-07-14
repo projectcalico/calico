@@ -136,7 +136,7 @@ spec:
 
 **Add a rule to allow traffic destined for all host endpoints**
 
-Or, you can add rules that allow-list specific host traffic including Kubernetes and {{site.prodname}}. Without this rule, normal host traffic is blocked.
+Or, you can add rules that allow specific host traffic including Kubernetes and {{site.prodname}}. Without this rule, normal host traffic is blocked.
 
 ```yaml
 apiVersion: projectcalico.org/v3

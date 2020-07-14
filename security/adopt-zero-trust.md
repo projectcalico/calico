@@ -47,7 +47,7 @@ Zero Trust Networks rely on network access controls with specific requirements:
 
 **Requirement 2**: Establishing the identity of a remote endpoint is always based on multiple criteria including strong cryptographic proofs of identity. In particular, network-level identifiers like IP address and port are not sufficient on their own as they can be spoofed by a hostile network.
 
-**Requirement 3**: All expected and allowed network flows are explicitly allow-listed. Any connection not explicitly allow-listed is denied.
+**Requirement 3**: All expected and allowed network flows are explicitly allowed. Any connection not explicitly allowed is denied.
 
 **Requirement 4**: Compromised workloads must not be able to circumvent policy enforcement.
 
