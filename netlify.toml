@@ -13,7 +13,9 @@
   cp netlify/Gemfile Gemfile && bundle install
   make bin/helm
   export PATH=$PATH:$(pwd)/bin
-  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive
+  jekyll build --config _config.yml,$(pwd)/netlify/_manifests_only.yml --baseurl / --destination _site
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive --destination _site/archive
+  mv _site/archive/404.html _site/404.html
   '''
 
 [context.deploy-preview]
@@ -44,3 +46,129 @@
   for = "/*.bash"
   [headers.values]
     content-type = "text/x-shellscript"
+
+[[redirects]]
+  from = "/v3.11/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.10/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.9/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.8/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.7/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.6/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.5/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.4/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.3/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.2/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.1/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.0/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.6/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.5/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.4/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.3/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.2/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.1/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.0/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v1.6/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v1.5/*"
+  to = "/:splat"
+  status = 301
+  force = false
