@@ -7,8 +7,9 @@
 [build.environment]
   RUBY_VERSION = "2.5.4"
 
-# this command is slightly diffrent from other branch deploy commands
-[context.branch-deploy]
+# One jekyll build here generates the website which is served at /archive/<version> other build generates only manifests
+# served on /<version>/ path, order of the build matters since destination folders are cleaned on each builds
+# 404 page moved to root of the site so that netlify shows it automatically [context.branch-deploy]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
   make bin/helm
@@ -47,6 +48,8 @@
   [headers.values]
     content-type = "text/x-shellscript"
 
+# unforced redirects here allows manifests to be collected on /<version>/ path generated in above build
+# but redirects anything else that's not inside /<version> to /. One for each version inside legacy
 [[redirects]]
   from = "/v3.11/*"
   to = "/:splat"
