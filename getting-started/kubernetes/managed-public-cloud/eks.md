@@ -11,7 +11,7 @@ Enable {{site.prodname}} in EKS managed Kubernetes service.
 
 EKS has built-in support for {{site.prodname}}, providing a robust implementation of the full Kubernetes Network Policy API. EKS users wanting to go beyond Kubernetes network policy capabilities can make full use of the Calico Network Policy API.
 
-You can also use {{site.prodname}} for networking on EKS in place of the default AWS VPC networking without the need to use IP addresses from the underlying VPC. This allows you to take advantage of the full set of {{site.prodname}} networking features, including {{site.prodname}}'s flexible IP address managemenet capabilities.
+You can also use {{site.prodname}} for networking on EKS in place of the default AWS VPC networking without the need to use IP addresses from the underlying VPC. This allows you to take advantage of the full set of {{site.prodname}} networking features, including {{site.prodname}}'s flexible IP address management capabilities.
 
 ### How to
 
@@ -19,6 +19,12 @@ You can also use {{site.prodname}} for networking on EKS in place of the default
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
+
+   > **Note**: Custom networking in EKS managed node groups prevents control plane to access host network,
+   > admission webhooks can be an example of this limitation.
+   > As a workaround, pods that require such communication should explicitly include `hostNetwork:true` in their settings.
+   > More information about this topic can be found {% include open-new-window.html text='at this link.' url='https://kubernetes.io/docs/concepts/policy/pod-security-policy/' %}
+   {: .alert .alert-info }
 
 To enable {{site.prodname}} network policy enforcement on an EKS cluster using the AWS VPC CNI plugin, follow these step-by-step instructions: {% include open-new-window.html text='Installing Calico on Amazon EKS' url='https://docs.aws.amazon.com/eks/latest/userguide/calico.html' %}
 
