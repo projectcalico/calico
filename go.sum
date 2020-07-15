@@ -54,6 +54,8 @@ github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf/go.mod h1:l
 github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
 github.com/auth0/go-jwt-middleware v0.0.0-20170425171159-5493cabe49f7/go.mod h1:LWMyo4iOLWXHGdBki7NIht1kHru/0wM179h+d3g8ATM=
 github.com/aws/aws-sdk-go v1.16.26/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
+github.com/aws/aws-sdk-go v1.31.15 h1:1Ahi6nvJLg5cjO5i3U7BWh91/zOw//tqOTLpLnIeyss=
+github.com/aws/aws-sdk-go v1.31.15/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
 github.com/bazelbuild/bazel-gazelle v0.18.2/go.mod h1:D0ehMSbS+vesFsLGiD6JXu3mVEzOlfUl8wNnq+x/9p0=
 github.com/bazelbuild/bazel-gazelle v0.19.1-0.20191105222053-70208cbdc798/go.mod h1:rPwzNHUqEzngx1iVBfO/2X2npKaT3tqPqqHW6rVsn/A=
 github.com/bazelbuild/buildtools v0.0.0-20190731111112-f720930ceb60/go.mod h1:5JP0TXzWDHXv8qvxRC4InIazwdyDseBDbzESUMKk1yU=
@@ -220,6 +222,7 @@ github.com/go-playground/locales v0.12.1/go.mod h1:IUMDtCfWo/w/mtMfIE/IG2K+Ey3yg
 github.com/go-playground/universal-translator v0.0.0-20170327191703-71201497bace h1:vfBaUX49VsqTxXGADDIWvTPvaU4AbQyX/yENHE0f7AY=
 github.com/go-playground/universal-translator v0.0.0-20170327191703-71201497bace/go.mod h1:1AnU7NaIRDWWzGEKwgtJRd2xk99HeFyHw3yid4rvQIY=
 github.com/go-sql-driver/mysql v1.4.0/go.mod h1:zAC/RDZ24gD3HViQzih4MyKcchzm+sOG5ZlKdlhCg5w=
+github.com/go-sql-driver/mysql v1.5.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
 github.com/go-toolsmith/astcast v1.0.0/go.mod h1:mt2OdQTeAQcY4DQgPSArJjHCcOwlX+Wl/kwN+LbLGQ4=
 github.com/go-toolsmith/astcopy v1.0.0/go.mod h1:vrgyG+5Bxrnz4MZWPF+pI4R8h3qKRjjyvV/DSez4WVQ=
@@ -358,6 +361,8 @@ github.com/jimstudt/http-authentication v0.0.0-20140401203705-3eca13d6893a/go.mo
 github.com/jingyugao/rowserrcheck v0.0.0-20191204022205-72ab7603b68a/go.mod h1:xRskid8CManxVta/ALEhJha/pweKBaVG6fWgc0yH25s=
 github.com/jirfag/go-printf-func-name v0.0.0-20191110105641-45db9963cdd3/go.mod h1:HEWGJkRDzjJY2sqdDwxccsGicWEf9BQOZsq2tV+xzM0=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
+github.com/jmespath/go-jmespath v0.3.0 h1:OS12ieG61fsCg5+qLJ+SsW9NicxNkg3b25OyT2yCeUc=
+github.com/jmespath/go-jmespath v0.3.0/go.mod h1:9QtRXoHjLGCJ5IBSaohpXITPlowMeeYCZ7fLUTSywik=
 github.com/jmoiron/sqlx v1.2.1-0.20190826204134-d7d95172beb5/go.mod h1:1FEQNm3xlJgrMD+FBdI9+xvCksHtbpVBBw5dYhBSsks=
 github.com/jonboulle/clockwork v0.1.0 h1:VKV+ZcuP6l3yW9doeqz6ziZGgcynBVQO+obU0+0hcPo=
 github.com/jonboulle/clockwork v0.1.0/go.mod h1:Ii8DK3G1RaLaWxj9trq07+26W01tbo22gdxWY5EU2bo=
@@ -520,6 +525,8 @@ github.com/philhofer/fwd v1.0.0/go.mod h1:gk3iGcWd9+svBvR0sR+KPcfE+RNWozjowpeBVG
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v0.0.0-20151028094244-d8ed2627bdf0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
@@ -546,6 +553,8 @@ github.com/projectcalico/confd v1.0.1-0.20200701184824-0dc95f8ffdaa h1:0A6XyX9/K
 github.com/projectcalico/confd v1.0.1-0.20200701184824-0dc95f8ffdaa/go.mod h1:4SdywFVDRLJguQKXBwi1Iw7ddp+l5CRJJlxFauhrtNc=
 github.com/projectcalico/confd v1.0.1-0.20200711080657-af59191225ad h1:pHlDZc5W9l+XF1ul2RTX1IJQl+DQVaIvd4f4JtHZA1s=
 github.com/projectcalico/confd v1.0.1-0.20200711080657-af59191225ad/go.mod h1:s9IHD4M3Jt3k+SSEYXAvUBElTbhmcMQRD/bIsD2DWw0=
+github.com/projectcalico/confd v1.0.1-0.20200714080855-4dfd3536b60a h1:QRvO6IZW4u6P5/8UAtsoVuCozsDCoDBHQADoXwFy84A=
+github.com/projectcalico/confd v1.0.1-0.20200714080855-4dfd3536b60a/go.mod h1:Oy3Yb8UVN5EM232f0ZNQDB/C+cQgkWrB0XHRXEHBbio=
 github.com/projectcalico/felix v0.0.0-20200611144157-d4d227ee6ea9 h1:jdOUNFsxWkeZXOYreaXXrCDBSXkeFFICNieYH9bUuYs=
 github.com/projectcalico/felix v0.0.0-20200611144157-d4d227ee6ea9/go.mod h1:4yvmYJ4+kgYQ+P74MLQjTqj8v3qSQ1VQI/YJ7J0TCmo=
 github.com/projectcalico/felix v0.0.0-20200612003414-17921cc56a95 h1:m9swjqTW67Tuis8vr6xiL+yb7vEjLOs2tvT1Hf0sciw=
@@ -586,6 +595,8 @@ github.com/projectcalico/felix v0.0.0-20200709140443-e898abfcdc88 h1:/psQzniqVcj
 github.com/projectcalico/felix v0.0.0-20200709140443-e898abfcdc88/go.mod h1:Ee89j4XjBz2VKsX91wLPMx55asD45kSsqzBn7Ryz0dY=
 github.com/projectcalico/felix v0.0.0-20200713183847-9536684af6e0 h1:PxVTg2kUWgWszUXEIgirwjgvbETkZVkHhE3Aag2ETtk=
 github.com/projectcalico/felix v0.0.0-20200713183847-9536684af6e0/go.mod h1:MuxoaIEHB309+hXLF7rMn94S16sJnRZAiY0ww/Oq2Xc=
+github.com/projectcalico/felix v0.0.0-20200714173301-47bc54bebc69 h1:zs/SEeQD9xC4533ZpyZ878uoJLXfV2FgwqfWCDqaOww=
+github.com/projectcalico/felix v0.0.0-20200714173301-47bc54bebc69/go.mod h1:6UnW0H/dpadBNX3dmdcvchUaoHk+dfwDRuCGhtmsPi0=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
@@ -627,6 +638,8 @@ github.com/projectcalico/typha v0.7.3-0.20200617040736-8be068576bc6 h1:joDPI/cvk
 github.com/projectcalico/typha v0.7.3-0.20200617040736-8be068576bc6/go.mod h1:i35DJ3Ez/xGyGO/VrvE7bu11Stc6hDnF/6Vf+79k6wo=
 github.com/projectcalico/typha v0.7.3-0.20200710040658-524b784b9017 h1:bON1zHHL5SAGyEP9P7RN5NYuPjT0Us4TfTYxweZs/iA=
 github.com/projectcalico/typha v0.7.3-0.20200710040658-524b784b9017/go.mod h1:v6menMubjXf4p2+oVKQz5J6y0SdGKbqiUcVttg9VMyo=
+github.com/projectcalico/typha v0.7.3-0.20200714040826-80bf3037ffe1 h1:Jg5ktcJlTVMtv4B7MCTIrB+GsOG2uHsOzGQOFMOA3wM=
+github.com/projectcalico/typha v0.7.3-0.20200714040826-80bf3037ffe1/go.mod h1:IMvu5gJQQflRisOXC2lKMArEJce5UzhD4b83sfAukY4=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
