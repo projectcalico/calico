@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20200713183847-9536684af6e0
+	github.com/projectcalico/felix v0.0.0-20200714173301-47bc54bebc69
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200713202632-8964eb1510ff
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
