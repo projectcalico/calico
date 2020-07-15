@@ -36,7 +36,6 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string, cfg apic
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindBGPConfiguration},
-			UpdateProcessor: updateprocessors.NewBGPConfigUpdateProcessor(),
 		},
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindNode},

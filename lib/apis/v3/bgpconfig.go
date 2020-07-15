@@ -55,6 +55,17 @@ type BGPConfigurationSpec struct {
 	// ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
 	// If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
 	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
+
+	// Communities is a list of BGP community values and their arbitrary names for tagging routes.
+	Communities []Community `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
+
+	// PrefixAdvertisements contains per-prefix advertisement configuration.
+	PrefixAdvertisements []PrefixAdvertisement `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
+
+	// ListenPort is the port where BGP protocol should listen. Defaults to 179
+	// +kubebuilder:validation:Minimum:=1
+	// +kubebuilder:validation:Maximum:=65535
+	ListenPort uint16 `json:"listenPort,omitempty" validate:"omitempty,gt=0" confignamev1:"listen_port"`
 }
 
 // ServiceExternalIPBlock represents a single whitelisted CIDR External IP block.
@@ -65,6 +76,29 @@ type ServiceExternalIPBlock struct {
 // ServiceClusterIPBlock represents a single whitelisted CIDR block for ClusterIPs.
 type ServiceClusterIPBlock struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
+}
+
+// Community contains standard or large community value and its name.
+type Community struct {
+	// Name given to community value.
+	Name  string `json:"name,omitempty" validate:"required,name"`
+	// Value must be of format `aa:nn` or `aa:nn:mm`.
+	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
+	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
+	// Where, `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
+	// +kubebuilder:validation:Pattern=`^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$`
+	Value string `json:"value,omitempty" validate:"required"`
+}
+
+// PrefixAdvertisement configures advertisement properties for the specified CIDR.
+type PrefixAdvertisement struct {
+	// CIDR for which properties should be advertised.
+	CIDR string `json:"cidr,omitempty" validate:"required,net"`
+	// Communities can be list of either community names already defined in `Specs.Communities` or community value of format `aa:nn` or `aa:nn:mm`.
+	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
+	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
+	// Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.
+	Communities []string `json:"communities,omitempty" validate:"required"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

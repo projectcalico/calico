@@ -19,6 +19,7 @@ import (
 	"net"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -83,6 +84,11 @@ var (
 	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
 	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
+	standardCommunity     = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number                = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat        = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat        = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
 	reasonString          = "Reason: "
 	poolUnstictCIDR       = "IP pool CIDR is not strictly masked"
 	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
@@ -160,6 +166,7 @@ func init() {
 	registerFieldValidator("regexp", validateRegexp)
 	registerFieldValidator("routeSource", validateRouteSource)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
+	registerFieldValidator("IP:port", validateIPPort)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -195,6 +202,7 @@ func init() {
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
+	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -530,6 +538,29 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 	}
 
 	return true
+}
+
+// validateIPPort validates the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
+func validateIPPort(fl validator.FieldLevel) bool {
+	ipPort := fl.Field().String()
+	if ipPort != "" {
+		// If PeerIP has both IP and port, validate both
+		if IPv4PortFormat.MatchString(ipPort) || IPv6PortFormat.MatchString(ipPort) {
+			_, _, err := net.SplitHostPort(ipPort)
+			if err != nil {
+				log.Debugf("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\".")
+				return false
+			}
+		} else {
+			parsedIP := net.ParseIP(ipPort)
+			if parsedIP == nil {
+				log.Debugf("PeerIP value is invalid.")
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // validateHTTPMethods checks if the HTTP method match clauses are valid.
@@ -1364,6 +1395,81 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 			reason("must be a range of route table indices within 1..250"),
 			"",
 		)
+	}
+}
+
+func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
+	spec := structLevel.Current().Interface().(api.BGPConfigurationSpec)
+
+	//check if Spec.Communities[] are valid
+	communities := spec.Communities
+	for _, community := range communities {
+		isValid := isValidCommunity(community.Value, "Spec.Communities[].Value", structLevel)
+		if !isValid {
+			log.Warningf("community value is invalid: %v", community.Value)
+			structLevel.ReportError(reflect.ValueOf(community.Value), "Spec.Communities[].Value", "",
+				reason("invalid community value or format used."), "")
+		}
+	}
+
+	// check if Spec.PrefixAdvertisement.Communities are valid
+	pas := spec.PrefixAdvertisements
+	for _, pa := range pas {
+		_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
+		if err != nil {
+			log.Warningf("CIDR value is invalid: %v", pa.CIDR)
+			structLevel.ReportError(reflect.ValueOf(pa.CIDR), "Spec.PrefixAdvertisement[].CIDR", "",
+				reason("invalid CIDR value."), "")
+		}
+
+		for _, v := range pa.Communities {
+			isValid := isValidCommunity(v, "Spec.PrefixAdvertisement[].Communities[]", structLevel)
+			if !isValid {
+				if !isCommunityDefined(v, communities) {
+					structLevel.ReportError(reflect.ValueOf(v), "Spec.PrefixAdvertisement[].Communities[]", "",
+						reason("community used is invalid or not defined."), "")
+				}
+			}
+		}
+	}
+}
+
+func isCommunityDefined(community string, communityKVPairs []api.Community) bool {
+	for _, val := range communityKVPairs {
+		if val.Name == community {
+			return true
+		}
+	}
+	return false
+}
+
+func isValidCommunity(communityValue string, fieldName string, structLevel validator.StructLevel) bool {
+	if standardCommunity.MatchString(communityValue) {
+		validateCommunityValue(communityValue, fieldName, structLevel, false)
+	} else if largeCommunity.MatchString(communityValue) {
+		validateCommunityValue(communityValue, fieldName, structLevel, true)
+	} else {
+		return false
+	}
+	return true
+}
+
+// Validate that if standard community is used, community value must follow `aa:nn` format, where `aa` and `nn` are 16 bit integers,
+// and if large community is used, value must follow `aa:nn:mm` format, where all `aa`, `nn` and `mm` are 32 bit integers.
+func validateCommunityValue(val string, fieldName string, structLevel validator.StructLevel, isLargeCommunity bool) {
+	splitValue := number.FindAllString(val, -1)
+	bitSize := 16
+
+	if isLargeCommunity {
+		bitSize = 32
+	}
+
+	for _, v := range splitValue {
+		_, err := strconv.ParseUint(v, 10, bitSize)
+		if err != nil {
+			structLevel.ReportError(reflect.ValueOf(val), fieldName, "",
+				reason(fmt.Sprintf("invalid community value, expected %d bit value", bitSize)), "")
+		}
 	}
 }
 

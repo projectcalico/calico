@@ -269,6 +269,8 @@ func KeyFromDefaultPath(path string) Key {
 		return k
 	} else if k := (ResourceListOptions{Kind: v3.KindBGPPeer}).KeyFromDefaultPath(path); k != nil {
 		return k
+	}  else if k := (ResourceListOptions{Kind: v3.KindBGPConfiguration}).KeyFromDefaultPath(path); k != nil {
+		return k
 	} else if k := (ResourceListOptions{Kind: v3.KindNetworkPolicy}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else if k := (ResourceListOptions{Kind: v3.KindIPPool}).KeyFromDefaultPath(path); k != nil {
