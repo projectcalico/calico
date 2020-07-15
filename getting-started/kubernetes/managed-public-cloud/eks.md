@@ -11,7 +11,7 @@ Enable {{site.prodname}} in EKS managed Kubernetes service.
 
 EKS has built-in support for {{site.prodname}}, providing a robust implementation of the full Kubernetes Network Policy API. EKS users wanting to go beyond Kubernetes network policy capabilities can make full use of the Calico Network Policy API.
 
-You can also use {{site.prodname}} for networking on EKS in place of the default AWS VPC networking without the need to use IP addresses from the underlying VPC. This allows you to take advantage of the full set of {{site.prodname}} networking features, including {{site.prodname}}'s flexible IP address managemenet capabilities.
+You can also use {{site.prodname}} for networking on EKS in place of the default AWS VPC networking without the need to use IP addresses from the underlying VPC. This allows you to take advantage of the full set of {{site.prodname}} networking features, including {{site.prodname}}'s flexible IP address management capabilities.
 
 ### How to
 
@@ -26,6 +26,14 @@ To enable {{site.prodname}} network policy enforcement on an EKS cluster using t
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
+
+   > **Note**: {{site.prodname}} networking cannot currently be installed on the EKS control plane nodes. As a result the control plane nodes
+   > will not be able to initiate network connections to {{site.prodname}} pods. (This is a general limitation of EKS's custom networking support,
+   > not specific to {{site.prodname}}.) As a workaround, trusted pods that require control plane nodes to connect to them, such as those implementing
+   > admission controller webhooks, can include `hostNetwork:true` in their pod spec. See the Kuberentes API
+   > {% include open-new-window.html text='pod spec' url='https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podspec-v1-core' %}
+   > definition for more information on this setting.
+   {: .alert .alert-info }
 
 For these instructions, we will use `eksctl` to provision the cluster. However, you can use any of the methods in {% include open-new-window.html text='Getting Started with Amazon EKS' url='https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html' %}
 
