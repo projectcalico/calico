@@ -1,0 +1,7 @@
+# pass this config file to a netlify build to skip generation of all 
+# markdown / html files. this allows builds of docs where only manifests are 
+# generated.
+exclude:
+  - "*.md"
+  - "*.html"
+

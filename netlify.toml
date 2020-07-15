@@ -1,12 +1,37 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 # The cp, bundle install and bundle exec parts are only required to work around not being able to put the Gemfile int he root directory. It can't go in the root because that breaks the jekyll/jekyll container.
 [build]
-  command = 'export PATH=$PATH:/opt/build/repo/bin; cp netlify/Gemfile Gemfile; make bin/helm; bundle install && bundle exec jekyll build'
+  command = 'jekyll build'
+  publish = "_site/"
 
-# Deploy Preview context: All Deploy Previews will inherit these settings.
-# Override the build command to include the Preview URL
+[build.environment]
+  RUBY_VERSION = "2.5.4"
+
+[context.branch-deploy]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+
+  # generate only manifests served at /<version>
+  jekyll build --config _config.yml,$(pwd)/netlify/_manifests_only.yml --baseurl / --destination _site
+
+  # generate the website which is served at /archive/
+  # note: this must be done second since destination folders are cleaned on each builds
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive --destination _site/archive
+
+  # move 404 page to root of the site so that netlify shows it automatically
+  mv _site/archive/404.html _site/404.html
+  '''
+
 [context.deploy-preview]
-  command = 'export PATH=$PATH:/opt/build/repo/bin; cp netlify/Gemfile Gemfile; echo "url: $DEPLOY_PRIME_URL" >_config_url.yml; make bin/helm; bundle install && bundle exec jekyll build --config _config.yml,_config_url.yml'
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
+  jekyll build --config _config.yml,_config_url.yml
+  '''
 
 [[headers]]
   for = "/*.yaml"
@@ -27,3 +52,131 @@
   for = "/*.bash"
   [headers.values]
     content-type = "text/x-shellscript"
+
+# unforced redirects here allows manifests to be collected on /<version>/ path generated in above build
+# but redirects anything else that's not inside /<version> to /. One for each version inside legacy
+[[redirects]]
+  from = "/v3.11/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.10/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.9/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.8/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.7/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.6/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.5/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.4/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.3/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.2/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.1/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v3.0/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.6/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.5/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.4/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.3/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.2/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.1/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v2.0/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v1.6/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
+[[redirects]]
+  from = "/v1.5/*"
+  to = "/:splat"
+  status = 301
+  force = false
