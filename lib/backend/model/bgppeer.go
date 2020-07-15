@@ -36,6 +36,7 @@ var (
 type NodeBGPPeerKey struct {
 	Nodename string `json:"-" validate:"omitempty"`
 	PeerIP   net.IP `json:"-" validate:"required"`
+	Port     string `json:"-" validate:"omitempty"`
 }
 
 func (key NodeBGPPeerKey) defaultPath() (string, error) {
@@ -45,8 +46,12 @@ func (key NodeBGPPeerKey) defaultPath() (string, error) {
 	if key.Nodename == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
+	ipPort := key.PeerIP.String()
+	if key.Port != "" {
+		ipPort = ipPort + "-" + key.Port
+	}
 	e := fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
-		key.Nodename, key.PeerIP.Version(), key.PeerIP)
+		key.Nodename, key.PeerIP.Version(), ipPort)
 	return e, nil
 }
 
@@ -63,7 +68,7 @@ func (key NodeBGPPeerKey) valueType() (reflect.Type, error) {
 }
 
 func (key NodeBGPPeerKey) String() string {
-	return fmt.Sprintf("BGPPeer(node=%s, ip=%s)", key.Nodename, key.PeerIP)
+	return fmt.Sprintf("BGPPeer(node=%s, ip=%s, port=%s)", key.Nodename, key.PeerIP, key.Port)
 }
 
 type NodeBGPPeerListOptions struct {
@@ -113,14 +118,19 @@ func (options NodeBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 
 type GlobalBGPPeerKey struct {
 	PeerIP net.IP `json:"-" validate:"required"`
+	Port   string `json:"-" validate:"omitempty"`
 }
 
 func (key GlobalBGPPeerKey) defaultPath() (string, error) {
 	if key.PeerIP.IP == nil {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "peerIP"}
 	}
+	ipPort := key.PeerIP.String()
+	if key.Port != "" {
+		ipPort = ipPort + "-" + key.Port
+	}
 	e := fmt.Sprintf("/calico/bgp/v1/global/peer_v%d/%s",
-		key.PeerIP.Version(), key.PeerIP)
+		key.PeerIP.Version(), ipPort)
 	return e, nil
 }
 
@@ -137,11 +147,12 @@ func (key GlobalBGPPeerKey) valueType() (reflect.Type, error) {
 }
 
 func (key GlobalBGPPeerKey) String() string {
-	return fmt.Sprintf("BGPPeer(global, ip=%s)", key.PeerIP)
+	return fmt.Sprintf("BGPPeer(global, ip=%s, port=%s)", key.PeerIP, key.Port)
 }
 
 type GlobalBGPPeerListOptions struct {
 	PeerIP net.IP
+	Port   string
 }
 
 func (options GlobalBGPPeerListOptions) defaultPathRoot() string {
