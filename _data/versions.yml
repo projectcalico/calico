@@ -3,7 +3,7 @@
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: release-v1.3
+   version: master
   components:
      typha:
       version: master
