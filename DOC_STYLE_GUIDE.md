@@ -386,8 +386,10 @@ Use decimal points. Example, 2.5 pounds.
 | Correct                  | Incorrect
 | ------------------------ | ---------
 | agent                    | slave
+| allow-list               | whitelist
 | API                      | api
 | API server               | api server, apiserver
+| deny-list                | blacklist
 | DockerHub                | Dockerhub, dockerhub
 | GitHub                   | Github, github
 | email                    | e-mail, Email, E-mail

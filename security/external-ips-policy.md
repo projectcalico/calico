@@ -9,7 +9,7 @@ Use {{site.prodname}} network policy to limit traffic to/from external non-{{sit
 
 ### Value
 
-Modern applications often integrate with third-party APIs and SaaS services that live outside Kubernetes clusters. To securely enable access to those integrations, network security teams must be able to limit IP ranges for egress and ingress traffic to workloads. This includes using IP lists or ranges to blacklist bad actors or embargoed countries.
+Modern applications often integrate with third-party APIs and SaaS services that live outside Kubernetes clusters. To securely enable access to those integrations, network security teams must be able to limit IP ranges for egress and ingress traffic to workloads. This includes using IP lists or ranges to deny-list bad actors or embargoed countries.
 
 Using {{site.prodname}} network policy, you can define IP addresses/CIDRs directly in policy to limit traffic to external networks. Or using {{site.prodname}} network sets, you can easily scale out by using the same set of IPs in multiple policies. 
 
@@ -63,7 +63,7 @@ spec:
 
 In this example, we use a {{site.prodname}} **GlobalNetworkSet** and reference it in a **GlobalNetworkPolicy**.
 
-In the following example, a {{site.prodname}} **GlobalNetworkSet** blacklists the CIDR ranges 192.0.2.55/32 and 203.0.113.0/24:
+In the following example, a {{site.prodname}} **GlobalNetworkSet** deny-lists the CIDR ranges 192.0.2.55/32 and 203.0.113.0/24:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -71,14 +71,14 @@ kind: GlobalNetworkSet
 metadata:
   name: ip-protect
   labels:
-    IP-blacklist: true
+    IP-deny-list: true
 spec:
   nets:
   - 192.0.2.55/32
   - 203.0.113.0/24
 ```
 
-Next, we create two {{site.prodname}} **GlobalNetworkPolicy** objects. The first is a high “order” policy that allows traffic as a default for things that don’t match our second policy, which is low “order” and uses the **GlobalNetworkSet** label as a selector to deny ingress traffic (IP-blacklist in the previous step). In the label selector, we also include the term **!has(projectcalico.org/namespace)**, which prevents this policy from matching pods or NetworkSets that also have this label. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
+Next, we create two {{site.prodname}} **GlobalNetworkPolicy** objects. The first is a high “order” policy that allows traffic as a default for things that don’t match our second policy, which is low “order” and uses the **GlobalNetworkSet** label as a selector to deny ingress traffic (IP-deny-list in the previous step). In the label selector, we also include the term **!has(projectcalico.org/namespace)**, which prevents this policy from matching pods or NetworkSets that also have this label. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -109,7 +109,7 @@ spec:
   ingress:
   - action: Deny
     source:
-      selector: IP-blacklist == 'true' && !has(projectcalico.org/namespace)
+      selector: IP-deny-list == 'true' && !has(projectcalico.org/namespace)
 ```
 
 ### Above and beyond
