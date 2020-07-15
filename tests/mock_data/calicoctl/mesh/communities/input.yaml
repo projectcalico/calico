@@ -3,30 +3,22 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
-  nodeToNodeMeshEnabled: false
-  logSeverityScreen: Debug
-  asNumber: 64567
-  listenPort: 150
-
----
-
-kind: BGPPeer
-apiVersion: projectcalico.org/v3
-metadata:
-  name: bgppeer-1
-spec:
-  peerIP: 10.192.0.3:166
-  asNumber: 64567
-
----
-
-kind: BGPPeer
-apiVersion: projectcalico.org/v3
-metadata:
-  name: bgppeer-2
-spec:
-  peerIP: 10.192.0.4
-  asNumber: 64567
+  logSeverityScreen: Info
+  communities:
+    - name: bgp-comm-standard
+      value: 100:6532
+    - name: bgp-comm-large
+      value: 100:555:107
+  prefixAdvertisements: 
+    - cidr: 192.168.0.0/16
+      communities:
+      - bgp-comm-standard
+      - 5663:12  
+      - bgp-comm-large
+    - cidr: fd00:96::/112
+      communities:
+      - bgp-comm-large
+  listenPort: 177
 
 ---
 
@@ -66,6 +58,5 @@ metadata:
   name: ippool-1
 spec:
   cidr: 192.168.0.0/16
-  ipipMode: Always
+  ipipMode: Never
   natOutgoing: true
-

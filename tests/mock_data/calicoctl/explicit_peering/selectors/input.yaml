@@ -7,6 +7,15 @@ spec:
 
 ---
 
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node.kube-node-1
+spec:
+  listenPort: 500
+
+---
+
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:

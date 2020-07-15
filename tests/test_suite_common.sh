@@ -258,6 +258,7 @@ execute_tests_daemon() {
         run_individual_test 'mesh/ipip-cross-subnet'
         run_individual_test 'mesh/ipip-off'
         run_individual_test 'mesh/static-routes'
+        run_individual_test 'mesh/communities'
     done
 
     # Turn the node-mesh off.
@@ -299,6 +300,7 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'explicit_peering/selectors'
         run_individual_test_oneshot 'explicit_peering/route_reflector'
         run_individual_test_oneshot 'mesh/static-routes'
+        run_individual_test_oneshot 'mesh/communities'
         export CALICO_ROUTER_ID=10.10.10.10
         run_individual_test_oneshot 'mesh/static-routes-no-ipv4-address'
         export -n CALICO_ROUTER_ID
@@ -366,6 +368,10 @@ run_individual_test() {
     echo "Preparing Calico data for next test"
     if [[ -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml ]]; then
             KUBECONFIG=/tests/confd_kubeconfig kubectl delete -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml
+    fi
+
+    if [ -f /tests/mock_data/calicoctl/${testdir}/step2/delete.yaml ]; then
+        calicoctl delete -f /tests/mock_data/calicoctl/${testdir}/step2/delete.yaml
     fi
     calicoctl delete -f /tests/mock_data/calicoctl/${testdir}/delete.yaml
 }
