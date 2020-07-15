@@ -7,15 +7,20 @@
   RUBY_VERSION = "2.5.4"
   RELEASE_VERSION = "v3.12"
 
-# One jekyll build here generates the website which is served at /archive/v3.12/ other build generates only manifests
-# served on /v3.12/ path, order of the build matters since destination folders are cleaned on each builds
 [context.branch-deploy]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
   make bin/helm
   export PATH=$PATH:$(pwd)/bin
+
+  # generate only manifests served at /<version>
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
+
+  # generate the website which is served at /archive/<version>
+  # note: this must be done second since destination folders are cleaned on each builds
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
+
+  # move 404 page to root of the site so that netlify shows it automatically
   mv _site/archive/$RELEASE_VERSION/404.html _site/404.html
   '''
 
