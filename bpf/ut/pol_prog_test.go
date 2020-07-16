@@ -132,6 +132,20 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 	Expect(fd.Close()).NotTo(HaveOccurred())
 }
 
+func TestLoadGarbageProgram(t *testing.T) {
+	RegisterTestingT(t)
+
+	var insns asm.Insns
+	for i := 0; i < 256; i++ {
+		i := uint8(i)
+		insns = append(insns, asm.Insn{i,i,i,i,i,i,i,i})
+	}
+
+	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	Expect(err).To(HaveOccurred())
+	Expect(fd).To(BeZero())
+}
+
 const (
 	RCDrop            = 2
 	RCEpilogueReached = 123
