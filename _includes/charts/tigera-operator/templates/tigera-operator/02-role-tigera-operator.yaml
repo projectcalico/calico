@@ -124,6 +124,26 @@ rules:
       - networksets
     verbs:
       - create
+{{- else }}
+  # Add the appropriate pod security policy permissions
+  - apiGroups:
+      - policy
+    resources:
+      - podsecuritypolicies
+    resourceNames:
+      - tigera-operator
+    verbs:
+      - use
+  - apiGroups:
+      - policy
+    resources:
+      - podsecuritypolicies
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
 {{- end }}
     # Permissions below this point are required for TSEE only.
   - apiGroups:
