@@ -65,12 +65,12 @@ func (w *Workload) Stop() {
 		log.Info("Stop no-op because nil workload")
 	} else {
 		log.WithField("workload", w).Info("Stop")
-		outputBytes, err := utils.Command("docker", "exec", w.C.Name,
-			"cat", fmt.Sprintf("/tmp/%v", w.Name)).CombinedOutput()
+		output, err := w.C.ExecOutput("cat", fmt.Sprintf("/tmp/%v", w.Name))
 		Expect(err).NotTo(HaveOccurred(), "failed to run docker exec command to get workload pid")
-		pid := strings.TrimSpace(string(outputBytes))
-		err = utils.Command("docker", "exec", w.C.Name, "kill", pid).Run()
-		Expect(err).NotTo(HaveOccurred(), "failed to kill workload")
+		pid := strings.TrimSpace(output)
+		w.C.Exec("kill", pid)
+		w.C.Exec("ip", "link", "del", w.InterfaceName)
+		w.C.Exec("ip", "netns", "del", w.NamespaceID())
 		_, err = w.runCmd.Process.Wait()
 		if err != nil {
 			log.WithField("workload", w).Error("failed to wait for process")
@@ -214,6 +214,8 @@ func (w *Workload) IPNet() string {
 	return w.IP + "/32"
 }
 
+// Configure creates a workload endpoint in the datastore.
+// Deprecated: should use ConfigureInInfra.
 func (w *Workload) Configure(client client.Interface) {
 	wep := w.WorkloadEndpoint
 	wep.Namespace = "fv"
@@ -222,17 +224,24 @@ func (w *Workload) Configure(client client.Interface) {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create workload in the calico datastore.")
 }
 
+// RemoveFromDatastore removes the workload endpoint from the datastore.
+// Deprecated: should use RemoveFromInfra.
 func (w *Workload) RemoveFromDatastore(client client.Interface) {
 	_, err := client.WorkloadEndpoints().Delete(utils.Ctx, "fv", w.WorkloadEndpoint.Name, options.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func (w *Workload) ConfigureInDatastore(infra infrastructure.DatastoreInfra) {
+func (w *Workload) ConfigureInInfra(infra infrastructure.DatastoreInfra) {
 	wep := w.WorkloadEndpoint
 	wep.Namespace = "default"
 	var err error
 	w.WorkloadEndpoint, err = infra.AddWorkload(wep)
 	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
+}
+
+func (w *Workload) RemoveFromInfra(infra infrastructure.DatastoreInfra) {
+	err := infra.RemoveWorkload(w.WorkloadEndpoint.Namespace, w.WorkloadEndpoint.Name)
+	Expect(err).NotTo(HaveOccurred(), "Failed to remove workload")
 }
 
 func (w *Workload) NameSelector() string {

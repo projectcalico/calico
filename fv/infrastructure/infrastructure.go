@@ -63,6 +63,8 @@ type DatastoreInfra interface {
 	// *api.WorkloadEndpoint will be returned, otherwise an error will be
 	// returned.
 	AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error)
+	// RemoveWorkload reverses the effect of AddWorkload.
+	RemoveWorkload(ns string, name string) error
 	// AddDefaultAllow will ensure that the datastore is configured so that
 	// the default profile/namespace will allow traffic. Returns the name of the
 	// default profile.

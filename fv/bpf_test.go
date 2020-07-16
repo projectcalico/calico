@@ -339,7 +339,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					wIP := fmt.Sprintf("10.65.0.%d", i+2)
 					w[i] = workload.Run(felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", testOpts.protocol)
 					w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
-					w[i].ConfigureInDatastore(infra)
+					w[i].ConfigureInInfra(infra)
 				}
 
 				err := infra.AddDefaultDeny()
@@ -449,6 +449,34 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
 					})
 				})
+
+				It("should clean up jump maps", func() {
+					numJumpMaps := func() int {
+						output, err := felixes[0].ExecOutput("sh", "-c", "find /sys/fs/bpf/tc -name cali_jump")
+						Expect(err).NotTo(HaveOccurred())
+						return strings.Count(output, "cali_jump")
+					}
+
+					expJumpMaps := func(numWorkloads int) int {
+						numHostIfaces := 1
+						expectedNumMaps := 2 * (numWorkloads + numHostIfaces)
+						return expectedNumMaps
+					}
+
+					// Check start-of-day number of interfaces.
+					Eventually(numJumpMaps, "10s", "200ms").Should(
+						BeNumerically("==", expJumpMaps(len(w))),
+						"Unexpected number of jump maps at start of day")
+
+					// Remove a workload.
+					w[0].RemoveFromInfra(infra)
+					w[0].Stop()
+
+					// Need a long timeout here because felix throttles cleanups.
+					Eventually(numJumpMaps, "15s", "200ms").Should(
+						BeNumerically("==", expJumpMaps(len(w)-1)),
+						"Unexpected number of jump maps after removing workload")
+				})
 			}
 
 			if testOpts.nonProtoTests {
@@ -494,7 +522,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					labels["workload"] = "regular"
 
 					w.WorkloadEndpoint.Labels = labels
-					w.ConfigureInDatastore(infra)
+					w.ConfigureInInfra(infra)
 					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
 					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 						IP:       cnet.MustParseIP(wIP),
@@ -527,7 +555,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testOpts.protocol)
 
 					hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
-					hostW[ii].ConfigureInDatastore(infra)
+					hostW[ii].ConfigureInInfra(infra)
 
 					// Two workloads on each host so we can check the same host and other host cases.
 					w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})

@@ -109,7 +109,7 @@ var _ = Describe("Spoof tests", func() {
 				wIP := fmt.Sprintf("10.65.%d.2", ii)
 				wName := fmt.Sprintf("w%d", ii)
 				w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
-				w[ii].ConfigureInDatastore(infra)
+				w[ii].ConfigureInInfra(infra)
 			}
 		})
 
@@ -142,7 +142,7 @@ var _ = Describe("Spoof tests", func() {
 				wIP := fmt.Sprintf("fdc6:3dbc:e983:cbc%x::1", ii)
 				wName := fmt.Sprintf("w%d", ii)
 				w[ii] = workload.Run(felixes[0], wName, "default", wIP, "8055", "tcp")
-				w[ii].ConfigureInDatastore(infra)
+				w[ii].ConfigureInInfra(infra)
 			}
 		})
 
