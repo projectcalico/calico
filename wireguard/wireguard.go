@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,10 +26,10 @@ import (
 
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
-	netlinkshim "github.com/projectcalico/felix/netlink"
+	"github.com/projectcalico/felix/netlinkshim"
 	"github.com/projectcalico/felix/routerule"
 	"github.com/projectcalico/felix/routetable"
-	timeshim "github.com/projectcalico/felix/timeshim"
+	"github.com/projectcalico/felix/timeshim"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -110,9 +110,9 @@ type Wireguard struct {
 	config   *Config
 
 	// Clients, client factories and testing shims.
-	newNetlinkClient                     func() (netlinkshim.Netlink, error)
+	newNetlinkClient                     func() (netlinkshim.Interface, error)
 	newWireguardClient                   func() (netlinkshim.Wireguard, error)
-	cachedNetlinkClient                  netlinkshim.Netlink
+	cachedNetlinkClient                  netlinkshim.Interface
 	cachedWireguardClient                netlinkshim.Wireguard
 	numConsistentNetlinkClientFailures   int
 	numConsistentWireguardClientFailures int
@@ -180,9 +180,9 @@ func New(
 func NewWithShims(
 	hostname string,
 	config *Config,
-	newRoutetableNetlink func() (netlinkshim.Netlink, error),
-	newRouteRuleNetlink func() (netlinkshim.Netlink, error),
-	newWireguardNetlink func() (netlinkshim.Netlink, error),
+	newRoutetableNetlink func() (netlinkshim.Interface, error),
+	newRouteRuleNetlink func() (netlinkshim.Interface, error),
+	newWireguardNetlink func() (netlinkshim.Interface, error),
 	newWireguardDevice func() (netlinkshim.Wireguard, error),
 	netlinkTimeout time.Duration,
 	timeShim timeshim.Interface,
@@ -1314,7 +1314,7 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 }
 
 // ensureLink checks that the wireguard link is configured correctly. Returns true if the link is oper up.
-func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Netlink) (bool, error) {
+func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error) {
 	logCxt := log.WithField("ifaceName", w.config.InterfaceName)
 	link, err := netlinkClient.LinkByName(w.config.InterfaceName)
 	if netlinkshim.IsNotExist(err) {
@@ -1379,7 +1379,7 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Netlink) (bool, error) 
 }
 
 // ensureNoLink checks that the wireguard link is not present.
-func (w *Wireguard) ensureNoLink(netlinkClient netlinkshim.Netlink) error {
+func (w *Wireguard) ensureNoLink(netlinkClient netlinkshim.Interface) error {
 	logCxt := log.WithField("ifaceName", w.config.InterfaceName)
 	link, err := netlinkClient.LinkByName(w.config.InterfaceName)
 	if err == nil {
@@ -1401,7 +1401,7 @@ func (w *Wireguard) ensureNoLink(netlinkClient netlinkshim.Netlink) error {
 
 // ensureLinkAddressV4 ensures the wireguard link to set to the required local IP address.  It removes any other
 // addresses.
-func (w *Wireguard) ensureLinkAddressV4(netlinkClient netlinkshim.Netlink) error {
+func (w *Wireguard) ensureLinkAddressV4(netlinkClient netlinkshim.Interface) error {
 	logCxt := log.WithField("ifaceName", w.config.InterfaceName)
 	logCxt.Debug("Setting local IPv4 address on link.")
 	link, err := netlinkClient.LinkByName(w.config.InterfaceName)
@@ -1467,7 +1467,7 @@ func (w *Wireguard) addRouteRule() {
 }
 
 // ensureDisabled ensures all calico-installed wireguard configuration is removed.
-func (w *Wireguard) ensureDisabled(netlinkClient netlinkshim.Netlink) error {
+func (w *Wireguard) ensureDisabled(netlinkClient netlinkshim.Interface) error {
 	var errRule, errLink, errRoutes error
 	wg := sync.WaitGroup{}
 
@@ -1568,7 +1568,7 @@ func (w *Wireguard) closeWireguardClient() {
 }
 
 // getNetlinkClient returns a netlink client for managing device links.
-func (w *Wireguard) getNetlinkClient() (netlinkshim.Netlink, error) {
+func (w *Wireguard) getNetlinkClient() (netlinkshim.Interface, error) {
 	if w.cachedNetlinkClient == nil {
 		// We do not expect the standard netlink client to fail, so panic after a set number of failed attempts.
 		if w.numConsistentNetlinkClientFailures >= maxConnFailures {

@@ -32,8 +32,8 @@ import (
 
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
-	mocknetlink "github.com/projectcalico/felix/netlink/mock"
-	mocktime "github.com/projectcalico/felix/timeshim/mocktime"
+	mocknetlink "github.com/projectcalico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/felix/timeshim/mocktime"
 )
 
 var (
@@ -144,9 +144,9 @@ var _ = Describe("Enable wireguard", func() {
 	var rule *netlink.Rule
 
 	BeforeEach(func() {
-		wgDataplane = mocknetlink.NewMockNetlinkDataplane()
-		rtDataplane = mocknetlink.NewMockNetlinkDataplane()
-		rrDataplane = mocknetlink.NewMockNetlinkDataplane()
+		wgDataplane = mocknetlink.New()
+		rtDataplane = mocknetlink.New()
+		rrDataplane = mocknetlink.New()
 		t = mocktime.NewMockTime()
 		s = &mockStatus{}
 		// Setting an auto-increment greater than the route cleanup delay effectively
@@ -1243,9 +1243,9 @@ var _ = Describe("Wireguard (disabled)", func() {
 	var wg *Wireguard
 
 	BeforeEach(func() {
-		wgDataplane = mocknetlink.NewMockNetlinkDataplane()
-		rtDataplane = mocknetlink.NewMockNetlinkDataplane()
-		rrDataplane = mocknetlink.NewMockNetlinkDataplane()
+		wgDataplane = mocknetlink.New()
+		rtDataplane = mocknetlink.New()
+		rrDataplane = mocknetlink.New()
 		t = mocktime.NewMockTime()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
@@ -1419,9 +1419,9 @@ var _ = Describe("Wireguard (with no table index)", func() {
 	var wgFn func(bool)
 
 	BeforeEach(func() {
-		wgDataplane = mocknetlink.NewMockNetlinkDataplane()
-		rtDataplane = mocknetlink.NewMockNetlinkDataplane()
-		rrDataplane = mocknetlink.NewMockNetlinkDataplane()
+		wgDataplane = mocknetlink.New()
+		rtDataplane = mocknetlink.New()
+		rrDataplane = mocknetlink.New()
 		t = mocktime.NewMockTime()
 		t.SetAutoIncrement(11 * time.Second)
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ import (
 
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
-	mocknetlink "github.com/projectcalico/felix/netlink/mock"
+	mocknetlink "github.com/projectcalico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/felix/testutils"
-	mocktime "github.com/projectcalico/felix/timeshim/mocktime"
+	"github.com/projectcalico/felix/timeshim/mocktime"
 )
 
 var (
@@ -51,7 +51,7 @@ var _ = Describe("RouteTable v6", func() {
 	var rt *RouteTable
 
 	BeforeEach(func() {
-		dataplane = mocknetlink.NewMockNetlinkDataplane()
+		dataplane = mocknetlink.New()
 		t = mocktime.NewMockTime()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
@@ -104,7 +104,7 @@ var _ = Describe("RouteTable", func() {
 	var rt *RouteTable
 
 	BeforeEach(func() {
-		dataplane = mocknetlink.NewMockNetlinkDataplane()
+		dataplane = mocknetlink.New()
 		t = mocktime.NewMockTime()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
@@ -975,7 +975,7 @@ var _ = Describe("RouteTable (main table)", func() {
 	var rt *RouteTable
 
 	BeforeEach(func() {
-		dataplane = mocknetlink.NewMockNetlinkDataplane()
+		dataplane = mocknetlink.New()
 		t = mocktime.NewMockTime()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
@@ -1073,7 +1073,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 	var rt *RouteTable
 
 	BeforeEach(func() {
-		dataplane = mocknetlink.NewMockNetlinkDataplane()
+		dataplane = mocknetlink.New()
 		t = mocktime.NewMockTime()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
@@ -1282,7 +1282,7 @@ var _ = Describe("Tests to verify netlink interface", func() {
 var _ = Describe("Tests to verify ip version is policed", func() {
 	It("Should panic with an invalid IP version", func() {
 		Expect(func() {
-			dataplane := mocknetlink.NewMockNetlinkDataplane()
+			dataplane := mocknetlink.New()
 			t := mocktime.NewMockTime()
 			_ = NewWithShims(
 				[]string{"^cali$", InterfaceNone},
