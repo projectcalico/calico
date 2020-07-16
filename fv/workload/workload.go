@@ -69,8 +69,8 @@ func (w *Workload) Stop() {
 		Expect(err).NotTo(HaveOccurred(), "failed to run docker exec command to get workload pid")
 		pid := strings.TrimSpace(output)
 		w.C.Exec("kill", pid)
-		w.C.Exec("ip", "link", "del", w.InterfaceName)
-		w.C.Exec("ip", "netns", "del", w.NamespaceID())
+		_ = w.C.ExecMayFail("ip", "link", "del", w.InterfaceName)
+		_ = w.C.ExecMayFail("ip", "netns", "del", w.NamespaceID())
 		_, err = w.runCmd.Process.Wait()
 		if err != nil {
 			log.WithField("workload", w).Error("failed to wait for process")
