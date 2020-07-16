@@ -265,7 +265,7 @@ var _ = Describe("BPF service type change", func() {
 				_, keyExtIPExists := front.m[keyExtIP]
 				_, keyExtIPWithSrcExists := front.m[keyExtIPWithSrc]
 				_, keyHostIPExists := front.m[keyHostIP]
-				if len(front.m) == 3 && keyClusterIPExists && keyExtIPExists &&	keyExtIPWithSrcExists && !keyHostIPExists {
+				if len(front.m) == 3 && keyClusterIPExists && keyExtIPExists && keyExtIPWithSrcExists && !keyHostIPExists {
 					return true
 				}
 				return false
@@ -359,4 +359,3 @@ func setSvcTypeToNodePort(testSvc *v1.Service, npPort int32, k8s *fake.Clientset
 	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
 	Expect(err).NotTo(HaveOccurred())
 }
-

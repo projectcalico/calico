@@ -29,7 +29,7 @@ import (
 	netlinkshim "github.com/projectcalico/felix/netlink"
 	"github.com/projectcalico/felix/routerule"
 	"github.com/projectcalico/felix/routetable"
-	timeshim "github.com/projectcalico/felix/time"
+	timeshim "github.com/projectcalico/felix/timeshim"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -116,7 +116,7 @@ type Wireguard struct {
 	cachedWireguardClient                netlinkshim.Wireguard
 	numConsistentNetlinkClientFailures   int
 	numConsistentWireguardClientFailures int
-	time                                 timeshim.Time
+	time                                 timeshim.Interface
 
 	// State information.
 	inSyncWireguard                    bool
@@ -170,7 +170,7 @@ func New(
 		netlinkshim.NewRealNetlink,
 		netlinkshim.NewRealWireguard,
 		netlinkTimeout,
-		timeshim.NewRealTime(),
+		timeshim.RealTime(),
 		deviceRouteProtocol,
 		statusCallback,
 	)
@@ -185,7 +185,7 @@ func NewWithShims(
 	newWireguardNetlink func() (netlinkshim.Netlink, error),
 	newWireguardDevice func() (netlinkshim.Wireguard, error),
 	netlinkTimeout time.Duration,
-	timeShim timeshim.Time,
+	timeShim timeshim.Interface,
 	deviceRouteProtocol int,
 	statusCallback func(publicKey wgtypes.Key) error,
 ) *Wireguard {

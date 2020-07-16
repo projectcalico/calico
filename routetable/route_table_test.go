@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/felix/ip"
 	mocknetlink "github.com/projectcalico/felix/netlink/mock"
 	"github.com/projectcalico/felix/testutils"
-	mocktime "github.com/projectcalico/felix/time/mock"
+	mocktime "github.com/projectcalico/felix/timeshim/mocktime"
 )
 
 var (

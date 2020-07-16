@@ -24,18 +24,18 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	timeshim "github.com/projectcalico/felix/time"
+	timeshim "github.com/projectcalico/felix/timeshim"
 )
 
 const FlapDampingDelay = 100 * time.Millisecond
 
 type updateFilter struct {
-	Time timeshim.Time
+	Time timeshim.Interface
 }
 
 type UpdateFilterOp func(filter *updateFilter)
 
-func WithTimeShim(t timeshim.Time) UpdateFilterOp {
+func WithTimeShim(t timeshim.Interface) UpdateFilterOp {
 	return func(filter *updateFilter) {
 		filter.Time = t
 	}
@@ -54,7 +54,7 @@ func FilterUpdates(ctx context.Context,
 	options ...UpdateFilterOp) {
 
 	u := &updateFilter{
-		Time: timeshim.NewRealTime(),
+		Time: timeshim.RealTime(),
 	}
 	for _, op := range options {
 		op(u)

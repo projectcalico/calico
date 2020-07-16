@@ -12,22 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package time
+package timeshim
 
 import (
 	"time"
 )
 
 // Time is our shim interface to the time package.
-type Time interface {
+type Interface interface {
 	Now() time.Time
 	Since(t time.Time) time.Duration
 	Until(t time.Time) time.Duration
 	After(t time.Duration) <-chan time.Time
 }
 
-func NewRealTime() Time {
-	return &realTime{}
+var singleton realTime
+
+func RealTime() Interface {
+	return singleton
 }
 
 // realTime is the real implementation of timeIface, which calls through to the real time package.

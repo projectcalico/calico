@@ -33,7 +33,7 @@ import (
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	mocknetlink "github.com/projectcalico/felix/netlink/mock"
-	mocktime "github.com/projectcalico/felix/time/mock"
+	mocktime "github.com/projectcalico/felix/timeshim/mocktime"
 )
 
 var (

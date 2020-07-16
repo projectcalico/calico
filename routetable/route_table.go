@@ -33,7 +33,7 @@ import (
 	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
 
 	netlinkshim "github.com/projectcalico/felix/netlink"
-	timeshim "github.com/projectcalico/felix/time"
+	timeshim "github.com/projectcalico/felix/timeshim"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -184,7 +184,7 @@ type RouteTable struct {
 	newNetlinkHandle  func() (netlinkshim.Netlink, error)
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
 	conntrack         conntrackIface
-	time              timeshim.Time
+	time              timeshim.Interface
 }
 
 func New(
@@ -205,7 +205,7 @@ func New(
 		netlinkTimeout,
 		addStaticARPEntry,
 		conntrack.New(),
-		timeshim.NewRealTime(),
+		timeshim.RealTime(),
 		deviceRouteSourceAddress,
 		deviceRouteProtocol,
 		removeExternalRoutes,
@@ -222,7 +222,7 @@ func NewWithShims(
 	netlinkTimeout time.Duration,
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
 	conntrack conntrackIface,
-	timeShim timeshim.Time,
+	timeShim timeshim.Interface,
 	deviceRouteSourceAddress net.IP,
 	deviceRouteProtocol int,
 	removeExternalRoutes bool,
