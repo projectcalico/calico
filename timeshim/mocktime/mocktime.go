@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mock
+package mocktime
 
 import (
 	"sort"
@@ -21,18 +21,18 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	timeshim "github.com/projectcalico/felix/time"
+	"github.com/projectcalico/felix/timeshim"
 )
 
 var startTime, _ = time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
 
-func NewMockTime() *MockTime {
+func New() *MockTime {
 	return &MockTime{
 		currentTime: startTime,
 	}
 }
 
-var _ timeshim.Time = NewMockTime()
+var _ timeshim.Interface = (*MockTime)(nil)
 
 type MockTime struct {
 	lock sync.Mutex

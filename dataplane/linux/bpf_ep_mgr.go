@@ -57,7 +57,7 @@ type bpfEndpointManager struct {
 	profiles map[proto.ProfileID]*proto.Profile
 
 	ifacesLock sync.Mutex
-	ifaces   map[string]epIface
+	ifaces     map[string]epIface
 
 	// Indexes
 	policiesToWorkloads map[proto.PolicyID]set.Set  /*proto.WorkloadEndpointID*/
@@ -742,4 +742,3 @@ func (m *bpfEndpointManager) extractRules(tier *proto.TierInfo, profileNames []s
 	allRules = append(allRules, profs)
 	return allRules
 }
-

@@ -1,4 +1,18 @@
-package mock
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package mocknetlink
 
 import (
 	"errors"
@@ -10,20 +24,19 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/felix/ip"
-	netlinkshim "github.com/projectcalico/felix/netlink"
+	"github.com/projectcalico/felix/netlinkshim"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-func NewMockNetlinkDataplane() *MockNetlinkDataplane {
+func New() *MockNetlinkDataplane {
 	dp := &MockNetlinkDataplane{
 		NameToLink:      map[string]*MockLink{},
 		RouteKeyToRoute: map[string]netlink.Route{},
@@ -47,7 +60,7 @@ func NewMockNetlinkDataplane() *MockNetlinkDataplane {
 }
 
 // Validate the mock netlink adheres to the netlink interface.
-var _ netlinkshim.Netlink = NewMockNetlinkDataplane()
+var _ netlinkshim.Interface = (*MockNetlinkDataplane)(nil)
 
 var (
 	SimulatedError        = errors.New("dummy error")
@@ -296,7 +309,7 @@ func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
 
 }
 
-func (d *MockNetlinkDataplane) NewMockNetlink() (netlinkshim.Netlink, error) {
+func (d *MockNetlinkDataplane) NewMockNetlink() (netlinkshim.Interface, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	defer GinkgoRecover()

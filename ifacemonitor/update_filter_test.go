@@ -26,7 +26,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/time/mock"
+	"github.com/projectcalico/felix/timeshim/mocktime"
 )
 
 const (
@@ -195,7 +195,7 @@ func TestUpdateFilter_FilterUpdates_RouteUpdateDelOnly(t *testing.T) {
 }
 
 type filterUpdatesHarness struct {
-	Time *mock.MockTime
+	Time *mocktime.MockTime
 
 	Ctx    context.Context
 	Cancel context.CancelFunc
@@ -208,7 +208,7 @@ type filterUpdatesHarness struct {
 
 func setUpFilterTest(t *testing.T) (*filterUpdatesHarness, context.CancelFunc) {
 	RegisterTestingT(t)
-	mockTime := mock.NewMockTime()
+	mockTime := mocktime.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	linkIn := make(chan netlink.LinkUpdate, 10)
