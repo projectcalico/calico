@@ -85,7 +85,7 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: {{.Values.cni.image}}:{{ .Values.cni.tag }}
-          command: ["/install-cni.sh"]
+          command: ["/opt/cni/bin/install"]
           env:
 {{- if .Values.bpf }}
             # Overrides for kubernetes API server host/port. Needed in BPF mode.
