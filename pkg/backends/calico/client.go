@@ -397,7 +397,7 @@ func (c *client) updatePeersV1() {
 		// already have a global peering to that IP, skip emitting the node-specific
 		// one.
 		if nodeKey, ok := key.(model.NodeBGPPeerKey); ok {
-			globalKey := model.GlobalBGPPeerKey{PeerIP: nodeKey.PeerIP}
+			globalKey := model.GlobalBGPPeerKey{PeerIP: nodeKey.PeerIP, Port:nodeKey.Port}
 			globalPath, _ := model.KeyToDefaultPath(globalKey)
 			if _, ok = peersV1[globalPath]; ok {
 				log.Debug("Global peering already exists")
@@ -473,12 +473,12 @@ func (c *client) updatePeersV1() {
 			for _, peer := range peers {
 				log.Debugf("Peer: %#v", peer)
 				if globalPass {
-					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP}
+					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP, Port: peer.Port}
 					emit(key, peer)
 				} else {
 					for _, localNodeName := range localNodeNames {
 						log.Debugf("Local node name: %#v", localNodeName)
-						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
 						emit(key, peer)
 					}
 				}
@@ -521,7 +521,7 @@ func (c *client) updatePeersV1() {
 		for _, peerNodeName := range peerNodeNames {
 			for _, peer := range c.nodeAsBGPPeers(peerNodeName) {
 				for _, localNodeName := range localNodeNames {
-					key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+					key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port:peer.Port}
 					emit(key, peer)
 				}
 			}
@@ -854,7 +854,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
-		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
@@ -865,7 +865,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		// for the global default values, or "node.<nodename>" for the node specific vales.
 		nodeName := resName[len(perNodeConfigNamePrefix):]
 		c.getPrefixAdvertisementsKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
-		c.getListenPortKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
+		c.getListenPortKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName}, updatePeersV1, updateReasons)
 		c.getLogSeverityKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
 	} else {
 		log.Warningf("Bad value for BGPConfiguration resource name: %s.", resName)
@@ -954,7 +954,7 @@ func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, ke
 	}
 }
 
-func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {
 	listenPortKey := getBGPConfigKey("listen_port", key)
 
 	if v3res != nil && v3res.Spec.ListenPort != 0 {
@@ -964,6 +964,7 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interfac
 		case model.GlobalBGPConfigKey:
 			c.globalListenPort = int(v3res.Spec.ListenPort)
 		}
+		*updateReasons = append(*updateReasons, "listenPort updated.")
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(listenPortKey, strconv.Itoa(int(v3res.Spec.ListenPort))))
 	} else {
 		switch k := key.(type) {
@@ -972,8 +973,10 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interfac
 		case model.GlobalBGPConfigKey:
 			c.globalListenPort = 0
 		}
+		*updateReasons = append(*updateReasons, "listenPort deleted.")
 		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(listenPortKey))
 	}
+	*updatePeersV1 = true
 }
 
 func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {

@@ -173,6 +173,9 @@ template bgp bgp_template {
 {{if ls "/global/peer_v6"}}
 {{range gets "/global/peer_v6/*"}}{{$data := json .Value}}
 {{$nums := split $data.ip ":"}}{{$id := join $nums "_"}}
+{{- if $data.port}}
+{{- $id = printf "%s_%s" $id $data.port}}
+{{- end}}
 # For peer {{.Key}}
 {{- if eq $data.ip ($node_ip6) }}
 # Skipping ourselves ({{$node_ip6}})
@@ -194,6 +197,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{if ls $node_peers_key}}
 {{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
 {{$nums := split $data.ip ":"}}{{$id := join $nums "_"}}
+{{- if $data.port}}
+{{- $id = printf "%s_%s" $id $data.port}}
+{{- end}}
 # For peer {{.Key}}
 {{- if eq $data.ip ($node_ip6) }}
 # Skipping ourselves ({{$node_ip6}})
