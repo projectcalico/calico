@@ -12,7 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1-407
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.2-301.1592810506 AS base
+
+COPY k8s-install/scripts/clean.sh /clean.sh
+
+RUN touch /in-the-container
+
+RUN microdnf install hostname
+
+RUN mkdir /licenses
+ADD licenses/ /licenses
+ADD LICENSE /licenses/
+
+RUN microdnf update
+
+SHELL ["/bin/bash", "-c"]
+RUN  /clean.sh "/bin/sed" "/bin/mkdir" "/bin/cp" "/bin/mv" "/bin/cat" "/bin/touch" "/bin/chmod" \
+"/bin/grep"  "/bin/hostname" "/bin/basename" "/bin/base64"
+
+FROM scratch
+SHELL ["/bin/sh", "-c"]
 
 ARG GIT_VERSION=unknown
 
@@ -24,15 +43,15 @@ LABEL name="Calico Networking for CNI" \
       description="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin" \
       maintainer="laurence@tigera.io"
 
-RUN mkdir /licenses
-ADD licenses/ /licenses
-ADD LICENSE /licenses/
+COPY --from=base /licenses /licenses
+COPY --from=base /bin /bin
+COPY --from=base /lib64 /lib64
+COPY --from=base /usr/lib64 /usr/lib64
+COPY --from=base /usr/bin /usr/bin
 
 ADD bin/amd64/ /opt/cni/bin/
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
 ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
-
-RUN microdnf install hostname
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
