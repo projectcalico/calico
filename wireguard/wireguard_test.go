@@ -147,7 +147,7 @@ var _ = Describe("Enable wireguard", func() {
 		wgDataplane = mocknetlink.New()
 		rtDataplane = mocknetlink.New()
 		rrDataplane = mocknetlink.New()
-		t = mocktime.NewMockTime()
+		t = mocktime.New()
 		s = &mockStatus{}
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
@@ -1246,7 +1246,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 		wgDataplane = mocknetlink.New()
 		rtDataplane = mocknetlink.New()
 		rrDataplane = mocknetlink.New()
-		t = mocktime.NewMockTime()
+		t = mocktime.New()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
@@ -1422,7 +1422,7 @@ var _ = Describe("Wireguard (with no table index)", func() {
 		wgDataplane = mocknetlink.New()
 		rtDataplane = mocknetlink.New()
 		rrDataplane = mocknetlink.New()
-		t = mocktime.NewMockTime()
+		t = mocktime.New()
 		t.SetAutoIncrement(11 * time.Second)
 
 		wgFn = func(enabled bool) {

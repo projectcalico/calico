@@ -208,7 +208,7 @@ type filterUpdatesHarness struct {
 
 func setUpFilterTest(t *testing.T) (*filterUpdatesHarness, context.CancelFunc) {
 	RegisterTestingT(t)
-	mockTime := mocktime.NewMockTime()
+	mockTime := mocktime.New()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	linkIn := make(chan netlink.LinkUpdate, 10)

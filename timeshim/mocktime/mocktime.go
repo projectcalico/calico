@@ -32,7 +32,7 @@ func New() *MockTime {
 	}
 }
 
-var _ timeshim.Interface = New()
+var _ timeshim.Interface = (*MockTime)(nil)
 
 type MockTime struct {
 	lock sync.Mutex

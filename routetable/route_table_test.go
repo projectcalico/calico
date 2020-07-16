@@ -52,7 +52,7 @@ var _ = Describe("RouteTable v6", func() {
 
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
-		t = mocktime.NewMockTime()
+		t = mocktime.New()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
@@ -105,7 +105,7 @@ var _ = Describe("RouteTable", func() {
 
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
-		t = mocktime.NewMockTime()
+		t = mocktime.New()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
@@ -976,7 +976,7 @@ var _ = Describe("RouteTable (main table)", func() {
 
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
-		t = mocktime.NewMockTime()
+		t = mocktime.New()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
@@ -1074,7 +1074,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 	BeforeEach(func() {
 		dataplane = mocknetlink.New()
-		t = mocktime.NewMockTime()
+		t = mocktime.New()
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
@@ -1283,7 +1283,7 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 	It("Should panic with an invalid IP version", func() {
 		Expect(func() {
 			dataplane := mocknetlink.New()
-			t := mocktime.NewMockTime()
+			t := mocktime.New()
 			_ = NewWithShims(
 				[]string{"^cali$", InterfaceNone},
 				5, // invalid IP version
