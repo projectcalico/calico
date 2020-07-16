@@ -24,6 +24,16 @@ type Interface interface {
 	Since(t time.Time) time.Duration
 	Until(t time.Time) time.Duration
 	After(t time.Duration) <-chan time.Time
+	NewTimer(d Duration) Timer
+}
+
+type Time = time.Time
+type Duration = time.Duration
+
+type Timer interface {
+	Stop() bool
+	Reset(clean Duration)
+	Chan() <-chan Time
 }
 
 var singleton realTime
@@ -34,6 +44,25 @@ func RealTime() Interface {
 
 // realTime is the real implementation of timeIface, which calls through to the real time package.
 type realTime struct{}
+
+func (t realTime) NewTimer(d Duration) Timer {
+	timer := time.NewTimer(d)
+	return (*timerWrapper)(timer)
+}
+
+type timerWrapper time.Timer
+
+func (t *timerWrapper) Stop() bool {
+	return (*time.Timer)(t).Stop()
+}
+
+func (t *timerWrapper) Reset(duration Duration) {
+	(*time.Timer)(t).Reset(duration)
+}
+
+func (t *timerWrapper) Chan() <-chan Time {
+	return (*time.Timer)(t).C
+}
 
 func (realTime) Until(t time.Time) time.Duration {
 	return time.Until(t)
