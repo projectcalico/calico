@@ -40,7 +40,7 @@ spec:
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
 | node     | If specified, the scope is node level, otherwise the scope is global. | The hostname of the node to which this peer applies. | string | |
-| peerIP   | The IP address of this peer. | Valid IPv4 or IPv6 address.  | string | |
+| peerIP   | The IP address of this peer and an optional port number. If port number is not set, and peer is Calico node with `listenPort` set, then `listenPort` is used. | Valid IPv4 or IPv6 address. If port number is set use, `IPv4:port` or `[IPv6]:port` format. | string | |
 | asNumber | The remote AS Number of the peer. | A valid AS Number, may be specified in dotted notation. | integer/string |
 | nodeSelector | Selector for the nodes that should have this peering.  When this is set, the `node` field must be empty. | | [selector](networkpolicy#selector) |
 | peerSelector | Selector for the remote nodes to peer with.  When this is set, the `peerIP` and `asNumber` fields must be empty. | | [selector](networkpolicy#selector) |
@@ -54,6 +54,7 @@ spec:
 
 BGP Peers can exist at either global or node-specific scope. A peer's scope
 determines which `{{site.nodecontainer}}`s will attempt to establish a BGP session with that peer.
+If `{{site.nodecontainer}}` has a `listenPort` set in `BGPConfiguration`, it will be used in peering.
 
 #### Global peer
 
