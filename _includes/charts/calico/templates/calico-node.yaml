@@ -314,6 +314,11 @@ spec:
             - name: CLUSTER_TYPE
               value: "k8s"
 {{- end }}
+{{- if and (eq .Values.network "calico") (.Values.eks) }}
+            # Disable AWS source-destination check on nodes.
+            - name: FELIX_AWSSRCDSTCHECK
+              value: Disable
+{{- end }}
             # The default IPv4 pool to create on startup if none exists. Pod IPs will be
             # chosen from this range. Changing this value after installation will have
             # no effect. This should fall within `--cluster-cidr`.
@@ -346,7 +351,7 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
-{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) }}
+{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) (not .Values.eks) }}
               - -bird-live
 {{- end }}
             periodSeconds: 10
@@ -358,7 +363,7 @@ spec:
               command:
               - /bin/calico-node
               - -felix-ready
-{{- if not .Values.flannel_migration }}
+{{- if and (not .Values.flannel_migration) (not .Values.eks) }}
               - -bird-ready
 {{- end }}
 {{- else if eq .Values.network "flannel" }}

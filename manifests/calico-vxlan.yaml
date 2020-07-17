@@ -5,4 +5,5 @@ layout: null
 datastore: kubernetes
 network: calico
 vxlan: true
+eks: true
 {% endhelm %}
