@@ -960,7 +960,7 @@ func createWorkloadWithAssignedIP(
 	Expect(err).NotTo(HaveOccurred())
 
 	wl := workload.Run(felix, wlName, "default", wlIP, "8055", "tcp")
-	wl.ConfigureInDatastore(*infra)
+	wl.ConfigureInInfra(*infra)
 
 	return wl
 }

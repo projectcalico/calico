@@ -100,7 +100,7 @@ var _ = infrastructure.DatastoreDescribe("host-port tests", []apiconfig.Datastor
 
 	It("with a local workload, port should be reachable", func() {
 		w := workload.Run(felix, "w", "default", "10.65.0.2", "8055", "tcp")
-		w.ConfigureInDatastore(infra)
+		w.ConfigureInInfra(infra)
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue(), "Not reachable with workload running")
 		w.Stop()
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue(), "With workload stopped, not reachable")

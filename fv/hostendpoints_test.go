@@ -67,7 +67,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
 			w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
-			w[ii].ConfigureInDatastore(infra)
+			w[ii].ConfigureInInfra(infra)
 
 			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
 		}

@@ -554,6 +554,15 @@ func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
 	}
 }
 
+func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
+	wepIDs, err := names.ParseWorkloadEndpointName(name)
+	if err != nil {
+		return err
+	}
+	err = kds.K8sClient.CoreV1().Pods(ns).Delete(wepIDs.Pod, DeleteImmediately)
+	return err
+}
+
 func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
 	podIP := wep.Spec.IPNetworks[0]
 	if strings.Contains(podIP, "/") {

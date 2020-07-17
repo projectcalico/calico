@@ -71,7 +71,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
 			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
-			w[ii].ConfigureInDatastore(infra)
+			w[ii].ConfigureInInfra(infra)
 		}
 
 		// We will use this container to model an external client trying to connect into

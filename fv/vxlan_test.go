@@ -94,7 +94,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Expect(err).NotTo(HaveOccurred())
 
 						w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
-						w[ii].ConfigureInDatastore(infra)
+						w[ii].ConfigureInInfra(infra)
 
 						hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
 					}

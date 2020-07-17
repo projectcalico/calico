@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -27,23 +28,21 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/polprog"
-
 	"github.com/projectcalico/felix/bpf/tc"
-
 	"github.com/projectcalico/felix/idalloc"
-
 	"github.com/projectcalico/felix/ifacemonitor"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/ratelimited"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
-
-	"github.com/projectcalico/felix/proto"
 )
+
+const jumpMapCleanupInterval = 10 * time.Second
 
 type epIface struct {
 	ifacemonitor.State
@@ -78,6 +77,9 @@ type bpfEndpointManager struct {
 
 	ipSetMap bpf.Map
 	stateMap bpf.Map
+
+	startupOnce      sync.Once
+	mapCleanupRunner *ratelimited.Runner
 }
 
 func newBPFEndpointManager(
@@ -111,6 +113,10 @@ func newBPFEndpointManager(
 		dsrEnabled:          dsrEnabled,
 		ipSetMap:            ipSetMap,
 		stateMap:            stateMap,
+		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
+			log.Debug("Jump map cleanup triggered.")
+			tc.CleanUpJumpMaps()
+		}),
 	}
 }
 
@@ -356,6 +362,9 @@ func (m *bpfEndpointManager) markProfileUsersDirty(id proto.ProfileID) {
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
+	// Do one-off initialisation.
+	m.ensureStarted()
+
 	m.applyProgramsToDirtyDataInterfaces()
 	m.applyProgramsToDirtyWorkloadEndpoints()
 
@@ -378,6 +387,13 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 
 	log.Infof("%s set to %s", path, numval)
 	return nil
+}
+
+func (m *bpfEndpointManager) ensureStarted() {
+	m.startupOnce.Do(func(){
+		log.Info("Starting map cleanup runner.")
+		m.mapCleanupRunner.Start(context.Background())
+	})
 }
 
 func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
@@ -461,7 +477,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 
 	if m.dirtyWorkloads.Len() > 0 {
 		// Clean up any left-over jump maps in the background...
-		go tc.CleanUpJumpMaps()
+		m.mapCleanupRunner.Trigger()
 	}
 
 	m.dirtyWorkloads.Iter(func(item interface{}) error {

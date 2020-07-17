@@ -39,12 +39,43 @@ type MockTime struct {
 
 	currentTime   time.Time
 	autoIncrement time.Duration
-	timers        []mockTimer
+	timers        []*mockTimer
+}
+
+func (m *MockTime) NewTimer(d timeshim.Duration) timeshim.Timer {
+	timer := &mockTimer{
+		mockTime: m,
+		C:        make(chan time.Time, 1), // Capacity 1 so we don't block on firing,
+	}
+	m.scheduleTimer(timer, d) // Takes the lock.
+
+	return timer
 }
 
 type mockTimer struct {
+	mockTime   *MockTime
 	TimeToFire time.Time
 	C          chan time.Time
+}
+
+func (m *mockTimer) fire() {
+	select {
+	case m.C <- m.TimeToFire: // Should never block since there channel has cap 1.
+	default:
+		logrus.Panic("Blocked while trying to fire timer")
+	}
+}
+
+func (m *mockTimer) Stop() bool {
+	return m.mockTime.stopTimer(m)
+}
+
+func (m *mockTimer) Reset(duration timeshim.Duration) {
+	m.mockTime.scheduleTimer(m, duration)
+}
+
+func (m *mockTimer) Chan() <-chan timeshim.Time {
+	return m.C
 }
 
 func (m *MockTime) Until(t time.Time) time.Duration {
@@ -52,17 +83,37 @@ func (m *MockTime) Until(t time.Time) time.Duration {
 }
 
 func (m *MockTime) After(t time.Duration) <-chan time.Time {
+	timer := m.NewTimer(t)
+	return timer.Chan()
+}
+
+func (m *MockTime) scheduleTimer(timer *mockTimer, duration time.Duration) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	c := make(chan time.Time, 1) // Capacity 1 so we don't block on firing
+	timer.TimeToFire = m.currentTime.Add(duration)
+	m.timers = append(m.timers, timer)
+}
 
-	m.timers = append(m.timers, mockTimer{
-		TimeToFire: m.currentTime.Add(t),
-		C:          c,
-	})
+func (m *MockTime) stopTimer(timer *mockTimer) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	return c
+	// Look for the timer in the queue; if we find it then we successfully stopped the timer.
+	// Otherwise, the timer must have fired.
+	timerWasPending := false
+	timers := m.timers[:0]
+	for _, t := range m.timers {
+		if t == timer {
+			// Timer was in the queue
+			timerWasPending = true
+			continue
+		}
+		timers = append(timers, t)
+	}
+	m.timers = timers
+
+	return timerWasPending
 }
 
 func (m *MockTime) Now() time.Time {
@@ -118,11 +169,7 @@ func (m *MockTime) incrementTimeLockHeld(t time.Duration) {
 		(m.timers[0].TimeToFire.Before(m.currentTime) ||
 			m.timers[0].TimeToFire.Equal(m.currentTime)) {
 		logrus.WithField("timer", m.timers[0]).Info("Firing timer.")
-		select {
-		case m.timers[0].C <- m.timers[0].TimeToFire: // Should never block since there channel has cap 1.
-		default:
-			logrus.Panic("Blocked while trying to fire timer")
-		}
+		m.timers[0].fire()
 		m.timers = m.timers[1:]
 	}
 }

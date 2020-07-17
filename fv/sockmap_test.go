@@ -253,7 +253,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 			ip,
 			fmt.Sprintf("%d", port),
 			"tcp")
-		host.ConfigureInDatastore(infra)
+		host.ConfigureInInfra(infra)
 		unlockAtEnd = false
 	})
 
