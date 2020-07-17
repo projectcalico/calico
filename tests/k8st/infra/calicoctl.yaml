@@ -24,7 +24,7 @@ spec:
   containers:
   - name: calicoctl
     image: calico/ctl:master
-    command: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
+    command: ["/calicoctl-wait"]
     env:
     - name: DATASTORE_TYPE
       value: kubernetes
@@ -103,4 +103,3 @@ subjects:
 - kind: ServiceAccount
   name: calicoctl
   namespace: kube-system
-
