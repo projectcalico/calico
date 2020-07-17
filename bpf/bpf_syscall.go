@@ -90,12 +90,12 @@ import (
 //
 // // bpf_attr_setup_load_prog sets up the bpf_attr union for use with BPF_PROG_LOAD.
 // // A C function makes this easier because unions aren't easy to access from Go.
-// void bpf_attr_setup_load_prog(union bpf_attr *attr, __u32 prog_type, __u32 insn_count, void *insns, char *license, __u32 log_size, void *log_buf) {
+// void bpf_attr_setup_load_prog(union bpf_attr *attr, __u32 prog_type, __u32 insn_count, void *insns, char *license, __u32 log_level, __u32 log_size, void *log_buf) {
 //    attr->prog_type = prog_type;
 //    attr->insn_cnt = insn_count;
 //    attr->insns = (__u64)(unsigned long)insns;
 //    attr->license = (__u64)(unsigned long)license;
-//    attr->log_level = 1;
+//    attr->log_level = log_level;
 //    attr->log_size = log_size;
 //    attr->log_buf = (__u64)(unsigned long)log_buf;
 //    attr->kern_version = 0;
@@ -185,9 +185,42 @@ func GetMapFDByID(mapID int) (MapFD, error) {
 	return MapFD(fd), nil
 }
 
+const defaultLogSize = 1024 * 1024
+const maxLogSize = 128 * 1024 * 1024
+
 func LoadBPFProgramFromInsns(insns asm.Insns, license string) (ProgFD, error) {
 	log.Debugf("LoadBPFProgramFromInsns(%v, %v)", insns, license)
 	increaseLockedMemoryQuota()
+
+	// By default, try to load the program with logging disabled, for performance.
+	fd, err := tryLoadBPFProgramFromInsns(insns, license, 0)
+	if err == nil {
+		log.WithField("fd", fd).Debug("Loaded program successfully")
+		return fd, nil
+	}
+
+	// After a failure, retry, passing a log buffer to get the diagnostics from the kernel.
+	log.WithError(err).Warn("Failed to load BPF program; collecting diagnostics...")
+	var logSize uint = defaultLogSize
+	for {
+		fd, err2 := tryLoadBPFProgramFromInsns(insns, license, logSize)
+		if err2 == nil {
+			// Unexpected but we'll take it.
+			log.Warn("Retry succeeded.")
+			return fd, nil
+		}
+		if err2 == unix.ENOSPC &&  logSize < maxLogSize {
+			// Log buffer was too small.
+			log.Warn("Diagnostics buffer was too small, trying again with a larger buffer.")
+			logSize *= 2
+			continue
+		}
+		return 0, err
+	}
+}
+
+func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint) (ProgFD, error) {
+	log.Debugf("tryLoadBPFProgramFromInsns(..., %v, %v)", license, logSize)
 	bpfAttr := C.bpf_attr_alloc()
 	defer C.free(unsafe.Pointer(bpfAttr))
 
@@ -195,21 +228,26 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string) (ProgFD, error) {
 	defer C.free(cInsnBytes)
 	cLicense := C.CString(license)
 	defer C.free(unsafe.Pointer(cLicense))
-	const logSize = 1024 * 1024
-	logBuf := C.malloc(logSize)
-	defer C.free(logBuf)
 
-	C.bpf_attr_setup_load_prog(bpfAttr, unix.BPF_PROG_TYPE_SCHED_CLS, C.uint(len(insns)), cInsnBytes, cLicense, logSize, logBuf)
+	var logBuf unsafe.Pointer
+	var logLevel uint
+	if logSize > 0 {
+		logLevel = 1
+		logBuf = C.malloc((C.size_t)(logSize))
+		defer C.free(logBuf)
+	}
+
+	C.bpf_attr_setup_load_prog(bpfAttr, unix.BPF_PROG_TYPE_SCHED_CLS, C.uint(len(insns)), cInsnBytes, cLicense,(C.uint)(logLevel), (C.uint)(logSize), logBuf)
 	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_LOAD, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 
-	if errno != 0 {
+	if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
 		goLog := strings.TrimSpace(C.GoString((*C.char)(logBuf)))
 		log.WithError(errno).Error("BPF_PROG_LOAD failed")
 		if len(goLog) > 0 {
 			for _, l := range strings.Split(goLog, "\n") {
 				log.Error("BPF Verifier:    ", l)
 			}
-		} else {
+		} else if logSize > 0 {
 			log.Error("Verifier log was empty.")
 		}
 	}
