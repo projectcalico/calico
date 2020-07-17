@@ -60,7 +60,6 @@ This how-to guide uses the following {{site.prodname}} features:
 
 - [Enable IPv6 only](#enable-ipv6-only)
 - [Enable dual stack](#enable-dual-stack)
-- (Optional)[Change host IPv4 addresses to IPv6 only](#change-host-ipv4-addresses-to-ipv6-only)
 
 #### Enable IPv6 only
 
@@ -110,6 +109,17 @@ This how-to guide uses the following {{site.prodname}} features:
 %>
 {% endtabs %}
 
+**(Optional) Update host to not look for IPv4 addresses**
+
+If you want your workloads to have IPv6 addresses only, because you do not have IPv4 addresses or connectivity
+between your nodes, complete these additional steps to tell {{site.prodname}} not to look for any IPv4 addresses.
+
+1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
+1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
+   - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.
+     This configures {{site.prodname}} to calculate the router ID based on the hostname.
+   - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
+
 #### Enable dual stack
 
 {% tabs id:installation-method-bbb %}
@@ -150,17 +160,6 @@ This how-to guide uses the following {{site.prodname}} features:
 
 %>
 {% endtabs %}
-
-
-#### Change host IPv4 addresses to IPv6 only
-
-To switch the host to use IPv6 only, follow these additional steps.
-
-1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
-1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
-   - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.
-     This configures {{site.prodname}} to calculate the router ID based on the hostname.
-   - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
 
 ### Above and beyond
 
