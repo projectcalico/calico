@@ -16,9 +16,9 @@ package model
 
 import (
 	"fmt"
-	"regexp"
-
 	"reflect"
+	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -31,6 +31,7 @@ var (
 	matchGlobalBGPPeer = regexp.MustCompile("^/?calico/bgp/v1/global/peer_v./([^/]+)$")
 	matchHostBGPPeer   = regexp.MustCompile("^/?calico/bgp/v1/host/([^/]+)/peer_v./([^/]+)$")
 	typeBGPPeer        = reflect.TypeOf(BGPPeer{})
+	ipPortSeparator    = "-"
 )
 
 type NodeBGPPeerKey struct {
@@ -46,12 +47,8 @@ func (key NodeBGPPeerKey) defaultPath() (string, error) {
 	if key.Nodename == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
-	ipPort := key.PeerIP.String()
-	if key.Port != "" {
-		ipPort = ipPort + "-" + key.Port
-	}
 	e := fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
-		key.Nodename, key.PeerIP.Version(), ipPort)
+		key.Nodename, key.PeerIP.Version(), combineIPAndPort(key.PeerIP.String(),key.Port))
 	return e, nil
 }
 
@@ -74,6 +71,7 @@ func (key NodeBGPPeerKey) String() string {
 type NodeBGPPeerListOptions struct {
 	Nodename string
 	PeerIP   net.IP
+	Port   string
 }
 
 func (options NodeBGPPeerListOptions) defaultPathRoot() string {
@@ -84,19 +82,21 @@ func (options NodeBGPPeerListOptions) defaultPathRoot() string {
 			options.Nodename)
 	} else {
 		return fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
-			options.Nodename, options.PeerIP.Version(), options.PeerIP)
+			options.Nodename, options.PeerIP.Version(), combineIPAndPort(options.PeerIP.String(), options.Port))
 	}
 }
 
 func (options NodeBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 	log.Debugf("Get BGPPeer key from %s", path)
 	nodename := ""
+	port := ""
 	peerIP := net.IP{}
 	ekeyb := []byte(path)
-
 	if r := matchHostBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
+		var ipBytes []byte
+		ipBytes, port = extractIPAndPort(string(r[0][2]))
 		nodename = string(r[0][1])
-		if err := peerIP.UnmarshalText(r[0][2]); err != nil {
+		if err := peerIP.UnmarshalText(ipBytes); err != nil {
 			log.WithError(err).WithField("PeerIP", r[0][2]).Error("Error unmarshalling GlobalBGPPeer IP address")
 			return nil
 		}
@@ -113,7 +113,7 @@ func (options NodeBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match hostname %s != %s", options.Nodename, nodename)
 		return nil
 	}
-	return NodeBGPPeerKey{PeerIP: peerIP, Nodename: nodename}
+	return NodeBGPPeerKey{PeerIP: peerIP, Nodename: nodename, Port: port}
 }
 
 type GlobalBGPPeerKey struct {
@@ -125,12 +125,8 @@ func (key GlobalBGPPeerKey) defaultPath() (string, error) {
 	if key.PeerIP.IP == nil {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "peerIP"}
 	}
-	ipPort := key.PeerIP.String()
-	if key.Port != "" {
-		ipPort = ipPort + "-" + key.Port
-	}
 	e := fmt.Sprintf("/calico/bgp/v1/global/peer_v%d/%s",
-		key.PeerIP.Version(), ipPort)
+		key.PeerIP.Version(), combineIPAndPort(key.PeerIP.String(), key.Port))
 	return e, nil
 }
 
@@ -160,7 +156,7 @@ func (options GlobalBGPPeerListOptions) defaultPathRoot() string {
 		return "/calico/bgp/v1/global"
 	} else {
 		return fmt.Sprintf("/calico/bgp/v1/global/peer_v%d/%s",
-			options.PeerIP.Version(), options.PeerIP)
+			options.PeerIP.Version(), combineIPAndPort(options.PeerIP.String(), options.Port))
 	}
 }
 
@@ -168,9 +164,12 @@ func (options GlobalBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 	log.Debugf("Get BGPPeer key from %s", path)
 	peerIP := net.IP{}
 	ekeyb := []byte(path)
+	port := ""
 
 	if r := matchGlobalBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
-		if err := peerIP.UnmarshalText(r[0][1]); err != nil {
+		var ipBytes []byte
+		ipBytes, port = extractIPAndPort(string(r[0][1]))
+		if err := peerIP.UnmarshalText(ipBytes); err != nil {
 			log.WithError(err).WithField("PeerIP", r[0][1]).Error("Error unmarshalling GlobalBGPPeer IP address")
 			return nil
 		}
@@ -183,7 +182,7 @@ func (options GlobalBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match peerIP %s != %s", options.PeerIP.String(), peerIP.String())
 		return nil
 	}
-	return GlobalBGPPeerKey{PeerIP: peerIP}
+	return GlobalBGPPeerKey{PeerIP: peerIP, Port:port}
 }
 
 type BGPPeer struct {
@@ -195,4 +194,19 @@ type BGPPeer struct {
 	// converts large uints to float e notation which breaks the BIRD
 	// configuration.
 	ASNum numorstring.ASNumber `json:"as_num,string"`
+}
+
+func extractIPAndPort(ipPort string) ([]byte, string) {
+	arr := strings.Split(ipPort, ipPortSeparator)
+	if len(arr) == 2 {
+		return []byte(arr[0]), arr[1]
+	}
+	return []byte(ipPort), ""
+}
+
+func combineIPAndPort(ip string, port string) string {
+	if port != "" {
+		return ip + ipPortSeparator + port
+	}
+	return ip
 }
