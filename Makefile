@@ -48,7 +48,7 @@ BUILD_IMAGE?=calico/node
 RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node asia.gcr.io/projectcalico-org/node us.gcr.io/projectcalico-org/node
 
 # Versions and location of dependencies used in the build.
-BIRD_VERSION=v0.3.3-151-g767b5389
+BIRD_VERSION=v0.3.3-167-g0a2f8d2d
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
@@ -193,7 +193,7 @@ $(FELIX_GPL_SOURCE): go.mod
 	mkdir -p filesystem/included-source/
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
 		tar cf $@ `go list -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl;'
-	
+
 ###############################################################################
 # FV Tests
 ###############################################################################
