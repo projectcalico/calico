@@ -42,6 +42,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
+const jumpMapCleanupInterval = 10 * time.Second
+
 type epIface struct {
 	ifacemonitor.State
 	jumpMapFDs map[PolDirection]bpf.MapFD
@@ -111,7 +113,7 @@ func newBPFEndpointManager(
 		dsrEnabled:          dsrEnabled,
 		ipSetMap:            ipSetMap,
 		stateMap:            stateMap,
-		mapCleanupRunner: ratelimited.NewRunner(10*time.Second, func(ctx context.Context) {
+		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
 			log.Debug("Jump map cleanup triggered.")
 			tc.CleanUpJumpMaps()
 		}),
@@ -361,7 +363,7 @@ func (m *bpfEndpointManager) markProfileUsersDirty(id proto.ProfileID) {
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Do one-off initialisation.
-	m.startupOnce.Do(m.Start)
+	m.ensureStarted()
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.applyProgramsToDirtyWorkloadEndpoints()
@@ -387,9 +389,11 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 	return nil
 }
 
-func (m *bpfEndpointManager) Start() {
-	log.Info("Starting map cleanup runner.")
-	m.mapCleanupRunner.Start(context.Background())
+func (m *bpfEndpointManager) ensureStarted() {
+	m.startupOnce.Do(func(){
+		log.Info("Starting map cleanup runner.")
+		m.mapCleanupRunner.Start(context.Background())
+	})
 }
 
 func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
