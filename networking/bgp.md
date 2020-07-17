@@ -10,7 +10,7 @@ Configure BGP (Border Gateway Protocol) between Calico nodes or peering with net
 
 ### Value
 
-{{site.prodname}} nodes can exchange routing information over BGP to enable reachability for {{site.prodname}} networked workloads (Kubernetes pods or OpenStack VMs). In an on-prem deployment this allows you to make your workloads first class citizen across the rest of your network. In public cloud deployments it provides an efficient way of distributing routing information within your Cluster, often used in conjunction with IPIP overlay or cross-subnet modes.
+{{site.prodname}} nodes can exchange routing information over BGP to enable reachability for {{site.prodname}} networked workloads (Kubernetes pods or OpenStack VMs). In an on-premises deployment this allows you to make your workloads first-class citizen across the rest of your network. In public cloud deployments, it provides an efficient way of distributing routing information within your cluster, and is often used in conjunction with IPIP overlay or cross-subnet modes.
 
 ### Features
 
@@ -26,7 +26,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### BGP
 
-**BGP** is a standard protocol for exchanging routing information between routers in a network. Each router running BGP has one or more **BGP peers** - other routers which they are communicating with over BGP. You can think of {{site.prodname}}  networking as providing a virtual router on each of your nodes. You can configure {{site.prodname}} nodes to peer with each other, with route reflectors, or with top-of-rack (ToR) routers.
+**BGP** is a standard protocol for exchanging routing information between routers in a network. Each router running BGP has one or more **BGP peers** - other routers which they are communicating with over BGP. You can think of {{site.prodname}} networking as providing a virtual router on each of your nodes. You can configure {{site.prodname}} nodes to peer with each other, with route reflectors, or with top-of-rack (ToR) routers.
 
 #### Common BGP topologies
 
@@ -34,7 +34,7 @@ There are many ways to configure a BGP network depending on your environment. He
 
 #### Full-mesh
 
-When BGP is enabled, {{site.prodname}}’s default behavior is to create a **full-mesh** of internal BGP (iBGP) connections where each node peers with each other. This allows {{site.prodname}} to operate over any L2 network, whether public cloud or private cloud, or, if IPIP is [configured]({{site.baseurl}}/networking/vxlan-ipip) to operate as an overlay over any network that does not block IPIP traffic. {{site.prodname}} does not use BGP for VXLAN overlays.
+When BGP is enabled, {{site.prodname}}’s default behavior is to create a **full-mesh** of internal BGP (iBGP) connections where each node peers with each other. This allows {{site.prodname}} to operate over any L2 network, whether public cloud or private cloud, or, if IPIP is [configured]({{site.baseurl}}/networking/vxlan-ipip), to operate as an overlay over any network that does not block IPIP traffic. {{site.prodname}} does not use BGP for VXLAN overlays.
 
 >**Note**: Most public clouds support IPIP. The notable exception is Azure, which blocks IPIP traffic. So if you want to run Calico as an overlay network in Azure, you must [configure {{site.prodname}} to use VXLAN]({{site.baseurl}}/networking/vxlan-ipip).
 {: .alert .alert-info}
