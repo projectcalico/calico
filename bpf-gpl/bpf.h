@@ -161,13 +161,15 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 
 enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.
-	CALI_SKB_MARK_SEEN                   = 0xc1000000,
-	CALI_SKB_MARK_SEEN_MASK              = 0xff000000,
-	CALI_SKB_MARK_BYPASS                 = CALI_SKB_MARK_SEEN | 0x2000000,
-	CALI_SKB_MARK_BYPASS_FWD             = CALI_SKB_MARK_BYPASS | 0x300000,
-	CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP   = CALI_SKB_MARK_BYPASS | 0x500000,
-	CALI_SKB_MARK_SKIP_RPF               = CALI_SKB_MARK_BYPASS | 0x400000,
-	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_SEEN | 0x800000,
+	CALI_MARK_CALICO                     = 0xc0000000,
+	CALI_MARK_CALICO_MASK                = 0xf0000000,
+	CALI_SKB_MARK_SEEN                   = CALI_MARK_CALICO      | 0x01000000,
+	CALI_SKB_MARK_SEEN_MASK              = CALI_MARK_CALICO_MASK | CALI_SKB_MARK_SEEN,
+	CALI_SKB_MARK_BYPASS                 = CALI_SKB_MARK_SEEN    | 0x02000000,
+	CALI_SKB_MARK_BYPASS_FWD             = CALI_SKB_MARK_BYPASS  | 0x00300000,
+	CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP   = CALI_SKB_MARK_BYPASS  | 0x00500000,
+	CALI_SKB_MARK_SKIP_RPF               = CALI_SKB_MARK_BYPASS  | 0x00400000,
+	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_SEEN  | 0x00800000,
 };
 
 #define ip_is_dnf(ip) ((ip)->frag_off & host_to_be16(0x4000))

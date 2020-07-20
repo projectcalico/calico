@@ -506,7 +506,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 		err := errs[wlID]
 		if err == nil {
 			log.WithField("id", wlID).Info("Applied policy to workload")
-			if _, ok := m.happyWEPs[wlID]; !ok {
+			if _, ok := m.happyWEPs[wlID]; !ok && m.allWEPs[wlID] != nil {
 				log.WithField("id", wlID).Info("Adding workload interface to iptables allow list.")
 				m.happyWEPsDirty = true
 			}

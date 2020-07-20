@@ -504,9 +504,10 @@ func TestNATNodePort(t *testing.T) {
 		ctKey = ctr.ReverseNATKey()
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
-		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
+		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse),
+			fmt.Sprintf("Expected reverse conntrack entry but got %v", ctr))
 
-		// Whitlisted source side
+		// Whitelisted source side
 		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
 		// Whitelisted destination side as well
 		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())

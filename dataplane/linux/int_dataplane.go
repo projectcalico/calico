@@ -905,15 +905,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		var inputRules []iptables.Rule
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
+				// Drop packets that have come from a workload but have not been through our BPF program.
 				iptables.Rule{
 					Match:   iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
 					Action:  iptables.DropAction{},
 					Comment: []string{"From workload without BPF seen mark"},
-				}, iptables.Rule{
-					Match:   iptables.Match().InInterface(prefix + "+"),
-					Action:  iptables.AcceptAction{},
-					Comment: []string{"From workload without BPF seen mark"},
-				})
+				},
+			)
 
 			if d.config.RulesConfig.EndpointToHostAction == "ACCEPT" {
 				// Only need to worry about ACCEPT here.  Drop gets compiled into the BPF program and
@@ -925,7 +923,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
-				Match:  iptables.Match().InInterface(prefix + "+"),
+				Match:  iptables.Match().InInterface(prefix + "+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
 				Action: iptables.DropAction{},
 			})
 		}
@@ -945,11 +943,27 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			// add interfaces to the dispatch chain if the BPF program is in place.
 			for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
 				// Make sure iptables rules don't drop packets that we're about to process through BPF.
-				fwdRules = append(fwdRules, iptables.Rule{
-					Match:   iptables.Match().OutInterface(prefix + "+"),
-					Action:  iptables.JumpAction{Target: rules.ChainToWorkloadDispatch},
-					Comment: []string{"To workload, check workload is known."},
-				})
+				fwdRules = append(fwdRules,
+					iptables.Rule{
+						Match:   iptables.Match().OutInterface(prefix + "+"),
+						Action:  iptables.JumpAction{Target: rules.ChainToWorkloadDispatch},
+						Comment: []string{"To workload, check workload is known."},
+					},
+				)
+			}
+			// Need a final rule to accept traffic that is from a workload and going somewhere else.
+			// Otherwise, if iptables has a DROP policy on the forward chain, the packet will get dropped.
+			// This rule must come after the to-workload jump rules above to ensure that we don't accept too
+			// early before the destination is checked.
+			for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
+				// Make sure iptables rules don't drop packets that we're about to process through BPF.
+				fwdRules = append(fwdRules,
+					iptables.Rule{
+						Match:   iptables.Match().InInterface(prefix + "+"),
+						Action:  iptables.AcceptAction{},
+						Comment: []string{"To workload, mark has already been verified."},
+					},
+				)
 			}
 		}
 

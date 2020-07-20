@@ -635,7 +635,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						BeNumerically("==", 0),
 						"Traffic to the workload should be blocked before datastore is configured")
 
-					dpOnlyWorkload.ConfigureInDatastore(infra)
+					dpOnlyWorkload.ConfigureInInfra(infra)
 
 					Eventually(tcpdump.MatchCountFn("UDP-8057"), "5s", "200ms").Should(
 						BeNumerically(">", 0),
