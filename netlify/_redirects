@@ -1,30 +1,32 @@
 # redirect old docs to latest at root.
 # note that you can still access these old docs at https://docs.projectcalico.org/archive/*
-/latest/* /:splat 301
-/v3.14/* /:splat 301
-/v3.13/* /:splat 301
-/v3.12/* /:splat 301
-/v3.11/* /:splat 301
-/v3.10/* /:splat 301
-/v3.9/* /:splat 301
-/v3.8/* /:splat 301
-/v3.7/* /:splat 301
-/v3.6/* /:splat 301
-/v3.5/* /:splat 301
-/v3.4/* /:splat 301
-/v3.3/* /:splat 301
-/v3.2/* /:splat 301
-/v3.1/* /:splat 301
-/v3.0/* /:splat 301
-/v2.6/* /:splat 301
-/v2.5/* /:splat 301
-/v2.4/* /:splat 301
-/v2.3/* /:splat 301
-/v2.2/* /:splat 301
-/v2.1/* /:splat 301
-/v2.0/* /:splat 301
-/v1.6/* /:splat 301
-/v1.5/* /:splat 301
+
+/archive/v3.15 /archive/v3.15/introduction 301!
+/archive/v3.14 /archive/v3.14/introduction 301!
+/archive/v3.13 /archive/v3.13/introduction 301!
+/archive/v3.12 /archive/v3.12/introduction 301!
+/archive/v3.11 /archive/v3.11/introduction 301!
+/archive/v3.10 /archive/v3.10/introduction 301!
+/archive/v3.9 /archive/v3.9/introduction 301!
+/archive/v3.8 /archive/v3.8/introduction 301!
+/archive/v3.7 /archive/v3.7/introduction 301!
+/archive/v3.6 /archive/v3.6/introduction 301!
+/archive/v3.5 /archive/v3.5/introduction 301!
+/archive/v3.4 /archive/v3.4/introduction 301!
+/archive/v3.3 /archive/v3.3/introduction 301!
+/archive/v3.2 /archive/v3.2/introduction 301!
+/archive/v3.1 /archive/v3.1/introduction 301!
+/archive/v3.0 /archive/v3.0/introduction 301!
+/archive/v2.6 /archive/v2.6/introduction 301!
+/archive/v2.5 /archive/v2.5/introduction 301!
+/archive/v2.4 /archive/v2.4/introduction 301!
+/archive/v2.3 /archive/v2.3/introduction 301!
+/archive/v2.2 /archive/v2.2/introduction 301!
+/archive/v2.1 /archive/v2.1/introduction 301!
+/archive/v2.0 /archive/v2.0/introduction 301!
+/archive/v1.6 /archive/v1.6/introduction 301!
+/archive/v1.5 /archive/v1.5/introduction 301!
+/master /master/introduction/ 301!
 
 # explicit redirects for any old that does not exist at an identical path in the
 # latest docs.
