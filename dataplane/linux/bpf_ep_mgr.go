@@ -382,7 +382,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.ensureStarted()
 
 	m.applyProgramsToDirtyDataInterfaces()
-	m.applyProgramsToDirtyWorkloadEndpoints()
+	m.updateWEPsInDataplane()
 
 	if m.happyWEPsDirty {
 		chains := m.ruleRenderer.WorkloadInterfaceAllowChains(m.happyWEPs)
@@ -478,7 +478,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	})
 }
 
-func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
+func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	var mutex sync.Mutex
 	errs := map[proto.WorkloadEndpointID]error{}
 	var wg sync.WaitGroup
@@ -506,11 +506,17 @@ func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 		err := errs[wlID]
 		if err == nil {
 			log.WithField("id", wlID).Info("Applied policy to workload")
-			if _, ok := m.happyWEPs[wlID]; !ok && m.allWEPs[wlID] != nil {
-				log.WithField("id", wlID).Info("Adding workload interface to iptables allow list.")
+			if m.allWEPs[wlID] != nil {
+				if _, ok := m.happyWEPs[wlID]; !ok {
+					log.WithField("id", wlID).Info("Adding workload interface to iptables allow list.")
+					m.happyWEPsDirty = true
+				}
+				m.happyWEPs[wlID] = m.allWEPs[wlID]
+			} else if _, ok := m.happyWEPs[wlID]; ok {
+				// Workload was marked dirty because it's being deleted.  Clean up the happyWEPs entry.
+				delete(m.happyWEPs, wlID)
 				m.happyWEPsDirty = true
 			}
-			m.happyWEPs[wlID] = m.allWEPs[wlID]
 			return set.RemoveItem
 		} else {
 			if _, ok := m.happyWEPs[wlID]; ok {
