@@ -16,8 +16,9 @@ Calico network policies **extend** the functionalities of Kubernetes network pol
 
 1. Create the namespace and NGINX service
 2. Configure default deny
-3. Allow access to NGINX
-4. Clean up
+3. Allow egress traffic from busybox
+4. Allow ingress traffic to NGINX
+5. Clean up
 
 ### 1. Create the namespace and nginx service
 
@@ -217,7 +218,7 @@ It will return the HTML of the google home page.
 
 We have allowed our access pod access to the outside internet and the nginx service using Calico Network Policies!
 
-## 7. Clean up namespace
+## 5. Clean up namespace
 
 Delete the advanced policy demo namespace to clean up this tutorial session and run the following commands to clear the Calico Network Policies.
 
