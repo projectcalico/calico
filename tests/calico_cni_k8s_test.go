@@ -871,12 +871,19 @@ var _ = Describe("Kubernetes CNI tests", func() {
 							Expect(string(out)).To(MatchRegexp(r))
 						}
 
+						if c.numIPv6IPs > 0 {
+							err := testutils.CheckSysctlValue("/proc/sys/net/ipv6/conf/eth0/accept_dad", "0")
+							Expect(err).NotTo(HaveOccurred())
+						}
+
 						out, err = exec.Command("ip", "addr", "show").Output()
 						Expect(err).NotTo(HaveOccurred())
 						inet := regexp.MustCompile(` {4}inet .*scope global`)
 						Expect(inet.FindAll(out, -1)).To(HaveLen(c.numIPv4IPs))
 						inetv6 := regexp.MustCompile(` {4}inet6 .*scope global`)
 						Expect(inetv6.FindAll(out, -1)).To(HaveLen(c.numIPv6IPs))
+						Expect(out).NotTo(ContainSubstring("scope global tentative"),
+							"Some IPv6 addresses marked as tentative; disabling DAD must have failed.")
 
 						return nil
 					})
