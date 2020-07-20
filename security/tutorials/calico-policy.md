@@ -16,9 +16,8 @@ Calico network policies **extend** the functionalities of Kubernetes network pol
 
 1. Create the namespace and NGINX service
 2. Configure default deny
-3. Allow kube-system
-4. Allow access to NGINX
-5. Clean up
+3. Allow access to NGINX
+4. Clean up
 
 ### 1. Create the namespace and nginx service
 
@@ -67,7 +66,7 @@ It returns the HTML of the google.com home page.
 
 ### 2. Lock down all traffic
 
-We will begin by using a default deny [Global Calico Network Policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) (which you can only do using Calico) that will help us adopt best practices in using a [zero trust network model]({{ site.baseurl }}/security/adopt-zero-trust) to secure our workloads. Note that Global Calico Network Policies don't need a namespace, this will effect all resources that match the selector. Kubernetes Network Policies cannot achieve this by themselves.
+We will begin by using a default deny [Global Calico Network Policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) (which you can only do using Calico) that will help us adopt best practices in using a [zero trust network model]({{ site.baseurl }}/security/adopt-zero-trust) to secure our workloads. Note that Global Calico Network Policies don't need a namespace, this will effect all resources that match the selector (which in our case is anything that doesn't match the kube-system namespace). Kubernetes Network Policies cannot achieve this by themselves. Note here that we are allowing important kube-system pods to still have wide permissions so that these pods can perform important tasks relevant to the kubernetes cluster.
 
 ```bash
 calicoctl create -f - <<EOF
@@ -76,7 +75,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: default-deny
 spec:
-  selector: all()
+  selector: projectcalico.org/namespace != "kube-system"
   types:
   - Ingress
   - Egress
@@ -117,53 +116,73 @@ wget: bad address 'google.com'
 
 Now that we have the defalt deny Global Calico Network Policy, all ingress / egress traffic is denied _everywhere_.
 
-### 3. Allow kube-system pods to communicate
+### 3. Allow egress traffic from busybox
 
-Kubernetes uses the kube-system namespace to create pods for the kubernetes cluster to function properly. Let's give this namespace wide permissions to allow these specific pods to function normally. It's important to note here that specific Calico Network Policies are namespaced resources that applies to workloads in that namespace whereas the Calico Global Network Policy is a non-namespaced resource and can be applied to any kind of endpoint (pods, VMs, host interfaces) independent of namespace.
+Let's create a Calico Network Policy which allows egress traffic from the busybox "access" pod.
 
 ```bash
 calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
-  name: allow-kube-system
-  namespace: kube-system
+  name: allow-busybox-egress
+  namespace: advanced-policy-demo
 spec:
-  selector: all()
+  selector: run == 'access'
   types:
-  - Ingress
   - Egress
-  ingress:
-  - action: Allow
   egress:
   - action: Allow
 EOF
 ```
 
-### 4. Allow traffic to Nginx from Busybox
+#### Verify egress - allowed traffic from "access" pod to google but not nginx
 
-Create another Calico Network Policy which allows traffic from the nginx pod from the busybox "access" pod.
+Now run the command to verify that we can access the nginx service.
+
+```bash
+wget -q --timeout=5 nginx -O -
+```
+
+It will return:
+
+```
+wget: download timed out
+```
+
+{: .no-select-button}
+
+Next, try to retrieve the home page of google.com.
+
+```bash
+wget -q --timeout=5 google.com -O -
+```
+
+It returns the html of googles home page.
+
+{: .no-select-button}
+
+Access to google is allowed because we have allowed all egress traffic from the busybox pod, however we still cannot access the nginx service because we have not allowed ingress traffic into that service. Let's do that now.
+
+### 4. Allow ingress traffic to nginx
+
+Let's create a Calico Network Policy that allows ingress traffic into the nginx service from the busybox.
 
 ```bash
 calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
-  name: allow-busybox-nginx
+  name: allow-nginx-ingress
   namespace: advanced-policy-demo
 spec:
-  selector: all()
+  selector: app == 'nginx'
   types:
   - Ingress
-  - Egress
   ingress:
   - action: Allow
     source:
       selector: run == 'access'
-    destination:
-      selector: app == 'nginx'
-  egress:
-  - action: Allow
 EOF
 ```
 
@@ -192,20 +211,19 @@ Next, try to retrieve the home page of google.com.
 wget -q --timeout=5 google.com -O -
 ```
 
-It returns:
-
-```
-wget: download timed out
-```
+It will return the HTML of the google home page.
 
 {: .no-select-button}
 
-Access to `google.com` times out because we have not allowed that in our network policy the default deny still applies here, only the traffic that we have specified through policies are allowed through.
+We have allowed our access pod access to the outside internet and the nginx service using Calico Network Policies!
 
 ## 7. Clean up namespace
 
-Delete the advanced policy demo namespace to clean up this tutorial session.
+Delete the advanced policy demo namespace to clean up this tutorial session and run the following commands to clear the Calico Network Policies.
 
 ```bash
+calicoctl delete policy allow-busybox-egress -n advanced-policy-demo
+calicoctl delete policy allow-busybox-egress -n advanced-policy-demo
+calicoctl delete gnp default-deny
 kubectl delete ns advanced-policy-demo
 ```
