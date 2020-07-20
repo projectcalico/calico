@@ -15,15 +15,16 @@
 package tc
 
 const (
-	MarkSeen                        = 0xca100000
-	MarkSeenMask                    = 0xfff00000
-	MarkSeenAndFlagsMask            = 0xfffe0000
-	MarkSeenBypass                  = MarkSeen | 0x10000
-	MarkSeenBypassMask              = 0xffff0000
-	MarkSeenBypassForward           = MarkSeen | 0x30000
-	MarkSeenBypassForwadSourceFixup = MarkSeen | 0x50000
-	MarkSeenBypassSkipRPF           = MarkSeen | 0x40000
-	MarkSeenBypassSkipRPFMask       = 0xffff0000
-	MarkSeenNATOutgoing             = MarkSeen | 0x80000
-	MarkSeenNATOutgoingMask         = 0xfff80000
+	MarkCalico                       = 0xc0000000
+	MarkCalicoMask                   = 0xf0000000
+	MarkSeen                         = MarkCalico | 0x1000000
+	MarkSeenMask                     = MarkCalicoMask | MarkSeen
+	MarkSeenBypass                   = MarkSeen | 0x2000000
+	MarkSeenBypassMask               = MarkSeenMask | MarkSeenBypass
+	MarkSeenBypassForward            = MarkSeenBypass | 0x300000
+	MarkSeenBypassForwardSourceFixup = MarkSeenBypass | 0x500000
+	MarkSeenBypassSkipRPF            = MarkSeenBypass | 0x400000
+	MarkSeenBypassSkipRPFMask        = MarkSeenBypassMask | 0xf00000
+	MarkSeenNATOutgoing              = MarkSeen | 0x800000
+	MarkSeenNATOutgoingMask          = MarkSeenMask | MarkSeenNATOutgoing
 )
