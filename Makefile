@@ -58,7 +58,7 @@ endif
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test 
 	rm -f *.created
 	rm -f crds.yaml
 	rm -rf config/
@@ -71,17 +71,27 @@ update-pins: update-libcalico-pin
 ###############################################################################
 # Building the binary
 ###############################################################################
-## Build the Calico network plugin and ipam plugins
 BIN=bin/$(ARCH)
-$(BIN)/calico $(BIN)/calico-ipam: $(LOCAL_BUILD_DEP) $(SRC_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-		go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico && \
-		go build -v -o $(BIN)/calico-ipam -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico-ipam'
-
-build: $(BIN)/calico $(BIN)/calico-ipam
+build: $(BIN)/install
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
+	
+## Build the Calico network plugin and ipam plugins
+$(BIN)/install binary: $(SRC_FILES)
+	-mkdir -p .go-pkg-cache
+	-mkdir -p $(BIN)
+	docker run --rm \
+	-e ARCH=$(ARCH) \
+	-e GOARCH=$(ARCH) \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	-v $(CURDIR)/$(BIN):/go/src/$(PACKAGE_NAME)/$(BIN):rw \
+	-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+	$(LOCAL_BUILD_MOUNTS) \
+	-w /go/src/$(PACKAGE_NAME) \
+	-e GOCACHE=/go-cache \
+	    $(CALICO_BUILD) sh -c 'go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico'
 
 ###############################################################################
 # Building the image
@@ -181,6 +191,8 @@ sub-tag-images-%:
 ###############################################################################
 ## Run the unit tests.
 ut: run-k8s-controller build $(BIN)/host-local
+	cp $(BIN)/install $(BIN)/calico-ipam
+	cp $(BIN)/install $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
@@ -201,7 +213,7 @@ ut-datastore: $(LOCAL_BUILD_DEP)
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
@@ -280,14 +292,20 @@ stop-etcd:
 ###############################################################################
 # We pre-build the test binary so that we can run it outside a container and allow it
 # to interact with docker.
-k8s-install/scripts/install_cni.test: k8s-install/scripts/*.go
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-		go test ./k8s-install/scripts -c --tags install_cni_test -o ./k8s-install/scripts/install_cni.test'
+pkg/install/install.test: pkg/install/*.go
+	-mkdir -p .go-pkg-cache
+	docker run --rm \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+		$(CALICO_BUILD) sh -c '\
+			cd /go/src/$(PACKAGE_NAME) && \
+			go test ./pkg/install -c --tags install_test -o ./pkg/install/install.test'
 
 .PHONY: test-install-cni
-## Test the install-cni.sh script
-test-install-cni: image k8s-install/scripts/install_cni.test
-	cd k8s-install/scripts && CONTAINER_NAME=$(BUILD_IMAGE) ./install_cni.test
+## Test the install
+test-install-cni: image pkg/install/install.test
+	cd pkg/install && CONTAINER_NAME=$(BUILD_IMAGE) ./install.test
 
 ###############################################################################
 # CI/CD
@@ -423,6 +441,6 @@ run-kube-proxy:
 
 .PHONY: test-watch
 ## Run the unit tests, watching for changes.
-test-watch: $(BIN)/calico $(BIN)/calico-ipam run-etcd run-k8s-apiserver
+test-watch: $(BIN)/install run-etcd run-k8s-apiserver
 	# The tests need to run as root
-	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch -skipPackage k8s-install -skipPackage vendor
+	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch -skipPackage pkg/install

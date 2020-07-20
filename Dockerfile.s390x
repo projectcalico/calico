@@ -4,11 +4,14 @@ LABEL maintainer "LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/
 
 ADD licenses/ /licenses
 ADD LICENSE /licenses/
+RUN mkdir -p /opt/cni/bin
+
+FROM scratch
+
+COPY --from=base /licenses /licenses
+COPY --from=base /opt/cni/bin /opt/cni/bin
 
 ADD bin/s390x/ /opt/cni/bin/
-ADD k8s-install/scripts/install-cni.sh /install-cni.sh
-ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
 ENV PATH=$PATH:/opt/cni/bin
-WORKDIR /opt/cni/bin
-CMD ["/opt/cni/bin/calico"]
+WORKDIR /opt/cni/bin]

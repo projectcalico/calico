@@ -15,6 +15,11 @@
 package main
 
 import (
+	"os"
+	"path"
+
+	"github.com/projectcalico/cni-plugin/pkg/install"
+	"github.com/projectcalico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/cni-plugin/pkg/plugin"
 )
 
@@ -22,5 +27,19 @@ import (
 var VERSION string
 
 func main() {
-	plugin.Main(VERSION)
+	// Use the name of the binary to determine which routine to run.
+	_, filename := path.Split(os.Args[0])
+	switch filename {
+	case "calico":
+		plugin.Main(VERSION)
+	case "calico-ipam":
+		ipamplugin.Main(VERSION)
+	case "install":
+		err := install.Install()
+		if err != nil {
+			panic(err)
+		}
+	default:
+		panic("Unknown binary name: " + filename)
+	}
 }

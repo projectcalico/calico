@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1-407
+FROM scratch
 
 ARG GIT_VERSION=unknown
 
@@ -22,18 +22,12 @@ LABEL name="Calico Networking for CNI" \
       release="1" \
       summary="Calico Networking for CNI" \
       description="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin" \
-      maintainer="laurence@tigera.io"
+      maintainer="maintainers@projectcalico.org"
 
-RUN mkdir /licenses
 ADD licenses/ /licenses
 ADD LICENSE /licenses/
 
 ADD bin/amd64/ /opt/cni/bin/
-ADD k8s-install/scripts/install-cni.sh /install-cni.sh
-ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
-
-RUN microdnf install hostname
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
-CMD ["/opt/cni/bin/calico"]
