@@ -159,7 +159,7 @@ Next, try to retrieve the home page of google.com.
 wget -q --timeout=5 google.com -O -
 ```
 
-It returns the html of googles home page.
+It will return the HTML of the google home page.
 
 {: .no-select-button}
 
@@ -187,7 +187,7 @@ spec:
 EOF
 ```
 
-#### Verify access - allowed traffic to nginx from "access" pod
+#### Verify access - allowed ingress traffic to nginx from "access" pod
 
 Now run the command to verify that we can access the nginx service.
 
