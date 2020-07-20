@@ -15,11 +15,13 @@
 package model_test
 
 import (
+	"net"
+
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"net"
 )
 
 var _ = DescribeTable(
@@ -40,31 +42,32 @@ var _ = DescribeTable(
 	Entry(
 		"global BGP peer without port",
 		"/calico/bgp/v1/global/peer_v4/10.0.0.5",
-		GlobalBGPPeerKey{PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}},
+		GlobalBGPPeerKey{PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port:179},
 		true,
 	),
 	Entry(
 		"global BGP peer with port",
 		"/calico/bgp/v1/global/peer_v4/10.0.0.5-500",
-		GlobalBGPPeerKey{PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port: "500"},
+		GlobalBGPPeerKey{PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port: 500},
 		true,
 	),
 	Entry(
 		"node BGP peer without port",
 		"/calico/bgp/v1/host/random-node-1/peer_v4/10.0.0.5",
-		NodeBGPPeerKey{Nodename: "random-node-1", PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}},
+		NodeBGPPeerKey{Nodename: "random-node-1", PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port:179},
 		false,
 	),
 	Entry(
 		"node BGP peer with port",
 		"/calico/bgp/v1/host/random-node-2/peer_v4/10.0.0.5-500",
-		NodeBGPPeerKey{Nodename: "random-node-2", PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port: "500"},
+		NodeBGPPeerKey{Nodename: "random-node-2", PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port: 500},
 		false,
 	),
 	Entry(
 		"node BGP IPv6 peer with port",
 		"/calico/bgp/v1/host/random-node-2/peer_v6/aabb:aabb::ffff-123",
-		NodeBGPPeerKey{Nodename: "random-node-2", PeerIP: cnet.IP{IP: net.ParseIP("aabb:aabb::ffff")}, Port: "123"},
+		NodeBGPPeerKey{Nodename: "random-node-2", PeerIP: cnet.IP{IP: net.ParseIP("aabb:aabb::ffff")}, Port: 123},
 		false,
 	),
 )
+
