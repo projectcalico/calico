@@ -57,10 +57,10 @@
 # it doesn't have a manifests only build and served without /archive prefix
 [context.master]
   command = '''
+  cp netlify/Gemfile Gemfile && bundle install
   make bin/helm
   export PATH=$PATH:$(pwd)/bin
-  # build for website
-  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
   '''
 
 [[redirects]]
