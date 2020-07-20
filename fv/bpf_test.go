@@ -2282,6 +2282,7 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			defer GinkgoRecover()
 			bpfsvcs[i], bpfeps[i] = dumpNATMaps(felixes[i])
 		}(i)
 	}
