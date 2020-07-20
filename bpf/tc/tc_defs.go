@@ -25,6 +25,6 @@ const (
 	MarkSeenBypassForwardSourceFixup = MarkSeenBypass | 0x00500000
 	MarkSeenBypassSkipRPF            = MarkSeenBypass | 0x00400000
 	MarkSeenBypassSkipRPFMask        = MarkSeenBypassMask | 0x00f00000
-	MarkSeenNATOutgoing              = MarkSeen | 0x00800000
-	MarkSeenNATOutgoingMask          = MarkSeenMask | MarkSeenNATOutgoing
+	MarkSeenNATOutgoing              = MarkSeenBypass | 0x00800000
+	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | MarkSeenNATOutgoing
 )
