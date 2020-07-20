@@ -17,7 +17,10 @@
   # generate the website which is served at root /
   jekyll build --config _config.yml,$(pwd)/netlify/_config_latest.yml --destination _site
 
-  # generate the website which is perma linked at /archive/<version>/
+  # generate only manifests served at /<version>
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
+
+  # generate the website which is served at /archive/<version>/
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
 
   mv _site/sitemap.xml _site/release-legacy-sitemap.xml
