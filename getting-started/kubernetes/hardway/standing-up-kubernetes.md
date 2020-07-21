@@ -14,9 +14,7 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
     1. Ensure the instances are in the same subnet, and security group policy allows them communicate freely with one another.
     1. Disable Source / Destination Checks on the Elastic Network Interface for each instance
 1. Install Docker on each node
-    1. `sudo apt update`
-    1. `sudo apt install docker.io`
-    1. `sudo systemctl enable docker`
+    1. sudo apt update -y && sudo apt install -y docker.io && sudo systemctl enable docker 
 
 ## Install Kubernetes
 
