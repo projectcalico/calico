@@ -19,6 +19,7 @@ import (
 	"net"
 	"reflect"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,8 +232,6 @@ type InternalDataplane struct {
 	managersWithRouteTables []ManagerWithRouteTables
 	ruleRenderer            rules.RuleRenderer
 
-	interfacePrefixes []string
-
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
 	// call apply().
 	dataplaneNeedsSync bool
@@ -281,15 +280,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.IptablesMarkNonCaliEndpoint)
 
 	dp := &InternalDataplane{
-		toDataplane:       make(chan interface{}, msgPeekLimit),
-		fromDataplane:     make(chan interface{}, 100),
-		ruleRenderer:      ruleRenderer,
-		interfacePrefixes: config.RulesConfig.WorkloadIfacePrefixes,
-		ifaceMonitor:      ifacemonitor.New(config.IfaceMonitorConfig),
-		ifaceUpdates:      make(chan *ifaceUpdate, 100),
-		ifaceAddrUpdates:  make(chan *ifaceAddrsUpdate, 100),
-		config:            config,
-		applyThrottle:     throttle.New(10),
+		toDataplane:      make(chan interface{}, msgPeekLimit),
+		fromDataplane:    make(chan interface{}, 100),
+		ruleRenderer:     ruleRenderer,
+		ifaceMonitor:     ifacemonitor.New(config.IfaceMonitorConfig),
+		ifaceUpdates:     make(chan *ifaceUpdate, 100),
+		ifaceAddrUpdates: make(chan *ifaceAddrsUpdate, 100),
+		config:           config,
+		applyThrottle:    throttle.New(10),
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
@@ -486,6 +484,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		tc.CleanUpProgramsAndPins()
 	}
 
+	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
+	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
+		interfaceRegexes[i] = "^" + r + ".*"
+	}
+
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		bpfMapContext := &bpf.MapContext{
@@ -507,12 +510,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create state BPF map.")
 		}
+		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		dp.RegisterManager(newBPFEndpointManager(
 			config.BPFLogLevel,
 			config.Hostname,
 			fibLookupEnabled,
 			config.RulesConfig.EndpointToHostAction == "DROP",
 			config.BPFDataIfacePattern,
+			workloadIfaceRegex,
 			ipSetIDAllocator,
 			config.VXLANMTU,
 			config.BPFNodePortDSREnabled,
@@ -599,10 +604,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
-	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
-		interfaceRegexes[i] = "^" + r + ".*"
-	}
 	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0)
 
