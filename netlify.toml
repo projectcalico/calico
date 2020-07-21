@@ -66,6 +66,13 @@
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
   '''
 
+# unforced redirect will redirect anything that's not inside /<version> to root at /
+[[redirects]]
+  from = "/v3.15/*"
+  to = "/:splat"
+  status = 301
+  force = false
+
 [[redirects]]
   from = "/archive/v3.14/*"
   to = "https://release-v3-14--calico.netlify.app/archive/v3.14/:splat"
