@@ -507,19 +507,19 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		if err == nil {
 			log.WithField("id", wlID).Info("Applied policy to workload")
 			if m.allWEPs[wlID] != nil {
-				if _, ok := m.happyWEPs[wlID]; !ok {
+				if m.happyWEPs[wlID] == nil {
 					log.WithField("id", wlID).Info("Adding workload interface to iptables allow list.")
 					m.happyWEPsDirty = true
 				}
 				m.happyWEPs[wlID] = m.allWEPs[wlID]
-			} else if _, ok := m.happyWEPs[wlID]; ok {
+			} else if m.happyWEPs[wlID] != nil {
 				// Workload was marked dirty because it's being deleted.  Clean up the happyWEPs entry.
 				delete(m.happyWEPs, wlID)
 				m.happyWEPsDirty = true
 			}
 			return set.RemoveItem
 		} else {
-			if _, ok := m.happyWEPs[wlID]; ok {
+			if m.happyWEPs[wlID] != nil {
 				log.WithField("id", wlID).WithError(err).Error(
 					"Failed to add policy to workload, removing from iptables allow list")
 				delete(m.happyWEPs, wlID)
