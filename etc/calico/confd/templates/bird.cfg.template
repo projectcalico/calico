@@ -203,6 +203,9 @@ protocol bgp Node_{{$id}} from bgp_template {
   rr client;
   rr cluster id {{$node_cluster_id}};
 {{- end}}
+{{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
 }
 {{- end}}
 {{end}}
