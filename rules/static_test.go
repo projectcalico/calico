@@ -225,11 +225,6 @@ var _ = Describe("Static", func() {
 									Action: JumpAction{Target: ChainToWorkloadDispatch}},
 								// Outgoing host endpoint chains.
 								{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
-								{
-									Match:   Match().MarkSingleBitSet(0x10),
-									Action:  AcceptAction{},
-									Comment: []string{"Policy explicitly accepted packet."},
-								},
 							},
 						}))
 					})
@@ -1206,11 +1201,6 @@ var _ = Describe("Static", func() {
 							Action: JumpAction{Target: ChainToWorkloadDispatch}},
 						// Outgoing host endpoint chains.
 						{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
-						{
-							Match:   Match().MarkSingleBitSet(0x10),
-							Action:  ReturnAction{},
-							Comment: []string{"Policy explicitly accepted packet."},
-						},
 					},
 				}))
 			})

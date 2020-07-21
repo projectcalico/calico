@@ -514,18 +514,19 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		},
 	)
 
-	// Accept packet if policies above set ACCEPT mark.
-	rules = append(rules,
-		Rule{
-			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
-			Action:  r.filterAllowAction,
-			Comment: []string{"Policy explicitly accepted packet."},
-		},
-	)
-
 	return []*Chain{{
 		Name:  ChainFilterForward,
 		Rules: rules,
+	}}
+}
+
+// StaticFilterForwardAppendRules returns rules which should be statically appended to the end of the filter
+// table's forward chain.
+func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []Rule {
+	return []Rule{{
+		Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
+		Action:  r.filterAllowAction,
+		Comment: []string{"Policy explicitly accepted packet."},
 	}}
 }
 
