@@ -138,7 +138,7 @@ func TestLoadGarbageProgram(t *testing.T) {
 	var insns asm.Insns
 	for i := 0; i < 256; i++ {
 		i := uint8(i)
-		insns = append(insns, asm.Insn{i,i,i,i,i,i,i,i})
+		insns = append(insns, asm.Insn{i, i, i, i, i, i, i, i})
 	}
 
 	fd, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")

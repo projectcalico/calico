@@ -125,6 +125,12 @@ func (t *TCPDump) MatchCount(name string) int {
 	return c
 }
 
+func (t *TCPDump) MatchCountFn(name string) func() int {
+	return func() int {
+		return t.MatchCount(name)
+	}
+}
+
 func (t *TCPDump) ResetCount(name string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()

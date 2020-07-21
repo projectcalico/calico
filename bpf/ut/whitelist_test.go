@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/bpf/tc"
 )
 
 // Usually a packet passes through 2 programs, HEP->WEP, WEP->HEP or WEP->WEP. These test
@@ -79,7 +80,7 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 	})
 
 	// Leaving node 1
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -147,7 +148,7 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
 	})
 
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -215,7 +216,7 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 		Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
 	})
 
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)

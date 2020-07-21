@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/tc"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -107,7 +108,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Leaving node 1
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(natedPkt)
@@ -143,7 +144,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Arriving at workload at node 2
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(natedPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -175,7 +176,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Response leaving node 2
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -211,7 +212,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	dumpCTMap(ctMap)
 
 	// Response arriving at workload at node 1
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		pktExp := gopacket.NewPacket(respPkt, layers.LayerTypeEthernet, gopacket.Default)
 		ipv4L := pktExp.Layer(layers.LayerTypeIPv4)
@@ -369,7 +370,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
+	skbMark = tc.MarkSeenBypassForwardSourceFixup // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
 	// Leaving node 1
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(encapedPkt)
@@ -477,7 +478,7 @@ func TestNATNodePort(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	skbMark = 0xca140000 // CALI_SKB_MARK_SKIP_RPF
+	skbMark = tc.MarkSeenBypassSkipRPF // CALI_SKB_MARK_SKIP_RPF
 
 	// Arriving at workload at node 2
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -503,9 +504,10 @@ func TestNATNodePort(t *testing.T) {
 		ctKey = ctr.ReverseNATKey()
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
-		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
+		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse),
+			fmt.Sprintf("Expected reverse conntrack entry but got %v", ctr))
 
-		// Whitlisted source side
+		// Whitelisted source side
 		Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
 		// Whitelisted destination side as well
 		Expect(ctr.Data().B2A.Whitelisted).To(BeTrue())
@@ -536,7 +538,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
+	skbMark = tc.MarkSeenBypassForwardSourceFixup // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
 
 	hostIP = node2ip
 
@@ -614,7 +616,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
 	})
 
-	skbMark = 0xca100000 | 0x30000 // CALI_SKB_MARK_BYPASS_FWD
+	skbMark = tc.MarkSeenBypassForward // CALI_SKB_MARK_BYPASS_FWD
 
 	// Response leaving to original source
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -762,7 +764,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -792,7 +794,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 		Expect(res.dataOut).To(Equal(respPkt))
 	})
 
-	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
 	// Response leaving to original source
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -938,7 +940,7 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
+	skbMark = tc.MarkSeenBypassForwardSourceFixup // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
 
 	hostIP = node1ip
 	var encapedGoPkt gopacket.Packet
@@ -1001,7 +1003,7 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca100000 | 0x30000 // CALI_SKB_MARK_BYPASS_FWD
+	skbMark = tc.MarkSeenBypassForward // CALI_SKB_MARK_BYPASS_FWD
 
 	// Response leaving to original source
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {

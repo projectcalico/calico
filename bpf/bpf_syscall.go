@@ -209,7 +209,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string) (ProgFD, error) {
 			log.Warn("Retry succeeded.")
 			return fd, nil
 		}
-		if err2 == unix.ENOSPC &&  logSize < maxLogSize {
+		if err2 == unix.ENOSPC && logSize < maxLogSize {
 			// Log buffer was too small.
 			log.Warn("Diagnostics buffer was too small, trying again with a larger buffer.")
 			logSize *= 2
@@ -237,7 +237,7 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint) (
 		defer C.free(logBuf)
 	}
 
-	C.bpf_attr_setup_load_prog(bpfAttr, unix.BPF_PROG_TYPE_SCHED_CLS, C.uint(len(insns)), cInsnBytes, cLicense,(C.uint)(logLevel), (C.uint)(logSize), logBuf)
+	C.bpf_attr_setup_load_prog(bpfAttr, unix.BPF_PROG_TYPE_SCHED_CLS, C.uint(len(insns)), cInsnBytes, cLicense, (C.uint)(logLevel), (C.uint)(logSize), logBuf)
 	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_LOAD, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 
 	if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
