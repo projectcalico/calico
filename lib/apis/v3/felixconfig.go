@@ -61,6 +61,9 @@ type FelixConfigurationSpec struct {
 	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
 	// Set to 0 to disable route refresh. [Default: 90s]
 	RouteRefreshInterval *metav1.Duration `json:"routeRefreshInterval,omitempty" configv1timescale:"seconds"`
+	// InterfaceRefreshInterval is the period at which Felix rescans local interfaces to verify their state.
+	// The rescan can be disabled by setting the interval to 0.
+	InterfaceRefreshInterval *metav1.Duration `json:"interfaceRefreshInterval,omitempty" configv1timescale:"seconds"`
 	// IptablesRefreshInterval is the period at which Felix re-checks the IP sets
 	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
 	// Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the
