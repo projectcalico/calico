@@ -42,7 +42,7 @@ var _ = DescribeTable(
 	Entry(
 		"global BGP peer without port",
 		"/calico/bgp/v1/global/peer_v4/10.0.0.5",
-		GlobalBGPPeerKey{PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port:179},
+		GlobalBGPPeerKey{PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port: 179},
 		true,
 	),
 	Entry(
@@ -54,7 +54,7 @@ var _ = DescribeTable(
 	Entry(
 		"node BGP peer without port",
 		"/calico/bgp/v1/host/random-node-1/peer_v4/10.0.0.5",
-		NodeBGPPeerKey{Nodename: "random-node-1", PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port:179},
+		NodeBGPPeerKey{Nodename: "random-node-1", PeerIP: cnet.IP{IP: net.ParseIP("10.0.0.5")}, Port: 179},
 		false,
 	),
 	Entry(
@@ -70,4 +70,3 @@ var _ = DescribeTable(
 		false,
 	),
 )
-

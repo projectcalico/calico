@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ type ServiceClusterIPBlock struct {
 // Community contains standard or large community value and its name.
 type Community struct {
 	// Name given to community value.
-	Name  string `json:"name,omitempty" validate:"required,name"`
+	Name string `json:"name,omitempty" validate:"required,name"`
 	// Value must be of format `aa:nn` or `aa:nn:mm`.
 	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
 	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
