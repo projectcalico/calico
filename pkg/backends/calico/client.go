@@ -559,8 +559,8 @@ func parseIPPort(ipPort string) (string, uint16) {
 		log.Debug("No custom port set for peer.")
 		return ipPort, 0
 	}
-	p, err:=strconv.ParseUint(port,0,16)
-	if err != nil{
+	p, err := strconv.ParseUint(port, 0, 16)
+	if err != nil {
 		log.Warning("Error parsing port.")
 		return ipPort, 0
 	}
