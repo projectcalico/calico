@@ -61,6 +61,10 @@ type BGPPeerSpec struct {
 	// NodeBGPSpec.IPv6Address specified.  The remote AS number comes from the remote
 	// node’s NodeBGPSpec.ASNumber, or the global default if that is not set.
 	PeerSelector string `json:"peerSelector,omitempty" validate:"omitempty,selector"`
+	// Option to keep the original nexthop field when routes are sent to a BGP Peer.
+	// Setting "true" configures the selected BGP Peers node to use the "next hop keep;"
+	// instead of "next hop self;"(default) in the specific branch of the Node on "bird.cfg".
+	KeepOriginalNextHop bool `json:"keepOriginalNextHop,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
