@@ -9,3 +9,4 @@ ADD bin/arm64 /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
+CMD ["/opt/cni/bin/install"]
