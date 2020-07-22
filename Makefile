@@ -275,16 +275,16 @@ dist/calicoctl:
 	  touch dist/calicoctl
 	-docker rm -f calicoctl
 
-dist/calico-cni-plugin dist/calico-ipam-plugin:
+dist/calico dist/calico-ipam:
 	-docker rm -f calico-cni
 	docker pull calico/cni:$(CNI_VER)
 	docker create --name calico-cni calico/cni:$(CNI_VER)
-	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
-	  test -e dist/calico-cni-plugin && \
-	  touch dist/calico-cni-plugin
-	docker cp calico-cni:/opt/cni/bin/calico-ipam dist/calico-ipam-plugin && \
-	  test -e dist/calico-ipam-plugin && \
-	  touch dist/calico-ipam-plugin
+	docker cp calico-cni:/opt/cni/bin/install dist/calico && \
+	  test -e dist/calico && \
+	  touch dist/calico
+	docker cp calico-cni:/opt/cni/bin/install dist/calico-ipam && \
+	  test -e dist/calico-ipam && \
+	  touch dist/calico-ipam
 	-docker rm -f calico-cni
 
 # Create images for containers used in the tests
@@ -365,12 +365,12 @@ remove-go-build-image:
 
 .PHONY: st
 ## Run the system tests
-st: remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
+st: remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
 	# Check versions of Calico binaries that ST execution will use.
 	docker run --rm -v $(CURDIR)/dist:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calicoctl version;	  /go/bin/calicoctl version; \
-	  echo; echo calico-cni-plugin -v;       /go/bin/calico-cni-plugin -v; \
-	  echo; echo calico-ipam-plugin -v;      /go/bin/calico-ipam-plugin -v; echo; \
+	  echo; echo calico -v;       /go/bin/calico -v; \
+	  echo; echo calico-ipam -v;      /go/bin/calico-ipam -v; echo; \
 	"
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)

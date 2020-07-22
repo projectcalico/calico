@@ -112,10 +112,10 @@ class Workload(object):
 
         command = ('echo \'{' +
                    '"name":"%s",' % self.network +
-                   '"type":"calico-cni-plugin",' +
+                   '"type":"calico",' +
                    etcd_json +
                    labels_json +
-                   '"ipam":{"type":"calico-ipam-plugin"%s}' % ip_json +
+                   '"ipam":{"type":"calico-ipam"%s}' % ip_json +
                    '}\' | ' +
                    'CNI_COMMAND=%s ' % add_or_del +
                    'CNI_CONTAINERID=%s ' % container_id +
@@ -124,7 +124,7 @@ class Workload(object):
                    cni_args +
                    'CNI_PATH=/code/dist ')
 
-        command = command + ip_args + '/code/dist/calico-cni-plugin'
+        command = command + ip_args + '/code/dist/calico'
         output = self.host.execute(command)
 
         if adding:

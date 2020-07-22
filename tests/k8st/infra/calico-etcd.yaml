@@ -229,7 +229,7 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: calico/cni:master
-          command: ["/install-cni.sh"]
+          command: ["/opt/cni/bin/install"]
           env:
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
