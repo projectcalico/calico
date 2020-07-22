@@ -42,6 +42,10 @@ const (
 	wireguardMarker = "*WIREGUARDMARKER*"
 )
 
+const (
+	numBaseFelixConfigs = 88
+)
+
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
 	// Define some common values
 	perNodeFelixKey := model.ResourceKey{
@@ -64,7 +68,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		Kind: apiv3.KindClusterInformation,
 		Name: "node.mynode",
 	}
-	numFelixConfigs := 87
+	numFelixConfigs := numBaseFelixConfigs
 	numClusterConfigs := 5
 	numNodeClusterConfigs := 4
 	felixMappedNames := map[string]interface{}{
