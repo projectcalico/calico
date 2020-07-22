@@ -40,6 +40,7 @@ var _ = Describe("Constructor test", func() {
 		dpConfig = intdataplane.Config{
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
+				ResyncInterval:    configParams.RouteRefreshInterval,
 			},
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),

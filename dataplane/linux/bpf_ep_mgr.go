@@ -33,10 +33,10 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/polprog"
-	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
+	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/ratelimited"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -77,8 +77,8 @@ type bpfEndpointManager struct {
 	vxlanMTU         int
 	dsrEnabled       bool
 
-	ipSetMap bpf.Map
-	stateMap bpf.Map
+	ipSetMap            bpf.Map
+	stateMap            bpf.Map
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable *iptables.Table
 
@@ -411,7 +411,7 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 }
 
 func (m *bpfEndpointManager) ensureStarted() {
-	m.startupOnce.Do(func(){
+	m.startupOnce.Do(func() {
 		log.Info("Starting map cleanup runner.")
 		m.mapCleanupRunner.Start(context.Background())
 	})

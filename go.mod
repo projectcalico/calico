@@ -11,20 +11,20 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
 	github.com/golang/protobuf v1.3.2
-	github.com/golangci/golangci-lint v1.27.0 // indirect
 	github.com/google/gopacket v1.1.17
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
-	github.com/hashicorp/go-version v1.2.0
 	github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
+	github.com/kr/text v0.2.0 // indirect
 	github.com/libp2p/go-reuseport v0.0.1
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200715213032-ef6b0a698105
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200722130801-a44ea3647ccd
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
 	github.com/projectcalico/typha v0.7.3-0.20200715220106-585d49a6de00
 	github.com/prometheus/client_golang v1.0.0
@@ -35,8 +35,11 @@ require (
 	github.com/vishvananda/netlink v1.0.0
 	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5
+	golang.org/x/tools v0.0.0-20200502202811-ed308ab3e770 // indirect
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/grpc v1.23.1
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
+	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v0.17.2

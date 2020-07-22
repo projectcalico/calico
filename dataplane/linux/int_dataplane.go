@@ -923,7 +923,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
-				Match:  iptables.Match().InInterface(prefix + "+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
+				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
 				Action: iptables.DropAction{},
 			})
 		}
