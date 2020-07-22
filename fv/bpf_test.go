@@ -464,7 +464,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					}
 
 					// Check start-of-day number of interfaces.
-					Eventually(numJumpMaps, "10s", "200ms").Should(
+					Eventually(numJumpMaps, "15s", "200ms").Should(
 						BeNumerically("==", expJumpMaps(len(w))),
 						"Unexpected number of jump maps at start of day")
 
