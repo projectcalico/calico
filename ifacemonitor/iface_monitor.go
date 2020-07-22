@@ -48,8 +48,10 @@ type InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int
 type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type Config struct {
-	// List of interface names that dataplane receives no callbacks from them.
+	// InterfaceExcludes is a list of interface names that we don't want callbacks for.
 	InterfaceExcludes []*regexp.Regexp
+	// ResyncInterval is the interval at which we rescan all the interfaces.  If <0 rescan is disabled.
+	ResyncInterval time.Duration
 }
 type InterfaceMonitor struct {
 	Config
@@ -65,8 +67,14 @@ type InterfaceMonitor struct {
 
 func New(config Config) *InterfaceMonitor {
 	// Interface monitor using the real netlink, and resyncing every 10 seconds.
-	resyncTicker := time.NewTicker(10 * time.Second)
-	return NewWithStubs(config, &netlinkReal{}, resyncTicker.C)
+	var resyncC <-chan time.Time
+	if config.ResyncInterval > 0 {
+		log.WithField("interval", config.ResyncInterval).Info(
+			"configured to periodically rescan interfaces.")
+		resyncTicker := time.NewTicker(config.ResyncInterval)
+		resyncC = resyncTicker.C
+	}
+	return NewWithStubs(config, &netlinkReal{}, resyncC)
 }
 
 func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Time) *InterfaceMonitor {

@@ -153,6 +153,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			Hostname: configParams.FelixHostname,
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
+				ResyncInterval:    configParams.InterfaceRefreshInterval,
 			},
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
