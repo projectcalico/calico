@@ -42,10 +42,8 @@ type watcherCache struct {
 	oldResources         map[string]cacheEntry
 	results              chan<- interface{}
 	hasSynced            bool
-	errors               int
 	resourceType         ResourceType
 	currentWatchRevision string
-	errorThreshold       int
 }
 
 var (
@@ -66,12 +64,11 @@ type cacheEntry struct {
 // Create a new watcherCache.
 func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}) *watcherCache {
 	return &watcherCache{
-		logger:         logrus.WithField("ListRoot", model.ListOptionsToDefaultPathRoot(resourceType.ListInterface)),
-		client:         client,
-		resourceType:   resourceType,
-		results:        results,
-		resources:      make(map[string]cacheEntry, 0),
-		errorThreshold: DefaultErrorThreshold,
+		logger:       logrus.WithField("ListRoot", model.ListOptionsToDefaultPathRoot(resourceType.ListInterface)),
+		client:       client,
+		resourceType: resourceType,
+		results:      results,
+		resources:    make(map[string]cacheEntry, 0),
 	}
 }
 
@@ -117,30 +114,14 @@ mainLoop:
 				kvp.Value = nil
 				wc.handleWatchListEvent(kvp)
 			case api.WatchError:
-				// Handle a WatchError.  First determine if the error type indicates that the
-				// watch has closed, and if so we'll need to resync and create a new watcher.
-				wc.results <- event.Error
+				// Handle a WatchError. This error triggered from upstream, all type
+				// of WatchError are treated equally,log the Error and trigger a full resync.
 
-				if e, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
-					wc.logger.Debug("Received watch terminated error - recreate watcher")
-					if !e.ClosedByRemote {
-						// If the watcher was not closed by remote, reset the currentWatchRevision.  This will
-						// trigger a full resync rather than simply trying to watch from the last event
-						// revision.
-						wc.logger.Debug("Watch was not closed by remote - full resync required")
-						wc.currentWatchRevision = ""
-						wc.onError()
-					}
-					wc.resyncAndCreateWatcher(ctx)
-				} else {
-					wc.onError()
-				}
+				wc.logger.WithField("EventType", event.Type).Errorf("Watch error received from Upstream")
+				wc.onWaitForDatastore()
+				wc.currentWatchRevision = ""
+				wc.resyncAndCreateWatcher(ctx)
 
-				if wc.errors > wc.errorThreshold {
-					// Trigger a full resync if we're past the error threshold.
-					wc.currentWatchRevision = ""
-					wc.resyncAndCreateWatcher(ctx)
-				}
 			default:
 				// Unknown event type - not much we can do other than log.
 				wc.logger.WithField("EventType", event.Type).Errorf("Unknown event type received from the datastore")
@@ -204,7 +185,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
-				wc.onError()
+				wc.onWaitForDatastore()
 				select {
 				case <-time.After(ListRetryInterval):
 					continue
@@ -265,7 +246,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			//      watch retry.  This would require some care to ensure the correct errors are captured
 			//      for the different datastore drivers.
 			wc.logger.WithError(err).WithField("performFullResync", performFullResync).Info("Failed to create watcher")
-			wc.onError()
+			wc.onWaitForDatastore()
 			performFullResync = true
 			continue
 		}
@@ -297,7 +278,6 @@ func (wc *watcherCache) finishResync() {
 		wc.logger.Info("Sending synced update")
 		wc.results <- api.InSync
 		wc.hasSynced = true
-		wc.errors = 0
 	}
 
 	// If the watcher failed at any time, we end up recreating a watcher and storing off
@@ -330,7 +310,6 @@ func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 	if wc.resourceType.UpdateProcessor == nil {
 		// No update processor - handle immediately.
 		wc.handleConvertedWatchEvent(kvp)
-		wc.errors = 0
 		return
 	}
 
@@ -343,8 +322,6 @@ func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 	// If we hit a conversion error, notify the main syncer.
 	if err != nil {
 		wc.results <- err
-	} else {
-		wc.errors = 0
 	}
 }
 
@@ -432,13 +409,12 @@ func (wc *watcherCache) markAsValid(resourceKey string) {
 	}
 }
 
-// onError signals to the syncer that this watcherCache is not in-sync if the number of consecutive errors
-// exceeds the error threshold.  See finishResync() for how the watcherCache goes back to in-sync.
-func (wc *watcherCache) onError() {
-	wc.errors++
-	if wc.hasSynced && wc.errors > wc.errorThreshold {
-		wc.logger.WithFields(logrus.Fields{"errors": wc.errors, "threshold": wc.errorThreshold}).Debugf("Exceeded error threshold")
-		wc.hasSynced = false
+// If a syncer is in-sync state, the onWaitForDatastore method, sends WaitForDatastore event.
+// See finishResync() for how the watcherCache goes back to in-sync.
+func (wc *watcherCache) onWaitForDatastore() {
+	wc.logger.Debug("Send WaitforDatastore event if sync isn't in-sync")
+	if wc.hasSynced {
 		wc.results <- api.WaitForDatastore
+		wc.hasSynced = false
 	}
 }

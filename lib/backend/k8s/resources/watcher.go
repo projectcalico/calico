@@ -20,11 +20,11 @@ import (
 	"sync/atomic"
 
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kwatch "k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 const (
@@ -104,16 +104,9 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 		case event, ok := <-crw.k8sWatch.ResultChan():
 			var events []*api.WatchEvent
 			if !ok {
-				// The channel is closed so send a terminating watcher event indicating the watch was
-				// closed by the remote.
-				crw.logCxt.Debug("Watcher terminated by remote")
-				events = []*api.WatchEvent{{
-					Type: api.WatchError,
-					Error: cerrors.ErrorWatchTerminated{
-						Err:            fmt.Errorf("terminating error event from Kubernetes watcher: closed by remote"),
-						ClosedByRemote: true,
-					},
-				}}
+				// Watch channel is closed by remote k8s hence, return from loop.
+				crw.logCxt.Debug("Watcher channel closed by remote")
+				return
 			} else {
 				// We have a valid event, so convert it.
 				events = crw.convertEvent(event)
@@ -127,16 +120,6 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 				select {
 				case crw.resultChan <- *e:
 					crw.logCxt.Debug("Kubernetes event converted and sent to backend watcher")
-
-					// If this is an error event, check to see if it's a terminating one (the
-					// convertEvent method will decide that).  If so, terminate this watcher.
-					if e.Type == api.WatchError {
-						crw.logCxt.WithError(e.Error).Debug("Watch event was an error event type")
-						if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
-							crw.logCxt.Debug("Watch event indicates a terminated watcher")
-							return
-						}
-					}
 				case <-crw.context.Done():
 					crw.logCxt.Debug("Process watcher done event during watch event in kdd client")
 					return
@@ -160,10 +143,8 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) []*api.WatchEv
 	case kwatch.Error:
 		// An error directly from the k8s watcher is a terminating event.
 		return []*api.WatchEvent{{
-			Type: api.WatchError,
-			Error: cerrors.ErrorWatchTerminated{
-				Err: fmt.Errorf("terminating error event from Kubernetes watcher: %v", kevent.Object),
-			},
+			Type:  api.WatchError,
+			Error: apierrors.FromObject(kevent.Object),
 		}}
 	case kwatch.Deleted:
 		fallthrough

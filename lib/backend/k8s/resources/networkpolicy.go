@@ -437,32 +437,18 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 		select {
 		case e, ok = <-npw.crdNPWatch.ResultChan():
 			if !ok {
-				// We shouldn't get a closed channel without first getting a terminating error,
-				// so write a warning log and convert to a termination error.
-				log.Warn("Calico NP channel closed")
-				e = api.WatchEvent{
-					Type: api.WatchError,
-					Error: cerrors.ErrorWatchTerminated{
-						ClosedByRemote: true,
-						Err:            errors.New("Calico NP watch channel closed"),
-					},
-				}
+				// Upstream channel is closed by k8s, hence exit from processing watch events
+				log.Debug("Calico NP channel closed by remote.")
+				return
 			}
 			log.Debug("Processing Calico NP event")
 			isCRDEvent = true
 
 		case e, ok = <-npw.k8sNPWatch.ResultChan():
 			if !ok {
-				// We shouldn't get a closed channel without first getting a terminating error,
-				// so write a warning log and convert to a termination error.
-				log.Warn("Kubernetes NP channel closed")
-				e = api.WatchEvent{
-					Type: api.WatchError,
-					Error: cerrors.ErrorWatchTerminated{
-						ClosedByRemote: true,
-						Err:            errors.New("Kubernetes NP watch channel closed"),
-					},
-				}
+				// Upstream channel is closed by k8s, hence exit from processing watch events
+				log.Debug("Kubernetes NP channel closed by remote.")
+				return
 			}
 			log.Debug("Processing Kubernetes NP event")
 			isCRDEvent = false
@@ -489,11 +475,10 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 			if !ok {
 				log.WithField("event", e).Error(
 					"Resource returned from watch does not implement the ObjectMetaAccessor interface")
+				// Handle this error as WatchError, this will force to resync the watcher
 				e = api.WatchEvent{
-					Type: api.WatchError,
-					Error: cerrors.ErrorWatchTerminated{
-						Err: errors.New("Resource returned from watch does not implement the ObjectMetaAccessor interface"),
-					},
+					Type:  api.WatchError,
+					Error: errors.New("Resource returned from watch does not implement the ObjectMetaAccessor interface"),
 				}
 			}
 			if isCRDEvent {
@@ -514,14 +499,9 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 		// Send the processed event.
 		select {
 		case npw.resultChan <- e:
-			// If this is an error event, check to see if it's a terminating one.
-			// If so, terminate this watcher.
+			// If this is a Watcherror event, bubble up error event.
 			if e.Type == api.WatchError {
-				log.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
-				if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
-					log.Debug("Watch terminated event")
-					return
-				}
+				log.Debug("Kubernetes watcher error converted to backend watcher error event")
 			}
 
 		case <-npw.context.Done():

@@ -393,32 +393,18 @@ func (pw *profileWatcher) processProfileEvents() {
 		select {
 		case e, ok = <-pw.k8sNSWatch.ResultChan():
 			if !ok {
-				// We shouldn't get a closed channel without first getting a terminating error,
-				// so write a warning log and convert to a termination error.
-				log.Warn("Profile, namespace watch channel closed.")
-				e = api.WatchEvent{
-					Type: api.WatchError,
-					Error: cerrors.ErrorWatchTerminated{
-						ClosedByRemote: true,
-						Err:            errors.New("Profile namespace watch channel closed."),
-					},
-				}
+				// Watch channel is closed by upstream hence, return from loop.
+				log.Debug("Profile, namespace watch channel closed by remote.")
+				return
 			}
 			log.Debug("Processing Namespace event")
 			isNsEvent = true
 
 		case e, ok = <-pw.k8sSAWatch.ResultChan():
 			if !ok {
-				// We shouldn't get a closed channel without first getting a terminating error,
-				// so write a warning log and convert to a termination error.
-				log.Warn("Profile, serviceaccount watch channel closed.")
-				e = api.WatchEvent{
-					Type: api.WatchError,
-					Error: cerrors.ErrorWatchTerminated{
-						ClosedByRemote: true,
-						Err:            errors.New("Profile serviceaccount watch channel closed."),
-					},
-				}
+				// Watch channel is closed by upstream hence, return from loop.
+				log.Debug("Profile, serviceaccount watch channel closed by remote.")
+				return
 			}
 			log.Debug("Processing ServiceAccount event")
 			isNsEvent = false
@@ -446,13 +432,8 @@ func (pw *profileWatcher) processProfileEvents() {
 			if !ok {
 				log.WithField("event", e).Error(
 					"Resource returned from watch does not implement ObjectMetaAccessor interface")
-				e = api.WatchEvent{
-					Type: api.WatchError,
-					Error: cerrors.ErrorWatchTerminated{
-						ClosedByRemote: true,
-						Err:            errors.New("Profile value does not implement ObjectMetaAccessor interface."),
-					},
-				}
+				// handle this Error as a Watcher termination by remote.
+				return
 			} else {
 				if isNsEvent {
 					pw.k8sNSRev = oma.GetObjectMeta().GetResourceVersion()
@@ -468,14 +449,9 @@ func (pw *profileWatcher) processProfileEvents() {
 		// Send the processed event.
 		select {
 		case pw.resultChan <- e:
-			// If this is an error event. check to see if it's a terminating one.
-			// If so, terminate this watcher.
+			// If this is an error event. bubble up the error event.
 			if e.Type == api.WatchError {
-				log.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
-				if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
-					log.Debug("Watch terminated event")
-					return
-				}
+				log.Debug("Kubernetes event converted to backend watcher error event")
 			}
 
 		case <-pw.context.Done():

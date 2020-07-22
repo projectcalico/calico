@@ -135,53 +135,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUnchanged()
 	})
 
-	It("should return WaitForDatastore on multiple consecutive watch errors", func() {
-		By("Sending errors to trigger a WaitForDatastore status update")
-
-		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
-		setErrorThreshold(6)
-
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
-		rs.clientListResponse(r1, emptyList)
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
-		rs.ExpectStatusUpdate(api.InSync)
-
-		rs.clientWatchResponse(r1, genError)
-		rs.ExpectStatusUnchanged()
-		for i := 0; i < watchersyncer.DefaultErrorThreshold-1; i++ {
-			rs.clientListResponse(r1, genError)
-			rs.ExpectStatusUnchanged()
-		}
-
-		rs.clientListResponse(r1, genError)
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
-
-		rs.clientListResponse(r1, emptyList)
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
-		rs.ExpectStatusUpdate(api.InSync)
-
-		By("Going back in-sync and driving WatchError events up to the error threshold")
-		genWatchError := api.WatchEvent{
-			Type:  api.WatchError,
-			Error: genError,
-		}
-
-		rs.clientWatchResponse(r1, nil)
-
-		// Watch is set but is now returning a generic WatchErrors
-		for i := 0; i < watchersyncer.DefaultErrorThreshold; i++ {
-			rs.sendEvent(r1, genWatchError)
-			rs.ExpectStatusUnchanged()
-		}
-
-		rs.sendEvent(r1, genWatchError)
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
-	})
-
 	It("should handle reconnection if watchers fail to be created", func() {
-		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
-		setErrorThreshold(3)
 
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -220,16 +174,11 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r1, genError)
-
-		for i := 0; i < watchersyncer.DefaultErrorThreshold; i++ {
-			rs.clientListResponse(r1, genError)
-		}
-
-		// We've exceeded the default error threshold
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		//rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r1, nil)
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, notSupported)
@@ -286,9 +235,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 	It("Should handle reconnection and syncing when the watcher sends a watch terminated error", func() {
 
-		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
-		setErrorThreshold(0)
-
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
@@ -312,26 +258,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 		// Watch fails, but gets created again immediately.  This should happen without
 		// additional pauses.
-		rs.expectAllEventsHandled()
-	})
-
-	It("Should not return WaitForDatastore on multiple watch errors due to ClosedByRemote exceeding error threshold", func() {
-		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
-		setErrorThreshold(0)
-
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
-		rs.clientListResponse(r1, emptyList)
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
-		rs.ExpectStatusUpdate(api.InSync)
-		rs.clientWatchResponse(r1, nil)
-
-		rs.sendEvent(r1, api.WatchEvent{
-			Type:  api.WatchError,
-			Error: cerrors.ErrorWatchTerminated{Err: dsError, ClosedByRemote: true},
-		})
-
-		rs.ExpectStatusUnchanged()
 		rs.expectAllEventsHandled()
 	})
 
@@ -365,9 +291,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		By("Syncing no results for resource 2, failing to create a watch, retrying successfully.")
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, genError)
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r2, emptyList)
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r2, nil)
 		time.Sleep(130 * watchersyncer.WatchPollInterval / 100)
 		rs.expectAllEventsHandled()
@@ -384,7 +310,12 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Type:  api.WatchError,
 			Error: cerrors.ErrorWatchTerminated{Err: dsError},
 		})
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r3, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.clientWatchResponse(r3, nil)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r3, nil)
 		// All events should be handled.
 		rs.expectAllEventsHandled()
 
@@ -446,8 +377,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 		// The retry thread will be blocked for the watch poll interval.
 		rs.clientWatchResponse(r1, genError)
-		rs.ExpectStatusUnchanged()
 		time.Sleep(watchersyncer.WatchPollInterval)
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		By("returning a sync list with one entry removed and a new one added")
 		rs.clientListResponse(r1, &model.KVPairList{
@@ -458,6 +389,10 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				eventL1Added4.New,
 			},
 		})
+
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
 		rs.clientWatchResponse(r1, nil)
 
 		By("Expecting new events for the first three entries followed by an add and then the delete")
@@ -500,7 +435,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Type:  api.WatchError,
 			Error: cerrors.ErrorWatchTerminated{Err: dsError},
 		})
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, &model.KVPairList{
 			Revision: "12347",
 			KVPairs: []*model.KVPair{
@@ -508,8 +443,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				eventL1Modified4_2.New,
 			},
 		})
-		rs.ExpectStatusUnchanged()
-		rs.clientWatchResponse(r1, nil)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
 
 		By("Expecting mod, delete, mod updates")
 		rs.ExpectUpdates([]api.Update{
@@ -537,8 +472,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		eventL2Added1 := addEvent(l2Key1)
 		eventL2Added2 := addEvent(l2Key2)
 		eventL2Modified1 := modifiedEvent(l2Key1)
-		eventL2Modified1_2 := modifiedEvent(l2Key1)
-		eventL2Modified2 := modifiedEvent(l2Key2)
 		eventL1Delete1 := deleteEvent(l1Key1)
 
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -597,53 +530,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				UpdateType: api.UpdateTypeKVDeleted,
 			},
 		}})
-
-		// Send in: an add, an update, a parse error and another update.
-		// -  An OnUpdate with 2 updates (the error will spit up the update)
-		// -  An OnUpdate with 1 update
-		// -  A parse error
-		rs.sendEvent(r1, eventL1Added1)
-		// Pause a little here because the previous watch event is on a different goroutine so
-		// we need to ensure it's been processed in a reliable order.
-		time.Sleep(100 * time.Millisecond)
-		rs.sendEvent(r2, eventL2Modified1_2)
-		rs.sendEvent(r2, eventL2Modified2)
-		rs.sendEvent(r2, api.WatchEvent{
-			Type: api.WatchError,
-			Error: cerrors.ErrorParsingDatastoreEntry{
-				RawKey:   "abcdef",
-				RawValue: "aabbccdd",
-			},
-		})
-		rs.sendEvent(r2, eventL2Modified1)
-
-		// Pause a little before unblocking the handler to allow the updates to be
-		// consolidated.
-		time.Sleep(100 * time.Millisecond)
-		rs.UnblockUpdateHandling()
-		rs.ExpectOnUpdates([][]api.Update{
-			{
-				{
-					KVPair:     *eventL1Added1.New,
-					UpdateType: api.UpdateTypeKVNew,
-				},
-				{
-					KVPair:     *eventL2Modified1_2.New,
-					UpdateType: api.UpdateTypeKVUpdated,
-				},
-				{
-					KVPair:     *eventL2Modified2.New,
-					UpdateType: api.UpdateTypeKVUpdated,
-				},
-			},
-			{
-				{
-					KVPair:     *eventL2Modified1.New,
-					UpdateType: api.UpdateTypeKVUpdated,
-				},
-			},
-		})
-		rs.ExpectParseError("abcdef", "aabbccdd")
 	})
 
 	It("should emit all events when stop is called", func() {
@@ -827,10 +713,6 @@ func setWatchIntervals(listRetryInterval, watchPollInterval time.Duration) {
 	watchersyncer.WatchPollInterval = watchPollInterval
 }
 
-func setErrorThreshold(t int) {
-	watchersyncer.DefaultErrorThreshold = t
-}
-
 // Fake converter used to cover error and update handling paths.
 type fakeConverter struct {
 	i int
@@ -977,7 +859,7 @@ type watcherSyncerTester struct {
 
 // Call to test that all of the client and watcher events have been processed.
 // Note that an unhandled event could easily be a problem with the test rather
-// than the WatcherSyncer.
+// than the watcherSyncer.
 func (rst *watcherSyncerTester) expectAllEventsHandled() {
 	log.Infof("Expecting all events to have been handled")
 	for _, l := range rst.lws {
@@ -1014,13 +896,12 @@ func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event ap
 	log.Info("Previous watcher terminated (if any)")
 
 	if event.Type == api.WatchError {
-		if _, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
-			// This is a terminating event.  Our test framework will shut down the previous
-			// watcher as part of the creation of the new one.  Increment the init wait group
-			// in the watcher which will be decremented once the old one has fully terminated.
-			log.WithField("Name", name).Info("Watcher error will trigger restart - increment termination count")
-			rst.lws[name].termWg.Add(1)
-		}
+		// Watch errors are treated as a terminating event.  Our test framework will shut down the previous
+		// watcher as part of the creation of the new one.  Increment the init wait group
+		// in the watcher which will be decremented once the old one has fully terminated.
+		log.WithField("Name", name).Info("Watcher error will trigger restart - increment termination count")
+		rst.lws[name].termWg.Add(1)
+
 	}
 
 	log.WithField("Name", name).Info("Sending event")
@@ -1029,11 +910,9 @@ func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event ap
 	if event.Type == api.WatchError {
 		// Finally, since this is a terminating event then we expect a corresponding Stop()
 		// invocation (now that the event has been sent).
-		if _, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
-			log.WithField("Name", name).Info("Expecting a stop invocation")
-			rst.expectStop(r)
-			log.WithField("Name", name).Info("Stop invoked")
-		}
+		log.WithField("Name", name).Info("Expecting a stop invocation")
+		rst.expectStop(r)
+		log.WithField("Name", name).Info("Stop invoked")
 	}
 }
 
