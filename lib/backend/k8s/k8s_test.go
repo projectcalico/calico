@@ -795,7 +795,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
 		})
 
-		By("Getting a Global Network Policy that does noe exist", func() {
+		By("Getting a Global Network Policy that does not exist", func() {
 			_, err := c.Get(ctx, model.ResourceKey{Name: "my-non-existent-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
 			Expect(err).To(HaveOccurred())
 		})

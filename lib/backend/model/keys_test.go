@@ -185,7 +185,7 @@ var _ = DescribeTable(
 		false,
 	),
 	Entry(
-		"poorly formated IP pool",
+		"poorly formatted IP pool",
 		"/calico/v1/ipam/v4/pool/577559",
 		nil,
 		true,

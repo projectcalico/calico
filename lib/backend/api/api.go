@@ -37,7 +37,7 @@ const (
 	// concurrently.
 	ResyncInProgress
 	// InSync means the Syncer has now sent all the existing keys in the
-	// datastore and the user of hte API has the full picture.
+	// datastore and the user of the API has the full picture.
 	InSync
 )
 

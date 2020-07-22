@@ -317,7 +317,7 @@ with specific kinds of IP traffic. Traffic that matches a set of rule
 criteria will be accepted or dropped, depending on the rule.
 
 The 'tags' are a list of classifiers that apply to each endpoint that
-refences the profile. The purpose of the tags is to allow for rules in
+references the profile. The purpose of the tags is to allow for rules in
 other profiles/policies to refer to profiles by name, rather than by
 membership.
 
