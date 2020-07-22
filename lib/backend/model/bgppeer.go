@@ -29,10 +29,11 @@ import (
 )
 
 var (
-	matchGlobalBGPPeer = regexp.MustCompile("^/?calico/bgp/v1/global/peer_v./([^/]+)$")
-	matchHostBGPPeer   = regexp.MustCompile("^/?calico/bgp/v1/host/([^/]+)/peer_v./([^/]+)$")
-	typeBGPPeer        = reflect.TypeOf(BGPPeer{})
-	ipPortSeparator    = "-"
+	matchGlobalBGPPeer        = regexp.MustCompile("^/?calico/bgp/v1/global/peer_v./([^/]+)$")
+	matchHostBGPPeer          = regexp.MustCompile("^/?calico/bgp/v1/host/([^/]+)/peer_v./([^/]+)$")
+	typeBGPPeer               = reflect.TypeOf(BGPPeer{})
+	ipPortSeparator           = "-"
+	defaultPort        uint16 = 179
 )
 
 type NodeBGPPeerKey struct {
@@ -211,15 +212,15 @@ func extractIPAndPort(ipPort string) ([]byte, uint16) {
 		port, err := strconv.ParseUint(arr[1], 0, 16)
 		if err != nil {
 			log.Warningf("Error extracting port. %#v", err)
-			return []byte(ipPort), 179
+			return []byte(ipPort), defaultPort
 		}
 		return []byte(arr[0]), uint16(port)
 	}
-	return []byte(ipPort), 179
+	return []byte(ipPort), defaultPort
 }
 
 func combineIPAndPort(ip net.IP, port uint16) string {
-	if port == 0 || port == 179 {
+	if port == 0 || port == defaultPort {
 		return ip.String()
 	} else {
 		strPort := strconv.Itoa(int(port))
