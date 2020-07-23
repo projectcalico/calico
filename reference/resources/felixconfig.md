@@ -39,6 +39,7 @@ spec:
 
 | Field                              | Description                 | Accepted Values   | Schema | Default    |
 |------------------------------------|-----------------------------|-------------------|--------|------------|
+| awsSrcDstCheck                     | Controls automatically setting {% include open-new-window.html text='source-destination-check' url='https://docs.aws.amazon.com/vpc/latest/userguide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck' %} on an AWS EC2 instance running Felix. Setting the value to `Enable` will set the check value in the instance description to `true`. For `Disable`, the check value will be `false`. Setting must be `Disable` if you want the EC2 instance to process traffic not matching the host interface IP address. For example, EKS cluster using Calico CNI with `VXLANMode=CrossSubnet`. Check [IAM role and profile configuration](#aws-iam-rolepolicy-for-source-destination-check-configuration) for setting the necessary permission for this setting to work.| DoNothing, Enable, Disable | string | `DoNothing` |
 | chainInsertMode                    | Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule at the top of the chain or by appending a rule at the bottom. `Insert` is the safe default since it prevents {{site.prodname}}'s rules from being bypassed.  If you switch to `Append` mode, be sure that the other rules in the chains signal acceptance by falling through to the {{site.prodname}} rules, otherwise the {{site.prodname}} policy will be bypassed. | Insert, Append | string | `Insert` |
 | defaultEndpointToHostAction        | This parameter controls what happens to traffic that goes from a workload endpoint to the host itself (after the traffic hits the endpoint egress policy).  By default {{site.prodname}} blocks traffic from workload endpoints to the host itself with an iptables "DROP" action. If you want to allow some or all traffic from endpoint to host, set this parameter to `Return` or `Accept`.  Use `Return` if you have your own rules in the iptables "INPUT" chain; {{site.prodname}} will insert its rules at the top of that chain, then `Return` packets to the "INPUT" chain once it has completed processing workload endpoint egress policy.  Use `Accept` to unconditionally accept packets from workloads after processing workload endpoint egress policy. | Drop, Return, Accept | string | `Drop` |
 | deviceRouteSourceAddress           | IPv4 address to set as the source hint for routes programmed by Felix. When not set the source address for local traffic from host to workload will be determined by the kernel. | IPv4 | string | `""` |
@@ -123,6 +124,25 @@ spec:
 |----------|----------------------|-------------------|--------|
 | min      | Minimum index to use | 1-250             | int    |
 | max      | Maximum index to use | 1-250             | int    |
+
+#### AWS IAM Role/Policy for source-destination-check configuration
+
+Setting `awsSrcDstCheck` to `Disable` will automatically disable source-destination-check on EC2 instances in a cluster, provided necessary IAM roles and policies are set. One of the policies assigned to IAM role of cluster nodes must contain a statement similar to the following:
+
+```
+{
+    "Effect": "Allow",
+        "Action": [
+            "ec2:DescribeInstances",
+            "ec2:ModifyNetworkInterfaceAttribute"
+        ],
+    "Resource": "*"
+}
+```
+
+If there are no policies attached to node roles containing the above statement, attach a new policy. For example, if a node role is `test-cluster-nodeinstance-role`, click on the IAM role in AWS console. In the `Permission policies` list, add a new inline policy with the above statement to the new policy JSON definition. For detailed information, see {% include open-new-window.html text='AWS documentation' url='https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_create.html?icmpid=docs_iam_console' %}.
+
+For an EKS cluster, the necessary IAM role and policy is available by default. No further actions are needed.
 
 ### Supported operations
 
