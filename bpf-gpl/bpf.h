@@ -133,7 +133,7 @@ struct bpf_map_def_extended {
 
 #define CALI_F_TO_HOST       (CALI_F_FROM_HEP || CALI_F_FROM_WEP)
 #define CALI_F_FROM_HOST     (!CALI_F_TO_HOST)
-#define CALI_F_L3            (CALI_F_TO_HEP && CALI_F_TUNNEL)
+#define CALI_F_L3            ((CALI_F_TO_HEP && CALI_F_TUNNEL) || CALI_F_WIREGUARD)
 #define CALI_F_IPIP_ENCAPPED (CALI_F_INGRESS && CALI_F_TUNNEL)
 #define CALI_F_WG_INGRESS    (CALI_F_INGRESS && CALI_F_WIREGUARD)
 
