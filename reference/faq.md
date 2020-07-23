@@ -414,9 +414,7 @@ EOF
 
 {{site.prodname}} will then route traffic between {{site.prodname}} hosts using IP-in-IP.
 
-To reduce encapsulation overhead, you can set `ipipMode` to `CrossSubnet` to selectively use IP-in-IP. Check [configuring overlay networking]({{ site.baseurl }}/networking/vxlan-ipip) for the details.
-
-For best performance in AWS, you can disable [Source/Destination Check]({{ site.baseurl }}/reference/resources/felixconfig#spec) instead of using IP-in-IP or VXLAN; but only if all your instances are in the same subnet of your VPC. The setting must be `Disable` for the EC2 instance(s) to process traffic not matching the host interface IP address.
+For best performance in AWS, you can disable [Source/Destination Check]({{ site.baseurl }}/reference/resources/felixconfig#spec) instead of using IP-in-IP or VXLAN; but only if all your instances are in the same subnet of your VPC. The setting must be `Disable` for the EC2 instance(s) to process traffic not matching the host interface IP address. This is also applicable if your cluster is spread across multiple subnets. If your cluster traffic crosses subnets, set `ipipMode` (or `vxlanMode`) to `CrossSubnet` to reduce the encapsulation overhead. Check [configuring overlay networking]({{ site.baseurl }}/networking/vxlan-ipip) for the details.
 
 You can disable Source/Destination Check using [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig), the AWS CLI, or the EC2 console. For example, using the AWS CLI:
 
