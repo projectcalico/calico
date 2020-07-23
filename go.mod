@@ -4,13 +4,15 @@ go 1.13
 
 require (
 	github.com/apparentlymart/go-cidr v1.0.1
+	github.com/golangci/golangci-lint v1.27.0 // indirect
+	github.com/hashicorp/go-version v1.2.0 // indirect
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20200721164651-4909abe9956d
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200715213032-ef6b0a698105
+	github.com/projectcalico/felix v0.0.0-20200722155616-1038de9f8c9e
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200722155955-02107623e057
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
