@@ -122,7 +122,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		nodeLabels:        make(map[string]map[string]string),
 		bgpPeers:          make(map[string]*apiv3.BGPPeer),
 		sourceReady:       make(map[string]bool),
-		nodeListenPorts:   make(map[string]int),
+		nodeListenPorts:   make(map[string]uint16),
 
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
@@ -234,8 +234,8 @@ type client struct {
 	nodeV1Processor  watchersyncer.SyncerUpdateProcessor
 	nodeLabels       map[string]map[string]string
 	bgpPeers         map[string]*apiv3.BGPPeer
-	globalListenPort int
-	nodeListenPorts  map[string]int
+	globalListenPort uint16
+	nodeListenPorts  map[string]uint16
 
 	// The route generator
 	rg *routeGenerator
@@ -360,7 +360,7 @@ type bgpPeer struct {
 	PeerIP      cnet.IP              `json:"ip"`
 	ASNum       numorstring.ASNumber `json:"as_num,string"`
 	RRClusterID string               `json:"rr_cluster_id"`
-	Port        string               `json:"port"`
+	Port        uint16               `json:"port"`
 }
 
 type bgpPrefix struct {
@@ -397,7 +397,7 @@ func (c *client) updatePeersV1() {
 		// already have a global peering to that IP, skip emitting the node-specific
 		// one.
 		if nodeKey, ok := key.(model.NodeBGPPeerKey); ok {
-			globalKey := model.GlobalBGPPeerKey{PeerIP: nodeKey.PeerIP}
+			globalKey := model.GlobalBGPPeerKey{PeerIP: nodeKey.PeerIP, Port:nodeKey.Port}
 			globalPath, _ := model.KeyToDefaultPath(globalKey)
 			if _, ok = peersV1[globalPath]; ok {
 				log.Debug("Global peering already exists")
@@ -448,16 +448,16 @@ func (c *client) updatePeersV1() {
 					continue
 				}
 
-				// If port is not empty, we use the given value to peer.
-				// If port is empty, check if BGP Peer is a calico/node, and use its listenPort to peer.
-				if port == "" {
+				// If port is not set, we use the given value to peer.
+				// If port is set, check if BGP Peer is a calico/node, and use its listenPort to peer.
+				if port == 0 {
 					// If port is empty, nodesWithIPPortAndAS() returns list of calico/node that matches IP and ASNumber.
 					nodeNames := c.nodesWithIPPortAndAS(host, v3res.Spec.ASNumber, port)
 					if len(nodeNames) != 0 {
 						if nodePort, ok := c.nodeListenPorts[nodeNames[0]]; ok {
-							port = strconv.Itoa(nodePort)
+							port = nodePort
 						} else if c.globalListenPort != 0 {
-							port = strconv.Itoa(c.globalListenPort)
+							port = c.globalListenPort
 						}
 					}
 				}
@@ -473,12 +473,12 @@ func (c *client) updatePeersV1() {
 			for _, peer := range peers {
 				log.Debugf("Peer: %#v", peer)
 				if globalPass {
-					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP}
+					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP, Port: peer.Port}
 					emit(key, peer)
 				} else {
 					for _, localNodeName := range localNodeNames {
 						log.Debugf("Local node name: %#v", localNodeName)
-						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
 						emit(key, peer)
 					}
 				}
@@ -521,7 +521,7 @@ func (c *client) updatePeersV1() {
 		for _, peerNodeName := range peerNodeNames {
 			for _, peer := range c.nodeAsBGPPeers(peerNodeName) {
 				for _, localNodeName := range localNodeNames {
-					key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+					key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port:peer.Port}
 					emit(key, peer)
 				}
 			}
@@ -553,13 +553,18 @@ func (c *client) updatePeersV1() {
 	}
 }
 
-func parseIPPort(ipPort string) (string, string) {
+func parseIPPort(ipPort string) (string, uint16) {
 	host, port, err := net.SplitHostPort(ipPort)
 	if err != nil {
 		log.Debug("No custom port set for peer.")
-		return ipPort, ""
+		return ipPort, 0
 	}
-	return host, port
+	p, err := strconv.ParseUint(port, 0, 16)
+	if err != nil {
+		log.Warning("Error parsing port.")
+		return ipPort, 0
+	}
+	return host, uint16(p)
 }
 
 func (c *client) nodesMatching(rawSelector string) []string {
@@ -577,7 +582,7 @@ func (c *client) nodesMatching(rawSelector string) []string {
 	return nodeNames
 }
 
-func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, port string) []string {
+func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, port uint16) []string {
 	globalAS := c.globalAS()
 	var asStr string
 	if asNum == numorstring.ASNumber(0) {
@@ -585,7 +590,6 @@ func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, por
 	} else {
 		asStr = asNum.String()
 	}
-	ipPort, _ := strconv.Atoi(port)
 	nodeNames := []string{}
 	for nodeName := range c.nodeLabels {
 		nodeIPv4, nodeIPv6, nodeAS, _ := c.nodeToBGPFields(nodeName)
@@ -599,10 +603,10 @@ func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, por
 			continue
 		}
 		// Port in PeerIP is optional, do not compare with listenPort if it is not set.
-		if ipPort != 0 {
-			if nodePort, ok := c.nodeListenPorts[nodeName]; ok && ipPort != nodePort {
+		if port != 0 {
+			if nodePort, ok := c.nodeListenPorts[nodeName]; ok && port != nodePort {
 				continue
-			} else if c.globalListenPort != 0 && c.globalListenPort != ipPort {
+			} else if c.globalListenPort != 0 && c.globalListenPort != port {
 				continue
 			}
 		}
@@ -644,9 +648,9 @@ func (c *client) nodeAsBGPPeers(nodeName string) (peers []*bgpPeer) {
 
 		// If peer node has listenPort set in BGPConfiguration, use that.
 		if port, ok := c.nodeListenPorts[nodeName]; ok {
-			peer.Port = strconv.Itoa(port)
+			peer.Port = port
 		} else if c.globalListenPort != 0 {
-			peer.Port = strconv.Itoa(c.globalListenPort)
+			peer.Port = c.globalListenPort
 		}
 
 		var err error
@@ -854,7 +858,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
-		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
@@ -865,7 +869,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		// for the global default values, or "node.<nodename>" for the node specific vales.
 		nodeName := resName[len(perNodeConfigNamePrefix):]
 		c.getPrefixAdvertisementsKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
-		c.getListenPortKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
+		c.getListenPortKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName}, updatePeersV1, updateReasons)
 		c.getLogSeverityKVPair(v3res, model.NodeBGPConfigKey{Nodename: nodeName})
 	} else {
 		log.Warningf("Bad value for BGPConfiguration resource name: %s.", resName)
@@ -954,16 +958,17 @@ func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, ke
 	}
 }
 
-func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
+func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {
 	listenPortKey := getBGPConfigKey("listen_port", key)
 
 	if v3res != nil && v3res.Spec.ListenPort != 0 {
 		switch key.(type) {
 		case model.NodeBGPConfigKey:
-			c.nodeListenPorts[getNodeName(v3res.Name)] = int(v3res.Spec.ListenPort)
+			c.nodeListenPorts[getNodeName(v3res.Name)] = v3res.Spec.ListenPort
 		case model.GlobalBGPConfigKey:
-			c.globalListenPort = int(v3res.Spec.ListenPort)
+			c.globalListenPort = v3res.Spec.ListenPort
 		}
+		*updateReasons = append(*updateReasons, "listenPort updated.")
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(listenPortKey, strconv.Itoa(int(v3res.Spec.ListenPort))))
 	} else {
 		switch k := key.(type) {
@@ -972,8 +977,10 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key interfac
 		case model.GlobalBGPConfigKey:
 			c.globalListenPort = 0
 		}
+		*updateReasons = append(*updateReasons, "listenPort deleted.")
 		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(listenPortKey))
 	}
+	*updatePeersV1 = true
 }
 
 func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key interface{}, updatePeersV1 *bool, updateReasons *[]string) {

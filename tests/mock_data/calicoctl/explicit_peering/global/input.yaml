@@ -15,7 +15,7 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-1
 spec:
-  peerIP: 10.192.0.3:166
+  peerIP: 10.192.0.3
   asNumber: 64567
 
 ---
@@ -24,6 +24,16 @@ kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-2
+spec:
+  peerIP: 10.192.0.4:166
+  asNumber: 64567
+
+---
+
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-3
 spec:
   peerIP: 10.192.0.4
   asNumber: 64567

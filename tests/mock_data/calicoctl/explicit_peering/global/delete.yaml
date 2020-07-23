@@ -18,6 +18,16 @@ spec:
 
 ---
 
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-3
+spec:
+  peerIP: 10.192.0.4
+  asNumber: 64567
+
+---
+
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

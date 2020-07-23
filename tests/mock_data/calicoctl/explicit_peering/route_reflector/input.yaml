@@ -28,7 +28,7 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-v6
 spec:
-  peerIP: ac13::57
+  peerIP: "[ac13::57]:50"
   asNumber: 64533
   nodeSelector: has(routeReflector)
 
