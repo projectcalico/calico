@@ -314,12 +314,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 		Describe("with a single node and an allow-all policy", func() {
 			var (
-				hostW *workload.Workload
-				w     [2]*workload.Workload
+				hostW   *workload.Workload
+				w       [2]*workload.Workload
+				wepCopy [2]*api.WorkloadEndpoint
 			)
 
 			if !testOpts.connTimeEnabled {
 				// These tests don't depend on NAT.
+				return
+			}
+
+			if testOpts.tunnel != "none" {
+				// Single node so tunnel doesn't matter.
 				return
 			}
 
@@ -339,6 +345,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					wIP := fmt.Sprintf("10.65.0.%d", i+2)
 					w[i] = workload.Run(felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", testOpts.protocol)
 					w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
+					// WEP gets clobbered when we add it to the datastore, take a copy so we can re-create the WEP.
+					wepCopy[i] = w[i].WorkloadEndpoint
 					w[i].ConfigureInInfra(infra)
 				}
 
@@ -476,6 +484,104 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					Eventually(numJumpMaps, "15s", "200ms").Should(
 						BeNumerically("==", expJumpMaps(len(w)-1)),
 						"Unexpected number of jump maps after removing workload")
+				})
+
+				It("should recover if the BPF programs are removed", func() {
+					flapInterface := func() {
+						By("Flapping interface")
+						felixes[0].Exec("ip", "link", "set", "down", w[0].InterfaceName)
+						felixes[0].Exec("ip", "link", "set", "up", w[0].InterfaceName)
+					}
+
+					recreateWEP := func() {
+						By("Recreating WEP.")
+						w[0].RemoveFromInfra(infra)
+						w[0].WorkloadEndpoint = wepCopy[0]
+						w[0].ConfigureInInfra(infra)
+					}
+
+					for _, trigger := range []func(){flapInterface, recreateWEP} {
+						// Wait for initial programming to complete.
+						cc.Expect(Some, w[0], w[1])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						By("handling ingress program removal")
+						felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
+
+						// Removing the ingress program should break connectivity due to the lack of "seen" mark.
+						cc.Expect(None, w[0], w[1])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						// Trigger felix to recover.
+						trigger()
+						cc.Expect(Some, w[0], w[1])
+						cc.CheckConnectivity()
+
+						// Check the program is put back.
+						Eventually(func() string {
+							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+							return out
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_workload_ep"))
+
+						By("handling egress program removal")
+						felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
+						// Removing the egress program doesn't stop traffic.
+
+						// Trigger felix to recover.
+						trigger()
+
+						// Check the program is put back.
+						Eventually(func() string {
+							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+							return out
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_workload_ep"))
+						cc.CheckConnectivity()
+
+						By("Handling qdisc removal")
+						felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
+
+						// Trigger felix to recover.
+						trigger()
+
+						// Check programs are put back.
+						Eventually(func() string {
+							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+							return out
+						}, "5s", "200ms").Should(ContainSubstring("calico_from_workload_ep"))
+						Eventually(func() string {
+							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+							return out
+						}, "5s", "200ms").Should(ContainSubstring("calico_to_workload_ep"))
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						// Add a policy to block traffic.
+						By("Adding deny policy")
+						denyPol := api.NewGlobalNetworkPolicy()
+						denyPol.Name = "policy-2"
+						var one float64 = 1
+						denyPol.Spec.Order = &one
+						denyPol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
+						denyPol.Spec.Egress = []api.Rule{{Action: "Deny"}}
+						denyPol.Spec.Selector = "all()"
+						denyPol = createPolicy(denyPol)
+
+						cc.Expect(None, w[0], w[1])
+						cc.Expect(None, w[1], w[0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						By("Removing deny policy")
+						_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-2", options2.DeleteOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						cc.Expect(Some, w[0], w[1])
+						cc.Expect(Some, w[1], w[0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+					}
 				})
 			}
 
