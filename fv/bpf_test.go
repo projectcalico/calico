@@ -1938,9 +1938,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									hostW0SrcIP := ExpectWithSrcIPs(node0IP)
 									hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
-									if testOpts.tunnel == "ipip" {
+									switch testOpts.tunnel {
+									case "ipip":
 										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+									case "wireguard":
+										hostW1SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedWireguardTunnelAddr)
+										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
 									}
 
 									ports := ExpectWithPorts(npPort)
