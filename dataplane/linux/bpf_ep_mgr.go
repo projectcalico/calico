@@ -48,7 +48,7 @@ type bpfInterface struct {
 	// info contains the information about the interface sent to us from external sources. For example,
 	// the ID of the controlling workload interface and our current expectation of its "oper state".
 	// When the info changes, we mark the interface dirty and refresh its dataplane state.
-	info  bpfInterfaceInfo
+	info bpfInterfaceInfo
 	// dpState contains the dataplane state that we've derived locally.  It caches the result of updating
 	// the interface (so changes to dpState don't cause the interface to be marked dirty).
 	dpState bpfInterfaceState
@@ -683,6 +683,23 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	rules := m.extractRules(tier, endpoint.ProfileIds, polDirection)
 
 	jumpMapFD := m.getJumpMapFD(endpoint.Name, polDirection)
+	if jumpMapFD != 0 {
+		if attached, err := ap.IsAttached(); err != nil {
+			return fmt.Errorf("failed to check if interface %s had BPF program; %w", endpoint.Name, err)
+		} else if !attached {
+			// BPF program is missing; maybe we missed a notification of the interface being recreated?
+			// Close the now-defunct jump map.
+			log.WithField("iface", endpoint.Name).Warn(
+				"Detected that BPF program no longer attached to interface.")
+			err := jumpMapFD.Close()
+			if err != nil {
+				log.WithError(err).Warn("Failed to close jump map FD. Ignoring.")
+			}
+			m.setJumpMapFD(endpoint.Name, polDirection, 0)
+			jumpMapFD = 0 // Trigger program to be re-added below.
+		}
+	}
+
 	if jumpMapFD == 0 {
 		// We don't have a program attached to this interface yet, attach one now.
 		err := ap.AttachProgram()

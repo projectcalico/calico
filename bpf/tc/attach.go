@@ -100,40 +100,18 @@ func (ap AttachPoint) AttachProgram() error {
 		return err
 	}
 
-	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
-	out, err := tcCmd.Output()
+	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
-		return errors.WithMessage(err, "failed to list tc filters on interface "+ap.Iface)
-	}
-	// Lines look like this; the section name always includes calico.
-	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
-	type progToCleanUp struct {
-		pref   string
-		handle string
-	}
-	var progsToClean []progToCleanUp
-	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.Contains(line, "calico") {
-			continue
-		}
-		// find the pref and the handle
-		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
-			p := progToCleanUp{
-				pref:   sm[1],
-				handle: sm[2],
-			}
-			log.WithField("prog", p).Debug("Found old calico program")
-			progsToClean = append(progsToClean, p)
-		}
+		return err
 	}
 
-	tcCmd = exec.Command("tc",
+	tcCmd := exec.Command("tc",
 		"filter", "add", "dev", ap.Iface,
 		string(ap.Hook),
 		"bpf", "da", "obj", tempBinary,
 		"sec", SectionName(ap.Type, ap.ToOrFrom))
 
-	out, err = tcCmd.Output()
+	out, err := tcCmd.Output()
 	if err != nil {
 		if err, ok := err.(*exec.ExitError); ok {
 			stderr := string(err.Stderr)
@@ -176,6 +154,37 @@ func (ap AttachPoint) AttachProgram() error {
 	return nil
 }
 
+type attachedProg struct {
+	pref   string
+	handle string
+}
+
+func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
+	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
+	out, err := tcCmd.Output()
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to list tc filters on interface "+ap.Iface)
+	}
+	// Lines look like this; the section name always includes calico.
+	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
+	var progsToClean []attachedProg
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "calico") {
+			continue
+		}
+		// find the pref and the handle
+		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
+			p := attachedProg{
+				pref:   sm[1],
+				handle: sm[2],
+			}
+			log.WithField("prog", p).Debug("Found old calico program")
+			progsToClean = append(progsToClean, p)
+		}
+	}
+	return progsToClean, nil
+}
+
 func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error {
 	b, err := bpf.BinaryFromFile(ifile)
 	if err != nil {
@@ -207,6 +216,21 @@ func (ap AttachPoint) ProgramName() string {
 // FileName return the file the AttachPoint will load the program from
 func (ap AttachPoint) FileName() string {
 	return ProgFilename(ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel)
+}
+
+func (ap AttachPoint) IsAttached() (bool, error) {
+	hasQ, err := HasQdisc(ap.Iface)
+	if err != nil {
+		return false, err
+	}
+	if !hasQ {
+		return false, nil
+	}
+	progs, err := ap.listAttachedPrograms()
+	if err != nil {
+		return false, err
+	}
+	return len(progs) > 0, nil
 }
 
 // tcDirRegex matches tc's auto-created directory names so we can clean them up when removing maps without accidentally
