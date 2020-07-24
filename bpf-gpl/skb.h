@@ -73,7 +73,8 @@ static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
 {
 	long offset = skb_iphdr_offset(skb);
 	struct iphdr *ip = skb_ptr(skb, offset);
-	CALI_DEBUG("IP@%d; s=%x d=%x\n", offset, be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+	CALI_DEBUG("IP id=%d s=%x d=%x\n",
+			be16_to_host(ip->id), be32_to_host(ip->saddr), be32_to_host(ip->daddr));
 	return ip;
 }
 
