@@ -175,4 +175,14 @@ rules:
       - networksets
     verbs:
       - create
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+      - cronjobs
+    verbs:
+      - create
+      - update
+      - list
+      - watch
 {{- end }}
