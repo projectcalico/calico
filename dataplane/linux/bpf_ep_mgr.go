@@ -45,12 +45,17 @@ import (
 const jumpMapCleanupInterval = 10 * time.Second
 
 type bpfInterface struct {
-	bpfInterfaceData
-	bpfInterfaceState
+	// info contains the information about the interface sent to us from external sources. For example,
+	// the ID of the controlling workload interface and our current expectation of its "oper state".
+	// When the info changes, we mark the interface dirty and refresh its dataplane state.
+	info  bpfInterfaceInfo
+	// dpState contains the dataplane state that we've derived locally.  It caches the result of updating
+	// the interface (so changes to dpState don't cause the interface to be marked dirty).
+	dpState bpfInterfaceState
 }
 
-type bpfInterfaceData struct {
-	state      ifacemonitor.State
+type bpfInterfaceInfo struct {
+	operState  ifacemonitor.State
 	endpointID *proto.WorkloadEndpointID
 }
 
@@ -144,6 +149,11 @@ func newBPFEndpointManager(
 	}
 }
 
+// withIface handles the bookkeeping for working with a particular bpfInterface value.  It
+// * creates the value if needed
+// * calls the giving callback with the value so it can be edited
+// * if the bpfInterface's info field changes, it marks it as dirty
+// * if the bpfInterface is now empty (no info or state), it cleans it up.
 func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInterface) (forceDirty bool)) {
 	iface := m.nameToIface[ifaceName]
 	ifaceCopy := iface
@@ -156,7 +166,7 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 		delete(m.nameToIface, ifaceName)
 	}
 
-	dirty = dirty || iface.bpfInterfaceData != ifaceCopy.bpfInterfaceData
+	dirty = dirty || iface.info != ifaceCopy.info
 
 	if !dirty {
 		return
@@ -225,7 +235,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	}
 
 	m.withIface(update.Name, func(iface *bpfInterface) bool {
-		iface.state = update.State
+		iface.info.operState = update.State
 		return false
 	})
 }
@@ -271,7 +281,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 		}
 
 		m.withIface(oldWEP.Name, func(iface *bpfInterface) bool {
-			iface.endpointID = nil
+			iface.info.endpointID = nil
 			return false
 		})
 	}
@@ -308,7 +318,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 		}
 	}
 	m.withIface(wl.Name, func(iface *bpfInterface) bool {
-		iface.endpointID = &wlID
+		iface.info.endpointID = &wlID
 		return true // Force interface to be marked dirty in case policies changed.
 	})
 }
@@ -347,7 +357,7 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 	}
 
 	m.withIface(oldWEP.Name, func(iface *bpfInterface) bool {
-		iface.endpointID = nil
+		iface.info.endpointID = nil
 		return false
 	})
 }
@@ -567,7 +577,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		}
 
 		err := errs[ifaceName]
-		wlID := m.nameToIface[ifaceName].endpointID
+		wlID := m.nameToIface[ifaceName].info.endpointID
 		if err == nil {
 			log.WithField("iface", ifaceName).Info("Updated workload interface.")
 			if wlID != nil && m.allWEPs[*wlID] != nil {
@@ -604,15 +614,15 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	m.ifacesLock.Lock()
 	var endpointID *proto.WorkloadEndpointID
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
-		endpointID = iface.endpointID
+		endpointID = iface.info.endpointID
 		if endpointID == nil {
-			for i := range iface.jumpMapFDs {
-				if iface.jumpMapFDs[i] > 0 {
-					err := iface.jumpMapFDs[i].Close()
+			for i := range iface.dpState.jumpMapFDs {
+				if iface.dpState.jumpMapFDs[i] > 0 {
+					err := iface.dpState.jumpMapFDs[i].Close()
 					if err != nil {
 						log.WithError(err).Error("Failed to close jump map.")
 					}
-					iface.jumpMapFDs[i] = 0
+					iface.dpState.jumpMapFDs[i] = 0
 				}
 			}
 		}
@@ -694,7 +704,7 @@ func (m *bpfEndpointManager) getJumpMapFD(ifaceName string, direction PolDirecti
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 	m.withIface(ifaceName, func(iface *bpfInterface) bool {
-		fd = iface.jumpMapFDs[direction]
+		fd = iface.dpState.jumpMapFDs[direction]
 		return false
 	})
 	return
@@ -705,7 +715,7 @@ func (m *bpfEndpointManager) setJumpMapFD(name string, direction PolDirection, f
 	defer m.ifacesLock.Unlock()
 
 	m.withIface(name, func(iface *bpfInterface) bool {
-		iface.jumpMapFDs[direction] = fd
+		iface.dpState.jumpMapFDs[direction] = fd
 		return false
 	})
 }
@@ -714,7 +724,7 @@ func (m *bpfEndpointManager) getIfaceState(ifaceName string) (state ifacemonitor
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 	m.withIface(ifaceName, func(iface *bpfInterface) bool {
-		state = iface.state
+		state = iface.info.operState
 		return false
 	})
 	return
