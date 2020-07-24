@@ -95,7 +95,7 @@ To include [Calico resources]({{site.baseurl}}/reference/resources) during insta
 
 > **Note**: If you have a directory with the Calico resources, you can create the file with the command:
 > ```
-> kubectl create configmap -n tigera-operator calico-resources \
+> oc create configmap -n tigera-operator calico-resources \
 >   --from-file=<resource-directory> --dry-run -o yaml \
 >   > manifests/02-configmap-calico-resources.yaml
 > ```
@@ -115,6 +115,52 @@ oc get tigerastatus
 ```
 
 > **Note**: To get more information, add `-o yaml` to the above command.
+
+#### Optionally integrate with Operator Lifecycle Manager (OLM)
+
+In OpenShift Container Platform, the [Operator Lifecycle Manager](https://docs.openshift.com/container-platform/4.4/operators/understanding_olm/olm-understanding-olm.html#olm-overview_olm-understanding-olm) helps
+cluster administrators manage the lifecycle of operators in their cluster. Managing the {{site.prodname}}
+operator with OLM gives administrators a single place to manage operators.
+
+In order to register the running {{site.prodname}} operator with OLM, first you will need to create an OperatorGroup for the operator:
+
+```bash
+oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+spec:
+  targetNamespaces:
+    - tigera-operator
+EOF
+```
+
+Next, you will create a Subscription to the operator. By subscribing to the operator package, the {{site.prodname}} operator will be managed by OLM.
+
+```bash
+oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+spec:
+  channel: stable
+  installPlanApproval: Manual
+  name: tigera-operator
+  source: certified-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: tigera-operator.{{site.data.versions.first.tigera-operator.version}}
+EOF
+```
+
+Finally, log in to the OpenShift console, navigate to the Installed Operators section and approve the Install Plan for the operator.
+
+> **Note**: This may trigger the operator deployment and all of its resources (pods, deployments, etc.) to be recreated.
+
+The OpenShift console provides an interface for editing the operator installation, viewing the operator's status, and more.
 
 ### Above and beyond
 
