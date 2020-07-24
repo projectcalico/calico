@@ -41,6 +41,8 @@ To release Calico, you need **the following permissions**:
 
 - You must be able to access binaries.projectcalico.org.
 
+- You must have admin access to docs.projectcalico.org site on netlify. 
+
 You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
 
 Some of the release scripts also require **tools to be installed** in your dev environment:
@@ -191,23 +193,34 @@ at the same time that subcomponent release branches are cut, often well before t
 1. Create a new branch off of the latest master.
 
    ```
-   git checkout -b release-candidate-vX.Y
+   git checkout -b release-vX.Y
    ```
+   
+1. Enable branch deployments for this branch on netlify by adding branch name to `Deploy contexts` in site settings.
 
-1. In [netlify.toml](netlify.toml), set the `CANDIDATE_RELEASE` environment variable:
-
-   ```toml
-   [build.environment]
-     CANDIDATE_RELEASE = "vX.Y"
-   ```
-
+1. In [netlify.toml](netlify.toml), set the `RELEASE_VERSION` environment variable to vX.Y.
+   
 1. Commit your changes. For example:
 
    ```
    git commit -m "build vX.Y candidate"
    ```
+   
+1. Open a pull request to the upstream release-vX.Y branch. Get it reviewed and merged. 
 
-1. Push your branch and open a pull request to the upstream master branch. Get it reviewed and wait for it to pass CI.
+1. After ensuring that the branch deployment is finished, in production branch's [netlify.toml](netlify.toml), add a new stanza for proxy to branch deploy site of release candidate.
+
+   ```toml
+   [[redirects]]
+     from = "/archive/vX.Y/*"
+     to = "https://release-vX.Y--calico.netlify.app/:splat"
+     status = 200
+     force = true
+     headers = {X-From = "Netlify"}
+
+   ```
+   
+1. Open a pull request to upstream production branch, get it reviewed and merged. This would generate the docs for the candidate at `/archive/vX.Y/` (Note: the trailing slash)
 
 ### Promoting to be the latest release in the docs
 
@@ -238,6 +251,10 @@ as described in the section above.
    git add _data/release-notes/<VERSION>-release-notes.md
    ```
 
+1. In [netlify.toml](netlify.toml):
+      
+      1. Set the `RELEASE_VERSION` environment variable to new version.
+            
 1. Commit your changes. For example:
 
    ```
@@ -259,36 +276,36 @@ as described in the section above.
    make release-publish
    ```
 
-1. Merge the PR. This will cause candidate.docs.projectcalico.org to be updated (after a few minutes). Validate that everything looks correct before proceeding to the next step.
+1. Merge the PR. 
 
-1. Checkout the master branch
+1. On netlify update `Production branch` in Deploy contexts to `release-vX.Y` in docs.projectcalico.org site settings.
+This will cause docs.projectcalico.org to be updated (after a few minutes). Validate that everything looks correct.
 
-1. In [netlify.toml](netlify.toml):
+## Adding the previous release to docs.projectcalico.org/archive
 
-   1. Set the `CANDIDATE_RELEASE` environment variable back to an empty string.
+1. Enable branch deployments for previous release branch on netlify by adding branch name to `Deploy contexts` in site settings.
+ 
+1. Checkout to previous release branch. Add a commit to the branch, an empty commit if necessary (to trigger the branch deploy). 
 
-   1. Update the `CURRENT_RELEASE` environment variable.
+1. Open a pull requests to upstream previous release branch, get it reviewed and merged. This triggers branch deployment for the previous release.
 
-1. In [netlify/_redirects](netlify/_redirects), add a new line for the new release.
+1. Ensure branch deployment is done by visiting to `<previous-release-branch-name>--calico.netlify.app`. (Note: For branch deploy site CSS might not load properly, but it'll show properly during the proxy). 
 
-1. Commit your changes. For example:
-
+1. Check out to production branch. 
    ```
-   git commit -m "Promote vX.Y.Z to latest"
-   ```
-
-1. Push your branch and open a pull request to the upstream master branch. Get it reviewed and wait for it to pass CI.
-
-## Adding the previous release to archive.docs.projectcalico.org
-
-1. Checkout latest master.
-
-   ```
-   git checkout master
+   git checkout release-vX.Y
    ```
 
-1. Add the previous release to the top of `_data/archive.yml`
+1. Add a new stanza to [netlify.toml](netlify.toml) to configure the proxy to the previous release.
 
+   ```toml
+    [[redirects]]
+      from = "/archive/<previous-release>/*"
+      to = "https://<previous-release-branch>--calico-test.netlify.app/:splat"
+      status = 200
+      force = true
+      headers = {X-From = "Netlify"}
+   ```
 1. Commit your changes and open a PR against upstream master.
 
 ## <a name="patch"></a> Performing a "patch" release
