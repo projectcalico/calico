@@ -111,6 +111,13 @@ rules:
       - update
       - delete
       - watch
+  - apiGroups:
+      - apiregistration.k8s.io
+    resources:
+      - apiservices
+    verbs:
+      - list
+      - watch
 {{- if eq .Values.installation.kubernetesProvider "openshift" }}
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
