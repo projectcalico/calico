@@ -88,7 +88,7 @@ After you create host endpoint objects, Felix will start policing
 traffic to/from that interface. If you have no policy or profiles in
 place, then you should see traffic being dropped on the interface.
 
-> **Note**: By default, {{site.prodname}} has a failsafe in place that whitelists certain
+> **Note**: By default, {{site.prodname}} has a failsafe in place that allows certain
 > traffic such as ssh. See below for more details on
 > disabling/configuring the failsafe rules.
 {: .alert .alert-info}

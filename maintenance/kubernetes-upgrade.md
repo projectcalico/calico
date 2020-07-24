@@ -79,7 +79,7 @@ procedure varies by datastore type.
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
 1. If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
-   add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade**.
+   add any global network policies needed to allow traffic, and delete the temporary network policy **allow-all-upgrade**.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
@@ -145,7 +145,7 @@ procedure varies by datastore type.
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
 1. If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
-   add any global network policies needed to whitelist traffic, and delete the temporary network policy **allow-all-upgrade**.
+   add any global network policies needed to allow traffic, and delete the temporary network policy **allow-all-upgrade**.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 

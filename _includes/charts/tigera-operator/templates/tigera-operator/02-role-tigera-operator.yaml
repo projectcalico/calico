@@ -175,6 +175,7 @@ rules:
       - networksets
     verbs:
       - create
+  # For AWS security group setup.
   - apiGroups:
       - batch
     resources:
@@ -185,4 +186,24 @@ rules:
       - update
       - list
       - watch
+{{- else }}
+  # Add the appropriate pod security policy permissions
+  - apiGroups:
+      - policy
+    resources:
+      - podsecuritypolicies
+    resourceNames:
+      - tigera-operator
+    verbs:
+      - use
+  - apiGroups:
+      - policy
+    resources:
+      - podsecuritypolicies
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
 {{- end }}

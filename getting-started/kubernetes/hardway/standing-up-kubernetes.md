@@ -20,7 +20,7 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
 
 ## Install Kubernetes
 
-1. Install kubeadm, kubelet, kubectl by following (official documentation)[https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl].
+1. Install kubeadm, kubelet, kubectl by following {% include open-new-window.html text='official documentation' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl' %}
 1. Choose one node as your Kubernetes master. On that node
    `sudo kubeadm init --pod-network-cidr=192.168.0.0/16`
 

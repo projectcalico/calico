@@ -1,12 +1,266 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 [build]
-  command = './netlify/build.sh'
+  command = 'jekyll build'
+  publish = "_site/"
 
 [build.environment]
   RUBY_VERSION = "2.5.4"
-  CANDIDATE_RELEASE = ""
-  CURRENT_RELEASE = "v3.15"
-  CUSTOM_ARCHIVE_PATH = "/archive"
+  RELEASE_VERSION = "master"
+
+[context.production]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+
+  # generate the website which is served at root /
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_latest.yml --destination _site
+
+  # generate only manifests served at /<version>
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
+
+  # generate the website which is served at /archive/<version>/
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
+
+  mv _site/sitemap.xml _site/release-legacy-sitemap.xml
+  mv _site/sitemap.xml _site/latest-sitemap.xml
+  mv netlify/sitemap-index.xml _site/sitemap.xml
+  mv netlify/_redirects _site/_redirects
+  '''
+
+[context.branch-deploy]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+
+  # generate only manifests served at /<version>
+  # note: this must be done second since destination folders are cleaned on each builds
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml,$(pwd)/netlify/_manifests_only.yml --baseurl /$RELEASE_VERSION --destination _site/$RELEASE_VERSION
+
+  # generate the website which is served at /archive/<version>/
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
+
+  # move 404 page to root of the site so that netlify shows it automatically
+  mv _site/archive/$RELEASE_VERSION/404.html _site/404.html
+  '''
+
+[context.deploy-preview]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
+  jekyll build --config _config.yml,_config_url.yml
+  mv netlify/_redirects _site/_redirects
+  '''
+
+# Deploys master branch as a seperate individual site, master build is diffrent from branch deploys
+# it doesn't have a manifests only build and served without /archive prefix
+[context.master]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
+  '''
+
+[context.nightly]
+  command = '''
+  cp netlify/Gemfile Gemfile && bundle install
+  make bin/helm
+  export PATH=$PATH:$(pwd)/bin
+  jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
+  '''
+
+# proxy redirects for website and manifests for v3.14
+[[redirects]]
+  from = "/archive/v3.14/*"
+  to = "https://release-v3-14--calico.netlify.app/archive/v3.14/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.14/*"
+  to = "https://release-v3-14--calico.netlify.app/v3.14/:splat"
+  status = 200
+  force = true
+
+# proxy redirects for website and manifests for v3.13
+[[redirects]]
+  from = "/archive/v3.13/*"
+  to = "https://release-v3-13--calico.netlify.app/archive/v3.13/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.13/*"
+  to = "https://release-v3-13--calico.netlify.app/v3.13/:splat"
+  status = 200
+  force = true
+
+# proxy redirects for website and manifests for v3.12
+[[redirects]]
+  from = "/archive/v3.12/*"
+  to = "https://release-v3-12--calico.netlify.app/archive/v3.12/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.12/*"
+  to = "https://release-v3-12--calico.netlify.app/v3.12/:splat"
+  status = 200
+  force = true
+
+# master branch can't have redirect for /master
+#[[redirects]]
+#  from = "/master/*"
+#  to = "https://nightly--calico.netlify.app/master/:splat"
+#  status = 200
+#  force = true
+
+# site redirects for archive sites, one redirect is sufficient for the entire release legacy site.
+# force here is false to allow serving of permalink site generated on production site at /archive/<version>/
+[[redirects]]
+  from = "/archive/*"
+  to = "https://release-legacy--calico.netlify.app/archive/:splat"
+  status = 200
+  force = false
+
+# supporting /<version>/manifests/<manifest.yaml> format for archive sites
+[[redirects]]
+  from = "/v3.11/*"
+  to = "https://release-legacy--calico.netlify.app/v3.11/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.10/*"
+  to = "https://release-legacy--calico.netlify.app/v3.10/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.9/*"
+  to = "https://release-legacy--calico.netlify.app/v3.9/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.8/*"
+  to = "https://release-legacy--calico.netlify.app/v3.8/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.7/*"
+  to = "https://release-legacy--calico.netlify.app/v3.7/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.6/*"
+  to = "https://release-legacy--calico.netlify.app/v3.6/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.5/*"
+  to = "https://release-legacy--calico.netlify.app/v3.5/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.4/*"
+  to = "https://release-legacy--calico.netlify.app/v3.4/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.3/*"
+  to = "https://release-legacy--calico.netlify.app/v3.3/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.2/*"
+  to = "https://release-legacy--calico.netlify.app/v3.2/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.1/*"
+  to = "https://release-legacy--calico.netlify.app/v3.1/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v3.0/*"
+  to = "https://release-legacy--calico.netlify.app/v3.0/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v2.6/*"
+  to = "https://release-legacy--calico.netlify.app/v2.6/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v2.5/*"
+  to = "https://release-legacy--calico.netlify.app/v2.5/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v2.4/*"
+  to = "https://release-legacy--calico.netlify.app/v2.4/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v2.3/*"
+  to = "https://release-legacy--calico.netlify.app/v2.3/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v2.2/*"
+  to = "https://release-legacy--calico.netlify.app/v2.2/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v2.1/*"
+  to = "https://release-legacy--calico.netlify.app/v2.1/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v2.0/*"
+  to = "https://release-legacy--calico.netlify.app/v2.0/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v1.6/*"
+  to = "https://release-legacy--calico.netlify.app/v1.6/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/v1.5/*"
+  to = "https://release-legacy--calico.netlify.app/v1.5/:splat"
+  status = 200
+  force = true
+
+# shifting generic redirect of /<version> to / from _redirects to toml
+[[redirects]]
+  from = "/latest/*"
+  to = "/:splat"
+  status = 301
+  force = false
 
 [[headers]]
   for = "/*.yaml"

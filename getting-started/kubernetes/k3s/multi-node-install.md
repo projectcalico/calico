@@ -10,7 +10,7 @@ This tutorial gets you a multi node K3s cluster with {{site.prodname}} in approx
 
 ### Value
 
-K3s is a lightweight implementation of Kubernetes packeged as a single binary.
+K3s is a lightweight implementation of Kubernetes packaged as a single binary.
 
 ### Before you begin
 
@@ -21,7 +21,7 @@ K3s is a lightweight implementation of Kubernetes packeged as a single binary.
    - 10GB free disk space
    - Ubuntu 16.04 (amd64), Ubuntu 18.04 (amd64), Ubuntu 20.04 (amd64)
    
-> **Note**: K3s supports ARM proccessors too, this tutorial was tested against x86-64 processor environment.
+> **Note**: K3s supports ARM processors too, this tutorial was tested against x86-64 processor environment.
 > For more detail please visit {% include open-new-window.html text='this link' url='https://rancher.com/docs/k3s/latest/en/installation/installation-requirements/#operating-systems' %}.
 {: .alert .alert-info}
 
@@ -63,9 +63,8 @@ K3s is a lightweight implementation of Kubernetes packeged as a single binary.
    ```
 
 #### Install {{site.prodname}}
-
-   {% tabs id:installation-method %}
-   <id:operator,name:Operator,active:true>
+   {% tabs tab-group:grp1 %}
+   <label:Operator,active:true>
    <%
 Install the {{site.prodname}} operator and custom resource definitions.
 
@@ -84,7 +83,7 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
    {: .alert .alert-info}
    
    %>
-   <id:manifest,name:Manifest>
+   <label:Manifest>
    <%
    Install {{site.prodname}} by using the following command.
 
@@ -135,25 +134,38 @@ Install {{site.prodname}} by creating the necessary custom resource. For more in
    
 1. Confirm that all of the pods are running using the following command.
 
-   ```bash
-   watch kubectl get pods --all-namespaces
-   ```
+{% tabs tab-group:grp1 %}
+<label:Operator,active:true>
+<%
 
-   Wait until each pod shows the `STATUS` of `Running`.
+```
+NAMESPACE         NAME                                      READY   STATUS    RESTARTS   AGE
+tigera-operator   tigera-operator-c9cf5b94d-gj9qp           1/1     Running   0          107s
+calico-system     calico-typha-7dcd87597-npqsf              1/1     Running   0          88s
+calico-system     calico-node-rdwwz                         1/1     Running   0          88s
+kube-system       local-path-provisioner-6d59f47c7-4q8l2    1/1     Running   0          2m14s
+kube-system       metrics-server-7566d596c8-xf66d           1/1     Running   0          2m14s
+kube-system       coredns-8655855d6-wfdbm                   1/1     Running   0          2m14s
+calico-system     calico-kube-controllers-89df8c6f8-7hxc5   1/1     Running   0          87s
+```
+{: .no-select-button}
+%>
+<label:Manifest>
+<%
 
-   ```
-   NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE
-   kube-system   {{site.noderunning}}-9hn9z                 1/1     Running   0          23m
-   kube-system   local-path-provisioner-6d59f47c7-drznc     1/1     Running   0          38m
-   kube-system   calico-kube-controllers-789f6df884-928lt   1/1     Running   0          23m
-   kube-system   metrics-server-7566d596c8-qxlfz            1/1     Running   0          38m
-   kube-system   coredns-8655855d6-blzl5                    1/1     Running   0          38m
-   ```
-   {: .no-select-button}
+```
+NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE
+kube-system   {{site.noderunning}}-9hn9z                    1/1     Running   0          23m
+kube-system   local-path-provisioner-6d59f47c7-drznc     1/1     Running   0          38m
+kube-system   calico-kube-controllers-789f6df884-928lt   1/1     Running   0          23m
+kube-system   metrics-server-7566d596c8-qxlfz            1/1     Running   0          38m
+kube-system   coredns-8655855d6-blzl5                    1/1     Running   0          38m
+```
+{: .no-select-button}
+%>
+{% endtabs %}
 
-   Press CTRL+C to exit `watch`.
-
-2. Confirm that you now have two nodes in your cluster with the following command.
+1. Confirm that you now have two nodes in your cluster with the following command.
 
    ```bash
    kubectl get nodes -o wide
@@ -173,5 +185,3 @@ equipped with {{site.prodname}} and Traefik.
 
 ### Next steps
 - Try running the [Kubernetes Network policy demo]({{ site.baseurl }}/security/tutorials/kubernetes-policy-demo/kubernetes-demo) to see live graphical view of network policy in action
-
-

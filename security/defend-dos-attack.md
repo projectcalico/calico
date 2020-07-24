@@ -5,7 +5,7 @@ description: Define DoS mitigation rules in Calico policy to quickly drop connec
 
 ### Big picture 
 
-Calico automatically enforces specific types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible. 
+Calico automatically enforces specific types of deny-list policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible.
 
 ### Value
 
@@ -15,7 +15,7 @@ During a DoS attack, a cluster can receive massive numbers of connection request
 
 This how-to guide uses the following Calico features:
 - **HostEndpoint**(s) as the policy enforcement point
-- **GlobalNetworkSet** to manage blacklisted CIDRs
+- **GlobalNetworkSet** to manage deny-listed CIDRs
 - **GlobalNetworkPolicy** to deny ingress traffic from IPs in the global network set
 
 ### Concepts
@@ -39,12 +39,12 @@ The earliest point in the packet processing pipeline that packets can be dropped
 The high-level steps to defend against a DoS attack are:
 
 - [Step 1: Create host endpoints](#step-1-create-host-endpoints)
-- [Step 2: Add CIDRs to blacklist in a global network set](#step-2-add-cidrs-to-blacklist-in-a-global-network-set)
+- [Step 2: Add CIDRs to deny-list in a global network set](#step-2-add-cidrs-to-deny-list-in-a-global-network-set)
 - [Step 3: Create deny incoming traffic global network policy](#step-3-create-deny-incoming-traffic-global-network-policy)
 
 #### Best practice
 
-The following steps walk through the above required steps, assuming no prior configuration is in place. A best practice is to proactively do these steps before an attack (create the host endpoints, network policy, and global network set). In the event of a DoS attack, you can quickly respond by just adding the CIDRs that you want to blacklist to the global network set.
+The following steps walk through the above required steps, assuming no prior configuration is in place. A best practice is to proactively do these steps before an attack (create the host endpoints, network policy, and global network set). In the event of a DoS attack, you can quickly respond by just adding the CIDRs that you want to deny-list to the global network set.
 
 #### Step 1: Create host endpoints
 
@@ -63,9 +63,9 @@ spec:
   expectedIPs: ["10.0.0.1"]
 ```
 
-#### Step 2: Add CIDRs to blacklist in a global network set
+#### Step 2: Add CIDRs to deny-list in a global network set
 
-Next, you create a Calico **GlobalNetworkset**, adding the CIDRs that you want to blacklist. In the following example, the global network set blacklists the CIDR ranges **1.2.3.4/32** and **5.6.0.0/16**:
+Next, you create a Calico **GlobalNetworkset**, adding the CIDRs that you want to deny-list. In the following example, the global network set deny-lists the CIDR ranges **1.2.3.4/32** and **5.6.0.0/16**:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -73,7 +73,7 @@ kind: GlobalNetworkSet
 metadata:
   name: dos-mitigation
   labels:
-    dos-blacklist == 'true'
+    dos-deny-list == 'true'
 spec:
   nets:
   - "1.2.3.4/32"
@@ -82,7 +82,7 @@ spec:
 
 #### Step 3: Create deny incoming traffic global network policy 
 
-Finally, create a Calico GlobalNetworkPolicy adding the GlobalNetworkSet label (**dos-blacklist** in the previous step) as a selector to deny ingress traffic. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options. 
+Finally, create a Calico GlobalNetworkPolicy adding the GlobalNetworkSet label (**dos-deny-list** in the previous step) as a selector to deny ingress traffic. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -98,7 +98,7 @@ spec:
   ingress:
   - action: Deny
     source:
-      selector: dos-blacklist == 'true'
+      selector: dos-deny-list == 'true'
 ```
 
 ### Above and beyond

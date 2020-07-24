@@ -34,17 +34,17 @@ exist in the cluster. The following options control the paramaters on the create
 | CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. If set to a value other than `Never`, `CALICO_IPV4POOL_VXLAN` should not be set. [Default: `Always`] | Always, CrossSubnet, Never ("Off" is also accepted as a synonym for "Never") |
 | CALICO_IPV4POOL_VXLAN | VXLAN Mode to use for the IPv4 POOL created at start up.  If set to a value other than `Never`, `CALICO_IPV4POOL_IPIP` should not be set. [Default: `Never`] | Always, CrossSubnet, Never |
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. [Default: `true`] | boolean |
-| CALICO_IPV4POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv4 Pool created at start up. [Default: `all()`] | [selector](../resources/ippool#node-selector) |
+| CALICO_IPV4POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv4 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `<a randomly chosen /48 ULA>`] | IPv6 CIDR |
 | CALICO_IPV6POOL_BLOCK_SIZE | Block size to use for the IPv6 POOL created at startup.  Block size for IPv6 should be in the range 116-128 (inclusive) [Default: `122`] | int |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
-| CALICO_IPV6POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv6 Pool created at start up. [Default: `all()`] | [selector](../resources/ippool#node-selector) |
+| CALICO_IPV6POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv6 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
 | NO_DEFAULT_POOLS | Prevents  {{site.prodname}} from creating a default pool if one does not exist. [Default: `false`] | boolean |
 
 ### Configuring BGP Networking
 
-BGP configuration for Calico nodes is configured through the [Node]() and [BGPConfiguration]() resources.
-`{{site.nodecontainer}}` exposes some options to allow setting certain fields on these objects, as described
+BGP configuration for Calico nodes is normally configured through the [Node]({{site.baseurl}}/reference/resources/node), [BGPConfiguration]({{site.baseurl}}/reference/resources/bgpconfig), and [BGPPeer]({{site.baseurl}}/reference/resources/bgppeer) resources.
+`{{site.nodecontainer}}` also exposes some options to allow setting certain fields on these objects, as described
 below.
 
 | Environment   | Description | Schema |
@@ -54,7 +54,7 @@ below.
 | IP6 | The IPv6 address to assign this host or detection behavior at startup. Refer to [IP setting](#ip-setting) for the details of the behavior possible with this field. | IPv6 |
 | IP_AUTODETECTION_METHOD | The method to use to autodetect the IPv4 address for this host. This is only used when the IPv4 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. [Default: `first-found`] | string |
 | IP6_AUTODETECTION_METHOD | The method to use to autodetect the IPv6 address for this host. This is only used when the IPv6 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. [Default: `first-found`] | string |
-| AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings](/networking/bgp) for details.) | int |
+| AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings]({{site.baseurl}}/networking/bgp) for details.) | int |
 | CALICO_ROUTER_ID | Sets the `router id` to use for BGP if no IPv4 address is set on the node. For an IPv6-only system, this may be set to `hash`. It then uses the hash of the nodename to create a 4 byte router id. See note below. [Default: ``] | string |
 | CALICO_K8S_NODE_REF | The name of the corresponding node object in the Kubernetes API. When set, used for correlating this node with events from the Kubernetes API. | string |
 
@@ -121,8 +121,8 @@ configuration used on the cluster.
 ### Node name determination
 
 The `{{site.nodecontainer}}` must know the name of the node on which it is running. The node name is used to
-retrieve the [Node resource](../resources/node) configured for this node if it exists, or to create a new node resource representing the node if it does not. It is
-also used to associate the node with per-node [BGP configuration](../resources/bgpconfig), [felix configuration](../resources/felixconfig), and endpoints.
+retrieve the [Node resource]({{site.baseurl}}/reference/resources/node) configured for this node if it exists, or to create a new node resource representing the node if it does not. It is
+also used to associate the node with per-node [BGP configuration]({{site.baseurl}}/reference/resources/bgpconfig), [felix configuration]({{site.baseurl}}/reference/resources/felixconfig), and endpoints.
 
 When launched, the `{{side.nodecontainer}}` container sets the node name according to the following order of precedence:
 
@@ -271,7 +271,7 @@ Substitute `[flag]` with one or more of the following.
 
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
-in the cluster, see [decomissioning a node]({{ site.baseurl }}/maintenance/decommissioning-a-node).
+in the cluster, see [decomissioning a node]({{site.baseurl}}/maintenance/decommissioning-a-node).
 
 
 ### Setting `CALICO_ROUTER_ID` for IPv6 only system
