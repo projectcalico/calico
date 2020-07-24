@@ -55,5 +55,9 @@ and developers. You can find out more about our monthly meetings, Slack group, a
 
 ## License
 
-Calico is available under the Apache 2.0 license. See the [LICENSE](LICENSE) file for details.
+Calico is open source, with most code and documenation available under the Apache 2.0 license (see the [LICENSE](LICENSE)), though some elements are necessarily licensed under different open source licenses for compatibility with upstream licensing or code linking. For example, some Calico BPF programs are licensed under GPL v2.0 for compatibility with Linux kernel helper functions.
+
+## Calico Enterprise
+
+Calico Enterprise is a commercial product that builds on top of and around the Calico open source project to provide additional capabilities beyond the core Calico feature set. You can learn more [here](https://docs.projectcalico.org/calico-enterprise/). Calico Enterprise is available under commercial license from Tigera.
 
