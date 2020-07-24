@@ -239,10 +239,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.FelixLogSeverity = "debug"
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
+			// override IPIP being enabled by default
+			options.IPIPEnabled = false
+			options.IPIPRoutesEnabled = false
 			switch testOpts.tunnel {
 			case "none":
-				options.IPIPEnabled = false
-				options.IPIPRoutesEnabled = false
+				// nothing
 			case "ipip":
 				options.IPIPEnabled = true
 				options.IPIPRoutesEnabled = true
