@@ -1412,9 +1412,13 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 		}
 	}
 
+	if (len(spec.PrefixAdvertisements) == 0) && (len(communities) != 0) {
+		structLevel.ReportError(reflect.ValueOf(communities), "Spec.Communities[]", "",
+			reason("communities are defined but not used in Spec.PrefixAdvertisement[]."), "")
+	}
+
 	// check if Spec.PrefixAdvertisement.Communities are valid
-	pas := spec.PrefixAdvertisements
-	for _, pa := range pas {
+	for _, pa := range spec.PrefixAdvertisements {
 		_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
 		if err != nil {
 			log.Warningf("CIDR value is invalid: %v", pa.CIDR)
