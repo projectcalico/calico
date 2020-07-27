@@ -18,6 +18,7 @@ spec:
     - cidr: fd00:96::/112
       communities:
       - bgp-comm-large
+      - bgp-comm-large
   listenPort: 177
 
 ---
