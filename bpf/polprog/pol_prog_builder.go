@@ -242,6 +242,7 @@ func (p *Builder) writeRule(rule *proto.Rule, passLabel string) {
 	rule = rules.FilterRuleToIPVersion(4, rule)
 	if rule == nil {
 		log.Debugf("Version mismatch, skipping rule")
+		return
 	}
 	p.writeStartOfRule()
 
