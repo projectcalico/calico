@@ -12,6 +12,8 @@ section:
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)
       path: /getting-started/kubernetes/managed-public-cloud/eks
+    - title: Amazon Elastic Kubernetes Service (EKS) Multiple CNI
+      path: /getting-started/kubernetes/managed-public-cloud/eks-multus
     - title: Google Kubernetes Engine (GKE)
       path: /getting-started/kubernetes/managed-public-cloud/gke
     - title: IBM Cloud Kubernetes Service (IKS)
