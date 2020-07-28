@@ -1,10 +1,9 @@
 module github.com/projectcalico/calicoctl
 
-go 1.13
+go 1.14
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
-	github.com/coreos/etcd v3.3.18+incompatible // indirect
 	github.com/docopt/docopt-go v0.0.0-20160216232012-784ddc588536
 	github.com/eapache/channels v1.1.0 // indirect
 	github.com/eapache/queue v0.0.0-20180227141424-093482f3f8ce // indirect
@@ -29,5 +28,4 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	k8s.io/apiextensions-apiserver v0.16.10
 	k8s.io/apimachinery v0.17.2
-	k8s.io/client-go v0.17.2
 )
