@@ -190,13 +190,13 @@ at the same time that subcomponent release branches are cut, often well before t
 
 ### Publishing the candidate release branch
 
-1. Create a new branch off of the latest master.
+1. Check out to the candidate release branch that is created as per the instructions [here](#-creating-a-candidate-release-branch). 
 
    ```
-   git checkout -b release-vX.Y
+   git checkout release-vX.Y
    ```
    
-1. Enable branch deployments for this branch on netlify by adding branch name to `Deploy contexts` in site settings.
+1. Enable branch deployments for this branch on netlify by adding branch name to `Branch deploys` context in `Deploy contexts`. This setting can be found in in `Build & deploy` tab of site settings sidebar.
 
 1. In [netlify.toml](netlify.toml), set the `RELEASE_VERSION` environment variable to vX.Y.
    
@@ -205,19 +205,23 @@ at the same time that subcomponent release branches are cut, often well before t
    ```
    git commit -m "build vX.Y candidate"
    ```
-   
-1. Open a pull request to the upstream release-vX.Y branch. Get it reviewed and merged. 
 
-1. After ensuring that the branch deployment is finished, in production branch's [netlify.toml](netlify.toml), add a new stanza for proxy to branch deploy site of release candidate.
+1. Commit your changes and push the branch. This would trigger a branch deployment of the candidate branch. Ensure that the site is generated properly by visiting the branch deploy site URL. 
+
+1. After ensuring that the branch deployment is successful, in current production branch's [netlify.toml](netlify.toml), add below proxy rules for the release candidate, at the top of `redirects` rules. Ensure that `force` is False
 
    ```toml
-   [[redirects]]
-     from = "/archive/vX.Y/*"
-     to = "https://release-vX.Y--calico.netlify.app/:splat"
-     status = 200
-     force = true
-     headers = {X-From = "Netlify"}
-
+    [[redirects]]
+      from = "/archive/vX.Y/*"
+      to = "https://release-vX-Y--calico.netlify.app/archive/vX.Y/:splat"
+      status = 200
+      force = false
+    
+    [[redirects]]
+      from = "/v3.14/*"
+      to = "https://release-vX-Y--calico.netlify.app/vX.Y/:splat"
+      status = 200
+      force = false
    ```
    
 1. Open a pull request to upstream production branch, get it reviewed and merged. This would generate the docs for the candidate at `/archive/vX.Y/` (Note: the trailing slash)
