@@ -326,6 +326,7 @@ var _ = Describe("BPF service type change", func() {
 
 func setSvcTypeToClusterIP(testSvc *v1.Service, k8s *fake.Clientset) {
 	testSvc.Spec.ExternalIPs = []string{}
+	testSvc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{}
 	testSvc.Spec.LoadBalancerSourceRanges = []string{}
 	testSvc.Spec.Type = v1.ServiceTypeClusterIP
 	testSvc.Spec.Ports[0].NodePort = 0
@@ -343,7 +344,8 @@ func setSvcTypeToExternalIP(testSvc *v1.Service, extIP []string, k8s *fake.Clien
 }
 
 func setSvcTypeToLoadBalancer(testSvc *v1.Service, extIP, srcRange []string, k8s *fake.Clientset) {
-	testSvc.Spec.ExternalIPs = extIP
+	//testSvc.Spec.ExternalIPs = extIP
+	testSvc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: extIP[0]}}
 	testSvc.Spec.LoadBalancerSourceRanges = srcRange
 	testSvc.Spec.Ports[0].NodePort = 0
 	testSvc.Spec.Type = v1.ServiceTypeLoadBalancer
