@@ -47,7 +47,13 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 			for _, fibEnabled := range []bool{false, true} {
 				fibEnabled := fibEnabled
 				logCxt = logCxt.WithField("fibEnabled", fibEnabled)
-				for _, epType := range []tc.EndpointType{tc.EpTypeWorkload, tc.EpTypeHost, tc.EpTypeTunnel} {
+				epTypes := []tc.EndpointType{
+					tc.EpTypeWorkload,
+					tc.EpTypeHost,
+					tc.EpTypeTunnel,
+					tc.EpTypeWireguard,
+				}
+				for _, epType := range epTypes {
 					epType := epType
 					logCxt = logCxt.WithField("epType", epType)
 					if epToHostDrop && epType != tc.EpTypeWorkload {

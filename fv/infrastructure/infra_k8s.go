@@ -500,11 +500,13 @@ func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, n
 
 func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needBGP bool) {
 	felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANTunnelAddr)
 }
 
 func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWg bool) {
 	// Set to be the same as IPIP tunnel address.
 	felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedWireguardTunnelAddr)
 }
 
 func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {

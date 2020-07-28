@@ -78,6 +78,7 @@ var _ = describeBPFTests(withProto("udp"), withDSR())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
 var _ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
+var _ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
 // with debug disabled and that can lead to verifier issues.
@@ -238,10 +239,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.FelixLogSeverity = "debug"
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
+			// override IPIP being enabled by default
+			options.IPIPEnabled = false
+			options.IPIPRoutesEnabled = false
 			switch testOpts.tunnel {
 			case "none":
-				options.IPIPEnabled = false
-				options.IPIPRoutesEnabled = false
+				// nothing
 			case "ipip":
 				options.IPIPEnabled = true
 				options.IPIPRoutesEnabled = true
@@ -1935,9 +1938,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									hostW0SrcIP := ExpectWithSrcIPs(node0IP)
 									hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
-									if testOpts.tunnel == "ipip" {
+									switch testOpts.tunnel {
+									case "ipip":
 										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+									case "wireguard":
+										hostW1SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedWireguardTunnelAddr)
+										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
 									}
 
 									ports := ExpectWithPorts(npPort)
