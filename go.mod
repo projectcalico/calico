@@ -1,6 +1,6 @@
 module github.com/projectcalico/libcalico-go
 
-go 1.12
+go 1.14
 
 require (
 	github.com/coreos/go-semver v0.3.0
@@ -33,7 +33,6 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.27.0
 	gopkg.in/tchap/go-patricia.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.2.8 // indirect
-
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v0.17.2
