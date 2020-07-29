@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/kelseyhightower/confd
-GO_BUILD_VER=v0.40
+GO_BUILD_VER=v0.45
 
 ###############################################################################
 # Download and include Makefile.common
