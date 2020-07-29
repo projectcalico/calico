@@ -34,8 +34,14 @@ Create an Amazon EKS cluster without any nodes.
 eksctl create cluster --name calico-multus --without-nodegroup
 ```
 
+#### Delete aws deployment
+
 > **Note**: Multus scans `/etc/cni/net.d/` folder in alphabetic order for files with `conf` or `conflist` 
-extension. To promote {{site.prodname}} as your primary CNI you have to delete `aws-node` from your cluster.
+extension. To elect {{site.prodname}} automatically as primary CNI you have to delete `aws-node` from your cluster.
+>
+> -
+>
+> It is possible to skip this step by using a {% include open-new-window.html text='custom configmap' url='https://github.com/openshift/multus-cni/blob/master/doc/configuration.md' %} for Multus. However, that is out of the scope of this tutorial.
 {: .alert .alert-info }
 
 Delete `amazon-vpc-cni-k8s` daemonset
@@ -68,13 +74,24 @@ eksctl create nodegroup --cluster calico-multus --node-type t3.medium --node-ami
 > See eksctl create nodegroup --help for the full set of node group options.
 {: .alert .alert-info }
 
-#### Install Multus and aws-k8s-cni in the cluster
+#### Installing Multus
 
-Install Multus
+Multus offers a manifest approach to ease the installation process.
+
+You can install Multus using kubectl.
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/openshift/multus-cni/master/images/multus-daemonset.yml
 ```
+
+#### Installing aws-k8s-cni
+
+> **Note**: Using default configuration with AWS CNI causes IPAMD to consume all available IP addresses in EC2 instances participating in the node group at the beginning. You can alter this behavior by using environment variables such as `MINIMUM_IP_TARGET` and `WARM_IP_TARGET`. 
+>
+> **Note**: It is important to use AWS CNI plugin version **1.6.0** or higher because older releases do not support `MINIMUM_IP_TARGET` environment variable.
+> 
+> More details can be found {% include open-new-window.html text="at this page." url='https://github.com/aws/amazon-vpc-cni-k8s' %}
+{: .alert .alert-info }
 
 Install `aws-k8s-cni` plugin
 
@@ -82,11 +99,11 @@ Install `aws-k8s-cni` plugin
 kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/master/config/v1.6/aws-k8s-cni.yaml
 ```
 
-#### Add aws-k8s-cni to Multus
+#### Add aws-k8s-cni configuration to Multus
 
 Multus uses custom resources to configure different CNI plugins.
 
-Create `NetworkAttachmentDefinition` and add `aws-k8s-cni` plugin configuration.
+You can add `aws-k8s-cni` to Multus by Creating a `NetworkAttachmentDefinition` with plugin configuration parameters.
 
 ```bash
 kubectl apply -f - <<EOF
@@ -122,13 +139,13 @@ Congratulations! your EKS cluster is now equipped with three CNI plugins.
 
 ### Demo 
 
-Create a namespace to isolate your demo resources.
+You should create a namespace in order to isolate resources created for this demo.
 
 ```bash
 kubectl create namespace calico-multus-demo
 ```
 
-Use `v1.multus-cni.io/default-network: aws-cni` annotation in pod manifest to attach it to the VPC network.
+Adding Multus crd to a pod manifest changes {{site.prodname}} with aws-k8s-cni plugin. Use [NetworkAttachmentDefinition](#add-aws-k8s-cni-configuration-to-multus) that you created earlier create a pod using IP addresses available in your AWS VPC.
 
 ```bash
 kubectl apply -f - <<EOF
@@ -150,7 +167,7 @@ spec:
 EOF
 ```
 
-Create another pod using {{site.prodname}} networking.
+Create a different Pod without applying Multus crd annotations. This causes the Pod to acquire an IP address from {{site.prodname}}.
 
 ```bash
 kubectl apply -f - <<EOF
@@ -202,6 +219,8 @@ spec:
 EOF
 ```
 
+#### Testing control plane connectivity
+
 > kubectl `proxy` provides access to Kubernetes API using apiserver.
 >
 > If you like to learn more about this feature {% include open-new-window.html text="click here." url='https://kubernetes.io/docs/tasks/administer-cluster/access-cluster-services/' %}
@@ -219,7 +238,7 @@ You should see an output similar to
 Starting to serve on 127.0.0.1:8001
 ```
 
-At this point you should be able to browse `awspod` home page using `http://localhost:8001/api/v1/namespaces/calico-multus-demo/services/awspod-service/proxy/` or {% include open-new-window.html text='by clicking here.' url='http://localhost:8001/api/v1/namespaces/calico-multus-demo/services/awspod-service/proxy/' %}.
+At this point you should be able to browse `awspod` home page {% include open-new-window.html text='by clicking here.' url='http://localhost:8001/api/v1/namespaces/calico-multus-demo/services/awspod-service/proxy/' %}
 
 {% include open-new-window.html text='Pod not reachable by conrol plane.' url='http://localhost:8001/api/v1/namespaces/calico-multus-demo/services/calicopod-service/proxy/' %}
 
