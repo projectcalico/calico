@@ -30,6 +30,10 @@ CFLAGS +=  \
 	-target bpf \
 	-emit-llvm
 
+# Workaround for Ubuntu placing "asm/types.h" in /usr/include/x86_64-linux-gnu
+TRIPLET := $(shell gcc -dumpmachine)
+CFLAGS += -I/usr/include/$(TRIPLET)
+
 CC := clang
 LD := llc
 
