@@ -552,7 +552,7 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 		if err := s.writeSvc(sinfo, svc.id, count, local); err != nil {
 			return err
 		}
-		if svcTypeLoadBalancer == t {
+		if svcTypeLoadBalancer == t || svcTypeExternalIP == t {
 			err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local)
 			if err != nil {
 				log.Debugf("Failed to write LB source range NAT keys")
@@ -586,14 +586,16 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			return err
 		}
 		for _, lbIP := range sinfo.LoadBalancerIPStrings() {
-			extInfo := serviceInfoFromK8sServicePort(sinfo)
-			extInfo.clusterIP = net.ParseIP(lbIP)
-			err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
-			if err != nil {
-				log.Errorf("failed to apply LoadBalancer IP %s for service %s : %s", lbIP, sname, err)
-				continue
+			if lbIP != "" {
+				extInfo := serviceInfoFromK8sServicePort(sinfo)
+				extInfo.clusterIP = net.ParseIP(lbIP)
+				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
+				if err != nil {
+					log.Errorf("failed to apply LoadBalancer IP %s for service %s : %s", lbIP, sname, err)
+					continue
+				}
+				log.Debugf("LB status IP %s", lbIP)
 			}
-			log.Debugf("LB status IP %s", lbIP)
 		}
 		// N.B. we assume that k8s provide us with no duplicities
 		for _, extIP := range sinfo.ExternalIPStrings() {
@@ -1035,6 +1037,20 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKey, k8sSvc k8sp.ServicePortName
 		}
 	}
 
+	for _, lbip := range k8sInfo.LoadBalancerIPStrings() {
+		if lbip != "" {
+			if bpfSvc.Addr().String() == lbip {
+				if matchLBSrcIP() {
+					skey := &svcKey{
+						sname: k8sSvc,
+						extra: getSvcKeyExtra(svcTypeLoadBalancer, lbip),
+					}
+					log.Debugf("resolved %s as %s", bpfSvc, skey)
+					return skey
+				}
+			}
+		}
+	}
 	// just in case the NodePort port is the same as the Port
 	if sk := matchNP(); sk != nil {
 		return sk
