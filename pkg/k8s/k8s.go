@@ -406,11 +406,36 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			return nil, err
 		}
 
+		// Get IPv4 and IPv6 targets for NAT
+		var podnetV4, podnetV6 net.IPNet
+		for _, ipNet := range result.IPs {
+			if ipNet.Address.IP.To4() != nil {
+				podnetV4 = ipNet.Address
+				netmask, _ := podnetV4.Mask.Size()
+				if netmask != 32 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv4: Mask size is %d, not 32", ipNet, netmask)
+				}
+			} else {
+				podnetV6 = ipNet.Address
+				netmask, _ := podnetV6.Mask.Size()
+				if netmask != 128 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv6: Mask size is %d, not 128", ipNet, netmask)
+				}
+			}
+		}
+
 		for _, ip := range ips {
-			endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, api.IPNAT{
-				InternalIP: result.IPs[0].Address.IP.String(),
-				ExternalIP: ip,
-			})
+			if strings.Contains(ip, ":") {
+				endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, api.IPNAT{
+					InternalIP: podnetV6.IP.String(),
+					ExternalIP: ip,
+				})
+			} else {
+				endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, api.IPNAT{
+					InternalIP: podnetV4.IP.String(),
+					ExternalIP: ip,
+				})
+			}
 		}
 		logger.WithField("endpoint", endpoint).Info("Added floatingIPs to endpoint")
 	}
