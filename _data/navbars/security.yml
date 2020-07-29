@@ -14,6 +14,8 @@ section:
       path: /security/calico-network-policy
     - title: Get started with Calico network policy for OpenStack
       path: /security/network-policy-openstack
+    - title: Calico policy tutorial
+      path: /security/tutorials/calico-policy
   - title: Kubernetes policy
     path: /security/kubernetes-policy
     section:
@@ -83,7 +85,7 @@ section:
   section:
   - title: Configure encryption and authentication
     path: /security/comms/crypto-auth
-  - title: Schedule Typha for scaling to well-known nodes
+  - title: Schedule Typha to well-known-nodes
     path: /security/comms/reduce-nodes
   - title: Secure Calico Prometheus endpoints
     path: /security/comms/secure-metrics
