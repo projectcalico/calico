@@ -61,7 +61,7 @@ blocks:
     jobs:
     - name: FV Test matrix
       commands:
-      - " make check-wireguard"
+      - make check-wireguard
       - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 3
     epilogue:
