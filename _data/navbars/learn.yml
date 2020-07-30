@@ -1,27 +1,27 @@
 title: "Learn"
-description: /introduction/
-path: /introduction/
+description: /learn/
+path: /learn/
 order: 0
 section:
 - title: About Calico
-  path: /introduction/
+  path: /learn/about-calico
 - title: About Networking
-  path: /introduction/
+  path: /learn/
 - title: About Kubernetes Networking
-  path: /introduction/
+  path: /learn/
 - title: About Kubernetes and Calico Network Policy
-  path: /introduction/
+  path: /learn/
 - title: About Kubernetes Services
-  path: /introduction/
+  path: /learn/
 - title: About Kubernetes Ingress
-  path: /introduction/
+  path: /learn/
 - title: About Kubernetes Egress
-  path: /introduction/
+  path: /learn/
 - title: About Border Gateway Protocol (BGP)
-  path: /introduction/
+  path: /learn/
 - title: About Multi-Cloud Networking
-  path: /introduction/
+  path: /learn/
 - title: About Service Meshes
-  path: /introduction/
+  path: /learn/
 - title: About Calico Enterprise
-  path: /introduction/
+  path: /learns/
