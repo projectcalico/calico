@@ -481,7 +481,10 @@ compare_templates() {
         fi
         expected=/tests/compiled_templates/${testdir}/${f}
         actual=/etc/calico/confd/config/${f}
-        if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
+        
+        # Order of line in templates is not guaranteed for communities test, so sort and compare
+        if [[ $(diff --ignore-blank-lines -q ${expected} ${actual}) != "" ]] \
+          && [[ "${testdir}" != *"mesh/communities"* || $(diff <(sort ${expected}) <(sort ${actual})) != "" ]] ; then       
             if ! $record; then
                 rc=1;
             fi

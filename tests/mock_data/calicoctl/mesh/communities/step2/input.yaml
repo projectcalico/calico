@@ -12,6 +12,7 @@ spec:
       communities:
       - 5663:12  
       - bgp-comm-large
+      - 5663:12
     - cidr: fd00:96::/112
       communities:
       - bgp-comm-large

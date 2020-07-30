@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
@@ -913,30 +914,32 @@ func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, ke
 		var ipv6PrefixToAdvertise []bgpPrefix
 		for _, prefixAdvertisement := range v3res.Spec.PrefixAdvertisements {
 			cidr := prefixAdvertisement.CIDR
-			var communityValues []string
+
+			communitiesSet:= set.New()
 			for _, c := range prefixAdvertisement.Communities {
 				isCommunity := isValidCommunity(c)
 				// if c is a community value, use it directly, else get the community value from defined definedCommunities.
 				if !isCommunity {
 					for _, definedCommunity := range definedCommunities {
 						if definedCommunity.Name == c {
-							communityValues = append(communityValues, definedCommunity.Value)
+							communitiesSet.Add(definedCommunity.Value)
 							break
 						}
 					}
 				} else {
-					communityValues = append(communityValues, c)
+					communitiesSet.Add(c)
 				}
 			}
+
 			if strings.Contains(cidr, ":") {
 				ipv6PrefixToAdvertise = append(ipv6PrefixToAdvertise, bgpPrefix{
 					CIDR:        cidr,
-					Communities: communityValues,
+					Communities: getCommunitiesArray(communitiesSet),
 				})
 			} else {
 				ipv4PrefixToAdvertise = append(ipv4PrefixToAdvertise, bgpPrefix{
 					CIDR:        cidr,
-					Communities: communityValues,
+					Communities: getCommunitiesArray(communitiesSet),
 				})
 			}
 		}
@@ -1071,6 +1074,15 @@ func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key interfa
 
 func getNodeName(nodeName string) string {
 	return strings.TrimPrefix(nodeName, perNodeConfigNamePrefix)
+}
+
+func getCommunitiesArray(communitiesSet set.Set) []string {
+	var communityValue []string
+	communitiesSet.Iter(func(item interface{}) error {
+		communityValue = append(communityValue, item.(string))
+		return nil
+	})
+	return communityValue
 }
 
 func (c *client) onExternalIPsUpdate(externalIPs []string) {
