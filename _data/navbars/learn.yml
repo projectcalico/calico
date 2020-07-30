@@ -24,4 +24,4 @@ section:
 - title: About Service Meshes
   path: /learn/about-kubernetes-networking
 - title: About Calico Enterprise
-  path: /learns/about-kubernetes-networking
+  path: /learn/about-kubernetes-networking
