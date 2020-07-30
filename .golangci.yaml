@@ -1,0 +1,9 @@
+issues:
+  exclude-rules:
+  - path: _test\.go
+    linters:
+    - unused
+  - path: _test\.go
+    linters:
+      - staticcheck
+    text: "SA4017:|SA4006:"

@@ -211,7 +211,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 			order = float64(10)
 
 			// apply XDP policy to felix[1] blocking felixes[0] by IP
-			serverSelector := fmt.Sprintf("proto == 'udp' && role=='server'")
+			serverSelector := "proto == 'udp' && role=='server'"
 			xdpPolicy := api.NewGlobalNetworkPolicy()
 			xdpPolicy.Name = "xdp-filter-u" // keep name short, so it matches with the iptables chain name
 			xdpPolicy.Spec.Order = &order
@@ -227,7 +227,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, xdpPolicy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 
-			serverSelector = fmt.Sprintf("proto == 'tcp' && role=='server'")
+			serverSelector = "proto == 'tcp' && role=='server'"
 			xdpPolicy = api.NewGlobalNetworkPolicy()
 			xdpPolicy.Name = "xdp-filter-t" // keep name short, so it matches with the iptables chain name
 			xdpPolicy.Spec.Order = &order

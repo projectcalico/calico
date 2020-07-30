@@ -2141,10 +2141,12 @@ type ServiceAccountMatch struct {
 	Names    []string `protobuf:"bytes,2,rep,name=names" json:"names,omitempty"`
 }
 
-func (m *ServiceAccountMatch) Reset()                    { *m = ServiceAccountMatch{} }
-func (m *ServiceAccountMatch) String() string            { return proto1.CompactTextString(m) }
-func (*ServiceAccountMatch) ProtoMessage()               {}
-func (*ServiceAccountMatch) Descriptor() ([]byte, []int) { return fileDescriptorFelixbackend, []int{17} }
+func (m *ServiceAccountMatch) Reset()         { *m = ServiceAccountMatch{} }
+func (m *ServiceAccountMatch) String() string { return proto1.CompactTextString(m) }
+func (*ServiceAccountMatch) ProtoMessage()    {}
+func (*ServiceAccountMatch) Descriptor() ([]byte, []int) {
+	return fileDescriptorFelixbackend, []int{17}
+}
 
 func (m *ServiceAccountMatch) GetSelector() string {
 	if m != nil {
@@ -2825,10 +2827,12 @@ type ProcessStatusUpdate struct {
 	Uptime       float64 `protobuf:"fixed64,2,opt,name=uptime,proto3" json:"uptime,omitempty"`
 }
 
-func (m *ProcessStatusUpdate) Reset()                    { *m = ProcessStatusUpdate{} }
-func (m *ProcessStatusUpdate) String() string            { return proto1.CompactTextString(m) }
-func (*ProcessStatusUpdate) ProtoMessage()               {}
-func (*ProcessStatusUpdate) Descriptor() ([]byte, []int) { return fileDescriptorFelixbackend, []int{33} }
+func (m *ProcessStatusUpdate) Reset()         { *m = ProcessStatusUpdate{} }
+func (m *ProcessStatusUpdate) String() string { return proto1.CompactTextString(m) }
+func (*ProcessStatusUpdate) ProtoMessage()    {}
+func (*ProcessStatusUpdate) Descriptor() ([]byte, []int) {
+	return fileDescriptorFelixbackend, []int{33}
+}
 
 func (m *ProcessStatusUpdate) GetIsoTimestamp() string {
 	if m != nil {
