@@ -35,213 +35,207 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-var _ = Describe("BPF Load Balancer source range", func() {
+func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) {
+	svcs := newMockNATMap()
+	eps := newMockNATBackendMap()
+	aff := newMockAffinityMap()
 
-	testfn := func(extIPs, lbIPs []string) {
-		svcs := newMockNATMap()
-		eps := newMockNATBackendMap()
-		aff := newMockAffinityMap()
+	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
+	rt := proxy.NewRTCache()
 
-		nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
-		rt := proxy.NewRTCache()
+	tempOption := option(arg[0:1])
+	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 
-		s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
-
-		svcKey := k8sp.ServicePortName{
-			NamespacedName: types.NamespacedName{
-				Namespace: "default",
-				Name:      "test-service",
-			},
-		}
-
-		state := proxy.DPSyncerState{
-			SvcMap: k8sp.ServiceMap{
-				svcKey: proxy.NewK8sServicePort(
-					net.IPv4(10, 0, 0, 2),
-					2222,
-					v1.ProtocolTCP,
-					proxy.K8sSvcWithExternalIPs(extIPs),
-					proxy.K8sSvcWithLoadBalancerIPs(lbIPs),
-					proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "33.0.1.2/16"}),
-				),
-			},
-			EpsMap: k8sp.EndpointsMap{
-				svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Endpoint: "10.1.0.1:5555"}},
-			},
-		}
-		makestep := func(step func()) func() {
-			return func() {
-				defer func() {
-					log("svcs = %+v\n", svcs)
-					log("eps = %+v\n", eps)
-				}()
-
-				step()
-			}
-		}
-
-		saddr1 := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
-		saddr2 := ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
-		saddr3 := ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
-
-		extIP := net.IPv4(35, 0, 0, 2)
-		proto := proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)
-		keyWithSaddr1 := nat.NewNATKeySrc(extIP, 2222, proto, saddr1)
-		keyWithSaddr2 := nat.NewNATKeySrc(extIP, 2222, proto, saddr2)
-		keyWithSaddr3 := nat.NewNATKeySrc(extIP, 2222, proto, saddr3)
-		keyWithExtIP := nat.NewNATKey(extIP, 2222, proto)
-		BlackholeNATVal := nat.NewNATValue(0, nat.BlackHoleCount, 0, 0)
-
-		It("should make the right test transitions", func() {
-
-			By("adding LBSourceRangeIP for existing service", makestep(func() {
-
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(svcs.m).To(HaveLen(4))
-
-				key := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222, proto, saddr1)
-				Expect(svcs.m).NotTo(HaveKey(key))
-
-				key = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222, proto, saddr2)
-				Expect(svcs.m).NotTo(HaveKey(key))
-
-				key = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proto)
-				Expect(svcs.m).To(HaveKey(key))
-
-				Expect(svcs.m).To(HaveKey(keyWithSaddr1))
-				Expect(svcs.m).To(HaveKey(keyWithSaddr2))
-				Expect(svcs.m).To(HaveKey(keyWithExtIP))
-
-				val, ok := svcs.m[keyWithExtIP]
-				Expect(ok).To(BeTrue())
-				Expect(val).To(Equal(BlackholeNATVal))
-
-			}))
-
-			By("updating LBSourceRangeIP for existing service", makestep(func() {
-				Expect(svcs.m).To(HaveLen(4))
-				state.SvcMap[svcKey] = proxy.NewK8sServicePort(
-					net.IPv4(10, 0, 0, 2),
-					2222,
-					v1.ProtocolTCP,
-					proxy.K8sSvcWithExternalIPs(extIPs),
-					proxy.K8sSvcWithLoadBalancerIPs(lbIPs),
-					proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "23.0.1.2/16"}),
-				)
-
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(svcs.m).To(HaveLen(4))
-
-				Expect(svcs.m).To(HaveKey(keyWithSaddr1))
-				Expect(svcs.m).To(HaveKey(keyWithSaddr3))
-				Expect(svcs.m).NotTo(HaveKey(keyWithSaddr2))
-
-			}))
-
-			By("Deleting one LBSourceRangeIP for existing service", makestep(func() {
-				state.SvcMap[svcKey] = proxy.NewK8sServicePort(
-					net.IPv4(10, 0, 0, 2),
-					2222,
-					v1.ProtocolTCP,
-					proxy.K8sSvcWithExternalIPs(extIPs),
-					proxy.K8sSvcWithLoadBalancerIPs(lbIPs),
-					proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
-				)
-
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(svcs.m).To(HaveLen(3))
-
-				Expect(svcs.m).To(HaveKey(keyWithSaddr1))
-				Expect(svcs.m).NotTo(HaveKey(keyWithSaddr3))
-
-			}))
-
-			By("Deleting LBSourceRangeIP for existing service", makestep(func() {
-				state.SvcMap[svcKey] = proxy.NewK8sServicePort(
-					net.IPv4(10, 0, 0, 2),
-					2222,
-					v1.ProtocolTCP,
-					proxy.K8sSvcWithExternalIPs(extIPs),
-					proxy.K8sSvcWithLoadBalancerIPs(lbIPs),
-					proxy.K8sSvcWithLBSourceRangeIPs([]string{}),
-				)
-
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(svcs.m).To(HaveLen(2))
-
-				Expect(svcs.m).NotTo(HaveKey(keyWithSaddr1))
-				Expect(svcs.m).NotTo(HaveKey(keyWithSaddr3))
-
-			}))
-
-			By("Adding new entries to the map with different source IPs", makestep(func() {
-				var tempLbIPs, tempExtIPs []string
-				if len(extIPs) == 0 {
-					tempLbIPs = append(lbIPs, "45.0.1.2")
-				} else {
-					tempExtIPs = append(extIPs, "45.0.1.2")
-				}
-				state.SvcMap[svcKey] = proxy.NewK8sServicePort(
-					net.IPv4(10, 0, 0, 2),
-					2222,
-					v1.ProtocolTCP,
-					proxy.K8sSvcWithExternalIPs(tempExtIPs),
-					proxy.K8sSvcWithLoadBalancerIPs(tempLbIPs),
-					proxy.K8sSvcWithLBSourceRangeIPs([]string{"33.0.1.2/24", "38.0.1.2/16", "40.0.1.2/32"}),
-				)
-
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(svcs.m).To(HaveLen(9))
-				s.Stop()
-			}))
-
-			By("Remove stale src range entries after syncer restarts", makestep(func() {
-				state.SvcMap[svcKey] = proxy.NewK8sServicePort(
-					net.IPv4(10, 0, 0, 2),
-					2222,
-					v1.ProtocolTCP,
-					proxy.K8sSvcWithExternalIPs(extIPs),
-					proxy.K8sSvcWithLoadBalancerIPs(lbIPs),
-					proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
-				)
-				s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(svcs.m).To(HaveLen(3))
-			}))
-
-			By("Remove all stale src ranges after syncer restarts", makestep(func() {
-				state.SvcMap[svcKey] = proxy.NewK8sServicePort(
-					net.IPv4(10, 0, 0, 2),
-					2222,
-					v1.ProtocolTCP,
-					proxy.K8sSvcWithExternalIPs(extIPs),
-					proxy.K8sSvcWithLoadBalancerIPs(lbIPs),
-				)
-				s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(svcs.m).To(HaveLen(2))
-			}))
-
-			By("deleting the services", makestep(func() {
-				delete(state.SvcMap, svcKey)
-
-				err := s.Apply(state)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(svcs.m).To(HaveLen(0))
-				Expect(eps.m).To(HaveLen(0))
-			}))
-
-		})
+	svcKey := k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{
+			Namespace: "default",
+			Name:      "test-service",
+		},
 	}
-	testfn([]string{}, []string{"35.0.0.2"})
-	testfn([]string{"35.0.0.2"}, []string{})
+
+	state := proxy.DPSyncerState{
+		SvcMap: k8sp.ServiceMap{
+			svcKey: proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				tempOption,
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "33.0.1.2/16"}),
+			),
+		},
+		EpsMap: k8sp.EndpointsMap{
+			svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Endpoint: "10.1.0.1:5555"}},
+		},
+	}
+	makestep := func(step func()) func() {
+		return func() {
+			defer func() {
+				log("svcs = %+v\n", svcs)
+				log("eps = %+v\n", eps)
+			}()
+
+			step()
+		}
+	}
+
+	saddr1 := ip.MustParseCIDROrIP("35.0.1.2/24").(ip.V4CIDR)
+	saddr2 := ip.MustParseCIDROrIP("33.0.1.2/16").(ip.V4CIDR)
+	saddr3 := ip.MustParseCIDROrIP("23.0.1.2/16").(ip.V4CIDR)
+
+	extIP := net.IPv4(35, 0, 0, 2)
+	proto := proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)
+	keyWithSaddr1 := nat.NewNATKeySrc(extIP, 2222, proto, saddr1)
+	keyWithSaddr2 := nat.NewNATKeySrc(extIP, 2222, proto, saddr2)
+	keyWithSaddr3 := nat.NewNATKeySrc(extIP, 2222, proto, saddr3)
+	keyWithExtIP := nat.NewNATKey(extIP, 2222, proto)
+	BlackholeNATVal := nat.NewNATValue(0, nat.BlackHoleCount, 0, 0)
+
+	It("should make the right test transitions", func() {
+
+		By("adding LBSourceRangeIP for existing service", makestep(func() {
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(4))
+
+			key := nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222, proto, saddr1)
+			Expect(svcs.m).NotTo(HaveKey(key))
+
+			key = nat.NewNATKeySrc(net.IPv4(10, 0, 0, 2), 2222, proto, saddr2)
+			Expect(svcs.m).NotTo(HaveKey(key))
+
+			key = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proto)
+			Expect(svcs.m).To(HaveKey(key))
+
+			Expect(svcs.m).To(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).To(HaveKey(keyWithSaddr2))
+			Expect(svcs.m).To(HaveKey(keyWithExtIP))
+
+			val, ok := svcs.m[keyWithExtIP]
+			Expect(ok).To(BeTrue())
+			Expect(val).To(Equal(BlackholeNATVal))
+
+		}))
+
+		By("updating LBSourceRangeIP for existing service", makestep(func() {
+			Expect(svcs.m).To(HaveLen(4))
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				tempOption,
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "23.0.1.2/16"}),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(4))
+
+			Expect(svcs.m).To(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).To(HaveKey(keyWithSaddr3))
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr2))
+
+		}))
+
+		By("Deleting one LBSourceRangeIP for existing service", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				tempOption,
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(3))
+
+			Expect(svcs.m).To(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr3))
+
+		}))
+
+		By("Deleting LBSourceRangeIP for existing service", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				tempOption,
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{}),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(2))
+
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr1))
+			Expect(svcs.m).NotTo(HaveKey(keyWithSaddr3))
+
+		}))
+
+		By("Adding new entries to the map with different source IPs", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				option(arg),
+				//proxy.K8sSvcWithExternalIPs(tempExtIPs),
+				//proxy.K8sSvcWithLoadBalancerIPs(tempLbIPs),
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{"33.0.1.2/24", "38.0.1.2/16", "40.0.1.2/32"}),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(9))
+			s.Stop()
+		}))
+
+		By("Remove stale src range entries after syncer restarts", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				tempOption,
+				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
+			)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(3))
+		}))
+
+		By("Remove all stale src ranges after syncer restarts", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				tempOption,
+			)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcs.m).To(HaveLen(2))
+		}))
+
+		By("deleting the services", makestep(func() {
+			delete(state.SvcMap, svcKey)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(0))
+			Expect(eps.m).To(HaveLen(0))
+		}))
+
+	})
+
+}
+
+var _ = Describe("BPF Load Balancer source range with external IP", func() {
+	testfn(proxy.K8sSvcWithExternalIPs, []string{"35.0.0.2", "45.0.1.2"})
+})
+
+var _ = Describe("BPF Load Balancer source range with LoadBalancer IP", func() {
+	testfn(proxy.K8sSvcWithLoadBalancerIPs, []string{"35.0.0.2", "45.0.1.2"})
 })
