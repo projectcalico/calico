@@ -61,14 +61,6 @@ blocks:
     jobs:
     - name: FV Test matrix
       commands:
-      # Check that Wireguard is NOT available on the normal Semaphore VM.  If it becomes
-      # available in future, then:
-      #
-      # 1. We should remove the `make fv GINKGO_FOCUS=WireGuard-Supported` that we're
-      # running on the newer kernel VMs (below), so as not to run those tests twice.
-      #
-      # 2. We should delete the WireGuard-Unsupported tests, or find another way to run
-      # them in CI, as they only do anything when WireGuard is NOT available.
       - " make check-wireguard"
       - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 3
