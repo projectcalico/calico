@@ -6,22 +6,22 @@ section:
 - title: About Calico
   path: /learn/about-calico
 - title: About Networking
-  path: /learn/
+  path: /learn/about-networking
 - title: About Kubernetes Networking
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Kubernetes and Calico Network Policy
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Kubernetes Services
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Kubernetes Ingress
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Kubernetes Egress
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Border Gateway Protocol (BGP)
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Multi-Cloud Networking
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Service Meshes
-  path: /learn/
+  path: /learn/about-kubernetes-networking
 - title: About Calico Enterprise
-  path: /learns/
+  path: /learns/about-kubernetes-networking
