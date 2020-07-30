@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
@@ -897,11 +898,39 @@ var _ = Describe("BPF Syncer", func() {
 
 type mockMapDummy struct{}
 
-func (m *mockMapDummy) Open() error {
+func (*mockMapDummy) GetName() string {
+	return "mockMapDummy"
+}
+
+func (*mockMapDummy) Open() error {
 	return nil
 }
 
-func (m *mockMapDummy) EnsureExists() error {
+func (*mockMapDummy) EnsureExists() error {
+	return nil
+}
+
+func (*mockMapDummy) MapFD() bpf.MapFD {
+	return 0
+}
+
+func (*mockMapDummy) Path() string {
+	return "mockMapDummy"
+}
+
+func (*mockMapDummy) Iter(_ bpf.MapIter) error {
+	return nil
+}
+
+func (*mockMapDummy) Update(k, v []byte) error {
+	return nil
+}
+
+func (*mockMapDummy) Get(k []byte) ([]byte, error) {
+	return nil, unix.ENOENT
+}
+
+func (*mockMapDummy) Delete(k []byte) error {
 	return nil
 }
 
