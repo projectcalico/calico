@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.40
+GO_BUILD_VER?=v0.45
 
 # This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
