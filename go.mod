@@ -1,18 +1,16 @@
 module github.com/projectcalico/kube-controllers
 
-go 1.13
+go 1.14
 
 require (
 	github.com/apparentlymart/go-cidr v1.0.1
-	github.com/golangci/golangci-lint v1.27.0 // indirect
-	github.com/hashicorp/go-version v1.2.0 // indirect
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20200728150932-d6d4c50bed34
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200728221526-a5e781268cd1
+	github.com/projectcalico/felix v0.0.0-20200730215335-083cb62a7d37
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200730160414-7f698f7025e9
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
@@ -22,12 +20,10 @@ require (
 	golang.org/x/tools v0.0.0-20200601175630-2caf76543d99 // indirect
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
-
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/apiserver v0.17.2
 	k8s.io/client-go v0.17.2
-
 	k8s.io/klog v1.0.0
 )
 
