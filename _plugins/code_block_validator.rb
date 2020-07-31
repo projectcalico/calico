@@ -6,8 +6,8 @@ Jekyll::Hooks.register :pages, :pre_render do |post|
     # do nothing if url indicates legal folder
     if !post.path.match(/\/legal\//)
         occurences = []
-        # Check content of the post for code blocks.
-        post.content.scan(/(?:[`]{3}(.*?)[`]{3})/m){ |match|
+        # Check post content and extract code blocks
+        post.content.scan(/(?:[`]{3}|(?<!`)[`](?!`))(.*?)(?:[`]{3}|(?<!`)[`](?!`))/m){ |match|
             # Check all matched cases
             match.each do |block|
                 # convert each character to an array of Decimal numbers
@@ -20,7 +20,7 @@ Jekyll::Hooks.register :pages, :pre_render do |post|
                 end
             end
         }
-        # was there any special characters?
+        # were there any special characters?
         if occurences.length > 0
             occurences.each do |sentence|
                 # printing line to user
