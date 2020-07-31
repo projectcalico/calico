@@ -35,7 +35,7 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) {
+func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	svcs := newMockNATMap()
 	eps := newMockNATBackendMap()
 	aff := newMockAffinityMap()
@@ -43,7 +43,9 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	tempOption := option(arg[0:1])
+	externalIP := makeIPs([]string{"35.0.0.2"})
+	twoExternalIPs := makeIPs([]string{"35.0.0.2", "45.0.1.2"})
+
 	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 
 	svcKey := k8sp.ServicePortName{
@@ -59,7 +61,7 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				tempOption,
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "33.0.1.2/16"}),
 			),
 		},
@@ -124,7 +126,7 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				tempOption,
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "23.0.1.2/16"}),
 			)
 
@@ -143,7 +145,7 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				tempOption,
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
 
@@ -161,7 +163,7 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				tempOption,
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{}),
 			)
 
@@ -179,9 +181,7 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				option(arg),
-				//proxy.K8sSvcWithExternalIPs(tempExtIPs),
-				//proxy.K8sSvcWithLoadBalancerIPs(tempLbIPs),
+				twoExternalIPs,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"33.0.1.2/24", "38.0.1.2/16", "40.0.1.2/32"}),
 			)
 
@@ -196,7 +196,7 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				tempOption,
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
 			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
@@ -210,7 +210,7 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				tempOption,
+				externalIP,
 			)
 			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 			err := s.Apply(state)
@@ -232,10 +232,12 @@ func testfn(option func(ips []string) proxy.K8sServicePortOption, arg []string) 
 
 }
 
-var _ = Describe("BPF Load Balancer source range with external IP", func() {
-	testfn(proxy.K8sSvcWithExternalIPs, []string{"35.0.0.2", "45.0.1.2"})
-})
+var _ = Describe("BPF Load Balancer source range", func() {
+	Context("With external IP", func() {
+		testfn(proxy.K8sSvcWithExternalIPs)
+	})
 
-var _ = Describe("BPF Load Balancer source range with LoadBalancer IP", func() {
-	testfn(proxy.K8sSvcWithLoadBalancerIPs, []string{"35.0.0.2", "45.0.1.2"})
+	Context("With LoadBalancer IP", func() {
+		testfn(proxy.K8sSvcWithLoadBalancerIPs)
+	})
 })
