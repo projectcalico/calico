@@ -27,6 +27,7 @@ In a modern enterprise or public cloud network, the layers commonly map as follo
 
 ### Anatomy of a network packet
 
+![Anatomy of a network packet]({{site.baseurl}}/images/anatomy-of-a-packet.svg)
 
 
 
