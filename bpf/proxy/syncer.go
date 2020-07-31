@@ -70,12 +70,14 @@ const (
 	svcTypeExternalIP svcType = iota
 	svcTypeNodePort
 	svcTypeNodePortRemote
+	svcTypeLoadBalancer
 )
 
 var svcType2String = map[svcType]string{
 	svcTypeNodePort:       "NodePort",
 	svcTypeExternalIP:     "ExternalIP",
 	svcTypeNodePortRemote: "NodePortRemote",
+	svcTypeLoadBalancer:   "LoadBalancer",
 }
 
 func getSvcKeyExtra(t svcType, ip string) string {
@@ -87,7 +89,7 @@ func hasSvcKeyExtra(skey svcKey, t svcType) bool {
 }
 
 func isSvcKeyDerived(skey svcKey) bool {
-	return hasSvcKeyExtra(skey, svcTypeExternalIP) || hasSvcKeyExtra(skey, svcTypeNodePort)
+	return hasSvcKeyExtra(skey, svcTypeExternalIP) || hasSvcKeyExtra(skey, svcTypeNodePort) || hasSvcKeyExtra(skey, svcTypeLoadBalancer)
 }
 
 type stickyFrontend struct {
@@ -550,7 +552,7 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 		if err := s.writeSvc(sinfo, svc.id, count, local); err != nil {
 			return err
 		}
-		if svcTypeExternalIP == t {
+		if svcTypeLoadBalancer == t || svcTypeExternalIP == t {
 			err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local)
 			if err != nil {
 				log.Debugf("Failed to write LB source range NAT keys")
@@ -583,7 +585,18 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		if err := s.applySvc(skey, sinfo, eps, s.cleanupDerived); err != nil {
 			return err
 		}
-
+		for _, lbIP := range sinfo.LoadBalancerIPStrings() {
+			if lbIP != "" {
+				extInfo := serviceInfoFromK8sServicePort(sinfo)
+				extInfo.clusterIP = net.ParseIP(lbIP)
+				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
+				if err != nil {
+					log.Errorf("failed to apply LoadBalancer IP %s for service %s : %s", lbIP, sname, err)
+					continue
+				}
+				log.Debugf("LB status IP %s", lbIP)
+			}
+		}
 		// N.B. we assume that k8s provide us with no duplicities
 		for _, extIP := range sinfo.ExternalIPStrings() {
 			extInfo := serviceInfoFromK8sServicePort(sinfo)
@@ -1024,6 +1037,20 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKey, k8sSvc k8sp.ServicePortName
 		}
 	}
 
+	for _, lbip := range k8sInfo.LoadBalancerIPStrings() {
+		if lbip != "" {
+			if bpfSvc.Addr().String() == lbip {
+				if matchLBSrcIP() {
+					skey := &svcKey{
+						sname: k8sSvc,
+						extra: getSvcKeyExtra(svcTypeLoadBalancer, lbip),
+					}
+					log.Debugf("resolved %s as %s", bpfSvc, skey)
+					return skey
+				}
+			}
+		}
+	}
 	// just in case the NodePort port is the same as the Port
 	if sk := matchNP(); sk != nil {
 		return sk
@@ -1375,6 +1402,13 @@ func stringsEqual(a, b []string) bool {
 	}
 
 	return true
+}
+
+//K8sSvcWithLoadBalancerIPs set LoadBalancerIPStrings
+func K8sSvcWithLoadBalancerIPs(ips []string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).loadBalancerIPStrings = ips
+	}
 }
 
 // K8sSvcWithLBSourceRangeIPs sets LBSourcePortRangeIPs

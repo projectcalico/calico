@@ -35,13 +35,16 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-var _ = Describe("BPF Load Balancer source range", func() {
+func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	svcs := newMockNATMap()
 	eps := newMockNATBackendMap()
 	aff := newMockAffinityMap()
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
+
+	externalIP := makeIPs([]string{"35.0.0.2"})
+	twoExternalIPs := makeIPs([]string{"35.0.0.2", "45.0.1.2"})
 
 	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 
@@ -51,13 +54,14 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Name:      "test-service",
 		},
 	}
+
 	state := proxy.DPSyncerState{
 		SvcMap: k8sp.ServiceMap{
 			svcKey: proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "33.0.1.2/16"}),
 			),
 		},
@@ -122,7 +126,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "23.0.1.2/16"}),
 			)
 
@@ -141,7 +145,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
 
@@ -159,7 +163,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{}),
 			)
 
@@ -177,7 +181,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2", "45.0.1.2"}),
+				twoExternalIPs,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"33.0.1.2/24", "38.0.1.2/16", "40.0.1.2/32"}),
 			)
 
@@ -192,7 +196,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
 			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
@@ -206,7 +210,7 @@ var _ = Describe("BPF Load Balancer source range", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				externalIP,
 			)
 			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 			err := s.Apply(state)
@@ -224,5 +228,16 @@ var _ = Describe("BPF Load Balancer source range", func() {
 			Expect(eps.m).To(HaveLen(0))
 		}))
 
+	})
+
+}
+
+var _ = Describe("BPF Load Balancer source range", func() {
+	Context("With external IP", func() {
+		testfn(proxy.K8sSvcWithExternalIPs)
+	})
+
+	Context("With LoadBalancer IP", func() {
+		testfn(proxy.K8sSvcWithLoadBalancerIPs)
 	})
 })
