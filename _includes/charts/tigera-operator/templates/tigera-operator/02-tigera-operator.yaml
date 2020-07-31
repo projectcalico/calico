@@ -42,6 +42,10 @@ spec:
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
               value: {{.Values.tigeraOperator.version}}
+          envFrom:
+            - configMapRef:
+                name: kubernetes-services-endpoint
+                optional: true
 {{- if eq .Values.installation.kubernetesProvider "openshift" }}
       initContainers:
         - name: create-initial-resources
