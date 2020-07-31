@@ -38,9 +38,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
-	"github.com/projectcalico/node/pkg/calicoclient"
-	"github.com/projectcalico/node/pkg/startup/autodetection"
-	"github.com/projectcalico/node/pkg/startup/autodetection/ipv4"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -48,6 +45,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"github.com/projectcalico/node/pkg/calicoclient"
+	"github.com/projectcalico/node/pkg/startup/autodetection"
+	"github.com/projectcalico/node/pkg/startup/autodetection/ipv4"
 )
 
 const (
@@ -60,6 +61,7 @@ const (
 	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
 	AUTODETECTION_METHOD_INTERFACE      = "interface="
 	AUTODETECTION_METHOD_SKIP_INTERFACE = "skip-interface="
+	AUTODETECTION_METHOD_CIDR           = "cidr="
 
 	// KubeadmConfigConfigMap is defined in k8s.io/kubernetes, which we can't import due to versioning issues.
 	KubeadmConfigConfigMap = "kubeadm-config"
@@ -636,6 +638,20 @@ func autoDetectCIDR(method string, version int) *cnet.IPNet {
 		// Regexes are passed in as a string separated by ","
 		ifRegexes := regexp.MustCompile(`\s*,\s*`).Split(ifStr, -1)
 		return autoDetectCIDRByInterface(ifRegexes, version)
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CIDR) {
+		// Autodetect the IP by filtering interface by its address.
+		cidrStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CIDR)
+		// CIDRs are passed in as a string separated by ","
+		matches := []cnet.IPNet{}
+		for _, r := range regexp.MustCompile(`\s*,\s*`).Split(cidrStr, -1) {
+			_, cidr, err := cnet.ParseCIDR(r)
+			if err != nil {
+				log.Errorf("Invalid CIDR %q for IP autodetection method: %s", r, method)
+				return nil
+			}
+			matches = append(matches, *cidr)
+		}
+		return autoDetectCIDRByCIDR(matches, version)
 	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
 		// Autodetect the IP by connecting a UDP socket to a supplied address.
 		destStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
@@ -661,7 +677,7 @@ func autoDetectCIDR(method string, version int) *cnet.IPNet {
 func autoDetectCIDRFirstFound(version int) *cnet.IPNet {
 	incl := []string{}
 
-	iface, cidr, err := autodetection.FilteredEnumeration(incl, DEFAULT_INTERFACES_TO_EXCLUDE, version)
+	iface, cidr, err := autodetection.FilteredEnumeration(incl, DEFAULT_INTERFACES_TO_EXCLUDE, nil, version)
 	if err != nil {
 		log.Warnf("Unable to auto-detect an IPv%d address: %s", version, err)
 		return nil
@@ -675,13 +691,27 @@ func autoDetectCIDRFirstFound(version int) *cnet.IPNet {
 // autoDetectCIDRByInterface auto-detects the first valid Network on the interfaces
 // matching the supplied interface regex.
 func autoDetectCIDRByInterface(ifaceRegexes []string, version int) *cnet.IPNet {
-	iface, cidr, err := autodetection.FilteredEnumeration(ifaceRegexes, nil, version)
+	iface, cidr, err := autodetection.FilteredEnumeration(ifaceRegexes, nil, nil, version)
 	if err != nil {
 		log.Warnf("Unable to auto-detect an IPv%d address using interface regexes %v: %s", version, ifaceRegexes, err)
 		return nil
 	}
 
 	log.Infof("Using autodetected IPv%d address %s on matching interface %s", version, cidr.String(), iface.Name)
+
+	return cidr
+}
+
+// autoDetectCIDRByCIDR auto-detects the first valid Network on the interfaces
+// matching the supplied cidr.
+func autoDetectCIDRByCIDR(matches []cnet.IPNet, version int) *cnet.IPNet {
+	iface, cidr, err := autodetection.FilteredEnumeration(nil, nil, matches, version)
+	if err != nil {
+		log.Warnf("Unable to auto-detect an IPv%d address using interface cidr %s: %s", version, matches, err)
+		return nil
+	}
+
+	log.Infof("Using autodetected IPv%d address %s on interface %s matching cidrs %+v", version, cidr.String(), iface.Name, matches)
 
 	return cidr
 }
@@ -705,7 +735,7 @@ func autoDetectCIDRBySkipInterface(ifaceRegexes []string, version int) *cnet.IPN
 	excl := DEFAULT_INTERFACES_TO_EXCLUDE
 	excl = append(excl, ifaceRegexes...)
 
-	iface, cidr, err := autodetection.FilteredEnumeration(incl, excl, version)
+	iface, cidr, err := autodetection.FilteredEnumeration(incl, excl, nil, version)
 	if err != nil {
 		log.Warnf("Unable to auto-detect an IPv%d address while excluding %v: %s", version, ifaceRegexes, err)
 		return nil

@@ -532,7 +532,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				// Unknown error releasing the address.
 				logCtx.WithError(err).WithFields(log.Fields{
-					"IP": ipAddrStr,
+					"IP":     ipAddrStr,
 					"Handle": handle,
 				}).Fatal("Error releasing address by handle")
 			}
