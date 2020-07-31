@@ -3,6 +3,7 @@ module github.com/projectcalico/node
 go 1.14
 
 require (
+	github.com/aws/aws-sdk-go v1.33.17 // indirect
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
