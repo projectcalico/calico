@@ -2,7 +2,7 @@
 title: About Calico
 description: The value of using Calico for networking and network policy for workloads and hosts.
 show_title: false
-canonical_url: '/learn/about-calico'
+canonical_url: '/about/about-calico'
 custom_css: css/intro.css
 ---
 
