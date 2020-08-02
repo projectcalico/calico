@@ -75,25 +75,3 @@ One common use case for NAT is to allow devices with private IP address to talk 
 
 Another common use case for NAT is by load balancers when load balancing incoming connections to one or more devices being load balanced to. In this case the load balancer performs DNAT (Destination Network Address Translation) to change the destination IP address of the incoming connection to the IP address of the chosen device it is load balancing to. The load balancer then reverses this NAT on response packets so neither source or destination device is aware the mapping is happening.
 
-### MTU
-
-Maximum Transmission Unit ({% include open-new-window.html text='MTU' url='https://en.wikipedia.org/wiki/Maximum_transmission_unit' %}) is the 
-
-https://en.wikipedia.org/wiki/Maximum_transmission_unit
-OSI model, L2, L3, Encap (VXLAN, IPIP), CIDRs, Routing, MTU, NAT, DNS
-
-
-
-
-
-A deeper look at L2 and L3
-Anatomy of a packet
-
-MTU
-IP Addressing
-IPv4, IPv6, CIDRs
-IP Routing
-Overlay Networks
-Network Address Translation (NAT)
-Overview of Domain Name Service (DNS)
-
