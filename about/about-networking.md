@@ -38,7 +38,7 @@ The Maximum Transmission Unit ({% include open-new-window.html text='MTU' url='h
 
 ### IP addressing, subnets and IP routing
 
-The L3 network layer introduces IP addresses and typically marks the boundary between the part of networking application developers care about, and the part of networking that network engineers care about. In particular application developers typically regard IP addresses as the source and destination of the network traffic, but have much less of a need to understand L3 routing or anything lower in the network stack, which is more the domain of network engineers.
+The L3 network layer introduces IP addresses and typically marks the boundary between the part of networking that application developers care about, and the part of networking that network engineers care about. In particular application developers typically regard IP addresses as the source and destination of the network traffic, but have much less of a need to understand L3 routing or anything lower in the network stack, which is more the domain of network engineers.
 
 There are two variants of IP addresses: IPv4 and IPv6.
 
