@@ -28,7 +28,7 @@ In a modern enterprise or public cloud network, the layers commonly map as follo
 
 ### Anatomy of a network packet
 
-When sending data over the network, each layer in the network stack adds its own header containing the control/metadata the layer needs to know in order to process the packet as it traverses the network, passing the resulting packet on to the next layer of the stack. In this way the complete packet it produces, which includes all the control/metadata required by every layer of the stack, without any layer understand the data or the control/metadata of adjacent network layers. 
+When sending data over the network, each layer in the network stack adds its own header containing the control/metadata the layer needs to know in order to process the packet as it traverses the network, passing the resulting packet on to the next layer of the stack. In this way the complete packet is produced, which includes all the control/metadata required by every layer of the stack, without any layer understanding the data or needing to process the control/metadata of adjacent network layers. 
 
 ![Anatomy of a network packet]({{site.baseurl}}/images/anatomy-of-a-packet.svg)
 
@@ -38,7 +38,7 @@ The Maximum Transmission Unit ({% include open-new-window.html text='MTU' url='h
 
 ### IP addressing, subnets and IP routing
 
-L3 of the network stack typically marks the boundary between networking application developers care about, and networking that network engineers care about. In particular application developers typically regard IP addresses as the source and destination of the network traffic, but have much less of a need to understand L3 routing or anything lower in the network stack, which is more the domain of network engineers.
+The L3 network layer introduces IP addresses and typically marks the boundary between the part of networking application developers care about, and the part of networking that network engineers care about. In particular application developers typically regard IP addresses as the source and destination of the network traffic, but have much less of a need to understand L3 routing or anything lower in the network stack, which is more the domain of network engineers.
 
 There are two variants of IP addresses: IPv4 and IPv6.
 
