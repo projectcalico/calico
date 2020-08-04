@@ -127,7 +127,8 @@ clean:
 	       $(GENERATED_FILES) \
 	       go/docs/calc.pdf \
 	       release-notes-* \
-	       fv/infrastructure/crds/
+	       fv/infrastructure/crds/ \
+	       vendor
 	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
