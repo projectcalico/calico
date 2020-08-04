@@ -26,11 +26,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	//	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/mock"
 	"github.com/projectcalico/felix/bpf/proxy"
 )
 
@@ -43,9 +43,9 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 
 		syncer, err := proxy.NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
-			&mockMapDummy{},
-			&mockMapDummy{},
-			&mockMapDummy{},
+			&mock.DummyMap{},
+			&mock.DummyMap{},
+			&mock.DummyMap{},
 			proxy.NewRTCache(),
 		)
 		Expect(err).ShouldNot(HaveOccurred())
@@ -55,7 +55,7 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 			syncC:    make(chan struct{}, 1),
 		}
 
-		connScan := conntrack.NewScanner(&mockMapDummy{})
+		connScan := conntrack.NewScanner(&mock.DummyMap{})
 
 		b.StartTimer()
 
