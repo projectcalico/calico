@@ -62,7 +62,8 @@ clean:
 		docker-image/bin \
 		build \
 		report/*.xml \
-		release-notes-*
+		release-notes-* \
+		vendor
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
