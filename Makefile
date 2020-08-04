@@ -60,6 +60,7 @@ clean:
 	rm -f report/*.xml
 	rm -f tests/crds.yaml
 	rm -rf tests/crds
+	rm -rf vendor
 
 ###############################################################################
 # Updating pins
