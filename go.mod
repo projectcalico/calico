@@ -8,7 +8,7 @@ require (
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/felix v0.0.0-20200803100349-4d3e35929fbb
+	github.com/projectcalico/felix v0.0.0-20200804224128-3d9637b64118
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200730160414-7f698f7025e9
 	github.com/projectcalico/typha v0.7.3-0.20200728223621-45dbca780350
 	github.com/sirupsen/logrus v1.4.2
