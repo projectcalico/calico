@@ -15,6 +15,7 @@
 package bpf
 
 import (
+	"encoding/binary"
 	"reflect"
 	"strings"
 	"sync"
@@ -138,6 +139,19 @@ import (
 //    return attr->test.duration;
 // }
 //
+// struct offsets {
+//   size_t map_fd, key, value, flags;
+// };
+//
+// struct offsets get_offsets() {
+//   return (struct offsets){
+//     .map_fd = offsetof(union bpf_attr, map_fd),
+//     .key = offsetof(union bpf_attr, key),
+//     .value = offsetof(union bpf_attr, value),
+//     .flags = offsetof(union bpf_attr, flags),
+//   };
+// };
+//
 // int bpf_map_call(int cmd, __u32 map_fd, void *pointer_to_key, void *pointer_to_value, __u64 flags) {
 //    union bpf_attr attr = {};
 //
@@ -150,6 +164,8 @@ import (
 // }
 //
 import "C"
+
+var offsets C.struct_offsets = C.get_offsets()
 
 func SyscallSupport() bool {
 	return true
@@ -448,22 +464,25 @@ func NewMapIterator(mapFD MapFD, keySize, valueSize int) (*MapIterator, error) {
 		return nil, err
 	}
 
-	mi := &MapIterator{
+	m := &MapIterator{
 		mapFD:     mapFD,
+		attrs:     C.bpf_attr_alloc(),
 		keySize:   keySize,
 		valueSize: valueSize,
 		nextKey:   C.malloc((C.size_t)(keySize)),
 		value:     C.malloc((C.size_t)(valueSize)),
 	}
 
-	C.memset(mi.nextKey, 0, (C.size_t)(keySize))
-	C.memset(mi.value, 0, (C.size_t)(valueSize))
+	binary.LittleEndian.PutUint32(m.attrs[offsets.map_fd:], uint32(mapFD))
+	C.memset(m.nextKey, 0, (C.size_t)(keySize))
+	C.memset(m.value, 0, (C.size_t)(valueSize))
 
-	return mi, nil
+	return m, nil
 }
 
 type MapIterator struct {
 	mapFD      MapFD
+	attrs      *C.union_bpf_attr
 	currentKey unsafe.Pointer
 	nextKey    unsafe.Pointer
 	value      unsafe.Pointer
@@ -472,16 +491,16 @@ type MapIterator struct {
 }
 
 func (m *MapIterator) Next() (k, v []byte, err error) {
-	errno := C.bpf_map_call(unix.BPF_MAP_GET_NEXT_KEY, C.uint(m.mapFD), m.currentKey, m.nextKey, 0)
+	binary.LittleEndian.PutUint64(m.attrs[offsets.value:], uint64((uintptr)(m.nextKey)))
+
+	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_GET_NEXT_KEY, uintptr(unsafe.Pointer(m.attrs)), C.sizeof_union_bpf_attr)
 	if errno != 0 {
-		err = unix.Errno(errno)
+		err = errno
 		return
 	}
 
-	// Kernel should now have written the next key in m.nextKey; swap the buffers.
-	tmp := m.nextKey
-	m.nextKey = m.currentKey
-	m.currentKey = tmp
+	// Kernel should now have written the next key in m.nextKey; swap current/next.
+	m.nextKey, m.currentKey = m.currentKey, m.nextKey
 
 	if m.nextKey == nil {
 		// First iteration.
@@ -489,10 +508,13 @@ func (m *MapIterator) Next() (k, v []byte, err error) {
 		C.memset(m.nextKey, 0, (C.size_t)(m.keySize))
 	}
 
+	binary.LittleEndian.PutUint64(m.attrs[offsets.key:], uint64((uintptr)(m.currentKey)))
+	binary.LittleEndian.PutUint64(m.attrs[offsets.value:], uint64((uintptr)(m.value)))
+
 	// Got a key, now look up the associated value.
-	errno = C.bpf_map_call(unix.BPF_MAP_LOOKUP_ELEM, C.uint(m.mapFD), m.currentKey, m.value, 0)
+	_, _, errno = unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_LOOKUP_ELEM, uintptr(unsafe.Pointer(m.attrs)), C.sizeof_union_bpf_attr)
 	if errno != 0 {
-		err = unix.Errno(errno)
+		err = errno
 		return
 	}
 
@@ -516,5 +538,7 @@ func (m *MapIterator) Close() error {
 	m.nextKey = nil
 	C.free(m.value)
 	m.value = nil
+	C.free(unsafe.Pointer(m.attrs))
+	m.attrs = nil
 	return nil
 }
