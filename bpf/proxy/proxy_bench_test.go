@@ -119,10 +119,6 @@ func makeSvcs(n int) []runtime.Object {
 	return svcs
 }
 
-func makeEps(sn, en int) []*v1.Endpoints {
-	return nil
-}
-
 type benchSyncer struct {
 	proxy.DPSyncer
 	syncC chan struct{}
