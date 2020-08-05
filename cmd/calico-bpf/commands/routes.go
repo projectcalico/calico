@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ func dumpRoutes() error {
 	var dests []ip.CIDR
 	valueByDest := map[ip.CIDR]routes.Value{}
 
-	err := routesMap.Iter(func(k, v []byte) {
+	err := routesMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		var key routes.Key
 		var value routes.Value
 		copy(key[:], k)
@@ -69,6 +69,7 @@ func dumpRoutes() error {
 		dest := key.Dest()
 		valueByDest[dest] = value
 		dests = append(dests, dest)
+		return bpf.IterNone
 	})
 	if err != nil {
 		return err

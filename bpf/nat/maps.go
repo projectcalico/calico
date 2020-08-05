@@ -298,7 +298,7 @@ func MapMemIter(m MapMem) bpf.MapIter {
 	ks := len(FrontendKey{})
 	vs := len(FrontendValue{})
 
-	return func(k, v []byte) {
+	return func(k, v []byte) bpf.IteratorAction {
 		var key FrontendKey
 		copy(key[:ks], k[:ks])
 
@@ -306,6 +306,7 @@ func MapMemIter(m MapMem) bpf.MapIter {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
+		return bpf.IterNone
 	}
 }
 
@@ -349,7 +350,7 @@ func BackendMapMemIter(m BackendMapMem) bpf.MapIter {
 	ks := len(BackendKey{})
 	vs := len(BackendValue{})
 
-	return func(k, v []byte) {
+	return func(k, v []byte) bpf.IteratorAction {
 		var key BackendKey
 		copy(key[:ks], k[:ks])
 
@@ -357,6 +358,7 @@ func BackendMapMemIter(m BackendMapMem) bpf.MapIter {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
+		return bpf.IterNone
 	}
 }
 
@@ -493,7 +495,7 @@ func AffinityMapMemIter(m AffinityMapMem) bpf.MapIter {
 	ks := len(AffinityKey{})
 	vs := len(AffinityValue{})
 
-	return func(k, v []byte) {
+	return func(k, v []byte) bpf.IteratorAction {
 		var key AffinityKey
 		copy(key[:ks], k[:ks])
 
@@ -501,6 +503,7 @@ func AffinityMapMemIter(m AffinityMapMem) bpf.MapIter {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
+		return bpf.IterNone
 	}
 }
 
@@ -597,7 +600,7 @@ func SendRecvMsgMapMemIter(m SendRecvMsgMapMem) bpf.MapIter {
 	ks := len(SendRecvMsgKey{})
 	vs := len(SendRecvMsgValue{})
 
-	return func(k, v []byte) {
+	return func(k, v []byte) bpf.IteratorAction {
 		var key SendRecvMsgKey
 		copy(key[:ks], k[:ks])
 
@@ -605,5 +608,6 @@ func SendRecvMsgMapMemIter(m SendRecvMsgMapMem) bpf.MapIter {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
+		return bpf.IterNone
 	}
 }

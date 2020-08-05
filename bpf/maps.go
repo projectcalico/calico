@@ -27,7 +27,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type MapIter func(k, v []byte)
+type IteratorAction string
+
+const (
+	IterNone   IteratorAction = ""
+	IterDelete IteratorAction = "delete"
+)
+
+type MapIter func(k, v []byte) IteratorAction
 
 type Map interface {
 	GetName() string
@@ -168,41 +175,41 @@ func IterMapCmdOutput(output []byte, f MapIter) error {
 }
 
 func (b *PinnedMap) Iter(f MapIter) error {
-	var nilKey []byte
-
-	// Get the first key
-	k, err := GetMapNextKey(b.fd, nilKey, b.KeySize)
+	it, err := NewMapIterator(b.MapFD(), b.KeySize, b.ValueSize)
 	if err != nil {
-		if IsNotExists(err) {
-			return nil
-		}
-		return errors.Errorf("GetMapNextKey failed: %s", err)
+		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
+	defer func() {
+		_ = it.Close()
+	}()
 
+	keyToDelete := make([]byte, b.KeySize)
+	var action IteratorAction
 	for {
-		next, nextErr := GetMapNextKey(b.fd, k, b.KeySize)
+		k, v, err := it.Next()
 
-		v, err := GetMapEntry(b.fd, k, b.ValueSize)
+		if action == IterDelete {
+			// The previous iteration asked us to delete its key; do that now before we check for the end of
+			// the iteration.
+			err := DeleteMapEntry(b.MapFD(), keyToDelete, b.ValueSize)
+			if err != nil && !IsNotExists(err) {
+				return fmt.Errorf("failed to delet map entry: %w", err)
+			}
+		}
+
 		if err != nil {
 			if IsNotExists(err) {
 				return nil
 			}
-			return errors.Errorf("GetMapEntry failed to get key %s: %s", k, err)
+			return errors.Errorf("GetMapNextKey failed: %s", err)
 		}
 
-		// We hope we have the next key in case the iterator deleted the current key
-		f(k, v)
+		action := f(k, v)
 
-		// We check if we really have the next key, if it was a failure, quit
-		if nextErr != nil {
-			if IsNotExists(nextErr) {
-				return nil
-			}
-			return errors.Errorf("GetMapNextKey failed: %s", nextErr)
+		if action == IterDelete {
+			// k will become invalid once we call Next again so take a copy.
+			copy(keyToDelete, k)
 		}
-
-		// We have the next key!
-		k = next
 	}
 }
 

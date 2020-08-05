@@ -403,7 +403,7 @@ type MapMem map[Key]Value
 func LoadMapMem(m bpf.Map) (MapMem, error) {
 	ret := make(MapMem)
 
-	err := m.Iter(func(k, v []byte) {
+	err := m.Iter(func(k, v []byte) bpf.IteratorAction {
 		ks := len(Key{})
 		vs := len(Value{})
 
@@ -414,6 +414,7 @@ func LoadMapMem(m bpf.Map) (MapMem, error) {
 		copy(val[:vs], v[:vs])
 
 		ret[key] = val
+		return bpf.IterNone
 	})
 
 	return ret, err
@@ -424,7 +425,7 @@ func MapMemIter(m MapMem) bpf.MapIter {
 	ks := len(Key{})
 	vs := len(Value{})
 
-	return func(k, v []byte) {
+	return func(k, v []byte) bpf.IteratorAction {
 		var key Key
 		copy(key[:ks], k[:ks])
 
@@ -432,6 +433,7 @@ func MapMemIter(m MapMem) bpf.MapIter {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
+		return bpf.IterNone
 	}
 }
 

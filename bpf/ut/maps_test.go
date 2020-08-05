@@ -45,15 +45,17 @@ func TestMapIteration(t *testing.T) {
 	k, err1 := setUpMapTestWithSingleKV(t)
 
 	seenKey := false
-	iterErr := ctMap.Iter(func(k2, v []byte) {
+	iterErr := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
 		seenKey = seenKey || reflect.DeepEqual(k2, k[:])
+		return bpf.IterNone
 	})
 
 	err2 := ctMap.Delete(k.AsBytes())
 
 	seenKeyAfterDel := false
-	iterErr2 := ctMap.Iter(func(k2, v []byte) {
+	iterErr2 := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
 		seenKeyAfterDel = seenKeyAfterDel || reflect.DeepEqual(k2, k[:])
+		return bpf.IterNone
 	})
 
 	// Defer error checking since the Delete call does the cleanup for this test...
@@ -96,8 +98,9 @@ func benchMapIteration(b *testing.B, n int) {
 	defer logrus.SetLevel(logLevel)
 	setUpConntrackMapEntries(b, n)
 	for i := 0; i < b.N; i++ {
-		err := ctMap.Iter(func(k, v []byte) {
+		err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
 			benchVal = v
+			return bpf.IterNone
 		})
 		if err != nil {
 			panic(err)

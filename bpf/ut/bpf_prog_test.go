@@ -277,8 +277,11 @@ func cleanUpMaps() {
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
 		var allKeys [][]byte
-		err := m.Iter(func(k, v []byte) {
-			allKeys = append(allKeys, k)
+		err := m.Iter(func(k, v []byte) bpf.IteratorAction {
+			kCopy := make([]byte, len(k))
+			copy(kCopy, k)
+			allKeys = append(allKeys, kCopy)
+			return bpf.IterNone
 		})
 		if err != nil {
 			log.WithError(err).Panic("Failed to walk map")
@@ -679,7 +682,7 @@ func TestMapIterWithDelete(t *testing.T) {
 	out := make(map[uint64]uint64)
 
 	cnt := 0
-	err = m.Iter(func(K, V []byte) {
+	err = m.Iter(func(K, V []byte) bpf.IteratorAction {
 		k := binary.LittleEndian.Uint64(K)
 		v := binary.LittleEndian.Uint64(V)
 
@@ -688,6 +691,7 @@ func TestMapIterWithDelete(t *testing.T) {
 		err := m.Delete(K)
 		Expect(err).NotTo(HaveOccurred())
 		cnt++
+		return bpf.IterNone
 	})
 	Expect(err).NotTo(HaveOccurred())
 
