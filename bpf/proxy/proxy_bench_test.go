@@ -39,7 +39,8 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 
 	for n := 0; n < b.N; n++ {
 		svcs := makeSvcs(svcN)
-		k8s := fake.NewSimpleClientset(svcs...)
+		eps := makeEps(svcN, epsN)
+		k8s := fake.NewSimpleClientset(append(svcs, eps...)...)
 
 		syncer, err := proxy.NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
@@ -83,6 +84,15 @@ func BenchmarkProxyUpdates(b *testing.B) {
 		{0, 0},
 		{1, 0},
 		{10, 0},
+		{1, 10},
+		{10, 1},
+		{10, 10},
+		{100, 1},
+		{100, 10},
+		{1000, 1},
+		{1000, 10},
+		{10000, 1},
+		{10000, 10},
 	}
 
 	for _, tc := range tests {
@@ -117,6 +127,36 @@ func makeSvcs(n int) []runtime.Object {
 	}
 
 	return svcs
+}
+
+func makeEps(sn, ep int) []runtime.Object {
+	eps := make([]runtime.Object, sn)
+
+	for i := 0; i < sn; i++ {
+		addrs := make([]v1.EndpointAddress, ep)
+		for a := 0; a < ep; a++ {
+			addrs[a] = v1.EndpointAddress{IP: fmt.Sprintf("10.11.12.%d", a)}
+		}
+		ep := &v1.Endpoints{
+			TypeMeta:   typeMetaV1("Endpoints"),
+			ObjectMeta: objectMeataV1(fmt.Sprintf("service-%d", i)),
+			Subsets: []v1.EndpointSubset{
+				{
+					Addresses: addrs,
+					Ports: []v1.EndpointPort{
+						{
+							Port: 1234,
+							Name: "1234",
+						},
+					},
+				},
+			},
+		}
+
+		eps[i] = ep
+	}
+
+	return eps
 }
 
 type benchSyncer struct {
