@@ -184,12 +184,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) {
+			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
+				return bpf.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -222,12 +223,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) {
+			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
+				return bpf.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -880,12 +882,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) {
+			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
+				return bpf.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
