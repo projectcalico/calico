@@ -266,11 +266,16 @@ func initMapsOnce() {
 
 func cleanUpMaps() {
 	log.Info("Cleaning up all maps")
+
+	logLevel := log.GetLevel()
+	log.SetLevel(log.InfoLevel)
+	defer log.SetLevel(logLevel)
+
 	for _, m := range allMaps {
 		if m == stateMap || m == testStateMap || m == jumpMap {
 			continue // Can't clean up array maps
 		}
-		log.WithField("map", m.GetName()).Debug("Cleaning")
+		log.WithField("map", m.GetName()).Info("Cleaning")
 		var allKeys [][]byte
 		err := m.Iter(func(k, v []byte) {
 			allKeys = append(allKeys, k)

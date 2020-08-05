@@ -15,6 +15,7 @@
 package bpf
 
 import (
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -411,14 +412,14 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 }
 
 // GetMapNextKey returns the next key for the given key if the current key exists.
-// Otherwise it returns the first key. Order is implemention / map type
+// Otherwise it returns the first key. Order is implementation / map type
 // dependent.
 //
 // Start iterating by passing a nil key.
 func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
 	log.Debugf("GetMapNextKey(%v, %v, %v)", mapFD, k, keySize)
 
-	if log.GetLevel() >= log.DebugLevel && keySize == 0 && len(k) != keySize && len(k) != 0 {
+	if log.GetLevel() >= log.DebugLevel && keySize != 0 && len(k) != keySize && len(k) != 0 {
 		log.WithField("keySize", keySize).WithField("keyLen", len(k)).Panic("keySize != len(k)")
 	}
 	err := checkMapIfDebug(mapFD, keySize, -1)
@@ -439,4 +440,81 @@ func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
 	}
 
 	return next, nil
+}
+
+func NewMapIterator(mapFD MapFD, keySize, valueSize int) (*MapIterator, error) {
+	err := checkMapIfDebug(mapFD, keySize, valueSize)
+	if err != nil {
+		return nil, err
+	}
+
+	mi := &MapIterator{
+		mapFD:     mapFD,
+		keySize:   keySize,
+		valueSize: valueSize,
+		nextKey:   C.malloc((C.size_t)(keySize)),
+		value:     C.malloc((C.size_t)(valueSize)),
+	}
+
+	C.memset(mi.nextKey, 0, (C.size_t)(keySize))
+	C.memset(mi.value, 0, (C.size_t)(valueSize))
+
+	return mi, nil
+}
+
+type MapIterator struct {
+	mapFD      MapFD
+	currentKey unsafe.Pointer
+	nextKey    unsafe.Pointer
+	value      unsafe.Pointer
+	valueSize  int
+	keySize    int
+}
+
+func (m *MapIterator) Next() (k, v []byte, err error) {
+	errno := C.bpf_map_call(unix.BPF_MAP_GET_NEXT_KEY, C.uint(m.mapFD), m.currentKey, m.nextKey, 0)
+	if errno != 0 {
+		err = unix.Errno(errno)
+		return
+	}
+
+	// Kernel should now have written the next key in m.nextKey; swap the buffers.
+	tmp := m.nextKey
+	m.nextKey = m.currentKey
+	m.currentKey = tmp
+
+	if m.nextKey == nil {
+		// First iteration.
+		m.nextKey = C.malloc((C.size_t)(m.keySize))
+		C.memset(m.nextKey, 0, (C.size_t)(m.keySize))
+	}
+
+	// Got a key, now look up the associated value.
+	errno = C.bpf_map_call(unix.BPF_MAP_LOOKUP_ELEM, C.uint(m.mapFD), m.currentKey, m.value, 0)
+	if errno != 0 {
+		err = unix.Errno(errno)
+		return
+	}
+
+	keySliceHdr := (*reflect.SliceHeader)(unsafe.Pointer(&k))
+	keySliceHdr.Data = uintptr(m.currentKey)
+	keySliceHdr.Cap = m.keySize
+	keySliceHdr.Len = m.keySize
+
+	valueSliceHdr := (*reflect.SliceHeader)(unsafe.Pointer(&v))
+	valueSliceHdr.Data = uintptr(m.value)
+	valueSliceHdr.Cap = m.valueSize
+	valueSliceHdr.Len = m.valueSize
+
+	return
+}
+
+func (m *MapIterator) Close() error {
+	C.free(m.currentKey)
+	m.currentKey = nil
+	C.free(m.nextKey)
+	m.nextKey = nil
+	C.free(m.value)
+	m.value = nil
+	return nil
 }

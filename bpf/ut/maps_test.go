@@ -15,11 +15,15 @@
 package ut_test
 
 import (
+	"encoding/binary"
+	"fmt"
 	"net"
 	"reflect"
+	"runtime"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
@@ -70,4 +74,97 @@ func setUpMapTestWithSingleKV(t *testing.T) (conntrack.Key, error) {
 	}
 	err1 := ctMap.Update(k.AsBytes(), v[:])
 	return k, err1
+}
+
+func BenchmarkMapIteration10k(b *testing.B) {
+	benchMapIteration(b, 10000)
+}
+
+func BenchmarkMapIteration100k(b *testing.B) {
+	benchMapIteration(b, 100000)
+}
+
+func BenchmarkMapIteration500k(b *testing.B) {
+	benchMapIteration(b, 500000)
+}
+
+var benchVal interface{}
+
+func benchMapIteration(b *testing.B, n int) {
+	logLevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.InfoLevel)
+	defer logrus.SetLevel(logLevel)
+	setUpConntrackMapEntries(b, n)
+	for i := 0; i < b.N; i++ {
+		err := ctMap.Iter(func(k, v []byte) {
+			benchVal = v
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+	runtime.KeepAlive(benchVal)
+	b.StopTimer()
+	cleanUpMaps()
+}
+
+func setUpConntrackMapEntries(b *testing.B, n int) {
+	b.StopTimer()
+	for i := 0; i < n; i++ {
+		var k conntrack.Key
+		var v conntrack.Value
+		binary.LittleEndian.PutUint32(k[:], uint32(i))
+		err := ctMap.Update(k.AsBytes(), v[:])
+		if err != nil {
+			panic(err)
+		}
+	}
+	b.StartTimer()
+}
+
+func BenchmarkMapIterator10k(b *testing.B) {
+	benchMapIterator(b, 10000)
+}
+
+func BenchmarkMapIterator100k(b *testing.B) {
+	benchMapIterator(b, 100000)
+}
+
+func BenchmarkMapIterator500k(b *testing.B) {
+	benchMapIterator(b, 500000)
+}
+
+func benchMapIterator(b *testing.B, n int) {
+	logLevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.InfoLevel)
+	defer logrus.SetLevel(logLevel)
+	setUpConntrackMapEntries(b, n)
+
+	for i := 0; i < b.N; i++ {
+		iter, err := bpf.NewMapIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize)
+		if err != nil {
+			panic(err)
+		}
+
+		numIterations := 0
+		for {
+			k, v, err := iter.Next()
+			if err != nil {
+				if bpf.IsNotExists(err) {
+					break
+				}
+				panic(err)
+			}
+			benchVal = k
+			benchVal = v
+			numIterations++
+		}
+		if numIterations < n {
+			panic(fmt.Sprintf("Unexpected number of iterations: %d", numIterations))
+		}
+		benchVal = nil
+		_ = iter.Close()
+	}
+	b.StopTimer()
+	cleanUpMaps()
 }
