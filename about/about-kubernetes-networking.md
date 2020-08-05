@@ -62,7 +62,7 @@ Kubernetes supports a rich set of options for controlling DNS in different scena
 
 The Kubernetes network model specifies that pods must be able to communicate with each other directly using pod IP addresses. But it does not mandate that pod IP addresses are routable beyond the boundaries of the cluster. Many Kubernetes network implementations use [overlay networks]({{site.baseurl}}/about/about-networking#overlay-networks). Typically for these deployments, when a pod initiates a connection to an IP address outside of the cluster, the node hosting the pod will SNAT (Source Network Address Translation) map the source address of the packet from the pod IP to the node IP. This enables the connection to be routed across the rest of the network to the destination (because the node IP is routable). Return packets on the connection are automatically mapped back by the node replacing the node IP with the pod IP before forwarding the packet to the pod.
 
-When using {{site.prodname}}, depending on your environment, you can generally choose whether you prefer to run an overlay network, or prefer to have fully routable pod IPs. {{site.prodname}} also allows you to [configure outgoing NAT]({{site.baseurl}}/networking/workloads-outside-cluster0) for specific IP address ranges if more granularity is desired.
+When using {{site.prodname}}, depending on your environment, you can generally choose whether you prefer to run an overlay network, or prefer to have fully routable pod IPs. {{site.prodname}} also allows you to [configure outgoing NAT]({{site.baseurl}}/networking/workloads-outside-cluster) for specific IP address ranges if more granularity is desired.
 
 ### Dual stack
 
