@@ -231,7 +231,7 @@ fv st:
 # CI
 ###############################################################################
 .PHONY: ci
-ci: mod-download static-checks test
+ci: clean mod-download static-checks test
 
 ###############################################################################
 # Release
