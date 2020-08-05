@@ -72,7 +72,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 - [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install)
 
 **Recommended**
-- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on AWS' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
 - [Get started with {{site.prodname}} network policy]({{ site.baseurl }}/security/calico-network-policy)
 - [Enable default deny for Kubernetes pods]({{ site.baseurl }}/security/kubernetes-default-deny)
