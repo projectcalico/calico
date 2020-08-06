@@ -12,9 +12,9 @@ Start, stop, and update {{site.prodNameWindows}} services on the Linux master no
 
 #### Start and stop {{site.prodNameWindows}} services
 
-- `install-calico.ps1` - install/boot {{site.prodNameWindows}}
-- `start-calico.ps1`- start {{site.prodNameWindows}} services
-- `stop-calico.ps1`- stop {{site.prodNameWindows}} services
+- Install and boot {{site.prodNameWindows}}: `install-calico.ps1` 
+- Start {{site.prodNameWindows}} services:`start-calico.ps1` 
+- Stop {{site.prodNameWindows}} services: `stop-calico.ps1`
 
 #### Update {{site.prodname}} services
 
