@@ -244,7 +244,7 @@ The geeky details of what you get:
   {% endtabs %}
 
 
-#### Installation script parameters
+#### Configure installation parameters
 
 | **Parameter Name** | **Description**                                         | **Default** |
 | ------------------ | --------------------------------------------------------- |-------------|
