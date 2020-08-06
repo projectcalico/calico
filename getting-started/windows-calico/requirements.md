@@ -10,7 +10,7 @@ Because the Kubernetes and {{site.prodname}} control components do not run on Wi
 
 ### What's supported in this release
 
-✓ Manifest install for Kubernetes 2 clusters
+✓ Install: Manifest install for Kubernetes 2 clusters
 
 ✓ Platforms: Kubernetes, EKS, and OpenShift
 
@@ -50,10 +50,10 @@ Earlier versions may work, but we do not actively test {{site.prodNameWindows}} 
 - Windows nodes support only a single IP pool type (so, if using a VXLAN pool, you should only use VXLAN throughout the cluster).
 - TLS v1.2 enabled. For example:
 
-  ```
-  PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
+```
+PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
                                [Net.SecurityProtocolType]::Tls12
-  ```
+```
 ### Next steps
 
 [Install {{site.prodNameWindows}}]({{site.baseurl}}/getting-started/windows-calico/standard)

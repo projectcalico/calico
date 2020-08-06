@@ -33,8 +33,7 @@ Extend your Kubernetes deployment to Windows environments.
 Because the Kubernetes and {{site.prodname}} control components do not run on Windows yet, a hybrid Linux/Windows cluster is required. First you create a Linux cluster for {{site.prodname}} components, then you join Windows nodes to the Linux cluster.
 
 The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:etcd|kdd' %}     
-%>
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}     
 
 **Kubernetes**
 1. [Create a Linux cluster](#create-a-linux-cluster)
@@ -165,7 +164,7 @@ adjust other kube-proxy parameters.
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
 
 1. If using a non-{{site.prodname}} network plugin for networking, install and verify it now. 
-1. Edit the install configuration file, `config.ps1` as follows:
+1. Edit the install configuration file, `config.ps1` as follows: 
 
 | **Set this variable...** | To...                   |
 | ----------- | ----------------------------------------------------- |
@@ -179,7 +178,7 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
 | $env:NODENAME | Hostname used by kubelet. The default uses the node's hostname. **Note**: If you are using the sample kubelet start-up script from the {{site.prodname}} package, kubelet is started with a hostname override that forces it to use this value. |
 |  | For AWS to work properly, kubelet should use the node's internal domain name for the AWS integration. |
 
-1. Run the installer.
+3. Run the installer.
   
   - Change directory to the location that you unpacked the archive. For example:
 
@@ -192,13 +191,13 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
   PS C:\... > .\install-calico.ps1
   ```
 
-  > **Note**: The installer initializes the Windows vSwitch, which can cause a short connectivity outage as the networking stack is reconfigured. After running that command, you may need to:
+  >**Note**: The installer initializes the Windows vSwitch, which can cause a short connectivity outage as the networking stack is reconfigured. After running that command, you may need to:
 - Reconnect to your remote desktop session.
 - Restart `kubelet` and `kube-proxy` if they were already running.
 - If you haven't started `kubelet` and `kube-proxy` already, you should do so now. The quickstart scripts provided in the {{site.prodname}} package provide an easy way to do this. {{site.prodname}} requires `kubelet` to be running to complete its per-node configuration (since Kubelet creates the Kubernetes Node resource).
 {: .alert .alert-info}
 
-  > **Note**: After you run the installer, do not move the directory because the service registration refers to the path of the directory.
+  >**Note**: After you run the installer, do not move the directory because the service registration refers to the path of the directory.
 {: .alert .alert-info}
 
 ### Next steps

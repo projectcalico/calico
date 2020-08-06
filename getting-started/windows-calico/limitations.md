@@ -115,4 +115,5 @@ The destination selector is moved into the policy selector, so this policy is on
 
 ### Next steps
 
-- [Requirements]({{site.baseurl}}/getting-started/kubernetes/windows-calico/requirements)
+- [Quickstart]({{site.baseurl}}/getting-started/windows-calico/quickstart)
+- [Standard install]({{site.baseurl}}/getting-started/windows-calico/standard)
