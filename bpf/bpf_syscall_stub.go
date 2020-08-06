@@ -64,6 +64,10 @@ func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
 	panic("BPF syscall stub")
 }
 
+func NewMapIteratorMulti(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapIterator, error) {
+	panic("BPF syscall stub")
+}
+
 func NewMapIterator(mapFD MapFD, keySize, valueSize int) (*MapIterator, error) {
 	panic("BPF syscall stub")
 }

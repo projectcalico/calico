@@ -33,6 +33,7 @@ import (
 // };
 const KeySize = 16
 const ValueSize = 64
+const MaxEntries = 512000
 
 type Key [KeySize]byte
 
@@ -363,7 +364,7 @@ var MapParams = bpf.MapParameters{
 	Type:       "hash",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
-	MaxEntries: 512000,
+	MaxEntries: MaxEntries,
 	Name:       "cali_v4_ct",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 	Version:    2,
