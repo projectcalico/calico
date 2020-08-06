@@ -23,9 +23,12 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 **Windows node requirements**
 - Windows Server 1903 (AKA 19H1) build 18317 or greater, with Docker service enabled
+- Additionally, for EKS:
+    - The VPC controllers must be installed be installed to run Windows pods.
+    - The Windows instance role must have access to `secrets` in the kube-system namespace.
 
 **Linux control node requirements**
-- Installed with {{site.prodname}} v3.12+ 
+- Installed with {{site.prodname}} v3.12+
 - {{site.prodname}} networking is VXLAN
 
 ### How to
@@ -35,7 +38,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 #### Install Calico for Windows
 
-The following steps install a Kubernetes cluster on a single Windows node, with a Linux control node. 
+The following steps install a Kubernetes cluster on a single Windows node, with a Linux control node.
 
 {% tabs %}
   <label:Kubernetes,active:true>
@@ -43,38 +46,38 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 #### Install {{site.prodNameWindows}}
 
 1. Prepare directory for Kubernetes files on Windows node.
+
    ```powershell
    mkdir c:\k
    ```
 
-1. Copy the Kubernetes certificate file from the master node (default, Location $HOME/.kube/config), to **c:\k**.
+1. Copy the Kubernetes kubeconfig file from the master node (default, Location $HOME/.kube/config), to **c:\k**.
 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
    ```powershell
-      Invoke-WebRequest https://github.com/projectcalico/calico/releases/download/v3.16.0/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
-      ```
+   Invoke-WebRequest https://github.com/projectcalico/calico/releases/download/v3.16.0/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
+   ```
 
 1. Run install-calico-windows.ps1 with correct parameters. The powershell script will perform following tasks.
-   
+
    - Downloads {{site.prodNameWindows}} release binary and other Windows utilities files.
-   - Downloads Kubernetes binaries. 
-   - Configures {{site.prodNameWindows}} and starts the Calico service.  
+   - Downloads Kubernetes binaries.
+   - Configures {{site.prodNameWindows}} and starts the Calico service.
 
-1. To skip any of the above tasks, see [Installation script parameters](#installation-script-parameters).  
+1. To skip any of the above tasks, see [Installation script parameters](#installation-script-parameters).
 
-1. Run install-calico-windows.ps1 for your datastore with parameters for your implementation. 
+1. Run install-calico-windows.ps1 for your datastore with parameters for your implementation.
    You do not need to pass a parameter if the default value of the parameter is correct for you cluster.
-   
+
    **Kubernetes datastore (default)**
 
    ```powershell
    c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
                                  -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
                                  -DNSServerIPs <your DNS service IP (default 10.96.0.10)>
-
    ```
-   
+
    **etcd datastore**
 
    ```powershell
@@ -83,63 +86,153 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
                                  -EtcdEndpoints <your etcd endpoint ip>
                                  -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
                                  -DNSServerIPs <your DNS server IPs (default 10.96.0.10)>
+   ```
 
-   ```     
-   
    > **Note**: You do not need to pass a parameter if the default value of the parameter is correct for you cluster.
    {: .alert .alert-info}
-   
+
 
 1. Verify that the {{site.prodname}} services are running.
 
    ```powershell
    PS C:\> Get-Service -Name CalicoNode
-   
+
    Status   Name               DisplayName
    ------   ----               -----------
    Running  CalicoNode         Calico Windows Startup
-   
-   
+
+
    PS C:\> Get-Service -Name CalicoFelix
-   
+
    Status   Name               DisplayName
    ------   ----               -----------
    Running  CalicoFelix        Calico Windows Agent
    ```
 1. Install and start kubelet/kube-proxy service. Execute following powershell script/commands.
- 
+
    ```powershell
    C:\CalicoWindows\kubernetes\install-kube-services.ps1
    Start-Service -Name kubelet
    Start-Service -Name kube-proxy
-   ```  
+   ```
 1. Verify kubelet/kube-proxy services are running.
- 
+
    ```powershell
    PS C:\> Get-Service -Name kubelet
-     
+
    Status   Name               DisplayName
    ------   ----               -----------
    Running  kubelet            kubelet service
-     
-     
+
+
    PS C:\> Get-Service -Name kube-proxy
-     
+
    Status   Name               DisplayName
    ------   ----               -----------
    Running  kube-proxy         kube-proxy service
-   ``` 
- 
+   ```
+
  The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}     
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}
 %>
 
   <label:EKS>
   <%
-steps…
+#### Install {{site.prodNameWindows}}
+
+1. Prepare directory for Kubernetes files on Windows node.
+
+   ```powershell
+   mkdir c:\k
+   ```
+
+1. Copy the Kubernetes kubeconfig file on the Windows node to **c:\k**.
+
+   ```powershell
+   cp c:\ProgramData\kubernetes\kubeconfig c:\k\config
+   ```
+
+1. Download the installation script:
+
+   ```powershell
+   Invoke-WebRequest https://github.com/projectcalico/calico/releases/download/v3.16.0/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
+   ```
+
+1. Download the powershell script, **install-calico-windows.ps1**.
+
+   ```powershell
+   Invoke-WebRequest https://github.com/projectcalico/calico/releases/download/v3.16.0/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
+   ```
+
+1. Run install-calico-windows.ps1 with correct parameters. The powershell script will perform following tasks.
+
+   - Downloads {{site.prodNameWindows}} release binary and other Windows utilities files.
+   - Downloads Kubernetes binaries.
+   - Configures {{site.prodNameWindows}} and starts the Calico service.
+
+1. To skip any of the above tasks, see [Installation script parameters](#installation-script-parameters).
+
+1. Run install-calico-windows.ps1 for your datastore with parameters for your implementation.
+   You do not need to pass a parameter if the default value of the parameter is correct for you cluster.
+
+   **Kubernetes datastore (default)**
+
+   ```powershell
+   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
+                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+                                 -DNSServerIPs <your DNS service IP (default 10.96.0.10)>
+   ```
+
+   **etcd datastore**
+
+   ```powershell
+   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
+                                 -Datastore etcdv3
+                                 -EtcdEndpoints <your etcd endpoint ip>
+                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+                                 -DNSServerIPs <your DNS server IPs (default 10.96.0.10)>
+   ```
+
+   > **Note**: You do not need to pass a parameter if the default value of the parameter is correct for you cluster.
+   {: .alert .alert-info}
+
+
+1. Verify that the {{site.prodname}} services are running.
+
+   ```powershell
+   PS C:\> Get-Service -Name CalicoNode
+
+   Status   Name               DisplayName
+   ------   ----               -----------
+   Running  CalicoNode         Calico Windows Startup
+
+
+   PS C:\> Get-Service -Name CalicoFelix
+
+   Status   Name               DisplayName
+   ------   ----               -----------
+   Running  CalicoFelix        Calico Windows Agent
+   ```
+
+1. Verify kubelet and kube-proxy services are running.
+
+   ```powershell
+   PS C:\> Get-Service -Name kubelet
+
+   Status   Name               DisplayName
+   ------   ----               -----------
+   Running  kubelet            kubelet service
+
+
+   PS C:\> Get-Service -Name kube-proxy
+
+   Status   Name               DisplayName
+   ------   ----               -----------
+   Running  kube-proxy         kube-proxy service
+   ```
 
 The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 %>
 
 <label:OpenShift>
@@ -147,7 +240,7 @@ The geeky details of what you get:
 steps…
 
 The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}
 %>
 
   {% endtabs %}
@@ -164,8 +257,8 @@ The geeky details of what you get:
 | ServiceCidr        | Service IP range of the Kubernetes cluster. Not required for managed Kubernetes cluster (for example, EKS). | 10.96.0.0/12 |
 | DNSServerIPs       | Comma-delimited list of DNS service IPs used by Windows pod. Not required for managed Kubernetes cluster (for example, EKS) | 10.96.0.10 |
 
-Congratulations! You now have a Kubernetes cluster with {{site.prodNameWindows}} and a Linux control node. 
+Congratulations! You now have a Kubernetes cluster with {{site.prodNameWindows}} and a Linux control node.
 
 ### Next steps
 
-You can now use the {{site.prodname}} Linux-based docs site for your documentation. Before you continue, review the [Limitations and known issues]({{site.baseurl}}/getting-started/windows-calico/limitations) to understand the features (and sections of documentation) that do not apply to Windows. 
+You can now use the {{site.prodname}} Linux-based docs site for your documentation. Before you continue, review the [Limitations and known issues]({{site.baseurl}}/getting-started/windows-calico/limitations) to understand the features (and sections of documentation) that do not apply to Windows.
