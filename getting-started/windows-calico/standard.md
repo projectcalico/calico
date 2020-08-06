@@ -164,8 +164,9 @@ adjust other kube-proxy parameters.
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
 
 1. If using a non-{{site.prodname}} network plugin for networking, install and verify it now. 
-1. Edit the install configuration file, `config.ps1` as follows:  
-   | **Set this variable...** | To...                   |
+1. Edit the install configuration file, `config.ps1` as follows: 
+
+| **Set this variable...** | To...                   |
 | ----------- | ----------------------------------------------------- |
 | $env:KUBE_NETWORK | CNI plugin you plan to use. For {{site.prodname}}, set the variable to `{{site.prodname}}.*` |
 | $env:CALICO_NETWORKING_BACKEND | `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
@@ -177,7 +178,7 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
 | $env:NODENAME | Hostname used by kubelet. The default uses the node's hostname. **Note**: If you are using the sample kubelet start-up script from the {{site.prodname}} package, kubelet is started with a hostname override that forces it to use this value. |
 |  | For AWS to work properly, kubelet should use the node's internal domain name for the AWS integration. |
 
-1. Run the installer.
+3. Run the installer.
   
   - Change directory to the location that you unpacked the archive. For example:
 
