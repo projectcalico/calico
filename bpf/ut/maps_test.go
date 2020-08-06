@@ -183,7 +183,7 @@ func doSingleMapIteratorTest(n int) {
 	for {
 		k, v, err := iter.Next()
 		if err != nil {
-			if bpf.IsNotExists(err) {
+			if err == bpf.ErrIterationFinished {
 				break
 			}
 			panic(err)

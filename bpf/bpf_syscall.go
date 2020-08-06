@@ -17,6 +17,7 @@ package bpf
 import (
 	"encoding/binary"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -466,35 +467,67 @@ func NewMapIterator(mapFD MapFD, keySize, valueSize int) (*MapIterator, error) {
 
 	m := &MapIterator{
 		mapFD:     mapFD,
-		attrs:     C.bpf_attr_alloc(),
+		bpfAttr:   C.bpf_attr_alloc(),
 		keySize:   keySize,
 		valueSize: valueSize,
 		nextKey:   C.malloc((C.size_t)(keySize)),
 		value:     C.malloc((C.size_t)(valueSize)),
 	}
 
-	binary.LittleEndian.PutUint32(m.attrs[offsets.map_fd:], uint32(mapFD))
+	binary.LittleEndian.PutUint32(m.bpfAttr[offsets.map_fd:], uint32(mapFD))
 	C.memset(m.nextKey, 0, (C.size_t)(keySize))
 	C.memset(m.value, 0, (C.size_t)(valueSize))
+
+	runtime.SetFinalizer(m, func(m *MapIterator) {
+		err := m.Close()
+		if err != nil {
+			log.WithError(err).Panic("Unexpected error from MapIterator.Close().")
+		}
+	})
 
 	return m, nil
 }
 
+// MapIterator handles one pass of iteration over the map.
 type MapIterator struct {
-	mapFD      MapFD
-	attrs      *C.union_bpf_attr
+	// Metadata about the map.
+	mapFD     MapFD
+	valueSize int
+	keySize   int
+
+	// The values below point to the C heap.  We must allocate the key and value buffers on the C heap
+	// because we pass them to the kernel as pointers contained in the bpf_attr union.  That extra level of
+	// indirection defeats Go's special handling of pointers when passing them to the syscall.  If we allocated the
+	// keys and values as slices and the garbage collector decided to move the backing memory of the slices then
+	// the pointers we write to the bpf_attr union could end up being stale (since the union is opaque to the
+	// garbage collector).
+
+	// bpfAttr is the C union that we pass to the BPF syscall to control it.
+	bpfAttr *C.union_bpf_attr
+	// currentKey is either nil at start of day or points to a buffer containing hte current key.
 	currentKey unsafe.Pointer
-	nextKey    unsafe.Pointer
-	value      unsafe.Pointer
-	valueSize  int
-	keySize    int
+	// nextKey starts as an empty buffer; the kernel writes the next key to it.
+	nextKey unsafe.Pointer
+	// value is a buffer to hold the most recently loaded value.
+	value unsafe.Pointer
 }
 
+// Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
+// MapIterator's internal buffers (which are allocated on the C heap); they should not be retained or modified.
+// Returns ErrIterationFinished at the end of the iteration.
 func (m *MapIterator) Next() (k, v []byte, err error) {
-	binary.LittleEndian.PutUint64(m.attrs[offsets.value:], uint64((uintptr)(m.nextKey)))
+	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.key:], uint64((uintptr)(m.currentKey)))
+	// BPF_MAP_GET_NEXT_KEY returns the next key by writing to the location pointed to by the value pointer.
+	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.value:], uint64((uintptr)(m.nextKey)))
 
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_GET_NEXT_KEY, uintptr(unsafe.Pointer(m.attrs)), C.sizeof_union_bpf_attr)
+	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_GET_NEXT_KEY, uintptr(unsafe.Pointer(m.bpfAttr)), C.sizeof_union_bpf_attr)
 	if errno != 0 {
+		if errno == unix.ENOENT {
+			// Key was the last element.  Return special value to avoid confusion with return code of
+			// BPF_MAP_LOOKUP_ELEM below.
+			err = ErrIterationFinished
+			return
+		}
 		err = errno
 		return
 	}
@@ -508,16 +541,17 @@ func (m *MapIterator) Next() (k, v []byte, err error) {
 		C.memset(m.nextKey, 0, (C.size_t)(m.keySize))
 	}
 
-	binary.LittleEndian.PutUint64(m.attrs[offsets.key:], uint64((uintptr)(m.currentKey)))
-	binary.LittleEndian.PutUint64(m.attrs[offsets.value:], uint64((uintptr)(m.value)))
+	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.key:], uint64((uintptr)(m.currentKey)))
+	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.value:], uint64((uintptr)(m.value)))
 
 	// Got a key, now look up the associated value.
-	_, _, errno = unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_LOOKUP_ELEM, uintptr(unsafe.Pointer(m.attrs)), C.sizeof_union_bpf_attr)
+	_, _, errno = unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_LOOKUP_ELEM, uintptr(unsafe.Pointer(m.bpfAttr)), C.sizeof_union_bpf_attr)
 	if errno != 0 {
 		err = errno
 		return
 	}
 
+	// Form slices from the buffer on the C heap.
 	keySliceHdr := (*reflect.SliceHeader)(unsafe.Pointer(&k))
 	keySliceHdr.Data = uintptr(m.currentKey)
 	keySliceHdr.Cap = m.keySize
@@ -538,7 +572,11 @@ func (m *MapIterator) Close() error {
 	m.nextKey = nil
 	C.free(m.value)
 	m.value = nil
-	C.free(unsafe.Pointer(m.attrs))
-	m.attrs = nil
+	C.free(unsafe.Pointer(m.bpfAttr))
+	m.bpfAttr = nil
+
+	// Don't need the finalizer any more.
+	runtime.SetFinalizer(m, nil)
+
 	return nil
 }

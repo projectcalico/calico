@@ -421,7 +421,7 @@ func LoadMapMem(m bpf.Map) (MapMem, error) {
 }
 
 // MapMemIter returns bpf.MapIter that loads the provided MapMem
-func MapMemIter(m MapMem) bpf.MapIter {
+func MapMemIter(m MapMem) bpf.IterCallback {
 	ks := len(Key{})
 	vs := len(Value{})
 

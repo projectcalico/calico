@@ -17,6 +17,7 @@
 package bpf
 
 import (
+	"errors"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -51,3 +52,5 @@ type MapInfo struct {
 }
 
 const ObjectDir = "/usr/lib/calico/bpf"
+
+var ErrIterationFinished = errors.New("iteration finished")

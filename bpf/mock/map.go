@@ -50,7 +50,7 @@ func (m *Map) Path() string {
 	return m.Filename
 }
 
-func (m Map) Iter(f bpf.MapIter) error {
+func (m Map) Iter(f bpf.IterCallback) error {
 	for kstr, vstr := range m.Contents {
 		f([]byte(kstr), []byte(vstr))
 	}

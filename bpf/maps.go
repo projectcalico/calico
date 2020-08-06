@@ -34,7 +34,7 @@ const (
 	IterDelete IteratorAction = "delete"
 )
 
-type MapIter func(k, v []byte) IteratorAction
+type IterCallback func(k, v []byte) IteratorAction
 
 type Map interface {
 	GetName() string
@@ -47,7 +47,7 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
-	Iter(MapIter) error
+	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
@@ -152,7 +152,7 @@ func DumpMapCmd(m Map) ([]string, error) {
 }
 
 // IterMapCmdOutput iterates over the outout of a command obtained by DumpMapCmd
-func IterMapCmdOutput(output []byte, f MapIter) error {
+func IterMapCmdOutput(output []byte, f IterCallback) error {
 	var mp []mapEntry
 	err := json.Unmarshal(output, &mp)
 	if err != nil {
@@ -174,13 +174,19 @@ func IterMapCmdOutput(output []byte, f MapIter) error {
 	return nil
 }
 
-func (b *PinnedMap) Iter(f MapIter) error {
+// Iter iterates over the map, passing each key/value pair to the provided callback function.  Warning:
+// The key and value are owned by the iterator and will be clobbered by the next iteration so they should not be
+// retained or modified.
+func (b *PinnedMap) Iter(f IterCallback) error {
 	it, err := NewMapIterator(b.MapFD(), b.KeySize, b.ValueSize)
 	if err != nil {
 		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
 	defer func() {
-		_ = it.Close()
+		err := it.Close()
+		if err != nil {
+			logrus.WithError(err).Panic("Unexpected error from map iterator Close().")
+		}
 	}()
 
 	keyToDelete := make([]byte, b.KeySize)
@@ -193,12 +199,12 @@ func (b *PinnedMap) Iter(f MapIter) error {
 			// the iteration.
 			err := DeleteMapEntry(b.MapFD(), keyToDelete, b.ValueSize)
 			if err != nil && !IsNotExists(err) {
-				return fmt.Errorf("failed to delet map entry: %w", err)
+				return fmt.Errorf("failed to delete map entry: %w", err)
 			}
 		}
 
 		if err != nil {
-			if IsNotExists(err) {
+			if err == ErrIterationFinished {
 				return nil
 			}
 			return errors.Errorf("GetMapNextKey failed: %s", err)

@@ -294,7 +294,7 @@ func LoadFrontendMap(m bpf.Map) (MapMem, error) {
 }
 
 // MapMemIter returns bpf.MapIter that loads the provided NATMapMem
-func MapMemIter(m MapMem) bpf.MapIter {
+func MapMemIter(m MapMem) bpf.IterCallback {
 	ks := len(FrontendKey{})
 	vs := len(FrontendValue{})
 
@@ -346,7 +346,7 @@ func LoadBackendMap(m bpf.Map) (BackendMapMem, error) {
 }
 
 // BackendMapMemIter returns bpf.MapIter that loads the provided NATBackendMapMem
-func BackendMapMemIter(m BackendMapMem) bpf.MapIter {
+func BackendMapMemIter(m BackendMapMem) bpf.IterCallback {
 	ks := len(BackendKey{})
 	vs := len(BackendValue{})
 
@@ -491,7 +491,7 @@ func LoadAffinityMap(m bpf.Map) (AffinityMapMem, error) {
 }
 
 // AffinityMapMemIter returns bpf.MapIter that loads the provided AffinityMapMem
-func AffinityMapMemIter(m AffinityMapMem) bpf.MapIter {
+func AffinityMapMemIter(m AffinityMapMem) bpf.IterCallback {
 	ks := len(AffinityKey{})
 	vs := len(AffinityValue{})
 
@@ -596,7 +596,7 @@ func LoadSendRecvMsgMap(m bpf.Map) (SendRecvMsgMapMem, error) {
 }
 
 // SendRecvMsgMapMemIter returns bpf.MapIter that loads the provided SendRecvMsgMapMem
-func SendRecvMsgMapMemIter(m SendRecvMsgMapMem) bpf.MapIter {
+func SendRecvMsgMapMemIter(m SendRecvMsgMapMem) bpf.IterCallback {
 	ks := len(SendRecvMsgKey{})
 	vs := len(SendRecvMsgValue{})
 
