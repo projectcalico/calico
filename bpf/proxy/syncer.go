@@ -839,7 +839,6 @@ func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
 }
 
 func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
-	var keys []nat.FrontendKey
 	ipaddr := svc.ClusterIP()
 	port := svc.Port()
 	loadBalancerSourceRanges := svc.LoadBalancerSourceRanges()
@@ -848,8 +847,11 @@ func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
 	}
 	proto, err := ProtoV1ToInt(svc.Protocol())
 	if err != nil {
-		return keys, err
+		return nil, err
 	}
+
+	keys := make([]nat.FrontendKey, 0, len(loadBalancerSourceRanges))
+
 	for _, src := range loadBalancerSourceRanges {
 		// Ignore IPv6 addresses
 		if strings.Contains(src, ":") {
