@@ -61,7 +61,7 @@ section:
       - title: Requirements
         path: /getting-started/windows-calico/requirements
       - title: Install Calico for Windows
-        path: /getting-started/windows-calico/Standard
+        path: /getting-started/windows-calico/standard
     - title: Create cluster roles for Windows nodes
       path: /getting-started/windows-calico/cluster-roles
     - title: Start and stop Calico for Windows services
