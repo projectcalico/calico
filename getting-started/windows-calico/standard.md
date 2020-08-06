@@ -164,9 +164,8 @@ adjust other kube-proxy parameters.
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
 
 1. If using a non-{{site.prodname}} network plugin for networking, install and verify it now. 
-1. Edit the install configuration file, `config.ps1` as follows:
-
-| **Set this variable...** | To...                   |
+1. Edit the install configuration file, `config.ps1` as follows:  
+   | **Set this variable...** | To...                   |
 | ----------- | ----------------------------------------------------- |
 | $env:KUBE_NETWORK | CNI plugin you plan to use. For {{site.prodname}}, set the variable to `{{site.prodname}}.*` |
 | $env:CALICO_NETWORKING_BACKEND | `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
