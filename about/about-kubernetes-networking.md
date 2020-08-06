@@ -1,5 +1,6 @@
 ---
-title: About Kubernetes Networking description: Learn about Kubernetes networking!
+title: About Kubernetes Networking
+description: Learn about Kubernetes networking!
 ---
 
 Kubernetes defines a network model that helps provide simplicity and consistency across a range of networking
