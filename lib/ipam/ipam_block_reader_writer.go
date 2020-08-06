@@ -98,6 +98,19 @@ func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string,
 		return nil, fmt.Errorf("no configured Calico pools for node %s", host)
 	}
 
+	// List blocks up front to reduce number of queries.
+	// We will try to write the block later to prevent races.
+	existingBlocks, err := rw.listBlocks(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	/// Build a map for faster lookups.
+	exists := map[string]bool{}
+	for _, e := range existingBlocks.KVPairs {
+		exists[e.Key.(model.BlockKey).CIDR.String()] = true
+	}
+
 	// Iterate through pools to find a new block.
 	for _, pool := range pools {
 		// Use a block generator to iterate through all of the blocks
@@ -107,14 +120,9 @@ func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string,
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if a block already exists for this subnet.
 			log.Debugf("Getting block: %s", subnet.String())
-			_, err := rw.queryBlock(ctx, *subnet, "")
-			if err != nil {
-				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-					log.Infof("Found free block: %+v", *subnet)
-					return subnet, nil
-				}
-				log.Errorf("Error getting block: %v", err)
-				return nil, err
+			if _, ok := exists[subnet.String()]; !ok {
+				log.Infof("Found free block: %+v", *subnet)
+				return subnet, nil
 			}
 			log.Debugf("Block %s already exists", subnet.String())
 		}
@@ -252,7 +260,6 @@ func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPa
 // releaseBlockAffinity releases the host's affinity to the given block, and returns an affinityClaimedError if
 // the host does not claim an affinity for the block.
 func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host string, blockCIDR cnet.IPNet, requireEmpty bool) error {
-	windowsHost := detectOS(ctx) == "windows"
 	// Make sure hostname is not empty.
 	if host == "" {
 		log.Errorf("Hostname can't be empty")
@@ -289,7 +296,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 	}
 
 	// Don't release block affinity if we require it to be empty and it's not empty.
-	if requireEmpty && !b.empty(windowsHost) {
+	if requireEmpty && !b.empty() {
 		logCtx.Info("Block must be empty but is not empty, refusing to remove affinity.")
 		return errBlockNotEmpty{Block: b}
 	}
@@ -302,7 +309,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 		return err
 	}
 
-	if b.empty(windowsHost) {
+	if b.empty() {
 		// If the block is empty, we can delete it.
 		logCtx.Debug("Block is empty - delete it")
 		err := rw.deleteBlock(ctx, obj)
@@ -361,6 +368,10 @@ func (rw blockReaderWriter) deleteAffinity(ctx context.Context, aff *model.KVPai
 // queryBlock gets a block for the given block CIDR key.
 func (rw blockReaderWriter) queryBlock(ctx context.Context, blockCIDR cnet.IPNet, revision string) (*model.KVPair, error) {
 	return rw.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, revision)
+}
+
+func (rw blockReaderWriter) listBlocks(ctx context.Context, revision string) (*model.KVPairList, error) {
+	return rw.client.List(ctx, model.BlockListOptions{}, revision)
 }
 
 // updateBlock updates the given block.

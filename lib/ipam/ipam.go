@@ -53,6 +53,7 @@ const (
 var (
 	ErrBlockLimit      = errors.New("cannot allocate new block due to per host block limit")
 	ErrNoQualifiedPool = errors.New("cannot find a qualified ippool")
+	ErrStrictAffinity  = errors.New("global strict affinity should not be false for Windows node")
 )
 
 // NewIPAMClient returns a new ipamClient, which implements Interface.
@@ -405,7 +406,7 @@ type blockAssignState struct {
 	allowNewClaim         bool
 
 	// For UT purpose, how many times datastore retry has been triggered.
-	datastoreRetryCount   int
+	datastoreRetryCount int
 }
 
 // Given a list of host-affine blocks, findOrClaimBlock returns one block with minimum free ips.
@@ -454,7 +455,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				break
 			}
 
-			s.datastoreRetryCount ++
+			s.datastoreRetryCount++
 		}
 	}
 
@@ -529,9 +530,9 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 					logCtx.Errorf(errString)
 					return nil, false, errors.New(errString)
 				}
-				s.datastoreRetryCount ++
+				s.datastoreRetryCount++
 			}
-			s.datastoreRetryCount ++
+			s.datastoreRetryCount++
 		}
 		return nil, false, errors.New("Max retries hit - excessive concurrent IPAM requests")
 	}
@@ -573,7 +574,6 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		allowNewClaim:         true,
 	}
 
-assignLoop:
 	// Allocate the IPs.
 	for len(ips) < num {
 		var b *model.KVPair
@@ -586,7 +586,8 @@ assignLoop:
 		b, newlyClaimed, err := s.findOrClaimBlock(ctx, 1)
 		if err != nil {
 			if _, ok := err.(noFreeBlocksError); ok {
-				break assignLoop
+				// Skip to check non-affine blocks
+				break
 			}
 			if errors.Is(err, ErrBlockLimit) {
 				log.Warnf("Unable to allocate a new IPAM block; host already has %v blocks but "+
@@ -600,7 +601,6 @@ assignLoop:
 			numBlocksOwned++
 		}
 
-	retryLoop:
 		// We have got a block b.
 		for i := 0; i < datastoreRetries; i++ {
 			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, config.StrictAffinity)
@@ -614,19 +614,19 @@ assignLoop:
 					b, err = c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 					if err != nil {
 						logCtx.WithError(err).Warn("Failed to get block again after update conflict")
-						break retryLoop
+						break
 					}
 
 					// Block b is in sync with datastore. Retry assigning IP.
-					continue retryLoop
+					continue
 				}
 				logCtx.WithError(err).Warningf("Failed to assign IPs in newly allocated block")
-				break retryLoop
+				break
 			}
 			logCtx.Debugf("Assigned IPs from new block: %s", newIPs)
 			ips = append(ips, newIPs...)
 			rem = num - len(ips)
-			break retryLoop
+			break
 		}
 	}
 
@@ -856,7 +856,6 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 }
 
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
-	windowsHost := detectOS(ctx) == "windows"
 	logCtx := log.WithField("cidr", blockCIDR)
 	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Info("Getting block so we can release IPs")
@@ -891,7 +890,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 		// the Value since we have updated the structure pointed to in the
 		// KVPair.
 		var updateErr error
-		if b.empty(windowsHost) && b.Affinity == nil {
+		if b.empty() && b.Affinity == nil {
 			logCtx.Info("Deleting non-affine block")
 			updateErr = c.blockReaderWriter.deleteBlock(ctx, obj)
 		} else {
@@ -1313,7 +1312,6 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 }
 
 func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockCIDR net.IPNet) error {
-	windowsHost := detectOS(ctx) == "windows"
 	logCtx := log.WithFields(log.Fields{"handle": handleID, "cidr": blockCIDR})
 	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Debug("Querying block so we can release IPs by handle")
@@ -1340,7 +1338,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 		}
 		logCtx.Debugf("Block has %d IPs with the given handle", num)
 
-		if block.empty(windowsHost) && block.Affinity == nil {
+		if block.empty() && block.Affinity == nil {
 			logCtx.Info("Deleting block because it is now empty and has no affinity")
 			err = c.blockReaderWriter.deleteBlock(ctx, obj)
 			if err != nil {
@@ -1537,10 +1535,12 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (config *IPAMConfig, err 
 		// When a Windows node owns a block, it creates a local /26 subnet object and as far as we know, it can't
 		// do a longest-prefix-match between the subnet CIDR and a remote /32.  This means that we can't allow
 		// remote hosts to borrow IPs from a Windows-owned block; and Windows hosts can't borrow IPs either.
-		// Force Windows nodes to always behave as if StrictAffinity is enabled.  This means that they won't borrow
-		// and they'll mark any blocks that they allocate as Strict so others can't borrow from them.
-		log.Info("On Windows, forcing IPAM StrictAffinity.")
-		config.StrictAffinity = true
+		// Return error if strict affinity is not true.
+		if !config.StrictAffinity {
+			err = ErrStrictAffinity
+			log.WithError(err).Error("Error validating ipam config")
+			return nil, err
+		}
 	}
 	return
 }

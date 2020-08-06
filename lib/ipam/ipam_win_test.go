@@ -82,7 +82,32 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		if config.Spec.DatastoreType == "kubernetes" {
 			kc = bc.(*k8s.KubeClient).ClientSet
 		}
+	})
 
+	It("Windows: Should return error if strict affinity is false for Windows", func() {
+		bc.Clean()
+		deleteAllPoolsWindows()
+		// Hosts must exist before trying to autoassign
+		err := applyNode(bc, kc, "Windows-TestHost-1", nil)
+		Expect(err).NotTo(HaveOccurred())
+		defer deleteNode(bc, kc, "Windows-TestHost-1")
+
+		ipPoolsWindows.pools["100.0.0.0/24"] = pool{cidr: "100.0.0.0/24", enabled: true, blockSize: 26}
+
+		fromPool := cnet.MustParseNetwork("100.0.0.0/24")
+
+		// Windows Hosts
+		By("Trying to allocate an ip for windows host 1")
+		ctx1 := context.WithValue(context.Background(), "windowsHost", "windows")
+		args1 := AutoAssignArgs{
+			Num4:                  1,
+			Num6:                  0,
+			Hostname:              "Windows-TestHost-1",
+			IPv4Pools:             []cnet.IPNet{fromPool},
+			HostReservedAttrIPv4s: rsvdAttrWindows,
+		}
+		_, _, outErr := ic.AutoAssign(ctx1, args1)
+		Expect(outErr).To(Equal(ErrStrictAffinity))
 	})
 
 	// Request for 256 IPs from a pool, say "10.0.0.0/24", with a blocksize of 26, allocates only 240 IPs as
@@ -98,6 +123,9 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 				bc.Clean()
 				deleteAllPoolsWindows()
 			}
+
+			setAffinity(ic, true)
+			defer setAffinity(ic, false)
 
 			for _, v := range pools {
 				ipPoolsWindows.pools[v.cidr] = pool{cidr: v.cidr, enabled: v.enabled, blockSize: v.blockSize}
@@ -167,16 +195,19 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 			err = applyNode(bc, kc, "Linux-TestHost-2", nil)
 			Expect(err).NotTo(HaveOccurred())
+
+			setAffinity(ic, true)
 		})
 
 		AfterEach(func() {
+			setAffinity(ic, false)
 			deleteNode(bc, kc, "Windows-TestHost-1")
 			deleteNode(bc, kc, "Windows-TestHost-2")
 			deleteNode(bc, kc, "Linux-TestHost-1")
 			deleteNode(bc, kc, "Linux-TestHost-2")
 		})
 
-		It("Windows: Should not be able to assign IPs from non-affine block for Windows but should be able to allocate from non-affine blocks for Linux", func() {
+		It("Windows: Should not be able to assign IPs from non-affine block for Windows and Linux", func() {
 			ipPoolsWindows.pools["100.0.0.0/24"] = pool{cidr: "100.0.0.0/24", enabled: true, blockSize: 26}
 
 			fromPool := cnet.MustParseNetwork("100.0.0.0/24")
@@ -256,7 +287,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			}
 			outv4_6, _, outErr := ic.AutoAssign(ctx2, args6)
 			Expect(outErr).ToNot(HaveOccurred())
-			Expect(len(outv4_6)).To(Equal(100))
+			Expect(len(outv4_6)).To(Equal(59))
 
 			By("Trying to allocate 100 IPs for linux host 2")
 			args7 := AutoAssignArgs{
@@ -268,7 +299,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			}
 			outv4_7, _, outErr := ic.AutoAssign(ctx2, args7)
 			Expect(outErr).ToNot(HaveOccurred())
-			Expect(len(outv4_7)).NotTo(Equal(100))
+			Expect(len(outv4_7)).To(Equal(59))
 		})
 	})
 
@@ -286,10 +317,13 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			// Hosts must exist before trying to autoassign
 			err := applyNode(bc, kc, "test-host", nil)
 			Expect(err).NotTo(HaveOccurred())
+
+			setAffinity(ic, true)
 		})
 
 		AfterEach(func() {
 			deleteNode(bc, kc, "test-host")
+			setAffinity(ic, false)
 		})
 
 		// Call once in order to assign an IP address and create a block.
@@ -329,9 +363,12 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			// Hosts must exist before trying to autoassign
 			err := applyNode(bc, kc, host, nil)
 			Expect(err).NotTo(HaveOccurred())
+
+			setAffinity(ic, true)
 		})
 
 		AfterEach(func() {
+			setAffinity(ic, false)
 			deleteNode(bc, kc, host)
 		})
 
@@ -420,6 +457,10 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 				bc.Clean()
 				deleteAllPoolsWindows()
 			}
+
+			setAffinity(ic, true)
+			defer setAffinity(ic, false)
+
 			for _, v := range pools {
 				ipPoolsWindows.pools[v.cidr] = pool{cidr: v.cidr, enabled: v.enabled, blockSize: v.blockSize}
 			}
@@ -471,6 +512,15 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		Entry("0 v4 1 v6", "testHost", true, []pool{{cidr: "fd80:24e2:f998:72d6::/120", blockSize: 122, enabled: true}}, rsvdAttrTooBig, "fd80:24e2:f998:72d6::/120", 0, 1, 0, 0, ErrNoQualifiedPool),
 	)
 })
+
+func setAffinity(ic Interface, affinity bool) {
+	cfg, err := ic.GetIPAMConfig(context.Background())
+	Expect(err).NotTo(HaveOccurred())
+
+	cfg.StrictAffinity = affinity
+	err = ic.SetIPAMConfig(context.Background(), *cfg)
+	Expect(err).NotTo(HaveOccurred())
+}
 
 func deleteAllPoolsWindows() {
 	log.Infof("Windows: Deleting all pools")
@@ -541,7 +591,7 @@ func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipPoolAccessor, i
 		if attrs.AttrPrimary == nil {
 			return false
 		}
-		if *attrs.AttrPrimary == "windows-reserved-IPAM-handle" {
+		if *attrs.AttrPrimary == "windows-reserved-ipam-handle" {
 			return true
 		}
 	}

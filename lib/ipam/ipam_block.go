@@ -32,7 +32,7 @@ import (
 
 // windwowsReservedHandle is the handle used to reserve addresses required for Windows
 // networking so that workloads do not get assigned these addresses.
-const WindowsReservedHandle = "windows-reserved-IPAM-handle"
+const WindowsReservedHandle = "windows-reserved-ipam-handle"
 
 // Wrap the backend AllocationBlock struct so that we can
 // attach methods to it.
@@ -60,7 +60,7 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 		// time only.
 		// IPs : x.0, x.1, x.2 and x.bcastAddr (e.g. x.255 for /24 subnet)
 
-		log.Infof("Block %s reserving IPs", b.CIDR.String())
+		log.WithField("block", b.CIDR.String()).Info("Block reserving IPs")
 		// nil attributes
 		attrs := make(map[string]string)
 		attrs["note"] = rsvdAttr.Note
@@ -177,11 +177,10 @@ func (b allocationBlock) NumFreeAddresses() int {
 	return len(b.Unallocated)
 }
 
-func (b allocationBlock) empty(windowsHost bool) bool {
-	if windowsHost && b.containsOnlyReservedIPs() {
-		return true
-	}
-	return b.NumFreeAddresses() == b.NumAddresses()
+// empty returns true if the block has released all of its assignable addresses,
+// and returns false if any assignable addresses are in use.
+func (b allocationBlock) empty() bool {
+	return b.containsOnlyReservedIPs()
 }
 
 // containsOnlyReservedIPs returns true if the block is empty excepted for
@@ -192,7 +191,7 @@ func (b *allocationBlock) containsOnlyReservedIPs() bool {
 			continue
 		}
 		attrs := b.Attributes[*attrIdx]
-		if attrs.AttrPrimary == nil || *attrs.AttrPrimary != WindowsReservedHandle {
+		if attrs.AttrPrimary == nil || strings.ToLower(*attrs.AttrPrimary) != WindowsReservedHandle {
 			return false
 		}
 	}
