@@ -54,7 +54,7 @@ section:
     - title: Limitations and known issues
       path: /getting-started/windows-calico/limitations
     - title: Quickstart
-      path:/getting-started/windows-calico/quickstart
+      path: /getting-started/windows-calico/quickstart
     - title: Standard install
       path: /getting-started/windows-calico/
       section:
