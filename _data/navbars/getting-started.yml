@@ -49,7 +49,7 @@ section:
     - title: Migrate a cluster from flannel networking to Calico networking
       path: /getting-started/kubernetes/flannel/migration-from-flannel     
   - title: Calico for Windows
-    path: /getting-started/windows-calico
+    path: /getting-started/windows-calico/
     section:
     - title: Limitations and known issues
       path: /getting-started/windows-calico/limitations
