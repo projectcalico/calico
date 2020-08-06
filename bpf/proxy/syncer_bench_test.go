@@ -29,15 +29,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
+	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/mock"
 	"github.com/projectcalico/felix/bpf/nat"
 )
 
-func makeSvcEpsPair(svcIdx, epCnt, port int) (k8sp.ServicePort, []k8sp.Endpoint) {
+func makeSvcEpsPair(svcIdx, epCnt, port int, opts ...K8sServicePortOption) (k8sp.ServicePort, []k8sp.Endpoint) {
 	svc := NewK8sServicePort(
 		net.IPv4(10, byte((svcIdx&0xff0000)>>16), byte((svcIdx&0xff00)>>8), byte(svcIdx&0xff)),
 		port,
 		v1.ProtocolTCP,
+		opts...,
 	)
 
 	eps := make([]k8sp.Endpoint, epCnt)
@@ -57,7 +59,7 @@ func makeSvcKey(svcIdx int) k8sp.ServicePortName {
 	}
 }
 
-func makeState(svcCnt, epCnt int) DPSyncerState {
+func makeState(svcCnt, epCnt int, opts ...K8sServicePortOption) DPSyncerState {
 	state := DPSyncerState{
 		SvcMap: make(k8sp.ServiceMap, svcCnt),
 		EpsMap: make(k8sp.EndpointsMap, epCnt),
@@ -65,7 +67,7 @@ func makeState(svcCnt, epCnt int) DPSyncerState {
 
 	for i := 0; i < svcCnt; i++ {
 		sk := makeSvcKey(i)
-		state.SvcMap[sk], state.EpsMap[sk] = makeSvcEpsPair(i, epCnt, 1234)
+		state.SvcMap[sk], state.EpsMap[sk] = makeSvcEpsPair(i, epCnt, 1234, opts...)
 	}
 
 	return state
@@ -133,18 +135,40 @@ func BenchmarkStartupSync(b *testing.B) {
 	benchmarkStartupSync(b, 10000, 100)
 }
 
-func benchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int) {
-	b.StopTimer()
-	state := makeState(svcCnt, epCnt)
-
-	syncer, err := NewSyncer(
-		[]net.IP{net.IPv4(1, 1, 1, 1)},
-		&mock.DummyMap{},
-		&mock.DummyMap{},
-		&mock.DummyMap{},
-		NewRTCache(),
+func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, opts ...K8sServicePortOption) {
+	var (
+		syncer DPSyncer
+		err    error
 	)
-	Expect(err).ShouldNot(HaveOccurred())
+
+	b.StopTimer()
+	state := makeState(svcCnt, epCnt, opts...)
+
+	if mockMaps {
+		syncer, err = NewSyncer(
+			[]net.IP{net.IPv4(1, 1, 1, 1)},
+			&mock.DummyMap{},
+			&mock.DummyMap{},
+			&mock.DummyMap{},
+			NewRTCache(),
+		)
+		Expect(err).ShouldNot(HaveOccurred())
+	} else {
+		feMap := nat.FrontendMap(new(bpf.MapContext))
+		err = feMap.EnsureExists()
+		Expect(err).ShouldNot(HaveOccurred())
+		beMap := nat.BackendMap(new(bpf.MapContext))
+		err = beMap.EnsureExists()
+		Expect(err).ShouldNot(HaveOccurred())
+		syncer, err = NewSyncer(
+			[]net.IP{net.IPv4(1, 1, 1, 1)},
+			feMap,
+			beMap,
+			&mock.DummyMap{},
+			NewRTCache(),
+		)
+		Expect(err).ShouldNot(HaveOccurred())
+	}
 
 	benchS := benchSyncer{
 		DPSyncer: syncer,
@@ -155,7 +179,12 @@ func benchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int) {
 	Expect(err).ShouldNot(HaveOccurred())
 	<-benchS.syncC
 
-	b.Run(fmt.Sprintf("Services %d Endpoints %d", svcCnt, epCnt), func(b *testing.B) {
+	title := fmt.Sprintf("Services %d Endpoints %d mockMaps %t", svcCnt, epCnt, mockMaps)
+	if len(opts) > 0 {
+		title += " + derived"
+	}
+
+	b.Run(title, func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			delKey := makeSvcKey(n)
 			newIdx := svcCnt + n
@@ -164,7 +193,7 @@ func benchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int) {
 			delete(state.SvcMap, delKey)
 			delete(state.EpsMap, delKey)
 
-			state.SvcMap[newKey], state.EpsMap[newKey] = makeSvcEpsPair(newIdx, epCnt, 1234)
+			state.SvcMap[newKey], state.EpsMap[newKey] = makeSvcEpsPair(newIdx, epCnt, 1234, opts...)
 
 			b.StartTimer()
 
@@ -183,12 +212,15 @@ func BenchmarkServiceUpdate(b *testing.B) {
 	logrus.SetLevel(logrus.WarnLevel)
 	defer logrus.SetLevel(loglevel)
 
-	benchmarkServiceUpdate(b, 1, 1)
-	benchmarkServiceUpdate(b, 1, 10)
-	benchmarkServiceUpdate(b, 10, 1)
-	benchmarkServiceUpdate(b, 100, 1)
-	benchmarkServiceUpdate(b, 1000, 1)
-	benchmarkServiceUpdate(b, 10000, 1)
+	for _, svcs := range []int{1, 10, 100, 1000, 10000} {
+		for _, eps := range []int{1, 10} {
+			for _, opts := range [][]K8sServicePortOption{nil, {K8sSvcWithNodePort(30333)}} {
+				for _, mock := range []bool{true, false} {
+					runBenchmarkServiceUpdate(b, svcs, eps, mock, opts...)
+				}
+			}
+		}
+	}
 }
 
 type benchSyncer struct {
