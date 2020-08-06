@@ -895,18 +895,8 @@ var _ = Describe("BPF Syncer", func() {
 	})
 })
 
-type mockMapDummy struct{}
-
-func (m *mockMapDummy) Open() error {
-	return nil
-}
-
-func (m *mockMapDummy) EnsureExists() error {
-	return nil
-}
-
 type mockNATMap struct {
-	mockMapDummy
+	mock.DummyMap
 	sync.Mutex
 	m map[nat.FrontendKey]nat.FrontendValue
 }
@@ -988,7 +978,7 @@ func (m *mockNATMap) Delete(k []byte) error {
 }
 
 type mockNATBackendMap struct {
-	mockMapDummy
+	mock.DummyMap
 	sync.Mutex
 	m map[nat.BackendKey]nat.BackendValue
 }
@@ -1070,7 +1060,7 @@ func (m *mockNATBackendMap) Delete(k []byte) error {
 }
 
 type mockAffinityMap struct {
-	mockMapDummy
+	mock.DummyMap
 	sync.Mutex
 	m map[nat.AffinityKey]nat.AffinityValue
 }
