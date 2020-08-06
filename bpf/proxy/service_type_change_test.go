@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !benchmark
-
 package proxy_test
 
 import (
@@ -88,13 +86,18 @@ var _ = Describe("BPF service type change", func() {
 	back := newMockNATBackendMap()
 	aff := newMockAffinityMap()
 	ct := mock.NewMockMap(conntrack.MapParams)
-	p, _ := proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
-	p.OnHostIPsUpdate([]net.IP{initIP})
 
 	keyClusterIP := nat.NewNATKey(clusterIP, port, proxy.ProtoV1ToIntPanic(proto))
 	keyExtIP := nat.NewNATKey(extIP, port, proxy.ProtoV1ToIntPanic(proto))
 	keyExtIPWithSrc := nat.NewNATKeySrc(extIP, port, proxy.ProtoV1ToIntPanic(proto), ip.MustParseCIDROrIP("30.1.0.1/32").(ip.V4CIDR))
 	keyHostIP := nat.NewNATKey(initIP, uint16(npPort), proxy.ProtoV1ToIntPanic(proto))
+
+	var p *proxy.KubeProxy
+
+	BeforeEach(func() {
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
+		p.OnHostIPsUpdate([]net.IP{initIP})
+	})
 
 	AfterEach(func() {
 		p.Stop()

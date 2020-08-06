@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !benchmark
-
 package proxy_test
 
 import (
@@ -31,53 +29,57 @@ import (
 )
 
 var _ = Describe("BPF kube-proxy", func() {
-	testSvc := &v1.Service{
-		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMeataV1("testService"),
-		Spec: v1.ServiceSpec{
-			ClusterIP: "10.1.0.1",
-			Type:      v1.ServiceTypeClusterIP,
-			Selector: map[string]string{
-				"app": "test",
-			},
-			Ports: []v1.ServicePort{
-				{
-					Protocol: v1.ProtocolTCP,
-					Port:     1234,
-					NodePort: 666,
-				},
-			},
-		},
-	}
-
-	testSvcEps := &v1.Endpoints{
-		TypeMeta:   typeMetaV1("Endpoints"),
-		ObjectMeta: objectMeataV1("testService"),
-		Subsets: []v1.EndpointSubset{
-			{
-				Addresses: []v1.EndpointAddress{
-					{
-						IP: "10.1.2.1",
-					},
-				},
-				Ports: []v1.EndpointPort{
-					{
-						Port: 1234,
-					},
-				},
-			},
-		},
-	}
-
-	k8s := fake.NewSimpleClientset(testSvc, testSvcEps)
-
 	initIP := net.IPv4(1, 1, 1, 1)
 
 	front := newMockNATMap()
 	back := newMockNATBackendMap()
 	aff := newMockAffinityMap()
 	ct := mock.NewMockMap(conntrack.MapParams)
-	p, _ := proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
+
+	var p *proxy.KubeProxy
+
+	BeforeEach(func() {
+		testSvc := &v1.Service{
+			TypeMeta:   typeMetaV1("Service"),
+			ObjectMeta: objectMeataV1("testService"),
+			Spec: v1.ServiceSpec{
+				ClusterIP: "10.1.0.1",
+				Type:      v1.ServiceTypeClusterIP,
+				Selector: map[string]string{
+					"app": "test",
+				},
+				Ports: []v1.ServicePort{
+					{
+						Protocol: v1.ProtocolTCP,
+						Port:     1234,
+						NodePort: 666,
+					},
+				},
+			},
+		}
+
+		testSvcEps := &v1.Endpoints{
+			TypeMeta:   typeMetaV1("Endpoints"),
+			ObjectMeta: objectMeataV1("testService"),
+			Subsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{
+						{
+							IP: "10.1.2.1",
+						},
+					},
+					Ports: []v1.EndpointPort{
+						{
+							Port: 1234,
+						},
+					},
+				},
+			},
+		}
+
+		k8s := fake.NewSimpleClientset(testSvc, testSvcEps)
+		p, _ = proxy.StartKubeProxy(k8s, "test-node", front, back, aff, ct, proxy.WithImmediateSync())
+	})
 
 	AfterEach(func() {
 		p.Stop()
