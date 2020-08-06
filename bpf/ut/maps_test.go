@@ -41,7 +41,30 @@ func TestMapEntryDeletion(t *testing.T) {
 	Expect(bpf.IsNotExists(err3)).To(Equal(true), "Error from deletion of non-existent entry was incorrect")
 }
 
-func TestMapIteration(t *testing.T) {
+func TestMapIterActionDelete(t *testing.T) {
+	k, err1 := setUpMapTestWithSingleKV(t)
+
+	seenKey := false
+	iterErr := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
+		seenKey = seenKey || reflect.DeepEqual(k2, k[:])
+		return bpf.IterDelete
+	})
+
+	seenKeyAfterDel := false
+	iterErr2 := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
+		seenKeyAfterDel = seenKeyAfterDel || reflect.DeepEqual(k2, k[:])
+		return bpf.IterNone
+	})
+
+	// Defer error checking since the Delete call does the cleanup for this test...
+	Expect(err1).NotTo(HaveOccurred(), "Failed to create map entry")
+	Expect(iterErr).ToNot(HaveOccurred(), "Failed to iterate map")
+	Expect(seenKey).To(BeTrue(), "Expected to see the key we put in the map")
+	Expect(seenKeyAfterDel).To(BeFalse(), "Saw key we'd just deleted")
+	Expect(iterErr2).ToNot(HaveOccurred(), "Failed to iterate map after delete")
+}
+
+func TestMapIterationDeleteAfter(t *testing.T) {
 	k, err1 := setUpMapTestWithSingleKV(t)
 
 	seenKey := false
@@ -144,30 +167,34 @@ func benchMapIterator(b *testing.B, n int) {
 	setUpConntrackMapEntries(b, n)
 
 	for i := 0; i < b.N; i++ {
-		iter, err := bpf.NewMapIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize)
-		if err != nil {
-			panic(err)
-		}
-
-		numIterations := 0
-		for {
-			k, v, err := iter.Next()
-			if err != nil {
-				if bpf.IsNotExists(err) {
-					break
-				}
-				panic(err)
-			}
-			benchVal = k
-			benchVal = v
-			numIterations++
-		}
-		if numIterations < n {
-			panic(fmt.Sprintf("Unexpected number of iterations: %d", numIterations))
-		}
-		benchVal = nil
-		_ = iter.Close()
+		doSingleMapIteratorTest(n)
 	}
 	b.StopTimer()
 	cleanUpMaps()
+}
+
+func doSingleMapIteratorTest(n int) {
+	iter, err := bpf.NewMapIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize)
+	if err != nil {
+		panic(err)
+	}
+
+	numIterations := 0
+	for {
+		k, v, err := iter.Next()
+		if err != nil {
+			if bpf.IsNotExists(err) {
+				break
+			}
+			panic(err)
+		}
+		benchVal = k
+		benchVal = v
+		numIterations++
+	}
+	if numIterations != n {
+		panic(fmt.Sprintf("Unexpected number of iterations: %d", numIterations))
+	}
+	benchVal = nil
+	_ = iter.Close()
 }

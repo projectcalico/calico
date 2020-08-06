@@ -204,7 +204,7 @@ func (b *PinnedMap) Iter(f MapIter) error {
 			return errors.Errorf("GetMapNextKey failed: %s", err)
 		}
 
-		action := f(k, v)
+		action = f(k, v)
 
 		if action == IterDelete {
 			// k will become invalid once we call Next again so take a copy.
