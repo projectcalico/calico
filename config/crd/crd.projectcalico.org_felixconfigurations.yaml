@@ -521,8 +521,6 @@ spec:
                   Calico''s BPF maps or attached programs. Set to 0 to disable XDP
                   refresh. [Default: 90s]'
                 type: string
-            required:
-            - bpfLogLevel
             type: object
         type: object
     served: true
