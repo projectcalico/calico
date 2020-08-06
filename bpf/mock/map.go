@@ -52,7 +52,10 @@ func (m *Map) Path() string {
 
 func (m Map) Iter(f bpf.IterCallback) error {
 	for kstr, vstr := range m.Contents {
-		f([]byte(kstr), []byte(vstr))
+		action := f([]byte(kstr), []byte(vstr))
+		if action == bpf.IterDelete {
+			delete(m.Contents, kstr)
+		}
 	}
 	return nil
 }

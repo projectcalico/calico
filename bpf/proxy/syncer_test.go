@@ -939,7 +939,10 @@ func (m *mockNATMap) Iter(iter bpf.IterCallback) error {
 	ks := len(nat.FrontendKey{})
 	vs := len(nat.FrontendValue{})
 	for k, v := range m.m {
-		iter(k[:ks], v[:vs])
+		action := iter(k[:ks], v[:vs])
+		if action == bpf.IterDelete {
+			delete(m.m, k)
+		}
 	}
 
 	return nil
@@ -1021,7 +1024,10 @@ func (m *mockNATBackendMap) Iter(iter bpf.IterCallback) error {
 	ks := len(nat.BackendKey{})
 	vs := len(nat.BackendValue{})
 	for k, v := range m.m {
-		iter(k[:ks], v[:vs])
+		action := iter(k[:ks], v[:vs])
+		if action == bpf.IterDelete {
+			delete(m.m, k)
+		}
 	}
 
 	return nil
@@ -1099,7 +1105,10 @@ func (m *mockAffinityMap) Iter(iter bpf.IterCallback) error {
 	ks := len(nat.AffinityKey{})
 	vs := len(nat.AffinityValue{})
 	for k, v := range m.m {
-		iter(k[:ks], v[:vs])
+		action := iter(k[:ks], v[:vs])
+		if action == bpf.IterDelete {
+			delete(m.m, k)
+		}
 	}
 
 	return nil
