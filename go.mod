@@ -26,7 +26,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200730160414-7f698f7025e9
 	github.com/projectcalico/pod2daemon v0.0.0-20200729161441-0e9320f4f3b4
-	github.com/projectcalico/typha v0.7.3-0.20200804223949-8c9153d92850
+	github.com/projectcalico/typha v0.7.3-0.20200806040917-db7cddd6da58
 	github.com/prometheus/client_golang v1.0.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
