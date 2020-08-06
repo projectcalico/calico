@@ -1,5 +1,6 @@
 ---
-title: About Networking description: Learn about networking!
+title: About Networking
+description: Learn about networking!
 ---
 
 You can get up and running with Calico by following any of our getting started guides without needing to be a networking
