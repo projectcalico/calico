@@ -150,57 +150,6 @@ func setUpConntrackMapEntries(b *testing.B, n int) {
 	b.StartTimer()
 }
 
-func BenchmarkMapIterator10k(b *testing.B) {
-	benchMapIterator(b, 10000)
-}
-
-func BenchmarkMapIterator100k(b *testing.B) {
-	benchMapIterator(b, 100000)
-}
-
-func BenchmarkMapIterator500k(b *testing.B) {
-	benchMapIterator(b, 500000)
-}
-
-func benchMapIterator(b *testing.B, n int) {
-	logLevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.InfoLevel)
-	defer logrus.SetLevel(logLevel)
-	setUpConntrackMapEntries(b, n)
-
-	for i := 0; i < b.N; i++ {
-		doSingleMapIteratorTest(n)
-	}
-	b.StopTimer()
-	cleanUpMaps()
-}
-
-func doSingleMapIteratorTest(n int) {
-	iter, err := bpf.NewMapIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize)
-	if err != nil {
-		panic(err)
-	}
-
-	numIterations := 0
-	var k, v []byte
-	for {
-		k, v, err = iter.Next()
-		if err != nil {
-			if err == bpf.ErrIterationFinished {
-				break
-			}
-			panic(err)
-		}
-		numIterations++
-	}
-	if numIterations != n {
-		panic(fmt.Sprintf("Unexpected number of iterations: %d", numIterations))
-	}
-	_ = iter.Close()
-	runtime.KeepAlive(k)
-	runtime.KeepAlive(v)
-}
-
 func BenchmarkMapIteratorMulti10(b *testing.B) {
 	benchMapIteratorMulti(b, 10)
 }
@@ -240,7 +189,7 @@ func benchMapIteratorMulti(b *testing.B, n int) {
 }
 
 func doSingleMapIteratorMultiTest(n int) {
-	iter, err := bpf.NewMapIteratorMulti(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize, conntrack.MaxEntries)
+	iter, err := bpf.NewMapIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize, conntrack.MaxEntries)
 	if err != nil {
 		panic(err)
 	}

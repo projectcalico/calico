@@ -15,7 +15,6 @@
 package bpf
 
 import (
-	"encoding/binary"
 	"reflect"
 	"runtime"
 	"strings"
@@ -140,19 +139,6 @@ import (
 //    return attr->test.duration;
 // }
 //
-// struct offsets {
-//   size_t map_fd, key, value, flags;
-// };
-//
-// struct offsets get_offsets() {
-//   return (struct offsets){
-//     .map_fd = offsetof(union bpf_attr, map_fd),
-//     .key = offsetof(union bpf_attr, key),
-//     .value = offsetof(union bpf_attr, value),
-//     .flags = offsetof(union bpf_attr, flags),
-//   };
-// };
-//
 // int bpf_map_call(int cmd, __u32 map_fd, void *pointer_to_key, void *pointer_to_value, __u64 flags) {
 //    union bpf_attr attr = {};
 //
@@ -202,8 +188,6 @@ import (
 // }
 //
 import "C"
-
-var offsets C.struct_offsets = C.get_offsets()
 
 func SyscallSupport() bool {
 	return true
@@ -465,164 +449,11 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 	return nil
 }
 
-// GetMapNextKey returns the next key for the given key if the current key exists.
-// Otherwise it returns the first key. Order is implementation / map type
-// dependent.
-//
-// Start iterating by passing a nil key.
-func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
-	log.Debugf("GetMapNextKey(%v, %v, %v)", mapFD, k, keySize)
-
-	if log.GetLevel() >= log.DebugLevel && keySize != 0 && len(k) != keySize && len(k) != 0 {
-		log.WithField("keySize", keySize).WithField("keyLen", len(k)).Panic("keySize != len(k)")
-	}
-	err := checkMapIfDebug(mapFD, keySize, -1)
-	if err != nil {
-		return nil, err
-	}
-
-	var cK unsafe.Pointer
-	if len(k) > 0 {
-		cK = unsafe.Pointer(&k[0])
-	}
-
-	next := make([]byte, keySize)
-
-	errno := C.bpf_map_call(unix.BPF_MAP_GET_NEXT_KEY, C.uint(mapFD), cK, unsafe.Pointer(&next[0]), 0)
-	if errno != 0 {
-		return nil, unix.Errno(errno)
-	}
-
-	return next, nil
-}
-
-func NewMapIterator(mapFD MapFD, keySize, valueSize int) (*MapIterator, error) {
-	err := checkMapIfDebug(mapFD, keySize, valueSize)
-	if err != nil {
-		return nil, err
-	}
-
-	m := &MapIterator{
-		mapFD:     mapFD,
-		bpfAttr:   C.bpf_attr_alloc(),
-		keySize:   keySize,
-		valueSize: valueSize,
-		nextKey:   C.malloc((C.size_t)(keySize)),
-		value:     C.malloc((C.size_t)(valueSize)),
-	}
-
-	binary.LittleEndian.PutUint32(m.bpfAttr[offsets.map_fd:], uint32(mapFD))
-	C.memset(m.nextKey, 0, (C.size_t)(keySize))
-	C.memset(m.value, 0, (C.size_t)(valueSize))
-
-	runtime.SetFinalizer(m, func(m *MapIterator) {
-		err := m.Close()
-		if err != nil {
-			log.WithError(err).Panic("Unexpected error from MapIterator.Close().")
-		}
-	})
-
-	return m, nil
-}
-
-// MapIterator handles one pass of iteration over the map.
-type MapIterator struct {
-	// Metadata about the map.
-	mapFD     MapFD
-	valueSize int
-	keySize   int
-
-	// The values below point to the C heap.  We must allocate the key and value buffers on the C heap
-	// because we pass them to the kernel as pointers contained in the bpf_attr union.  That extra level of
-	// indirection defeats Go's special handling of pointers when passing them to the syscall.  If we allocated the
-	// keys and values as slices and the garbage collector decided to move the backing memory of the slices then
-	// the pointers we write to the bpf_attr union could end up being stale (since the union is opaque to the
-	// garbage collector).
-
-	// bpfAttr is the C union that we pass to the BPF syscall to control it.
-	bpfAttr *C.union_bpf_attr
-	// currentKey is either nil at start of day or points to a buffer containing hte current key.
-	currentKey unsafe.Pointer
-	// nextKey starts as an empty buffer; the kernel writes the next key to it.
-	nextKey unsafe.Pointer
-	// value is a buffer to hold the most recently loaded value.
-	value unsafe.Pointer
-}
-
-// Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
-// MapIterator's internal buffers (which are allocated on the C heap); they should not be retained or modified.
-// Returns ErrIterationFinished at the end of the iteration.
-func (m *MapIterator) Next() (k, v []byte, err error) {
-	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.key:], uint64((uintptr)(m.currentKey)))
-	// BPF_MAP_GET_NEXT_KEY returns the next key by writing to the location pointed to by the value pointer.
-	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.value:], uint64((uintptr)(m.nextKey)))
-
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_GET_NEXT_KEY, uintptr(unsafe.Pointer(m.bpfAttr)), C.sizeof_union_bpf_attr)
-	if errno != 0 {
-		if errno == unix.ENOENT {
-			// Key was the last element.  Return special value to avoid confusion with return code of
-			// BPF_MAP_LOOKUP_ELEM below.
-			err = ErrIterationFinished
-			return
-		}
-		err = errno
-		return
-	}
-
-	// Kernel should now have written the next key in m.nextKey; swap current/next.
-	m.nextKey, m.currentKey = m.currentKey, m.nextKey
-
-	if m.nextKey == nil {
-		// First iteration.
-		m.nextKey = C.malloc((C.size_t)(m.keySize))
-		C.memset(m.nextKey, 0, (C.size_t)(m.keySize))
-	}
-
-	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.key:], uint64((uintptr)(m.currentKey)))
-	binary.LittleEndian.PutUint64(m.bpfAttr[offsets.value:], uint64((uintptr)(m.value)))
-
-	// Got a key, now look up the associated value.
-	_, _, errno = unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_LOOKUP_ELEM, uintptr(unsafe.Pointer(m.bpfAttr)), C.sizeof_union_bpf_attr)
-	if errno != 0 {
-		err = errno
-		return
-	}
-
-	// Form slices from the buffer on the C heap.
-	keySliceHdr := (*reflect.SliceHeader)(unsafe.Pointer(&k))
-	keySliceHdr.Data = uintptr(m.currentKey)
-	keySliceHdr.Cap = m.keySize
-	keySliceHdr.Len = m.keySize
-
-	valueSliceHdr := (*reflect.SliceHeader)(unsafe.Pointer(&v))
-	valueSliceHdr.Data = uintptr(m.value)
-	valueSliceHdr.Cap = m.valueSize
-	valueSliceHdr.Len = m.valueSize
-
-	return
-}
-
-func (m *MapIterator) Close() error {
-	C.free(m.currentKey)
-	m.currentKey = nil
-	C.free(m.nextKey)
-	m.nextKey = nil
-	C.free(m.value)
-	m.value = nil
-	C.free(unsafe.Pointer(m.bpfAttr))
-	m.bpfAttr = nil
-
-	// Don't need the finalizer any more.
-	runtime.SetFinalizer(m, nil)
-
-	return nil
-}
-
 // Batch size established by trial and error; 8-32 seemed to be the sweet spot for the conntrack map.
 const mapIteratorNumKeys = 16
 
-// MapIteratorMulti handles one pass of iteration over the map.
-type MapIteratorMulti struct {
+// MapIterator handles one pass of iteration over the map.
+type MapIterator struct {
 	// Metadata about the map.
 	mapFD      MapFD
 	maxEntries int
@@ -640,16 +471,25 @@ type MapIteratorMulti struct {
 	// bpf_map_load_multi.
 	keyBeforeNextBatch unsafe.Pointer
 
-	keys   unsafe.Pointer
+	// keys points to a buffer containing up to mapIteratorNumKeys keys
+	keys unsafe.Pointer
+	// values points to a buffer containing up to mapIteratorNumKeys values
 	values unsafe.Pointer
 
-	valueStride    int
-	keyStride      int
-	numKVsLoaded   int
-	kvIndex        int
-	numKeysVisited int
+	// valueStride is the step through the values buffer.  I.e. the size of the value rounded up for alignment.
+	valueStride int
+	// keyStride is the step through the keys buffer.  I.e. the size of the key rounded up for alignment.
+	keyStride int
+	// numEntriesLoaded is the number of valid entries in the key and values buffers.
+	numEntriesLoaded int
+	// entryIdx is the index of the next key/value to return.
+	entryIdx int
+	// numEntriesVisited is incremented for each entry that we visit.  Used as a sanity check in case we go into an
+	// infinite loop.
+	numEntriesVisited int
 }
 
+// align64 rounds up the given size to the nearest 8-bytes.
 func align64(size int) int {
 	if size%8 == 0 {
 		return size
@@ -657,7 +497,7 @@ func align64(size int) int {
 	return size + (8 - (size % 8))
 }
 
-func NewMapIteratorMulti(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapIteratorMulti, error) {
+func NewMapIterator(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapIterator, error) {
 	err := checkMapIfDebug(mapFD, keySize, valueSize)
 	if err != nil {
 		return nil, err
@@ -669,7 +509,7 @@ func NewMapIteratorMulti(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapI
 	keysBufSize := (C.size_t)(keyStride * mapIteratorNumKeys)
 	valueBufSize := (C.size_t)(valueStride * mapIteratorNumKeys)
 
-	m := &MapIteratorMulti{
+	m := &MapIterator{
 		mapFD:       mapFD,
 		maxEntries:  maxEntries,
 		keySize:     keySize,
@@ -683,10 +523,11 @@ func NewMapIteratorMulti(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapI
 	C.memset(m.keys, 0, (C.size_t)(keysBufSize))
 	C.memset(m.values, 0, (C.size_t)(valueBufSize))
 
-	runtime.SetFinalizer(m, func(m *MapIteratorMulti) {
+	// Make sure the C buffers are cleaned up.
+	runtime.SetFinalizer(m, func(m *MapIterator) {
 		err := m.Close()
 		if err != nil {
-			log.WithError(err).Panic("Unexpected error from MapIteratorMulti.Close().")
+			log.WithError(err).Panic("Unexpected error from MapIterator.Close().")
 		}
 	})
 
@@ -694,10 +535,10 @@ func NewMapIteratorMulti(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapI
 }
 
 // Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
-// MapIteratorMulti's internal buffers (which are allocated on the C heap); they should not be retained or modified.
+// MapIterator's internal buffers (which are allocated on the C heap); they should not be retained or modified.
 // Returns ErrIterationFinished at the end of the iteration.
-func (m *MapIteratorMulti) Next() (k, v []byte, err error) {
-	if m.numKVsLoaded == m.kvIndex {
+func (m *MapIterator) Next() (k, v []byte, err error) {
+	if m.numEntriesLoaded == m.entryIdx {
 		// Need to load a new batch of KVs from the kernel.
 		var count C.int
 		rc := C.bpf_map_load_multi(C.uint(m.mapFD), m.keyBeforeNextBatch, mapIteratorNumKeys, C.int(m.keyStride), m.keys, C.int(m.valueStride), m.values)
@@ -712,24 +553,24 @@ func (m *MapIteratorMulti) Next() (k, v []byte, err error) {
 			return
 		}
 
-		m.numKVsLoaded = int(count)
-		m.kvIndex = 0
+		m.numEntriesLoaded = int(count)
+		m.entryIdx = 0
 		if m.keyBeforeNextBatch == nil {
 			m.keyBeforeNextBatch = C.malloc((C.size_t)(m.keySize))
 		}
-		C.memcpy(m.keyBeforeNextBatch, unsafe.Pointer(uintptr(m.keys)+uintptr(m.keyStride*(m.numKVsLoaded-1))), (C.size_t)(m.keySize))
+		C.memcpy(m.keyBeforeNextBatch, unsafe.Pointer(uintptr(m.keys)+uintptr(m.keyStride*(m.numEntriesLoaded-1))), (C.size_t)(m.keySize))
 	}
 
-	currentKeyPtr := unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.kvIndex)))
-	currentValPtr := unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.kvIndex)))
+	currentKeyPtr := unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.entryIdx)))
+	currentValPtr := unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.entryIdx)))
 
 	k = ptrToSlice(currentKeyPtr, m.keySize)
 	v = ptrToSlice(currentValPtr, m.valueSize)
 
-	m.kvIndex++
-	m.numKeysVisited++
+	m.entryIdx++
+	m.numEntriesVisited++
 
-	if m.numKeysVisited > m.maxEntries*5 {
+	if m.numEntriesVisited > m.maxEntries*5 {
 		log.Panic("Visited more keys than there are in the map!")
 	}
 
@@ -744,7 +585,7 @@ func ptrToSlice(ptr unsafe.Pointer, size int) (b []byte) {
 	return
 }
 
-func (m *MapIteratorMulti) Close() error {
+func (m *MapIterator) Close() error {
 	C.free(m.keyBeforeNextBatch)
 	m.keyBeforeNextBatch = nil
 	C.free(m.keys)
