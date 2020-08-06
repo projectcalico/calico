@@ -48,6 +48,26 @@ section:
       path: /getting-started/kubernetes/flannel/flannel
     - title: Migrate a cluster from flannel networking to Calico networking
       path: /getting-started/kubernetes/flannel/migration-from-flannel     
+  - title: Calico for Windows
+    path: /getting-started/windows-calico
+    section:
+    - title: Limitations and known issues
+      path: /getting-started/windows-calico/limitations
+    - title: Quickstart
+      path:/getting-started/windows-calico/quickstart
+    - title: Standard install
+      path: /getting-started/windows-calico/
+      section:
+      - title: Requirements
+        path: /getting-started/windows-calico/requirements
+      - title: Install Calico for Windows
+        path: /getting-started/windows-calico/Standard
+    - title: Create cluster roles for Windows nodes
+      path: /getting-started/windows-calico/cluster-roles
+    - title: Start and stop Calico for Windows services
+      path: /getting-started/windows-calico/maintain
+    - title: Troubleshoot Calico for Windows
+      path: /getting-started/windows-calico/troubleshoot  
   - title: K3s
     path: /getting-started/kubernetes/k3s/
     section:
