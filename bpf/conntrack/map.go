@@ -317,9 +317,9 @@ func (e Value) Data() EntryData {
 	return EntryData{
 		A2B:      readConntrackLeg(e[24:36]),
 		B2A:      readConntrackLeg(e[36:48]),
-		OrigDst:  net.IPv4(ip[0], ip[1], ip[2], ip[3]),
+		OrigDst:  ip,
 		OrigPort: binary.LittleEndian.Uint16(e[52:54]),
-		TunIP:    net.IPv4(tip[0], tip[1], tip[2], tip[3]),
+		TunIP:    tip,
 	}
 }
 

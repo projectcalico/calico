@@ -157,6 +157,8 @@ func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVe
 	}
 	now := l.cachedKTime
 
+	debug := log.GetLevel() >= log.DebugLevel
+
 	switch ctVal.Type() {
 	case TypeNATForward:
 		// Look up the reverse entry, where we do the book-keeping.
@@ -176,7 +178,9 @@ func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVe
 			return ScanVerdictOK
 		}
 		if reason, expired := l.EntryExpired(now, ctKey.Proto(), revEntry); expired {
-			log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
+			if debug {
+				log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
+			}
 			return ScanVerdictDelete
 			// do not delete the reverse entry yet to avoid breaking the iterating
 			// over the map.  We must not delete other than the current key. We remove
@@ -184,12 +188,16 @@ func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVe
 		}
 	case TypeNATReverse:
 		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
-			log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
+			if debug {
+				log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
+			}
 			return ScanVerdictDelete
 		}
 	case TypeNormal:
 		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
-			log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
+			if debug {
+				log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
+			}
 			return ScanVerdictDelete
 		}
 	default:
@@ -249,6 +257,8 @@ type NATChecker func(frontIP net.IP, frontPort uint16, backIP net.IP, backPort u
 // exisitng NAT entries using the provided NATChecker and if not, it deletes
 // them.
 func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
+	debug := log.GetLevel() >= log.DebugLevel
+
 	return func(k Key, v Value, get EntryGet) ScanVerdict {
 		switch v.Type() {
 		case TypeNormal:
@@ -270,10 +280,14 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
 			// likely an active entry.
 			if !frontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
 				!frontendHasBackend(svcIP, svcPort, ipB, portB, proto) {
-				log.WithField("key", k).Debugf("TypeNATReverse is stale")
+				if debug {
+					log.WithField("key", k).Debugf("TypeNATReverse is stale")
+				}
 				return ScanVerdictDelete
 			}
-			log.WithField("key", k).Debugf("TypeNATReverse still active")
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATReverse still active")
+			}
 
 		case TypeNATForward:
 			proto := k.Proto()
@@ -306,10 +320,14 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
 			}
 
 			if !frontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
-				log.WithField("key", k).Debugf("TypeNATForward is stale")
+				if debug {
+					log.WithField("key", k).Debugf("TypeNATForward is stale")
+				}
 				return ScanVerdictDelete
 			}
-			log.WithField("key", k).Debugf("TypeNATForward still active")
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATForward still active")
+			}
 
 		default:
 			log.WithField("conntrack.Value.Type()", v.Type()).Warn("Unknown type")
