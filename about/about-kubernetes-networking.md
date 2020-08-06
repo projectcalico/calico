@@ -110,7 +110,7 @@ ranges if more granularity is desired.
 
 ### Dual stack
 
-If you want to use a mix of IPv4 and IPv6 then you can enable Kubernetes dual-stack  {% include open-new-window.html
+If you want to use a mix of IPv4 and IPv6 then you can enable Kubernetes {% include open-new-window.html
 text='dual-stack' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/' %} mode. When enabled, all
 pods will be assigned both an IPv4 and IPv6 address, and Kubernetes Services can specify whether they should be exposed
 as IPv4 or IPv6 addresses.
