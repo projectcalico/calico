@@ -202,5 +202,5 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
 
 ### Next steps
 
-- [Configure cluster roles]({{site.baseurl}}/getting-started/windows-calico/cluster-roles)
+- [Create cluster roles]({{site.baseurl}}/getting-started/windows-calico/cluster-roles)
 - [Review network policy limitations in Windows]({{site.baseurl}}/getting-started/windows-calico/limitations)
