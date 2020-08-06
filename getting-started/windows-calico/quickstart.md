@@ -6,17 +6,17 @@ canonical_url: '/getting-started/windows-calico/quickstart'
 
 ### Big picture
 
-Install {{site.prodNameWindows}} on your Kubernetes cluster in approximately 5 minutes.
+Install {{site.prodnameWindows}} on your Kubernetes cluster in approximately 5 minutes.
 
 ### Concepts
 
-{{site.prodNameWindows}} is a hybrid implementation that requires a Linux control node for {{site.prodname}} components, and a Windows cluster for Windows nodes.
+{{site.prodnameWindows}} is a hybrid implementation that requires a Linux control node for {{site.prodname}} components, and a Windows cluster for Windows nodes.
 
 ### Before you begin
 
 **Datastore requirements**
 
-Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodNameWindows}} implementation.)
+Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodnameWindows}} implementation.)
 
 **Kubernetes cluster requirements**
 - Versions 1.17, 1.16, or 1.15
@@ -33,17 +33,16 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 ### How to
 
-- [Install Calico for Windows](#install-calico-for-windows)
+- [Install {{site.prodnameWindows}}](#install-calico-for-windows)
 - [Configure installation parameters](#configure-installation-parameters)
 
-#### Install Calico for Windows
+#### Install {{site.prodnameWindows}}
 
 The following steps install a Kubernetes cluster on a single Windows node, with a Linux control node.
 
 {% tabs %}
   <label:Kubernetes,active:true>
   <%
-#### Install {{site.prodNameWindows}}
 
 1. Prepare directory for Kubernetes files on Windows node.
 
@@ -61,9 +60,9 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. Run install-calico-windows.ps1 with correct parameters. The powershell script will perform following tasks.
 
-   - Downloads {{site.prodNameWindows}} release binary and other Windows utilities files.
+   - Downloads {{site.prodnameWindows}} release binary and other Windows utilities files.
    - Downloads Kubernetes binaries.
-   - Configures {{site.prodNameWindows}} and starts the Calico service.
+   - Configures {{site.prodnameWindows}} and starts the Calico service.
 
 1. To skip any of the above tasks, see [Installation script parameters](#installation-script-parameters).
 
@@ -138,7 +137,6 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
   <label:EKS>
   <%
-#### Install {{site.prodNameWindows}}
 
 1. Prepare directory for Kubernetes files on Windows node.
 
@@ -166,9 +164,9 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. Run install-calico-windows.ps1 with correct parameters. The powershell script will perform following tasks.
 
-   - Downloads {{site.prodNameWindows}} release binary and other Windows utilities files.
+   - Downloads {{site.prodnameWindows}} release binary and other Windows utilities files.
    - Downloads Kubernetes binaries.
-   - Configures {{site.prodNameWindows}} and starts the Calico service.
+   - Configures {{site.prodnameWindows}} and starts the Calico service.
 
 1. To skip any of the above tasks, see [Installation script parameters](#installation-script-parameters).
 
@@ -250,14 +248,14 @@ The geeky details of what you get:
 
 | **Parameter Name** | **Description**                                         | **Default** |
 | ------------------ | --------------------------------------------------------- |-------------|
-| KubeVersion        | Version of Kubernetes binaries to use. If value is empty string (default), the {{site.prodNameWindows}} installation script does not download Kubernetes binaries and run Kubernetes service. Use default for managed public cloud (for example, EKS). | "" |
-| DownloadOnly       | Download without installing {{site.prodNameWindows}}. Set to `yes` to manually install and configure {{site.prodNameWindows}}. For example, {{site.prodNameWindows}} the hard way. | no |
-| Datastore          | {{site.prodNameWindows}} datastore type [`kubernetes` or `etcdv3`]  for reading endpoints and policy information. | kubernetes |
+| KubeVersion        | Version of Kubernetes binaries to use. If value is empty string (default), the {{site.prodnameWindows}} installation script does not download Kubernetes binaries and run Kubernetes service. Use default for managed public cloud (for example, EKS). | "" |
+| DownloadOnly       | Download without installing {{site.prodnameWindows}}. Set to `yes` to manually install and configure {{site.prodnameWindows}}. For example, {{site.prodnameWindows}} the hard way. | no |
+| Datastore          | {{site.prodnameWindows}} datastore type [`kubernetes` or `etcdv3`]  for reading endpoints and policy information. | kubernetes |
 | EtcdEndpoints      | Comma-delimited list of etcd connection endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`. Valid only if `Datastore` is set to `etcdv3`. | "" |
 | ServiceCidr        | Service IP range of the Kubernetes cluster. Not required for managed Kubernetes cluster (for example, EKS). | 10.96.0.0/12 |
 | DNSServerIPs       | Comma-delimited list of DNS service IPs used by Windows pod. Not required for managed Kubernetes cluster (for example, EKS) | 10.96.0.10 |
 
-Congratulations! You now have a Kubernetes cluster with {{site.prodNameWindows}} and a Linux control node.
+Congratulations! You now have a Kubernetes cluster with {{site.prodnameWindows}} and a Linux control node.
 
 ### Next steps
 
