@@ -109,7 +109,8 @@ func benchmarkStartupSync(b *testing.B, svcCnt, epCnt int) {
 			}
 
 			b.StartTimer()
-			s.startupBuildPrev(state)
+			err := s.startupBuildPrev(state)
+			Expect(err).ShouldNot(HaveOccurred())
 			b.StopTimer()
 		}
 	})
@@ -150,7 +151,8 @@ func benchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int) {
 		syncC:    make(chan struct{}, 1),
 	}
 
-	benchS.Apply(state)
+	err = benchS.Apply(state)
+	Expect(err).ShouldNot(HaveOccurred())
 	<-benchS.syncC
 
 	b.Run(fmt.Sprintf("Services %d Endpoints %d", svcCnt, epCnt), func(b *testing.B) {
@@ -166,7 +168,8 @@ func benchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int) {
 
 			b.StartTimer()
 
-			benchS.Apply(state)
+			err := benchS.Apply(state)
+			Expect(err).ShouldNot(HaveOccurred())
 			<-benchS.syncC
 
 			b.StopTimer()
