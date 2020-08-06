@@ -587,8 +587,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	// next call. We cannot keep the provided maps as the generic k8s proxy code
 	// updates them. This function is called with a lock help so we are safe
 	// here and now.
-	s.newSvcMap = make(map[svcKey]svcInfo)
-	s.newEpsMap = make(k8sp.EndpointsMap)
+	s.newSvcMap = make(map[svcKey]svcInfo, len(state.SvcMap))
+	s.newEpsMap = make(k8sp.EndpointsMap, len(state.EpsMap))
 
 	var expNPMisses []*expandMiss
 
