@@ -12,7 +12,7 @@ Because the Kubernetes and {{site.prodname}} control components do not run on Wi
 
 ✓ Install: Manifest install for Kubernetes 2 clusters
 
-✓ Platforms: Kubernetes, EKS, and OpenShift
+✓ Platforms: Kubernetes, EKS
 
 ✓ Networking: Calico CNI with VXLAN, or other supported CNI
 
