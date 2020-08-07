@@ -398,33 +398,35 @@ func (s *Syncer) cleanupDerived(id uint32) error {
 }
 
 func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoint,
-	cleanupDerived func(uint32) error) error {
+	cleanupDerived func(uint32) error) (error, bool) {
 
 	var (
-		err   error
-		id    uint32
-		count int
-		local int
+		err        error
+		id         uint32
+		count      int
+		local      int
+		svcChanged = true
 	)
 
 	old, exists := s.prevSvcMap[skey]
 	if exists {
 		if ServicePortEqual(old.svc, sinfo) {
 			id = old.id
-			if !ServiceEpsEqual(s.prevEpsMap[skey.sname], eps) {
+			if !s.synced || !ServiceEpsEqual(s.prevEpsMap[skey.sname], eps) {
 				count, local, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, eps)
 			} else {
+				svcChanged = false
 				count = old.count
 			}
 		} else {
 			if err := s.deleteSvc(old.svc, old.id, old.count); err != nil {
-				return err
+				return err, false
 			}
 
 			delete(s.prevSvcMap, skey)
 			if cleanupDerived != nil {
 				if err := cleanupDerived(old.id); err != nil {
-					return errors.WithMessage(err, "cleanupDerived")
+					return errors.WithMessage(err, "cleanupDerived"), false
 				}
 			}
 
@@ -436,7 +438,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 		count, local, err = s.newSvc(skey.sname, sinfo, id, eps)
 	}
 	if err != nil {
-		return err
+		return err, false
 	}
 
 	s.newSvcMap[skey] = svcInfo{
@@ -449,10 +451,11 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 	s.newEpsMap[skey.sname] = eps
 
 	if log.GetLevel() >= log.DebugLevel {
-		log.Debugf("applied a service %s update: sinfo=%+v", skey, s.newSvcMap[skey])
+		log.Debugf("applied a service %s update: sinfo=%+v changed: %t",
+			skey, s.newSvcMap[skey], svcChanged)
 	}
 
-	return nil
+	return nil, svcChanged
 }
 
 func (s *Syncer) addActiveEps(id uint32, svc k8sp.ServicePort, eps []k8sp.Endpoint) {
@@ -482,7 +485,7 @@ func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServiceP
 	si.clusterIP = node.AsNetIP()
 	si.port = nport
 
-	if err := s.applySvc(skey, si, eps, nil); err != nil {
+	if err, _ := s.applySvc(skey, si, eps, nil); err != nil {
 		return errors.Errorf("apply NodePortRemote for %s node %s", sname, node)
 	}
 
@@ -537,7 +540,12 @@ func (s *Syncer) expandNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServiceP
 	return miss
 }
 
-func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.ServicePort) error {
+func (s *Syncer) applyDerived(
+	sname k8sp.ServicePortName,
+	t svcType,
+	sinfo k8sp.ServicePort,
+	svcChanged bool,
+) error {
 
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
 	if !ok {
@@ -564,7 +572,7 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 		svc:        sinfo,
 	}
 
-	if oldInfo, ok := s.prevSvcMap[skey]; !ok || oldInfo != newInfo {
+	if _, ok := s.prevSvcMap[skey]; !ok || !s.synced || svcChanged {
 		if err := s.writeSvc(sinfo, svc.id, count, local); err != nil {
 			return err
 		}
@@ -600,14 +608,17 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	for sname, sinfo := range state.SvcMap {
 		skey := getSvcKey(sname, "")
 		eps := state.EpsMap[sname]
-		if err := s.applySvc(skey, sinfo, eps, s.cleanupDerived); err != nil {
+
+		err, svcChanged := s.applySvc(skey, sinfo, eps, s.cleanupDerived)
+		if err != nil {
 			return err
 		}
+
 		for _, lbIP := range sinfo.LoadBalancerIPStrings() {
 			if lbIP != "" {
 				extInfo := serviceInfoFromK8sServicePort(sinfo)
 				extInfo.clusterIP = net.ParseIP(lbIP)
-				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
+				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo, svcChanged)
 				if err != nil {
 					log.Errorf("failed to apply LoadBalancer IP %s for service %s : %s", lbIP, sname, err)
 					continue
@@ -619,7 +630,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		for _, extIP := range sinfo.ExternalIPStrings() {
 			extInfo := serviceInfoFromK8sServicePort(sinfo)
 			extInfo.clusterIP = net.ParseIP(extIP)
-			err := s.applyDerived(sname, svcTypeExternalIP, extInfo)
+			err := s.applyDerived(sname, svcTypeExternalIP, extInfo, svcChanged)
 			if err != nil {
 				log.Errorf("failed to apply ExternalIP %s for service %s : %s", extIP, sname, err)
 				continue
@@ -636,7 +647,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					// separately
 					continue
 				}
-				err := s.applyDerived(sname, svcTypeNodePort, npInfo)
+				err := s.applyDerived(sname, svcTypeNodePort, npInfo, svcChanged)
 				if err != nil {
 					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
 					continue
@@ -692,7 +703,6 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		if err := s.startupSync(state); err != nil {
 			return errors.WithMessage(err, "startup sync")
 		}
-		s.synced = true
 		// deallocate, no further use
 		s.origSvcs = nil
 		s.origEps = nil
@@ -723,6 +733,11 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		// dont bother to cleanup affinity since we do not know in what state we
 		// are anyway. Will get resolved once we get in a good state
 		return err
+	}
+
+	// we are fully synced now
+	if !s.synced {
+		s.synced = true
 	}
 
 	// We wrote all updates, noone will create new records in affinity table
