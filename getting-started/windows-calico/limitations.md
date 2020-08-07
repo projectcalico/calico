@@ -6,20 +6,18 @@ canonical_url: '/getting-started/windows-calico/limitations'
 
 ### Calico for Windows feature limitations
 
-| **Feature** | **Not supported**                                     |
-| ----------- | ----------------------------------------------------- |
-| Install     | Operator install                                      |
-|             | AKS, GKE, IKS, AWS, GCE, Azure, OpenStack, flannel    |
-|             | K3 clusters                                           |
-| Security    | Non-cluster hosts, including automatic host endpoints |
-|             | Application layer policy (ALP) for Istio              |
-| Networking  | BGP peering                                           |
-|             | IP in IP overlay with BPG routing                     |
-|             | Cross-subnet support and MTU setting for VXLAN        |
-|             | Service IP advertisement                              |
-|             | IPv6 and dual stack                                   |
-
-TBD - OpenShift?  {{site.prodname}} must be installed manually rather than as a Kubernetes-managed DaemonSet.
+| **Feature** | **Not supported**                                            |
+| ----------- | ------------------------------------------------------------ |
+| Install     | Operator install                                             |
+|             | AKS, GKE, IKS, AWS, GCE, Azure, OpenShift, OpenStack, flannel |
+|             | K3 clusters                                                  |
+| Security    | Non-cluster hosts, including automatic host endpoints        |
+|             | Application layer policy (ALP) for Istio                     |
+| Networking  | BGP peering                                                  |
+|             | IP in IP overlay with BPG routing                            |
+|             | Cross-subnet support and MTU setting for VXLAN               |
+|             | Service IP advertisement                                     |
+|             | IPv6 and dual stack                                          |
 
 ### Networking limitations with {{site.prodname}} VXLAN 
 
