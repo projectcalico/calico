@@ -168,7 +168,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    - Downloads Kubernetes binaries.
    - Configures {{site.prodnameWindows}} and starts the Calico service.
 
-1. To skip any of the above tasks, see [Installation script parameters](#installation-script-parameters).
+1. To skip any of the above tasks, see [Configure installation parameters](#configure-installation-parameters).
 
 1. Run install-calico-windows.ps1 for your datastore with parameters for your implementation.
    You do not need to pass a parameter if the default value of the parameter is correct for you cluster.
