@@ -3,7 +3,7 @@ title: About Networking
 description: Learn about networking!
 ---
 
-> <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional education, not specific to {{site.prodname}}.
+> <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional background education, not specific to {{site.prodname}}.
 {: .alert .alert-info}
 
 You can get up and running with Calico by following any of the {{site.prodname}} [install
