@@ -205,9 +205,17 @@ func BenchmarkServiceUpdate(b *testing.B) {
 	logrus.SetLevel(logrus.WarnLevel)
 	defer logrus.SetLevel(loglevel)
 
+	dynaNodePort := func() K8sServicePortOption {
+		np := 0
+		return func(s interface{}) {
+			np = (np + 1) % 30000
+			K8sSvcWithNodePort(30000 + np)(s)
+		}
+	}
+
 	for _, svcs := range []int{1, 10, 100, 1000, 10000} {
 		for _, eps := range []int{1, 10} {
-			for _, opts := range [][]K8sServicePortOption{nil, {K8sSvcWithNodePort(30333)}} {
+			for _, opts := range [][]K8sServicePortOption{nil, {dynaNodePort()}} {
 				for _, mock := range []bool{true, false} {
 					runBenchmarkServiceUpdate(b, svcs, eps, mock, opts...)
 				}
