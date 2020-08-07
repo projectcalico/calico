@@ -56,4 +56,4 @@ PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
 ```
 ### Next steps
 
-[Install {{site.prodNameWindows}}]({{site.baseurl}}/getting-started/windows-calico/standard)
+[Install Calico for Windows]({{site.baseurl}}/getting-started/windows-calico/standard)
