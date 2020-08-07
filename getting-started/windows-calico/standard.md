@@ -164,19 +164,19 @@ adjust other kube-proxy parameters.
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
 
 1. If using a non-{{site.prodname}} network plugin for networking, install and verify it now. 
-1. Edit the install configuration file, `config.ps1` as follows: 
+2. Edit the install configuration file, `config.ps1` as follows:     
 
-  | **Set this variable...** | To...                   |
-  | ----------- | ----------------------------------------------------- |
-  | $env:KUBE_NETWORK | CNI plugin you plan to use. For {{site.prodname}}, set the variable to `{{site.prodname}}.*` |
-  | $env:CALICO_NETWORKING_BACKEND | `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
-  | $env:CNI_ variables | Location of your Kubernetes installation. |
-  | $env:K8S_SERVICE_CIDR | Your Kubernetes service cluster IP CIDR. |
-  | $env:CALICO_DATASTORE_TYPE | {{site.prodname}} datastore you want to use. |
-  | $env:KUBECONFIG | Location of the kubeconfig file {{site.prodname}} should use to access the Kubernetes API server. To set up a secure kubeconfig with   the correct permissions for {{site.prodNameWindows}}, see [Create a cluster role]({{site.baseurl}}/getting-started/windows-calico/cluster-roles) and   kubeconfig for {{site.prodNameWindows}}. |
-  | $env:ETCD_ parameters | etcd3 datastore parameters. **Note**: Because of a limitation of the Windows dataplane, a Kubernetes service ClusterIP cannot be   used for the etcd endpoint (the host compartment cannot reach Kubernetes services). |
-  | $env:NODENAME | Hostname used by kubelet. The default uses the node's hostname. **Note**: If you are using the sample kubelet start-up script from the   {{site.prodname}} package, kubelet is started with a hostname override that forces it to use this value. |
-  |  | For AWS to work properly, kubelet should use the node's internal domain name for the AWS integration. |
+   | **Set this variable...** | To...                   |
+   | ----------- | ----------------------------------------------------- |
+   | $env:KUBE_NETWORK | CNI plugin you plan to use. For {{site.prodname}}, set the variable to `{{site.prodname}}.*` |
+   | $env:CALICO_NETWORKING_BACKEND | `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
+   | $env:CNI_ variables | Location of your Kubernetes installation. |
+   | $env:K8S_SERVICE_CIDR | Your Kubernetes service cluster IP CIDR. |
+   | $env:CALICO_DATASTORE_TYPE | {{site.prodname}} datastore you want to use. |
+   | $env:KUBECONFIG | Location of the kubeconfig file {{site.prodname}} should use to access the Kubernetes API server. To set up a secure kubeconfig with    the correct permissions for {{site.prodNameWindows}}, see [Create a cluster role]({{site.baseurl}}/getting-started/windows-calico/cluster-roles) and    kubeconfig for {{site.prodNameWindows}}. |
+   | $env:ETCD_ parameters | etcd3 datastore parameters. **Note**: Because of a limitation of the Windows dataplane, a Kubernetes service ClusterIP cannot    be used for the etcd endpoint (the host compartment cannot reach Kubernetes services). |
+   | $env:NODENAME | Hostname used by kubelet. The default uses the node's hostname. **Note**: If you are using the sample kubelet start-up script from the    {{site.prodname}} package, kubelet is started with a hostname override that forces it to use this value. |
+   |  | For AWS to work properly, kubelet should use the node's internal domain name for the AWS integration. |
 
 3. Run the installer.
   
