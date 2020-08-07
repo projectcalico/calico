@@ -44,12 +44,12 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 - **Kubernetes**
   
   The geeky details of what you get by default:
-{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}
+  {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}
 
 - **EKS**
 
   The geeky details of what you get by default:
-{% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
+  {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
 {% tabs %}
   <label:Kubernetes,active:true>
