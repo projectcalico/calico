@@ -15,8 +15,6 @@
 // We keep the benchmarks in the proxy package to be able to bench unexported
 // partial functionality.
 
-// +build benchmark
-
 package proxy
 
 import (
@@ -24,13 +22,40 @@ import (
 	"net"
 	"testing"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
+	"github.com/projectcalico/felix/bpf/mock"
 	"github.com/projectcalico/felix/bpf/nat"
 )
+
+func makeSvcEpsPair(svcIdx, epCnt, port int) (k8sp.ServicePort, []k8sp.Endpoint) {
+	svc := NewK8sServicePort(
+		net.IPv4(10, byte((svcIdx&0xff0000)>>16), byte((svcIdx&0xff00)>>8), byte(svcIdx&0xff)),
+		port,
+		v1.ProtocolTCP,
+	)
+
+	eps := make([]k8sp.Endpoint, epCnt)
+	for j := 0; j < epCnt; j++ {
+		eps[j] = &k8sp.BaseEndpointInfo{Endpoint: fmt.Sprintf("11.1.1.1:%d", j+1)}
+	}
+
+	return svc, eps
+}
+
+func makeSvcKey(svcIdx int) k8sp.ServicePortName {
+	return k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{
+			Namespace: "default",
+			Name:      fmt.Sprintf("bench-svc-%d", svcIdx),
+		},
+	}
+}
 
 func makeState(svcCnt, epCnt int) DPSyncerState {
 	state := DPSyncerState{
@@ -39,23 +64,8 @@ func makeState(svcCnt, epCnt int) DPSyncerState {
 	}
 
 	for i := 0; i < svcCnt; i++ {
-		sk := k8sp.ServicePortName{
-			NamespacedName: types.NamespacedName{
-				Namespace: "default",
-				Name:      fmt.Sprintf("bench-svc-%d", i),
-			},
-		}
-		state.SvcMap[sk] = NewK8sServicePort(
-			net.IPv4(10, byte((i&0xff0000)>>16), byte((i&0xff00)>>8), byte(i&0xff)),
-			1234,
-			v1.ProtocolTCP,
-		)
-
-		eps := make([]k8sp.Endpoint, epCnt)
-		for j := 0; j < epCnt; j++ {
-			eps[j] = &k8sp.BaseEndpointInfo{Endpoint: fmt.Sprintf("11.1.1.1:%d", j+1)}
-		}
-		state.EpsMap[sk] = eps
+		sk := makeSvcKey(i)
+		state.SvcMap[sk], state.EpsMap[sk] = makeSvcEpsPair(i, epCnt, 1234)
 	}
 
 	return state
@@ -85,11 +95,11 @@ func stateToBPFMaps(state DPSyncerState) (nat.MapMem, nat.BackendMapMem) {
 }
 
 func benchmarkStartupSync(b *testing.B, svcCnt, epCnt int) {
+	b.StopTimer()
 	state := makeState(svcCnt, epCnt)
 
 	b.Run(fmt.Sprintf("Services %d Endpoints %d", svcCnt, epCnt), func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
-			b.StopTimer()
 			origSvcs, origEps := stateToBPFMaps(state)
 			s := &Syncer{
 				prevSvcMap: make(map[svcKey]svcInfo),
@@ -99,13 +109,18 @@ func benchmarkStartupSync(b *testing.B, svcCnt, epCnt int) {
 			}
 
 			b.StartTimer()
-			s.startupBuildPrev(state)
+			err := s.startupBuildPrev(state)
+			Expect(err).ShouldNot(HaveOccurred())
+			b.StopTimer()
 		}
 	})
 }
 
 func BenchmarkStartupSync(b *testing.B) {
-	logrus.SetLevel(logrus.InfoLevel)
+	RegisterTestingT(b)
+	loglevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.WarnLevel)
+	defer logrus.SetLevel(loglevel)
 
 	benchmarkStartupSync(b, 10, 1)
 	benchmarkStartupSync(b, 10, 10)
@@ -116,4 +131,73 @@ func BenchmarkStartupSync(b *testing.B) {
 	benchmarkStartupSync(b, 10000, 1)
 	benchmarkStartupSync(b, 10000, 10)
 	benchmarkStartupSync(b, 10000, 100)
+}
+
+func benchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int) {
+	b.StopTimer()
+	state := makeState(svcCnt, epCnt)
+
+	syncer, err := NewSyncer(
+		[]net.IP{net.IPv4(1, 1, 1, 1)},
+		&mock.DummyMap{},
+		&mock.DummyMap{},
+		&mock.DummyMap{},
+		NewRTCache(),
+	)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	benchS := benchSyncer{
+		DPSyncer: syncer,
+		syncC:    make(chan struct{}, 1),
+	}
+
+	err = benchS.Apply(state)
+	Expect(err).ShouldNot(HaveOccurred())
+	<-benchS.syncC
+
+	b.Run(fmt.Sprintf("Services %d Endpoints %d", svcCnt, epCnt), func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			delKey := makeSvcKey(n)
+			newIdx := svcCnt + n
+			newKey := makeSvcKey(newIdx)
+
+			delete(state.SvcMap, delKey)
+			delete(state.EpsMap, delKey)
+
+			state.SvcMap[newKey], state.EpsMap[newKey] = makeSvcEpsPair(newIdx, epCnt, 1234)
+
+			b.StartTimer()
+
+			err := benchS.Apply(state)
+			Expect(err).ShouldNot(HaveOccurred())
+			<-benchS.syncC
+
+			b.StopTimer()
+		}
+	})
+}
+
+func BenchmarkServiceUpdate(b *testing.B) {
+	RegisterTestingT(b)
+	loglevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.WarnLevel)
+	defer logrus.SetLevel(loglevel)
+
+	benchmarkServiceUpdate(b, 1, 1)
+	benchmarkServiceUpdate(b, 1, 10)
+	benchmarkServiceUpdate(b, 10, 1)
+	benchmarkServiceUpdate(b, 100, 1)
+	benchmarkServiceUpdate(b, 1000, 1)
+	benchmarkServiceUpdate(b, 10000, 1)
+}
+
+type benchSyncer struct {
+	DPSyncer
+	syncC chan struct{}
+}
+
+func (s *benchSyncer) Apply(state DPSyncerState) error {
+	err := s.DPSyncer.Apply(state)
+	s.syncC <- struct{}{}
+	return err
 }
