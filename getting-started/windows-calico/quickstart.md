@@ -228,16 +228,7 @@ The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 %>
 
-<label:OpenShift>
-  <%
-steps…
-
-The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}
-%>
-
   {% endtabs %}
-
 
 #### Configure installation parameters
 
