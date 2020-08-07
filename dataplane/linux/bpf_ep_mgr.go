@@ -601,7 +601,10 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
 		}
-		log.WithError(err).WithField("id", wlID).Warn("Failed to apply policy to endpoint")
+		log.WithError(err).WithFields(log.Fields{
+			"wepID": wlID,
+			"name":  ifaceName,
+		}).Warn("Failed to apply policy to endpoint")
 		return nil
 	})
 }
@@ -613,7 +616,9 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	var endpointID *proto.WorkloadEndpointID
+	var endpointStatus ifacemonitor.State
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+		endpointStatus = iface.info.operState
 		endpointID = iface.info.endpointID
 		if endpointID == nil {
 			for i := range iface.dpState.jumpMapFDs {
@@ -631,8 +636,17 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	m.ifacesLock.Unlock()
 
 	if endpointID == nil {
-		err := tc.RemoveQdisc(ifaceName)
-		return err
+		if endpointStatus != ifacemonitor.StateUnknown {
+			// We think this endpoint exists but it is not known in the datastore.  It may be being removed;
+			// clean it up.
+			log.Debug("Interface has no matching endpoint, cleaning up")
+			err := tc.RemoveQdisc(ifaceName)
+			if err != nil {
+				log.WithField("name", ifaceName).WithError(err).Info(
+					"Failed to remove BPF from interface; assuming it's already gone.")
+			}
+		}
+		return nil
 	}
 
 	wep := m.allWEPs[*endpointID]

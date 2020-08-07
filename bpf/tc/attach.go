@@ -386,14 +386,18 @@ func EnsureQdisc(ifaceName string) error {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return nil
 	}
-	return exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact").Run()
+	err = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact").Run()
+	if err != nil {
+		return fmt.Errorf("failed to add qdisc to interface '%s': %w", ifaceName, err)
+	}
+	return nil
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
 	cmd := exec.Command("tc", "qdisc", "show", "dev", ifaceName, "clsact")
 	out, err := cmd.Output()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to check if interface '%s' has qdisc: %w", ifaceName, err)
 	}
 	if strings.Contains(string(out), "qdisc clsact") {
 		return true, nil
@@ -410,6 +414,8 @@ func RemoveQdisc(ifaceName string) error {
 	if !hasQdisc {
 		return nil
 	}
-
-	return exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact").Run()
+	err = exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact").Run()
+	if err != nil {
+		return fmt.Errorf("failed to remove qdisc from interface '%s': %w", ifaceName, err)
+	}
 }
