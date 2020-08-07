@@ -239,6 +239,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20200728221526-a5e781268cd1 h1:8W
 github.com/projectcalico/libcalico-go v1.7.2-0.20200728221526-a5e781268cd1/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200730160414-7f698f7025e9 h1:f4JY2nCTHAfXUg41/P0NdOqAuG19UwFosPW5lBX/r8E=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200730160414-7f698f7025e9/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200806184730-7d6ad0975840 h1:7hFe2ENrfyKpOlZMOg+ls2YeBh4UXQTvLjQbgGIyzjU=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200806184730-7d6ad0975840/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
