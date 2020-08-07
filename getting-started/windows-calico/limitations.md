@@ -13,11 +13,12 @@ canonical_url: '/getting-started/windows-calico/limitations'
 |             | K3 clusters                                                  |
 | Security    | Non-cluster hosts, including automatic host endpoints        |
 |             | Application layer policy (ALP) for Istio                     |
-| Networking  | BGP peering                                                  |
+| Networking  | Non-overlay mode with BGP peering                            |
 |             | IP in IP overlay with BPG routing                            |
 |             | Cross-subnet support and MTU setting for VXLAN               |
 |             | Service IP advertisement                                     |
 |             | IPv6 and dual stack                                          |
+
 
 ### Networking limitations with {{site.prodname}} VXLAN 
 
