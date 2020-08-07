@@ -45,7 +45,7 @@ Earlier versions may work, but we do not actively test {{site.prodNameWindows}} 
 
 - Windows versions:
   - Windows Server 1903 (AKA 19H1) build 18317 or greater
-  - Windows Server 2019 / 1809 (RS5) or greater, with [some limitations]({{site.baseurl}}/getting-started/windows-calico/determine-networking)
+  - Windows Server 2019 / 1809 (RS5) or greater, with [some limitations]({{site.baseurl}}/getting-started/windows-calico/limitations)
 - Powershell for the installer
 - Windows nodes support only a single IP pool type (so, if using a VXLAN pool, you should only use VXLAN throughout the cluster).
 - TLS v1.2 enabled. For example:
