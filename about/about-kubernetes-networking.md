@@ -3,6 +3,9 @@ title: About Kubernetes Networking
 description: Learn about Kubernetes networking!
 ---
 
+> <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional education, not specific to {{site.prodname}}.
+{: .alert .alert-info}
+
 Kubernetes defines a network model that helps provide simplicity and consistency across a range of networking
 environments and network implementations. The Kubernetes network model provides the foundation for understanding how
 containers, pods, and services within Kubernetes communicate with each other. This guide explains the key concepts and

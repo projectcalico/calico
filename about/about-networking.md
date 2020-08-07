@@ -3,6 +3,9 @@ title: About Networking
 description: Learn about networking!
 ---
 
+> <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional education, not specific to {{site.prodname}}.
+{: .alert .alert-info}
+
 You can get up and running with Calico by following any of the {{site.prodname}} [install
 guides]({{site.baseurl}}/getting-started/) without needing to be a networking expert. Calico hides the complexities for
 you.  However, if you would like to learn more about networking so you can better understand what is happening under the
