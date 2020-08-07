@@ -418,4 +418,5 @@ func RemoveQdisc(ifaceName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to remove qdisc from interface '%s': %w", ifaceName, err)
 	}
+	return nil
 }
