@@ -188,18 +188,24 @@ func GetMapFDByID(mapID int) (MapFD, error) {
 const defaultLogSize = 1024 * 1024
 const maxLogSize = 128 * 1024 * 1024
 
-func LoadBPFProgramFromInsns(insns asm.Insns, license string) (ProgFD, error) {
+func LoadBPFProgramFromInsns(insns asm.Insns, license string) (fd ProgFD, err error) {
 	log.Debugf("LoadBPFProgramFromInsns(%v, %v)", insns, license)
 	increaseLockedMemoryQuota()
 
-	// By default, try to load the program with logging disabled, for performance.
-	fd, err := tryLoadBPFProgramFromInsns(insns, license, 0)
-	if err == nil {
-		log.WithField("fd", fd).Debug("Loaded program successfully")
-		return fd, nil
+	// Occasionally see retryable errors here, retry silently a few times before going into log-collection mode.
+	for retries := 3; retries > 0; retries-- {
+		// By default, try to load the program with logging disabled.  This has two advantages: better performance
+		// and the fact that the log cannot overflow.
+		fd, err = tryLoadBPFProgramFromInsns(insns, license, 0)
+		if err == nil {
+			log.WithField("fd", fd).Debug("Loaded program successfully")
+			return fd, nil
+		}
+		log.WithError(err).Debug("Error loading BPF program; will retry.")
+		time.Sleep(time.Millisecond)
 	}
 
-	// After a failure, retry, passing a log buffer to get the diagnostics from the kernel.
+	// Retry again, passing a log buffer to get the diagnostics from the kernel.
 	log.WithError(err).Warn("Failed to load BPF program; collecting diagnostics...")
 	var logSize uint = defaultLogSize
 	for {
