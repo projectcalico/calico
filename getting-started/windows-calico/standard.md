@@ -32,7 +32,7 @@ Extend your Kubernetes deployment to Windows environments.
 
 Because the Kubernetes and {{site.prodname}} control components do not run on Windows yet, a hybrid Linux/Windows cluster is required. First you create a Linux cluster for {{site.prodname}} components, then you join Windows nodes to the Linux cluster.
 
-The geeky details of what you get:
+The geeky details of what you get by default:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:BGP,Datastore:Kubernetes' %}     
 
 **Kubernetes**
