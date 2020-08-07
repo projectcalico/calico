@@ -170,14 +170,8 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 		Expect(err).ShouldNot(HaveOccurred())
 	}
 
-	benchS := benchSyncer{
-		DPSyncer: syncer,
-		syncC:    make(chan struct{}, 1),
-	}
-
-	err = benchS.Apply(state)
+	err = syncer.Apply(state)
 	Expect(err).ShouldNot(HaveOccurred())
-	<-benchS.syncC
 
 	title := fmt.Sprintf("Services %d Endpoints %d mockMaps %t", svcCnt, epCnt, mockMaps)
 	if len(opts) > 0 {
@@ -197,9 +191,8 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 
 			b.StartTimer()
 
-			err := benchS.Apply(state)
+			err := syncer.Apply(state)
 			Expect(err).ShouldNot(HaveOccurred())
-			<-benchS.syncC
 
 			b.StopTimer()
 		}
@@ -221,15 +214,4 @@ func BenchmarkServiceUpdate(b *testing.B) {
 			}
 		}
 	}
-}
-
-type benchSyncer struct {
-	DPSyncer
-	syncC chan struct{}
-}
-
-func (s *benchSyncer) Apply(state DPSyncerState) error {
-	err := s.DPSyncer.Apply(state)
-	s.syncC <- struct{}{}
-	return err
 }
