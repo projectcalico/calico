@@ -3,10 +3,11 @@ title: About Networking
 description: Learn about networking!
 ---
 
-You can get up and running with Calico by following any of our getting started guides without needing to be a networking
-expert. Calico hides the complexities for you.  However, if you would like to learn more about networking so you can
-better understand what is happening under the covers, this guide provides a short introduction to some of the key
-fundamental networking concepts for anyone who is not already familiar with them.
+You can get up and running with Calico by following any of the {{site.prodname}} [install
+guides]({{site.baseurl}}/getting-started/) without needing to be a networking expert. Calico hides the complexities for
+you.  However, if you would like to learn more about networking so you can better understand what is happening under the
+covers, this guide provides a short introduction to some of the key fundamental networking concepts for anyone who is
+not already familiar with them.
 
 In this guide you will learn:
 - The terms used to described different layers of the network.
@@ -42,22 +43,6 @@ every layer of the stack, without any layer understanding the data or needing to
 adjacent network layers. 
 
 ![Anatomy of a network packet]({{site.baseurl}}/images/anatomy-of-a-packet.svg)
-
-### MTU
-
-The Maximum Transmission Unit ({% include open-new-window.html text='MTU'
-url='https://en.wikipedia.org/wiki/Maximum_transmission_unit' %}) of a network link is the maximum size of packet that
-can be sent across that network link. It is common for all links in a network to be configured with the same MTU to
-reduce the need to fragment packets as they traverse the network, which can significantly lower the performance of the
-network. In addition, TCP tries to learn path MTUs, and adjust packet sizes for each network path based on the smallest
-MTU of any of the links in the network path. When an application tries to send more data than can fit in a single
-packet, TCP will fragment the data into multiple TCP segments, so the MTU is not exceed. 
-
-Most networks have links with an MTU of 1,500 bytes, but some networks support MTUs of 9,000 bytes. In a Linux system,
-larger MTU sizes can result in lower CPU being used by the Linux networking stack when sending large amounts of data,
-because it has to process fewer packets for the same amount of data. Depending on the network interface hardware being
-used, some of this overhead may be offloaded to the network interface hardware, so the impact of small vs large MTU
-sizes varies from device to device.
 
 ### IP addressing, subnets and IP routing
 
@@ -149,4 +134,20 @@ Another common use case for NAT for load balancing. In this case the load balanc
 Address Translation) to change the destination IP address of the incoming connection to the IP address of the chosen
 device it is load balancing to. The load balancer then reverses this NAT on response packets so neither source or
 destination device is aware the mapping is happening.
+
+### MTU
+
+The Maximum Transmission Unit ({% include open-new-window.html text='MTU'
+url='https://en.wikipedia.org/wiki/Maximum_transmission_unit' %}) of a network link is the maximum size of packet that
+can be sent across that network link. It is common for all links in a network to be configured with the same MTU to
+reduce the need to fragment packets as they traverse the network, which can significantly lower the performance of the
+network. In addition, TCP tries to learn path MTUs, and adjust packet sizes for each network path based on the smallest
+MTU of any of the links in the network path. When an application tries to send more data than can fit in a single
+packet, TCP will fragment the data into multiple TCP segments, so the MTU is not exceeded. 
+
+Most networks have links with an MTU of 1,500 bytes, but some networks support MTUs of 9,000 bytes. In a Linux system,
+larger MTU sizes can result in lower CPU being used by the Linux networking stack when sending large amounts of data,
+because it has to process fewer packets for the same amount of data. Depending on the network interface hardware being
+used, some of this overhead may be offloaded to the network interface hardware, so the impact of small vs large MTU
+sizes varies from device to device.
 
