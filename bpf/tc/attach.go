@@ -86,11 +86,6 @@ func (ap AttachPoint) AttachProgram() error {
 	defer tcLock.RUnlock()
 	logCxt.Debug("AttachProgram got lock.")
 
-	err = EnsureQdisc(ap.Iface)
-	if err != nil {
-		return err
-	}
-
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
 		return err

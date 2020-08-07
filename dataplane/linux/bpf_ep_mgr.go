@@ -31,6 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/tc"
@@ -39,7 +41,6 @@ import (
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/ratelimited"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const jumpMapCleanupInterval = 10 * time.Second
@@ -494,6 +495,15 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		go func() {
 			defer wg.Done()
 
+			// Attach the qdisc first; it is shared between the directions.
+			err := tc.EnsureQdisc(iface)
+			if err != nil {
+				mutex.Lock()
+				errs[iface] = err
+				mutex.Unlock()
+				return
+			}
+
 			var ingressWG sync.WaitGroup
 			var ingressErr error
 			ingressWG.Add(1)
@@ -501,7 +511,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				defer ingressWG.Done()
 				ingressErr = m.attachDataIfaceProgram(iface, PolDirnIngress)
 			}()
-			err := m.attachDataIfaceProgram(iface, PolDirnEgress)
+			err = m.attachDataIfaceProgram(iface, PolDirnEgress)
 			ingressWG.Wait()
 			if err == nil {
 				err = ingressErr
@@ -660,6 +670,18 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	}
 
 	wep := m.allWEPs[*endpointID]
+
+	// Attach the qdisc first; it is shared between the directions.
+	err := tc.EnsureQdisc(ifaceName)
+	if err != nil {
+		if errors.Is(err, tc.ErrDeviceNotFound) {
+			// Interface is gone, nothing to do.
+			log.WithField("ifaceName", ifaceName).Debug(
+				"Ignoring request to program interface that is not present.")
+			return nil
+		}
+		return err
+	}
 
 	var ingressErr, egressErr error
 	var wg sync.WaitGroup
