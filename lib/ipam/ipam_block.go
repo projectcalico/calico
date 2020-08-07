@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 
 // windwowsReservedHandle is the handle used to reserve addresses required for Windows
 // networking so that workloads do not get assigned these addresses.
-const windowsReservedHandle = "windows-reserved-IPAM-handle"
+const WindowsReservedHandle = "windows-reserved-ipam-handle"
 
 // Wrap the backend AllocationBlock struct so that we can
 // attach methods to it.
@@ -40,7 +40,7 @@ type allocationBlock struct {
 	*model.AllocationBlock
 }
 
-func newBlock(cidr cnet.IPNet) allocationBlock {
+func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	ones, size := cidr.Mask.Size()
 	numAddresses := 1 << uint(size-ones)
 	b := model.AllocationBlock{}
@@ -51,6 +51,33 @@ func newBlock(cidr cnet.IPNet) allocationBlock {
 	// Initialize unallocated ordinals.
 	for i := 0; i < numAddresses; i++ {
 		b.Unallocated[i] = i
+	}
+
+	if rsvdAttr != nil {
+		// Reserve IPs based on host reserved attributes.
+		// For example, with windows OS, the following IP addresses of the block are
+		// reserved. This is done by pre-allocating them during initialization
+		// time only.
+		// IPs : x.0, x.1, x.2 and x.bcastAddr (e.g. x.255 for /24 subnet)
+
+		log.WithField("block", b.CIDR.String()).Info("Block reserving IPs")
+		// nil attributes
+		attrs := make(map[string]string)
+		attrs["note"] = rsvdAttr.Note
+		handleID := rsvdAttr.Handle
+		b.Unallocated = b.Unallocated[rsvdAttr.StartOfBlock : numAddresses-rsvdAttr.EndOfBlock]
+		attrIndex := len(b.Attributes)
+		for i := 0; i < rsvdAttr.StartOfBlock; i++ {
+			b.Allocations[i] = &attrIndex
+		}
+		for i := 1; i <= rsvdAttr.EndOfBlock; i++ {
+			b.Allocations[numAddresses-i] = &attrIndex
+		}
+
+		// Create slice of IPs and perform the allocations.
+		log.Debugf("Reserving allocation attribute: %#v handle %s", attrs, handleID)
+		attr := model.AllocationAttribute{&handleID, attrs}
+		b.Attributes = append(b.Attributes, attr)
 	}
 
 	return allocationBlock{&b}
@@ -146,7 +173,7 @@ func getHostAffinity(block *model.AllocationBlock) string {
 	return ""
 }
 
-func (b allocationBlock) numFreeAddresses() int {
+func (b allocationBlock) NumFreeAddresses() int {
 	return len(b.Unallocated)
 }
 
@@ -164,7 +191,7 @@ func (b *allocationBlock) containsOnlyReservedIPs() bool {
 			continue
 		}
 		attrs := b.Attributes[*attrIdx]
-		if attrs.AttrPrimary == nil || *attrs.AttrPrimary != windowsReservedHandle {
+		if attrs.AttrPrimary == nil || strings.ToLower(*attrs.AttrPrimary) != WindowsReservedHandle {
 			return false
 		}
 	}

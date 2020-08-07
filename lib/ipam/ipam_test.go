@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1430,6 +1430,255 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 	})
 
+	Describe("IPAM EnsureBlock from different pools - multi", func() {
+		host := "host-a"
+		pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+		pool2 := cnet.MustParseNetwork("20.0.0.0/24")
+		pool3 := cnet.MustParseNetwork("30.0.0.0/24")
+		pool4_v6 := cnet.MustParseNetwork("fe80::11/120")
+		pool5_doesnot_exist := cnet.MustParseNetwork("40.0.0.0/24")
+		pool_big_block_size := cnet.MustParseNetwork("90.0.0.0/24")
+
+		It("should fail to EnsureBlock when requesting a disabled IPv4 in the list of requested pools", func() {
+			args := BlockArgs{
+				Hostname:              host,
+				IPv4Pools:             []cnet.IPNet{pool1, pool3},
+				HostReservedAttrIPv4s: rsvdAttrWindows,
+			}
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, kc, host, nil)
+			applyPool(pool1.String(), true, "")
+			applyPool(pool2.String(), true, "")
+			applyPool(pool3.String(), false, "")
+			applyPool(pool4_v6.String(), true, "")
+			ipPools.pools[pool_big_block_size.String()] = pool{enabled: true, nodeSelector: "", blockSize: 31}
+			_, _, outErr := ic.EnsureBlock(context.Background(), args)
+			Expect(outErr).To(HaveOccurred())
+		})
+
+		It("should fail to EnsureBlock when specifying an IPv6 pool in the IPv4 requested pools", func() {
+			args := BlockArgs{
+				Hostname:              host,
+				IPv4Pools:             []cnet.IPNet{pool4_v6},
+				HostReservedAttrIPv4s: rsvdAttrWindows,
+			}
+			_, _, outErr := ic.EnsureBlock(context.Background(), args)
+			Expect(outErr).To(HaveOccurred())
+		})
+
+		It("should fail to allocate a block when requesting an invalid pool which does not satisfy HostReserveAttr", func() {
+			args := BlockArgs{
+				Hostname:              host,
+				IPv4Pools:             []cnet.IPNet{pool_big_block_size, pool1},
+				HostReservedAttrIPv4s: rsvdAttrWindows,
+			}
+			_, _, err := ic.EnsureBlock(context.Background(), args)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).Should(Equal("the given pool (90.0.0.0/24) does not exist, or is not enabled"))
+		})
+
+		It("should fail to allocate a block when requesting an invalid pool and a valid pool", func() {
+			args := BlockArgs{
+				Hostname:              host,
+				IPv4Pools:             []cnet.IPNet{pool1, pool5_doesnot_exist},
+				HostReservedAttrIPv4s: rsvdAttrWindows,
+			}
+			_, _, err := ic.EnsureBlock(context.Background(), args)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).Should(Equal("the given pool (40.0.0.0/24) does not exist, or is not enabled"))
+		})
+
+		It("should allocate a block with no required pool specified", func() {
+			args := BlockArgs{
+				Hostname:              host,
+				HostReservedAttrIPv4s: rsvdAttrWindows,
+			}
+			v4, _, outErr := ic.EnsureBlock(context.Background(), args)
+			log.Printf("IPAM returned: %v\n", v4)
+
+			Expect(outErr).NotTo(HaveOccurred())
+			Expect(pool1.Contains(v4.IP)).To(BeTrue())
+		})
+
+		It("should allocate a block from the first requested pool when two valid pools are requested", func() {
+			args := BlockArgs{
+				Hostname:              host,
+				IPv4Pools:             []cnet.IPNet{pool1, pool2},
+				HostReservedAttrIPv4s: rsvdAttrWindows,
+			}
+			v4, _, outErr := ic.EnsureBlock(context.Background(), args)
+			log.Printf("IPAM returned: %v\n", v4)
+
+			Expect(outErr).NotTo(HaveOccurred())
+			Expect(pool1.Contains(v4.IP)).To(BeTrue())
+		})
+
+		It("should return existing block after calling EnsureBlock again", func() {
+			args := BlockArgs{
+				Hostname:              host,
+				IPv4Pools:             []cnet.IPNet{pool1, pool2},
+				HostReservedAttrIPv4s: rsvdAttrWindows,
+			}
+			v4, _, outErr := ic.EnsureBlock(context.Background(), args)
+			log.Printf("IPAM returned: %v\n", v4)
+
+			Expect(outErr).NotTo(HaveOccurred())
+			Expect(pool1.Contains(v4.IP)).To(BeTrue())
+
+			v4_again, _, outErr := ic.EnsureBlock(context.Background(), args)
+			Expect(outErr).NotTo(HaveOccurred())
+			Expect(v4_again).To(Equal(v4))
+		})
+	})
+
+	Describe("IPAM findOrClaimBlock test", func() {
+		host := "host-a"
+		pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+		rsvdAttr := &HostReservedAttr{
+			StartOfBlock: 2,
+			EndOfBlock:   1,
+			Handle:       "findOrClaimBlock",
+			Note:         "ipam ut",
+		}
+		var pools []v3.IPPool
+		var ctx context.Context
+		var affBlocks []cnet.IPNet
+		var s *blockAssignState
+
+		BeforeEach(func() {
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, kc, host, nil)
+			// ippool with 4 ips
+			ipPools.pools[pool1.String()] = pool{enabled: true, nodeSelector: "", blockSize: 30}
+			pools, _ = ipPools.GetEnabledPools(4)
+			Expect(len(pools)).To(Equal(1))
+
+			ctx = context.Background()
+
+			// initiate two block cidr
+			affBlocks = []cnet.IPNet{cnet.MustParseNetwork("10.0.0.0/30"), cnet.MustParseNetwork("10.0.0.4/30")}
+
+			cfg, err := ic.GetIPAMConfig(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			// Claim affinity on two blocks
+			for _, blockCIDR := range affBlocks {
+				pa, err := ic.(*ipamClient).blockReaderWriter.getPendingAffinity(ctx, host, blockCIDR)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			s = &blockAssignState{
+				client:                *ic.(*ipamClient),
+				version:               4,
+				host:                  host,
+				pools:                 pools,
+				remainingAffineBlocks: affBlocks,
+				hostReservedAttr:      rsvdAttr,
+				allowNewClaim:         true,
+			}
+		})
+
+		It("Should find or claim blocks", func() {
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks.
+			Expect(newlyClaimed).To(BeFalse())
+			// Should find first block.
+			Expect(b.Key.(model.BlockKey).CIDR.String()).To(Equal("10.0.0.0/30"))
+			// uncheckedAffBlocks has single element which is the second block.
+			Expect(len(s.remainingAffineBlocks)).To(Equal(1))
+			Expect(s.remainingAffineBlocks[0].String()).To(Equal("10.0.0.4/30"))
+
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks
+			Expect(newlyClaimed).To(BeFalse())
+			// find first block of outClaimed.
+			Expect(b.Key.(model.BlockKey).CIDR.String()).To(Equal("10.0.0.4/30"))
+			// uncheckedAffBlocks has single element which is the second block of outClaimed.
+			Expect(len(s.remainingAffineBlocks)).To(Equal(0))
+
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks
+			Expect(newlyClaimed).To(BeTrue())
+			Expect(len(s.remainingAffineBlocks)).To(Equal(0))
+		})
+
+		It("Should skip blocks having insufficient ip", func() {
+			// Assign an IP from first block
+			args := AssignIPArgs{
+				IP:       cnet.IP{net.ParseIP("10.0.0.2")},
+				Hostname: host,
+			}
+			outErr := ic.AssignIP(context.Background(), args)
+			Expect(outErr).NotTo(HaveOccurred())
+
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks.
+			Expect(newlyClaimed).To(BeFalse())
+			// Should find second block.
+			Expect(b.Key.(model.BlockKey).CIDR.String()).To(Equal("10.0.0.4/30"))
+			// uncheckedAffBlocks has no elements.
+			Expect(len(s.remainingAffineBlocks)).To(Equal(0))
+			Expect(s.datastoreRetryCount).To(Equal(0))
+
+			// Assign an IP from second block
+			args = AssignIPArgs{
+				IP:       cnet.IP{net.ParseIP("10.0.0.6")},
+				Hostname: host,
+			}
+			outErr = ic.AssignIP(context.Background(), args)
+			Expect(outErr).NotTo(HaveOccurred())
+
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should claim new block.
+			Expect(newlyClaimed).To(BeTrue())
+			Expect(len(s.remainingAffineBlocks)).To(Equal(0))
+			Expect(s.datastoreRetryCount).To(Equal(0))
+
+			// Should return error if allowNewClaim is false.
+			s.allowNewClaim = false
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).To(Equal(ErrBlockLimit))
+		})
+
+		It("Should return same block after been called multiple times", func() {
+			// Clone current blockAssignState
+			sCopy := *s
+			sCopyPtr := &sCopy
+
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks.
+			Expect(newlyClaimed).To(BeFalse())
+			// Should find first block.
+			Expect(b.Key.(model.BlockKey).CIDR.String()).To(Equal("10.0.0.0/30"))
+			// uncheckedAffBlocks has single element which is the second block.
+			Expect(len(s.remainingAffineBlocks)).To(Equal(1))
+			Expect(s.remainingAffineBlocks[0].String()).To(Equal("10.0.0.4/30"))
+
+			b, newlyClaimed, outErr = sCopyPtr.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks.
+			Expect(newlyClaimed).To(BeFalse())
+			// Should find first block.
+			Expect(b.Key.(model.BlockKey).CIDR.String()).To(Equal("10.0.0.0/30"))
+			// uncheckedAffBlocks has single element which is the second block.
+			Expect(len(s.remainingAffineBlocks)).To(Equal(1))
+			Expect(s.remainingAffineBlocks[0].String()).To(Equal("10.0.0.4/30"))
+		})
+	})
+
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
 		func(host string, cleanEnv bool, pools []pool, usePool string, inv4, inv6, expv4, expv6 int, blockLimit int, expError error) {
 
@@ -1738,7 +1987,7 @@ var _ = DescribeTable("determinePools tests",
 		}
 
 		// Call determinePools
-		pools, _, err := ic.(*ipamClient).determinePools(reqPools, 4, node)
+		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 4, node, 32)
 
 		// Assert on any returned error.
 		if expectErr {
@@ -1809,7 +2058,6 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 	}
 	return blocks
 }
-
 func deleteAllPools() {
 	log.Infof("Deleting all pools")
 	ipPools.pools = map[string]pool{}

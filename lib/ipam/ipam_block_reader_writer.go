@@ -170,7 +170,7 @@ func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, host string,
 
 // claimAffineBlock claims the provided block using the given pending affinity. If successful, it will confirm the affinity. If another host
 // steals the block, claimAffineBlock will attempt to delete the provided pending affinity.
-func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVPair, config IPAMConfig) (*model.KVPair, error) {
+func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVPair, config IPAMConfig, rsvdAttr *HostReservedAttr) (*model.KVPair, error) {
 	// Pull out relevant fields.
 	subnet := aff.Key.(model.BlockAffinityKey).CIDR
 	host := aff.Key.(model.BlockAffinityKey).Host
@@ -178,7 +178,7 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 
 	// Create the new block.
 	affinityKeyStr := "host:" + host
-	block := newBlock(subnet)
+	block := newBlock(subnet, rsvdAttr)
 	block.Affinity = &affinityKeyStr
 
 	// Create the new block in the datastore.

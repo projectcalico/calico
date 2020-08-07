@@ -215,7 +215,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						applyNode(bc, kc, testhost, nil)
 						defer deleteNode(bc, kc, testhost)
 
-						ips, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0)
+						ips, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -303,7 +303,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					go func() {
 						defer GinkgoRecover()
 
-						ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0)
+						ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -499,7 +499,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 
 				config := IPAMConfig{}
-				_, err = rw.claimAffineBlock(ctx, pa, config)
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil)
 				Expect(err).NotTo(BeNil())
 
 				// Should hit a resource update conflict.
@@ -530,7 +530,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			)
 
 			By("setting up the client for the test", func() {
-				b := newBlock(*net)
+				b := newBlock(*net, nil)
 				blockKVP = model.KVPair{
 					Key:   model.BlockKey{CIDR: *net},
 					Value: b.AllocationBlock,
@@ -637,14 +637,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			// Creation function for the actual block - should return an error indicating the block
 			// was already taken by another host.
-			b := newBlock(*net)
+			b := newBlock(*net, nil)
 			b.Affinity = &affStrA
 			blockKVP := &model.KVPair{
 				Key:   model.BlockKey{CIDR: *net},
 				Value: b.AllocationBlock,
 			}
 
-			b2 := newBlock(*net)
+			b2 := newBlock(*net, nil)
 			b2.Affinity = &affStrB
 			blockKVP2 := &model.KVPair{
 				Key:   model.BlockKey{CIDR: *net},
@@ -716,7 +716,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
-				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0)
+				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -746,7 +746,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to claim another address", func() {
-				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0)
+				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -774,7 +774,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// - hostA proc1 allocates IP from block
 			// - hostA proc1 updates block
 			// - hostA proc2 attempts to delete block (tries to mark but fails)
-			b := newBlock(*net)
+			b := newBlock(*net, nil)
 			aff := "host:" + hostA
 			b.AllocationBlock.Affinity = &aff
 			blockKVP := model.KVPair{
@@ -897,7 +897,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 
 				config := IPAMConfig{}
-				_, err = rw.claimAffineBlock(ctx, pa, config)
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -906,7 +906,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 
 				config := IPAMConfig{}
-				_, err = rw.claimAffineBlock(ctx, pa, config)
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -946,6 +946,84 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())
 			})
+		})
+	})
+
+	Context("test block allocation with host reserves", func() {
+		var (
+			rw       blockReaderWriter
+			p        *ipPoolAccessor
+			bc       api.Client
+			ctx      context.Context
+			host     string
+			net      *cnet.IPNet
+			kc       *kubernetes.Clientset
+			rsvdAttr *HostReservedAttr
+		)
+
+		BeforeEach(func() {
+			var err error
+
+			// Make the client and clean the data store.
+			bc, err = backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			bc.Clean()
+
+			// If running in KDD mode, extract the k8s clientset.
+			if config.Spec.DatastoreType == "kubernetes" {
+				kc = bc.(*k8s.KubeClient).ClientSet
+			}
+
+			// Configure a BRW with a real datastore client.
+			rw = blockReaderWriter{
+				client: bc,
+				pools:  p,
+			}
+			p = &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/30": {enabled: true, blockSize: 30, cidr: "10.0.0.0/30"}}}
+			ctx = context.Background()
+
+			_, net, err = cnet.ParseCIDR("10.0.0.0/30")
+			Expect(err).NotTo(HaveOccurred())
+
+			host = "test-hostname"
+			applyNode(bc, kc, host, nil)
+
+			rsvdAttr = &HostReservedAttr{
+				StartOfBlock: 2,
+				EndOfBlock:   1,
+				Handle:       "test-handle",
+				Note:         "ipam ut",
+			}
+		})
+
+		It("should allocate new block", func() {
+			b := newBlock(*net, rsvdAttr)
+			// Block should have one unallocated IP and one attribute.
+			Expect(b.NumFreeAddresses()).To(Equal(1))
+			Expect(len(b.Attributes)).To(Equal(1))
+			// First two IPs should point at the reservation, as should the last.
+			// The only IP available for allocation is the third one.
+			Expect(*b.Allocations[0]).To(Equal(0))
+			Expect(*b.Allocations[1]).To(Equal(0))
+			Expect(b.Allocations[2]).To(BeNil())
+			Expect(*b.Allocations[3]).To(Equal(0))
+			// Attributes[0] should be the reservation attribute.
+			Expect(*b.Attributes[0].AttrPrimary).To(Equal("test-handle"))
+			Expect(b.Attributes[0].AttrSecondary["note"]).To(Equal("ipam ut"))
+
+		})
+
+		It("should allocate one ip", func() {
+			ic := &ipamClient{
+				client:            bc,
+				pools:             p,
+				blockReaderWriter: rw,
+			}
+			ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(len(ips)).To(Equal(1))
+			Expect(ips[0].String()).To(Equal("10.0.0.2/30"))
+
 		})
 	})
 })

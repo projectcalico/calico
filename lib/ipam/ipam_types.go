@@ -36,6 +36,9 @@ type AssignIPArgs struct {
 	// will be allocated.  If not specified, this will default
 	// to the value provided by os.Hostname.
 	Hostname string
+
+	// If specified, the attributes of reserved IPv4 addresses in the block.
+	HostReservedAttr *HostReservedAttr
 }
 
 // AutoAssignArgs defines the set of arguments for assigning one or more
@@ -70,6 +73,12 @@ type AutoAssignArgs struct {
 	// If non-zero, limit on the number of affine blocks this host is allowed to claim
 	// (per IP version).
 	MaxBlocksPerHost int
+
+	// If specified, the attributes of reserved IPv4 addresses in the block.
+	HostReservedAttrIPv4s *HostReservedAttr
+
+	// If specified, the attributes of reserved IPv6 addresses in the block.
+	HostReservedAttrIPv6s *HostReservedAttr
 }
 
 // IPAMConfig contains global configuration options for Calico IPAM.
@@ -116,4 +125,40 @@ type PoolUtilization struct {
 
 	// Utilization for each of this pool's blocks.
 	Blocks []BlockUtilization
+}
+
+type HostReservedAttr struct {
+	// Number of addresses reserved from start of the block.
+	StartOfBlock int
+
+	// Number of addresses reserved from end of the block.
+	EndOfBlock int
+
+	// Handle for reserved addresses.
+	Handle string
+
+	// A description about the reserves.
+	Note string
+}
+
+// BlockArgs defines the set of arguments for allocating one block.
+type BlockArgs struct {
+	// If specified, the hostname of the host on which blocks
+	// will be allocated.  If not specified, this will default
+	// to the value provided by os.Hostname.
+	Hostname string
+
+	// If specified, the previously configured IPv4 pools from which
+	// to assign IPv4 addresses.  If not specified, this defaults to all IPv4 pools.
+	IPv4Pools []cnet.IPNet
+
+	// If specified, the previously configured IPv6 pools from which
+	// to assign IPv6 addresses.  If not specified, this defaults to all IPv6 pools.
+	IPv6Pools []cnet.IPNet
+
+	// If specified, the attributes of reserved IPv4 addresses in this block.
+	HostReservedAttrIPv4s *HostReservedAttr
+
+	// If specified, the attributes of reserved IPv6 addresses in this block.
+	HostReservedAttrIPv6s *HostReservedAttr
 }
