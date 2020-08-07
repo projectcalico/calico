@@ -1,6 +1,6 @@
 ---
 title: Troubleshoot Calico for Windows
-description: Provides useful commands to troubleshoot issues.
+description: Help for troubleshooting issues in this release.
 canonical_url: /getting-started/windows-calico/troubleshoot
 ---
 
@@ -8,7 +8,7 @@ canonical_url: /getting-started/windows-calico/troubleshoot
 
 **Examine the HNS network(s)**
 
-When using the {{site.prodname}} CNI plugin, each {{site.prodname}} IPAM block (or the single podCIDR in host-local IPAM mode), is represented as a HNS l2bridge network. The networks can be inspected with:
+When using the {{site.prodname}} CNI plugin, each {{site.prodname}} IPAM block (or the single podCIDR in host-local IPAM mode), is represented as a HNS l2bridge network. Use the following command to inspect the networks.
 
 ```
 PS C:\> ipmo c:\CalicoWindows\libs\hns\hns.psm1
@@ -36,7 +36,7 @@ This can be caused by a mismatch between a cloud provider (such as the AWS cloud
 
 #### After initializing {{site.prodname}}, AWS metadata server is no longer reachable
 
-This is a known Windows issue that Microsoft are working on. The route to the metadata server is lost when the vSwitch is created. As a workaround, the route can be added back manually by running:
+This is a known Windows issue that Microsoft is working on. The route to the metadata server is lost when the vSwitch is created. As a workaround, manually add the route back by running:
 
 ```
 PS C:\> New-NetRoute -DestinationPrefix 169.254.169.254/32
@@ -50,19 +50,18 @@ PS C:\> Get-NetAdapter
 ```
 #### Installation stalls at "Waiting for {{site.prodname}} initialization to finish"
 
-This can be caused by Window's Execution protection feature. Exit the install using Ctrl-C, unblock the scripts, and then run uninstall-calico.ps1 followed by install-calico.ps1.
+This can be caused by Window's Execution protection feature. Exit the install using Ctrl-C, unblock the scripts, run `uninstall-calico.ps1`, followed by `install-calico.ps1`.
 
-#### Windows Server 2019 insider preview: after rebooting a node, {{site.prodname}} fails to start, the tigera-node.err.log file contains errors.
+#### Windows Server 2019 insider preview: after rebooting a node, {{site.prodname}} fails to start, the tigera-node.err.log file contains errors
 
-We plan to resolve it in a patch release. As a workaround, stop and then start {{site.prodname}} using the stop-calico.ps1 and start-calico.ps1 scripts.
+After rebooting the Windows node, pods fail to schedule, and the kubelet log has CNI errors like "timed out waiting for interface matching the management IP (169.254.57.5) of network" (where the IP address may vary but will always be a 169.254.x.x address). To workaround:
 
-After reboot of Windows node, pods fail to schedule, kubelet log has CNI errors "timed out waiting for interface matching the management IP (169.254.57.5) of network" (where the IP address may vary but will always be a 169.254.x.x address)
-
-Sometimes the HNS network picks up a temporary self-assigned address at start-of-day and it does not get refreshed when the correct IP becomes known. As a workaround, rebooting the node a second time often resolves the problem.
+- Stop and then start {{site.prodname}} using the `stop-calico.ps1` and `start-calico.ps1` scripts
+- Sometimes the HNS network picks up a temporary self-assigned address at start-of-day and it does not get refreshed when the correct IP becomes known. Rebooting the node a second time often resolves the problem.
 
 #### Invoke-Webrequest fails with TLS errors
 
-If you see an error such as "The request was aborted: Could not create SSL/TLS secure channel", the issue is often that Windows does not support TLS v1.2 (which is required by many websites) by default. To enable TLS v1.2, run the following command:
+The error, "The request was aborted: Could not create SSL/TLS secure channel", often means that Windows does not support TLS v1.2 (which is required by many websites) by default. To enable TLS v1.2, run the following command:
 
 ```
 PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
@@ -76,7 +75,7 @@ If kubelet is already running when {{site.prodname}} is installed, the creation 
 
 If using AWS, check that the source/dest check is disabled on the interfaces assigned to your nodes. This allows nodes to forward traffic on behalf of local pods. In AWS, the "Change Source/Dest. Check" option can be found on the Actions menu for a selected network interface.
 
-If using {{site.prodname}} networking check that the {{site.prodname}} IP pool you are using has IPIP mode disabled. IPIP is not supported on Windows. To check the IP pool, you can use `calicoctl`:
+If using {{site.prodname}} networking, check that the {{site.prodname}} IP pool you are using has IPIP mode disabled (set to "Never). IPIP is not supported on Windows. To check the IP pool, you can use `calicoctl`:
 
 ```
 $ calicoctl get ippool -o yaml
@@ -97,15 +96,12 @@ disabled: true
 ipipMode: Never
 natOutgoing: true
 ```
-The ipipMode setting should be "Never". To change the value, follow the instructions in this section.
 
-#### Felix logs "Failed to create datastore client"
+#### Felix log error: "Failed to create datastore client"
 
 If the error includes 'loading config file "<path-to-kubeconfig>"', follow the instructions in
-Changing environment variables to update the KUBECONFIG environment variable to the
-path of your kubeconfig file.
+[Set environment variables]({{site.baseurl}}/getting-started/windows-calico/standard#install-calico-and-kubernetes-on-windows-nodes) to update the `KUBECONFIG` environment variable to the path of your kubeconfig file.
 
-#### Felix starts but logs no output
+#### Felix starts, but does not output logs
 
-At its default log level Felix waits to connect to the datastore before logging (in case the datastore contains configuration that intentionally disables logging). To diagnose issues in early startup, follow the instructions in Updating Configuration to update the FELIX_LOGSEVERITYSCREEN environment variable to "info" or "debug" level.
-
+By default, Felix waits to connect to the datastore before logging (in case the datastore configuration intentionally disables logging). To start logging at startup, update the [FELIX_LOGSEVERITYSCREEN environment variable]({{site.baseurl}}/reference/felix/configuration#general-configuration) to "info" or "debug" level.
