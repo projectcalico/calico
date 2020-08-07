@@ -131,7 +131,7 @@ func (*DummyMap) Path() string {
 	return "DummyMap"
 }
 
-func (*DummyMap) Iter(_ bpf.MapIter) error {
+func (*DummyMap) Iter(_ bpf.IterCallback) error {
 	return nil
 }
 

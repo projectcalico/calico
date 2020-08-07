@@ -78,7 +78,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 
 	BeforeEach(func() {
 		mockTime = mocktime.New()
-		Expect(mockTime.KTimeNanos()).To(BeNumerically("==",now))
+		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
 		lc = conntrack.NewLivenessScanner(timeouts, false, conntrack.WithTimeShim(mockTime))
 		scanner = conntrack.NewScanner(ctMap, lc.ScanEntry)
@@ -120,7 +120,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			By("always deleting the entry if we fast-forward time")
 			err = ctMap.Update(key.AsBytes(), entry[:])
 			Expect(err).NotTo(HaveOccurred())
-			mockTime.IncrementTime(2*time.Hour)
+			mockTime.IncrementTime(2 * time.Hour)
 			scanner.Scan()
 			_, err = ctMap.Get(key.AsBytes())
 			Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")

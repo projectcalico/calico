@@ -166,7 +166,7 @@ func WithTimeShim(shim timeshim.Interface) LivenessScannerOpt {
 func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVerdict {
 	if l.cachedKTime == 0 || l.time.Since(l.goTimeOfLastKTimeLookup) > time.Second {
 		l.cachedKTime = l.time.KTimeNanos()
-		l.goTimeOfLastKTimeLookup =  l.time.Now()
+		l.goTimeOfLastKTimeLookup = l.time.Now()
 	}
 	now := l.cachedKTime
 

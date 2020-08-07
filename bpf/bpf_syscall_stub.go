@@ -78,7 +78,3 @@ func (m *MapIterator) Next() (k, v []byte, err error) {
 func (m *MapIterator) Close() error {
 	return nil
 }
-
-func KTimeNanos() int64 {
-	panic("BPF syscall stub")
-}
