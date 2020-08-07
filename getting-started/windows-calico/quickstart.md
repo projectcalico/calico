@@ -23,6 +23,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 **Windows node requirements**
 - Windows Server 1903 (AKA 19H1) build 18317 or greater, with Docker service enabled
+- Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
 - Additionally, for EKS:
     - The VPC controllers must be installed be installed to run Windows pods.
     - The Windows instance role must have access to `secrets` in the kube-system namespace.
