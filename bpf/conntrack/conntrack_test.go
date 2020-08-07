@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/timeshim/mocktime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -30,7 +31,7 @@ import (
 	"github.com/projectcalico/felix/bpf/mock"
 )
 
-const now = 1000 * time.Hour
+var now = mocktime.StartKTime
 
 var (
 	ip1     = net.ParseIP("10.0.0.1")
@@ -73,13 +74,13 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 	var lc *conntrack.LivenessScanner
 	var scanner *conntrack.Scanner
 	var ctMap *mock.Map
+	var mockTime *mocktime.MockTime
 
 	BeforeEach(func() {
+		mockTime = mocktime.New()
+		Expect(mockTime.KTimeNanos()).To(BeNumerically("==",now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
-		lc = conntrack.NewLivenessScanner(timeouts, false)
-		lc.NowNanos = func() int64 {
-			return int64(now)
-		}
+		lc = conntrack.NewLivenessScanner(timeouts, false, conntrack.WithTimeShim(mockTime))
 		scanner = conntrack.NewScanner(ctMap, lc.ScanEntry)
 	})
 
@@ -119,9 +120,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			By("always deleting the entry if we fast-forward time")
 			err = ctMap.Update(key.AsBytes(), entry[:])
 			Expect(err).NotTo(HaveOccurred())
-			lc.NowNanos = func() int64 {
-				return int64(now + 2*time.Hour)
-			}
+			mockTime.IncrementTime(2*time.Hour)
 			scanner.Scan()
 			_, err = ctMap.Get(key.AsBytes())
 			Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")

@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/timeshim"
 )
 
 type Timeouts struct {
@@ -133,7 +134,7 @@ func (s *Scanner) get(k Key) (Value, error) {
 type LivenessScanner struct {
 	timeouts Timeouts
 	dsr      bool
-	NowNanos func() int64
+	time     timeshim.Interface
 
 	// goTimeOfLastKTimeLookup is the go timestamp of the last time we looked up the kernel time.
 	// We cache the kernel time because it's expensive to look up (vs looking up a go timestamp which uses vdso).
@@ -142,18 +143,30 @@ type LivenessScanner struct {
 	cachedKTime int64
 }
 
-func NewLivenessScanner(timeouts Timeouts, dsr bool) *LivenessScanner {
-	return &LivenessScanner{
+func NewLivenessScanner(timeouts Timeouts, dsr bool, opts ...LivenessScannerOpt) *LivenessScanner {
+	ls := &LivenessScanner{
 		timeouts: timeouts,
 		dsr:      dsr,
-		NowNanos: bpf.KTimeNanos,
+		time:     timeshim.RealTime(),
+	}
+	for _, opt := range opts {
+		opt(ls)
+	}
+	return ls
+}
+
+type LivenessScannerOpt func(ls *LivenessScanner)
+
+func WithTimeShim(shim timeshim.Interface) LivenessScannerOpt {
+	return func(ls *LivenessScanner) {
+		ls.time = shim
 	}
 }
 
 func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVerdict {
-	if l.cachedKTime == 0 || time.Since(l.goTimeOfLastKTimeLookup) > time.Second {
-		l.cachedKTime = l.NowNanos()
-		l.goTimeOfLastKTimeLookup = time.Now()
+	if l.cachedKTime == 0 || l.time.Since(l.goTimeOfLastKTimeLookup) > time.Second {
+		l.cachedKTime = l.time.KTimeNanos()
+		l.goTimeOfLastKTimeLookup =  l.time.Now()
 	}
 	now := l.cachedKTime
 
