@@ -27,8 +27,8 @@ import (
 	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/buger/jsonparser"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/juju/clock"
 	"github.com/juju/errors"
@@ -42,19 +42,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilexec "k8s.io/utils/exec"
-
-	"golang.org/x/sys/windows/registry"
 )
 
 const (
-	DefaultVNI          = 4096
-	CalicoRegistryKey   = `Software\tigera\calico`
-	PodDeletedKeyString = `PodDeleted`
-	PodDeletedKey       = CalicoRegistryKey + `\` + PodDeletedKeyString
-
-	// Wait for 10 minutes for pod deletion timestamp timeout.
-	// Sandbox operations timeout is 4 minutes.
-	defaultPodDeletionTimestampTimeout = 600
+	DefaultVNI = 4096
 )
 
 type windowsDataplane struct {
@@ -92,148 +83,6 @@ func acquireLock() (mutex.Releaser, error) {
 	}
 	logrus.Infof("Acquired lock %v", spec)
 	return m, nil
-}
-
-// Create calico key if not exists.
-func ensureCalicoKey() error {
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, "software", registry.CREATE_SUB_KEY)
-	if err != nil {
-		return err
-	}
-	defer k.Close()
-
-	// CreateKey creates a key named path under open key k.
-	// CreateKey returns the new key and a boolean flag that reports whether the key already existed.
-	tigeraK, _, err := registry.CreateKey(k, "tigera", registry.CREATE_SUB_KEY)
-	if err != nil {
-		return err
-	}
-	defer tigeraK.Close()
-
-	calicoK, _, err := registry.CreateKey(tigeraK, "calico", registry.CREATE_SUB_KEY)
-	if err != nil {
-		return err
-	}
-	defer calicoK.Close()
-
-	return nil
-}
-
-// Create key for deletion timestamps if not exists.
-// Remove obsolete  entries.
-func (d *windowsDataplane) MaintainWepDeletionTimestamps(timeout int) error {
-	if timeout == 0 {
-		timeout = defaultPodDeletionTimestampTimeout
-	}
-	// Open or Create subkey if not exists.
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, PodDeletedKey, registry.QUERY_VALUE|registry.SET_VALUE)
-	if err == registry.ErrNotExist {
-		// Create calico key if not exists.
-		err := ensureCalicoKey()
-		if err != nil {
-			logrus.Errorf("Failed to ensure Calico registry key. err: %v", err)
-			return err
-		}
-		calicoK, err := registry.OpenKey(registry.LOCAL_MACHINE, CalicoRegistryKey, registry.CREATE_SUB_KEY)
-		if err != nil {
-			return err
-		}
-		defer calicoK.Close()
-
-		k, _, err = registry.CreateKey(calicoK, PodDeletedKeyString, registry.QUERY_VALUE|registry.SET_VALUE)
-		if err != nil {
-			return err
-		}
-	} else if err != nil {
-		return nil
-	}
-	defer k.Close()
-
-	// Delete obsolete timestamps.
-	containerIDs, err := k.ReadValueNames(-1)
-	if err != nil {
-		return err
-	}
-
-	for _, id := range containerIDs {
-		val, _, err := k.GetStringValue(id)
-		if err != nil {
-			return err
-		}
-
-		t, err := time.Parse(time.RFC3339, val)
-		if err != nil {
-			return err
-		}
-
-		logrus.WithField("id", id).Debugf("Maintainer get timestamp for pod deletion [%s]", val)
-		if time.Since(t) > (time.Second * time.Duration(timeout)) {
-			logrus.WithField("id", id).Debugf("Found old pod deletion timestamp [%s] with timeout %d seconds, cleaning it up.", val, timeout)
-			err := k.DeleteValue(id)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (d *windowsDataplane) CheckWepJustDeleted(containerID string, timeout int) (bool, error) {
-	if timeout == 0 {
-		timeout = defaultPodDeletionTimestampTimeout
-	}
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, PodDeletedKey, registry.QUERY_VALUE)
-	if err != nil {
-		return false, err
-	}
-	defer k.Close()
-
-	val, _, err := k.GetStringValue(containerID)
-	if err == registry.ErrNotExist {
-		logrus.WithField("id", containerID).Infof("No timestamp for pod deletion")
-		return false, nil
-	}
-
-	t, err := time.Parse(time.RFC3339, val)
-	if err != nil {
-		// Time format is wrong, return true anyway.
-		return true, err
-	}
-
-	logrus.WithField("id", containerID).Infof("Get timestamp for pod deletion [%s]", val)
-	if time.Since(t) < (time.Second * time.Duration(timeout)) {
-		logrus.WithField("id", containerID).Infof("timestamp for pod deletion [%s] within %d seconds", val, timeout)
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (d *windowsDataplane) RegisterDeletedWep(containerID string) error {
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, PodDeletedKey, registry.QUERY_VALUE|registry.SET_VALUE)
-	if err != nil {
-		return err
-	}
-	defer k.Close()
-
-	if err := k.SetStringValue(containerID, time.Now().Format(time.RFC3339)); err != nil {
-		return err
-	}
-
-	// loop 3 seconds until successfully read back
-	retry := 0
-	for retry < 30 {
-		val, _, err := k.GetStringValue(containerID)
-		if err == nil {
-			logrus.WithField("id", containerID).Infof("Saved timestamp for pod deletion [%s]", val)
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-		retry++
-	}
-
-	return fmt.Errorf("timeout waiting registry update for %s", containerID)
 }
 
 func SetupL2bridgeNetwork(networkName string, subNet *net.IPNet, dns cnitypes.DNS, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
@@ -594,7 +443,7 @@ func EnsureNetworkExists(networkName string, subNet *net.IPNet, dns cnitypes.DNS
 	return hnsNetwork, err
 }
 
-func (d *windowsDataplane) EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet) error {
+func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet, conf types.NetConf) error {
 	logrus.Debug("Checking the node's VXLAN tunnel address")
 	var updateRequired bool
 	node, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
@@ -609,10 +458,10 @@ func (d *windowsDataplane) EnsureVXLANTunnelAddr(ctx context.Context, calicoClie
 	}
 
 	var networkName string
-	if d.conf.WindowsUseSingleNetwork {
-		networkName = d.conf.Name
+	if conf.WindowsUseSingleNetwork {
+		networkName = conf.Name
 	} else {
-		networkName = CreateNetworkName(d.conf.Name, ipNet)
+		networkName = CreateNetworkName(conf.Name, ipNet)
 	}
 
 	mac, err := GetDRMACAddr(networkName, ipNet)
@@ -1046,7 +895,7 @@ func (d *windowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 // NetworkApplicationContainer tries to attach the application container to the endpoint that is attached to its pause container.
 // On failure, it returns the error.
 // This is done so that the DNS details are reflected in the container.
-func (d *windowsDataplane) NetworkApplicationContainer(args *skel.CmdArgs) error {
+func NetworkApplicationContainer(args *skel.CmdArgs) error {
 	n, _, err := loadNetConf(args.StdinData)
 	hnsEndpointName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 

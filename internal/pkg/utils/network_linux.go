@@ -13,6 +13,35 @@
 
 package utils
 
+import (
+	"context"
+	"net"
+
+	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/projectcalico/cni-plugin/pkg/types"
+	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
+)
+
 func updateHostLocalIPAMDataForOS(subnet string, ipamData map[string]interface{}) error {
+	return nil
+}
+
+func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet, conf types.NetConf) error {
+	return nil
+}
+
+func NetworkApplicationContainer(args *skel.CmdArgs) error {
+	return nil
+}
+
+func MaintainWepDeletionTimestamps(timeout int) error {
+	return nil
+}
+
+func CheckWepJustDeleted(containerID string, timeout int) (bool, error) {
+	return false, nil
+}
+
+func RegisterDeletedWep(containerID string) error {
 	return nil
 }

@@ -43,11 +43,6 @@ type Dataplane interface {
 	) (hostVethName, contVethMAC string, err error)
 
 	CleanUpNamespace(args *skel.CmdArgs) error
-	NetworkApplicationContainer(args *skel.CmdArgs) error
-	EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet) error
-	MaintainWepDeletionTimestamps(timeout int) error
-	CheckWepJustDeleted(containerID string, timeout int) (bool, error)
-	RegisterDeletedWep(containerID string) error
 }
 
 func GetDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {

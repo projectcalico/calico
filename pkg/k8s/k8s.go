@@ -72,7 +72,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		// CNI ADD to check the status of the pod.  Detect such spurious adds and return early, avoiding trying to
 		// network the pod multiple times.
 
-		err := d.MaintainWepDeletionTimestamps(conf.WindowsPodDeletionTimestampTimeout)
+		err := utils.MaintainWepDeletionTimestamps(conf.WindowsPodDeletionTimestampTimeout)
 		if err != nil {
 			logger.WithError(err).Warn("Failed to do maintenance on pod deletion timestamps.")
 		}
@@ -88,7 +88,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			// is a static value. The other requests come from checks on the other containers.
 			// Application containers should be networked with the pause container endpoint to reflect DNS details.
 			logger.Info("Non-pause container specified, doing a lookup-only request.")
-			err = d.NetworkApplicationContainer(args)
+			err = utils.NetworkApplicationContainer(args)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to network container with pause container endpoint.")
 				return result, err
@@ -118,7 +118,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 		// No WEP and no network, check deletion timestamp to skip recent deleted wep.
 		// If WEP just been deleted, report back error.
-		justDeleted, err := d.CheckWepJustDeleted(epIDs.ContainerID, conf.WindowsPodDeletionTimestampTimeout)
+		justDeleted, err := utils.CheckWepJustDeleted(epIDs.ContainerID, conf.WindowsPodDeletionTimestampTimeout)
 		if err != nil {
 			logger.Warnf("Failed to check pod deletion timestamp. %v", err)
 			return nil, err
@@ -460,7 +460,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		_, subNet, _ := net.ParseCIDR(result.IPs[0].Address.String())
 		var err error
 		for attempts := 3; attempts > 0; attempts-- {
-			err = d.EnsureVXLANTunnelAddr(ctx, calicoClient, epIDs.Node, subNet)
+			err = utils.EnsureVXLANTunnelAddr(ctx, calicoClient, epIDs.Node, subNet, conf)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to set node's VXLAN tunnel IP, node may not receive traffic.  May retry...")
 				time.Sleep(1 * time.Second)
@@ -527,7 +527,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	// Register timestamp before deleting wep. This is important.
 	// Because with ADD command running in parallel checking wep before checking timestamp,
 	// DEL command should run the process in reverse order to avoid race condition.
-	err = d.RegisterDeletedWep(args.ContainerID)
+	err = utils.RegisterDeletedWep(args.ContainerID)
 	if err != nil {
 		logger.WithError(err).Warn("Failed to register pod deletion timestamp.")
 		return err

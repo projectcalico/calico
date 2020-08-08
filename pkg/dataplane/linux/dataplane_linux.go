@@ -107,8 +107,10 @@ func (d *linuxDataplane) DoNetworking(
 		for _, addr := range result.IPs {
 			if addr.Version == "4" {
 				hasIPv4 = true
+				addr.Address.Mask = net.CIDRMask(32, 32)
 			} else if addr.Version == "6" {
 				hasIPv6 = true
+				addr.Address.Mask = net.CIDRMask(128, 128)
 			}
 		}
 
@@ -150,17 +152,6 @@ func (d *linuxDataplane) DoNetworking(
 
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
 		// Both ends of the veth are still in the container's network namespace.
-
-		// Figure out whether we have IPv4 and/or IPv6 addresses.
-		for _, addr := range result.IPs {
-			if addr.Version == "4" {
-				hasIPv4 = true
-				addr.Address.Mask = net.CIDRMask(32, 32)
-			} else if addr.Version == "6" {
-				hasIPv6 = true
-				addr.Address.Mask = net.CIDRMask(128, 128)
-			}
-		}
 
 		// Do the per-IP version set-up.  Add gateway routes etc.
 		if hasIPv4 {
@@ -506,26 +497,5 @@ func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 		}
 	}
 
-	return nil
-}
-
-// This is a dummy function required for Windows
-func (d *linuxDataplane) NetworkApplicationContainer(args *skel.CmdArgs) error {
-	return nil
-}
-
-func (d *linuxDataplane) EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet) error {
-	return nil // No-op on Linux.
-}
-
-func (d *linuxDataplane) MaintainWepDeletionTimestamps(timeout int) error {
-	return nil
-}
-
-func (d *linuxDataplane) CheckWepJustDeleted(containerID string, timeout int) (bool, error) {
-	return false, nil
-}
-
-func (d *linuxDataplane) RegisterDeletedWep(containerID string) error {
 	return nil
 }
