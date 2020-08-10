@@ -30,10 +30,9 @@ import (
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
-
 	"github.com/projectcalico/felix/netlinkshim"
 	"github.com/projectcalico/felix/timeshim"
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -501,11 +500,13 @@ func (r *RouteTable) Apply() error {
 	}
 
 	graceIfaces := 0
-ifaceLoop:
-	for ifaceName, ia := range r.ifaceNameToUpdateType {
-		logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-		fullResync := ia == updateTypeFullResync
-		for retry := 0; retry < maxApplyRetries; retry++ {
+	for retry := 0; retry < maxApplyRetries; retry++ {
+	ifaceLoop:
+		for ifaceName, ia := range r.ifaceNameToUpdateType {
+			logCxt := r.logCxt.WithField("ifaceName", ifaceName)
+			firstTry := retry == 0
+			lastTry := retry == maxApplyRetries-1
+			fullResync := ia == updateTypeFullResync || lastTry
 			var err error
 			if r.vxlan {
 				// Sync L2 routes first.
@@ -513,7 +514,7 @@ ifaceLoop:
 			}
 			if err == nil {
 				// No errors syncing L2, sync L3 routes.
-				err = r.syncRoutesForLink(ifaceName, fullResync)
+				err = r.syncRoutesForLink(ifaceName, fullResync, firstTry)
 			}
 
 			// Handle errors from syncing either L2 or L3 routes.
@@ -531,20 +532,20 @@ ifaceLoop:
 				delete(r.ifaceNameToUpdateType, ifaceName)
 				continue ifaceLoop
 			case IfaceGrace:
-				logCxt.Info("Interface in cleanup grace period, will retry after.")
+				if lastTry {
+					logCxt.Info("Interface in cleanup grace period, will retry after.")
+				}
 				graceIfaces++
 				continue ifaceLoop
 			}
 
-			// We failed to sync the routes, next try perform a full resync.
-			logCxt.WithError(err).Warn("Failed to synchronise routes.")
-			fullResync = true
+			if lastTry {
+				// The interface might be flapping or being deleted. Flag that it will require a full re-sync
+				logCxt.Warn("Failed to sync routes to interface even after retries. " +
+					"Leaving it dirty, requiring a full sync.")
+				r.markIfaceForUpdate(ifaceName, true)
+			}
 		}
-
-		// The interface might be flapping or being deleted. Flag that it will require a full re-sync
-		logCxt.Warn("Failed to sync routes to interface even after retries. " +
-			"Leaving it dirty, requiring a full sync.")
-		r.markIfaceForUpdate(ifaceName, true)
 	}
 
 	r.cleanUpPendingConntrackDeletions()
@@ -560,7 +561,7 @@ ifaceLoop:
 	return nil
 }
 
-func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool) error {
+func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry bool) error {
 	startTime := time.Now()
 	defer func() {
 		perIfaceSyncTime.Observe(r.time.Since(startTime).Seconds())
@@ -600,7 +601,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool) error {
 		if routesToDelete, resyncErr = r.fullResyncRoutesForLink(logCxt, ifaceName, deletedConnCIDRs); resyncErr != nil && resyncErr != IfaceGrace {
 			// If we hit anything other than an interface-in-grace error, exit now.
 			r.logCxt.WithError(resyncErr).Info("Hit error doing kernel reconciliation")
-			return r.filterErrorByIfaceState(ifaceName, resyncErr, UpdateFailed)
+			return r.filterErrorByIfaceState(ifaceName, resyncErr, UpdateFailed, firstTry)
 		}
 
 		// Ensure we have static ARP entries for all of our existing routes.
@@ -652,7 +653,11 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool) error {
 		// to be cleaned up.  (No-op if there are no pending deletes.)
 		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
 		if err := nl.RouteAdd(&route); err != nil {
-			logCxt.WithError(err).Warn("Failed to add route")
+			if firstTry {
+				logCxt.WithError(err).Debug("Failed to add route on first attempt, retrying...")
+			} else {
+				logCxt.WithError(err).Warn("Failed to add route")
+			}
 			updatesFailed = true
 		}
 		if r.ipVersion == 4 && target.DestMAC != nil {
@@ -670,7 +675,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool) error {
 
 		// Recheck whether the interface exists so we don't produce spammy logs during
 		// interface removal.
-		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed)
+		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed, firstTry)
 	}
 
 	// Return any un-handled re-sync error.
@@ -792,7 +797,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed)
+		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
 		if filteredErr == ListFailed {
 			logCxt.WithError(err).Error("Error listing routes")
 			r.closeNetlink() // Defensive: force a netlink reconnection next time.
@@ -971,7 +976,7 @@ func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
 
 		// Recheck whether the interface exists so we don't produce spammy logs during
 		// interface removal.
-		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed)
+		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed, false)
 	}
 
 	return nil
@@ -1053,7 +1058,7 @@ func (r *RouteTable) waitForPendingConntrackDeletion(ipAddr ip.Addr) {
 
 // filterErrorByIfaceState checks the current state of the interface; if it's down or gone, it
 // returns IfaceDown or IfaceNotPresent, otherwise, it returns the given defaultErr.
-func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defaultErr error) error {
+func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defaultErr error, suppressExistsWarning bool) error {
 	logCxt := r.logCxt.WithFields(log.Fields{"ifaceName": ifaceName, "error": currentErr})
 	if ifaceName == InterfaceNone {
 		// Short circuit the no-OIF interface name.
@@ -1083,8 +1088,13 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 		logCxt.WithField("link", link).Debug("Interface still exists")
 		if link.Attrs().Flags&net.FlagUp != 0 {
 			// Link exists and it's up, no reason that we expect to fail.
-			logCxt.WithField("link", link).Warning(
-				"Failed to access interface but it now appears to be up")
+			if suppressExistsWarning {
+				logCxt.WithField("link", link).Debug(
+					"Failed to access interface but it appears to be up; retrying...")
+			} else {
+				logCxt.WithField("link", link).Warning(
+					"Failed to access interface but it appears to be up")
+			}
 			return defaultErr
 		} else {
 			// Special case: Link exists and it's down.  Assume that's the problem.
@@ -1123,7 +1133,7 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed)
+		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed, false)
 		if filteredErr == GetFailed {
 			logCxt.WithError(err).Error("Failed to get interface.")
 			r.closeNetlink() // Defensive: force a netlink reconnection next time.
