@@ -216,8 +216,10 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 
 		for _, entry := range unknownEntries {
 			err := m.bpfMap.Delete(entry[:])
-			log.WithError(err).Error("Failed to remove unexpected IP set entry")
-			m.resyncScheduled = true
+			if err != nil {
+				log.WithError(err).WithField("key", entry).Error("Failed to remove unexpected IP set entry")
+				m.resyncScheduled = true
+			}
 		}
 
 		for _, ipSet := range m.ipSets {
