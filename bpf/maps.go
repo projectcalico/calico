@@ -175,7 +175,7 @@ func IterMapCmdOutput(output []byte, f IterCallback) error {
 }
 
 // Iter iterates over the map, passing each key/value pair to the provided callback function.  Warning:
-// The key and value are owned by the iterator and will be clobbered by the next iteration so they should not be
+// The key and value are owned by the iterator and will be clobbered by the next iteration so they must not be
 // retained or modified.
 func (b *PinnedMap) Iter(f IterCallback) error {
 	it, err := NewMapIterator(b.MapFD(), b.KeySize, b.ValueSize, b.MaxEntries)
@@ -207,7 +207,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 			if err == ErrIterationFinished {
 				return nil
 			}
-			return errors.Errorf("GetMapNextKey failed: %s", err)
+			return errors.Errorf("iterating the map failed: %s", err)
 		}
 
 		action = f(k, v)

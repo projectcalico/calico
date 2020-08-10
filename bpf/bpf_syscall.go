@@ -536,7 +536,8 @@ func NewMapIterator(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapIterat
 
 // Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
 // MapIterator's internal buffers (which are allocated on the C heap); they should not be retained or modified.
-// Returns ErrIterationFinished at the end of the iteration.
+// Returns ErrIterationFinished at the end of the iteration or ErrVisitedTooManyKeys if it visits considerably more
+// keys than the maximum size of the map.
 func (m *MapIterator) Next() (k, v []byte, err error) {
 	if m.numEntriesLoaded == m.entryIdx {
 		// Need to load a new batch of KVs from the kernel.
@@ -570,8 +571,10 @@ func (m *MapIterator) Next() (k, v []byte, err error) {
 	m.entryIdx++
 	m.numEntriesVisited++
 
-	if m.numEntriesVisited > m.maxEntries*5 {
-		log.Panic("Visited more keys than there are in the map!")
+	if m.numEntriesVisited > m.maxEntries*10 {
+		// Either a bug or entries are being created 10x faster than we're iterating through them?
+		err = ErrVisitedTooManyKeys
+		return
 	}
 
 	return
