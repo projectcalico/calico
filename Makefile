@@ -76,6 +76,10 @@ update-pins: update-libcalico-pin
 ###############################################################################
 BIN=bin/$(ARCH)
 build: $(BIN)/install
+ifeq ($(ARCH),amd64)
+# Go only supports amd64 for Windows builds.
+build: $(BIN)/calico.exe $(BIN)/calico-ipam.exe
+endif
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -84,17 +88,26 @@ sub-build-%:
 $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
 	-mkdir -p $(BIN)
-	docker run --rm \
+	$(DOCKER_RUN) \
 	-e ARCH=$(ARCH) \
 	-e GOARCH=$(ARCH) \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	-v $(CURDIR)/$(BIN):/go/src/$(PACKAGE_NAME)/$(BIN):rw \
-	-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 	$(LOCAL_BUILD_MOUNTS) \
 	-w /go/src/$(PACKAGE_NAME) \
 	-e GOCACHE=/go-cache \
-	    $(CALICO_BUILD) sh -c 'go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico'
+	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+		go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
+
+## Build the Calico network plugin and ipam plugins for Windows
+$(BIN)/calico.exe $(BIN)/calico-ipam.exe: $(LOCAL_BUILD_DEP) $(SRC_FILES)
+	$(DOCKER_RUN) \
+	-e GOOS=windows \
+	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+		go build -v -o $(BIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico && \
+		go build -v -o $(BIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
+
 
 ###############################################################################
 # Building the image
@@ -202,6 +215,7 @@ ut: run-k8s-controller build $(BIN)/host-local
 ut-datastore: $(LOCAL_BUILD_DEP)
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
+	$(EXTRA_DOCKER_ARGS) \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e RUN_AS_ROOT=true \
@@ -214,7 +228,7 @@ ut-datastore: $(LOCAL_BUILD_DEP)
 	-e K8S_API_ENDPOINT=http://127.0.0.1:8080 \
 	-e GO111MODULE=on \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	$(CALICO_BUILD) sh -c '\
+	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
 
@@ -301,7 +315,7 @@ pkg/install/install.test: pkg/install/*.go
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
-		$(CALICO_BUILD) sh -c '\
+		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd /go/src/$(PACKAGE_NAME) && \
 			go test ./pkg/install -c --tags install_test -o ./pkg/install/install.test'
 
@@ -326,6 +340,10 @@ ifndef BRANCH_NAME
 endif
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests  IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests  IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
+
+## Build fv binary for Windows
+$(BIN)/win-fv.exe: $(LOCAL_BUILD_DEP) $(WINFV_SRCFILES)
+	$(DOCKER_RUN) -e GOOS=windows $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go test ./win_tests -c -o $(BIN)/win-fv.exe'
 
 ###############################################################################
 # Release

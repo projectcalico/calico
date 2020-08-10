@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -56,7 +57,7 @@ func DetermineNodename(conf types.NetConf) (nodename string) {
 	if conf.Nodename != "" {
 		logrus.Debugf("Read node name from CNI conf: %s", conf.Nodename)
 		nodename = conf.Nodename
-	} else if nff := nodenameFromFile(); nff != "" {
+	} else if nff := nodenameFromFile(conf.NodenameFile); nff != "" {
 		logrus.Debugf("Read node name from file: %s", nff)
 		nodename = nff
 	} else if conf.Hostname != "" {
@@ -73,15 +74,18 @@ func DetermineNodename(conf types.NetConf) (nodename string) {
 
 // nodenameFromFile reads the /var/lib/calico/nodename file if it exists and
 // returns the nodename within.
-func nodenameFromFile() string {
-	data, err := ioutil.ReadFile("/var/lib/calico/nodename")
+func nodenameFromFile(filename string) string {
+	if filename == "" {
+		filename = "/var/lib/calico/nodename"
+	}
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, return empty string.
-			logrus.Info("File /var/lib/calico/nodename does not exist")
+			logrus.Infof("File %s does not exist", filename)
 			return ""
 		}
-		logrus.WithError(err).Error("Failed to read /var/lib/calico/nodename")
+		logrus.WithError(err).Errorf("Failed to read %s", filename)
 		return ""
 	}
 	return string(data)
@@ -309,9 +313,125 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 		}
 		logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
 		ipamData["subnet"] = podCidr
+		subnet = podCidr
 		logger.Infof("Calico CNI passing podCidr to host-local IPAM: %s", podCidr)
 	}
+
+	err := updateHostLocalIPAMDataForOS(subnet, ipamData)
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// This function will update host-local IPAM data based on input from cni.conf
+func UpdateHostLocalIPAMDataForWindows(subnet string, ipamData map[string]interface{}) error {
+	if len(subnet) == 0 {
+		return nil
+	}
+	//Checks whether the ip is valid or not
+	logrus.Info("Updating host-local IPAM configuration to reserve IPs for Windows bridge.")
+	ip, ipnet, err := net.ParseCIDR(subnet)
+	if err != nil {
+		return err
+	}
+	//process only if we have ipv4 subnet
+	if ip.To4() != nil {
+		//get Expected start and end range for given CIDR
+		expStartRange, expEndRange := getIPRanges(ip, ipnet)
+		//validate ranges given in cni.conf
+		rangeStart, _ := ipamData["rangeStart"].(string)
+		startRange, err := validateRangeOrSetDefault(rangeStart, expStartRange, ipnet, true)
+		if err != nil {
+			return err
+		}
+		ipamData["rangeStart"] = startRange
+
+		rangeEnd, _ := ipamData["rangeEnd"].(string)
+		endRange, err := validateRangeOrSetDefault(rangeEnd, expEndRange, ipnet, false)
+		if err != nil {
+			return err
+		}
+		ipamData["rangeEnd"] = endRange
+	}
+	return nil
+}
+
+func getIPRanges(ip net.IP, ipnet *net.IPNet) (string, string) {
+
+	ip = ip.To4()
+	// Mask the address
+	ip.Mask(ipnet.Mask)
+	// OR in the start address.
+	ip[len(ip)-1] |= 3
+	startRange := ip.String()
+	// Now find the broadbcast address and decrement by 1 to get endRange
+	for i := 0; i < len(ip); i++ {
+		ip[i] |= (^ipnet.Mask[i])
+	}
+	ip[len(ip)-1] -= 1
+
+	endRange := ip.String()
+	return startRange, endRange
+}
+
+func validateStartRange(startRange net.IP, expStartRange net.IP) (net.IP, error) {
+	//check if we have ipv4 ip address
+	startRange = startRange.To4()
+	expStartRange = expStartRange.To4()
+	if startRange == nil || expStartRange == nil {
+		return nil, fmt.Errorf("Invalid ip address")
+	}
+	if bytes.Compare([]byte(startRange), []byte(expStartRange)) < 0 {
+		//if ip is not in given range,return default
+		return expStartRange, nil
+	}
+	return startRange, nil
+
+}
+
+func validateEndRange(endRange net.IP, expEndRange net.IP) (net.IP, error) {
+	//check if we have ipv4 ip address
+	endRange = endRange.To4()
+	expEndRange = expEndRange.To4()
+	if endRange == nil || expEndRange == nil {
+		return nil, fmt.Errorf("Invalid ip address")
+	}
+	if bytes.Compare([]byte(endRange), []byte(expEndRange)) > 0 {
+		//if ip is not in given range,return default
+		return expEndRange, nil
+	}
+	return endRange, nil
+}
+
+// This function will validate and return an ip within expected start/end range
+func validateRangeOrSetDefault(rangeData string, expRange string, ipnet *net.IPNet, isRangeStart bool) (string, error) {
+	var parsedIP *cnet.IP
+	var expRangeIP *cnet.IP
+	var ip net.IP
+	//Parse IP and convert into 4 bytes address
+	if expRangeIP = cnet.ParseIP(expRange); expRangeIP == nil {
+		return "", fmt.Errorf("expRange contains invalid ip")
+	}
+	if len(rangeData) > 0 {
+		//Checks whether the ip is valid or not
+		if parsedIP = cnet.ParseIP(rangeData); parsedIP == nil {
+			return "", fmt.Errorf("range contains invalid ip")
+		} else if ipnet.Contains(parsedIP.IP) { //Checks whether the ip belongs to subnet
+			if isRangeStart {
+				//check if Startrange should be in expected limit
+				ip, _ = validateStartRange(parsedIP.IP, expRangeIP.IP)
+			} else {
+				//check if Endrange exceeds expected limit
+				ip, _ = validateEndRange(parsedIP.IP, expRangeIP.IP)
+			}
+			return ip.String(), nil
+		}
+	}
+	//return default range
+	return expRangeIP.IP.String(), nil
+
 }
 
 // ValidateNetworkName checks that the network name meets felix's expectations
@@ -392,18 +512,20 @@ func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*current.Result, error
 // PopulateEndpointNets takes a WorkloadEndpoint and a CNI Result, extracts IP address and mask
 // and populates that information into the WorkloadEndpoint.
 func PopulateEndpointNets(wep *api.WorkloadEndpoint, result *current.Result) error {
+	var copyIpNet net.IPNet
 	if len(result.IPs) == 0 {
 		return errors.New("IPAM plugin did not return any IP addresses")
 	}
 
 	for _, ipNet := range result.IPs {
+		copyIpNet = net.IPNet{IP: ipNet.Address.IP, Mask: ipNet.Address.Mask}
 		if ipNet.Version == "4" {
-			ipNet.Address.Mask = net.CIDRMask(32, 32)
+			copyIpNet.Mask = net.CIDRMask(32, 32)
 		} else {
-			ipNet.Address.Mask = net.CIDRMask(128, 128)
+			copyIpNet.Mask = net.CIDRMask(128, 128)
 		}
 
-		wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, ipNet.Address.String())
+		wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, copyIpNet.String())
 	}
 
 	return nil
@@ -457,6 +579,7 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 
 func GetHandleID(netName, containerID, workload string) string {
 	handleID := fmt.Sprintf("%s.%s", netName, containerID)
+
 	logrus.WithFields(logrus.Fields{
 		"HandleID":    handleID,
 		"Network":     netName,

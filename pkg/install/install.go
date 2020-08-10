@@ -1,3 +1,17 @@
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package install
 
 import (
@@ -16,7 +30,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
+        "go.etcd.io/etcd/pkg/fileutil"
 	"k8s.io/client-go/rest"
 )
 
@@ -165,7 +179,7 @@ func Install() error {
 	// Place the new binaries if the directory is writeable.
 	dirs := []string{"/host/opt/cni/bin", "/host/secondary-bin-dir"}
 	for _, d := range dirs {
-		if unix.Access(d, unix.W_OK) != nil {
+                if err := fileutil.IsDirWriteable(d); err != nil {
 			logrus.Infof("%s is not writeable, skipping", d)
 			continue
 		}

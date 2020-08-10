@@ -1,4 +1,4 @@
-// Copyright 2015,2020 Tigera Inc
+// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -125,9 +125,14 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 	utils.ConfigureLogging(conf.LogLevel)
 
+	nodeNameFile := "/var/lib/calico/nodename"
+	if conf.NodenameFile != "" {
+		nodeNameFile = conf.NodenameFile
+	}
+
 	if !conf.NodenameFileOptional {
 		// Configured to wait for the nodename file - don't start until it exists.
-		if _, err = os.Stat("/var/lib/calico/nodename"); err != nil {
+		if _, err := os.Stat(nodeNameFile); err != nil {
 			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
 			return fmt.Errorf(s, err)
 		}
@@ -380,7 +385,8 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// Select the first 11 characters of the containerID for the host veth.
 			var hostVethName, contVethMac string
 			desiredVethName := "cali" + args.ContainerID[:utils.Min(11, len(args.ContainerID))]
-			hostVethName, contVethMac, err = d.DoNetworking(args, result, desiredVethName, utils.DefaultRoutes, endpoint, map[string]string{})
+			hostVethName, contVethMac, err = d.DoNetworking(
+				ctx, calicoClient, args, result, desiredVethName, utils.DefaultRoutes, endpoint, map[string]string{})
 			if err != nil {
 				// Cleanup IP allocation and return the error.
 				utils.ReleaseIPAllocation(logger, conf, args)
@@ -500,9 +506,14 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 
 	utils.ConfigureLogging(conf.LogLevel)
 
+	nodeNameFile := "/var/lib/calico/nodename"
+	if conf.NodenameFile != "" {
+		nodeNameFile = conf.NodenameFile
+	}
+
 	if !conf.NodenameFileOptional {
 		// Configured to wait for the nodename file - don't start until it exists.
-		if _, err = os.Stat("/var/lib/calico/nodename"); err != nil {
+		if _, err = os.Stat(nodeNameFile); err != nil {
 			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
 			err = fmt.Errorf(s, err)
 			return
