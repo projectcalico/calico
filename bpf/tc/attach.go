@@ -19,6 +19,7 @@ package tc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -31,7 +32,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -54,15 +54,6 @@ type AttachPoint struct {
 
 var tcLock sync.RWMutex
 
-type ErrAttachFailed struct {
-	ExitCode int
-	Stderr   string
-}
-
-func (e ErrAttachFailed) Error() string {
-	return fmt.Sprintf("tc failed with exit code %d; stderr=%v", e.ExitCode, e.Stderr)
-}
-
 var ErrDeviceNotFound = errors.New("device not found")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
@@ -72,7 +63,7 @@ func (ap AttachPoint) AttachProgram() error {
 
 	tempDir, err := ioutil.TempDir("", "calico-tc")
 	if err != nil {
-		return errors.Wrap(err, "failed to create temporary directory")
+		return fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	defer func() {
 		_ = os.RemoveAll(tempDir)
@@ -95,53 +86,28 @@ func (ap AttachPoint) AttachProgram() error {
 	defer tcLock.RUnlock()
 	logCxt.Debug("AttachProgram got lock.")
 
-	err = EnsureQdisc(ap.Iface)
-	if err != nil {
-		return err
-	}
-
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
 		return err
 	}
 
-	tcCmd := exec.Command("tc",
-		"filter", "add", "dev", ap.Iface,
-		string(ap.Hook),
+	_, err = tc("filter", "add", "dev", ap.Iface, string(ap.Hook),
 		"bpf", "da", "obj", tempBinary,
-		"sec", SectionName(ap.Type, ap.ToOrFrom))
-
-	out, err := tcCmd.Output()
+		"sec", SectionName(ap.Type, ap.ToOrFrom),
+	)
 	if err != nil {
-		if err, ok := err.(*exec.ExitError); ok {
-			stderr := string(err.Stderr)
-			if strings.Contains(stderr, "Cannot find device") {
-				// Avoid a big, spammy log when the issue is that the interface isn't present.
-				logCxt.WithField("iface", ap.Iface).Info(
-					"Failed to attach BPF program; interface not found.  Will retry if it show up.")
-				return ErrDeviceNotFound
-			}
-		}
-		logCxt.WithError(err).WithFields(log.Fields{"out": out}).
-			WithField("command", tcCmd).Error("Failed to attach BPF program")
-		if err, ok := err.(*exec.ExitError); ok {
-			// ExitError is really unhelpful dumped to the log, swap it for a custom one.
-			return ErrAttachFailed{
-				ExitCode: err.ExitCode(),
-				Stderr:   string(err.Stderr),
-			}
-		}
-		return errors.WithMessage(err, "failed to attach TC program")
+		return err
 	}
 
 	// Success: clean up the old programs.
 	var progErrs []error
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
-		tcCmd := exec.Command("tc", "filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
-		err := tcCmd.Run()
+		_, err = tc("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
+		if err == ErrDeviceNotFound {
+			continue
+		}
 		if err != nil {
-			// TODO: filter error to avoid spam if interface is gone.
 			log.WithError(err).WithField("prog", p).Warn("Failed to clean up old calico program.")
 			progErrs = append(progErrs, err)
 		}
@@ -154,16 +120,45 @@ func (ap AttachPoint) AttachProgram() error {
 	return nil
 }
 
+func tc(args ...string) (out string, err error) {
+	tcCmd := exec.Command("tc", args...)
+	outBytes, err := tcCmd.Output()
+	if err != nil {
+		if isCannotFindDevice(err) {
+			err = ErrDeviceNotFound
+		} else if err2, ok := err.(*exec.ExitError); ok {
+			err = fmt.Errorf("failed to execute tc %v: rc=%v stderr=%v (%w)",
+				args, err2.ExitCode(), string(err2.Stderr), err)
+		} else {
+			err = fmt.Errorf("failed to execute tc %v: %w", args, err)
+		}
+	}
+	out = string(outBytes)
+	return
+}
+
+func isCannotFindDevice(err error) bool {
+	if errors.Is(err, ErrDeviceNotFound) {
+		return true
+	}
+	if err, ok := err.(*exec.ExitError); ok {
+		stderr := string(err.Stderr)
+		if strings.Contains(stderr, "Cannot find device") {
+			return true
+		}
+	}
+	return false
+}
+
 type attachedProg struct {
 	pref   string
 	handle string
 }
 
 func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
-	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
-	out, err := tcCmd.Output()
+	out, err := tc("filter", "show", "dev", ap.Iface, string(ap.Hook))
 	if err != nil {
-		return nil, errors.WithMessage(err, "failed to list tc filters on interface "+ap.Iface)
+		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
 	}
 	// Lines look like this; the section name always includes calico.
 	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
@@ -188,13 +183,13 @@ func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error {
 	b, err := bpf.BinaryFromFile(ifile)
 	if err != nil {
-		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
+		return fmt.Errorf("failed to read pre-compiled BPF binary: %w", err)
 	}
 
 	logCtx.WithField("ip", ap.HostIP).Debug("Patching in IP")
 	err = b.PatchIPv4(ap.HostIP)
 	if err != nil {
-		return errors.WithMessage(err, "patching in IPv4")
+		return fmt.Errorf("failed to patch IPv4 into BPF binary: %w", err)
 	}
 
 	b.PatchLogPrefix(ap.Iface)
@@ -202,7 +197,7 @@ func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error 
 
 	err = b.WriteToFile(ofile)
 	if err != nil {
-		return errors.Wrap(err, "failed to write patched BPF binary")
+		return fmt.Errorf("failed to write pre-compiled BPF binary: %w", err)
 	}
 
 	return nil
@@ -386,16 +381,19 @@ func EnsureQdisc(ifaceName string) error {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return nil
 	}
-	return exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact").Run()
+	_, err = tc("qdisc", "add", "dev", ifaceName, "clsact")
+	if err != nil {
+		return fmt.Errorf("failed to add qdisc to interface '%s': %w", ifaceName, err)
+	}
+	return nil
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
-	cmd := exec.Command("tc", "qdisc", "show", "dev", ifaceName, "clsact")
-	out, err := cmd.Output()
+	out, err := tc("qdisc", "show", "dev", ifaceName, "clsact")
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to check if interface '%s' has qdisc: %w", ifaceName, err)
 	}
-	if strings.Contains(string(out), "qdisc clsact") {
+	if strings.Contains(out, "qdisc clsact") {
 		return true, nil
 	}
 	return false, nil
@@ -410,6 +408,9 @@ func RemoveQdisc(ifaceName string) error {
 	if !hasQdisc {
 		return nil
 	}
-
-	return exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact").Run()
+	_, err = tc("qdisc", "del", "dev", ifaceName, "clsact")
+	if err != nil {
+		return fmt.Errorf("failed to remove qdisc from interface '%s': %w", ifaceName, err)
+	}
+	return nil
 }

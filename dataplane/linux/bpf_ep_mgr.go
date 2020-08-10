@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
@@ -27,9 +28,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/polprog"
@@ -39,7 +41,6 @@ import (
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/ratelimited"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const jumpMapCleanupInterval = 10 * time.Second
@@ -494,6 +495,15 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		go func() {
 			defer wg.Done()
 
+			// Attach the qdisc first; it is shared between the directions.
+			err := tc.EnsureQdisc(iface)
+			if err != nil {
+				mutex.Lock()
+				errs[iface] = err
+				mutex.Unlock()
+				return
+			}
+
 			var ingressWG sync.WaitGroup
 			var ingressErr error
 			ingressWG.Add(1)
@@ -501,7 +511,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				defer ingressWG.Done()
 				ingressErr = m.attachDataIfaceProgram(iface, PolDirnIngress)
 			}()
-			err := m.attachDataIfaceProgram(iface, PolDirnEgress)
+			err = m.attachDataIfaceProgram(iface, PolDirnEgress)
 			ingressWG.Wait()
 			if err == nil {
 				err = ingressErr
@@ -530,7 +540,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			log.WithField("id", iface).Info("Applied program to host interface")
 			return set.RemoveItem
 		}
-		if err == tc.ErrDeviceNotFound {
+		if errors.Is(err, tc.ErrDeviceNotFound) {
 			log.WithField("iface", iface).Debug(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
@@ -590,18 +600,24 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			return set.RemoveItem
 		} else {
 			if wlID != nil && m.happyWEPs[*wlID] != nil {
-				log.WithField("id", *wlID).WithError(err).Error(
-					"Failed to add policy to workload, removing from iptables allow list")
+				if !errors.Is(err, tc.ErrDeviceNotFound) {
+					log.WithField("id", *wlID).WithError(err).Error(
+						"Failed to add policy to workload, removing from iptables allow list")
+				}
 				delete(m.happyWEPs, *wlID)
 				m.happyWEPsDirty = true
 			}
 		}
-		if err == tc.ErrDeviceNotFound {
+		if errors.Is(err, tc.ErrDeviceNotFound) {
 			log.WithField("wep", wlID).Debug(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
+			return nil
 		}
-		log.WithError(err).WithField("id", wlID).Warn("Failed to apply policy to endpoint")
+		log.WithError(err).WithFields(log.Fields{
+			"wepID": wlID,
+			"name":  ifaceName,
+		}).Warn("Failed to apply policy to endpoint")
 		return nil
 	})
 }
@@ -613,7 +629,9 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	var endpointID *proto.WorkloadEndpointID
+	var endpointStatus ifacemonitor.State
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+		endpointStatus = iface.info.operState
 		endpointID = iface.info.endpointID
 		if endpointID == nil {
 			for i := range iface.dpState.jumpMapFDs {
@@ -630,12 +648,40 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	})
 	m.ifacesLock.Unlock()
 
+	if endpointStatus == ifacemonitor.StateUnknown {
+		// Interface is gone, nothing to do.
+		log.WithField("ifaceName", ifaceName).Debug(
+			"Ignoring request to program interface that is not present.")
+		return nil
+	}
+
 	if endpointID == nil {
+		// We think this endpoint exists but it is not known in the datastore.  It may be being removed;
+		// clean it up.
+		log.Debug("Interface has no matching endpoint, cleaning up")
 		err := tc.RemoveQdisc(ifaceName)
-		return err
+		if errors.Is(err, tc.ErrDeviceNotFound) {
+			log.WithField("name", ifaceName).Debug("Interface already gone.")
+		} else if err != nil {
+			log.WithField("name", ifaceName).WithError(err).Warn(
+				"Failed to remove BPF from interface; ignoring.")
+		}
+		return nil
 	}
 
 	wep := m.allWEPs[*endpointID]
+
+	// Attach the qdisc first; it is shared between the directions.
+	err := tc.EnsureQdisc(ifaceName)
+	if err != nil {
+		if errors.Is(err, tc.ErrDeviceNotFound) {
+			// Interface is gone, nothing to do.
+			log.WithField("ifaceName", ifaceName).Debug(
+				"Ignoring request to program interface that is not present.")
+			return nil
+		}
+		return err
+	}
 
 	var ingressErr, egressErr error
 	var wg sync.WaitGroup
@@ -709,7 +755,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 
 		jumpMapFD, err = FindJumpMap(ap)
 		if err != nil {
-			return errors.Wrap(err, "failed to look up jump map")
+			return fmt.Errorf("failed to look up jump map: %w", err)
 		}
 		m.setJumpMapFD(endpoint.Name, polDirection, jumpMapFD)
 	}
@@ -751,18 +797,18 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][]
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.ipSetMap.MapFD(), m.stateMap.MapFD(), jumpMapFD)
 	insns, err := pg.Instructions(rules)
 	if err != nil {
-		return errors.Wrap(err, "failed to generate policy bytecode")
+		return fmt.Errorf("failed to generate policy bytecode: %w", err)
 	}
 	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
 	if err != nil {
-		return errors.Wrap(err, "failed to load BPF policy program")
+		return fmt.Errorf("failed to load BPF policy program: %w", err)
 	}
 	k := make([]byte, 4)
 	v := make([]byte, 4)
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
 	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
 	if err != nil {
-		return errors.Wrap(err, "failed to update jump map")
+		return fmt.Errorf("failed to update jump map: %w", err)
 	}
 	return nil
 }
@@ -771,7 +817,7 @@ func FindJumpMap(ap tc.AttachPoint) (bpf.MapFD, error) {
 	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
 	out, err := tcCmd.Output()
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to find TC filter for interface "+ap.Iface)
+		return 0, fmt.Errorf("failed to find TC filter for interface %v: %w", ap.Iface, err)
 	}
 
 	progName := ap.ProgramName()
@@ -785,20 +831,20 @@ func FindJumpMap(ap tc.AttachPoint) (bpf.MapFD, error) {
 				bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
 				output, err := bpftool.Output()
 				if err != nil {
-					return 0, errors.Wrap(err, "failed to get map metadata")
+					return 0, fmt.Errorf("failed to get map metadata: %w", err)
 				}
 				var prog struct {
 					MapIDs []int `json:"map_ids"`
 				}
 				err = json.Unmarshal(output, &prog)
 				if err != nil {
-					return 0, errors.Wrap(err, "failed to parse bpftool output")
+					return 0, fmt.Errorf("failed to parse bpftool output: %w", err)
 				}
 
 				for _, mapID := range prog.MapIDs {
 					mapFD, err := bpf.GetMapFDByID(mapID)
 					if err != nil {
-						return 0, errors.Wrap(err, "failed to get map FD from ID")
+						return 0, fmt.Errorf("failed to get map FD from ID: %w", err)
 					}
 					mapInfo, err := bpf.GetMapInfo(mapFD)
 					if err != nil {
@@ -806,7 +852,7 @@ func FindJumpMap(ap tc.AttachPoint) (bpf.MapFD, error) {
 						if err != nil {
 							log.WithError(err).Panic("Failed to close FD.")
 						}
-						return 0, errors.Wrap(err, "failed to get map info")
+						return 0, fmt.Errorf("failed to get map info: %w", err)
 					}
 					if mapInfo.Type == unix.BPF_MAP_TYPE_PROG_ARRAY {
 						return mapFD, nil
