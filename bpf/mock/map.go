@@ -50,9 +50,12 @@ func (m *Map) Path() string {
 	return m.Filename
 }
 
-func (m Map) Iter(f bpf.MapIter) error {
+func (m Map) Iter(f bpf.IterCallback) error {
 	for kstr, vstr := range m.Contents {
-		f([]byte(kstr), []byte(vstr))
+		action := f([]byte(kstr), []byte(vstr))
+		if action == bpf.IterDelete {
+			delete(m.Contents, kstr)
+		}
 	}
 	return nil
 }
@@ -128,7 +131,7 @@ func (*DummyMap) Path() string {
 	return "DummyMap"
 }
 
-func (*DummyMap) Iter(_ bpf.MapIter) error {
+func (*DummyMap) Iter(_ bpf.IterCallback) error {
 	return nil
 }
 

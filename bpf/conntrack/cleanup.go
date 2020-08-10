@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/timeshim"
 )
 
 type Timeouts struct {
@@ -88,11 +89,16 @@ func NewScanner(ctMap bpf.Map, scanners ...EntryScanner) *Scanner {
 
 // Scan executes a scanning iteration
 func (s *Scanner) Scan() {
-	err := s.ctMap.Iter(func(k, v []byte) {
-		ctKey := KeyFromBytes(k)
-		ctVal := ValueFromBytes(v)
+	debug := log.GetLevel() >= log.DebugLevel
 
-		if log.GetLevel() >= log.DebugLevel {
+	var ctKey Key
+	var ctVal Value
+
+	err := s.ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		copy(ctKey[:], k[:])
+		copy(ctVal[:], v[:])
+
+		if debug {
 			log.WithFields(log.Fields{
 				"key":   ctKey,
 				"entry": ctVal,
@@ -101,16 +107,13 @@ func (s *Scanner) Scan() {
 
 		for _, scanner := range s.scanners {
 			if verdict := scanner(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
-				err := s.ctMap.Delete(k)
-				if err != nil {
-					log.WithError(err).Debug("Deletion result")
-					if !bpf.IsNotExists(err) {
-						log.WithError(err).WithField("key", ctKey).Warn("Failed to delete conntrack entry")
-					}
+				if debug {
+					log.Debug("Deleting conntrack entry.")
 				}
-				return // the entry is no more
+				return bpf.IterDelete
 			}
 		}
+		return bpf.IterNone
 	})
 
 	if err != nil {
@@ -131,19 +134,43 @@ func (s *Scanner) get(k Key) (Value, error) {
 type LivenessScanner struct {
 	timeouts Timeouts
 	dsr      bool
-	NowNanos func() int64
+	time     timeshim.Interface
+
+	// goTimeOfLastKTimeLookup is the go timestamp of the last time we looked up the kernel time.
+	// We cache the kernel time because it's expensive to look up (vs looking up a go timestamp which uses vdso).
+	goTimeOfLastKTimeLookup time.Time
+	// cachedKTime is the most recent kernel time.
+	cachedKTime int64
 }
 
-func NewLivenessScanner(timeouts Timeouts, dsr bool) *LivenessScanner {
-	return &LivenessScanner{
+func NewLivenessScanner(timeouts Timeouts, dsr bool, opts ...LivenessScannerOpt) *LivenessScanner {
+	ls := &LivenessScanner{
 		timeouts: timeouts,
 		dsr:      dsr,
-		NowNanos: bpf.KTimeNanos,
+		time:     timeshim.RealTime(),
+	}
+	for _, opt := range opts {
+		opt(ls)
+	}
+	return ls
+}
+
+type LivenessScannerOpt func(ls *LivenessScanner)
+
+func WithTimeShim(shim timeshim.Interface) LivenessScannerOpt {
+	return func(ls *LivenessScanner) {
+		ls.time = shim
 	}
 }
 
 func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVerdict {
-	now := l.NowNanos()
+	if l.cachedKTime == 0 || l.time.Since(l.goTimeOfLastKTimeLookup) > time.Second {
+		l.cachedKTime = l.time.KTimeNanos()
+		l.goTimeOfLastKTimeLookup = l.time.Now()
+	}
+	now := l.cachedKTime
+
+	debug := log.GetLevel() >= log.DebugLevel
 
 	switch ctVal.Type() {
 	case TypeNATForward:
@@ -164,7 +191,9 @@ func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVe
 			return ScanVerdictOK
 		}
 		if reason, expired := l.EntryExpired(now, ctKey.Proto(), revEntry); expired {
-			log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
+			if debug {
+				log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
+			}
 			return ScanVerdictDelete
 			// do not delete the reverse entry yet to avoid breaking the iterating
 			// over the map.  We must not delete other than the current key. We remove
@@ -172,12 +201,16 @@ func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVe
 		}
 	case TypeNATReverse:
 		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
-			log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
+			if debug {
+				log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
+			}
 			return ScanVerdictDelete
 		}
 	case TypeNormal:
 		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
-			log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
+			if debug {
+				log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
+			}
 			return ScanVerdictDelete
 		}
 	default:
@@ -237,6 +270,8 @@ type NATChecker func(frontIP net.IP, frontPort uint16, backIP net.IP, backPort u
 // exisitng NAT entries using the provided NATChecker and if not, it deletes
 // them.
 func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
+	debug := log.GetLevel() >= log.DebugLevel
+
 	return func(k Key, v Value, get EntryGet) ScanVerdict {
 		switch v.Type() {
 		case TypeNormal:
@@ -258,10 +293,14 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
 			// likely an active entry.
 			if !frontendHasBackend(svcIP, svcPort, ipA, portA, proto) &&
 				!frontendHasBackend(svcIP, svcPort, ipB, portB, proto) {
-				log.WithField("key", k).Debugf("TypeNATReverse is stale")
+				if debug {
+					log.WithField("key", k).Debugf("TypeNATReverse is stale")
+				}
 				return ScanVerdictDelete
 			}
-			log.WithField("key", k).Debugf("TypeNATReverse still active")
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATReverse still active")
+			}
 
 		case TypeNATForward:
 			proto := k.Proto()
@@ -294,10 +333,14 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
 			}
 
 			if !frontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
-				log.WithField("key", k).Debugf("TypeNATForward is stale")
+				if debug {
+					log.WithField("key", k).Debugf("TypeNATForward is stale")
+				}
 				return ScanVerdictDelete
 			}
-			log.WithField("key", k).Debugf("TypeNATForward still active")
+			if debug {
+				log.WithField("key", k).Debugf("TypeNATForward still active")
+			}
 
 		default:
 			log.WithField("conntrack.Value.Type()", v.Type()).Warn("Unknown type")

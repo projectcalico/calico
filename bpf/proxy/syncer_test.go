@@ -184,12 +184,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) {
+			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
+				return bpf.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -222,12 +223,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) {
+			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
+				return bpf.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -880,12 +882,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) {
+			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
+				return bpf.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -919,14 +922,17 @@ func (m *mockNATMap) Path() string {
 	return "/sys/fs/bpf/tc/nat"
 }
 
-func (m *mockNATMap) Iter(iter bpf.MapIter) error {
+func (m *mockNATMap) Iter(iter bpf.IterCallback) error {
 	m.Lock()
 	defer m.Unlock()
 
 	ks := len(nat.FrontendKey{})
 	vs := len(nat.FrontendValue{})
 	for k, v := range m.m {
-		iter(k[:ks], v[:vs])
+		action := iter(k[:ks], v[:vs])
+		if action == bpf.IterDelete {
+			delete(m.m, k)
+		}
 	}
 
 	return nil
@@ -1001,14 +1007,17 @@ func (m *mockNATBackendMap) Path() string {
 	return "/sys/fs/bpf/tc/natbe"
 }
 
-func (m *mockNATBackendMap) Iter(iter bpf.MapIter) error {
+func (m *mockNATBackendMap) Iter(iter bpf.IterCallback) error {
 	m.Lock()
 	defer m.Unlock()
 
 	ks := len(nat.BackendKey{})
 	vs := len(nat.BackendValue{})
 	for k, v := range m.m {
-		iter(k[:ks], v[:vs])
+		action := iter(k[:ks], v[:vs])
+		if action == bpf.IterDelete {
+			delete(m.m, k)
+		}
 	}
 
 	return nil
@@ -1079,14 +1088,17 @@ func (m *mockAffinityMap) Path() string {
 	return "/sys/fs/bpf/tc/aff"
 }
 
-func (m *mockAffinityMap) Iter(iter bpf.MapIter) error {
+func (m *mockAffinityMap) Iter(iter bpf.IterCallback) error {
 	m.Lock()
 	defer m.Unlock()
 
 	ks := len(nat.AffinityKey{})
 	vs := len(nat.AffinityValue{})
 	for k, v := range m.m {
-		iter(k[:ks], v[:vs])
+		action := iter(k[:ks], v[:vs])
+		if action == bpf.IterDelete {
+			delete(m.m, k)
+		}
 	}
 
 	return nil

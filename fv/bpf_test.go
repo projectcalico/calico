@@ -2409,7 +2409,7 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 	return dumpNATMap(felix), dumpEPMap(felix)
 }
 
-func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.MapIter) {
+func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.IterCallback) {
 	// Wait for the map to exist before trying to access it.  Otherwise, we
 	// might fail a test that was retrying this dump anyway.
 	Eventually(func() bool {

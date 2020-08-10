@@ -185,7 +185,7 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 		}
 
 		var unknownEntries []ipsets.IPSetEntry
-		err := m.bpfMap.Iter(func(k, v []byte) {
+		err := m.bpfMap.Iter(func(k, v []byte) bpf.IteratorAction {
 			var entry ipsets.IPSetEntry
 			copy(entry[:], k)
 			setID := entry.SetID()
@@ -206,6 +206,7 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 					ipSet.PendingRemoves.Add(entry)
 				}
 			}
+			return bpf.IterNone
 		})
 		if err != nil {
 			log.WithError(err).Error("Failed to iterate over BPF map; IP sets may be out of sync")

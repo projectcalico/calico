@@ -80,7 +80,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
-	err := ctMap.Iter(func(k, v []byte) {
+	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		var ctKey conntrack.Key
 		if len(k) != len(ctKey) {
 			log.Panic("Key has unexpected length")
@@ -96,6 +96,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		fmt.Printf("%v -> %v", ctKey, ctVal)
 		dumpExtra(ctKey, ctVal)
 		fmt.Printf("\n")
+		return bpf.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
@@ -197,7 +198,7 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
 	var keysToRemove []conntrack.Key
-	err := ctMap.Iter(func(k, v []byte) {
+	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		var ctKey conntrack.Key
 		if len(k) != len(ctKey) {
 			log.Panic("Key has unexpected length")
@@ -207,7 +208,7 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 		log.Infof("Examining conntrack key: %v", ctKey)
 
 		if ctKey.Proto() != cmd.proto {
-			return
+			return bpf.IterNone
 		}
 
 		if ctKey.AddrA().Equal(cmd.ip1) && ctKey.AddrB().Equal(cmd.ip2) {
@@ -217,6 +218,7 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 			log.Info("Match")
 			keysToRemove = append(keysToRemove, ctKey)
 		}
+		return bpf.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")

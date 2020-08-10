@@ -330,7 +330,7 @@ func (m *bpfRouteManager) resyncWithDataplane() {
 	}
 
 	// Scan the dataplane, discarding any routes that are already correct.
-	err := m.routeMap.Iter(func(k, v []byte) {
+	err := m.routeMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		var key routes.Key
 		var value routes.Value
 		copy(key[:], k)
@@ -354,6 +354,7 @@ func (m *bpfRouteManager) resyncWithDataplane() {
 			}
 			m.dirtyRoutes.Add(key)
 		}
+		return bpf.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Panic("Failed to scan BPF map.")

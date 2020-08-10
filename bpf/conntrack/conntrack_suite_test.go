@@ -33,7 +33,7 @@ func init() {
 	logrus.SetFormatter(&logutils.Formatter{})
 }
 
-func TestCalculationGraph(t *testing.T) {
+func TestBPFConntrack(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../report/bpf_conntrack_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "BPF Conntrack Suite", []Reporter{junitReporter})

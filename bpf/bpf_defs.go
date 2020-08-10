@@ -17,6 +17,7 @@
 package bpf
 
 import (
+	"errors"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -51,3 +52,10 @@ type MapInfo struct {
 }
 
 const ObjectDir = "/usr/lib/calico/bpf"
+
+// ErrIterationFinished is returned by the MapIterator's Next() method when there are no more keys.
+var ErrIterationFinished = errors.New("iteration finished")
+
+// ErrVisitedTooManyKeys is returned by the MapIterator's Next() method if it sees many more keys than there should
+// be in the map.
+var ErrVisitedTooManyKeys = errors.New("visited 10x the max size of the map keys")

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ func dumpIPSets() error {
 	}
 
 	membersBySet := map[uint64][]string{}
-	err := ipsetMap.Iter(func(k, v []byte) {
+	err := ipsetMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		var entry ipsets.IPSetEntry
 		copy(entry[:], k[:])
 		var member string
@@ -65,6 +65,7 @@ func dumpIPSets() error {
 			member = fmt.Sprintf("%s:%d (proto %d)", entry.Addr(), entry.Port(), entry.Protocol())
 		}
 		membersBySet[entry.SetID()] = append(membersBySet[entry.SetID()], member)
+		return bpf.IterNone
 	})
 	if err != nil {
 		return err

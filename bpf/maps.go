@@ -27,7 +27,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type MapIter func(k, v []byte)
+type IteratorAction string
+
+const (
+	IterNone   IteratorAction = ""
+	IterDelete IteratorAction = "delete"
+)
+
+type IterCallback func(k, v []byte) IteratorAction
 
 type Map interface {
 	GetName() string
@@ -40,7 +47,7 @@ type Map interface {
 	// Path returns the path that the map is (to be) pinned to.
 	Path() string
 
-	Iter(MapIter) error
+	Iter(IterCallback) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
@@ -145,7 +152,7 @@ func DumpMapCmd(m Map) ([]string, error) {
 }
 
 // IterMapCmdOutput iterates over the outout of a command obtained by DumpMapCmd
-func IterMapCmdOutput(output []byte, f MapIter) error {
+func IterMapCmdOutput(output []byte, f IterCallback) error {
 	var mp []mapEntry
 	err := json.Unmarshal(output, &mp)
 	if err != nil {
@@ -167,42 +174,48 @@ func IterMapCmdOutput(output []byte, f MapIter) error {
 	return nil
 }
 
-func (b *PinnedMap) Iter(f MapIter) error {
-	var nilKey []byte
-
-	// Get the first key
-	k, err := GetMapNextKey(b.fd, nilKey, b.KeySize)
+// Iter iterates over the map, passing each key/value pair to the provided callback function.  Warning:
+// The key and value are owned by the iterator and will be clobbered by the next iteration so they must not be
+// retained or modified.
+func (b *PinnedMap) Iter(f IterCallback) error {
+	it, err := NewMapIterator(b.MapFD(), b.KeySize, b.ValueSize, b.MaxEntries)
 	if err != nil {
-		if IsNotExists(err) {
-			return nil
-		}
-		return errors.Errorf("GetMapNextKey failed: %s", err)
+		return fmt.Errorf("failed to create BPF map iterator: %w", err)
 	}
-
-	for {
-		next, nextErr := GetMapNextKey(b.fd, k, b.KeySize)
-
-		v, err := GetMapEntry(b.fd, k, b.ValueSize)
+	defer func() {
+		err := it.Close()
 		if err != nil {
-			if IsNotExists(err) {
-				return nil
+			logrus.WithError(err).Panic("Unexpected error from map iterator Close().")
+		}
+	}()
+
+	keyToDelete := make([]byte, b.KeySize)
+	var action IteratorAction
+	for {
+		k, v, err := it.Next()
+
+		if action == IterDelete {
+			// The previous iteration asked us to delete its key; do that now before we check for the end of
+			// the iteration.
+			err := DeleteMapEntry(b.MapFD(), keyToDelete, b.ValueSize)
+			if err != nil && !IsNotExists(err) {
+				return fmt.Errorf("failed to delete map entry: %w", err)
 			}
-			return errors.Errorf("GetMapEntry failed to get key %s: %s", k, err)
 		}
 
-		// We hope we have the next key in case the iterator deleted the current key
-		f(k, v)
-
-		// We check if we really have the next key, if it was a failure, quit
-		if nextErr != nil {
-			if IsNotExists(nextErr) {
+		if err != nil {
+			if err == ErrIterationFinished {
 				return nil
 			}
-			return errors.Errorf("GetMapNextKey failed: %s", nextErr)
+			return errors.Errorf("iterating the map failed: %s", err)
 		}
 
-		// We have the next key!
-		k = next
+		action = f(k, v)
+
+		if action == IterDelete {
+			// k will become invalid once we call Next again so take a copy.
+			copy(keyToDelete, k)
+		}
 	}
 }
 

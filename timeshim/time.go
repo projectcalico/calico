@@ -16,6 +16,8 @@ package timeshim
 
 import (
 	"time"
+
+	"github.com/projectcalico/felix/bpf"
 )
 
 // Time is our shim interface to the time package.
@@ -25,6 +27,7 @@ type Interface interface {
 	Until(t time.Time) time.Duration
 	After(t time.Duration) <-chan time.Time
 	NewTimer(d Duration) Timer
+	KTimeNanos() int64
 }
 
 type Time = time.Time
@@ -78,4 +81,8 @@ func (realTime) Now() time.Time {
 
 func (realTime) Since(t time.Time) time.Duration {
 	return time.Since(t)
+}
+
+func (realTime) KTimeNanos() int64 {
+	return bpf.KTimeNanos()
 }

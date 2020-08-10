@@ -1104,8 +1104,11 @@ func cleanIPSetMap() {
 	// Clean out any existing IP sets.  (The other maps have a fixed number of keys that
 	// we set as needed.)
 	var keys [][]byte
-	err := ipsMap.Iter(func(k, v []byte) {
-		keys = append(keys, k)
+	err := ipsMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		kCopy := make([]byte, len(k))
+		copy(kCopy, k)
+		keys = append(keys, kCopy)
+		return bpf.IterNone
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
 	for _, k := range keys {

@@ -197,13 +197,14 @@ type MapMem map[Key]Value
 func LoadMap(rtm bpf.Map) (MapMem, error) {
 	m := make(MapMem)
 
-	err := rtm.Iter(func(k, v []byte) {
+	err := rtm.Iter(func(k, v []byte) bpf.IteratorAction {
 		var key Key
 		var value Value
 		copy(key[:], k)
 		copy(value[:], v)
 
 		m[key] = value
+		return bpf.IterNone
 	})
 
 	return m, err

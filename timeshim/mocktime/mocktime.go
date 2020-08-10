@@ -24,11 +24,13 @@ import (
 	"github.com/projectcalico/felix/timeshim"
 )
 
-var startTime, _ = time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+var StartTime, _ = time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+var StartKTime = 1000 * time.Hour
+var KTimeEpoch = StartTime.Add(-StartKTime)
 
 func New() *MockTime {
 	return &MockTime{
-		currentTime: startTime,
+		currentTime: StartTime,
 	}
 }
 
@@ -125,6 +127,13 @@ func (m *MockTime) Now() time.Time {
 	return t
 }
 
+func (m *MockTime) KTimeNanos() int64 {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	// Kernel time isn't necessarily coupled to the same epoch so use a different one.
+	return int64(m.currentTime.Sub(KTimeEpoch))
+}
+
 func (m *MockTime) Since(t time.Time) time.Duration {
 	return m.Now().Sub(t)
 }
@@ -153,7 +162,7 @@ func (m *MockTime) incrementTimeLockHeld(t time.Duration) {
 	}
 
 	m.currentTime = m.currentTime.Add(t)
-	logrus.WithField("increment", t).WithField("t", m.currentTime.Sub(startTime)).Info("Incrementing time")
+	logrus.WithField("increment", t).WithField("t", m.currentTime.Sub(StartTime)).Info("Incrementing time")
 
 	if len(m.timers) == 0 {
 		return

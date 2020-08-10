@@ -1166,72 +1166,58 @@ func (s *Syncer) Stop() {
 }
 
 func (s *Syncer) cleanupSticky() error {
-
-	// no sticky service was updated, there cannot be any stale affinity entries
-	// to clean up
 	if len(s.stickySvcs) == 0 && !s.stickySvcDeleted {
+		// no sticky service was updated, there cannot be any stale affinity entries
+		// to clean up
 		return nil
 	}
+
+	debug := log.GetLevel() >= log.DebugLevel
+	_ = debug // Work around linter false-positive.
 
 	var (
 		key nat.AffinityKey
 		val nat.AffinityValue
 	)
 
-	dels := make([]nat.AffinityKey, 0, 64)
 	ks := len(nat.AffinityKey{})
 	vs := len(nat.AffinityValue{})
 
 	now := time.Duration(bpf.KTimeNanos())
 
-	err := s.bpfAff.Iter(func(k, v []byte) {
-
+	err := s.bpfAff.Iter(func(k, v []byte) bpf.IteratorAction {
 		copy(key[:], k[:ks])
 		copy(val[:], v[:vs])
 
 		fend, ok := s.stickySvcs[key.FrontendAffinityKey()]
 		if !ok {
-			if log.GetLevel() >= log.DebugLevel {
+			if debug {
 				log.Debugf("cleaning affinity %v:%v - no such a service", key, val)
 			}
-			dels = append(dels, key)
-			return
+			return bpf.IterDelete
 		}
 
 		if _, ok := s.stickyEps[fend.id][val.Backend()]; !ok {
-			if log.GetLevel() >= log.DebugLevel {
+			if debug {
 				log.Debugf("cleaning affinity %v:%v - no such a backend", key, val)
 			}
-			dels = append(dels, key)
-			return
+			return bpf.IterDelete
 		}
 
 		if now-val.Timestamp() > fend.timeo {
-			if log.GetLevel() >= log.DebugLevel {
+			if debug {
 				log.Debugf("cleaning affinity %v:%v - expired", key, val)
 			}
-			dels = append(dels, key)
-			return
+			return bpf.IterDelete
 		}
-		if log.GetLevel() >= log.DebugLevel {
+		if debug {
 			log.Debugf("cleaning affinity %v:%v - keeping", key, val)
 		}
+		return bpf.IterNone
 	})
 
 	if err != nil {
 		return errors.Errorf("NAT affinity map iterator failed: %s", err)
-	}
-
-	errs := 0
-
-	for _, k := range dels {
-		if err := s.bpfAff.Delete(k.AsBytes()); err != nil {
-			log.WithField("key", k).Errorf("Failed to delete stale NAT affinity record")
-		}
-	}
-
-	if errs > 0 {
-		return errors.Errorf("encountered  %d errors writing NAT affinity map", errs)
 	}
 	return nil
 }
