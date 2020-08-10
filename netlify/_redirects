@@ -28,6 +28,7 @@
 
 # explicit redirects for any old that does not exist at an identical path in the
 # latest docs.
+/introduction/ /about/about-calico 301
 /getting-started/as-service /getting-started/bare-metal/installation/container 301
 /getting-started/bare-metal/bare-metal /getting-started/bare-metal/ 301
 /getting-started/bare-metal/bare-metal-install /getting-started/bare-metal/installation/container 301
