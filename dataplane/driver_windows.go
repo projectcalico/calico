@@ -15,6 +15,7 @@
 package dataplane
 
 import (
+	"fmt"
 	"os/exec"
 
 	log "github.com/sirupsen/logrus"
@@ -46,4 +47,8 @@ func StartDataplaneDriver(configParams *config.Config,
 	winDP.Start()
 
 	return winDP, nil
+}
+
+func SupportsBPF() error {
+	return fmt.Errorf("BPF dataplane is not supported on Windows")
 }
