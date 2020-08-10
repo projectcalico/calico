@@ -21,6 +21,8 @@ import (
 	"net"
 	"os/exec"
 
+	"github.com/projectcalico/felix/bpf"
+
 	"github.com/projectcalico/felix/wireguard"
 
 	"github.com/projectcalico/felix/bpf/conntrack"
@@ -305,4 +307,8 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		return extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
 	}
+}
+
+func SupportsBPF() error {
+	return bpf.SupportsBPFDataplane()
 }

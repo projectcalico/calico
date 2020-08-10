@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,4 +71,18 @@ func (t *Ticker) calculateDelay() time.Duration {
 
 func (t *Ticker) Stop() {
 	t.stop <- true
+}
+
+func (t *Ticker) Channel() <-chan time.Time {
+	return t.C
+}
+
+func (t *Ticker) Done() chan bool {
+	return t.stop
+}
+
+type JitterTicker interface {
+	Stop()
+	Channel() <-chan time.Time
+	Done() chan bool
 }
