@@ -139,6 +139,7 @@ type endpointManager struct {
 	ruleRenderer rules.RuleRenderer
 	routeTable   routeTable
 	writeProcSys procSysWriter
+	osStat       func(path string) (os.FileInfo, error)
 	epMarkMapper rules.EndpointMarkMapper
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
@@ -225,6 +226,7 @@ func newEndpointManager(
 		wlInterfacePrefixes,
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
+		os.Stat,
 		bpfEnabled,
 		callbacks,
 	)
@@ -242,6 +244,7 @@ func newEndpointManagerWithShims(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
+	osStat func(name string) (os.FileInfo, error),
 	bpfEnabled bool,
 	callbacks *callbacks,
 ) *endpointManager {
@@ -260,6 +263,7 @@ func newEndpointManagerWithShims(
 		ruleRenderer: ruleRenderer,
 		routeTable:   routeTable,
 		writeProcSys: procSysWriter,
+		osStat:       osStat,
 		epMarkMapper: epMarkMapper,
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
@@ -682,7 +686,12 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		ifaceName := item.(string)
 		err := m.configureInterface(ifaceName)
 		if err != nil {
-			log.WithError(err).Warn("Failed to configure interface, will retry")
+			if exists, err := m.interfaceExistsInProcSys(ifaceName); err == nil && !exists {
+				// Suppress log spam if interface has been removed.
+				log.WithError(err).Debug("Failed to configure interface and it seems to be gone")
+			} else {
+				log.WithError(err).Warn("Failed to configure interface, will retry")
+			}
 			return nil
 		}
 		return set.RemoveItem
@@ -1041,6 +1050,23 @@ func (m *endpointManager) updateDispatchChains(
 	}
 }
 
+func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
+	var directory string
+	if m.ipVersion == 4 {
+		directory = fmt.Sprintf("/proc/sys/net/ipv4/conf/%s", name)
+	} else {
+		directory = fmt.Sprintf("/proc/sys/net/ipv6/conf/%s", name)
+	}
+	_, err := m.osStat(directory)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (m *endpointManager) configureInterface(name string) error {
 	if !m.activeUpIfaces.Contains(name) {
 		log.WithField("ifaceName", name).Info(
@@ -1048,11 +1074,16 @@ func (m *endpointManager) configureInterface(name string) error {
 		return nil
 	}
 
-	// Try setting accept_ra to 0 and just log if it failed (it might fail if IPv6
-	// was disabled).
-	err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name), "0")
+	// Special case: for security, even if our IPv6 support is disabled, try to disable RAs on the interface.
+	acceptRAPath := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name)
+	err := m.writeProcSys(acceptRAPath, "0")
 	if err != nil {
-		log.WithField("ifaceName", name).Warnf("Could not set accept_ra: %v", err)
+		if exists, err := m.interfaceExistsInProcSys(name); err == nil && !exists {
+			log.WithField("file", acceptRAPath).Debug(
+				"Failed to set accept_ra flag. Interface is missing in /proc/sys.")
+		} else {
+			log.WithField("ifaceName", name).Warnf("Could not set accept_ra: %v", err)
+		}
 	}
 
 	log.WithField("ifaceName", name).Info(
