@@ -106,6 +106,17 @@ and sent as UDP in the outer packet.
 
 ![Anatomy of an overlay network packet]({{site.baseurl}}/images/anatomy-of-an-overlay-packet.svg)
 
+Overlay networks have the advantage of having minimal dependencies on the underlying network infrastructure, but have
+the downsides of:
+- having a small performance impact compared to non-overlay networking, which you might want to avoid if running
+  network intensive workloads
+- workloads on the overlay are not easily addressable from the rest of the network. so NAT gateways or load balancers
+  are required to bridge between the overlay and the underlay network for any ingress to, or egress from, the overlay.
+
+{{site.prodname}} networking options are exceptionally flexible, so in general you can choose whether you prefer 
+{{site.prodname}} to provide an overlay network, or non-overlay network. You can read more about this in the {{site.prodname}} 
+[determine best networking option]({{site.baseurl}}/networking/determine-best-networking) guide.
+
 ### DNS
 
 While the underlying network packet flow across a the network is determined using IP addresses, users and applications
