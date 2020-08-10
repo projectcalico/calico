@@ -139,11 +139,13 @@ func Run() {
 
 		// Check if we're running on a kubeadm and/or rancher cluster. Any error other than not finding the respective
 		// config map should be serious enough that we ought to stop here and return.
-		kubeadmConfig, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(KubeadmConfigConfigMap,
-			metav1.GetOptions{})
+		kubeadmConfig, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(KubeadmConfigConfigMap, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				kubeadmConfig = nil
+			} else if errors.IsUnauthorized(err) {
+				kubeadmConfig = nil
+				log.WithError(err).Info("Unauthorized to query kubeadm configmap, assuming not on kubeadm. CIDR detection will not occur.")
 			} else {
 				log.WithError(err).Error("failed to query kubeadm's config map")
 				terminate()
@@ -156,6 +158,9 @@ func Run() {
 		if err != nil {
 			if errors.IsNotFound(err) {
 				rancherState = nil
+			} else if errors.IsUnauthorized(err) {
+				kubeadmConfig = nil
+				log.WithError(err).Info("Unauthorized to query rancher configmap, assuming not on rancher. CIDR detection will not occur.")
 			} else {
 				log.WithError(err).Error("failed to query Rancher's cluster state config map")
 				terminate()
@@ -483,9 +488,9 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 			log.Warnf("Autodetection of IPv6 address failed, keeping existing value: %s", node.Spec.BGP.IPv6Address)
 			validateIP(node.Spec.BGP.IPv6Address)
 		}
-	} else if ipv6Env == "none" && node.Spec.BGP.IPv6Address!="" {
+	} else if ipv6Env == "none" && node.Spec.BGP.IPv6Address != "" {
 		log.Infof("Autodetection for IPv6 disabled, keeping existing value: %s", node.Spec.BGP.IPv6Address)
-		validateIP(node.Spec.BGP.IPv6Address)	
+		validateIP(node.Spec.BGP.IPv6Address)
 	} else if ipv6Env != "none" {
 		if ipv6Env != "" {
 			node.Spec.BGP.IPv6Address = parseIPEnvironment("IP6", ipv6Env, 6)
