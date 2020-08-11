@@ -15,13 +15,13 @@
 package intdataplane
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -601,7 +601,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		} else {
 			if wlID != nil && m.happyWEPs[*wlID] != nil {
 				if !errors.Is(err, tc.ErrDeviceNotFound) {
-					log.WithField("id", *wlID).WithError(err).Error(
+					log.WithField("id", *wlID).WithError(err).Warning(
 						"Failed to add policy to workload, removing from iptables allow list")
 				}
 				delete(m.happyWEPs, *wlID)
@@ -813,16 +813,14 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][]
 	return nil
 }
 
-func FindJumpMap(ap tc.AttachPoint) (bpf.MapFD, error) {
-	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
-	out, err := tcCmd.Output()
+func FindJumpMap(ap tc.AttachPoint) (mapFD bpf.MapFD, err error) {
+	out, err := tc.ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
 	if err != nil {
 		return 0, fmt.Errorf("failed to find TC filter for interface %v: %w", ap.Iface, err)
 	}
 
 	progName := ap.ProgramName()
-	for _, line := range bytes.Split(out, []byte("\n")) {
-		line := string(line)
+	for _, line := range strings.Split(out, "\n") {
 		if strings.Contains(line, progName) {
 			re := regexp.MustCompile(`id (\d+)`)
 			m := re.FindStringSubmatch(line)
@@ -831,6 +829,11 @@ func FindJumpMap(ap tc.AttachPoint) (bpf.MapFD, error) {
 				bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
 				output, err := bpftool.Output()
 				if err != nil {
+					// We can hit this case if the interface was deleted underneath us; check that it's still there.
+					if _, err := os.Stat(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s", ap.Iface)); os.IsNotExist(err) {
+						return 0, tc.ErrDeviceNotFound
+					}
+
 					return 0, fmt.Errorf("failed to get map metadata: %w", err)
 				}
 				var prog struct {
