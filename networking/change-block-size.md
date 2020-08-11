@@ -111,7 +111,7 @@ temporary-pool        10.0.0.0/16      true   Always     false
 Disable allocations in the default pool.
 
 ```
-calicoctl patch ippool default-ipv4-ippool -p '{"spec": {"disabled": “true”}}'
+calicoctl patch ippool default-ipv4-ippool -p '{"spec": {"disabled": "true"}}'
 ```
 
 Verify the changes.
@@ -175,7 +175,7 @@ calicoctl apply -f pool.yaml
 #### Disable the temporary IP pool
 
 ```
-calicoctl patch ippool temporary-pool -p '{"spec": {"disabled": “true”}}'
+calicoctl patch ippool temporary-pool -p '{"spec": {"disabled": "true"}}'
 ```
 
 #### Delete pods from the temporary IP pool
