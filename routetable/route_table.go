@@ -825,7 +825,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 		logCxt := logCxt.WithField("dest", dest)
 		// Check if we should remove routes not added by us
 		if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
-			logCxt.Debug("Syncing routes: not removing route as its not marked as Felix route")
+			logCxt.Debug("Syncing routes: not removing route as it is not marked as Felix route")
 			continue
 		}
 

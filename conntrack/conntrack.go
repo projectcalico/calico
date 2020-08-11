@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,6 +90,8 @@ func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 				logCxt.Debug("Successfully removed conntrack flows.")
 				break
 			} else if bytes.Contains(output, []byte("0 flow entries have been deleted")) {
+				// If there are no flows to delete then the tool returns rc=1; detect that case and handle as
+				// success.
 				logCxt.Debug("conntrack tool didn't find any flows.")
 				break
 			}
