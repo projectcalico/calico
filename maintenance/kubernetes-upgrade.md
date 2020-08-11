@@ -98,7 +98,7 @@ procedure varies by datastore type.
    curl {{ "/manifests/canal-etcd.yaml" | absolute_url }} -O
    ```
 
-   > **Note**: You must must manually apply the changes you made to the manifest
+   > **Note**: You must manually apply the changes you made to the manifest
    > during installation to the downloaded {{page.version}} manifest. At a minimum,
    > you must set the `etcd_endpoints` value.
    {: .alert .alert-info}
