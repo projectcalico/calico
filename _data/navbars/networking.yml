@@ -15,7 +15,7 @@ section:
     path: /networking/advertise-service-ips
   - title: Configure MTU to maximize network performance
     path: /networking/mtu
-  - title: Configure workload access outside cluster
+  - title: Configure outgoing NAT
     path: /networking/workloads-outside-cluster
   - title: Use IPVS kube-proxy
     path: /networking/use-ipvs
