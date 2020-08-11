@@ -50,6 +50,7 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
    kube-system   calico-node-drmr8                          1/1     Running   0          62s
    kube-system   calico-kube-controllers-555fc8cc5c-dbx8j   1/1     Running   0          62s
    ```
+
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
