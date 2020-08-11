@@ -10,7 +10,7 @@ This quickstart gets you a single-host MicroK8s cluster with {{site.prodname}} i
 
 ### Value
 
-MicroK8s is a small, fast implementation of Kubernetes.
+MicroK8s is a lightweight upstream Kubernetes distribution package to run as an immutable container.
 
 Use this quickstart to quickly and easily try {{site.prodname}} features with MicroK8s.
 
@@ -19,31 +19,24 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
 - Make sure you have a linux host that meets the following requirements:
   - 4GB RAM
   - 20GB free disk space
-  - Ubuntu 20.04 LTS, 18.04 LTS or 16.04 LTS (or an operating system with the support of `snapd`)
+  - Ubuntu 20.04 LTS, 18.04 LTS or 16.04 LTS (or anotherr operating system that supports `snapd`)
 
 ### How to
 
 
-1. Initialize the master using the following command.
+1. Initialize the node using the following command.
    
-   > **Note**: MicroK8s uses {% include open-new-window.html text='snap' url='https://snapcraft.io/docs/snapcraft-overview' %} bundle to publish its releases, since snap enviroment uses different folder paths
-   > it is not possible to install {{site.prodname}} using manifest or operator.
-   >
-   > If you like to learn more about MicroK8s paths {% include open-new-window.html text='click here.' url='https://github.com/ubuntu/microk8s/blob/master/docs/build.md#assembling-the-calico-cni-manifest' %}
-   {: .alert .alert-info }
-
    ```
    snap install microk8s --classic --channel=edge/ha-preview
    ```
 
 1. Enable dns services.
    
-   > **Note**: DNS service is not required. However, it is recommended to enable this feature.
-   {: .alert .alert-info}
-
    ```
    microk8s enable dns
    ```
+   > **Note**: DNS service is not required. However, it is recommended to enable this feature.
+   {: .alert .alert-info}
 
 1. Check your cluster status
    
