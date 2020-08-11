@@ -24,11 +24,13 @@ import (
 	"net"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -99,6 +101,9 @@ type bpfEndpointManager struct {
 
 	startupOnce      sync.Once
 	mapCleanupRunner *ratelimited.Runner
+
+	// onStillAlive is called from loops to reset the watchdog.
+	onStillAlive func()
 }
 
 type bpfAllowChainRenderer interface {
@@ -119,7 +124,11 @@ func newBPFEndpointManager(
 	stateMap bpf.Map,
 	iptablesRuleRenderer bpfAllowChainRenderer,
 	iptablesFilterTable *iptables.Table,
+	livenessCallback func(),
 ) *bpfEndpointManager {
+	if livenessCallback == nil {
+		livenessCallback = func() {}
+	}
 	return &bpfEndpointManager{
 		allWEPs:             map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPs:           map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
@@ -147,6 +156,7 @@ func newBPFEndpointManager(
 			log.Debug("Jump map cleanup triggered.")
 			tc.CleanUpJumpMaps()
 		}),
+		onStillAlive: livenessCallback,
 	}
 }
 
@@ -469,6 +479,11 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	errs := map[string]error{}
 	var wg sync.WaitGroup
 
+	// Limit the number of parallel workers.  Without this, all the workers vie for CPU and complete slowly.
+	// On a constrained system, we can end up taking too long and going non-ready.
+	maxWorkers := runtime.GOMAXPROCS(0)
+	sem := semaphore.NewWeighted(int64(maxWorkers))
+
 	m.dirtyIfaceNames.Iter(func(item interface{}) error {
 		ifaceName := item.(string)
 
@@ -476,9 +491,16 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			return nil
 		}
 
+		if err := sem.Acquire(context.Background(), 1); err != nil {
+			// Should only happen if the context finishes.
+			log.WithError(err).Panic("Failed to acquire semaphore")
+		}
+		m.onStillAlive()
+
 		wg.Add(1)
 		go func(ifaceName string) {
 			defer wg.Done()
+			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
 			mutex.Lock()
 			errs[ifaceName] = err
