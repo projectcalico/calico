@@ -20,10 +20,12 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/windows"
 	"github.com/projectcalico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
 
 	"golang.org/x/sys/windows/registry"
@@ -47,7 +49,7 @@ func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interf
 	return windows.EnsureVXLANTunnelAddr(ctx, calicoClient, nodeName, ipNet, conf)
 }
 
-func NetworkApplicationContainer(args *skel.CmdArgs) error {
+func networkApplicationContainer(args *skel.CmdArgs) error {
 	return windows.NetworkApplicationContainer(args)
 }
 
@@ -78,7 +80,7 @@ func ensureCalicoKey() error {
 
 // Create key for deletion timestamps if not exists.
 // Remove obsolete  entries.
-func MaintainWepDeletionTimestamps(timeout int) error {
+func maintainWepDeletionTimestamps(timeout int) error {
 	if timeout == 0 {
 		timeout = defaultPodDeletionTimestampTimeout
 	}
@@ -191,4 +193,74 @@ func RegisterDeletedWep(containerID string) error {
 	}
 
 	return fmt.Errorf("timeout waiting registry update for %s", containerID)
+}
+
+// Windows special case: Kubelet has a hacky implementation of GetPodNetworkStatus() that uses a
+// CNI ADD to check the status of the pod.  Detect such spurious adds and allow cni-plugin to return early,
+// avoiding trying to network the pod multiple times.
+func CheckForSpuriousAdd(args *skel.CmdArgs,
+	conf types.NetConf,
+	epIDs WEPIdentifiers,
+	endpoint *api.WorkloadEndpoint,
+	logger *logrus.Entry) (*current.Result, error) {
+	var err error
+	var result *current.Result
+
+	err = maintainWepDeletionTimestamps(conf.WindowsPodDeletionTimestampTimeout)
+	if err != nil {
+		logger.WithError(err).Warn("Failed to do maintenance on pod deletion timestamps.")
+	}
+
+	lookupRequest := false
+	const pauseContainerNetNS = "none"
+	if args.Netns == "" {
+		// Defensive: this case should be blocked by CNI validation.
+		logger.Info("No network namespace supplied, assuming a lookup-only request.")
+		lookupRequest = true
+	} else if args.Netns != pauseContainerNetNS {
+		// When kubelet really wants to network the pod, it passes us the netns of the "pause" container, which
+		// is a static value. The other requests come from checks on the other containers.
+		// Application containers should be networked with the pause container endpoint to reflect DNS details.
+		logger.Info("Non-pause container specified, doing a lookup-only request.")
+		err = networkApplicationContainer(args)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to network container with pause container endpoint.")
+			return nil, err
+		}
+		lookupRequest = true
+	} else if endpoint != nil && len(endpoint.Spec.IPNetworks) > 0 {
+		// Defensive: datastore says the pod is already networked.  This check isn't sufficient on its own because
+		// GetPodNetworkStatus() can race with a CNI DEL operation, making it look like the pod has no network.
+		logger.Info("Endpoint already networked, doing a lookup-only request.")
+		lookupRequest = true
+	}
+
+	if lookupRequest {
+		result, err = CreateResultFromEndpoint(endpoint)
+		if err == nil {
+			logger.WithField("result", result).Info("Status lookup result")
+		} else {
+			// For example, endpoint not found (which is expected if we're racing with a CNI DEL).
+			logger.WithError(err).Warn("Failed to look up pod status")
+		}
+		return result, err
+	}
+
+	// After checking wep not exists, next step is to check wep deletion timestamp.
+	// The order is important because with DEL command running in parallel registering timestamp before deleting wep,
+	// ADD command should run the process in reverse order to avoid race condition.
+
+	// No WEP and no network, check deletion timestamp to skip recent deleted wep.
+	// If WEP just been deleted, report back error.
+	justDeleted, err := CheckWepJustDeleted(epIDs.ContainerID, conf.WindowsPodDeletionTimestampTimeout)
+	if err != nil {
+		logger.Warnf("Failed to check pod deletion timestamp. %v", err)
+		return nil, err
+	}
+	if justDeleted {
+		logger.Info("Pod just been deleted. Report error for pod status")
+		return nil, fmt.Errorf("endpoint with same ID was recently deleted")
+	}
+
+	return nil, nil
 }

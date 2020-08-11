@@ -675,19 +675,6 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		return nil, fmt.Errorf("HNS network lost its management IP")
 	}
 
-	if natOutgoing {
-		d.logger.Debug("Looking up management subnet to add outgoing NAT exclusion.")
-		mgmtNet, err := lookupManagementAddr(mgmtIP, d.logger)
-		if err != nil {
-			return nil, err
-		}
-		if !d.conf.WindowsDisableHostSubnetNATExclusion {
-			natExclusions = make([]*net.IPNet, len(allIPAMPools)+1)
-			copy(natExclusions, allIPAMPools)
-			natExclusions[len(natExclusions)-1] = mgmtNet
-		}
-	}
-
 	pols, err := winpol.CalculateEndpointPolicies(n, natExclusions, natOutgoing, mgmtIP, d.logger)
 	if err != nil {
 		return nil, err
