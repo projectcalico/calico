@@ -55,6 +55,8 @@ section:
         path: /getting-started/kubernetes/k3s/quickstart
       - title: Multi-node install
         path: /getting-started/kubernetes/k3s/multi-node-install
+  - title: MicroK8s
+    path: /getting-started/kubernetes/microk8s
   - title: Calico the hard way
     path: /getting-started/kubernetes/hardway/
     section:
