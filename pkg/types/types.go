@@ -105,10 +105,6 @@ type NetConf struct {
 	// WindowsUseSingleNetwork disables the use of multiple IPAM blocks on a single host and forces
 	// a static HNS network name.
 	WindowsUseSingleNetwork bool `json:"windows_use_single_network,omitempty"`
-	// WindowsDisableHostSubnetNATExclusion disables our attempt to add an outbound NAT exclusion for the host's
-	// subnet.  The NAT exclusion is generally required for pod-to-host communication but that communication can also
-	// be enabled by manually setting an exclusion or by creating a dummy IP pool.
-	WindowsDisableHostSubnetNATExclusion bool `json:"windows_disable_host_subnet_nat_exclusion,omitempty"`
 	// WindowsDisableDefaultBlockAllPolicy disables the default "block all traffic" policy on the pod endpoint.
 	// By default, WindowsDisableDefaultBlockAllPolicy = false, as the default "block all traffic" policy is placed at
 	// the time of creating the pod network.
