@@ -15,7 +15,6 @@
 package conntrack
 
 import (
-	"bytes"
 	"net"
 	"os/exec"
 	"strings"
@@ -89,14 +88,10 @@ func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 			if err == nil {
 				logCxt.Debug("Successfully removed conntrack flows.")
 				break
-			} else if bytes.Contains(output, []byte("0 flow entries have been deleted")) {
-				// If there are no flows to delete then the tool returns rc=1; detect that case and handle as
-				// success.
-				logCxt.Debug("conntrack tool didn't find any flows.")
-				break
 			}
 
-			if strings.Contains(string(output), "0 flow entries") {
+			outStr := string(output)
+			if strings.Contains(outStr, "0 flow entries") {
 				// Success, there were no flows.
 				logCxt.Debug("IP wasn't in conntrack")
 				break
@@ -104,7 +99,7 @@ func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 			if retry == numRetries {
 				logCxt.WithError(err).Error("Failed to remove conntrack flows after retries.")
 			} else {
-				logCxt.WithError(err).Warn("Failed to remove conntrack flows, will retry...")
+				logCxt.WithError(err).WithField("output", outStr).Warn("Failed to remove conntrack flows, will retry...")
 			}
 		}
 	}
