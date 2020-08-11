@@ -6,7 +6,7 @@ canonical_url: '/getting-started/kubernetes/microk8s'
 
 ### Big picture
 
-This quickstart gets you a single-host MicroK8s cluster with {{site.prodname}} in approximately 5 minutes.
+Install a single node MicroK8s cluster with {{site.prodname}} in approximately 5 minutes.
 
 ### Value
 
@@ -23,6 +23,8 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
 
 ### How to
 
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
 1. Initialize the node using the following command.
    
@@ -55,9 +57,12 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
 ### Next steps
 
 **Required**
-- [Install and configure calicoctl](../clis/calicoctl/install)
+- [Install and configure calicoctl]({{site.basurl}}/getting-started/clis/calicoctl/install)
+
+**Optional**
+- {% include open-new-window.html text='Add another node to form a multi-node cluster' url='https://microk8s.io/docs/clustering' %}
 
 **Recommended tutorials**
-- [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)
-- [Control ingress and egress traffic using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-advanced)
-- [Run a tutorial that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+- [Secure a simple application using the Kubernetes NetworkPolicy API]({{site.basurl}}/security/tutorials/kubernetes-policy-basic)
+- [Control ingress and egress traffic using the Kubernetes NetworkPolicy API]({{site.basurl}}/security/tutorials/kubernetes-policy-advanced)
+- [Run a tutorial that shows blocked and allowed connections in real time]({{site.basurl}}/security/tutorials/kubernetes-policy-demo/kubernetes-demo)
