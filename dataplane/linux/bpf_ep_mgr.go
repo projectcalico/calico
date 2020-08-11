@@ -247,77 +247,11 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 	log.WithField("wep", msg.Endpoint).Debug("Workload endpoint update")
 	wlID := *msg.Id
 	oldWEP := m.allWEPs[wlID]
+	m.removeWEPFromIndexes(wlID, oldWEP)
+
 	wl := msg.Endpoint
-	if oldWEP != nil {
-		for _, t := range oldWEP.Tiers {
-			for _, pol := range t.IngressPolicies {
-				polSet := m.policiesToWorkloads[proto.PolicyID{
-					Tier: t.Name,
-					Name: pol,
-				}]
-				if polSet == nil {
-					continue
-				}
-				polSet.Discard(wlID)
-			}
-			for _, pol := range t.EgressPolicies {
-				polSet := m.policiesToWorkloads[proto.PolicyID{
-					Tier: t.Name,
-					Name: pol,
-				}]
-				if polSet == nil {
-					continue
-				}
-				polSet.Discard(wlID)
-			}
-		}
-
-		for _, profName := range oldWEP.ProfileIds {
-			profID := proto.ProfileID{Name: profName}
-			profSet := m.profilesToWorkloads[profID]
-			if profSet == nil {
-				continue
-			}
-			profSet.Discard(wlID)
-		}
-
-		m.withIface(oldWEP.Name, func(iface *bpfInterface) bool {
-			iface.info.endpointID = nil
-			return false
-		})
-	}
-	m.allWEPs[wlID] = msg.Endpoint
-	for _, t := range wl.Tiers {
-		for _, pol := range t.IngressPolicies {
-			polID := proto.PolicyID{
-				Tier: t.Name,
-				Name: pol,
-			}
-			if m.policiesToWorkloads[polID] == nil {
-				m.policiesToWorkloads[polID] = set.New()
-			}
-			m.policiesToWorkloads[polID].Add(wlID)
-		}
-		for _, pol := range t.EgressPolicies {
-			polID := proto.PolicyID{
-				Tier: t.Name,
-				Name: pol,
-			}
-			if m.policiesToWorkloads[polID] == nil {
-				m.policiesToWorkloads[polID] = set.New()
-			}
-			m.policiesToWorkloads[polID].Add(wlID)
-		}
-		for _, profName := range wl.ProfileIds {
-			profID := proto.ProfileID{Name: profName}
-			profSet := m.profilesToWorkloads[profID]
-			if profSet == nil {
-				profSet = set.New()
-				m.profilesToWorkloads[profID] = profSet
-			}
-			profSet.Add(wlID)
-		}
-	}
+	m.allWEPs[wlID] = wl
+	m.addWEPToIndexes(wlID, wl)
 	m.withIface(wl.Name, func(iface *bpfInterface) bool {
 		iface.info.endpointID = &wlID
 		return true // Force interface to be marked dirty in case policies changed.
@@ -329,29 +263,9 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 	wlID := *msg.Id
 	log.WithField("id", wlID).Debug("Workload endpoint removed")
 	oldWEP := m.allWEPs[wlID]
-	for _, t := range oldWEP.Tiers {
-		for _, pol := range t.IngressPolicies {
-			polSet := m.policiesToWorkloads[proto.PolicyID{
-				Tier: t.Name,
-				Name: pol,
-			}]
-			if polSet == nil {
-				continue
-			}
-			polSet.Discard(wlID)
-		}
-		for _, pol := range t.EgressPolicies {
-			polSet := m.policiesToWorkloads[proto.PolicyID{
-				Tier: t.Name,
-				Name: pol,
-			}]
-			if polSet == nil {
-				continue
-			}
-			polSet.Discard(wlID)
-		}
-	}
+	m.removeWEPFromIndexes(wlID, oldWEP)
 	delete(m.allWEPs, wlID)
+
 	if m.happyWEPs[wlID] != nil {
 		delete(m.happyWEPs, wlID)
 		m.happyWEPsDirty = true
@@ -407,7 +321,7 @@ func (m *bpfEndpointManager) markPolicyUsersDirty(id proto.PolicyID) {
 	}
 	wls.Iter(func(item interface{}) error {
 		wlID := item.(proto.WorkloadEndpointID)
-		m.markExistingWEPDirty(wlID)
+		m.markExistingWEPDirty(wlID, "policy")
 		return nil
 	})
 }
@@ -420,16 +334,16 @@ func (m *bpfEndpointManager) markProfileUsersDirty(id proto.ProfileID) {
 	}
 	wls.Iter(func(item interface{}) error {
 		wlID := item.(proto.WorkloadEndpointID)
-		m.markExistingWEPDirty(wlID)
+		m.markExistingWEPDirty(wlID, "profile")
 		return nil
 	})
 }
 
-func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID) {
+func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID, mapping string) {
 	wep := m.allWEPs[wlID]
 	if wep == nil {
-		log.WithField("wlID", wlID).Panic(
-			"BUG: policiesToWorkloads mapping points to unknown workload.")
+		log.WithField("wlID", wlID).Panicf(
+			"BUG: %s mapping points to unknown workload.", mapping)
 	} else {
 		m.dirtyIfaceNames.Add(wep.Name)
 	}
@@ -966,4 +880,88 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface)
+}
+
+func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+	for _, t := range wl.Tiers {
+		m.addPolicyToWEPMappings(t.IngressPolicies, wlID)
+		m.addPolicyToWEPMappings(t.EgressPolicies, wlID)
+	}
+	m.addProfileToWEPMappings(wl.ProfileIds, wlID)
+}
+
+func (m *bpfEndpointManager) addPolicyToWEPMappings(polNames []string, wlID proto.WorkloadEndpointID) {
+	for _, pol := range polNames {
+		polID := proto.PolicyID{
+			Tier: "default",
+			Name: pol,
+		}
+		if m.policiesToWorkloads[polID] == nil {
+			m.policiesToWorkloads[polID] = set.New()
+		}
+		m.policiesToWorkloads[polID].Add(wlID)
+	}
+}
+
+func (m *bpfEndpointManager) addProfileToWEPMappings(profileIds []string, wlID proto.WorkloadEndpointID) {
+	for _, profName := range profileIds {
+		profID := proto.ProfileID{Name: profName}
+		profSet := m.profilesToWorkloads[profID]
+		if profSet == nil {
+			profSet = set.New()
+			m.profilesToWorkloads[profID] = profSet
+		}
+		profSet.Add(wlID)
+	}
+}
+
+func (m *bpfEndpointManager) removeWEPFromIndexes(wlID proto.WorkloadEndpointID, wep *proto.WorkloadEndpoint) {
+	if wep == nil {
+		return
+	}
+
+	for _, t := range wep.Tiers {
+		m.removePolicyToWEPMappings(t.IngressPolicies, wlID)
+		m.removePolicyToWEPMappings(t.EgressPolicies, wlID)
+	}
+
+	m.removeProfileToWEPMappings(wep.ProfileIds, wlID)
+
+	m.withIface(wep.Name, func(iface *bpfInterface) bool {
+		iface.info.endpointID = nil
+		return false
+	})
+}
+
+func (m *bpfEndpointManager) removePolicyToWEPMappings(polNames []string, wlID proto.WorkloadEndpointID) {
+	for _, pol := range polNames {
+		polID := proto.PolicyID{
+			Tier: "default",
+			Name: pol,
+		}
+		polSet := m.policiesToWorkloads[polID]
+		if polSet == nil {
+			continue
+		}
+		polSet.Discard(wlID)
+		if polSet.Len() == 0 {
+			// Defensive; we also clean up when the profile is removed.
+			delete(m.policiesToWorkloads, polID)
+		}
+	}
+}
+
+func (m *bpfEndpointManager) removeProfileToWEPMappings(profileIds []string, wlID proto.WorkloadEndpointID) {
+	for _, profName := range profileIds {
+		profID := proto.ProfileID{Name: profName}
+		profSet := m.profilesToWorkloads[profID]
+		if profSet == nil {
+			continue
+		}
+		profSet.Discard(wlID)
+		if profSet.Len() == 0 {
+			// Defensive; we also clean up when the policy is removed.
+			delete(m.profilesToWorkloads, profID)
+		}
+	}
 }
