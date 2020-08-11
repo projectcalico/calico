@@ -97,9 +97,9 @@ func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 				break
 			}
 			if retry == numRetries {
-				logCxt.WithError(err).Error("Failed to remove conntrack flows after retries.")
+				logCxt.WithError(err).WithField("output", outStr).Error("Failed to remove conntrack flows after retries.")
 			} else {
-				logCxt.WithError(err).WithField("output", outStr).Warn("Failed to remove conntrack flows, will retry...")
+				logCxt.WithError(err).WithField("output", outStr).Debug("Failed to remove conntrack flows, will retry...")
 			}
 		}
 	}
