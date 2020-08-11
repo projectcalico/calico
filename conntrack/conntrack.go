@@ -15,9 +15,10 @@
 package conntrack
 
 import (
+	"bytes"
+	"io"
 	"net"
 	"os/exec"
-	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -48,8 +49,18 @@ type Conntrack struct {
 
 func New() *Conntrack {
 	return NewWithCmdShim(func(name string, arg ...string) CmdIface {
-		return exec.Command(name, arg...)
+		return (*cmdAdapter)(exec.Command(name, arg...))
 	})
+}
+
+type cmdAdapter exec.Cmd
+
+func (c *cmdAdapter) SetStderr(w io.Writer) {
+	(*exec.Cmd)(c).Stderr = w
+}
+
+func (c *cmdAdapter) Run() error {
+	return (*exec.Cmd)(c).Run()
 }
 
 // NewWithCmdShim is a test constructor that allows for shimming exec.Command.
@@ -62,7 +73,8 @@ func NewWithCmdShim(newCmd newCmd) *Conntrack {
 type newCmd func(name string, arg ...string) CmdIface
 
 type CmdIface interface {
-	CombinedOutput() ([]byte, error)
+	SetStderr(w io.Writer)
+	Run() error
 }
 
 func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
@@ -84,22 +96,26 @@ func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 				"--family", family,
 				"--delete", direction,
 				ipAddr.String())
-			output, err := cmd.CombinedOutput()
+
+			// The conntrack tool generates quite a lot of output on stdout (one line per flow) so we
+			// only capture stderr (which is where it logs its errors).
+			var stderrBuf bytes.Buffer
+			cmd.SetStderr(&stderrBuf)
+			err := cmd.Run()
 			if err == nil {
 				logCxt.Debug("Successfully removed conntrack flows.")
 				break
 			}
 
-			outStr := string(output)
-			if strings.Contains(outStr, "0 flow entries") {
+			if bytes.Contains(stderrBuf.Bytes(), []byte("0 flow entries")) {
 				// Success, there were no flows.
 				logCxt.Debug("IP wasn't in conntrack")
 				break
 			}
 			if retry == numRetries {
-				logCxt.WithError(err).WithField("output", outStr).Error("Failed to remove conntrack flows after retries.")
+				logCxt.WithError(err).WithField("output", stderrBuf.String()).Error("Failed to remove conntrack flows after retries.")
 			} else {
-				logCxt.WithError(err).WithField("output", outStr).Debug("Failed to remove conntrack flows, will retry...")
+				logCxt.WithError(err).WithField("output", stderrBuf.String()).Debug("Failed to remove conntrack flows, will retry...")
 			}
 		}
 	}
