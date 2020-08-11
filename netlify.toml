@@ -1,13 +1,6 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 [build]
-  command = 'jekyll build'
   publish = "_site/"
-
-[build.environment]
-  RUBY_VERSION = "2.5.4"
-  RELEASE_VERSION = "v3.14"
-
-[context.branch-deploy]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
   make bin/helm
@@ -23,6 +16,10 @@
   # move 404 page to root of the site so that netlify shows it automatically
   mv _site/archive/$RELEASE_VERSION/404.html _site/404.html
   '''
+
+[build.environment]
+  RUBY_VERSION = "2.5.4"
+  RELEASE_VERSION = "v3.14"
 
 [context.deploy-preview]
   command = '''
