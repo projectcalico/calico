@@ -338,6 +338,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 // checks that it is still correctly configured.
 func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, wait time.Duration) {
 	logrus.Info("VXLAN tunnel device thread started.")
+	logNextSuccess := true
 	for {
 		localVTEP := m.getLocalVTEP()
 		if localVTEP == nil {
@@ -361,10 +362,14 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, wait time.Duration) {
 		err := m.configureVXLANDevice(mtu, localVTEP)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed configure VXLAN tunnel device, retrying...")
+			logNextSuccess = true
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		logrus.Info("VXLAN tunnel device configured")
+		if logNextSuccess {
+			logrus.Info("VXLAN tunnel device configured")
+			logNextSuccess = false
+		}
 		time.Sleep(wait)
 	}
 }
