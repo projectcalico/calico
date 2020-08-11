@@ -19,9 +19,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -684,7 +686,7 @@ func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.Cm
 }
 
 // Set up logging for both Calico and libcalico using the provided log level,
-func ConfigureLogging(logLevel string) {
+func ConfigureLogging(logLevel, logFilePath string) {
 	if strings.EqualFold(logLevel, "debug") {
 		logrus.SetLevel(logrus.DebugLevel)
 	} else if strings.EqualFold(logLevel, "info") {
@@ -696,7 +698,34 @@ func ConfigureLogging(logLevel string) {
 		logrus.SetLevel(logrus.WarnLevel)
 	}
 
-	logrus.SetOutput(os.Stderr)
+	writers := []io.Writer{os.Stderr}
+	// Set the log output to write to a log file if specified.
+	if logFilePath != "" {
+		var logFile *os.File
+		// Create the path for the log file if it does not exist
+		err := os.MkdirAll(filepath.Dir(logFilePath), 0755)
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(logFilePath))
+		}
+
+		// Open or create the log file
+		if _, err = os.Stat(logFilePath); os.IsNotExist(err) {
+			logFile, err = os.Create(logFilePath)
+			if err != nil {
+				logrus.WithError(err).Errorf("Failed to create CNI log file: %v", logFilePath)
+			}
+		} else {
+			logFile, err = os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY, 0755)
+			if err != nil {
+				logrus.WithError(err).Errorf("Failed to open CNI log file: %v", logFilePath)
+			}
+		}
+		writers = append(writers, logFile)
+	}
+
+	mw := io.MultiWriter(writers...)
+
+	logrus.SetOutput(mw)
 }
 
 // ResolvePools takes an array of CIDRs or IP Pool names and resolves it to a slice of pool CIDRs.

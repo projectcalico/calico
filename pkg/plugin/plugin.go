@@ -123,7 +123,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	utils.ConfigureLogging(conf.LogLevel)
+	utils.ConfigureLogging(conf.LogLevel, conf.LogFilePath)
 
 	nodeNameFile := "/var/lib/calico/nodename"
 	if conf.NodenameFile != "" {
@@ -504,7 +504,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	utils.ConfigureLogging(conf.LogLevel)
+	utils.ConfigureLogging(conf.LogLevel, conf.LogFilePath)
 
 	nodeNameFile := "/var/lib/calico/nodename"
 	if conf.NodenameFile != "" {
