@@ -1,4 +1,4 @@
-// Copyright 2018 Tigera Inc
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package linux
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 type linuxDataplane struct {
@@ -48,6 +50,8 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane
 }
 
 func (d *linuxDataplane) DoNetworking(
+	ctx context.Context,
+	calicoClient calicoclient.Interface,
 	args *skel.CmdArgs,
 	result *current.Result,
 	desiredVethName string,
@@ -103,8 +107,10 @@ func (d *linuxDataplane) DoNetworking(
 		for _, addr := range result.IPs {
 			if addr.Version == "4" {
 				hasIPv4 = true
+				addr.Address.Mask = net.CIDRMask(32, 32)
 			} else if addr.Version == "6" {
 				hasIPv6 = true
+				addr.Address.Mask = net.CIDRMask(128, 128)
 			}
 		}
 

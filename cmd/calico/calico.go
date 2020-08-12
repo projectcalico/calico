@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ package main
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/projectcalico/cni-plugin/pkg/install"
 	"github.com/projectcalico/cni-plugin/pkg/ipamplugin"
@@ -28,11 +28,11 @@ var VERSION string
 
 func main() {
 	// Use the name of the binary to determine which routine to run.
-	_, filename := path.Split(os.Args[0])
+	_, filename := filepath.Split(os.Args[0])
 	switch filename {
-	case "calico":
+	case "calico", "calico.exe":
 		plugin.Main(VERSION)
-	case "calico-ipam":
+	case "calico-ipam", "calico-ipam.exe":
 		ipamplugin.Main(VERSION)
 	case "install":
 		err := install.Install()

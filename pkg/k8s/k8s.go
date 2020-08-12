@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -59,11 +60,21 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		"Namespace":        epIDs.Namespace,
 	})
 
+	d, err := dataplane.GetDataplane(conf, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	logger.Info("Extracted identifiers for CmdAddK8s")
+
+	result, err = utils.CheckForSpuriousAdd(args, conf, epIDs, endpoint, logger)
+	if result != nil || err != nil {
+		return result, err
+	}
 
 	// Allocate the IP and update/create the endpoint. Do this even if the endpoint already exists and has an IP
 	// allocation. The kubelet will send a DEL call for any old containers and we'll clean up the old IPs then.
-	client, err := newK8sClient(conf, logger)
+	client, err := NewK8sClient(conf, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -366,14 +377,10 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		utils.ReleaseIPAllocation(logger, conf, args)
 	}
 
-	d, err := dataplane.GetDataplane(conf, logger)
-	if err != nil {
-		return nil, err
-	}
-
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	desiredVethName := k8sconversion.NewConverter().VethNameForWorkload(epIDs.Namespace, epIDs.Pod)
-	hostVethName, contVethMac, err := d.DoNetworking(args, result, desiredVethName, routes, endpoint, annot)
+	hostVethName, contVethMac, err := d.DoNetworking(
+		ctx, calicoClient, args, result, desiredVethName, routes, endpoint, annot)
 	if err != nil {
 		logger.WithError(err).Error("Error setting up networking")
 		releaseIPAM()
@@ -390,6 +397,23 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	endpoint.Spec.InterfaceName = hostVethName
 	endpoint.Spec.ContainerID = epIDs.ContainerID
 	logger.WithField("endpoint", endpoint).Info("Added Mac, interface name, and active container ID to endpoint")
+
+	if conf.Mode == "vxlan" {
+		_, subNet, _ := net.ParseCIDR(result.IPs[0].Address.String())
+		var err error
+		for attempts := 3; attempts > 0; attempts-- {
+			err = utils.EnsureVXLANTunnelAddr(ctx, calicoClient, epIDs.Node, subNet, conf)
+			if err != nil {
+				logger.WithError(err).Warn("Failed to set node's VXLAN tunnel IP, node may not receive traffic.  May retry...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			break
+		}
+		if err != nil {
+			logger.WithError(err).Error("Failed to set node's VXLAN tunnel IP after retries, node may not receive traffic.")
+		}
+	}
 
 	// List of DNAT ipaddrs to map to this workload endpoint
 	floatingIPs := annot["cni.projectcalico.org/floatingIPs"]
@@ -437,6 +461,20 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 // it means the DEL is for an old sandbox and the pod is still running. We should still clean up IPAM allocations, since they are identified by the
 // container ID rather than the pod name and namespace. If they do match, then we can delete the workload endpoint.
 func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIdentifiers, args *skel.CmdArgs, conf types.NetConf, logger *logrus.Entry) error {
+	d, err := dataplane.GetDataplane(conf, logger)
+	if err != nil {
+		return err
+	}
+
+	// Register timestamp before deleting wep. This is important.
+	// Because with ADD command running in parallel checking wep before checking timestamp,
+	// DEL command should run the process in reverse order to avoid race condition.
+	err = utils.RegisterDeletedWep(args.ContainerID)
+	if err != nil {
+		logger.WithError(err).Warn("Failed to register pod deletion timestamp.")
+		return err
+	}
+
 	wep, err := c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -475,11 +513,6 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		default:
 			return err
 		}
-	}
-
-	d, err := dataplane.GetDataplane(conf, logger)
-	if err != nil {
-		return err
 	}
 
 	// Clean up namespace by removing the interfaces.
@@ -735,7 +768,7 @@ func parseIPAddrs(ipAddrsStr string, logger *logrus.Entry) ([]string, error) {
 	return ips, nil
 }
 
-func newK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
+func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
 	// Some config can be passed in a kubeconfig file
 	kubeconfig := conf.Kubernetes.Kubeconfig
 

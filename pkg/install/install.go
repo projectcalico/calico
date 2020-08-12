@@ -1,3 +1,17 @@
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package install
 
 import (
@@ -17,7 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
+        "go.etcd.io/etcd/pkg/fileutil"
 	"k8s.io/client-go/rest"
 )
 
@@ -166,7 +180,7 @@ func Install() error {
 	// Place the new binaries if the directory is writeable.
 	dirs := []string{"/host/opt/cni/bin", "/host/secondary-bin-dir"}
 	for _, d := range dirs {
-		if unix.Access(d, unix.W_OK) != nil {
+                if err := fileutil.IsDirWriteable(d); err != nil {
 			logrus.Infof("%s is not writeable, skipping", d)
 			continue
 		}
@@ -314,6 +328,8 @@ func writeCNIConfig(c config) {
 		netconf = string(netconfBytes)
 	}
 
+	kubeconfigPath := c.CNINetDir + "/calico-kubeconfig"
+
 	// Perform replacements of variables.
 	nodename, err := names.Hostname()
 	if err != nil {
@@ -322,7 +338,7 @@ func writeCNIConfig(c config) {
 	netconf = strings.Replace(netconf, "__LOG_LEVEL__", getEnv("LOG_LEVEL", "warn"), -1)
 	netconf = strings.Replace(netconf, "__DATASTORE_TYPE__", getEnv("DATASTORE_TYPE", "kubernetes"), -1)
 	netconf = strings.Replace(netconf, "__KUBERNETES_NODE_NAME__", getEnv("NODENAME", nodename), -1)
-	netconf = strings.Replace(netconf, "__KUBECONFIG_FILEPATH__", "/etc/cni/net.d/calico-kubeconfig", -1)
+	netconf = strings.Replace(netconf, "__KUBECONFIG_FILEPATH__", kubeconfigPath, -1)
 	netconf = strings.Replace(netconf, "__CNI_MTU__", getEnv("CNI_MTU", "1500"), -1)
 
 	netconf = strings.Replace(netconf, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""), -1)
