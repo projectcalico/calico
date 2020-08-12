@@ -45,15 +45,17 @@ component needs access to in etcd to function successfully.
 
 ## calico/kube-controllers
 
-| Path                                                          | Access |
-|---------------------------------------------------------------|--------|
-| /calico/ipam/v2/\*                                            |   RW   |
-| /calico/resources/v3/projectcalico.org/profiles/\*            |   RW   |
-| /calico/resources/v3/projectcalico.org/networkpolicies/\*     |   RW   |
-| /calico/resources/v3/projectcalico.org/nodes/\*               |   RW   |
-| /calico/resources/v3/projectcalico.org/clusterinformations/\* |   RW   |
-| /calico/resources/v3/projectcalico.org/\*                     |   R    |
-
+| Path                                                                    | Access |
+|-------------------------------------------------------------------------|--------|
+| /calico/ipam/v2/\*                                                      |   RW   |
+| /calico/resources/v3/projectcalico.org/profiles/\*                      |   RW   |
+| /calico/resources/v3/projectcalico.org/networkpolicies/\*               |   RW   |
+| /calico/resources/v3/projectcalico.org/nodes/\*                         |   RW   |
+| /calico/resources/v3/projectcalico.org/clusterinformations/\*           |   RW   |
+| /calico/resources/v3/projectcalico.org/hostendpoints/\*                 |   RW   |
+| /calico/resources/v3/projectcalico.org/kubecontrollersconfigurations/\* |   RW   |
+| /calico/resources/v3/projectcalico.org/\*                               |   R    |
+ 
 > **Note**: By default, `calico/kube-controllers` performs periodic
 > compaction of the etcd data store. If you limit it to just these
 > paths it will be unauthorized to perform this compaction, as that
