@@ -116,7 +116,7 @@ gen-crds: remote-deps
 remote-deps: mod-download	
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
 		$(GIT_CONFIG_SSH) \
-		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config config; \
+		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config .; \
 		chmod -R +w config/'
 
 ###############################################################################
