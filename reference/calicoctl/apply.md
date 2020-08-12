@@ -24,7 +24,7 @@ command.
 
 ```
 Usage:
-  calicoctl apply --filename=<FILENAME> [--config=<CONFIG>] [--namespace=<NS>]
+  calicoctl apply --filename=<FILENAME> [--recursive] [--skip-empty] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Apply a policy using the data in policy.yaml.
@@ -36,7 +36,12 @@ Examples:
 Options:
   -h --help                 Show this screen.
   -f --filename=<FILENAME>  Filename to use to apply the resource.  If set to
-                            "-" loads from stdin.
+                            "-" loads from stdin. If filename is a directory, this command is
+                            invoked for each .json .yaml and .yml file within that directory,
+                            terminating after the first failure.
+  -R --recursive            Process the filename specified in -f or --filename recursively.
+     --skip-empty           Do not error if any files or directory specified using -f or --filename contain no
+                            data.
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
                             [default: /etc/calico/calicoctl.cfg]
