@@ -525,6 +525,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			stateMap,
 			ruleRenderer,
 			filterTableV4,
+			dp.reportHealth,
 		))
 
 		// Pre-create the NAT maps so that later operations can assume access.

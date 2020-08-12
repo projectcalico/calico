@@ -125,6 +125,15 @@ func TestCompileTemplateRun(t *testing.T) {
 	})
 }
 
+func TestLoadZeroProgram(t *testing.T) {
+	RegisterTestingT(t)
+	fd, err := bpf.LoadBPFProgramFromInsns(nil, "Apache-2.0")
+	if err == nil {
+		_ = fd.Close()
+	}
+	Expect(err).To(Equal(unix.E2BIG))
+}
+
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn func(bpfProgRunFn)) {
 	RegisterTestingT(t)

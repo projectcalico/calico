@@ -232,7 +232,8 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string) (fd ProgFD, err er
 	increaseLockedMemoryQuota()
 
 	// Occasionally see retryable errors here, retry silently a few times before going into log-collection mode.
-	for retries := 3; retries > 0; retries-- {
+	backoff := 1 * time.Millisecond
+	for retries := 10; retries > 0; retries-- {
 		// By default, try to load the program with logging disabled.  This has two advantages: better performance
 		// and the fact that the log cannot overflow.
 		fd, err = tryLoadBPFProgramFromInsns(insns, license, 0)
@@ -241,7 +242,8 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string) (fd ProgFD, err er
 			return fd, nil
 		}
 		log.WithError(err).Debug("Error loading BPF program; will retry.")
-		time.Sleep(time.Millisecond)
+		time.Sleep(backoff)
+		backoff *= 2
 	}
 
 	// Retry again, passing a log buffer to get the diagnostics from the kernel.
@@ -259,6 +261,9 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string) (fd ProgFD, err er
 			log.Warn("Diagnostics buffer was too small, trying again with a larger buffer.")
 			logSize *= 2
 			continue
+		}
+		if err != err2 {
+			log.WithError(err2).Error("Retry failed with a different error.")
 		}
 		return 0, err
 	}

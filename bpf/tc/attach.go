@@ -143,7 +143,8 @@ func isCannotFindDevice(err error) bool {
 	}
 	if err, ok := err.(*exec.ExitError); ok {
 		stderr := string(err.Stderr)
-		if strings.Contains(stderr, "Cannot find device") {
+		if strings.Contains(stderr, "Cannot find device") ||
+			strings.Contains(stderr, "No such device") {
 			return true
 		}
 	}
