@@ -456,7 +456,7 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 }
 
 // Batch size established by trial and error; 8-32 seemed to be the sweet spot for the conntrack map.
-const mapIteratorNumKeys = 16
+const MapIteratorNumKeys = 16
 
 // MapIterator handles one pass of iteration over the map.
 type MapIterator struct {
@@ -477,9 +477,9 @@ type MapIterator struct {
 	// bpf_map_load_multi.
 	keyBeforeNextBatch unsafe.Pointer
 
-	// keys points to a buffer containing up to mapIteratorNumKeys keys
+	// keys points to a buffer containing up to MapIteratorNumKeys keys
 	keys unsafe.Pointer
-	// values points to a buffer containing up to mapIteratorNumKeys values
+	// values points to a buffer containing up to MapIteratorNumKeys values
 	values unsafe.Pointer
 
 	// valueStride is the step through the values buffer.  I.e. the size of the value rounded up for alignment.
@@ -512,8 +512,8 @@ func NewMapIterator(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapIterat
 	keyStride := align64(keySize)
 	valueStride := align64(valueSize)
 
-	keysBufSize := (C.size_t)(keyStride * mapIteratorNumKeys)
-	valueBufSize := (C.size_t)(valueStride * mapIteratorNumKeys)
+	keysBufSize := (C.size_t)(keyStride * MapIteratorNumKeys)
+	valueBufSize := (C.size_t)(valueStride * MapIteratorNumKeys)
 
 	m := &MapIterator{
 		mapFD:       mapFD,
@@ -548,7 +548,7 @@ func (m *MapIterator) Next() (k, v []byte, err error) {
 	if m.numEntriesLoaded == m.entryIdx {
 		// Need to load a new batch of KVs from the kernel.
 		var count C.int
-		rc := C.bpf_map_load_multi(C.uint(m.mapFD), m.keyBeforeNextBatch, mapIteratorNumKeys, C.int(m.keyStride), m.keys, C.int(m.valueStride), m.values)
+		rc := C.bpf_map_load_multi(C.uint(m.mapFD), m.keyBeforeNextBatch, MapIteratorNumKeys, C.int(m.keyStride), m.keys, C.int(m.valueStride), m.values)
 		if rc < 0 {
 			err = unix.Errno(-rc)
 			return
