@@ -412,7 +412,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 	if exists {
 		if ServicePortEqual(old.svc, sinfo) {
 			id = old.id
-			if !s.synced || !ServiceEpsEqual(s.prevEpsMap[skey.sname], eps) {
+			if !s.synced || !serviceEpsEqual(s.prevEpsMap[skey.sname], eps) {
 				count, local, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, eps)
 			} else {
 				svcChanged = false
@@ -1444,21 +1444,29 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		stringsEqual(a.TopologyKeys(), b.TopologyKeys())
 }
 
-func ServiceEpsEqual(a, b []k8sp.Endpoint) bool {
-	if len(a) != len(b) {
+func serviceEpsEqual(a, b []k8sp.Endpoint) bool {
+	l := len(a)
+	if l != len(b) {
 		return false
 	}
 
-	for _, aa := range a {
-		found := false
-		for _, bb := range b {
-			if aa.Equal(bb) {
-				found = true
-				break
+	for ia, aa := range a {
+		// We assume that most of the time (always?) the endpoints are in the
+		// same order since the slice is not updated unless there was a change
+		// in the service. And we compare in O(n). But if there is a mismatch,
+		// we fall back to O(n^2) in case the order changed.
+		if !aa.Equal(b[ia]) {
+			found := false
+			for i := 0; i < l-1; i++ {
+				ib := (ia + i + 1) % l
+				if aa.Equal(b[ib]) {
+					found = true
+					break
+				}
 			}
-		}
-		if !found {
-			return false
+			if !found {
+				return false
+			}
 		}
 	}
 
