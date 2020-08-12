@@ -1,13 +1,7 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 # The cp, bundle install and bundle exec parts are only required to work around not being able to put the Gemfile int he root directory. It can't go in the root because that breaks the jekyll/jekyll container.
 [build]
-  command = 'jekyll build'
   publish = "_site/"
-
-[build.environment]
-  RUBY_VERSION = "2.5.4"
-
-[context.branch-deploy]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
   make bin/helm
@@ -23,6 +17,9 @@
   # move 404 page to root of the site so that netlify shows it automatically
   mv _site/archive/404.html _site/404.html
   '''
+
+[build.environment]
+  RUBY_VERSION = "2.5.4"
 
 [context.deploy-preview]
   command = '''
@@ -59,124 +56,103 @@
   from = "/v3.11/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.10/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.9/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.8/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.7/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.6/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.5/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.4/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.3/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.2/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.1/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v3.0/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v2.6/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v2.5/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v2.4/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v2.3/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v2.2/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v2.1/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v2.0/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v1.6/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[redirects]]
   from = "/v1.5/*"
   to = "/:splat"
   status = 301
-  force = false
