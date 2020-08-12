@@ -44,6 +44,7 @@ spec:
 | asNumber | The remote AS Number of the peer. | A valid AS Number, may be specified in dotted notation. | integer/string |
 | nodeSelector | Selector for the nodes that should have this peering.  When this is set, the `node` field must be empty. | | [selector](networkpolicy#selector) |
 | peerSelector | Selector for the remote nodes to peer with.  When this is set, the `peerIP` and `asNumber` fields must be empty. | | [selector](networkpolicy#selector) |
+| keepOriginalNextHop | Maintain and forward the original next hop BGP route attribute to a specific Peer within a different AS. | | boolean |
 
 > **Tip**: the cluster-wide default local AS number used when speaking with a peer is controlled by the
 > [BGPConfiguration resource](./bgpconfig).  That value can be overriden per-node by using the `bgp` field of
