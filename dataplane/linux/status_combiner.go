@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ func (e *endpointStatusCombiner) Apply() {
 			status := statuses[id]
 			logCxt := logCxt.WithField("ipVersion", ipVer).WithField("status", status)
 			if status == "error" {
-				logCxt.Warn("Endpoint is in error, will report error")
+				logCxt.Info("Endpoint is in error, will report error")
 				statusToReport = "error"
 			} else if status == "down" && statusToReport != "error" {
 				logCxt.Info("Endpoint down for at least one IP version")
