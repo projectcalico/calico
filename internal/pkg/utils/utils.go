@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/cni-plugin/pkg/types"
@@ -701,26 +701,13 @@ func ConfigureLogging(logLevel, logFilePath string) {
 	writers := []io.Writer{os.Stderr}
 	// Set the log output to write to a log file if specified.
 	if logFilePath != "" {
-		var logFile *os.File
-		// Create the path for the log file if it does not exist
-		err := os.MkdirAll(filepath.Dir(logFilePath), 0755)
-		if err != nil {
-			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(logFilePath))
+		// Create file logger with log file rotation. Defaults to rotate once files hit 100 MB.
+		fileLogger := &lumberjack.Logger{
+			Filename: logFilePath,
+			MaxSize:  100,
 		}
 
-		// Open or create the log file
-		if _, err = os.Stat(logFilePath); os.IsNotExist(err) {
-			logFile, err = os.Create(logFilePath)
-			if err != nil {
-				logrus.WithError(err).Errorf("Failed to create CNI log file: %v", logFilePath)
-			}
-		} else {
-			logFile, err = os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY, 0755)
-			if err != nil {
-				logrus.WithError(err).Errorf("Failed to open CNI log file: %v", logFilePath)
-			}
-		}
-		writers = append(writers, logFile)
+		writers = append(writers, fileLogger)
 	}
 
 	mw := io.MultiWriter(writers...)

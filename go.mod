@@ -31,6 +31,7 @@ require (
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5
 	google.golang.org/grpc v1.23.1
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 
 	// k8s.io/api v1.16.3 is at 16d7abae0d2a
 	k8s.io/api v0.17.3
