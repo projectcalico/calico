@@ -708,19 +708,6 @@ func ConfigureLogging(logLevel, logFilePath string) {
 			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(logFilePath))
 		}
 
-		// Open or create the log file in order to set the file permissions.
-		if _, err = os.Stat(logFilePath); os.IsNotExist(err) {
-			_, err = os.Create(logFilePath)
-			if err != nil {
-				logrus.WithError(err).Errorf("Failed to create CNI log file: %v", logFilePath)
-			}
-		} else {
-			_, err = os.OpenFile(logFilePath, os.O_APPEND|os.O_WRONLY, 0755)
-			if err != nil {
-				logrus.WithError(err).Errorf("Failed to open CNI log file: %v", logFilePath)
-			}
-		}
-
 		// Create file logger with log file rotation. Defaults to rotate once files hit 100 MB.
 		fileLogger := &lumberjack.Logger{
 			Filename: logFilePath,

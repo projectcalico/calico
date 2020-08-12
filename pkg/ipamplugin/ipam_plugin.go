@@ -223,7 +223,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		logger.Infof("Calico CNI IPAM handle=%s", handleID)
+		logger.Debugf("Calico CNI IPAM handle=%s", handleID)
 		var maxBlocks int
 		if conf.WindowsUseSingleNetwork {
 			// When running in single-network mode (for kube-proxy compatibility), limit the
@@ -278,7 +278,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				Address: ipV6Network,
 			})
 		}
-		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Info("IPAM Result")
+		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
 	}
 
 	// Print result to stdout, in the format defined by the requested cniVersion.

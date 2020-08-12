@@ -148,7 +148,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	logrus.WithField("EndpointIDs", wepIDs).Info("Extracted identifiers")
+	logrus.WithField("EndpointIDs", wepIDs).Debug("Extracted identifiers")
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
@@ -562,7 +562,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		"Node":             epIDs.Node,
 		"WorkloadEndpoint": epIDs.WEPName,
 		"ContainerID":      epIDs.ContainerID,
-	}).Info("Extracted identifiers")
+	}).Debug("Extracted identifiers")
 
 	// Handle k8s specific bits of handling the DEL.
 	if epIDs.Orchestrator == api.OrchestratorKubernetes {
