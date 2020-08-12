@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,14 @@
 package conntrack_test
 
 import (
-	. "github.com/projectcalico/felix/conntrack"
-
 	"errors"
+	"io"
 	"net"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/felix/conntrack"
 )
 
 var _ = Describe("Conntrack", func() {
@@ -121,12 +122,17 @@ func (r *cmdRecorder) newCmd(name string, arg ...string) CmdIface {
 }
 
 type mockCmd struct {
-	err error
+	err    error
+	stderr io.Writer
 }
 
-func (c *mockCmd) CombinedOutput() ([]byte, error) {
-	if c.err != nil {
-		return []byte(c.err.Error()), c.err
+func (m *mockCmd) SetStderr(w io.Writer) {
+	m.stderr = w
+}
+
+func (m *mockCmd) Run() error {
+	if m.err != nil {
+		_, _ = m.stderr.Write([]byte(m.err.Error()))
 	}
-	return []byte(""), nil
+	return m.err
 }

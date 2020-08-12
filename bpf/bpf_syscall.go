@@ -287,7 +287,7 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint) (
 
 	if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
 		goLog := strings.TrimSpace(C.GoString((*C.char)(logBuf)))
-		log.WithError(errno).Error("BPF_PROG_LOAD failed")
+		log.WithError(errno).Debug("BPF_PROG_LOAD failed")
 		if len(goLog) > 0 {
 			for _, l := range strings.Split(goLog, "\n") {
 				log.Error("BPF Verifier:    ", l)

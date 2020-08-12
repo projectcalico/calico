@@ -323,9 +323,10 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 			if arc.datastoreInSync {
 				// We're in sync so we know the profile is missing from the
 				// datastore or it failed validation
-				log.WithField("profileID", profileID).Warn(
-					"Profile not known or invalid, generating dummy profile " +
-						"that drops all traffic.")
+				log.WithField("profileID", profileID).Info(
+					"One or more endpoints uses a profile that doesn't exist; generating " +
+						"default-drop profile. (This can happen transiently when a Kubernetes " +
+						"namespace is deleted.)")
 			} else {
 				// Not in sync, the profile may still show up.  Keep a record of its
 				// name so we can log it out at the end of the resync.

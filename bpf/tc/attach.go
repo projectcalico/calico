@@ -91,7 +91,7 @@ func (ap AttachPoint) AttachProgram() error {
 		return err
 	}
 
-	_, err = tc("filter", "add", "dev", ap.Iface, string(ap.Hook),
+	_, err = ExecTC("filter", "add", "dev", ap.Iface, string(ap.Hook),
 		"bpf", "da", "obj", tempBinary,
 		"sec", SectionName(ap.Type, ap.ToOrFrom),
 	)
@@ -103,7 +103,7 @@ func (ap AttachPoint) AttachProgram() error {
 	var progErrs []error
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
-		_, err = tc("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
+		_, err = ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
 		if err == ErrDeviceNotFound {
 			continue
 		}
@@ -120,7 +120,7 @@ func (ap AttachPoint) AttachProgram() error {
 	return nil
 }
 
-func tc(args ...string) (out string, err error) {
+func ExecTC(args ...string) (out string, err error) {
 	tcCmd := exec.Command("tc", args...)
 	outBytes, err := tcCmd.Output()
 	if err != nil {
@@ -156,7 +156,7 @@ type attachedProg struct {
 }
 
 func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
-	out, err := tc("filter", "show", "dev", ap.Iface, string(ap.Hook))
+	out, err := ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
 	}
@@ -381,7 +381,7 @@ func EnsureQdisc(ifaceName string) error {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return nil
 	}
-	_, err = tc("qdisc", "add", "dev", ifaceName, "clsact")
+	_, err = ExecTC("qdisc", "add", "dev", ifaceName, "clsact")
 	if err != nil {
 		return fmt.Errorf("failed to add qdisc to interface '%s': %w", ifaceName, err)
 	}
@@ -389,7 +389,7 @@ func EnsureQdisc(ifaceName string) error {
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
-	out, err := tc("qdisc", "show", "dev", ifaceName, "clsact")
+	out, err := ExecTC("qdisc", "show", "dev", ifaceName, "clsact")
 	if err != nil {
 		return false, fmt.Errorf("failed to check if interface '%s' has qdisc: %w", ifaceName, err)
 	}
@@ -408,7 +408,7 @@ func RemoveQdisc(ifaceName string) error {
 	if !hasQdisc {
 		return nil
 	}
-	_, err = tc("qdisc", "del", "dev", ifaceName, "clsact")
+	_, err = ExecTC("qdisc", "del", "dev", ifaceName, "clsact")
 	if err != nil {
 		return fmt.Errorf("failed to remove qdisc from interface '%s': %w", ifaceName, err)
 	}
