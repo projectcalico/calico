@@ -20,6 +20,8 @@ import (
 	"github.com/projectcalico/felix/bpf/asm"
 )
 
+const MapIteratorNumKeys = 16
+
 func SyscallSupport() bool {
 	return false
 }

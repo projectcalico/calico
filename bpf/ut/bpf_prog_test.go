@@ -696,17 +696,68 @@ func TestMapIterWithDelete(t *testing.T) {
 		v := binary.LittleEndian.Uint64(V)
 
 		out[k] = v
-
-		err := m.Delete(K)
-		Expect(err).NotTo(HaveOccurred())
 		cnt++
-		return bpf.IterNone
+
+		return bpf.IterDelete
 	})
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(cnt).To(Equal(10))
 
 	for i := 0; i < 10; i++ {
+		Expect(out).To(HaveKey(uint64(i)))
+		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
+	}
+}
+
+func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
+	RegisterTestingT(t)
+
+	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
+		Type:       "hash",
+		KeySize:    8,
+		ValueSize:  8,
+		MaxEntries: 1000,
+		Name:       "cali_tmap",
+		Flags:      unix.BPF_F_NO_PREALLOC,
+	})
+
+	err := m.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	for i := 0; i < 40; i++ {
+		var k, v [8]byte
+
+		binary.LittleEndian.PutUint64(k[:], uint64(i))
+		binary.LittleEndian.PutUint64(v[:], uint64(i*7))
+
+		err := m.Update(k[:], v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	out := make(map[uint64]uint64)
+
+	cnt := 0
+	err = m.Iter(func(K, V []byte) bpf.IteratorAction {
+		k := binary.LittleEndian.Uint64(K)
+		v := binary.LittleEndian.Uint64(V)
+
+		out[k] = v
+
+		cnt++
+		// Delete the last of the first batch. Must not make the iteration to
+		// restart from the begining.
+		if cnt == bpf.MapIteratorNumKeys {
+			return bpf.IterDelete
+		}
+		return bpf.IterNone
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(cnt).To(Equal(40))
+
+	for i := 0; i < 40; i++ {
 		Expect(out).To(HaveKey(uint64(i)))
 		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
 	}
