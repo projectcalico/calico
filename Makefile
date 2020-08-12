@@ -150,6 +150,7 @@ remote-deps: mod-download
 	# Recreate the directory so that we are sure to clean up any old files.
 	rm -rf filesystem/etc/calico/confd
 	mkdir -p filesystem/etc/calico/confd
+	rm -rf config
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
 	rm -rf filesystem/usr/lib/calico/bpf/
