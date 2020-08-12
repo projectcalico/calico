@@ -1,13 +1,6 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 [build]
-  command = 'jekyll build'
   publish = "_site/"
-
-[build.environment]
-  RUBY_VERSION = "2.5.4"
-  RELEASE_VERSION = "v3.13"
-
-[context.branch-deploy]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
   make bin/helm
@@ -24,6 +17,10 @@
   mv _site/archive/$RELEASE_VERSION/404.html _site/404.html
   '''
 
+[build.environment]
+  RUBY_VERSION = "2.5.4"
+  RELEASE_VERSION = "v3.13"
+
 [context.deploy-preview]
   command = '''
   cp netlify/Gemfile Gemfile && bundle install
@@ -39,7 +36,6 @@
   from = "/v3.13/*"
   to = "/:splat"
   status = 301
-  force = false
 
 [[headers]]
   for = "/*.yaml"
