@@ -54,7 +54,7 @@ type ScanVerdict int
 
 const (
 	// ScanVerdictOK means entry is fine and should remain
-	ScanVerdictOK = iota
+	ScanVerdictOK ScanVerdict = iota
 	// ScanVerdictDelete means entry should be deleted
 	ScanVerdictDelete
 )
@@ -272,7 +272,7 @@ type NATChecker func(frontIP net.IP, frontPort uint16, backIP net.IP, backPort u
 func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
 	debug := log.GetLevel() >= log.DebugLevel
 
-	return func(k Key, v Value, get EntryGet) ScanVerdict {
+	return func(k Key, v Value, _ EntryGet) ScanVerdict {
 		switch v.Type() {
 		case TypeNormal:
 			// skip non-NAT entry
@@ -305,10 +305,14 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
 		case TypeNATForward:
 			proto := k.Proto()
 			kA := k.AddrA()
+			kAport := k.PortA()
 			kB := k.AddrB()
+			kBport := k.PortB()
 			revKey := v.ReverseNATKey()
 			revA := revKey.AddrA()
+			revAport := revKey.PortA()
 			revB := revKey.AddrB()
+			revBport := revKey.PortB()
 
 			var (
 				svcIP, epIP     net.IP
@@ -318,18 +322,29 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) EntryScanner {
 			// Because client IP/Port are both in fwd key and rev key, we can
 			// can tell which one it is and thus determine exactly meaning of
 			// the other values.
-			if kA.Equal(revA) {
+			if kA.Equal(revA) && kAport == revAport {
 				epIP = revB
-				epPort = revKey.PortB()
+				epPort = revBport
 				svcIP = kB
-				svcPort = k.PortB()
-			} else if kA.Equal(revB) {
-				epIP = revA
-				epPort = revKey.PortA()
+				svcPort = kBport
+			} else if kB.Equal(revA) && kBport == revAport {
+				epIP = revB
+				epPort = revBport
 				svcIP = kA
-				svcPort = k.PortA()
+				svcPort = kAport
+			} else if kA.Equal(revB) && kAport == revBport {
+				epIP = revA
+				epPort = revAport
+				svcIP = kB
+				svcPort = kBport
+			} else if kB.Equal(revB) && kBport == revBport {
+				epIP = revA
+				epPort = revAport
+				svcIP = kA
+				svcPort = kAport
 			} else {
 				log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
+				return ScanVerdictOK // don't touch, will get deleted when expired
 			}
 
 			if !frontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
