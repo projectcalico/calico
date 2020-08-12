@@ -1,0 +1,64 @@
+{
+  "name": "Calico",
+  "windows_use_single_network": true,
+
+  "cniVersion": "0.3.1",
+  "type": "calico",
+  "mode": "__MODE__",
+
+  "vxlan_mac_prefix":  "__MAC_PREFIX__",
+  "vxlan_vni": __VNI__,
+
+  "policy": {
+    "type": "k8s"
+  },
+
+  "log_level": "info",
+
+  "capabilities": {"dns": true},
+
+  "DNS":  {
+    "Nameservers":  [__DNS_NAME_SERVERS__],
+    "Search":  [
+      "svc.cluster.local"
+    ]
+  },
+
+  "nodename_file": "__NODENAME_FILE__",
+
+  "datastore_type": "__DATASTORE_TYPE__",
+
+  "etcd_endpoints": "__ETCD_ENDPOINTS__",
+  "etcd_key_file": "__ETCD_KEY_FILE__",
+  "etcd_cert_file": "__ETCD_CERT_FILE__",
+  "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+
+  "kubernetes": {
+    "kubeconfig": "__KUBECONFIG__"
+  },
+
+  "ipam": {
+    "type": "__IPAM_TYPE__",
+    "subnet": "usePodCidr"
+  },
+
+  "policies":  [
+    {
+      "Name":  "EndpointPolicy",
+      "Value":  {
+        "Type":  "OutBoundNAT",
+        "ExceptionList":  [
+          "__K8S_SERVICE_CIDR__"
+        ]
+      }
+    },
+    {
+      "Name":  "EndpointPolicy",
+      "Value":  {
+        "Type":  "ROUTE",
+        "DestinationPrefix":  "__K8S_SERVICE_CIDR__",
+        "NeedEncap":  true
+      }
+    }
+  ]
+}

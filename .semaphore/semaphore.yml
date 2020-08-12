@@ -56,3 +56,14 @@ blocks:
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
+
+# build windows release
+- name: "nightly build windows release"
+  dependencies: []
+  task:
+    jobs:
+    - name: "build windows release"
+      commands:
+      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+      - make release-windows-archive VERSION=${BRANCH_NAME}
+
