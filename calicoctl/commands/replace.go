@@ -21,14 +21,15 @@ import (
 
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
-	log "github.com/sirupsen/logrus"
 )
 
 func Replace(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl replace --filename=<FILENAME> [--config=<CONFIG>] [--namespace=<NS>]
+  calicoctl replace --filename=<FILENAME> [--recursive] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Replace a policy using the data in policy.yaml.
@@ -40,7 +41,10 @@ Examples:
 Options:
   -h --help                  Show this screen.
   -f --filename=<FILENAME>   Filename to use to replace the resource.  If set
-                             to "-" loads from stdin.
+                             to "-" loads from stdin. If filename is a directory, this command is
+                             invoked for each .json .yaml and .yml file within that directory,
+                             terminating after the first failure.
+  -R --recursive             Process the filename specified in -f or --filename recursively.
   -c --config=<CONFIG>       Path to the file containing connection
                              configuration in YAML or JSON format.
                              [default: ` + constants.DefaultConfigPath + `]

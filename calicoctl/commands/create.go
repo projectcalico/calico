@@ -27,7 +27,7 @@ import (
 
 func Create(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl create --filename=<FILENAME> [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>]
+  calicoctl create --filename=<FILENAME> [--recursive] [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Create a policy using the data in policy.yaml.
@@ -39,7 +39,10 @@ Examples:
 Options:
   -h --help                 Show this screen.
   -f --filename=<FILENAME>  Filename to use to create the resource.  If set to
-                            "-" loads from stdin.
+                            "-" loads from stdin. If filename is a directory, this command is
+                            invoked for each .json .yaml and .yml file within that directory,
+                            terminating after the first failure.
+  -R --recursive            Process the filename specified in -f or --filename recursively.
      --skip-exists          Skip over and treat as successful any attempts to
                             create an entry that already exists.
   -c --config=<CONFIG>      Path to the file containing connection

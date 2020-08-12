@@ -20,8 +20,9 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calicoctl/calicoctl/commands"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calicoctl/calicoctl/commands"
 )
 
 func main() {

@@ -20,9 +20,10 @@ import (
 	"os"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -28,7 +28,7 @@ import (
 func Delete(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl delete ( (<KIND> [<NAME>...]) |
-                   --filename=<FILE>)
+                   --filename=<FILE> [--recursive])
                    [--skip-not-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
@@ -46,7 +46,10 @@ Options:
   -s --skip-not-exists      Skip over and treat as successful, resources that
                             don't exist.
   -f --filename=<FILENAME>  Filename to use to delete the resource.  If set to
-                            "-" loads from stdin.
+                            "-" loads from stdin. If filename is a directory, this command is
+                            invoked for each .json .yaml and .yml file within that directory,
+                            terminating after the first failure.
+  -R --recursive            Process the filename specified in -f or --filename recursively.
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
                             [default: ` + constants.DefaultConfigPath + `]

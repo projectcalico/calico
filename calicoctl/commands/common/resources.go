@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/file"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -125,16 +126,30 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 	log.Info("Executing config command")
 
 	if filename := args["--filename"]; filename != nil {
-		// Filename is specified, load the resource from file and convert to a slice
-		// of resources for easier handling.
-		r, err := resourcemgr.CreateResourcesFromFile(filename.(string))
-		if err != nil {
-			return CommandResults{Err: err, FileInvalid: true}
-		}
+		// Filename is specified.  Use the file iterator to handle the fact that this may be a directory rather than a
+		// single file. For each file load the resources from the file and convert to a single slice of resources for
+		// easier handling.
+		fileInvalid := false
+		err := file.Iter(args, func(modifiedArgs map[string]interface{}) error {
+			modifiedFilename := modifiedArgs["--filename"].(string)
 
-		resources, err = convertToSliceOfResources(r)
+			r, err := resourcemgr.CreateResourcesFromFile(modifiedFilename)
+			if err != nil {
+				fileInvalid = true
+				return err
+			}
+
+			converted, err := convertToSliceOfResources(r)
+			if err != nil {
+				return err
+			}
+
+			resources = append(resources, converted...)
+			return nil
+		})
+
 		if err != nil {
-			return CommandResults{Err: err}
+			return CommandResults{Err: err, FileInvalid: fileInvalid}
 		}
 	} else {
 		// Filename is not specific so extract the resource from the arguments. This
@@ -167,16 +182,16 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 	// Load the client config and connect.
 	cf := args["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
+	cclient, err := clientmgr.NewClient(cf)
 	if err != nil {
 		fmt.Printf("Failed to create Calico API client: %s\n", err)
 		os.Exit(1)
 	}
-	log.Infof("Client: %v", client)
+	log.Infof("Client: %v", cclient)
 
 	// Initialise the command results with the number of resources and the name of the
 	// kind of resource (if only dealing with a single resource).
-	results := CommandResults{Client: client}
+	results := CommandResults{Client: cclient}
 	var kind string
 	count := make(map[string]int)
 	for _, r := range resources {
@@ -212,7 +227,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 	}
 
 	for _, r := range resources {
-		res, err := ExecuteResourceAction(args, client, r, action)
+		res, err := ExecuteResourceAction(args, cclient, r, action)
 		if err != nil {
 			switch action {
 			case ActionApply, ActionCreate, ActionDelete, ActionGetOrList:
