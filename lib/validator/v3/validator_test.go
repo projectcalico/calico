@@ -1343,15 +1343,33 @@ func init() {
 		}, true),
 		Entry("should reject BGPPeerSpec with invalid port in PeerIP (IPv4)", api.BGPPeerSpec{
 			PeerIP: "[192.168.0.0]:98956",
-		}, true),
+		}, false),
+		Entry("should reject BGPPeerSpec with invalid port in PeerIP (IPv4)", api.BGPPeerSpec{
+			PeerIP: "192.168.0.0:65536",
+		}, false),
+		Entry("should reject BGPPeerSpec with invalid port in PeerIP (IPv4)", api.BGPPeerSpec{
+			PeerIP: "192.168.0.0:0",
+		}, false),
+		Entry("should reject BGPPeerSpec with invalid IP in PeerIP (IPv4)", api.BGPPeerSpec{
+			PeerIP: "192.168.0.330:170",
+		}, false),
 		Entry("should reject BGPPeerSpec with invalid port in PeerIP (IPv6)", api.BGPPeerSpec{
 			PeerIP: "[9000::]:98956",
-		}, true),
+		}, false),
 		Entry("should reject invalid BGPPeerSpec without port set in PeerIP (IPv4)", api.BGPPeerSpec{
 			PeerIP: "192.168.0.0:",
 		}, false),
 		Entry("should reject invalid BGPPeerSpec without port set in PeerIP (IPv6)", api.BGPPeerSpec{
 			PeerIP: "[9000::]:",
+		}, false),
+		Entry("should reject BGPPeerSpec with invalid port in PeerIP (IPv6)", api.BGPPeerSpec{
+			PeerIP: "[9000::]:65536",
+		}, false),
+		Entry("should reject BGPPeerSpec with invalid port in PeerIP (IPv6)", api.BGPPeerSpec{
+			PeerIP: "[9000::]:0",
+		}, false),
+		Entry("should reject BGPPeerSpec with invalid IP in PeerIP (IPv6)", api.BGPPeerSpec{
+			PeerIP: "[9000::FFFFF]:170",
 		}, false),
 		Entry("should reject invalid BGPPeerSpec when port is set with empty IP in PeerIP (IPv4)", api.BGPPeerSpec{
 			PeerIP: ":8552",

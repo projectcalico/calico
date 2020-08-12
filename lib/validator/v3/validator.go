@@ -544,20 +544,34 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 func validateIPPort(fl validator.FieldLevel) bool {
 	ipPort := fl.Field().String()
 	if ipPort != "" {
+		var ipStr, portStr string
+		var err error
+		ipStr = ipPort
 		// If PeerIP has both IP and port, validate both
 		if IPv4PortFormat.MatchString(ipPort) || IPv6PortFormat.MatchString(ipPort) {
-			_, _, err := net.SplitHostPort(ipPort)
+			ipStr, portStr, err = net.SplitHostPort(ipPort)
 			if err != nil {
 				log.Debugf("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\".")
 				return false
 			}
-		} else {
-			parsedIP := net.ParseIP(ipPort)
-			if parsedIP == nil {
-				log.Debugf("PeerIP value is invalid.")
+			var port uint64
+			port, err = strconv.ParseUint(portStr, 10, 16)
+			if err != nil {
+				log.Debugf("PeerIP value has invalid port.")
+				return false
+			}
+			if port < 1 {
+				log.Debugf("PeerIP value has invalid port.")
 				return false
 			}
 		}
+
+		parsedIP := net.ParseIP(ipStr)
+		if parsedIP == nil {
+			log.Debugf("PeerIP value is invalid.")
+			return false
+		}
+
 		return true
 	}
 	return false
