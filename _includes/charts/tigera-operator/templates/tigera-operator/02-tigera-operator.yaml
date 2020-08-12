@@ -54,7 +54,10 @@ spec:
             - name: DATASTORE_TYPE
               value: kubernetes
           command:
-            - /calicoctl-util apply /calico-resources
+            - /calicoctl-util
+          args:
+            - apply
+            - /calico-resources
           volumeMounts:
             - name: calico-resources
               mountPath: /calico-resources
