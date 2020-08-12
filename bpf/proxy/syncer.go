@@ -398,7 +398,7 @@ func (s *Syncer) cleanupDerived(id uint32) error {
 }
 
 func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoint,
-	cleanupDerived func(uint32) error) (error, bool) {
+	cleanupDerived func(uint32) error) (bool, error) {
 
 	var (
 		err        error
@@ -420,13 +420,13 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 			}
 		} else {
 			if err := s.deleteSvc(old.svc, old.id, old.count); err != nil {
-				return err, false
+				return false, err
 			}
 
 			delete(s.prevSvcMap, skey)
 			if cleanupDerived != nil {
 				if err := cleanupDerived(old.id); err != nil {
-					return errors.WithMessage(err, "cleanupDerived"), false
+					return false, errors.WithMessage(err, "cleanupDerived")
 				}
 			}
 
@@ -438,7 +438,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 		count, local, err = s.newSvc(skey.sname, sinfo, id, eps)
 	}
 	if err != nil {
-		return err, false
+		return false, err
 	}
 
 	s.newSvcMap[skey] = svcInfo{
@@ -455,7 +455,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 			skey, s.newSvcMap[skey], svcChanged)
 	}
 
-	return nil, svcChanged
+	return svcChanged, nil
 }
 
 func (s *Syncer) addActiveEps(id uint32, svc k8sp.ServicePort, eps []k8sp.Endpoint) {
@@ -485,7 +485,7 @@ func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServiceP
 	si.clusterIP = node.AsNetIP()
 	si.port = nport
 
-	if err, _ := s.applySvc(skey, si, eps, nil); err != nil {
+	if _, err := s.applySvc(skey, si, eps, nil); err != nil {
 		return errors.Errorf("apply NodePortRemote for %s node %s", sname, node)
 	}
 
@@ -609,7 +609,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		skey := getSvcKey(sname, "")
 		eps := state.EpsMap[sname]
 
-		err, svcChanged := s.applySvc(skey, sinfo, eps, s.cleanupDerived)
+		svcChanged, err := s.applySvc(skey, sinfo, eps, s.cleanupDerived)
 		if err != nil {
 			return err
 		}
