@@ -291,6 +291,7 @@ func writeCNIConfig(c config) {
     {
       "type": "calico",
       "log_level": "__LOG_LEVEL__",
+      "log_file_path": "__LOG_FILE_PATH__",
       "datastore_type": "__DATASTORE_TYPE__",
       "nodename": "__KUBERNETES_NODE_NAME__",
       "mtu": __CNI_MTU__,
