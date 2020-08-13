@@ -739,6 +739,13 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][]
 	if err != nil {
 		return fmt.Errorf("failed to load BPF policy program: %w", err)
 	}
+	defer func() {
+		// Once we've put the program in the map, we don't need its FD any more.
+		err := progFD.Close()
+		if err != nil {
+			log.WithError(err).Panic("Failed to close program FD.")
+		}
+	}()
 	k := make([]byte, 4)
 	v := make([]byte, 4)
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
@@ -795,6 +802,10 @@ func FindJumpMap(ap tc.AttachPoint) (mapFD bpf.MapFD, err error) {
 					}
 					if mapInfo.Type == unix.BPF_MAP_TYPE_PROG_ARRAY {
 						return mapFD, nil
+					}
+					err = mapFD.Close()
+					if err != nil {
+						log.WithError(err).Panic("Failed to close FD.")
 					}
 				}
 			}
