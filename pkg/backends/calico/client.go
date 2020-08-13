@@ -362,6 +362,7 @@ type bgpPeer struct {
 	ASNum       numorstring.ASNumber `json:"as_num,string"`
 	RRClusterID string               `json:"rr_cluster_id"`
 	Port        uint16               `json:"port"`
+	KeepNextHop bool                 `json:"keep_next_hop"`
 }
 
 type bgpPrefix struct {
@@ -464,9 +465,10 @@ func (c *client) updatePeersV1() {
 				}
 
 				peers = append(peers, &bgpPeer{
-					PeerIP: *ip,
-					ASNum:  v3res.Spec.ASNumber,
-					Port:   port,
+					PeerIP:      *ip,
+					ASNum:       v3res.Spec.ASNumber,
+					Port:        port,
+					KeepNextHop: v3res.Spec.KeepOriginalNextHop,
 				})
 			}
 			log.Debugf("Peers %#v", peers)

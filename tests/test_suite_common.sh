@@ -270,6 +270,7 @@ execute_tests_daemon() {
         run_individual_test 'explicit_peering/specific_node'
         run_individual_test 'explicit_peering/selectors'
         run_individual_test 'explicit_peering/route_reflector'
+        run_individual_test 'explicit_peering/keepnexthop'
     done
 
     # Turn the node-mesh back on.
@@ -301,6 +302,7 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'explicit_peering/route_reflector'
         run_individual_test_oneshot 'mesh/static-routes'
         run_individual_test_oneshot 'mesh/communities'
+        run_individual_test_oneshot 'explicit_peering/keepnexthop'
         export CALICO_ROUTER_ID=10.10.10.10
         run_individual_test_oneshot 'mesh/static-routes-no-ipv4-address'
         export -n CALICO_ROUTER_ID
