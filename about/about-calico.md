@@ -28,7 +28,7 @@ custom_css: css/intro.css
 <div id="why-use-calico-6" class="row">
   <div class="col-md-6">
     <h3 id="familiar" style="margin-top: 5px">Choice of dataplanes</h3>
-    <p>{{site.prodname}} gives you a choice of dataplanes, including a pure Linux eBPF dataplane, a standard Linux networking dataplane, and a Windows HNS dataplane. Whether you prefer cutting edge features of eBPF, or the familiarity of the standard primitives that existing system administrators already know, Calico has has you covered. Whichever choice is right for you, you’ll get the same, easy to use, base networking, network policy and IP address management capabilities, that have made Calico the most trusted networking and network policy solution for mission-critical cloud-native applications.
+    <p>{{site.prodname}} gives you a choice of dataplanes, including a pure Linux eBPF dataplane, a standard Linux networking dataplane, and a Windows HNS dataplane. Whether you prefer cutting edge features of eBPF, or the familiarity of the standard primitives that existing system administrators already know, Calico has has you covered. Whichever choice is right for you, you’ll get the same, easy to use, base networking, network policy and IP address management capabilities, that have made Calico the most trusted networking and network policy solution for mission-critical cloud-native applications.</p>
   </div>
   <div class="col-md-6">
     <img class="img-responsive center-block" src="{{ site.baseurl }}/images/intro/multiple-dataplanes.png">
