@@ -71,12 +71,17 @@ The following options are deprecated.
 
 ### Logging
 
-* Logging is always to `stderr`
-* Logging level can be controlled by setting `"log_level"` in the netconf. Allowed levels are
-  * `ERROR` - Only error logs are emitted.
-  * `WARNING` - the default.
-  * `INFO` - Enables some additional logging from the CNI plugin.
-  * `DEBUG` - Enables lots of debug logging from both the CNI plugin and the underlying libcalico library.
+Logging is always to `stderr`. Logs are also written to `/var/log/calico/cni/cni.log` on each host by default.
+
+Logging can be configured using the following options in the netconf.
+
+| Option name          | Default                       | Description
+|----------------------|-------------------------------|-------------
+| `log_level`          | INFO                          | Logging level. Allowed levels are `ERROR`, `WARNING`, `INFO`, and `DEBUG`.
+| `log_file_path`      | `/var/log/calico/cni/cni.log` | Location on each host to write CNI log files to. Logging to file can be disabled by removing this option.
+| `log_file_max_size`  | 100                           | Max file size in MB log files can reach before they are rotated.
+| `log_file_max_age`   | 30                            | Max age in days that old log files will be kept on the host before they are removed.
+| `log_file_max_count` | 10                            | Max number of rotated log files allowed on the host before they are cleaned up.
 
 ```json
 {
@@ -84,6 +89,7 @@ The following options are deprecated.
     "cniVersion": "0.1.0",
     "type": "calico",
     "log_level": "DEBUG",
+    "log_file_path": "/var/log/calico/cni/cni.log",
     "ipam": {
         "type": "calico-ipam"
     }
