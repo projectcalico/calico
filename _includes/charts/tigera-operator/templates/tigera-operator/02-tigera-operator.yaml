@@ -54,13 +54,16 @@ spec:
             - name: DATASTORE_TYPE
               value: kubernetes
           command:
-            - /script/install.sh
+            - calicoctl
+          args:
+            - create
+            - --skip-exists
+            - --skip-empty
+            - -f
+            - /calico-resources
           volumeMounts:
             - name: calico-resources
               mountPath: /calico-resources
-            - name: install-resources-script
-              mountPath: /script/install.sh
-              subPath: install.sh
       volumes:
         - name: calico-resources
           configMap:

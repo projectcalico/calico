@@ -30,14 +30,14 @@ calicoctl commands.
 Usage:
   calicoctl [options] <command> [<args>...]
 
-    create    Create a resource by filename or stdin.
-    replace   Replace a resource by filename or stdin.
-    apply     Apply a resource by filename or stdin.  This creates a resource
+    create    Create a resource by file, directory or stdin.
+    replace   Replace a resource by file, directory or stdin.
+    apply     Apply a resource by file, directory or stdin.  This creates a resource
               if it does not exist, and replaces a resource if it does exists.
     patch     Patch a pre-exisiting resource in place.
-    delete    Delete a resource identified by file, stdin or resource type and
+    delete    Delete a resource identified by file, directory, stdin or resource type and
               name.
-    get       Get a resource identified by file, stdin or resource type and
+    get       Get a resource identified by file, directory, stdin or resource type and
               name.
     label     Add or update labels of resources.
     convert   Convert config files between different API versions.

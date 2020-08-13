@@ -25,7 +25,7 @@ command.
 ```
 Usage:
   calicoctl get ( (<KIND> [<NAME...>]) |
-                --filename=<FILENAME>)
+                --filename=<FILENAME>) [--recursive] [--skip-empty]
                 [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces]
 
 Examples:
@@ -39,7 +39,12 @@ Examples:
 Options:
   -h --help                    Show this screen.
   -f --filename=<FILENAME>     Filename to use to get the resource.  If set to
-                               "-" loads from stdin.
+                               "-" loads from stdin. If filename is a directory, this command is
+                               invoked for each .json .yaml and .yml file within that directory,
+                               terminating after the first failure.
+  -R --recursive               Process the filename specified in -f or --filename recursively.
+     --skip-empty              Do not error if any files or directory specified using -f or --filename contain no
+                               data.
   -o --output=<OUTPUT FORMAT>  Output format.  One of: yaml, json, ps, wide,
                                custom-columns=..., go-template=...,
                                go-template-file=...   [Default: ps]
