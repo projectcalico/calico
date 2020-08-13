@@ -68,12 +68,12 @@ type BGPConfigurationSpec struct {
 	ListenPort uint16 `json:"listenPort,omitempty" validate:"omitempty,gt=0" confignamev1:"listen_port"`
 }
 
-// ServiceExternalIPBlock represents a single whitelisted CIDR External IP block.
+// ServiceExternalIPBlock represents a single allowed External IP CIDR block.
 type ServiceExternalIPBlock struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
-// ServiceClusterIPBlock represents a single whitelisted CIDR block for ClusterIPs.
+// ServiceClusterIPBlock represents a single allowed ClusterIP CIDR block.
 type ServiceClusterIPBlock struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
