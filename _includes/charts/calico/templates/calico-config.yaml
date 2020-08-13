@@ -88,6 +88,7 @@ data:
                     "etcd_cert_file": "__ETCD_CERT_FILE__",
                     "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
                     "log_level": "info",
+                    "log_file_path": "/var/log/calico/cni/cni.log",
                     "policy": {
                         "type": "k8s",
                         "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
@@ -114,6 +115,7 @@ data:
         {
           "type": "calico",
           "log_level": "info",
+          "log_file_path": "/var/log/calico/cni/cni.log",
   {{- if eq .Values.datastore "etcd" }}
           "etcd_endpoints": "__ETCD_ENDPOINTS__",
           "etcd_key_file": "__ETCD_KEY_FILE__",
