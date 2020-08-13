@@ -245,6 +245,11 @@ spec:
                   integrations set the ‘cali’ value, and our OpenStack integration
                   sets the ‘tap’ value. [Default: cali]'
                 type: string
+              interfaceRefreshInterval:
+                description: InterfaceRefreshInterval is the period at which Felix
+                  rescans local interfaces to verify their state. The rescan can be
+                  disabled by setting the interval to 0.
+                type: string
               ipipEnabled:
                 type: boolean
               ipipMTU:
@@ -516,8 +521,6 @@ spec:
                   Calico''s BPF maps or attached programs. Set to 0 to disable XDP
                   refresh. [Default: 90s]'
                 type: string
-            required:
-            - bpfLogLevel
             type: object
         type: object
     served: true
