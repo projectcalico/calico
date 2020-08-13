@@ -687,12 +687,12 @@ func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.Cm
 }
 
 // Set up logging for both Calico and libcalico using the provided log level,
-func ConfigureLogging(logLevel, logFilePath string) {
-	if strings.EqualFold(logLevel, "debug") {
+func ConfigureLogging(conf types.NetConf) {
+	if strings.EqualFold(conf.LogLevel, "debug") {
 		logrus.SetLevel(logrus.DebugLevel)
-	} else if strings.EqualFold(logLevel, "info") {
+	} else if strings.EqualFold(conf.LogLevel, "info") {
 		logrus.SetLevel(logrus.InfoLevel)
-	} else if strings.EqualFold(logLevel, "error") {
+	} else if strings.EqualFold(conf.LogLevel, "error") {
 		logrus.SetLevel(logrus.ErrorLevel)
 	} else {
 		// Default level
@@ -701,17 +701,34 @@ func ConfigureLogging(logLevel, logFilePath string) {
 
 	writers := []io.Writer{os.Stderr}
 	// Set the log output to write to a log file if specified.
-	if logFilePath != "" {
+	if conf.LogFilePath != "" {
 		// Create the path for the log file if it does not exist
-		err := os.MkdirAll(filepath.Dir(logFilePath), 0755)
+		err := os.MkdirAll(filepath.Dir(conf.LogFilePath), 0755)
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(logFilePath))
+			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(conf.LogFilePath))
 		}
 
-		// Create file logger with log file rotation. Defaults to rotate once files hit 100 MB.
+		// Create file logger with log file rotation.
 		fileLogger := &lumberjack.Logger{
-			Filename: logFilePath,
-			MaxSize:  100,
+			Filename:   conf.LogFilePath,
+			MaxSize:    100,
+			MaxAge:     30,
+			MaxBackups: 10,
+		}
+
+		// Set the max size if exists. Defaults to 100 MB.
+		if conf.LogFileMaxSize != 0 {
+			fileLogger.MaxSize = conf.LogFileMaxSize
+		}
+
+		// Set the max time in days to retain a log file before it is cleaned up. Defaults to 30 days.
+		if conf.LogFileMaxAge != 0 {
+			fileLogger.MaxAge = conf.LogFileMaxAge
+		}
+
+		// Set the max number of log files to retain before they are cleaned up. Defaults to 10.
+		if conf.LogFileMaxCount != 0 {
+			fileLogger.MaxBackups = conf.LogFileMaxCount
 		}
 
 		writers = append(writers, fileLogger)

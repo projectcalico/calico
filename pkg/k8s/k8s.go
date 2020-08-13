@@ -51,7 +51,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	var err error
 	var result *current.Result
 
-	utils.ConfigureLogging(conf.LogLevel, conf.LogFilePath)
+	utils.ConfigureLogging(conf)
 
 	logger := logrus.WithFields(logrus.Fields{
 		"WorkloadEndpoint": epIDs.WEPName,
