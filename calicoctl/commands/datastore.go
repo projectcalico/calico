@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/datastore"
 )

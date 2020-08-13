@@ -21,14 +21,16 @@ import (
 
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
-	log "github.com/sirupsen/logrus"
 )
 
 func Replace(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl replace --filename=<FILENAME> [--config=<CONFIG>] [--namespace=<NS>]
+  calicoctl replace --filename=<FILENAME> [--recursive] [--skip-empty]
+                    [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Replace a policy using the data in policy.yaml.
@@ -40,7 +42,12 @@ Examples:
 Options:
   -h --help                  Show this screen.
   -f --filename=<FILENAME>   Filename to use to replace the resource.  If set
-                             to "-" loads from stdin.
+                             to "-" loads from stdin. If filename is a directory, this command is
+                             invoked for each .json .yaml and .yml file within that directory,
+                             terminating after the first failure.
+  -R --recursive             Process the filename specified in -f or --filename recursively.
+     --skip-empty            Do not error if any files or directory specified using -f or --filename contain no
+                             data.
   -c --config=<CONFIG>       Path to the file containing connection
                              configuration in YAML or JSON format.
                              [default: ` + constants.DefaultConfigPath + `]
@@ -94,10 +101,14 @@ Description:
 
 	if results.FileInvalid {
 		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.NumResources == 0 {
+		// No resources specified. If there is an associated error use that, otherwise print message with no error.
+		if results.Err != nil {
+			return results.Err
+		}
+		fmt.Println("No resources specified")
 	} else if results.NumHandled == 0 {
-		if results.NumResources == 0 {
-			return fmt.Errorf("No resources specified in file")
-		} else if results.NumResources == 1 {
+		if results.NumResources == 1 {
 			return fmt.Errorf("Failed to replace '%s' resource: %v", results.SingleKind, results.Err)
 		} else if results.SingleKind != "" {
 			return fmt.Errorf("Failed to replace any '%s' resources: %v", results.SingleKind, results.Err)

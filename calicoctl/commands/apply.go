@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ import (
 
 func Apply(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl apply --filename=<FILENAME> [--config=<CONFIG>] [--namespace=<NS>]
+  calicoctl apply --filename=<FILENAME> [--recursive] [--skip-empty]
+                  [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Apply a policy using the data in policy.yaml.
@@ -39,7 +40,12 @@ Examples:
 Options:
   -h --help                 Show this screen.
   -f --filename=<FILENAME>  Filename to use to apply the resource.  If set to
-                            "-" loads from stdin.
+                            "-" loads from stdin. If filename is a directory, this command is
+                            invoked for each .json .yaml and .yml file within that directory,
+                            terminating after the first failure.
+  -R --recursive            Process the filename specified in -f or --filename recursively.
+     --skip-empty           Do not error if any files or directory specified using -f or --filename contain no
+                            data.
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
                             [default: ` + constants.DefaultConfigPath + `]
@@ -97,10 +103,14 @@ Description:
 
 	if results.FileInvalid {
 		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.NumResources == 0 {
+		// No resources specified. If there is an associated error use that, otherwise print message with no error.
+		if results.Err != nil {
+			return results.Err
+		}
+		fmt.Println("No resources specified")
 	} else if results.NumHandled == 0 {
-		if results.NumResources == 0 {
-			return fmt.Errorf("No resources specified in file")
-		} else if results.NumResources == 1 {
+		if results.NumResources == 1 {
 			return fmt.Errorf("Failed to apply '%s' resource: %v", results.SingleKind, results.ResErrs)
 		} else if results.SingleKind != "" {
 			return fmt.Errorf("Failed to apply any '%s' resources: %v", results.SingleKind, results.ResErrs)

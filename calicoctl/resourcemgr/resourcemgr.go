@@ -25,18 +25,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
-	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
+	yaml "github.com/projectcalico/go-yaml-wrapper"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 // ResourceManager provides a useful function for each resource type.  This includes:

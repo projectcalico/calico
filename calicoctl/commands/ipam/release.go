@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 
 	docopt "github.com/docopt/docopt-go"
+
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"

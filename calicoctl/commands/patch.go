@@ -19,9 +19,10 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
-	log "github.com/sirupsen/logrus"
 )
 
 func Patch(args []string) error {
@@ -92,6 +93,10 @@ Description:
 	log.Infof("results: %+v", results)
 
 	if results.NumResources == 0 {
+		// No resources specified. If there is an associated error use that, otherwise print message with no error.
+		if results.Err != nil {
+			return results.Err
+		}
 		return fmt.Errorf("No resources specified")
 	} else if results.Err == nil && results.NumHandled > 0 {
 		fmt.Printf("Successfully patched %d '%s' resource\n", results.NumHandled, results.SingleKind)
