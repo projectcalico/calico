@@ -76,6 +76,13 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	}
 
 	go func() {
+		// Before we start, scan for all finished / timed out connections to
+		// free up the conntrack table asap as it may take time to sync up the
+		// proxy and kick off the first full cleaner scan.
+		lc := conntrack.NewLivenessScanner(kp.conntrackTimeouts, kp.dsrEnabled)
+		connScan := conntrack.NewScanner(kp.ctMap, lc.ScanEntry)
+		connScan.Scan()
+
 		err := kp.start()
 		if err != nil {
 			log.WithError(err).Panic("kube-proxy failed to start")
