@@ -5,11 +5,11 @@ description: Enable WireGuard for state-of-the-art cryptographic security betwee
 
 ### Big picture
 
-Enable WireGuard to secure on the wire in-cluster pod traffic in a {{site.prodname}} cluster.
+Enable WireGuard to secure on-the-wire, in-cluster pod traffic in a {{site.prodname}} cluster.
 
 ### Value
 
-{{ site.prodname }} automatically creates and manages WireGuard tunnels between nodes providing transport-level security for on the wire in-cluster pod traffic. WireGuard provides {% include open-new-window.html text='formally verified' url='https://www.wireguard.com/formal-verification/' %} secure and {% include open-new-window.html text='performant tunnels' url='https://www.wireguard.com/performance/' %} without any specialized hardware. For a deep dive in to WireGuard implementation, see {% include open-new-window.html text='whitepaper' url='https://www.wireguard.com/papers/wireguard.pdf' %}.
+{{ site.prodname }} automatically creates and manages WireGuard tunnels between nodes providing transport-level security for on- the-wire, in-cluster pod traffic. WireGuard provides {% include open-new-window.html text='formally verified' url='https://www.wireguard.com/formal-verification/' %} secure and {% include open-new-window.html text='performant tunnels' url='https://www.wireguard.com/performance/' %} without any specialized hardware. For a deep dive in to WireGuard implementation, see this {% include open-new-window.html text='whitepaper' url='https://www.wireguard.com/papers/wireguard.pdf' %}.
 
 ### Features
 
@@ -25,7 +25,14 @@ This how-to guide uses the following {{site.prodname}} features:
 > **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. Also, encryption using WireGuard is not supported if `CALICO_NETWORKING_BACKEND=none` (e.g. managed Kubernetes platforms EKS, AKS and GKE).
 {: .alert .alert-info}
 
-### How to enable WireGuard for the cluster
+### How to 
+
+- [Enable WireGuard for a cluster](#enable-wireguard-for-a-cluster)
+- [Disable WireGuard for an individual node](#disable-wireguard-for-an-individual-node)
+- [Verify configuration](#verify-configuration)
+- [Disable WireGuard for a cluster](#disable-wireguard-for-a-cluster)
+
+#### Enable WireGuard for a cluster
 
 1. Install WireGuard on cluster nodes using {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}. Note that you may need to reboot your nodes after installing WireGuard to make the kernel modules available on your system.
 
@@ -38,15 +45,14 @@ This how-to guide uses the following {{site.prodname}} features:
 calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
     ```
 
-   For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{ site.baseurl }}/getting-started/openshift/installation#optionally-provide-additional-configuration).
+   For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{site.baseurl}}/getting-started/openshift/installation#optionally-provide-additional-configuration).
 
-   > **Note**: The above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{ site.baseurl }}/reference/resources/felixconfig#felix-configuration-definition).
+   > **Note**: The above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{site.baseurl}}/reference/resources/felixconfig#felix-configuration-definition).
    {: .alert .alert-info}
 
-1. We recommend that you review and modify the MTU used by Calico networking when WireGuard is enabled to increase network performance. Follow the instructions in the [Configure MTU to maximize network performance]({{ site.baseurl }}/networking/mtu) guide to set the MTU to a value appropriate for your network.
+1. We recommend that you review and modify the MTU used by Calico networking when WireGuard is enabled to increase network performance. Follow the instructions in the [Configure MTU to maximize network performance]({{site.baseurl}}/networking/mtu) guide to set the MTU to a value appropriate for your network.
 
-
-### How to disable WireGuard for an individual node
+#### Disable WireGuard for an individual node
 
 To disable WireGuard on a specific node with WireGuard installed, modify the node-specific Felix configuration. For example:
 
@@ -62,15 +68,7 @@ calicoctl patch felixconfiguration node.my-node --type='merge' -p '{"spec":{"wir
 
 With the above command, Calico will not encrypt any of the pod traffic to or from node `my-node`.
 
-### How to disable WireGuard for the cluster
-
-To disable WireGuard on all nodes modify the default Felix configuration. For example:
-
-  ```bash
-calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
-  ```
-
-#### Troubleshoot
+#### Verify configuration
 
 To verify that the nodes are configured for WireGuard encryption, check the node status set by Felix using `calicoctl`. For example:
 
@@ -83,7 +81,15 @@ To verify that the nodes are configured for WireGuard encryption, check the node
      ...
    ```
 
+#### Disable WireGuard for a cluster
+
+To disable WireGuard on all nodes modify the default Felix configuration. For example:
+
+  ```bash
+  calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
+  ```
+
 ### Above and beyond
 
-- [Secure Calico component communications]({{ site.baseurl }}/security/comms)
-- [Configure MTU to maximize network performance]({{ site.baseurl }}/networking/mtu)
+- [Secure Calico component communications]({{site.baseurl}}/security/comms)
+- [Configure MTU to maximize network performance]({{site.baseurl}}/networking/mtu)
