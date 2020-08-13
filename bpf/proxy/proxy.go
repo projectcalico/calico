@@ -98,7 +98,8 @@ type proxy struct {
 	svcHealthServer healthcheck.ServiceHealthServer
 	healthzServer   healthcheck.ProxierHealthUpdater
 
-	connScan *conntrack.Scanner
+	connScan          *conntrack.Scanner
+	connScanStartOnce sync.Once
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
@@ -198,10 +199,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, connScan *conntrack.Scanner,
 	p.startRoutine(func() { informerFactory.Start(p.stopCh) })
 	p.startRoutine(func() { svcConfig.Run(p.stopCh) })
 
-	if p.connScan != nil {
-		p.startRoutine(func() { p.conntrackCleaner(p.stopCh) })
-	}
-
 	return p, nil
 }
 
@@ -248,6 +245,7 @@ func (p *proxy) invokeDPSyncer() {
 	if err := p.svcHealthServer.SyncEndpoints(epsUpdateResult.HCEndpointsLocalIPSize); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck endpoints")
 	}
+
 	err := p.dpSyncer.Apply(DPSyncerState{
 		SvcMap: p.svcMap,
 		EpsMap: p.epsMap,
@@ -257,6 +255,14 @@ func (p *proxy) invokeDPSyncer() {
 		log.WithError(err).Errorf("applying changes failed")
 		// TODO log the error or panic as the best might be to restart
 		// completely to wipe out the loaded bpf maps
+	} else {
+		// After the first successful Apply() start the conntract cleaner. It
+		// will make the first sweep immediately, based on the fresh state.
+		p.connScanStartOnce.Do(func() {
+			if p.connScan != nil {
+				p.startRoutine(func() { p.conntrackCleaner(p.stopCh) })
+			}
+		})
 	}
 
 	if p.healthzServer != nil {
@@ -332,14 +338,15 @@ func (p *proxy) conntrackCleaner(stopCh <-chan struct{}) {
 	ticker := jitter.NewTicker(10*time.Second, 100*time.Millisecond)
 
 	for {
+		// N.B. syncer needs to be told about when scanning starts and ends so that it
+		// can get its internal structs ready, take/release any locks and do cleanup.
+		p.dpSyncer.ConntrackScanStart()
+		p.connScan.Scan()
+		p.dpSyncer.ConntrackScanEnd()
+
 		select {
 		case <-ticker.C:
 			log.Debug("Conntrack cleanup timer popped")
-			// N.B. syncer needs to be told about when scanning starts and ends so that it
-			// can get its internal structs ready, take/release any locks and do cleanup.
-			p.dpSyncer.ConntrackScanStart()
-			p.connScan.Scan()
-			p.dpSyncer.ConntrackScanEnd()
 		case <-stopCh:
 			log.Debug("Conntrack cleanup got stop signal")
 			return
