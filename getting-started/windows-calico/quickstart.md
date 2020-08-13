@@ -29,7 +29,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 **Linux control node requirements**
 - Installed with {{site.prodname}} v3.12+
-- {{site.prodname}} networking is VXLAN
+- {{site.prodname}} networking is VXLAN. For EKS, networking is set to none.
 
 ### How to
 
@@ -65,7 +65,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
    ```powershell
-   Invoke-WebRequest https://github.com/projectcalico/calico/releases/download/v3.16.0/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
+   Invoke-WebRequest {{site.url}}/scripts/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
    ```
 
 1. Run install-calico-windows.ps1 with correct parameters. The powershell script will perform following tasks.
@@ -161,7 +161,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
    ```powershell
-   Invoke-WebRequest https://github.com/projectcalico/calico/releases/download/v3.16.0/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
+   Invoke-WebRequest {{site.url}}/scripts/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
    ```
 
 1. Run install-calico-windows.ps1 with correct parameters. The powershell script will perform following tasks.
