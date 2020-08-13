@@ -201,6 +201,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 	Expect(err).NotTo(HaveOccurred())
 	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
 	Expect(err).NotTo(HaveOccurred())
+	defer func() { _ = polProgFD.Close() }()
 	progFDBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
 	err = jumpMap.Update([]byte{0, 0, 0, 0}, progFDBytes)

@@ -179,13 +179,15 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 
 	dirty = dirty || iface.info != ifaceCopy.info
 
+	// Store the result in case iface.state was changed.
+	m.nameToIface[ifaceName] = iface
+
 	if !dirty {
 		return
 	}
 
 	logCtx.Debug("Marking iface dirty.")
 	m.dirtyIfaceNames.Add(ifaceName)
-	m.nameToIface[ifaceName] = iface
 }
 
 func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
@@ -570,6 +572,7 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 		endpointStatus = iface.info.operState
 		endpointID = iface.info.endpointID
 		if endpointID == nil {
+			log.WithField("iface", ifaceName).Debug("No endpoint ID, closing jump maps.")
 			for i := range iface.dpState.jumpMapFDs {
 				if iface.dpState.jumpMapFDs[i] > 0 {
 					err := iface.dpState.jumpMapFDs[i].Close()
@@ -671,7 +674,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 		} else if !attached {
 			// BPF program is missing; maybe we missed a notification of the interface being recreated?
 			// Close the now-defunct jump map.
-			log.WithField("iface", endpoint.Name).Warn(
+			log.WithField("iface", endpoint.Name).Info(
 				"Detected that BPF program no longer attached to interface.")
 			err := jumpMapFD.Close()
 			if err != nil {
@@ -739,6 +742,13 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][]
 	if err != nil {
 		return fmt.Errorf("failed to load BPF policy program: %w", err)
 	}
+	defer func() {
+		// Once we've put the program in the map, we don't need its FD any more.
+		err := progFD.Close()
+		if err != nil {
+			log.WithError(err).Panic("Failed to close program FD.")
+		}
+	}()
 	k := make([]byte, 4)
 	v := make([]byte, 4)
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
@@ -750,6 +760,8 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][]
 }
 
 func FindJumpMap(ap tc.AttachPoint) (mapFD bpf.MapFD, err error) {
+	logCtx := log.WithField("iface", ap.Iface)
+	logCtx.Debug("Looking up jump map.")
 	out, err := tc.ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
 	if err != nil {
 		return 0, fmt.Errorf("failed to find TC filter for interface %v: %w", ap.Iface, err)
@@ -794,7 +806,12 @@ func FindJumpMap(ap tc.AttachPoint) (mapFD bpf.MapFD, err error) {
 						return 0, fmt.Errorf("failed to get map info: %w", err)
 					}
 					if mapInfo.Type == unix.BPF_MAP_TYPE_PROG_ARRAY {
+						logCtx.WithField("fd", mapFD).Debug("Found jump map")
 						return mapFD, nil
+					}
+					err = mapFD.Close()
+					if err != nil {
+						log.WithError(err).Panic("Failed to close FD.")
 					}
 				}
 			}
