@@ -93,6 +93,10 @@ Description:
 	log.Infof("results: %+v", results)
 
 	if results.NumResources == 0 {
+		// No resources specified. If there is an associated error use that, otherwise print message with no error.
+		if results.Err != nil {
+			return results.Err
+		}
 		return fmt.Errorf("No resources specified")
 	} else if results.Err == nil && results.NumHandled > 0 {
 		fmt.Printf("Successfully patched %d '%s' resource\n", results.NumHandled, results.SingleKind)

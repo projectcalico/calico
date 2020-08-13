@@ -16,7 +16,6 @@ package common
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -29,7 +28,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/file"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
+	"github.com/projectcalico/go-yaml-wrapper"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
@@ -110,6 +109,10 @@ type CommandResults struct {
 	Client client.Interface
 }
 
+type fileError struct {
+	error
+}
+
 // ExecuteConfigCommand is main function called by all of the resource management commands
 // in calicoctl (apply, create, replace, get, delete and patch).  This provides common function
 // for all these commands:
@@ -125,23 +128,28 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 	log.Info("Executing config command")
 
+	errorOnEmpty := !argutils.ArgBoolOrFalse(args, "--skip-empty")
+
 	if filename := args["--filename"]; filename != nil {
 		// Filename is specified.  Use the file iterator to handle the fact that this may be a directory rather than a
 		// single file. For each file load the resources from the file and convert to a single slice of resources for
 		// easier handling.
-		fileInvalid := false
 		err := file.Iter(args, func(modifiedArgs map[string]interface{}) error {
 			modifiedFilename := modifiedArgs["--filename"].(string)
 
 			r, err := resourcemgr.CreateResourcesFromFile(modifiedFilename)
 			if err != nil {
-				fileInvalid = true
-				return err
+				return fileError{err}
 			}
 
 			converted, err := convertToSliceOfResources(r)
 			if err != nil {
-				return err
+				return fileError{err}
+			}
+
+			if len(converted) == 0 && errorOnEmpty {
+				// We should fail on empty files.
+				return fmt.Errorf("No resources specified in file %s", modifiedFilename)
 			}
 
 			resources = append(resources, converted...)
@@ -149,7 +157,21 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		})
 
 		if err != nil {
-			return CommandResults{Err: err, FileInvalid: fileInvalid}
+			_, ok := err.(fileError)
+			return CommandResults{Err: err, FileInvalid: ok}
+		}
+
+		if len(resources) == 0 {
+			if errorOnEmpty {
+				// Empty files are handled above, so the only way to get here is if --filename pointed to a directory.
+				// We can therefore tweak the error message slightly to be more specific.
+				return CommandResults{
+					Err: fmt.Errorf("No resources specified in directory %s", filename),
+				}
+			} else {
+				// No data, but not an error case. Return an empty set of results.
+				return CommandResults{}
+			}
 		}
 	} else {
 		// Filename is not specific so extract the resource from the arguments. This
@@ -162,10 +184,13 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		if err != nil {
 			return CommandResults{Err: err}
 		}
-	}
 
-	if len(resources) == 0 {
-		return CommandResults{Err: errors.New("no resources specified")}
+		if len(resources) == 0 {
+			// No resources specified on non-file input is always an error.
+			return CommandResults{
+				Err: fmt.Errorf("No resources specified"),
+			}
+		}
 	}
 
 	if log.GetLevel() >= log.DebugLevel {

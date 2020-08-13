@@ -28,7 +28,7 @@ import (
 func Delete(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl delete ( (<KIND> [<NAME>...]) |
-                   --filename=<FILE> [--recursive])
+                   --filename=<FILE> [--recursive] [--skip-empty] )
                    [--skip-not-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
@@ -50,6 +50,8 @@ Options:
                             invoked for each .json .yaml and .yml file within that directory,
                             terminating after the first failure.
   -R --recursive            Process the filename specified in -f or --filename recursively.
+     --skip-empty           Do not error if any files or directory specified using -f or --filename contain no
+                            data.
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
                             [default: ` + constants.DefaultConfigPath + `]
@@ -111,7 +113,11 @@ Description:
 	if results.FileInvalid {
 		return fmt.Errorf("Failed to execute command: %v", results.Err)
 	} else if results.NumResources == 0 {
-		return fmt.Errorf("No resources specified")
+		// No resources specified. If there is an associated error use that, otherwise print message with no error.
+		if results.Err != nil {
+			return results.Err
+		}
+		fmt.Println("No resources specified")
 	} else if results.Err == nil && results.NumHandled > 0 {
 		if results.SingleKind != "" {
 			fmt.Printf("Successfully deleted %d '%s' resource(s)\n", results.NumHandled, results.SingleKind)

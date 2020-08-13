@@ -27,7 +27,8 @@ import (
 
 func Create(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl create --filename=<FILENAME> [--recursive] [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>]
+  calicoctl create --filename=<FILENAME> [--recursive] [--skip-empty]
+                   [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Create a policy using the data in policy.yaml.
@@ -43,6 +44,8 @@ Options:
                             invoked for each .json .yaml and .yml file within that directory,
                             terminating after the first failure.
   -R --recursive            Process the filename specified in -f or --filename recursively.
+     --skip-empty           Do not error if any files or directory specified using -f or --filename contain no
+                            data.
      --skip-exists          Skip over and treat as successful any attempts to
                             create an entry that already exists.
   -c --config=<CONFIG>      Path to the file containing connection
@@ -97,10 +100,14 @@ Description:
 
 	if results.FileInvalid {
 		return fmt.Errorf("Failed to execute command: %v", results.Err)
+	} else if results.NumResources == 0 {
+		// No resources specified. If there is an associated error use that, otherwise print message with no error.
+		if results.Err != nil {
+			return results.Err
+		}
+		fmt.Println("No resources specified")
 	} else if results.NumHandled == 0 {
-		if results.NumResources == 0 {
-			return fmt.Errorf("No resources specified in file")
-		} else if results.NumResources == 1 {
+		if results.NumResources == 1 {
 			return fmt.Errorf("Failed to create '%s' resource: %v", results.SingleKind, results.ResErrs)
 		} else if results.SingleKind != "" {
 			return fmt.Errorf("Failed to create any '%s' resources: %v", results.SingleKind, results.ResErrs)

@@ -30,7 +30,7 @@ import (
 func Get(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl get ( (<KIND> [<NAME>...]) |
-                --filename=<FILENAME> [--recursive])
+                --filename=<FILENAME> [--recursive] [--skip-empty] )
                 [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces] [--export]
 
 Examples:
@@ -47,6 +47,8 @@ Options:
                                invoked for each .json .yaml and .yml file within that directory,
                                terminating after the first failure.
   -R --recursive               Process the filename specified in -f or --filename recursively.
+     --skip-empty              Do not error if any files or directory specified using -f or --filename contain no
+                               data.
   -o --output=<OUTPUT FORMAT>  Output format.  One of: yaml, json, ps, wide,
                                custom-columns=..., go-template=...,
                                go-template-file=...   [Default: ps]

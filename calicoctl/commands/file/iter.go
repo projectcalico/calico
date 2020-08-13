@@ -18,6 +18,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 )
 
 // Iter extracts the filename from the parsed args and
@@ -43,7 +45,7 @@ func Iter(parsedArgs map[string]interface{}, cb func(map[string]interface{}) err
 	}
 
 	// Determine if we are following directories recursively.
-	recursive, _ := parsedArgs["--recursive"].(bool)
+	recursive := argutils.ArgBoolOrFalse(parsedArgs, "--recursive")
 
 	// Handle directory by walking the directory contents and performing the action on each manifest file.
 	return filepath.Walk(f,
