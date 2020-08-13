@@ -81,4 +81,4 @@ user:
 token: ${token}
 EOF
 ```
-Copy this config file to the windows node C:\k\ and set the KUBECONFIG environment variable in `config.ps1` to point to it.
+Copy this config file to the windows node `C:\CalicoWindows\calico-kube-config` and set the KUBECONFIG environment variable in `config.ps1` to point to it.
