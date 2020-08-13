@@ -51,7 +51,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	var err error
 	var result *current.Result
 
-	utils.ConfigureLogging(conf.LogLevel)
+	utils.ConfigureLogging(conf)
 
 	logger := logrus.WithFields(logrus.Fields{
 		"WorkloadEndpoint": epIDs.WEPName,
@@ -817,7 +817,7 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 
 func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
 	ns, err := client.CoreV1().Namespaces().Get(podNamespace, metav1.GetOptions{})
-	logrus.Infof("namespace info %+v", ns)
+	logrus.Debugf("namespace info %+v", ns)
 	if err != nil {
 		return nil, err
 	}
@@ -826,7 +826,7 @@ func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotation
 
 func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, profiles []string, generateName string, err error) {
 	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(podName, metav1.GetOptions{})
-	logrus.Infof("pod info %+v", pod)
+	logrus.Debugf("pod info %+v", pod)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}

@@ -87,6 +87,10 @@ type NetConf struct {
 	EtcdEndpoints        string                 `json:"etcd_endpoints"`
 	EtcdDiscoverySrv     string                 `json:"etcd_discovery_srv"`
 	LogLevel             string                 `json:"log_level"`
+	LogFilePath          string                 `json:"log_file_path"`
+	LogFileMaxSize       int                    `json:"log_file_max_size"`
+	LogFileMaxAge        int                    `json:"log_file_max_age"`
+	LogFileMaxCount      int                    `json:"log_file_max_count"`
 	Policy               Policy                 `json:"policy"`
 	Kubernetes           Kubernetes             `json:"kubernetes"`
 	FeatureControl       FeatureControl         `json:"feature_control"`

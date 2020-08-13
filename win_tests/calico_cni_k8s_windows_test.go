@@ -127,7 +127,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		updateIPAMStrictAffinity(calicoClient, true)
 	})
 
-	utils.ConfigureLogging("info")
+	logConf := types.NetConf{
+		LogLevel: "info",
+	}
+	utils.ConfigureLogging(logConf)
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
 
 	Context("l2bridge network::using host-local IPAM", func() {

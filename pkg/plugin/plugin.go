@@ -123,7 +123,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	utils.ConfigureLogging(conf.LogLevel)
+	utils.ConfigureLogging(conf)
 
 	nodeNameFile := "/var/lib/calico/nodename"
 	if conf.NodenameFile != "" {
@@ -148,7 +148,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	logrus.WithField("EndpointIDs", wepIDs).Info("Extracted identifiers")
+	logrus.WithField("EndpointIDs", wepIDs).Debug("Extracted identifiers")
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
@@ -504,7 +504,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	utils.ConfigureLogging(conf.LogLevel)
+	utils.ConfigureLogging(conf)
 
 	nodeNameFile := "/var/lib/calico/nodename"
 	if conf.NodenameFile != "" {
@@ -562,7 +562,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		"Node":             epIDs.Node,
 		"WorkloadEndpoint": epIDs.WEPName,
 		"ContainerID":      epIDs.ContainerID,
-	}).Info("Extracted identifiers")
+	}).Debug("Extracted identifiers")
 
 	// Handle k8s specific bits of handling the DEL.
 	if epIDs.Orchestrator == api.OrchestratorKubernetes {
