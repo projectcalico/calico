@@ -1,0 +1,94 @@
+version: v1.0
+name: Typha
+
+execution_time_limit:
+  hours: 2
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+blocks:
+  - name: 'Build'
+    dependencies: []
+    task:
+      jobs:
+        - name: Build
+          commands:
+            - checkout
+            - cache restore go-pkg-cache
+            - cache restore go-mod-cache
+            - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+            - cache store go-pkg-cache .go-pkg-cache
+            - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
+            - make build
+
+  - name: 'UTs'
+    dependencies: ["Build"]
+    task:
+      prologue:
+        commands:
+          - checkout
+          - cache restore go-pkg-cache
+          - cache restore go-mod-cache
+          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      jobs:
+        - name: Run UT
+          commands:
+            - make ci
+
+  - name: 'FVs'
+    dependencies: ["Build"]
+    task:
+      prologue:
+        commands:
+          - checkout
+          - cache restore go-pkg-cache
+          - cache restore go-mod-cache
+          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      jobs:
+        - name: Run FV
+          commands:
+            - make image
+            - cd .. && git clone https://github.com/projectcalico/felix.git && cd felix
+            - JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=calico/typha:latest TYPHA_VERSION=latest make k8sfv-test
+
+  - name: 'Foss Checks'
+    dependencies: ["Build"]
+    task:
+      secrets:
+        - name: foss-api-key
+      prologue:
+        commands:
+          - checkout
+          - cache restore go-pkg-cache
+          - cache restore go-mod-cache
+          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      jobs:
+        - name: Foss Checks
+          commands:
+            - if [ -z "${PULL_REQUEST_NUMBER}" ]; then make foss-checks; fi
+
+  - name: 'Push Images (non-PR builds only)'
+    dependencies: ["UTs", "FVs", "Foss Checks"]
+    skip:
+      # Only run on branches, not PRs.
+      when: "branch !~ '.+'"
+    task:
+      secrets:
+        - name: quay-robot-calico+semaphoreci
+        - name: docker
+      prologue:
+        commands:
+          - checkout
+          - cache restore go-pkg-cache
+          - cache restore go-mod-cache
+          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      jobs:
+        - name: Run CD
+          commands:
+            - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+            - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+            - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
