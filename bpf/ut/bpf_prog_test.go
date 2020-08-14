@@ -593,17 +593,23 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.La
 	if ipv4Alt != nil {
 		ipv4 = ipv4Alt
 	} else {
-		ipv4 = ipv4Default
+		// Make a copy so that we do not mangle the default if we set the
+		// protocol below.
+		ipv4 = new(layers.IPv4)
+		*ipv4 = *ipv4Default
 	}
 
 	if l4Alt != nil {
 		switch v := l4Alt.(type) {
 		case *layers.UDP:
 			udp = v
+			ipv4.Protocol = layers.IPProtocolUDP
 		case *layers.TCP:
 			tcp = v
+			ipv4.Protocol = layers.IPProtocolTCP
 		case *layers.ICMPv4:
 			icmp = v
+			ipv4.Protocol = layers.IPProtocolICMPv4
 		default:
 			return nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4Alt)
 		}
@@ -629,7 +635,17 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.La
 
 		return eth, ipv4, udp, payload, pkt.Bytes(), err
 	case tcp != nil:
-		return nil, nil, nil, nil, nil, errors.Errorf("tcp not implemented yet")
+		if tcp == nil {
+			return nil, nil, nil, nil, nil, errors.Errorf("tcp default not implemented yet")
+		}
+		ipv4.Length = uint16(5*4 + 8 + len(payload))
+		_ = tcp.SetNetworkLayerForChecksum(ipv4)
+
+		pkt := gopacket.NewSerializeBuffer()
+		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+			eth, ipv4, tcp, gopacket.Payload(payload))
+
+		return eth, ipv4, tcp, payload, pkt.Bytes(), err
 	case icmp != nil:
 		ipv4.Length = uint16(5*4 + 8 + len(payload))
 
