@@ -155,10 +155,16 @@ adjust other kube-proxy parameters.
    - Windows supports only VXLAN on port 4789 and VSID >=4096. {{site.prodname}}'s default (on Linux and Windows) is to use port 4789 and VSID 4096.
 
 1. Apply the manifest using `calicoctl`, and verify that you have a single pool with `VXLANMODE Always`. 
+   ```bash
+   $ calicoctl get ippool -o wide
+   ```
+  
+1. For Linux control nodes using {{site.prodname}} networking, strict affinity must be set to `true`.
+This is required to prevent Linux nodes from borrowing IP addresses from Windows nodes:
+   ```bash
+   calicoctl ipam configure --strictaffinity=true
+   ```
 
-  ```
-  $ calicoctl get ippool -o wide
-  ```
 #### Install Calico and Kubernetes on Windows nodes
 
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
@@ -180,13 +186,12 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
 
 3. Run the installer.
   
-  - Change directory to the location that you unpacked the archive. For example:
-
+   - Change directory to the location that you unpacked the archive. For example:
   ```
   PS C:\... > cd c:\CalicoWindows
   ```
-  - Run the install script:
-
+  
+   - Run the install script:
   ```
   PS C:\... > .\install-calico.ps1
   ```
