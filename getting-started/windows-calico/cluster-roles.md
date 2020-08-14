@@ -10,22 +10,14 @@ Create cluster role for Windows nodes.
 
 ### How to
 
-Because Kubernetes on Windows cannot run {{site.prodname}} in a pod with an auto-provisioned service account, {{site.prodname}} requires a kubeconfig file to access the API server. This section describes how to create an appropriate service account, and then to export the service account token as a kubeconfig file for {{site.prodname}} to use.
+Because Kubernetes on Windows cannot run {{site.prodname}} in a pod with an auto-provisioned service account, {{site.prodname}} requires a kubeconfig file to access the API server. This section describes how to find an existing `calico-node` service account used by {{site.prodname}} on Linux side, and then to export the service account token as a kubeconfig file for {{site.prodname}} to use.
 
 >**Note**: In general, the node kubeconfig as used by kubelet does not have enough permissions to access {{site.prodname}}-specific resources.
 {: .alert .alert-info}
 
-#### Install the cluster-role manifest
-
-A cluster-role with the correct permissions for {{site.prodnameWindows}} is available here: [calico-windows cluster role](https://github.com/projectcalico/calico/releases/download/v3.16.0/win-cluster-role.yaml).
-
-Apply the cluster role.
-
-```
-$ kubectl apply -f
-```
+#### Export calico-node service account token as a kubeconfig file
   
-Then, to make the kube-config file, you'll need the URL of your Kubernetes API server.
+To make the kube-config file, you'll need the URL of your Kubernetes API server.
 
 >**Note**: Kubernetes for Windows does not support access to services from the host so you must use the address of your server, not the Kubernetes service IP.
 {: .alert .alert-info}
@@ -35,15 +27,15 @@ Set a variable to the URL of your API server:
 ```
 $ server=https://<server>:<port>
 ```
-Then, find the secret containing the service account token for the calico-windows service account:
+Then, find the secret containing the service account token for the `calico-node` service account:
 
 ```
-$ kubectl get secret -n kube-system | grep calico-windows
+$ kubectl get secret -n kube-system | grep calico-node
 ```
 Inspect the output and find the name of the token, store it in a variable:
 
 ```
-$ name=calico-windows-token-xxxxx
+$ name=calico-node-token-xxxxx
 ```
 Extract the parts of the secret, storing them in variables:
 

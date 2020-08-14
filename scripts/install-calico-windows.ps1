@@ -107,7 +107,8 @@ function GetPlatformType()
 function GetCalicoKubeConfig()
 {
     param(
-      [parameter(Mandatory=$true)] $SecretName
+      [parameter(Mandatory=$true)] $SecretName,
+      [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
     # On EKS, we need to have AWS tools loaded for kubectl authentication.
@@ -117,15 +118,15 @@ function GetCalicoKubeConfig()
         Import-Module $eksAWSToolsModulePath
     }
 
-    $name=c:\k\kubectl.exe --kubeconfig=c:\k\config get secret -n kube-system | findstr $SecretName | % { $_.Split(" ") | select -first 1 }
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n kube-system | findstr $SecretName | % { $_.Split(" ") | select -first 1 }
     if ([string]::IsNullOrEmpty($name)) {
         throw "$SecretName service account does not exist."
     }
-    $ca=c:\k\kubectl.exe --kubeconfig=c:\k\config get secret/$name -o jsonpath='{.data.ca\.crt}' -n kube-system
-    $tokenBase64=c:\k\kubectl.exe --kubeconfig=c:\k\config get secret/$name -o jsonpath='{.data.token}' -n kube-system
+    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n kube-system
+    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n kube-system
     $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
 
-    $server=findstr https:// c:\k\config
+    $server=findstr https:// $KubeConfigPath
 
     (Get-Content c:\CalicoWindows\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content c:\CalicoWindows\calico-kube-config -Force
 }
@@ -150,6 +151,7 @@ function StartCalico()
     Write-Host "`nCalico Started`n"
 }
 
+$Backend="vxlan"
 $BaseDir="c:\k"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -183,26 +185,27 @@ SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
 SetConfigParameters -OldString '<your etcd endpoints>' -NewString "$EtcdEndpoints"
 SetConfigParameters -OldString '<your service cidr>' -NewString $ServiceCidr
 SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
+SetConfigParameters -OldString 'KUBECONFIG = "c:\k\config"' -NewString 'KUBECONFIG = "c:\CalicoWindows\calico-kube-config"'
+
 if ($platform -EQ "azure") {
     Write-Host "Setup Calico for Windows for azure..."
+    $Backend="none"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
     GetCalicoKubeConfig -SecretName 'calico-windows'
-    SetConfigParameters -OldString 'KUBECONFIG = "c:\k\config"' -NewString 'KUBECONFIG = "c:\CalicoWindows\calico-kube-config"'
 }
 if ($platform -EQ "eks") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for eks, node name $awsNodeName ..."
+    $Backend="none"
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "vpc.*"'
 
-    # We need kubectl.
-    InstallK8sBinaries
-
-    GetCalicoKubeConfig -SecretName 'calico-node'
-    SetConfigParameters -OldString 'KUBECONFIG = "c:\k\config"' -NewString 'KUBECONFIG = "c:\CalicoWindows\calico-kube-config"'
+    # Note: EKS mode requires downloading kubectl.exe to c:\k before running this script.
+    # https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html
+    GetCalicoKubeConfig -SecretName 'calico-node' -KubeConfigPath C:\\ProgramData\\kubernetes\\kubeconfig
 }
 if ($platform -EQ "ec2") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
@@ -210,7 +213,6 @@ if ($platform -EQ "ec2") {
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     GetCalicoKubeConfig -SecretName 'calico-node'
-    SetConfigParameters -OldString 'KUBECONFIG = "c:\k\config"' -NewString 'KUBECONFIG = "c:\CalicoWindows\calico-kube-config"'
 }
 
 if ($DownloadOnly -EQ "yes") {
@@ -219,3 +221,7 @@ if ($DownloadOnly -EQ "yes") {
 }
 
 StartCalico
+
+if ($Backend -NE "none") {
+    New-NetFirewallRule -Name KubectlExec10250 -Description "Enable kubectl exec and log" -Action Allow -LocalPort 10250 -Enabled True -DisplayName "kubectl exec 10250" -Protocol TCP -ErrorAction SilentlyContinue
+}

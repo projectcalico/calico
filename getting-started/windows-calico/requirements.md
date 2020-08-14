@@ -33,7 +33,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 #### Kubernetes version 
 
-- Versions 1.17, 1.16, or 1.15
+- Versions 1.18, 1.17, 1.16
 
 Earlier versions may work, but we do not actively test {{site.prodnameWindows}} against them, and they may have known issues and incompatibilities.
 
