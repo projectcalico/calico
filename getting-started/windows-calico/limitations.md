@@ -11,6 +11,7 @@ canonical_url: '/getting-started/windows-calico/limitations'
 | Install     | Operator install                                             |
 |             | AKS, GKE, IKS, AWS, GCE, Azure, OpenShift, OpenStack, flannel |
 |             | K3 clusters                                                  |
+|             | Typha component for scaling                                  |
 | Security    | Non-cluster hosts, including automatic host endpoints        |
 |             | Application layer policy (ALP) for Istio                     |
 |             | Encryption with Wireguard                                    |
