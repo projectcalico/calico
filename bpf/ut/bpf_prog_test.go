@@ -286,18 +286,11 @@ func cleanUpMaps() {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
-		var allKeys [][]byte
-		err := m.Iter(func(k, v []byte) bpf.IteratorAction {
-			kCopy := make([]byte, len(k))
-			copy(kCopy, k)
-			allKeys = append(allKeys, kCopy)
-			return bpf.IterNone
+		err := m.Iter(func(_, _ []byte) bpf.IteratorAction {
+			return bpf.IterDelete
 		})
 		if err != nil {
 			log.WithError(err).Panic("Failed to walk map")
-		}
-		for _, k := range allKeys {
-			_ = m.Delete(k)
 		}
 	}
 	log.Info("Cleaned up all maps")
@@ -483,6 +476,13 @@ func dumpNATMap(natMap bpf.Map) {
 	}
 }
 
+func resetMap(m bpf.Map) {
+	err := m.Iter(func(_, _ []byte) bpf.IteratorAction {
+		return bpf.IterDelete
+	})
+	Expect(err).NotTo(HaveOccurred())
+}
+
 func dumpCTMap(ctMap bpf.Map) {
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -494,12 +494,7 @@ func dumpCTMap(ctMap bpf.Map) {
 }
 
 func resetCTMap(ctMap bpf.Map) {
-	ct, err := conntrack.LoadMapMem(ctMap)
-	Expect(err).NotTo(HaveOccurred())
-	for k := range ct {
-		err := ctMap.Delete(k[:])
-		Expect(err).NotTo(HaveOccurred())
-	}
+	resetMap(ctMap)
 }
 
 func saveCTMap(ctMap bpf.Map) conntrack.MapMem {
@@ -523,13 +518,8 @@ func dumpRTMap(rtMap bpf.Map) {
 	}
 }
 
-func resetRTMap(ctMap bpf.Map) {
-	rt, err := routes.LoadMap(ctMap)
-	Expect(err).NotTo(HaveOccurred())
-	for k := range rt {
-		err := rtMap.Delete(k[:])
-		Expect(err).NotTo(HaveOccurred())
-	}
+func resetRTMap(rtMap bpf.Map) {
+	resetMap(rtMap)
 }
 
 func saveRTMap(rtMap bpf.Map) routes.MapMem {

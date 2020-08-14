@@ -38,9 +38,9 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	srcPort := uint16(12345)
 
 	defer func() {
-		// Disable debug while cleaning up the map
+		// Disable debug while cleaning up the maps
 		logrus.SetLevel(logrus.WarnLevel)
-		resetCTMap(ctMap)
+		cleanUpMaps()
 	}()
 
 	// Disable debug while filling up the map
