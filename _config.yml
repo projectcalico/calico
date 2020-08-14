@@ -18,6 +18,7 @@ repository: projectcalico/calico
 
 prodname: Calico
 prodnamedash: calico
+prodnameWindows: Calico for Windows
 nodecontainer: calico/node
 noderunning: calico-node
 
