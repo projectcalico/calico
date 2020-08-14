@@ -48,14 +48,11 @@ $ name=calico-windows-token-xxxxx
 Extract the parts of the secret, storing them in variables:
 
 ```
-$ ca=$(kubectl get secret/$name -o jsonpath='{.data.ca\.crt}' -n
-kube-system)
+$ ca=$(kubectl get secret/$name -o jsonpath='{.data.ca\.crt}' -n kube-system)
 
-$ token=$(kubectl get secret/$name -o jsonpath='{.data.token}' -n
-kube-system | base64 --decode)
+$ token=$(kubectl get secret/$name -o jsonpath='{.data.token}' -n kube-system | base64 --decode)
 
-$ namespace=$(kubectl get secret/$name -o jsonpath='{.data.namespace}'
--n kube-system | base64 --decode)
+$ namespace=$(kubectl get secret/$name -o jsonpath='{.data.namespace}' -n kube-system | base64 --decode)
 ```
 Then, output the file:
 
@@ -65,20 +62,20 @@ apiVersion: v1
 kind: Config
 clusters:
 - name: kubernetes
-cluster:
-certificate-authority-data: ${ca}
-server: ${server}
+  cluster:
+    certificate-authority-data: ${ca}
+    server: ${server}
 contexts:
 - name: calico-windows@kubernetes
-context:
-cluster: kubernetes
-namespace: kube-system
-user: calico-windows
+  context:
+    cluster: kubernetes
+    namespace: kube-system
+    user: calico-windows
 current-context: calico-windows@kubernetes
 users:
 - name: calico-windows
-user:
-token: ${token}
+  user:
+    token: ${token}
 EOF
 ```
 Copy this config file to the windows node `C:\CalicoWindows\calico-kube-config` and set the KUBECONFIG environment variable in `config.ps1` to point to it.

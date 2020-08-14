@@ -1,6 +1,6 @@
 ---
 title: Troubleshoot Calico for Windows
-description: Help for troubleshooting issues in this release.
+description: Help for troubleshooting Calico for Windows issues in Calico this release.
 canonical_url: /getting-started/windows-calico/troubleshoot
 ---
 
@@ -34,7 +34,7 @@ Ensure that the Windows firewall (and any network firewall or cloud security gro
 
 This can be caused by a mismatch between a cloud provider (such as the AWS cloud provider) and the configuration of the node. For example, the AWS cloud provider requires that the node has a nodename matching its private domain name.
 
-#### After initializing {{site.prodname}}, AWS metadata server is no longer reachable
+#### After initializing {{site.prodnameWindows}}, AWS metadata server is no longer reachable
 
 This is a known Windows issue that Microsoft is working on. The route to the metadata server is lost when the vSwitch is created. As a workaround, manually add the route back by running:
 
@@ -52,11 +52,11 @@ PS C:\> Get-NetAdapter
 
 This can be caused by Window's Execution protection feature. Exit the install using Ctrl-C, unblock the scripts, run `uninstall-calico.ps1`, followed by `install-calico.ps1`.
 
-#### Windows Server 2019 insider preview: after rebooting a node, {{site.prodname}} fails to start, the tigera-node.err.log file contains errors
+#### Windows Server 2019 insider preview: after rebooting a node, {{site.prodnameWindows}} fails to start, the tigera-node.err.log file contains errors
 
 After rebooting the Windows node, pods fail to schedule, and the kubelet log has CNI errors like "timed out waiting for interface matching the management IP (169.254.57.5) of network" (where the IP address may vary but will always be a 169.254.x.x address). To workaround:
 
-- Stop and then start {{site.prodname}} using the `stop-calico.ps1` and `start-calico.ps1` scripts
+- Stop and then start {{site.prodnameWindows}} using the `stop-calico.ps1` and `start-calico.ps1` scripts
 - Sometimes the HNS network picks up a temporary self-assigned address at start-of-day and it does not get refreshed when the correct IP becomes known. Rebooting the node a second time often resolves the problem.
 
 #### Invoke-Webrequest fails with TLS errors
@@ -69,7 +69,7 @@ PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
 ```
 #### Kubelet persistently fails to contact the API server
 
-If kubelet is already running when {{site.prodname}} is installed, the creation of the container vSwitch can cause kubelet to lose its connection and then persistently fail to reconnect to the API server. To resolve this, restart kubelet after installing {{site.prodname}}.
+If kubelet is already running when {{site.prodnameWindows}} is installed, the creation of the container vSwitch can cause kubelet to lose its connection and then persistently fail to reconnect to the API server. To resolve this, restart kubelet after installing {{site.prodnameWindows}}.
 
 #### No connectivity between pods on Linux and Windows nodes
 
@@ -82,19 +82,18 @@ $ calicoctl get ippool -o yaml
 apiVersion: projectcalico.org/v3
 items:
 - apiVersion: projectcalico.org/v3
-kind: IPPool
-metadata:
-28
-creationTimestamp: 2018-11-26T15:37:39Z
-name: default-ipv4-ippool
-resourceVersion: "172"
-uid: 34db7316-f191-11e8-ad7d-02850eebe6c4
-spec:
-blockSize: 26
-cidr: 192.168.0.0/16
-disabled: true
-ipipMode: Never
-natOutgoing: true
+  kind: IPPool
+  metadata:
+    creationTimestamp: 2018-11-26T15:37:39Z
+    name: default-ipv4-ippool
+    resourceVersion: "172"
+    uid: 34db7316-f191-11e8-ad7d-02850eebe6c4
+  spec:
+    blockSize: 26
+    cidr: 192.168.0.0/16
+    disabled: true
+    ipipMode: Never
+    natOutgoing: true
 ```
 
 #### Felix log error: "Failed to create datastore client"
