@@ -252,6 +252,17 @@ IP_AUTODETECTION_METHOD=skip-interface=enp6s0f0,eth.*
 IP6_AUTODETECTION_METHOD=skip-interface=enp6s0f0,eth.*
 ```
 
+#### cidr=CIDR
+
+The `cidr` method uses one or more comma-separated IP ranges in CIDR format to determine valid IP
+addresses to choose from.
+
+Example:
+
+```
+IP_AUTODETECTION_METHOD=cidr=10.0.1.0/24,10.0.2.0/24
+IP6_AUTODETECTION_METHOD=cidr=2001:4860::0/64
+```
 
 ### Node readiness
 
