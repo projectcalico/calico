@@ -65,7 +65,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
    ```powershell
-   Invoke-WebRequest {{site.url}}/scripts/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
+   Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
 
 1. Run install-calico-windows.ps1 with correct parameters. The powershell script will perform following tasks.

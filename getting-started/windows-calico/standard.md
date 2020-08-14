@@ -23,7 +23,7 @@ Extend your Kubernetes deployment to Windows environments.
   On each of your Windows nodes, download and run {{site.prodnameWindows}} installation scripts:
 
   ```
-  Invoke-WebRequest https://github.com/projectcalico/calico/releases/download/v3.16.0/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
+  Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
   c:\install-calico-windows.ps1 -DownloadOnly yes -KubeVersion <your Kubernetes version>
   ```
   cd into `c:\CalicoWindows`, you will see the calico-node.exe binary, install scripts, and other files.
@@ -46,7 +46,7 @@ The geeky details of what you get by default:
 
 #### Create a Linux cluster
 
-There are many ways to create a Linux Kubernetes cluster. The Tigera team regularly tests {{ site.prodnameWindows }} with `kubeadm`.
+There are many ways to create a Linux Kubernetes cluster. We regularly test {{ site.prodnameWindows }} with `kubeadm`.
 
 #### Ensure pods run on the correct nodes
 
@@ -63,12 +63,12 @@ To get around this for `kube-proxy`:
 
    ```
    spec:
-   template:
-   ...
-   spec:
-   nodeSelector:
-   beta.kubernetes.io/os: linux
-   containers:
+     template:
+     ...
+       spec:
+         nodeSelector:
+           beta.kubernetes.io/os: linux
+         containers:
    ```
 1. Apply the updated manifest.
 
