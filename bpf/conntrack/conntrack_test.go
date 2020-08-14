@@ -144,3 +144,72 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		Entry("icmp timed out", icmpKey, icmpTimedOut, true),
 	)
 })
+
+var _ = Describe("BPF Conntrack StaleNATScanner", func() {
+
+	clientIP := net.IPv4(1, 1, 1, 1)
+	clientPort := uint16(1111)
+
+	svcIP := net.IPv4(4, 3, 2, 1)
+	svcPort := uint16(4321)
+
+	backendIP := net.IPv4(2, 2, 2, 2)
+	backendPort := uint16(2222)
+
+	DescribeTable("forward entries",
+		func(k conntrack.Key, v conntrack.Value, verdict conntrack.ScanVerdict) {
+			staleNATScanner := conntrack.NewStaleNATScanner(
+				func(fIP net.IP, fPort uint16, bIP net.IP, bPort uint16, proto uint8) bool {
+					Expect(proto).To(Equal(uint8(123)))
+					Expect(fIP.Equal(svcIP)).To(BeTrue())
+					Expect(fPort).To(Equal(svcPort))
+					Expect(bIP.Equal(backendIP)).To(BeTrue())
+					Expect(bPort).To(Equal(backendPort))
+					return false
+				},
+			)
+
+			Expect(verdict).To(Equal(staleNATScanner(k, v, nil)))
+		},
+		Entry("keyA - revA",
+			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, clientPort, backendIP, backendPort)),
+			conntrack.ScanVerdictDelete,
+		),
+		Entry("keyA - revB",
+			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
+			conntrack.ScanVerdictDelete,
+		),
+		Entry("keyB - revA",
+			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, clientPort, backendIP, backendPort)),
+			conntrack.ScanVerdictDelete,
+		),
+		Entry("keyB - revB",
+			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
+			conntrack.ScanVerdictDelete,
+		),
+		Entry("mismatch key port",
+			conntrack.NewKey(123, svcIP, svcPort, clientIP, 54545),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
+			conntrack.ScanVerdictOK,
+		),
+		Entry("mismatch key IP",
+			conntrack.NewKey(123, svcIP, svcPort, net.IPv4(2, 1, 2, 1), clientPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
+			conntrack.ScanVerdictOK,
+		),
+		Entry("mismatch rev port",
+			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, 12321)),
+			conntrack.ScanVerdictOK,
+		),
+		Entry("mismatch rev IP",
+			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, net.IPv4(3, 2, 2, 3), clientPort)),
+			conntrack.ScanVerdictOK,
+		),
+	)
+})
