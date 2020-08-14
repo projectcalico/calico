@@ -29,12 +29,24 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 **Linux control node requirements**
 - Installed with {{site.prodname}} v3.12+
-- {{site.prodname}} networking is VXLAN. For EKS, networking is set to none.
+- If {{site.prodname}} networking is being used:
+    - Networking must be VXLAN. (Note: for EKS, networking is set to none since AWS VPC networking is used.)
+    - Strict affinity must be set to `true`
 
 ### How to
 
+- [Configure strict affinity for clusters using {{site.prodname}} networking](#configure-strict-affinity-for-clusters-using-calico-networking)
 - [Install {{site.prodnameWindows}}](#install-calico-for-windows)
 - [Configure installation parameters](#configure-installation-parameters)
+
+#### Configure strict affinity for clusters using {{site.prodname}} networking
+
+For Linux control nodes using {{site.prodname}} networking, strict affinity must be set to `true`.
+This is required to prevent Linux nodes from borrowing IP addresses from Windows nodes:
+
+```bash
+calicoctl ipam configure --strictaffinity=true
+```
 
 #### Install {{site.prodnameWindows}}
 
