@@ -1,12 +1,12 @@
 ---
-title: Create cluster roles for Windows nodes
-description: Configure cluster roles with correct permissions for Calico for Windows.
-canonical_url: '/getting-started/windows-calico/cluster-roles'
+title: Create kubeconfig for Windows nodes
+description: Configure kubeconfig for Calico for Windows.
+canonical_url: '/getting-started/windows-calico/kubeconfig'
 ---
 
 ### Big picture
 
-Create cluster role for Windows nodes.
+Create kubeconfig for Windows nodes.
 
 ### How to
 
@@ -17,7 +17,7 @@ Because Kubernetes on Windows cannot run {{site.prodname}} in a pod with an auto
 
 #### Export calico-node service account token as a kubeconfig file
   
-To make the kube-config file, you'll need the URL of your Kubernetes API server.
+To make the kubeconfig file, you'll need the URL of your Kubernetes API server.
 
 >**Note**: Kubernetes for Windows does not support access to services from the host so you must use the address of your server, not the Kubernetes service IP.
 {: .alert .alert-info}
