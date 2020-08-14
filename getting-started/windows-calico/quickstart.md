@@ -237,14 +237,14 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 #### Configure installation parameters
 
-| **Parameter Name** | **Description**                                         | **Default** |
+| **Parameter Name** | **Description**                                           | **Default** |
 | ------------------ | --------------------------------------------------------- |-------------|
-| KubeVersion        | Version of Kubernetes binaries to use. If value is empty string (default), the {{site.prodnameWindows}} installation script does not download Kubernetes binaries and run Kubernetes service. Use default for managed public cloud (for example, EKS). | "" |
+| KubeVersion        | Version of Kubernetes binaries to use. If value is empty string (default), the {{site.prodnameWindows}} installation script does not download Kubernetes binaries and run Kubernetes service. Use the default for managed public cloud except for EKS (for EKS, the Kubernetes binaries are necessary). | "" |
 | DownloadOnly       | Download without installing {{site.prodnameWindows}}. Set to `yes` to manually install and configure {{site.prodnameWindows}}. For example, {{site.prodnameWindows}} the hard way. | no |
-| Datastore          | {{site.prodnameWindows}} datastore type [`kubernetes` or `etcdv3`]  for reading endpoints and policy information. | kubernetes |
+| Datastore          | {{site.prodnameWindows}} datastore type [`kubernetes` or `etcdv3`] for reading endpoints and policy information. | kubernetes |
 | EtcdEndpoints      | Comma-delimited list of etcd connection endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`. Valid only if `Datastore` is set to `etcdv3`. | "" |
-| ServiceCidr        | Service IP range of the Kubernetes cluster. Not required for managed Kubernetes cluster (for example, EKS). | 10.96.0.0/12 |
-| DNSServerIPs       | Comma-delimited list of DNS service IPs used by Windows pod. Not required for managed Kubernetes cluster (for example, EKS) | 10.96.0.10 |
+| ServiceCidr        | Service IP range of the Kubernetes cluster. Not required for most managed Kubernetes clusters. Note: EKS has non-default value. | 10.96.0.0/12 |
+| DNSServerIPs       | Comma-delimited list of DNS service IPs used by Windows pod. Not required for most managed Kubernetes clusters. Note: EKS has a non-default value. | 10.96.0.10 |
 
 Congratulations! You now have a Kubernetes cluster with {{site.prodnameWindows}} and a Linux control node.
 
