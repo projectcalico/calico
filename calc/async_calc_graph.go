@@ -231,7 +231,7 @@ func (acg *AsyncCalcGraph) onEvent(event interface{}) {
 	log.Debug("Sending output event on channel(s)")
 	healthTickCount := 0
 	startTime := time.Now()
-	channelLoop:
+channelLoop:
 	for _, c := range acg.outputChannels {
 		for {
 			select {
