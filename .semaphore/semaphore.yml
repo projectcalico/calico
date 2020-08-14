@@ -1,0 +1,16 @@
+version: v1.0
+name: libcalico-go
+execution_time_limit:
+  hours: 2
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+blocks:
+  - name: Build
+    task:
+      jobs:
+        - name: Build
+          commands:
+            - checkout
+            - make ci
