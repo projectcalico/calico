@@ -10,7 +10,7 @@ Because the Kubernetes and {{site.prodname}} control components do not run on Wi
 
 ### What's supported in this release
 
-✓ Install: Manifest install for Kubernetes 2 clusters
+✓ Install: Manifest install for Kubernetes clusters
 
 ✓ Platforms: Kubernetes, EKS
 
