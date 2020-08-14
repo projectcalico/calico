@@ -24,7 +24,11 @@ spec:
   containers:
   - name: calicoctl
     image: {{page.registry}}{{page.imageNames["calicoctl"]}}:{{site.data.versions.first.components["calicoctl"].version}}
-    command: ["/calicoctl-wait"]
+    command:
+      - /calicoctl
+    args:
+      - version
+      - --poll=1m
     env:
     - name: DATASTORE_TYPE
       value: kubernetes

@@ -1,6 +1,6 @@
 ---
 title: calicoctl version
-description: Command to display the calicoctl CLI version. 
+description: Command to display the calicoctl CLI version.
 canonical_url: '/reference/calicoctl/version'
 ---
 
@@ -16,13 +16,15 @@ commands.
 
 ```
 Usage:
-  calicoctl version [--config=<CONFIG>]
+  calicoctl version [--config=<CONFIG>] [--poll=<POLLFREQ>]
 
 Options:
   -h --help             Show this screen.
   -c --config=<CONFIG>  Path to the file containing connection configuration in
                         YAML or JSON format.
                         [default: /etc/calico/calicoctl.cfg]
+     --poll=<POLL>      Poll for changes to the cluster information at a frequency specified using POLL duration
+                        (e.g. 1s, 10m, 2h etc.). A value of 0 (the default) disables polling.
 
 Description:
   Display the version of calicoctl.
