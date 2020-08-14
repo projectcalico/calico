@@ -571,8 +571,8 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		endpointStatus = iface.info.operState
 		endpointID = iface.info.endpointID
-		if endpointID == nil {
-			log.WithField("iface", ifaceName).Debug("No endpoint ID, closing jump maps.")
+		if endpointStatus == ifacemonitor.StateUnknown {
+			log.WithField("iface", ifaceName).Debug("Interface is gone, closing jump maps.")
 			for i := range iface.dpState.jumpMapFDs {
 				if iface.dpState.jumpMapFDs[i] > 0 {
 					err := iface.dpState.jumpMapFDs[i].Close()
@@ -594,21 +594,9 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 		return nil
 	}
 
-	if endpointID == nil {
-		// We think this endpoint exists but it is not known in the datastore.  It may be being removed;
-		// clean it up.
-		log.Debug("Interface has no matching endpoint, cleaning up")
-		err := tc.RemoveQdisc(ifaceName)
-		if errors.Is(err, tc.ErrDeviceNotFound) {
-			log.WithField("name", ifaceName).Debug("Interface already gone.")
-		} else if err != nil {
-			log.WithField("name", ifaceName).WithError(err).Warn(
-				"Failed to remove BPF from interface; ignoring.")
-		}
-		return nil
-	}
-
-	wep := m.allWEPs[*endpointID]
+	// Otherwise, the interface appears to be present but we may or may not have an endpoint from the
+	// datastore.  If we don't have an endpoint then we'll attach a program to block traffic and we'll
+	// get the jump map ready to insert the policy if the endpoint shows up.
 
 	// Attach the qdisc first; it is shared between the directions.
 	err := tc.EnsureQdisc(ifaceName)
@@ -624,15 +612,19 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 
 	var ingressErr, egressErr error
 	var wg sync.WaitGroup
+	var wep *proto.WorkloadEndpoint
+	if endpointID != nil {
+		wep = m.allWEPs[*endpointID]
+	}
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.attachWorkloadProgram(wep, PolDirnIngress)
+		ingressErr = m.attachWorkloadProgram(ifaceName, wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.attachWorkloadProgram(wep, PolDirnEgress)
+		egressErr = m.attachWorkloadProgram(ifaceName, wep, PolDirnEgress)
 	}()
 	wg.Wait()
 
@@ -650,8 +642,8 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
-func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
-	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
+func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
+	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, ifaceName)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.HostIP = calicoRouterIP
 	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
@@ -662,25 +654,35 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
 
 	var tier *proto.TierInfo
-	if len(endpoint.Tiers) != 0 {
-		tier = endpoint.Tiers[0]
+	var profileIDs []string
+	if endpoint != nil {
+		profileIDs = endpoint.ProfileIds
+		if len(endpoint.Tiers) != 0 {
+			tier = endpoint.Tiers[0]
+		}
+	} else {
+		log.WithField("name", ifaceName).Debug(
+			"Workload interface with no endpoint in datastore, installing default-drop program.")
 	}
-	rules := m.extractRules(tier, endpoint.ProfileIds, polDirection)
 
-	jumpMapFD := m.getJumpMapFD(endpoint.Name, polDirection)
+	// If tier or profileIDs is nil, this will return an empty set of rules but updatePolicyProgram appends a
+	// drop rule, giving us default drop behaviour in that case.
+	rules := m.extractRules(tier, profileIDs, polDirection)
+
+	jumpMapFD := m.getJumpMapFD(ifaceName, polDirection)
 	if jumpMapFD != 0 {
 		if attached, err := ap.IsAttached(); err != nil {
-			return fmt.Errorf("failed to check if interface %s had BPF program; %w", endpoint.Name, err)
+			return fmt.Errorf("failed to check if interface %s had BPF program; %w", ifaceName, err)
 		} else if !attached {
 			// BPF program is missing; maybe we missed a notification of the interface being recreated?
 			// Close the now-defunct jump map.
-			log.WithField("iface", endpoint.Name).Info(
+			log.WithField("iface", ifaceName).Info(
 				"Detected that BPF program no longer attached to interface.")
 			err := jumpMapFD.Close()
 			if err != nil {
 				log.WithError(err).Warn("Failed to close jump map FD. Ignoring.")
 			}
-			m.setJumpMapFD(endpoint.Name, polDirection, 0)
+			m.setJumpMapFD(ifaceName, polDirection, 0)
 			jumpMapFD = 0 // Trigger program to be re-added below.
 		}
 	}
@@ -696,7 +698,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 		if err != nil {
 			return fmt.Errorf("failed to look up jump map: %w", err)
 		}
-		m.setJumpMapFD(endpoint.Name, polDirection, jumpMapFD)
+		m.setJumpMapFD(ifaceName, polDirection, jumpMapFD)
 	}
 
 	return m.updatePolicyProgram(jumpMapFD, rules)
