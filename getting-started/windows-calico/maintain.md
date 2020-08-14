@@ -6,37 +6,37 @@ canonical_url: '/getting-started/windows-calico/maintain'
 
 ### Big picture
 
-Start, stop, and update {{site.prodNameWindows}} services on the Linux master node, and uninstall for {{site.prodNameWindows}}.
+Start, stop, and update {{site.prodnameWindows}} services on the Linux master node, and uninstall for {{site.prodnameWindows}}.
 
 ### How to
 
-#### Start and stop {{site.prodNameWindows}} services
+#### Start and stop {{site.prodnameWindows}} services
 
-- Install and boot {{site.prodNameWindows}}: `install-calico.ps1` 
-- Start {{site.prodNameWindows}} services:`start-calico.ps1` 
-- Stop {{site.prodNameWindows}} services: `stop-calico.ps1`
+- Install and boot {{site.prodnameWindows}}: `install-calico.ps1`
+- Start {{site.prodnameWindows}} services:`start-calico.ps1`
+- Stop {{site.prodnameWindows}} services: `stop-calico.ps1`
 
 #### Update {{site.prodname}} services
 
 To change the parameters defined in `config.ps1`:
 
-- Run `uninstall-calico.ps1` to remove {{site.prodNameWindows}} service configuration
+- Run `uninstall-calico.ps1` to remove {{site.prodnameWindows}} service configuration
 - Modify the configuration
-- Run `install-calico.ps1`to reinstall {{site.prodNameWindows}}.
+- Run `install-calico.ps1`to reinstall {{site.prodnameWindows}}.
 
 Because `config.ps1` is imported by the various component startup scripts, additional environment variables can be added, as documented in the [{{site.prodname}} reference guide]({{site.baseurl}}/reference).
 
 #### Update service wrapper configuration
 
-The `nssm` command supports changing a number of configuration options for the {{site.prodname}} services. For example, to adjust the maximum size of the Felix log file before it is rotated: 
+The `nssm` command supports changing a number of configuration options for the {{site.prodname}} services. For example, to adjust the maximum size of the Felix log file before it is rotated:
 
 ```
 PS C:\... > nssm set TigeraFelix AppRotateBytes 1048576
 ```
 
-#### Uninstall {{site.prodNameWindows}} from Windows nodes
+#### Uninstall {{site.prodnameWindows}} from Windows nodes
 
-The following steps removes {{site.prodNameWindows}} (for example to change configuration), but keeps the cluster running.
+The following steps removes {{site.prodnameWindows}} (for example to change configuration), but keeps the cluster running.
 
 1. Remove all pods from the Windows nodes.
 1. On each Windows node, run the uninstall script:
@@ -55,5 +55,5 @@ The following steps uninstall kubelet/kube-proxy services if they were installed
    ```
    PS C:\CalicoWindows\kubernetes > .\uninstall-kube-services.ps1
    ```
-   
+
 1. If desired, delete the `CalicoWindows` directory.

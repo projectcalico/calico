@@ -17,7 +17,7 @@ Because Kubernetes on Windows cannot run {{site.prodname}} in a pod with an auto
 
 #### Install the cluster-role manifest
 
-A cluster-role with the correct permissions for {{site.prodNameWindows}} is available here: [calico-windows cluster role](https://github.com/projectcalico/calico/releases/download/v3.16.0/win-cluster-role.yaml).
+A cluster-role with the correct permissions for {{site.prodnameWindows}} is available here: [calico-windows cluster role](https://github.com/projectcalico/calico/releases/download/v3.16.0/win-cluster-role.yaml).
 
 Apply the cluster role.
 

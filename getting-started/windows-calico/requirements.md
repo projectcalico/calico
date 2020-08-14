@@ -4,9 +4,9 @@ description: Review requirements for the standard install for Calico for Windows
 canonical_url: '/getting-started/windows-calico/requirements'
 ---
 
-### About {{site.prodNameWindows}}
+### About {{site.prodnameWindows}}
 
-Because the Kubernetes and {{site.prodname}} control components do not run on Windows yet, a hybrid Linux/Windows cluster is required. {{site.prodNameWindows}} standard installation is distributed as a **.zip archive**. 
+Because the Kubernetes and {{site.prodname}} control components do not run on Windows yet, a hybrid Linux/Windows cluster is required. {{site.prodnameWindows}} standard installation is distributed as a **.zip archive**. 
 
 ### What's supported in this release
 
@@ -29,13 +29,13 @@ The following table summarizes the networking options and considerations.
 
 #### Datastores
 
-Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodNameWindows}} implementation.)
+Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodnameWindows}} implementation.)
 
 #### Kubernetes version 
 
 - Versions 1.17, 1.16, or 1.15
 
-Earlier versions may work, but we do not actively test {{site.prodNameWindows}} against them, and they may have known issues and incompatibilities.
+Earlier versions may work, but we do not actively test {{site.prodnameWindows}} against them, and they may have known issues and incompatibilities.
 
 #### Linux platform 
 
