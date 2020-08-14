@@ -40,11 +40,12 @@ The following steps removes {{site.prodnameWindows}} (for example to change conf
 
 1. Remove all pods from the Windows nodes.
 1. On each Windows node, run the uninstall script:
+
    ```
    PS C:\CalicoWindows > .\uninstall-calico.ps1
    ```
    >**Note**: If you are uninstalling to change configuration, make sure that you run the uninstall script with the old configuration file.
-{: .alert .alert-info}
+   {: .alert .alert-info}
 
 #### Uninstall kubelet and kube-proxy services from Windows nodes
 
