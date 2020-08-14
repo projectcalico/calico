@@ -449,6 +449,17 @@ To disable it, remove the portmap section from the CNI network configuration in 
 
 The {% include open-new-window.html text='traffic shaping Kubernetes CNI plugin' url='https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/' %} supports pod ingress and egress traffic shaping. This bandwidth management technique delays the flow of certain types of network packets to ensure network performance for higher priority applications. It is enabled by default. 
 
+You can add the `kubernetes.io/ingress-bandwidth` and `kubernetes.io/egress-bandwidth` annotations to your pod. For example, the following sets a 1 megabit-per-second connection for ingress and egress traffic.
+
+```bash
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubernetes.io/ingress-bandwidth: 1M
+    kubernetes.io/egress-bandwidth: 1M
+...
+```
 To disable it, remove the bandwidth section from the the CNI network configuration in the {{site.prodname}} manifests.
 
 ```json
