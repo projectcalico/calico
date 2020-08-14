@@ -59,11 +59,9 @@ One example is the VXLAN VNI setting. To change such parameters:
 Restarting Felix or changes to policy (including changes to endpoints referred to in policy), can cause pod-to-pod connections to be dropped with TCP reset packets. When one of the following occurs:
 
 - The policy that applies to a pod is updated
-- Some ingress or egress policy that applies to a pod contains selectors and the set of endpoints that those selectors match changes,
+- Some ingress or egress policy that applies to a pod contains selectors and the set of endpoints that those selectors match changes
 
-Felix must reprogram the HNS ACL policy attached to the pod. This reprogramming can cause TCP resets.
-
-Microsoft has confirmed this is a HNS issue, and they are investigating.
+Felix must reprogram the HNS ACL policy attached to the pod. This reprogramming can cause TCP resets. Microsoft has confirmed this is a HNS issue, and they are investigating.
 
 ### Service ClusterIPs incompatible with selectors/pod IPs in network policy
 
@@ -81,17 +79,18 @@ We recommend avoiding policies that contain rules with both a source and destina
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-name: calico-dest-selector
+  name: calico-dest-selector
 spec:
-selector: all()
-order: 500
-ingress:
-- action: Allow
-destination:
-selector: role == "webserver"
-source:
-selector: role == "client"
+  selector: all()
+  order: 500
+  ingress:
+  - action: Allow
+    destination:
+      selector: role == "webserver"
+    source:
+      selector: role == "client"
 ```
+
 Because the policy applies to all workloads, it will be rendered once per workload (even if the workload is not labeled as a server), and then the selectors will be expanded into many individual dataplane rules to capture the allowed connectivity. 
 
 Here is a much more efficient policy that still allows the same traffic:
@@ -100,16 +99,17 @@ Here is a much more efficient policy that still allows the same traffic:
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-name: calico-dest-selector
+  name: calico-dest-selector
 spec:
-selector: role == "webserver"
-order: 500
-ingress:
-- action: Allow
-source:
-selector: role == "client"
+  selector: role == "webserver"
+  order: 500
+  ingress:
+  - action: Allow
+    source:
+      selector: role == "client"
 ```
-The destination selector is moved into the policy selector, so this policy is only rendered for workloads that have the role: `webserver` label. In addition, the rule is simplified so that it only matches on the source of the traffic. Depending on the number of webserver pods, this change can reduce the dataplane resource usage by several orders of magnitude.
+
+The destination selector is moved into the policy selector, so this policy is only rendered for workloads that have the `role: webserver` label. In addition, the rule is simplified so that it only matches on the source of the traffic. Depending on the number of webserver pods, this change can reduce the dataplane resource usage by several orders of magnitude.
 
 ### Next steps
 
