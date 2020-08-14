@@ -152,11 +152,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    mkdir c:\k
    ```
 
-1. Copy the Kubernetes kubeconfig file on the Windows node to **c:\k**.
-
-   ```powershell
-   cp c:\ProgramData\kubernetes\kubeconfig c:\k\config
-   ```
+1. [Install kubectl](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#windows) and move the kubectl binary to **c:\k**.
 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
@@ -178,16 +174,14 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    **Kubernetes datastore (default)**
 
    ```powershell
-   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
-                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+   c:\install-calico-windows.ps1 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
                                  -DNSServerIPs <your DNS service IP (default 10.96.0.10)>
    ```
 
    **etcd datastore**
 
    ```powershell
-   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
-                                 -Datastore etcdv3
+   c:\install-calico-windows.ps1 -Datastore etcdv3
                                  -EtcdEndpoints <your etcd endpoint ip>
                                  -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
                                  -DNSServerIPs <your DNS server IPs (default 10.96.0.10)>
@@ -239,7 +233,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 | **Parameter Name** | **Description**                                           | **Default** |
 | ------------------ | --------------------------------------------------------- |-------------|
-| KubeVersion        | Version of Kubernetes binaries to use. If value is empty string (default), the {{site.prodnameWindows}} installation script does not download Kubernetes binaries and run Kubernetes service. Use the default for managed public cloud except for EKS (for EKS, the Kubernetes binaries are necessary). | "" |
+| KubeVersion        | Version of Kubernetes binaries to use. If value is empty string (default), the {{site.prodnameWindows}} installation script does not download Kubernetes binaries and run Kubernetes service. Use the default for managed public cloud. | "" |
 | DownloadOnly       | Download without installing {{site.prodnameWindows}}. Set to `yes` to manually install and configure {{site.prodnameWindows}}. For example, {{site.prodnameWindows}} the hard way. | no |
 | Datastore          | {{site.prodnameWindows}} datastore type [`kubernetes` or `etcdv3`] for reading endpoints and policy information. | kubernetes |
 | EtcdEndpoints      | Comma-delimited list of etcd connection endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`. Valid only if `Datastore` is set to `etcdv3`. | "" |

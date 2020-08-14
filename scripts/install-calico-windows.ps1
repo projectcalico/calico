@@ -18,6 +18,8 @@ layout: null
 <#
 .DESCRIPTION
     This script installs and starts Calico services on a Windows node.
+
+    Note: EKS requires downloading kubectl.exe to c:\k before running this script: https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html
 #>
 
 Param(
@@ -202,10 +204,7 @@ if ($platform -EQ "eks") {
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "vpc.*"'
-
-    # Note: EKS mode requires downloading kubectl.exe to c:\k before running this script.
-    # https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html
-    GetCalicoKubeConfig -SecretName 'calico-node' -KubeConfigPath C:\\ProgramData\\kubernetes\\kubeconfig
+    GetCalicoKubeConfig -SecretName 'calico-node' -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
 }
 if ($platform -EQ "ec2") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
