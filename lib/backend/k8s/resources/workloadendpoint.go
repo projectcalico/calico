@@ -60,7 +60,7 @@ func (c *WorkloadEndpointClient) Create(ctx context.Context, kvp *model.KVPair) 
 	// Note: it's a bit odd to do this in the Create, but the CNI plugin uses CreateOrUpdate().  Doing it
 	// here makes sure that, if the update fails: we retry here, and, we don't report success without
 	// making the patch.
-	return c.patchPodIP(ctx, kvp)
+	return c.patchInPodIPs(ctx, kvp)
 }
 
 func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -68,7 +68,7 @@ func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) 
 	// As a special case for the CNI plugin, try to patch the Pod with the IP that we've calculated.
 	// This works around a bug in kubelet that causes it to delay writing the Pod IP for a long time:
 	// https://github.com/kubernetes/kubernetes/issues/39113.
-	return c.patchPodIP(ctx, kvp)
+	return c.patchInPodIPs(ctx, kvp)
 }
 
 func (c *WorkloadEndpointClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -76,37 +76,49 @@ func (c *WorkloadEndpointClient) DeleteKVP(ctx context.Context, kvp *model.KVPai
 }
 
 func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	log.Warn("Operation Delete is not supported on WorkloadEndpoint type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: key,
-		Operation:  "Delete",
-	}
+	log.Debug("Delete for WorkloadEndpoint, patching out annotations.")
+	return c.patchOutPodIPs(ctx, key)
 }
 
-// patchPodIP PATCHes the Kubernetes Pod associated with the given KVPair with the IP addresses it contains.
+// patchInPodIPs PATCHes the Kubernetes Pod associated with the given KVPair with the IP addresses it contains.
 // This is a no-op if there is no IP address.
 //
 // We store the IP addresses in annotations because patching the PodStatus directly races with changes that
 // kubelet makes so kubelet can undo our changes.
-func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) patchInPodIPs(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
 	if len(ips) == 0 {
 		return kvp, nil
 	}
 
 	log.Debugf("PATCHing pod with IPs: %v", ips)
-	wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
+	key := kvp.Key
+	return c.patchPodIPAnnotations(key, ips)
+}
+
+// patchOutPodIPs sets our pod IP annotations to empty strings; this is used to signal that the IP has been removed
+// from the pod at teardown.
+func (c *WorkloadEndpointClient) patchOutPodIPs(ctx context.Context, key model.Key) (*model.KVPair, error) {
+	return c.patchPodIPAnnotations(key, nil)
+}
+
+func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, ips []string) (*model.KVPair, error) {
+	wepID, err := c.converter.ParseWorkloadEndpointName(key.(model.ResourceKey).Name)
 	if err != nil {
 		return nil, err
 	}
 	if wepID.Pod == "" {
-		return nil, cerrors.ErrorInsufficientIdentifiers{Name: kvp.Key.(model.ResourceKey).Name}
+		return nil, cerrors.ErrorInsufficientIdentifiers{Name: key.(model.ResourceKey).Name}
 	}
 	// Write the IP addresses into annotations.  This generates an event more quickly than
 	// waiting for kubelet to update the PodStatus PodIP and PodIPs fields.
-	ns := kvp.Key.(model.ResourceKey).Namespace
+	ns := key.(model.ResourceKey).Namespace
+	firstIP := ""
+	if len(ips) > 0 {
+		firstIP = ips[0]
+	}
 	patch, err := calculateAnnotationPatch(
-		conversion.AnnotationPodIP, ips[0],
+		conversion.AnnotationPodIP, firstIP,
 		conversion.AnnotationPodIPs, strings.Join(ips, ","),
 	)
 	if err != nil {
@@ -115,7 +127,7 @@ func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPa
 	}
 	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(wepID.Pod, types.StrategicMergePatchType, patch, "status")
 	if err != nil {
-		return nil, K8sErrorToCalico(err, kvp.Key)
+		return nil, K8sErrorToCalico(err, key)
 	}
 	log.Debugf("Successfully PATCHed pod to add podIP annotation: %+v", pod)
 

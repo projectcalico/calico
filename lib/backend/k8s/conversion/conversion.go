@@ -157,8 +157,16 @@ const (
 )
 
 func IsFinished(pod *kapiv1.Pod) bool {
+	if pod.DeletionTimestamp != nil {
+		// Pod is Terminating, check if it still has its IPs.
+		if pod.Annotations[AnnotationPodIP] == "" {
+			log.Debug("Pod is being deleted and IPs have been removed.")
+			return true
+		}
+	}
 	switch pod.Status.Phase {
 	case kapiv1.PodFailed, kapiv1.PodSucceeded, podCompleted:
+		log.Debug("Pod phase is failed/succeeded/completed.")
 		return true
 	}
 	return false
