@@ -24,11 +24,11 @@ layout: null
 
 Param(
 {%- if site.url == "https://docs.projectcalico.org" %}
-    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.title}}/",
+    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.components["calico/node"].version}}/",
 {%- else %}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="{{site.url}}/files/windows/",
 {%- endif %}
-    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.title}}.zip",
+    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.components["calico/node"].version}}.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
