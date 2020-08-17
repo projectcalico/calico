@@ -129,7 +129,7 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, revision s
 	log.WithField("patch", string(patch)).Debug("Calculated pod patch.")
 	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(wepID.Pod, types.StrategicMergePatchType, patch, "status")
 	if err != nil {
-		return nil, convertPatchErrorToCalico(err, key)
+		return nil, K8sErrorToCalico(err, key)
 	}
 	log.Debugf("Successfully PATCHed pod to set podIP annotation: %+v", pod)
 
@@ -139,45 +139,6 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, revision s
 	}
 
 	return kvps[0], nil
-}
-
-// convertPatchErrorToCalico is a specialised version of K8sErrorToCalico that understands patch-specific errors.
-func convertPatchErrorToCalico(err error, id interface{}) error {
-	if ke, ok := err.(kerrors.APIStatus); ok {
-		if details := ke.Status().Details; details != nil {
-			uidInvalid := false
-			revInvalid := false
-			somethingElse := false
-			for _, c := range details.Causes {
-				if c.Field == "metadata.uid" && c.Type == metav1.CauseTypeFieldValueInvalid {
-					uidInvalid = true
-					continue
-				}
-				if c.Field == "metadata.resourceVersion" && c.Type == metav1.CauseTypeFieldValueInvalid {
-					revInvalid = true
-					continue
-				}
-				somethingElse = true
-			}
-			if uidInvalid && !somethingElse {
-				// The UID in the patch was incorrect; this means that the resource we tried to update
-				// has been deleted and recreated with a new UID.
-				return cerrors.ErrorResourceDoesNotExist{
-					Err:        err,
-					Identifier: id,
-				}
-			}
-			if revInvalid && !somethingElse {
-				// The revision in the patch was incorrect but the UID was OK; this means someone else modified
-				// the resource under our feet.
-				return cerrors.ErrorResourceUpdateConflict{
-					Err:        err,
-					Identifier: id,
-				}
-			}
-		}
-	}
-	return K8sErrorToCalico(err, id)
 }
 
 func calculateAnnotationPatch(revision string, uid *types.UID, namesAndValues ...string) ([]byte, error) {
