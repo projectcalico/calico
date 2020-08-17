@@ -58,7 +58,7 @@ type bpfInterface struct {
 }
 
 type bpfInterfaceInfo struct {
-	operState  ifacemonitor.State
+	ifaceIsUp  bool
 	endpointID *proto.WorkloadEndpointID
 }
 
@@ -248,8 +248,8 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	}
 
 	m.withIface(update.Name, func(iface *bpfInterface) bool {
-		iface.info.operState = update.State
-		return false
+		iface.info.ifaceIsUp = update.State == ifacemonitor.StateUp
+		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
 }
 
@@ -412,7 +412,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				"Ignoring interface that doesn't match the host data interface regex")
 			return nil
 		}
-		if m.getIfaceState(iface) != ifacemonitor.StateUp {
+		if !m.ifaceIsUp(iface) {
 			log.WithField("iface", iface).Debug("Ignoring interface that is down")
 			return set.RemoveItem
 		}
@@ -567,12 +567,12 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	var endpointID *proto.WorkloadEndpointID
-	var endpointStatus ifacemonitor.State
+	var ifaceUp bool
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
-		endpointStatus = iface.info.operState
+		ifaceUp = iface.info.ifaceIsUp
 		endpointID = iface.info.endpointID
-		if endpointStatus == ifacemonitor.StateUnknown {
-			log.WithField("iface", ifaceName).Debug("Interface is gone, closing jump maps.")
+		if !ifaceUp {
+			log.WithField("iface", ifaceName).Debug("Interface is down/gone, closing jump maps.")
 			for i := range iface.dpState.jumpMapFDs {
 				if iface.dpState.jumpMapFDs[i] > 0 {
 					err := iface.dpState.jumpMapFDs[i].Close()
@@ -587,7 +587,7 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	})
 	m.ifacesLock.Unlock()
 
-	if endpointStatus == ifacemonitor.StateUnknown {
+	if !ifaceUp {
 		// Interface is gone, nothing to do.
 		log.WithField("ifaceName", ifaceName).Debug(
 			"Ignoring request to program interface that is not present.")
@@ -724,11 +724,11 @@ func (m *bpfEndpointManager) setJumpMapFD(name string, direction PolDirection, f
 	})
 }
 
-func (m *bpfEndpointManager) getIfaceState(ifaceName string) (state ifacemonitor.State) {
+func (m *bpfEndpointManager) ifaceIsUp(ifaceName string) (up bool) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 	m.withIface(ifaceName, func(iface *bpfInterface) bool {
-		state = iface.info.operState
+		up = iface.info.ifaceIsUp
 		return false
 	})
 	return
