@@ -33,15 +33,16 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/cni-plugin/pkg/dataplane"
-	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/cni-plugin/pkg/dataplane"
+	"github.com/projectcalico/cni-plugin/pkg/types"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
@@ -475,44 +476,57 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
-	wep, err := c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
-	if err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-			// Could not connect to datastore (connection refused, unauthorized, etc.)
-			// so we have no way of knowing/checking ContainerID. To protect the endpoint
-			// from false DEL, we return the error without deleting/cleaning up.
-			return err
-		}
+	for attempts := 5; attempts >= 0; attempts-- {
+		wep, err := c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				// Could not connect to datastore (connection refused, unauthorized, etc.)
+				// so we have no way of knowing/checking ContainerID. To protect the endpoint
+				// from false DEL, we return the error without deleting/cleaning up.
+				return err
+			}
 
-		// The WorkloadEndpoint doesn't exist for some reason. We should still try to clean up any IPAM allocations
-		// if they exist, so continue DEL processing.
-		logger.WithField("WorkloadEndpoint", epIDs.WEPName).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
-	} else if wep.Spec.ContainerID != "" && args.ContainerID != wep.Spec.ContainerID {
-		// If the ContainerID is populated and doesn't match the CNI_CONATINERID provided for this execution, then
-		// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
-		// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
-		// CNI_CONTAINERID, so we should still do that below for this case.
-		logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ConainerID, don't delete WEP.")
-	} else if _, err = c.WorkloadEndpoints().Delete(ctx, wep.Namespace, wep.Name, options.DeleteOptions{}); err != nil {
-		// Delete the WorkloadEndpoint object from the datastore, passing revision information from the
-		// queried resource above in order to prevent conflicts.
-		switch err := err.(type) {
-		case cerrors.ErrorResourceDoesNotExist:
-			// Log and proceed with the clean up if WEP doesn't exist.
-			logger.WithField("endpoint", wep).Info("Endpoint object does not exist, no need to clean up.")
-		case cerrors.ErrorResourceUpdateConflict:
-			// This case means the WEP object was modified between the time we did the Get and now,
-			// so it's not a safe Compare-and-Delete operation, so log and abort with the error.
-			// Returning an error here is with the assumption that k8s (kubelet) retries deleting again.
-			logger.WithField("endpoint", wep).Warning("Error deleting endpoint: endpoint was modified before it could be deleted.")
-			return fmt.Errorf("error deleting endpoint: endpoint was modified before it could be deleted: %v", err)
-		case cerrors.ErrorOperationNotSupported:
-			// KDD does not support WorkloadEndpoint deletion, the WEP is backed by the Pod and the
-			// deletion will be handled by Kubernetes. This error can be ignored.
-			logger.WithField("endpoint", wep).Info("Endpoint deletion will be handled by Kubernetes deletion of the Pod.")
-		default:
-			return err
+			// The WorkloadEndpoint doesn't exist for some reason. We should still try to clean up any IPAM allocations
+			// if they exist, so continue DEL processing.
+			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
+		} else if wep.Spec.ContainerID != "" && args.ContainerID != wep.Spec.ContainerID {
+			// If the ContainerID is populated and doesn't match the CNI_CONTAINERID provided for this execution, then
+			// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
+			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
+			// CNI_CONTAINERID, so we should still do that below for this case.
+			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ConainerID, don't delete WEP.")
+		} else if _, err = c.WorkloadEndpoints().Delete(
+			ctx,
+			wep.Namespace,
+			wep.Name,
+			options.DeleteOptions{
+				ResourceVersion: wep.ResourceVersion,
+				UID:             &wep.UID,
+			},
+		); err != nil {
+			// Delete the WorkloadEndpoint object from the datastore, passing revision information from the
+			// queried resource above in order to prevent conflicts.
+			switch err := err.(type) {
+			case cerrors.ErrorResourceDoesNotExist:
+				// Log and proceed with the clean up if WEP doesn't exist.
+				logger.WithField("endpoint", wep).Info("Endpoint object does not exist, no need to clean up.")
+			case cerrors.ErrorResourceUpdateConflict:
+				// This case means the WEP object was modified between the time we did the Get and now, retry
+				// a few times and then return the error.  kubelet should then retry the whole DEL later.
+				if attempts == 0 {
+					logger.WithField("endpoint", wep).Warn("Endpoint was modified before it could be deleted.  Giving up.")
+					return fmt.Errorf("error deleting endpoint: endpoint was modified before it could be deleted: %v", err)
+				}
+				logger.WithField("endpoint", wep).Info("Endpoint was modified before it could be deleted.  Retrying...")
+				continue
+			case cerrors.ErrorOperationNotSupported:
+				// Defensive: shouldn't be hittable any more since KDD now supports pod deletion.
+				logger.WithField("endpoint", wep).WithError(err).Warn("Deleting pod returned ErrorOperationNotSupported.")
+			default:
+				return err
+			}
 		}
+		break
 	}
 
 	// Clean up namespace by removing the interfaces.
