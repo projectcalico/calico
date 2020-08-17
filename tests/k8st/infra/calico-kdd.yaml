@@ -563,7 +563,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: calico/cni:master
+          image: calico/cni:release-v3.15
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           env:
             - name: KUBERNETES_NODE_NAME
@@ -585,7 +585,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: calico/cni:master
+          image: calico/cni:release-v3.15
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
@@ -621,7 +621,7 @@ spec:
         # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
-          image: calico/pod2daemon-flexvol:master
+          image: calico/pod2daemon-flexvol:release-v3.15
           volumeMounts:
           - name: flexvol-driver-host
             mountPath: /host/driver
@@ -807,7 +807,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: calico/kube-controllers:master
+          image: calico/kube-controllers:release-v3.15
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
