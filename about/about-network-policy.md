@@ -15,18 +15,19 @@ your cluster so the only traffic that is allowed to flow is the traffic you are 
 To understand the significance of network policy, let's briefly explore how network security was typically achieved
 prior to network policy. Historically in enterprise networks, network security was provided by designing a physical
 topology of network devices (switches, routers, firewalls) and their associated configuration. The physical topology
-defined the security boundaries of the network. In the first phase of virtualization, the network and network devices
-were virtualized in the cloud, and many of the same techniques for creating specific network topologies of (virtual)
-network devices were used to provide network security. Adding new classes of workloads often required additional network
-design to update the topology and network device configuration to provide the desired security.
+defined the security boundaries of the network. In the first phase of virtualization, the same network and network
+device constructs were virtualized in the cloud, and the same techniques for creating specific network topologies of
+(virtual) network devices were used to provide network security. Adding new applications or services often required
+additional network design to update the network topology and network device configuration to provide the desired
+security.
 
-In contrast, the [Kubernetes network model]({{site.baseurl}}/about/about-kubernetes-networking.md) defines a "flat"
+In contrast, the [Kubernetes network model]({{site.baseurl}}/about/about-kubernetes-networking) defines a "flat"
 network in which every pod can communicate with all other pods in the cluster using pod IP addresses. This approach
 massively simplifies network design and allows new workloads to be scheduled dynamically anywhere in the cluster with no
 dependencies on the network design.
 
 In this model, rather than network security being defined by network topology boundaries, it is defined using network
-policies that are independent of the network itself. Network policies are further abstracted from the network by using
+policies that are independent of the network topology. Network policies are further abstracted from the network by using
 label selectors as their primary mechanism for defining which workloads can talk to which workloads, rather than IP
 addresses or IP address ranges.
 
@@ -36,23 +37,25 @@ In age where attackers are becoming more and more sophisticated, network securit
 than ever. 
 
 While you can (and should) use firewalls to restrict traffic at the perimeters of your network (commonly referred to as
-north-south traffic), their ability to police Kubernetes traffic is often limited to the cluster as a whole, rather than
-to specific groups of pods, due to the dynamic nature of pod scheduling and pod IP addresses. In addition, the goal of
-most attackers once they gain a small foothold inside the perimeter is to move laterally (commonly referred to as
-east-west) to gain access to higher value targets, which perimeter based firewalls can't police against.
+north-south traffic), their ability to police Kubernetes traffic is often limited to a granularity of the cluster as a
+whole, rather than to specific groups of pods, due to the dynamic nature of pod scheduling and pod IP addresses. In
+addition, the goal of most attackers once they gain a small foothold inside the perimeter is to move laterally (commonly
+referred to as east-west) to gain access to higher value targets, which perimeter based firewalls can't police against.
 
 Network policy on the other hand is designed for the dynamic nature of Kubernetes by following the standard Kubernetes
 paradigm of using abel selectors to define groups of pods, rather than IP addresses. And because network policy is
 enforced within the cluster itself it can police both north-south and east-west traffic.
 
-(It's worth noting that Calico and Calico Enterprise offer capabilities that can help perimeter firewalls integrate
-better with Kubernetes. However, this does not remove the need or value of network policies within the cluster itself.)
-
-Network policy represents an important evolution of network security, not just because it handles the dynamic nature
-of modern microservices, but because it empowers dev and devops engineers to easily define network security themselves,
+Network policy represents an important evolution of network security, not just because it handles the dynamic nature of
+modern microservices, but because it empowers dev and devops engineers to easily define network security themselves,
 rather than needing to learn low-level networking details or raise tickets with a separate team responsible for managing
 firewalls. Network policy makes it easy to define intent, such as "only this microservice gets to connect to the
-database", write that intent as code (YAML), and integrate authoring of network policies into git workflows and CI/CD processes.
+database", write that intent as code (typically in YAML files), and integrate authoring of network policies into git
+workflows and CI/CD processes.
+
+> Note: Calico and Calico Enterprise offer capabilities that can help perimeter firewalls integrate
+> more tightly with Kubernetes. However, this does not remove the need or value of network policies within the cluster itself.)
+{: .alert .alert-info }
 
 ### Kubernetes network policy
 
@@ -82,7 +85,7 @@ features beyond those supported by Kubernetes network policy. This includes supp
 - policy ordering/priority
 - deny and log actions in rules
 - more flexible match criteria for applying policies and in policy rules, including matching on Kubernetes
-  ServiceAccounts, and (if using Istio & Envoy) cryptographic identity and layer 5-7 match criteria such as HTTP(S) & GRPC URLs.
+  ServiceAccounts, and (if using Istio & Envoy) cryptographic identity and layer 5-7 match criteria such as HTTP & gRPC URLs.
 - ability to reference non-Kubernetes workloads in polices, including matching on
   [NetworkSets]({{site.baseurl}}/reference/resources/networkset) in policy rules
 
@@ -94,10 +97,14 @@ policy]({{site.baseurl}}/security/calico-network-policy) guide.
 
 ### Benefits of using {{site.prodname}} for network policy
 
+#### Full Kubernetes network policy support
 Unlike some other network policy implementations, Calico implements the full set of Kubernetes network policy features.
-Calico network policies allow even richer traffic control if you need it, plus Calico GlobalNetworkPolicy allows you to
-create policy that applies across all namespaces.
 
+#### Richer network policy
+Calico network policies allow even richer traffic control than Kubernetes network policies if you need it. In addition,
+Calico GlobalNetworkPolicy allows you to create policy that applies across multiple namespaces.
+
+#### Mix Kubernetes and Calico network policy
 Kubernetes and Calico network policies can be mixed together seamlessly. One common and powerful use case for this is to
 split responsibilities between security / cluster ops teams and developer / service teams. For example, giving the
 security / cluster ops team RBAC permissions to define Calico policies, and giving developer / service teams RBAC
@@ -107,22 +114,23 @@ allows the security / cluster ops team to define higher-level constraints that t
 circumvent, while empowering the developer / service teams to define their own fine-grained constraints on the apps and
 services they are responsible for.
 
-!!! Diagram, show personas and policy evaluation order: global allow metrics collector to connect to all pods, global
-deny cluster egress, k8s policies team A, k8s policies team B, global default deny except for DNS
 ![Example mix of network policy types]({{site.baseurl}}/images/example-k8s-calico-policy-mix.svg)
 
+#### Ability to protect hosts and VMs
 As {{site.prodname}} policies can be enforce on host interfaces, you can use them to protect your Kubernetes nodes (not
 just your pods), including for example, limiting access to node ports from outside of the cluster. To learn more, check
 out the {{site.prodname}} [policy for hosts]({{site.baseurl}}/security/hosts) guides.
 
-[Calico Enterprise]({{site.baseurl}}/calico-enterprise/) adds even richer network policy capabilities, with the ability
-to specify hierarchical policies with each team have particular boundaries of trust, and FQDN / domain names in policy
-rules for restricting access to specific external services.
-
-Finally, when used with Istio service mesh, {{site.prodname}} policy engine enforces the same policy model at the host networking
+#### Integrates with Istio
+When used with Istio service mesh, {{site.prodname}} policy engine enforces the same policy model at the host networking
 layer and at the service mesh layer, protecting your infrastructure from compromised workloads and protecting your
 workloads from compromised infrastructure. This also avoids the need for dual provisioning of security at the service
 mesh and infrastructure layers, or having to learn different policy models for each layer.
+
+#### Extendable with Calico Enterprise
+[Calico Enterprise]({{site.baseurl}}/calico-enterprise/) adds even richer network policy capabilities, with the ability
+to specify hierarchical policies with each team have particular boundaries of trust, and FQDN / domain names in policy
+rules for restricting access to specific external services.
 
 ### Best practices for network policies
 
@@ -132,9 +140,6 @@ to connect to the pod and on which pods. The best practice is also to define net
 what the pod is allowed to connect to itself. Ingress rules protect your pod from attacks outside of the pod. Egress
 rules help protect everything outside of the pod if the pod gets compromised, reducing the attack surface to make moving
 laterally (east-west) or to prevent exfiltrate compromised data from your cluster (north-south).
-
-?!!! diagram of ingress showing allowed connections (pods) and denied connections (compromised pod, external attacker)
-?!!! diagram of egress showing allowed connections (pods) and exfiltration
 
 #### Policy schemas
 Due to the flexibility of network policy and labelling, there are often multiple different ways of labelling and writing
