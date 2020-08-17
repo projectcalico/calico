@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<svg version="1.1" viewBox="0.0 0.0 960.0 540.0" fill="none" stroke="none" stroke-linecap="square" stroke-miterlimit="10" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg version="1.1" viewBox="0 0 960 440" fill="none" stroke="none" stroke-linecap="square" stroke-miterlimit="10" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <clipPath id="g90e9cd5a5d_0_0.0">
     <path d="m0 0l960.0 0l0 540.0l-960.0 0l0 -540.0z" clip-rule="nonzero"/>
   </clipPath>
-  <g clip-path="url(#g90e9cd5a5d_0_0.0)">
+  <g clip-path="url(#g90e9cd5a5d_0_0.0)" transform="matrix(1, 0, 0, 1, 0, -83)">
     <defs>
       <linearGradient id="g90e9cd5a5d_0_0.1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(17.08632778424712 0.0 0.0 17.08632778424712 0.0 0.0)" spreadMethod="pad" x1="35.61968544370925" y1="26.676481591090152" x2="35.6130369067738" y2="9.590155100363958">
         <stop offset="0" stop-color="#1084bd"/>
