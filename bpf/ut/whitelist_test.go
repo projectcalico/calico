@@ -34,16 +34,12 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 
 	bpfIfaceName = "WHwl"
 	defer func() { bpfIfaceName = "" }()
+	defer cleanUpMaps()
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
-	mc := &bpf.MapContext{}
-
-	ctMap := conntrack.Map(mc)
-	err = ctMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean
 
 	hostIP = node1ip
@@ -52,10 +48,6 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
-	defer func() {
-		err := rtMap.Delete(rtKey)
-		Expect(err).NotTo(HaveOccurred())
-	}()
 	Expect(err).NotTo(HaveOccurred())
 
 	ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
