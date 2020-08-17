@@ -104,6 +104,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		// Pods with no IPs will get filtered out before they get to Felix in the watcher syncer cache layer.
 		// We can't pretend the workload endpoint is deleted _here_ because that would confuse users of the
 		// native v3 Watch() API.
+		log.Debug("Pod is in a 'finished' state so no longer owns its IP(s).")
 		podIPNets = nil
 	}
 

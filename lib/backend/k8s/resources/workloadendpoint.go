@@ -77,7 +77,7 @@ func (c *WorkloadEndpointClient) DeleteKVP(ctx context.Context, kvp *model.KVPai
 
 func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Debug("Delete for WorkloadEndpoint, patching out annotations.")
-	return c.patchOutPodIPs(ctx, key)
+	return c.patchOutPodIPs(ctx, key, revision, uid)
 }
 
 // patchInPodIPs PATCHes the Kubernetes Pod associated with the given KVPair with the IP addresses it contains.
@@ -93,16 +93,16 @@ func (c *WorkloadEndpointClient) patchInPodIPs(ctx context.Context, kvp *model.K
 
 	log.Debugf("PATCHing pod with IPs: %v", ips)
 	key := kvp.Key
-	return c.patchPodIPAnnotations(key, ips)
+	return c.patchPodIPAnnotations(key, kvp.Revision, kvp.UID, ips)
 }
 
 // patchOutPodIPs sets our pod IP annotations to empty strings; this is used to signal that the IP has been removed
 // from the pod at teardown.
-func (c *WorkloadEndpointClient) patchOutPodIPs(ctx context.Context, key model.Key) (*model.KVPair, error) {
-	return c.patchPodIPAnnotations(key, nil)
+func (c *WorkloadEndpointClient) patchOutPodIPs(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	return c.patchPodIPAnnotations(key, revision, uid, nil)
 }
 
-func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, ips []string) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, revision string, uid *types.UID, ips []string) (*model.KVPair, error) {
 	wepID, err := c.converter.ParseWorkloadEndpointName(key.(model.ResourceKey).Name)
 	if err != nil {
 		return nil, err
@@ -118,6 +118,7 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, ips []stri
 		firstIP = ips[0]
 	}
 	patch, err := calculateAnnotationPatch(
+		revision, uid,
 		conversion.AnnotationPodIP, firstIP,
 		conversion.AnnotationPodIPs, strings.Join(ips, ","),
 	)
@@ -125,11 +126,12 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, ips []stri
 		log.WithError(err).Error("failed to calculate Pod patch.")
 		return nil, err
 	}
+	log.WithField("patch", string(patch)).Debug("Calculated pod patch.")
 	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(wepID.Pod, types.StrategicMergePatchType, patch, "status")
 	if err != nil {
-		return nil, K8sErrorToCalico(err, key)
+		return nil, convertPatchErrorToCalico(err, key)
 	}
-	log.Debugf("Successfully PATCHed pod to add podIP annotation: %+v", pod)
+	log.Debugf("Successfully PATCHed pod to set podIP annotation: %+v", pod)
 
 	kvps, err := c.converter.PodToWorkloadEndpoints(pod)
 	if err != nil {
@@ -139,25 +141,69 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, ips []stri
 	return kvps[0], nil
 }
 
-const annotationNameValueTemplate = `%s: %s`
-const annotationPatchTemplate = `{"metadata": {"annotations": {%s}}}`
-
-func calculateAnnotationPatch(namesAndValues ...string) ([]byte, error) {
-	settings := []string{}
-	for i := 0; i < len(namesAndValues); i += 2 {
-		// Marshal the key and value in order to make sure all the escaping is done correctly.
-		nameJson, err := json.Marshal(namesAndValues[i])
-		if err != nil {
-			return nil, err
+// convertPatchErrorToCalico is a specialised version of K8sErrorToCalico that understands patch-specific errors.
+func convertPatchErrorToCalico(err error, id interface{}) error {
+	if ke, ok := err.(kerrors.APIStatus); ok {
+		if details := ke.Status().Details; details != nil {
+			uidInvalid := false
+			revInvalid := false
+			somethingElse := false
+			for _, c := range details.Causes {
+				if c.Field == "metadata.uid" && c.Type == metav1.CauseTypeFieldValueInvalid {
+					uidInvalid = true
+					continue
+				}
+				if c.Field == "metadata.resourceVersion" && c.Type == metav1.CauseTypeFieldValueInvalid {
+					revInvalid = true
+					continue
+				}
+				somethingElse = true
+			}
+			if uidInvalid && !somethingElse {
+				// The UID in the patch was incorrect; this means that the resource we tried to update
+				// has been deleted and recreated with a new UID.
+				return cerrors.ErrorResourceDoesNotExist{
+					Err:        err,
+					Identifier: id,
+				}
+			}
+			if revInvalid && !somethingElse {
+				// The revision in the patch was incorrect but the UID was OK; this means someone else modified
+				// the resource under our feet.
+				return cerrors.ErrorResourceUpdateConflict{
+					Err:        err,
+					Identifier: id,
+				}
+			}
 		}
-		valueJson, err := json.Marshal(namesAndValues[i+1])
-		if err != nil {
-			return nil, err
-		}
-		settings = append(settings, fmt.Sprintf(annotationNameValueTemplate, nameJson, valueJson))
 	}
-	patch := []byte(fmt.Sprintf(annotationPatchTemplate, strings.Join(settings, ", ")))
-	return patch, nil
+	return K8sErrorToCalico(err, id)
+}
+
+func calculateAnnotationPatch(revision string, uid *types.UID, namesAndValues ...string) ([]byte, error) {
+	patch := map[string]interface{}{}
+	metadata := map[string]interface{}{}
+	patch["metadata"] = metadata
+	annotations := map[string]interface{}{}
+	metadata["annotations"] = annotations
+
+	for i := 0; i < len(namesAndValues); i += 2 {
+		annotations[namesAndValues[i]] = namesAndValues[i+1]
+	}
+	if revision != "" {
+		// We have a revision.  Since the revision is immutable, if our patch revision doesn't match then the
+		// patch will fail.
+		log.WithField("rev", revision).Debug("Generating patch for specific rev")
+		metadata["resourceVersion"] = revision
+	}
+	if uid != nil {
+		// We have a UID, which identifies a particular instance of a pod with a particular name; add that to
+		// the patch.  Since the UID is immutable, if our patch UID doesn't match then the patch will fail.
+		log.WithField("uid", *uid).Debug("Generating patch for specific UID")
+		metadata["uid"] = uid
+	}
+
+	return json.Marshal(patch)
 }
 
 func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
