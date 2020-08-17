@@ -37,6 +37,10 @@ var (
 	})
 )
 
+func init() {
+	prometheus.MustRegister(bpfIPSetsGauge)
+}
+
 type bpfIPSetManager struct {
 	// ipSets contains an entry for each IP set containing the state of that IP set.
 	ipSets map[uint64]*bpfIPSet

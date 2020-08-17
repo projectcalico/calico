@@ -63,6 +63,12 @@ var (
 	})
 )
 
+func init() {
+	prometheus.MustRegister(bpfEndpointsGauge)
+	prometheus.MustRegister(bpfDirtyEndpointsGauge)
+	prometheus.MustRegister(bpfHappyEndpointsGauge)
+}
+
 type bpfInterface struct {
 	// info contains the information about the interface sent to us from external sources. For example,
 	// the ID of the controlling workload interface and our current expectation of its "oper state".
