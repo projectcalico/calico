@@ -9,8 +9,8 @@ description: Learn about networking!
 
 ### What is network policy?
 
-Network policy is the primary tool for securing a Kubernetes network. It allows you to easily restrict the network traffic in
-your cluster so the only traffic that is allowed to flow is the traffic you are wanting to flow.
+Network policy is the primary tool for securing a Kubernetes network. It allows you to easily restrict the network
+traffic in your cluster so only the traffic that you want to flow is allowed.
 
 To understand the significance of network policy, let's briefly explore how network security was typically achieved
 prior to network policy. Historically in enterprise networks, network security was provided by designing a physical
@@ -43,7 +43,7 @@ addition, the goal of most attackers once they gain a small foothold inside the 
 referred to as east-west) to gain access to higher value targets, which perimeter based firewalls can't police against.
 
 Network policy on the other hand is designed for the dynamic nature of Kubernetes by following the standard Kubernetes
-paradigm of using abel selectors to define groups of pods, rather than IP addresses. And because network policy is
+paradigm of using label selectors to define groups of pods, rather than IP addresses. And because network policy is
 enforced within the cluster itself it can police both north-south and east-west traffic.
 
 Network policy represents an important evolution of network security, not just because it handles the dynamic nature of
@@ -102,7 +102,8 @@ Unlike some other network policy implementations, Calico implements the full set
 
 #### Richer network policy
 Calico network policies allow even richer traffic control than Kubernetes network policies if you need it. In addition,
-Calico GlobalNetworkPolicy allows you to create policy that applies across multiple namespaces.
+Calico network policies allow you to create policy that applies across multiple namespaces using GlobalNetworkPolicy
+resources.
 
 #### Mix Kubernetes and Calico network policy
 Kubernetes and Calico network policies can be mixed together seamlessly. One common use case for this is to split
@@ -131,7 +132,7 @@ mesh and infrastructure layers, or having to learn different policy models for e
 
 #### Extendable with Calico Enterprise
 [Calico Enterprise]({{site.baseurl}}/calico-enterprise/) adds even richer network policy capabilities, with the ability
-to specify hierarchical policies with each team have particular boundaries of trust, and FQDN / domain names in policy
+to specify hierarchical policies, with each team have particular boundaries of trust, and FQDN / domain names in policy
 rules for restricting access to specific external services.
 
 ### Best practices for network policies
@@ -139,9 +140,9 @@ rules for restricting access to specific external services.
 #### Ingress and egress
 At a minimum it is recommended that every pod is protected by network policy ingress rules that restrict what is allowed
 to connect to the pod and on which pods. The best practice is also to define network policy egress rules that restrict
-what the pod is allowed to connect to itself. Ingress rules protect your pod from attacks outside of the pod. Egress
-rules help protect everything outside of the pod if the pod gets compromised, reducing the attack surface to make moving
-laterally (east-west) or to prevent exfiltrate compromised data from your cluster (north-south).
+the outgoing connections that are allowed by pods themselves. Ingress rules protect your pod from attacks outside of the
+pod. Egress rules help protect everything outside of the pod if the pod gets compromised, reducing the attack surface to
+make moving laterally (east-west) or to prevent exfiltrate compromised data from your cluster (north-south).
 
 #### Policy schemas
 Due to the flexibility of network policy and labelling, there are often multiple different ways of labelling and writing
@@ -182,7 +183,7 @@ spec:
 One approach to ensuring these best practices are being followed is to define [default
 deny]({{site.baseurl}}/security/kubernetes-default-deny) network policies. These ensure that if no other policy is
 defined that explicitly allows traffic to/from a pod, then the traffic will be denied. As a result, anytime a team
-deploys a new pod, they are forced to also define network policy for the pod. It can be useful to use a Calico
+deploys a new pod, they are forced to also define network policy for the pod. It can be useful to use a {{site.prodname}}
 GlobalNetworkPolicy for this (rather than needing to define a policy every time a new namespace is created) and to
 include some exceptions to the default deny (for example to allow pods to access DNS).
 
