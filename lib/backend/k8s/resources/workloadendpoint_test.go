@@ -21,6 +21,9 @@ import (
 	"sync"
 	"time"
 
+	uuid "github.com/satori/go.uuid"
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -246,6 +249,71 @@ var _ = Describe("WorkloadEndpointClient", func() {
 			})
 		})
 	})
+
+	Describe("Delete", func() {
+		Context("WorkloadEndpoint has no IPs set", func() {
+			It("zeros out the cni.projectcalico.org/podIP and cni.projectcalico.org/podIPs annotations", func() {
+				podUID := types.UID(uuid.NewV4().String())
+				k8sClient := fake.NewSimpleClientset(&k8sapi.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "simplePod",
+						Namespace: "testNamespace",
+						Annotations: map[string]string{
+							conversion.AnnotationPodIP:  "192.168.91.117/32",
+							conversion.AnnotationPodIPs: "192.168.91.117/32,192.168.91.118/32",
+						},
+						UID: podUID,
+					},
+					Spec: k8sapi.PodSpec{
+						NodeName: "test-node",
+					},
+				})
+
+				wepIDs := names.WorkloadEndpointIdentifiers{
+					Orchestrator: "k8s",
+					Node:         "test-node",
+					Pod:          "simplePod",
+					Endpoint:     "eth0",
+				}
+
+				wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				wepClient := resources.NewWorkloadEndpointClient(k8sClient)
+				key := model.ResourceKey{
+					Name:      wepName,
+					Namespace: "testNamespace",
+					Kind:      apiv3.KindWorkloadEndpoint,
+				}
+				wep, err := wepClient.Get(context.Background(), key, "")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Doesn't work because the fake k8s client allows the UID to be changed.
+				//
+				// By("Ignoring requests with the wrong UID.")
+				// wrongUID := types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
+				// _, err = wepClient.Delete(context.Background(), key, wep.Revision, &wrongUID)
+				// Expect(err).ShouldNot(HaveOccurred())
+				// pod, err := k8sClient.CoreV1().Pods("testNamespace").Get("simplePod", metav1.GetOptions{})
+				// Expect(err).ShouldNot(HaveOccurred())
+				// Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
+				// 	conversion.AnnotationPodIP:  "192.168.91.117/32",
+				// 	conversion.AnnotationPodIPs: "192.168.91.117/32,192.168.91.118/32",
+				// }))
+
+				By("Accepting requests with the right UID.")
+				_, err = wepClient.Delete(context.Background(), key, wep.Revision, wep.UID)
+				Expect(err).ShouldNot(HaveOccurred())
+				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get("simplePod", metav1.GetOptions{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
+					conversion.AnnotationPodIP:  "",
+					conversion.AnnotationPodIPs: "",
+				}))
+			})
+		})
+	})
+
 	Describe("Get", func() {
 		It("gets the WorkloadEndpoint using the given name", func() {
 			k8sClient := fake.NewSimpleClientset(&k8sapi.Pod{
@@ -538,16 +606,18 @@ var _ = Describe("WorkloadEndpointClient", func() {
 	Describe("Watch", func() {
 		Context("Pod added", func() {
 			It("returns a single event containing the Pod's WorkloadEndpoint", func() {
-				testWatchWorkloadEndpoints(&k8sapi.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "simplePod",
-						Namespace: "testNamespace",
-					},
-					Spec: k8sapi.PodSpec{
-						NodeName: "test-node",
-					},
-					Status: k8sapi.PodStatus{
-						PodIP: "192.168.91.113",
+				testWatchWorkloadEndpoints([]*k8sapi.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "simplePod",
+							Namespace: "testNamespace",
+						},
+						Spec: k8sapi.PodSpec{
+							NodeName: "test-node",
+						},
+						Status: k8sapi.PodStatus{
+							PodIP: "192.168.91.113",
+						},
 					},
 				}, []*apiv3.WorkloadEndpoint{{
 					TypeMeta: metav1.TypeMeta{
@@ -574,6 +644,95 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				}})
 			})
 		})
+		Context("Terminating Pods and normal Pod added", func() {
+			It("should ignore the IPs of a deleted pod with released IPs", func() {
+				now := metav1.Now()
+				testWatchWorkloadEndpoints([]*k8sapi.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "termPod",
+							Namespace:         "testNamespace",
+							DeletionTimestamp: &now,
+							Annotations: map[string]string{
+								conversion.AnnotationPodIP:  "192.168.91.114",
+								conversion.AnnotationPodIPs: "192.168.91.114",
+							},
+						},
+						Spec: k8sapi.PodSpec{
+							NodeName: "test-node",
+						},
+						Status: k8sapi.PodStatus{
+							PodIP: "192.168.91.114",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "termPod2",
+							Namespace:         "testNamespace",
+							DeletionTimestamp: &now,
+							Annotations: map[string]string{
+								// Empty annotation signals that the CNI plugin has released the IP.
+								conversion.AnnotationPodIP:  "",
+								conversion.AnnotationPodIPs: "",
+							},
+						},
+						Spec: k8sapi.PodSpec{
+							NodeName: "test-node",
+						},
+						Status: k8sapi.PodStatus{
+							PodIP: "192.168.91.115",
+						},
+					},
+				}, []*apiv3.WorkloadEndpoint{
+					{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       apiv3.KindWorkloadEndpoint,
+							APIVersion: apiv3.GroupVersionCurrent,
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test--node-k8s-termPod-eth0",
+							Namespace: "testNamespace",
+							Labels: map[string]string{
+								apiv3.LabelNamespace:    "testNamespace",
+								apiv3.LabelOrchestrator: "k8s",
+							},
+						},
+						Spec: apiv3.WorkloadEndpointSpec{
+							Orchestrator:  "k8s",
+							Node:          "test-node",
+							Pod:           "termPod",
+							Endpoint:      "eth0",
+							Profiles:      []string{"kns.testNamespace"},
+							IPNetworks:    []string{"192.168.91.114/32"},
+							InterfaceName: "calidfce31fd9be",
+						},
+					},
+					{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       apiv3.KindWorkloadEndpoint,
+							APIVersion: apiv3.GroupVersionCurrent,
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test--node-k8s-termPod2-eth0",
+							Namespace: "testNamespace",
+							Labels: map[string]string{
+								apiv3.LabelNamespace:    "testNamespace",
+								apiv3.LabelOrchestrator: "k8s",
+							},
+						},
+						Spec: apiv3.WorkloadEndpointSpec{
+							Orchestrator:  "k8s",
+							Node:          "test-node",
+							Pod:           "termPod2",
+							Endpoint:      "eth0",
+							Profiles:      []string{"kns.testNamespace"},
+							IPNetworks:    []string{},
+							InterfaceName: "cali9591578421e",
+						},
+					},
+				})
+			})
+		})
 	})
 })
 
@@ -592,7 +751,7 @@ func testListWorkloadEndpoints(pods []runtime.Object, listOptions model.Resource
 	Expect(weps).Should(Equal(expectedWEPs))
 }
 
-func testWatchWorkloadEndpoints(pod *k8sapi.Pod, expectedWEPs []*apiv3.WorkloadEndpoint) {
+func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*apiv3.WorkloadEndpoint) {
 	k8sClient := fake.NewSimpleClientset()
 
 	wepClient := resources.NewWorkloadEndpointClient(k8sClient).(*resources.WorkloadEndpointClient)
@@ -627,8 +786,10 @@ func testWatchWorkloadEndpoints(pod *k8sapi.Pod, expectedWEPs []*apiv3.WorkloadE
 		}
 	}()
 
-	_, err = k8sClient.CoreV1().Pods(pod.Namespace).Create(pod)
-	Expect(err).ShouldNot(HaveOccurred())
+	for _, pod := range pods {
+		_, err = k8sClient.CoreV1().Pods(pod.Namespace).Create(pod)
+		Expect(err).ShouldNot(HaveOccurred())
+	}
 
 	wg.Wait()
 	wepWatcher.Stop()

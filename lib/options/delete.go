@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
 
 package options
 
+import (
+	"k8s.io/apimachinery/pkg/types"
+)
+
 // DeleteOptions is the standard options for deleting a resource through the Calico API.
 type DeleteOptions struct {
 	// When specified:
@@ -21,4 +25,8 @@ type DeleteOptions struct {
 	// - if set to non zero, then the result is at least as fresh as given rv.
 	// +optional
 	ResourceVersion string
+
+	// If non-nil and supported by the backend (only KDD WorkloadEndpoints at the time of writing),
+	// only delete the resource if its UID matches.
+	UID *types.UID
 }

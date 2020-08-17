@@ -21,27 +21,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/libcalico-go/lib/names"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
-
 	log "github.com/sirupsen/logrus"
+	k8sapi "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/names"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-
-	k8sapi "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 var (
@@ -1535,6 +1534,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 		By("Assigning an IP", func() {
 			// Update the Pod to have an IP and be running.
+			pod.Annotations = map[string]string{
+				conversion.AnnotationPodIP:  "192.168.1.1",
+				conversion.AnnotationPodIPs: "192.168.1.1",
+			}
 			pod.Status.PodIP = "192.168.1.1"
 			pod.Status.Phase = k8sapi.PodRunning
 			pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
@@ -1637,7 +1640,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	})
 
 	// There are several states that we consider "finished", run the test for each one.
-	for _, finishPhase := range []k8sapi.PodPhase{k8sapi.PodSucceeded, k8sapi.PodFailed} {
+	for _, finishPhase := range []k8sapi.PodPhase{k8sapi.PodSucceeded, k8sapi.PodFailed, "Terminating"} {
 		finishPhase := finishPhase
 		It(fmt.Sprintf("should treat a finished Pod (%v) as a deletion", finishPhase), func() {
 			pod, wepName := createPodAndMarkAsRunning("finished-pod-" + strings.ToLower(string(finishPhase)))
@@ -1660,11 +1663,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				})
 			})
 
+			var wepKV *model.KVPair
+			key := model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}
 			By("Checking the pod is visible before we mark it as finished", func() {
 				// Perform a Get and ensure no error in the Calico API.
-				wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
+				var err error
+				wepKV, err = c.Get(ctx, key, "")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(wep).NotTo(BeNil())
+				Expect(wepKV).NotTo(BeNil())
 
 				// Perform List and ensure it shows up in the Calico API.
 				weps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint}, "")
@@ -1673,6 +1679,39 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			})
 
 			By(fmt.Sprintf("Marking the Pod as finished (%v)", finishPhase), func() {
+				if finishPhase == "Terminating" {
+					// The Terminating state isn't a real state; it means the pod is being deleted but hasn't
+					// finished yet. The CNI plugin calls through to DeleteKVP when it gets a DEL.
+					var gracePeriod int64 = 60
+					err = c.ClientSet.CoreV1().Pods("default").Delete(pod.Name,
+						&metav1.DeleteOptions{GracePeriodSeconds: &gracePeriod})
+
+					// Terminating alone shouldn't remove the IP (so that pods that are gracefully shutting down
+					// can finish).
+					wepKV, err = c.Get(ctx, key, "")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(wepKV.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
+
+					// Deleting in the Calico API with incorrect UID should fail.
+					realUID := wepKV.UID
+					badUID := types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
+					wepKV.UID = &badUID
+					_, err = c.DeleteKVP(ctx, wepKV)
+					Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+					wepKV.UID = realUID
+					wepKV2, err := c.Get(ctx, key, "")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(wepKV2.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).NotTo(HaveLen(0))
+
+					// Successful deletion in the Calico API should make the IPs disappear.
+					_, err = c.DeleteKVP(ctx, wepKV)
+					Expect(err).NotTo(HaveOccurred())
+					wepKV2, err = c.Get(ctx, key, "")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(wepKV2.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(0))
+
+					return
+				}
 				pod.Status.Phase = finishPhase
 				pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
 				Expect(err).NotTo(HaveOccurred())
@@ -1687,6 +1726,18 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// a "delete", we should now see a "new", rather than an "update".
 
 			By("Marking the Pod as running again", func() {
+				if finishPhase == "Terminating" {
+					// Revision is now out of date, create should fail.
+					_, err := c.Update(ctx, wepKV)
+					Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceUpdateConflict{}))
+
+					// Recreate the WEP (this puts the annotations back again).
+					wepKV.Revision = ""
+					wepKV.UID = nil
+					_, err = c.Create(ctx, wepKV)
+					Expect(err).NotTo(HaveOccurred())
+					return
+				}
 				pod.Status.Phase = k8sapi.PodRunning
 				pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
 				Expect(err).NotTo(HaveOccurred())
@@ -1700,7 +1751,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 			By("Checking the pod is gettable", func() {
 				// Perform a Get and ensure no error in the Calico API.
-				_, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
+				_, err := c.Get(ctx, key, "")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1751,6 +1802,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Removing its IP", func() {
+			pod.Annotations = map[string]string{}
 			pod.Status.PodIP = ""
 			pod.Status.PodIPs = nil
 			pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)

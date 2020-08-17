@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -173,7 +173,13 @@ func (c *resources) Delete(ctx context.Context, opts options.DeleteOptions, kind
 		Name:      name,
 		Namespace: ns,
 	}
-	kvp, err := c.backend.Delete(ctx, key, opts.ResourceVersion)
+	// Wrap the Key in a KVPair so we can pass the UID through.
+	kvpIn := model.KVPair{
+		Key:      key,
+		Revision: opts.ResourceVersion,
+		UID:      opts.UID,
+	}
+	kvp, err := c.backend.DeleteKVP(ctx, &kvpIn)
 	if kvp != nil {
 		return c.kvPairToResource(kvp), err
 	}
