@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
@@ -46,6 +47,21 @@ import (
 )
 
 const jumpMapCleanupInterval = 10 * time.Second
+
+var (
+	bpfEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_dataplane_endpoints",
+		Help: "Number of BPF endpoints managed in the dataplane.",
+	})
+	bpfDirtyEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_dirty_dataplane_endpoints",
+		Help: "Number of BPF endpoints managed in the dataplane that are left dirty after a failure.",
+	})
+	bpfHappyEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_happy_dataplane_endpoints",
+		Help: "Number of BPF endpoints that are successfully programmed.",
+	})
+)
 
 type bpfInterface struct {
 	// info contains the information about the interface sent to us from external sources. For example,
@@ -368,11 +384,15 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
 
+	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
+	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
+
 	if m.happyWEPsDirty {
 		chains := m.ruleRenderer.WorkloadInterfaceAllowChains(m.happyWEPs)
 		m.iptablesFilterTable.UpdateChains(chains)
 		m.happyWEPsDirty = false
 	}
+	bpfHappyEndpointsGauge.Set(float64(len(m.happyWEPs)))
 
 	return nil
 }
@@ -470,6 +490,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			log.WithField("iface", iface).Debug(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
+			return set.RemoveItem
 		}
 		log.WithError(err).Warn("Failed to apply policy to interface")
 		return nil
@@ -550,12 +571,12 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			log.WithField("wep", wlID).Debug(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
-			return nil
+			return set.RemoveItem
 		}
 		log.WithError(err).WithFields(log.Fields{
 			"wepID": wlID,
 			"name":  ifaceName,
-		}).Warn("Failed to apply policy to endpoint")
+		}).Warn("Failed to apply policy to endpoint, leaving it dirty")
 		return nil
 	})
 }

@@ -17,6 +17,8 @@ package intdataplane
 import (
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/felix/bpf/ipsets"
 
 	"github.com/projectcalico/felix/idalloc"
@@ -26,6 +28,13 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/set"
+)
+
+var (
+	bpfIPSetsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_num_ip_sets",
+		Help: "Number of BPF IP sets managed in the dataplane.",
+	})
 )
 
 type bpfIPSetManager struct {
@@ -290,6 +299,8 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 			"numDels":   numDels,
 		}).Info("Completed updates to BPF IP sets.")
 	}
+
+	bpfIPSetsGauge.Set(float64(len(m.ipSets)))
 
 	return nil
 }
