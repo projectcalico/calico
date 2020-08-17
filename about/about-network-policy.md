@@ -1,6 +1,6 @@
 ---
 title: About Network Policy
-description: Learn about networking!
+description: Learn about network policy!
 ---
 
 > <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional background education, including
