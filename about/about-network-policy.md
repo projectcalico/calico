@@ -105,14 +105,16 @@ Calico network policies allow even richer traffic control than Kubernetes networ
 Calico GlobalNetworkPolicy allows you to create policy that applies across multiple namespaces.
 
 #### Mix Kubernetes and Calico network policy
-Kubernetes and Calico network policies can be mixed together seamlessly. One common and powerful use case for this is to
-split responsibilities between security / cluster ops teams and developer / service teams. For example, giving the
-security / cluster ops team RBAC permissions to define Calico policies, and giving developer / service teams RBAC
-permissions to define Kubernetes network policies in their specific namespaces. As Calico policy rules can be ordered to
-be enforced either before or after Kubernetes network policies, and can include actions such as deny and log, this
-allows the security / cluster ops team to define higher-level constraints that the developer / service teams cannot
-circumvent, while empowering the developer / service teams to define their own fine-grained constraints on the apps and
-services they are responsible for.
+Kubernetes and Calico network policies can be mixed together seamlessly. One common use case for this is to split
+responsibilities between security / cluster ops teams and developer / service teams. For example, giving the security /
+cluster ops team RBAC permissions to define Calico policies, and giving developer / service teams RBAC permissions to
+define Kubernetes network policies in their specific namespaces. As Calico policy rules can be ordered to be enforced
+either before or after Kubernetes network policies, and can include actions such as deny and log, this allows the
+security / cluster ops team to define basic higher-level more-general purpose rules, while empowering the developer /
+service teams to define their own fine-grained constraints on the apps and services they are responsible for.
+
+For more flexible control and delegation of responsibilities between two or more teams, Calico Enterprise extends this
+model to provide [hierarchical policy](#hierarchical-policy).
 
 ![Example mix of network policy types]({{site.baseurl}}/images/example-k8s-calico-policy-mix.svg)
 
