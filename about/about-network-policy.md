@@ -208,7 +208,7 @@ spec:
 #### Hierarchical policy
 
 [Calico Enterprise]({{site.baseurl}}/calico-enterprise/) supports hierarchical network policy using policy tiers. RBAC
-to each tier can be defined to restrict who can interact with each tier. This can be used to delegate trust across
+for each tier can be defined to restrict who can interact with each tier. This can be used to delegate trust across
 multiple teams.
 
 ![Example tiers]({{site.baseurl}}/images/example-tiers.svg)
