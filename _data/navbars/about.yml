@@ -9,3 +9,5 @@ section:
   path: /about/about-networking
 - title: Kubernetes Networking
   path: /about/about-kubernetes-networking
+- title: Network Policy
+  path: /about/about-network-policy
