@@ -1,5 +1,5 @@
 ---
-title: Configuring the Calico CNI plugins
+title: Configure the Calico CNI plugins
 description: Details for configuring the Calico CNI plugins.  
 canonical_url: '/reference/cni-plugin/configuration'
 ---
@@ -430,9 +430,19 @@ for a full example.
 
 ### CNI network configuration lists
 
-The CNI 0.3.0 [spec](https://github.com/containernetworking/cni/blob/spec-v0.3.0/SPEC.md#network-configuration-lists) supports "chaining" multiple cni plugins together and {{site.prodname}} supports this as well. {{site.prodname}} enables the portmap plugin by default which is required to implement Kubernetes host port functionality. This can be disabled by removing the portmap section from the CNI network configuration in the {{site.prodname}} manifests.
+The CNI 0.3.0 [spec](https://github.com/containernetworking/cni/blob/spec-v0.3.0/SPEC.md#network-configuration-lists) supports "chaining" multiple CNI plugins together. {{site.prodname}} supports the following Kubernetes CNI plugins, which are enabled by default. Although chaining other CNI plugins may work, we support only the following tested CNI plugins. 
 
- ```json
+**Port mapping plugin**
+
+{{site.prodname}} is required to implement Kubernetes host port functionality and is enabled by default. 
+
+> **Note**: Be aware of the following {% include open-new-window.html text='portmap plugin CNI issue' url='https://github.com/containernetworking/cni/issues/605' %} where draining nodes
+> may take a long time with a cluster of 100+ nodes and 4000+ services.
+{: .alert .alert-info}
+
+To disable it, remove the portmap section from the CNI network configuration in the {{site.prodname}} manifests. 
+
+```json
         {
           "type": "portmap",
           "snat": true,
@@ -441,10 +451,30 @@ The CNI 0.3.0 [spec](https://github.com/containernetworking/cni/blob/spec-v0.3.0
 ```
 {: .no-select-button}
 
-> **Note**: A CNI issue exists with the portmap plugin where draining nodes
-> may take a long time with a cluster of 100+ nodes and 4000+ services.
-> See https://github.com/containernetworking/cni/issues/605
-{: .alert .alert-info}
+**Traffic shaping plugin**
+
+The {% include open-new-window.html text='traffic shaping Kubernetes CNI plugin' url='https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/' %} supports pod ingress and egress traffic shaping. This bandwidth management technique delays the flow of certain types of network packets to ensure network performance for higher priority applications. It is enabled by default. 
+
+You can add the `kubernetes.io/ingress-bandwidth` and `kubernetes.io/egress-bandwidth` annotations to your pod. For example, the following sets a 1 megabit-per-second connection for ingress and egress traffic.
+
+```bash
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubernetes.io/ingress-bandwidth: 1M
+    kubernetes.io/egress-bandwidth: 1M
+...
+```
+To disable it, remove the bandwidth section from the the CNI network configuration in the {{site.prodname}} manifests.
+
+```json
+        { 
+          "type": "bandwidth",
+          "capabilities": {"bandwidth": true}
+        }
+```   
+{: .no-select-button}     
 
 ### Order of precedence
 
