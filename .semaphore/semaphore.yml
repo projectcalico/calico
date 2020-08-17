@@ -9,6 +9,17 @@ agent:
     type: e1-standard-2
     os_image: ubuntu1804
 
+global_job_config:
+  prologue:
+    commands:
+      - checkout
+      # Note that the 'cache restore' commands require that the "Build" block has been run. The "Build" block is what populates
+      # the cache, therefore every block that requires the use of these cached items must make the "Build" block one of
+      # it's dependencies.
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+
 blocks:
   - name: 'Build'
     dependencies: []
@@ -16,37 +27,22 @@ blocks:
       jobs:
         - name: Build
           commands:
-            - checkout
-            - cache restore go-pkg-cache
-            - cache restore go-mod-cache
+            - make build
             - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
             - cache store go-pkg-cache .go-pkg-cache
             - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
-            - make build
 
   - name: 'UTs'
     dependencies: ["Build"]
     task:
-      prologue:
-        commands:
-          - checkout
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
-          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
       jobs:
         - name: Run UT
           commands:
-            - make ci
+            - make ci EXCEPT=k8sfv-test
 
   - name: 'FVs'
     dependencies: ["Build"]
     task:
-      prologue:
-        commands:
-          - checkout
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
-          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
       jobs:
         - name: Run FV
           commands:
@@ -59,12 +55,6 @@ blocks:
     task:
       secrets:
         - name: foss-api-key
-      prologue:
-        commands:
-          - checkout
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
-          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
       jobs:
         - name: Foss Checks
           commands:
@@ -81,14 +71,10 @@ blocks:
         - name: docker
       prologue:
         commands:
-          - checkout
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
-          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       jobs:
         - name: Run CD
           commands:
-            - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-            - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
