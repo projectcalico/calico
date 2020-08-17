@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -55,6 +56,7 @@ import (
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/felix/timeshim"
 )
 
 // We run with and without connection-time load balancing for a couple of reasons:
@@ -412,7 +414,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				BeforeEach(func() {
 					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 				})
-				It("should traffic from workload to workload and to/from host", func() {
+				It("should allow traffic from workload to workload and to/from host", func() {
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
 					cc.ExpectSome(w[1], hostW)
@@ -793,6 +795,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Hosts.
 				cc.ExpectSome(felixes[0], w[0][0])
 				cc.ExpectNone(felixes[1], w[0][0])
+				cc.CheckConnectivity()
+			})
+
+			It("should allow host -> host", func() {
+				// XXX as long as there is no HEP policy
+				// using hostW as a sink
+				cc.Expect(Some, felixes[0], hostW[1])
+				cc.Expect(Some, felixes[1], hostW[0])
 				cc.CheckConnectivity()
 			})
 
@@ -2362,6 +2372,63 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 							Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
 								Should(BeNumerically(">", 0), matcher)
+						})
+					})
+				})
+
+				Context("with CT tables full", func() {
+					It("should still allow host -> host", func() {
+						// XXX as long as there is no HEP policy
+						// using hostW as a sink
+
+						By("waiting for everything to come up", func() {
+							cc.Expect(Some, felixes[0], hostW[1])
+							cc.Expect(Some, felixes[1], hostW[0])
+							cc.CheckConnectivity()
+						})
+
+						By("filling up the CT tables", func() {
+							srcIP := net.IPv4(123, 123, 123, 123)
+							dstIP := net.IPv4(121, 121, 121, 121)
+
+							now := time.Duration(timeshim.RealTime().KTimeNanos())
+							leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+							val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+							val64 := base64.StdEncoding.EncodeToString(val[:])
+
+							key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
+							key64 := base64.StdEncoding.EncodeToString(key[:])
+
+							_, err := felixes[0].ExecCombinedOutput("calico-bpf", "conntrack", "fill", key64, val64)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						By("checking host-host connectivity works", func() {
+							cc.ResetExpectations()
+							cc.Expect(Some, felixes[0], hostW[1])
+							cc.Expect(Some, felixes[1], hostW[0])
+							cc.CheckConnectivity()
+						})
+
+						By("checking pod-pod connectivity fails", func() {
+							cc.ResetExpectations()
+							cc.Expect(None, w[0][1], w[0][0])
+							cc.Expect(None, w[1][0], w[0][0])
+							cc.Expect(None, w[1][1], w[0][0])
+							cc.CheckConnectivity()
+						})
+
+						By("cleaning up the CT maps", func() {
+							_, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "clean")
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						By("checking pod-pod connectivity works again", func() {
+							cc.ResetExpectations()
+							cc.Expect(Some, w[0][1], w[0][0])
+							cc.Expect(Some, w[1][0], w[0][0])
+							cc.Expect(Some, w[1][1], w[0][0])
+							cc.CheckConnectivity()
 						})
 					})
 				})

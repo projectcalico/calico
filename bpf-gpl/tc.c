@@ -956,6 +956,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		if (nat_dest == NULL) {
 			if (conntrack_create(&ct_nat_ctx, CT_CREATE_NORMAL)) {
 				CALI_DEBUG("Creating normal conntrack failed\n");
+
+				if ((CALI_F_FROM_HEP && rt_addr_is_local_host(ct_nat_ctx.dst)) ||
+						(CALI_F_TO_HEP && rt_addr_is_local_host(ct_nat_ctx.src))) {
+					CALI_DEBUG("Allowing local host traffic without CT\n");
+					goto allow;
+				}
+
 				goto deny;
 			}
 			goto allow;
