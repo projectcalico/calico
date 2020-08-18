@@ -16,8 +16,8 @@ global_job_config:
       # Note that the 'cache restore' commands require that the "Build" block has been run. The "Build" block is what populates
       # the cache, therefore every block that requires the use of these cached items must make the "Build" block one of
       # it's dependencies.
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
+      - 'cache restore go-pkg-cache-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore go-mod-cache-${SEMAPHORE_GIT_SHA}'
       - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
 
 blocks:
@@ -29,8 +29,8 @@ blocks:
           commands:
             - make build
             - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
-            - cache store go-pkg-cache .go-pkg-cache
-            - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
+            - 'cache store go-pkg-cache-${SEMAPHORE_GIT_SHA} .go-pkg-cache'
+            - 'cache store go-mod-cache-${SEMAPHORE_GIT_SHA} ${HOME}/go/pkg/mod/cache'
 
   - name: 'UTs'
     dependencies: ["Build"]
@@ -78,3 +78,8 @@ blocks:
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
+
+promotions:
+  # Run this manually via the semaphore UI if the cache is full
+  - name: Clear Cache
+    pipeline_file: clear_cache.yml

@@ -1,0 +1,18 @@
+version: v1.0
+name: Typha
+
+execution_time_limit:
+  hours: 2
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+blocks:
+  - name: 'Clear Cache'
+    task:
+      jobs:
+        - name: Clear Cache
+          commands:
+            - 'cache clear'
