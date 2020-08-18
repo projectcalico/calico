@@ -75,7 +75,7 @@ update-pins: update-libcalico-pin
 # Building the binary
 ###############################################################################
 BIN=bin/$(ARCH)
-build: $(BIN)/install
+build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
 BIN_WIN=bin/windows
@@ -207,11 +207,12 @@ sub-tag-images-%:
 # Unit Tests
 ###############################################################################
 ## Run the unit tests.
-ut: run-k8s-controller build $(BIN)/host-local
-	cp $(BIN)/install $(BIN)/calico-ipam
-	cp $(BIN)/install $(BIN)/calico
+ut: run-k8s-controller $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+
+$(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
+	cp "$<" "$@"
 
 ut-datastore: $(LOCAL_BUILD_DEP)
 	# The tests need to run as root
