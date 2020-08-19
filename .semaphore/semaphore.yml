@@ -68,7 +68,7 @@ blocks:
       - sudo apt-get install putty-tools
       - git clone git@github.com:tigera/process.git
       - checkout
-      - make build && make bin/amd64/win-fv.exe
+      - make build && make bin/windows/win-fv.exe
     jobs:
     - name: FV Test matrix
       commands:
