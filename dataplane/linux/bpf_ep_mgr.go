@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
@@ -47,6 +48,27 @@ import (
 
 const jumpMapCleanupInterval = 10 * time.Second
 
+var (
+	bpfEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_dataplane_endpoints",
+		Help: "Number of BPF endpoints managed in the dataplane.",
+	})
+	bpfDirtyEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_dirty_dataplane_endpoints",
+		Help: "Number of BPF endpoints managed in the dataplane that are left dirty after a failure.",
+	})
+	bpfHappyEndpointsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_happy_dataplane_endpoints",
+		Help: "Number of BPF endpoints that are successfully programmed.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(bpfEndpointsGauge)
+	prometheus.MustRegister(bpfDirtyEndpointsGauge)
+	prometheus.MustRegister(bpfHappyEndpointsGauge)
+}
+
 type bpfInterface struct {
 	// info contains the information about the interface sent to us from external sources. For example,
 	// the ID of the controlling workload interface and our current expectation of its "oper state".
@@ -58,7 +80,7 @@ type bpfInterface struct {
 }
 
 type bpfInterfaceInfo struct {
-	operState  ifacemonitor.State
+	ifaceIsUp  bool
 	endpointID *proto.WorkloadEndpointID
 }
 
@@ -175,12 +197,12 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	if iface == zeroIface {
 		logCtx.Debug("Interface info is now empty.")
 		delete(m.nameToIface, ifaceName)
+	} else {
+		// Always store the result (rather than checking hte dirty flag) because dirty only covers the info..
+		m.nameToIface[ifaceName] = iface
 	}
 
 	dirty = dirty || iface.info != ifaceCopy.info
-
-	// Store the result in case iface.state was changed.
-	m.nameToIface[ifaceName] = iface
 
 	if !dirty {
 		return
@@ -248,8 +270,8 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	}
 
 	m.withIface(update.Name, func(iface *bpfInterface) bool {
-		iface.info.operState = update.State
-		return false
+		iface.info.ifaceIsUp = update.State == ifacemonitor.StateUp
+		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
 }
 
@@ -368,11 +390,15 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
 
+	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
+	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
+
 	if m.happyWEPsDirty {
 		chains := m.ruleRenderer.WorkloadInterfaceAllowChains(m.happyWEPs)
 		m.iptablesFilterTable.UpdateChains(chains)
 		m.happyWEPsDirty = false
 	}
+	bpfHappyEndpointsGauge.Set(float64(len(m.happyWEPs)))
 
 	return nil
 }
@@ -412,7 +438,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				"Ignoring interface that doesn't match the host data interface regex")
 			return nil
 		}
-		if m.getIfaceState(iface) != ifacemonitor.StateUp {
+		if !m.ifaceIsUp(iface) {
 			log.WithField("iface", iface).Debug("Ignoring interface that is down")
 			return set.RemoveItem
 		}
@@ -470,6 +496,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			log.WithField("iface", iface).Debug(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
+			return set.RemoveItem
 		}
 		log.WithError(err).Warn("Failed to apply policy to interface")
 		return nil
@@ -550,12 +577,12 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			log.WithField("wep", wlID).Debug(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
-			return nil
+			return set.RemoveItem
 		}
 		log.WithError(err).WithFields(log.Fields{
 			"wepID": wlID,
 			"name":  ifaceName,
-		}).Warn("Failed to apply policy to endpoint")
+		}).Warn("Failed to apply policy to endpoint, leaving it dirty")
 		return nil
 	})
 }
@@ -567,12 +594,12 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	var endpointID *proto.WorkloadEndpointID
-	var endpointStatus ifacemonitor.State
+	var ifaceUp bool
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
-		endpointStatus = iface.info.operState
+		ifaceUp = iface.info.ifaceIsUp
 		endpointID = iface.info.endpointID
-		if endpointID == nil {
-			log.WithField("iface", ifaceName).Debug("No endpoint ID, closing jump maps.")
+		if !ifaceUp {
+			log.WithField("iface", ifaceName).Debug("Interface is down/gone, closing jump maps.")
 			for i := range iface.dpState.jumpMapFDs {
 				if iface.dpState.jumpMapFDs[i] > 0 {
 					err := iface.dpState.jumpMapFDs[i].Close()
@@ -587,28 +614,16 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	})
 	m.ifacesLock.Unlock()
 
-	if endpointStatus == ifacemonitor.StateUnknown {
+	if !ifaceUp {
 		// Interface is gone, nothing to do.
 		log.WithField("ifaceName", ifaceName).Debug(
 			"Ignoring request to program interface that is not present.")
 		return nil
 	}
 
-	if endpointID == nil {
-		// We think this endpoint exists but it is not known in the datastore.  It may be being removed;
-		// clean it up.
-		log.Debug("Interface has no matching endpoint, cleaning up")
-		err := tc.RemoveQdisc(ifaceName)
-		if errors.Is(err, tc.ErrDeviceNotFound) {
-			log.WithField("name", ifaceName).Debug("Interface already gone.")
-		} else if err != nil {
-			log.WithField("name", ifaceName).WithError(err).Warn(
-				"Failed to remove BPF from interface; ignoring.")
-		}
-		return nil
-	}
-
-	wep := m.allWEPs[*endpointID]
+	// Otherwise, the interface appears to be present but we may or may not have an endpoint from the
+	// datastore.  If we don't have an endpoint then we'll attach a program to block traffic and we'll
+	// get the jump map ready to insert the policy if the endpoint shows up.
 
 	// Attach the qdisc first; it is shared between the directions.
 	err := tc.EnsureQdisc(ifaceName)
@@ -624,15 +639,19 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 
 	var ingressErr, egressErr error
 	var wg sync.WaitGroup
+	var wep *proto.WorkloadEndpoint
+	if endpointID != nil {
+		wep = m.allWEPs[*endpointID]
+	}
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.attachWorkloadProgram(wep, PolDirnIngress)
+		ingressErr = m.attachWorkloadProgram(ifaceName, wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.attachWorkloadProgram(wep, PolDirnEgress)
+		egressErr = m.attachWorkloadProgram(ifaceName, wep, PolDirnEgress)
 	}()
 	wg.Wait()
 
@@ -650,8 +669,8 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
-func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
-	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
+func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
+	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, ifaceName)
 	// Host side of the veth is always configured as 169.254.1.1.
 	ap.HostIP = calicoRouterIP
 	// * VXLAN MTU should be the host ifaces MTU -50, in order to allow space for VXLAN.
@@ -662,25 +681,35 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
 
 	var tier *proto.TierInfo
-	if len(endpoint.Tiers) != 0 {
-		tier = endpoint.Tiers[0]
+	var profileIDs []string
+	if endpoint != nil {
+		profileIDs = endpoint.ProfileIds
+		if len(endpoint.Tiers) != 0 {
+			tier = endpoint.Tiers[0]
+		}
+	} else {
+		log.WithField("name", ifaceName).Debug(
+			"Workload interface with no endpoint in datastore, installing default-drop program.")
 	}
-	rules := m.extractRules(tier, endpoint.ProfileIds, polDirection)
 
-	jumpMapFD := m.getJumpMapFD(endpoint.Name, polDirection)
+	// If tier or profileIDs is nil, this will return an empty set of rules but updatePolicyProgram appends a
+	// drop rule, giving us default drop behaviour in that case.
+	rules := m.extractRules(tier, profileIDs, polDirection)
+
+	jumpMapFD := m.getJumpMapFD(ifaceName, polDirection)
 	if jumpMapFD != 0 {
 		if attached, err := ap.IsAttached(); err != nil {
-			return fmt.Errorf("failed to check if interface %s had BPF program; %w", endpoint.Name, err)
+			return fmt.Errorf("failed to check if interface %s had BPF program; %w", ifaceName, err)
 		} else if !attached {
 			// BPF program is missing; maybe we missed a notification of the interface being recreated?
 			// Close the now-defunct jump map.
-			log.WithField("iface", endpoint.Name).Info(
+			log.WithField("iface", ifaceName).Info(
 				"Detected that BPF program no longer attached to interface.")
 			err := jumpMapFD.Close()
 			if err != nil {
 				log.WithError(err).Warn("Failed to close jump map FD. Ignoring.")
 			}
-			m.setJumpMapFD(endpoint.Name, polDirection, 0)
+			m.setJumpMapFD(ifaceName, polDirection, 0)
 			jumpMapFD = 0 // Trigger program to be re-added below.
 		}
 	}
@@ -696,7 +725,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 		if err != nil {
 			return fmt.Errorf("failed to look up jump map: %w", err)
 		}
-		m.setJumpMapFD(endpoint.Name, polDirection, jumpMapFD)
+		m.setJumpMapFD(ifaceName, polDirection, jumpMapFD)
 	}
 
 	return m.updatePolicyProgram(jumpMapFD, rules)
@@ -722,11 +751,11 @@ func (m *bpfEndpointManager) setJumpMapFD(name string, direction PolDirection, f
 	})
 }
 
-func (m *bpfEndpointManager) getIfaceState(ifaceName string) (state ifacemonitor.State) {
+func (m *bpfEndpointManager) ifaceIsUp(ifaceName string) (up bool) {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 	m.withIface(ifaceName, func(iface *bpfInterface) bool {
-		state = iface.info.operState
+		up = iface.info.ifaceIsUp
 		return false
 	})
 	return
