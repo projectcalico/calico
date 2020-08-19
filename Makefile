@@ -78,7 +78,8 @@ BIN=bin/$(ARCH)
 build: $(BIN)/install
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
-build: $(BIN)/calico.exe $(BIN)/calico-ipam.exe
+BIN_WIN=bin/windows
+build: $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe
 endif
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
@@ -101,12 +102,12 @@ $(BIN)/install binary: $(SRC_FILES)
 		go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
 
 ## Build the Calico network plugin and ipam plugins for Windows
-$(BIN)/calico.exe $(BIN)/calico-ipam.exe: $(LOCAL_BUILD_DEP) $(SRC_FILES)
+$(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(LOCAL_BUILD_DEP) $(SRC_FILES)
 	$(DOCKER_RUN) \
 	-e GOOS=windows \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $(BIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico && \
-		go build -v -o $(BIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
+		go build -v -o $(BIN_WIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico && \
+		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
 
 
 ###############################################################################
@@ -342,8 +343,8 @@ endif
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests  IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 ## Build fv binary for Windows
-$(BIN)/win-fv.exe: $(LOCAL_BUILD_DEP) $(WINFV_SRCFILES)
-	$(DOCKER_RUN) -e GOOS=windows $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go test ./win_tests -c -o $(BIN)/win-fv.exe'
+$(BIN_WIN)/win-fv.exe: $(LOCAL_BUILD_DEP) $(WINFV_SRCFILES)
+	$(DOCKER_RUN) -e GOOS=windows $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go test ./win_tests -c -o $(BIN_WIN)/win-fv.exe'
 
 ###############################################################################
 # Release
