@@ -93,7 +93,10 @@ func (c *WorkloadEndpointClient) patchInPodIPs(ctx context.Context, kvp *model.K
 
 	log.Debugf("PATCHing pod with IPs: %v", ips)
 	key := kvp.Key
-	return c.patchPodIPAnnotations(key, kvp.Revision, kvp.UID, ips)
+	
+	// Note: we drop the revision here because the CNI plugin can't handle a retry right now (and the kubelet
+	// ensures that only one CNI ADD for a given UID can be in progress).
+	return c.patchPodIPAnnotations(key, "", kvp.UID, ips)
 }
 
 // patchOutPodIPs sets our pod IP annotations to empty strings; this is used to signal that the IP has been removed
