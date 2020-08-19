@@ -1727,10 +1727,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 			By("Marking the Pod as running again", func() {
 				if finishPhase == "Terminating" {
-					// Revision is now out of date, create should fail.
-					_, err := c.Update(ctx, wepKV)
-					Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceUpdateConflict{}))
-
 					// Recreate the WEP (this puts the annotations back again).
 					wepKV.Revision = ""
 					wepKV.UID = nil
