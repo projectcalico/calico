@@ -199,6 +199,9 @@ spec:
             # Actually enable BPF mode.
             - name: FELIX_BPFENABLED
               value: "true"
+{{- else }}
+            - name: FELIX_IPTABLESBACKEND
+              value: "Auto"
 {{- end }}
 {{- if eq .Values.datastore "etcd" }}
             # The location of the etcd cluster.
