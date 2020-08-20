@@ -1117,10 +1117,10 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKey, k8sSvc k8sp.ServicePortName
 }
 
 func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
-	s.expFixupStop = make(chan struct{})
 	if len(misses) == 0 {
 		return
 	}
+	s.expFixupStop = make(chan struct{})
 	s.expFixupWg.Add(1)
 
 	// start the fixer routine and exit
@@ -1172,8 +1172,12 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 }
 
 func (s *Syncer) stopExpandNPFixup() {
-	close(s.expFixupStop)
-	s.expFixupWg.Wait()
+	// If there was an error before we started ExpandNPFixup, there is nothing to stop
+	if s.expFixupStop != nil {
+		close(s.expFixupStop)
+		s.expFixupWg.Wait()
+		s.expFixupStop = nil
+	}
 }
 
 // Stop stops the syncer
