@@ -22,6 +22,7 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
+#include <linux/tcp.h>
 
 #include "bpf.h"
 #include "log.h"
@@ -53,9 +54,11 @@ static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
 		min_size = ETH_IPV4_UDP_SIZE;
 	}
 	if (skb_shorter(skb, min_size)) {
-		// Try to pull in more data.
-		if (bpf_skb_pull_data(skb, min_size)) {
-			return true;
+		// Try to pull in more data.  Ideally enough for TCP, or, failing that, enough for UDP.
+		if (bpf_skb_pull_data(skb, min_size + sizeof(struct tcphdr) - sizeof(struct udphdr))) {
+			if (bpf_skb_pull_data(skb, min_size)) {
+				return true;
+			}
 		}
 		return skb_shorter(skb, min_size);
 	}
