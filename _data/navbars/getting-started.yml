@@ -27,7 +27,7 @@ section:
       path: /getting-started/kubernetes/self-managed-public-cloud/gce
     - title: Self-managed Kubernetes in Azure
       path: /getting-started/kubernetes/self-managed-public-cloud/azure        
-    - title: Self-managed Kubernetes in Digital Ocean
+    - title: Self-managed Kubernetes in DigitalOcean
       path: /getting-started/kubernetes/self-managed-public-cloud/do   
   - title: Self-managed on-premises
     path: /getting-started/kubernetes/self-managed-onprem/
