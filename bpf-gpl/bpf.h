@@ -83,6 +83,7 @@ MAKEFUNC(int, fib_lookup, void *ctx, struct bpf_fib_lookup *params, int plen, __
 MAKEFUNC(int, skb_change_head, void *ctx, __u32 len, __u64 flags)
 MAKEFUNC(int, skb_change_tail, void *ctx, __u32 len, __u64 flags)
 MAKEFUNC(int, skb_adjust_room, void *ctx, __s32 len, __u32 mode, __u64 flags)
+MAKEFUNC(int, skb_pull_data, void *ctx, __u32 len)
 MAKEFUNC(int, csum_diff, __be32 *from, __u32 from_size, __be32 *to, __u32 to_size, __wsum seed)
 MAKEFUNC(uint64_t, get_socket_cookie, void *ctx)
 

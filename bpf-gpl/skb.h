@@ -22,6 +22,7 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
+#include <linux/tcp.h>
 
 #include "bpf.h"
 #include "log.h"
@@ -44,14 +45,27 @@
 
 static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
 {
+	int min_size;
 	if (CALI_F_IPIP_ENCAPPED) {
-		return skb_shorter(skb, ETH_IPV4_UDP_SIZE + sizeof(struct iphdr));
+		min_size = ETH_IPV4_UDP_SIZE + sizeof(struct iphdr);
 	} else if (CALI_F_L3) {
-		return skb_shorter(skb, IPV4_UDP_SIZE);
+		min_size = IPV4_UDP_SIZE;
 	} else {
-		return skb_shorter(skb, ETH_IPV4_UDP_SIZE);
+		min_size = ETH_IPV4_UDP_SIZE;
 	}
-	// TODO Deal with IP header with options.
+	if (skb_shorter(skb, min_size)) {
+		// Try to pull in more data.  Ideally enough for TCP, or, failing that, enough for UDP.
+		if (bpf_skb_pull_data(skb, min_size + sizeof(struct tcphdr) - sizeof(struct udphdr))) {
+			CALI_DEBUG("Pull failed (TCP len)\n");
+			if (bpf_skb_pull_data(skb, min_size)) {
+				CALI_DEBUG("Pull failed (UDP len)\n");
+				return true;
+			}
+		}
+		CALI_DEBUG("Pulled data\n");
+		return skb_shorter(skb, min_size);
+	}
+	return false;
 }
 
 static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
