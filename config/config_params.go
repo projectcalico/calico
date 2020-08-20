@@ -162,7 +162,7 @@ type Config struct {
 
 	Ipv6Support bool `config:"bool;true"`
 
-	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);legacy"`
+	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
 	InterfaceRefreshInterval           time.Duration     `config:"seconds;90"`
 	DeviceRouteSourceAddress           net.IP            `config:"ipv4;"`
