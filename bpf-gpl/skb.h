@@ -56,10 +56,13 @@ static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
 	if (skb_shorter(skb, min_size)) {
 		// Try to pull in more data.  Ideally enough for TCP, or, failing that, enough for UDP.
 		if (bpf_skb_pull_data(skb, min_size + sizeof(struct tcphdr) - sizeof(struct udphdr))) {
+			CALI_DEBUG("Pull failed (TCP len)\n");
 			if (bpf_skb_pull_data(skb, min_size)) {
+				CALI_DEBUG("Pull failed (UDP len)\n");
 				return true;
 			}
 		}
+		CALI_DEBUG("Pulled data\n");
 		return skb_shorter(skb, min_size);
 	}
 	return false;
