@@ -377,7 +377,11 @@ func (s *Syncer) cleanupDerived(id uint32) error {
 				log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0, 0))
 			}
 			if err := s.bpfSvcs.Delete(key[:]); err != nil {
-				return errors.Errorf("bpfSvcs.Delete: %s", err)
+				if bpf.IsNotExists(err) {
+					log.Debugf("frontend key %s does not exist", key)
+				} else {
+					return errors.Errorf("bpfSvcs.Delete: %s", err)
+				}
 			}
 			keys, err := getSvcNATKeyLBSrcRange(si.svc)
 			if err != nil {
@@ -388,7 +392,11 @@ func (s *Syncer) cleanupDerived(id uint32) error {
 					log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0, 0))
 				}
 				if err := s.bpfSvcs.Delete(key[:]); err != nil {
-					return errors.Errorf("bpfSvcs.Delete: %s", err)
+					if bpf.IsNotExists(err) {
+						log.Debugf("frontend key %s does not exist", key)
+					} else {
+						return errors.Errorf("bpfSvcs.Delete: %s", err)
+					}
 				}
 			}
 		}
@@ -840,7 +848,11 @@ func (s *Syncer) deleteSvcBackend(svcID uint32, idx uint32) error {
 		log.Debugf("bpf map deleting %s", key)
 	}
 	if err := s.bpfEps.Delete(key[:]); err != nil {
-		return errors.Errorf("bpfEps.Delete: %s", err)
+		if bpf.IsNotExists(err) {
+			log.Debugf("backend key %s does not exist", key)
+		} else {
+			return errors.Errorf("bpfEps.Delete: %s", err)
+		}
 	}
 	return nil
 }
@@ -965,7 +977,11 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 		log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
 	}
 	if err := s.bpfSvcs.Delete(key[:]); err != nil {
-		return errors.WithMessage(err, "Delete svc")
+		if bpf.IsNotExists(err) {
+			log.Debugf("frontend key %s does not exist", key)
+		} else {
+			return errors.WithMessage(err, "Delete svc")
+		}
 	}
 
 	keys, err := getSvcNATKeyLBSrcRange(svc)
@@ -976,9 +992,12 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 		if log.GetLevel() >= log.DebugLevel {
 			log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
 		}
-		err := s.bpfSvcs.Delete(key[:])
-		if err != nil && !bpf.IsNotExists(err) {
-			return errors.WithMessage(err, "Delete svc")
+		if err := s.bpfSvcs.Delete(key[:]); err != nil {
+			if bpf.IsNotExists(err) {
+				log.Debugf("frontend key %s does not exist", key)
+			} else {
+				return errors.WithMessage(err, "Delete svc")
+			}
 		}
 	}
 
