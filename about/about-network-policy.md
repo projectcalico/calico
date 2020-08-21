@@ -7,7 +7,7 @@ description: Learn about network policy!
 > education that is not specific to {{site.prodname}}.
 {: .alert .alert-info}
 
-Both Kubernetes and {{side.prodname}} define network policy APIs to help you secure your workloads.
+Kubernetes and {{site.prodname}} provide network policy APIs to help you secure your workloads.
 
 In this guide you will learn:
 - What network policy is and why it is important.
