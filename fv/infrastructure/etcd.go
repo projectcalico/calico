@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,10 @@ import (
 func RunEtcd() *containers.Container {
 	log.Info("Starting etcd")
 	return containers.Run("etcd",
-		containers.RunOpts{AutoRemove: true},
+		containers.RunOpts{
+			AutoRemove: true,
+			StopSignal: "SIGKILL",
+		},
 		"--privileged", // So that we can add routes inside the etcd container,
 		// when using the etcd container to model an external client connecting
 		// into the cluster.

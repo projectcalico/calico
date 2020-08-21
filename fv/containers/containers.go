@@ -165,9 +165,11 @@ func (c *Container) Signal(sig os.Signal) {
 }
 
 type RunOpts struct {
-	AutoRemove    bool
-	WithStdinPipe bool
-	SameNamespace *Container
+	AutoRemove      bool
+	WithStdinPipe   bool
+	SameNamespace   *Container
+	StopTimeoutSecs int
+	StopSignal      string
 }
 
 func NextContainerIndex() int {
@@ -191,7 +193,11 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
-	runArgs := []string{"run", "--name", c.Name}
+	runArgs := []string{"run", "--name", c.Name, "--stop-timeout", fmt.Sprint(opts.StopTimeoutSecs)}
+
+	if opts.StopSignal != "" {
+		runArgs = append(runArgs, "--stop-signal", opts.StopSignal)
+	}
 
 	if opts.AutoRemove {
 		runArgs = append(runArgs, "--rm")
