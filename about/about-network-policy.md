@@ -7,6 +7,13 @@ description: Learn about network policy!
 > education that is not specific to {{site.prodname}}.
 {: .alert .alert-info}
 
+Both Kubernetes and {{side.prodname}} define network policy APIs to help you secure your workloads.
+
+In this guide you will learn:
+- What network policy is and why it is important.
+- The differences between Kubernetes and Calico network policies and when you might want to use each.
+- Some best practices for using network policy.
+
 ### What is network policy?
 
 Network policy is the primary tool for securing a Kubernetes network. It allows you to easily restrict the network
