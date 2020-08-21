@@ -104,3 +104,7 @@ func (_ API) GetHNSSupportedFeatures() HNSSupportedFeatures {
 func (_ API) HNSListEndpointRequest() ([]HNSEndpoint, error) {
 	return hcsshim.HNSListEndpointRequest()
 }
+
+func (_ API) GetAttachedContainerIDs(endpoint *HNSEndpoint) ([]string, error) {
+	return endpoint.GetAttachedContainerIDs()
+}

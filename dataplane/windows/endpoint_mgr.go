@@ -80,6 +80,7 @@ type endpointManager struct {
 type hnsInterface interface {
 	GetHNSSupportedFeatures() hns.HNSSupportedFeatures
 	HNSListEndpointRequest() ([]hns.HNSEndpoint, error)
+	GetAttachedContainerIDs(endpoint *hns.HNSEndpoint) ([]string, error)
 }
 
 func newEndpointManager(hns hnsInterface, policysets policysets.PolicySetsDataplane) *endpointManager {
@@ -182,7 +183,7 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 		// Some CNI plugins do not clear endpoint properly when a pod has been torn down.
 		// In that case, it is possible Felix sees multiple endpoints with the same IP.
 		// We need to filter out inactive endpoints that do not attach to any container.
-		containers, err := endpoint.GetAttachedContainerIDs()
+		containers, err := m.hns.GetAttachedContainerIDs(&endpoint)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"id":   endpoint.Id,
