@@ -3,7 +3,7 @@ module github.com/projectcalico/felix
 go 1.14
 
 require (
-	github.com/Microsoft/hcsshim v0.8.6
+	github.com/Microsoft/hcsshim v0.8.9
 	github.com/aws/aws-sdk-go v1.31.15
 	github.com/containernetworking/plugins v0.8.2
 	github.com/davecgh/go-spew v1.1.1
@@ -49,6 +49,7 @@ require (
 )
 
 replace (
+	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799
 
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because

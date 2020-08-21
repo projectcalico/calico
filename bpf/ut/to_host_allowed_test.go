@@ -15,9 +15,10 @@
 package ut_test
 
 import (
-	"golang.org/x/sys/unix"
 	"net"
 	"testing"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"

@@ -17,10 +17,11 @@ package commands
 import (
 	"encoding/base64"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"net"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"

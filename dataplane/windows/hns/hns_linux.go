@@ -148,3 +148,7 @@ func (a API) GetHNSSupportedFeatures() HNSSupportedFeatures {
 func (a API) HNSListEndpointRequest() ([]HNSEndpoint, error) {
 	return nil, nil
 }
+
+func (_ API) GetAttachedContainerIDs(endpoint *HNSEndpoint) ([]string, error) {
+	return nil, nil
+}
