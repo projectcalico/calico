@@ -145,6 +145,7 @@ class TestSimplePolicy(TestBase):
         # the server pod - which can confuse test code that is
         # expecting connection failure for some other reason.
         kubectl("run --generator=run-pod/v1 access -n policy-demo" +
+                " --overrides='{\"metadata\": {\"annotations\": {\"cni.projectcalico.org/floatingIPs\":\"[\\\"195.160.168.193\\\", \\\"2001:67c:275c:ff::1\\\"]\"}}}' "
                 " --image busybox --command /bin/sleep -- 3600")
         kubectl("run --generator=run-pod/v1 no-access -n policy-demo" +
                 " --image busybox --command /bin/sleep -- 3600")

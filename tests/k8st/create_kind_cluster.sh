@@ -39,6 +39,12 @@ function enable_dual_stack() {
 EOF
   sed -i -e 's/"type": "calico-ipam"/"type": "calico-ipam",/' "${yaml}"
 
+  sed -i -e '/"type": "calico"/r /dev/stdin' "${yaml}" <<EOF
+     "feature_control": {
+         "floating_ips": true
+     },
+EOF
+
   # And add all the IPV6 env vars
   sed -i '/# Enable IPIP/r /dev/stdin' "${yaml}" << EOF
             - name: IP6
