@@ -57,6 +57,8 @@ section:
       path: /getting-started/windows-calico/limitations
     - title: Quickstart
       path: /getting-started/windows-calico/quickstart
+    - title: Basic policy demo
+      path: /getting-started/windows-calico/demo
     - title: Standard install
       path: /getting-started/windows-calico/
       section:
