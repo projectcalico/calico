@@ -80,6 +80,7 @@ type endpointManager struct {
 type hnsInterface interface {
 	GetHNSSupportedFeatures() hns.HNSSupportedFeatures
 	HNSListEndpointRequest() ([]hns.HNSEndpoint, error)
+	GetAttachedContainerIDs(endpoint *hns.HNSEndpoint) ([]string, error)
 }
 
 func newEndpointManager(hns hnsInterface, policysets policysets.PolicySetsDataplane) *endpointManager {
@@ -178,6 +179,25 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 			}
 			continue
 		}
+
+		// Some CNI plugins do not clear endpoint properly when a pod has been torn down.
+		// In that case, it is possible Felix sees multiple endpoints with the same IP.
+		// We need to filter out inactive endpoints that do not attach to any container.
+		containers, err := m.hns.GetAttachedContainerIDs(&endpoint)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"id":   endpoint.Id,
+				"name": endpoint.Name,
+			}).Warn("Failed to get attached containers")
+			continue
+		}
+		if len(containers) == 0 {
+			log.WithFields(log.Fields{
+				"id":   endpoint.Id,
+				"name": endpoint.Name,
+			}).Warn("This is a stale endpoint with no container attached")
+			continue
+		}
 		ip := endpoint.IPAddress.String() + ipv4AddrSuffix
 		logCxt := log.WithFields(log.Fields{"IPAddress": ip, "EndpointId": endpoint.Id})
 		logCxt.Debug("Adding HNS Endpoint Id entry to cache")
@@ -271,7 +291,10 @@ func (m *endpointManager) CompleteDeferredWork() error {
 	}
 
 	if len(m.pendingWlEpUpdates) > 0 {
-		_ = m.RefreshHnsEndpointCache(false)
+		// HnsEndpointCache needs to be refreshed before endpoint manager processes any
+		// WEP updates. This is because an IP address can be recycled and assigned to a
+		// different endpoint since last time HnsEndpointCache been updated.
+		_ = m.RefreshHnsEndpointCache(true)
 	}
 
 	// Loop through each pending update
