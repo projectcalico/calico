@@ -41,6 +41,7 @@ var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 var version = flagSet.Bool("v", false, "Display version")
 var runFelix = flagSet.Bool("felix", false, "Run Felix")
 var runStartup = flagSet.Bool("startup", false, "Initialize a new node")
+var monitorAddrs = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
 var runAllocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 var allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 var monitorToken = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
@@ -80,7 +81,7 @@ func main() {
 
 	// Perform some validation on the parsed flags. Only one of the following may be
 	// specified at a time.
-	onlyOne := []*bool{version, runFelix, runStartup, runConfd}
+	onlyOne := []*bool{version, runFelix, runStartup, runConfd, monitorAddrs}
 	oneSelected := false
 	for _, o := range onlyOne {
 		if oneSelected && *o {
@@ -109,6 +110,9 @@ func main() {
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
+	} else if *monitorAddrs {
+		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
+		startup.MonitorIPAddressSubnets()
 	} else if *runConfd {
 		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
 		cfg, err := confdConfig.InitConfig(true)
