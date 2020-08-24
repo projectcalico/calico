@@ -155,8 +155,8 @@ metadata:
   name: kubernetes-services-endpoint
   namespace: tigera-operator
 data:
-  KUBERNETES_SERVICE_HOST: <API server host>
-  KUBERNETES_SERVICE_PORT: <API server port>
+  KUBERNETES_SERVICE_HOST: "<API server host>"
+  KUBERNETES_SERVICE_PORT: "<API server port>"
 ```
 
 Then, restart the operator to pick up the change:
@@ -184,8 +184,8 @@ metadata:
   name: kubernetes-services-endpoint
   namespace: kube-system
 data:
-  KUBERNETES_SERVICE_HOST: <API server host>
-  KUBERNETES_SERVICE_PORT: <API server port>
+  KUBERNETES_SERVICE_HOST: "<API server host>"
+  KUBERNETES_SERVICE_PORT: "<API server port>"
 ```
 
 Then, restart the {{site.prodname}} pods to pick up the change:
