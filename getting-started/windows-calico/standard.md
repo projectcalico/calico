@@ -205,6 +205,23 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
   >**Note**: After you run the installer, do not move the directory because the service registration refers to the path of the directory.
 {: .alert .alert-info}
 
+4. Verify that the {{site.prodname}} services are running.
+
+   ```powershell
+   PS C:\> Get-Service -Name CalicoNode
+
+   Status   Name               DisplayName
+   ------   ----               -----------
+   Running  CalicoNode         Calico Windows Startup
+
+
+   PS C:\> Get-Service -Name CalicoFelix
+
+   Status   Name               DisplayName
+   ------   ----               -----------
+   Running  CalicoFelix        Calico Windows Agent
+   ```
+
 ### Next steps
 
 - [Create a kubeconfig]({{site.baseurl}}/getting-started/windows-calico/kubeconfig)
