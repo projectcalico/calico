@@ -33,7 +33,7 @@ data:
   # You must set a non-zero value for Typha replicas below.
   typha_service_name: "calico-typha"
 {{- else }}
-  # Typha is disabled. {{- if .Values.bpf }} Typha is not supported in BPF mode.{{ end }}
+  # Typha is disabled.
   typha_service_name: "none"
 
 {{- end }}
