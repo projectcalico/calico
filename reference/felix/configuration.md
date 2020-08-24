@@ -122,24 +122,24 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 
 #### eBPF dataplane configuration
 
-eBPF dataplane mode is a tech preview feature, which supports a subset of {{site.prodname}} function in this release.  When BPFEnabled is set to `true`, Felix will:
+eBPF dataplane mode uses the Linux Kernel's eBPF virtual machine to implement networking and policy instead of iptables.  When BPFEnabled is set to `true`, Felix will:
 
 * Require a v5.3 Linux kernel.
 * Implement workload endpoint policy with eBPF programs instead of iptables.
 * Activate its embedded implementation of `kube-proxy` to implement Kubernetes service load balancing.
 * Disable support for IPv6 and host endpoints.
 
-See the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-ebpf) for step-by step instructions on trying out this feature.
+See the [HOWTO guide]({{ site.baseurl }}/maintenance/enabling-bpf) for step-by step instructions to enable this feature.
 
 | Configuration parameter / Environment variable                                        | Description | Schema | Default |
 | ------------------------------------------------------------------------------------- | ----------- | ------ |---------|
-| BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-ebpf).  This is a tech preview feature and subject to change in future releases. | true, false |  false |
+| BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [HOWTO guide]({{ site.baseurl }}/maintenance/enabling-bpf). | true, false |  false |
 | BPFDisableUnprivileged             / <br/> FELIX_BPFDISABLEUNPRIVILEGED               | If true, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with the ones that {{site.prodname}} installs. | true, false |  true |
-| BPFLogLevel                        / <br/> FELIX_BPFLOGLEVEL                          | The log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec BPF debug`.  This is a tech preview feature and subject to change in future releases. | Off,Info,Debug | Off |
-| BPFDataIfacePattern                / <br/> FELIX_BPFDATAIFACEPATTERN                  | Controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...)..  This is a tech preview feature and subject to change in future releases. | regular expression | `^(en.*|eth.*|tunl0$)` |
-| BPFConnectTimeLoadBalancingEnabled / <br/> FELIX_BPFCONNECTTIMELOADBALANCINGENABLED   | Controls whether Felix installs the connect-time load balancer.  In the current release, the connect-time load balancer is required for the host to reach kubernetes services.  This is a tech preview feature and subject to change in future releases. | true,false |  true |
+| BPFLogLevel                        / <br/> FELIX_BPFLOGLEVEL                          | The log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec BPF debug`. | Off,Info,Debug | Off |
+| BPFDataIfacePattern                / <br/> FELIX_BPFDATAIFACEPATTERN                  | Controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).. | regular expression | `^(en.*|eth.*|tunl0$)` |
+| BPFConnectTimeLoadBalancingEnabled / <br/> FELIX_BPFCONNECTTIMELOADBALANCINGENABLED   | Controls whether Felix installs the connect-time load balancer.  In the current release, the connect-time load balancer is required for the host to reach kubernetes services. | true,false |  true |
 | BPFExternalServiceMode             / <br/> FELIX_BPFEXTERNALSERVICEMODE               | Controls how traffic from outside the cluster to NodePorts and ClusterIPs is handled.  In Tunnel mode, packet is tunneled from the ingress host to the host with the backing pod and back again.  In DSR mode, traffic is tunneled to the host with the backing pod and then returned directly; this requires a network that allows direct return. | Tunnel,DSR |  Tunnel |
-| BPFKubeProxyIptablesCleanupEnabled / <br/> FELIX_BPFKUBEPROXYIPTABLESCLEANUPENABLED   | Controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. This is a tech preview feature and subject to change in future releases. | true,false| true |
+| BPFKubeProxyIptablesCleanupEnabled / <br/> FELIX_BPFKUBEPROXYIPTABLESCLEANUPENABLED   | Controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. | true,false| true |
 | BPFKubeProxyMinSyncPeriod          / <br/> FELIX_BPFKUBEPROXYMINSYNCPERIOD            | Controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | seconds | `1` |
 | BPFKubeProxyEndpointSlicesEnabled  / <br/> FELIX_BPFKUBEPROXYENDPOINTSLICESENABLED    | Controls whether Felix's embedded kube-proxy derives its services from Kubernetes' EndpointSlices resources. Using EndpointSlices is more efficient but it requires EndpointSlices support to be enabled at the Kubernetes API server. | true,false | false |
 
