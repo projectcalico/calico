@@ -65,7 +65,7 @@ reverse the NAT.)
 Note that because the connection source IP address is SNATed to the node IP address, ingress network policy for the
 service backing pod does not see the original client IP address. Typically this means that any such policy is limited to
 restricting the destination protocol and port, and cannot restrict based on the client / source IP. This limitation can
-be circumvented in some scenarios by using [externalTrafficPolicy](#externaltrafficpolicy-local) or by using
+be circumvented in some scenarios by using [externalTrafficPolicy](#externaltrafficpolicylocal) or by using
 {{site.prodname}}'s eBPF dataplane [native service handling](#calico-ebpf-native-service-handling) (rather than kube-proxy) which preserves source IP address.
 
 ### Load balancer services
@@ -81,7 +81,7 @@ default will load balance evenly across the nodes using the service node port.
 
 Most network load balancers preserve the client source IP address, but because the service then goes via a node port,
 the backing pods themselves do not see the client IP, with the same implications for network policy.  As with node
-ports, this limitation can be circumvented in some scenarios by using [externalTrafficPolicy](#externaltrafficpolicy-local)
+ports, this limitation can be circumvented in some scenarios by using [externalTrafficPolicy](#externaltrafficpolicylocal)
 or by using {{site.prodname}}'s eBPF dataplane [native service handling](#calico-ebpf-native-service-handling) (rather
 than kube-proxy) which preserves source IP address.
 
@@ -125,7 +125,7 @@ handling. This preserves source IP to simplify network policy, uses DSR (Direct 
 
 ![kube-proxy service advertisement]({{site.baseurl}}/images/calico-native-service-handling.svg)
 
-### Above and beyond
+## Above and beyond
 
 - {% include open-new-window.html text='Video: Everything you need to know about Kubernetes Services networking   '
   url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-services-networking/' %}
