@@ -222,7 +222,7 @@ Then, should you want to start `kube-proxy` again, you can simply remove the nod
 If you choose not to disable `kube-proxy` (for example, because it is managed by your Kubernetes distribution), then you *must* change Felix configuration parameter `BPFKubeProxyIptablesCleanupEnabled` to `false`.  This can be done with `calicoctl` as follows:
 
 ```
-calicoctl patch felixconfiguration default  '{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
+calicoctl patch felixconfiguration default --patch='{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
 ```
 
 If both `kube-proxy` and `BPFKubeProxyIptablesCleanupEnabled` is enabled then `kube-proxy` will write its iptables rules and Felix will try to clean them up resulting in iptables flapping between the two. 
@@ -232,7 +232,7 @@ If both `kube-proxy` and `BPFKubeProxyIptablesCleanupEnabled` is enabled then `k
 To enable eBPF mode, change Felix configuration parameter  `BPFEnabled` to `true`.  This can be done with `calicoctl`, as follows:
 
 ```
-calicoctl patch felixconfiguration default  '{"spec": {"bpfEnabled": true}}'
+calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
 ```
 
 Enabling eBPF node can disrupt existing workload connections.  After enabling eBPF mode you may need to restart workload pods in order for them to restart connections. 
@@ -244,13 +244,13 @@ Direct return mode skips a hop through the network for traffic to services (such
 DSR mode is disabled by default; to enable it, set the `BPFExternalServiceMode` Felix configuration parameter to `"DSR"`.  This can be done with `calicoctl`:
 
 ```
-calicoctl patch felixconfiguration default  '{"spec": {"bpfExternalServiceMode": "DSR"}}'
+calicoctl patch felixconfiguration default --patch='{"spec": {"bpfExternalServiceMode": "DSR"}}'
 ```
 
 To switch back to tunneled mode, set the configuration parameter to `"Tunnel"`:
 
 ```
-calicoctl patch felixconfiguration default  '{"spec": {"bpfExternalServiceMode": "Tunnel"}}'
+calicoctl patch felixconfiguration default --patch='{"spec": {"bpfExternalServiceMode": "Tunnel"}}'
 ```
 
 Switching external traffic mode can disrupt in-progress connections.
@@ -262,7 +262,7 @@ To revert to standard Linux networking:
 1. Disable Calico eBPF mode:
 
    ```
-   calicoctl patch felixconfiguration default  '{"spec": {"bpfEnabled": true}}'
+   calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
    ```
 
 1. If you disabled `kube-proxy`, re-enable it (for example, by removing the node selector added above).
