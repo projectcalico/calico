@@ -183,11 +183,14 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 			Revision: kvp.Revision,
 		},
 		{
+			// Include the original node KVP info as a separate update. Note we do not use the node value here because
+			// a nil interface is different to a nil pointer. Felix and other code assumes a nil Value is a delete, so
+			// preserve that relationship here.
 			Key: model.ResourceKey{
 				Name: name,
 				Kind: apiv3.KindNode,
 			},
-			Value:    node,
+			Value:    kvp.Value,
 			Revision: kvp.Revision,
 		},
 		{

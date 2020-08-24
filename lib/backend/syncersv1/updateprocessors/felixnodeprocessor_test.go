@@ -359,6 +359,17 @@ var _ = Describe("Test the (Felix) Node update processor with USE_POD_CIDR=true"
 		up.OnSyncerStarting()
 	})
 
+	It("should contain updates with nil values for a delete", func() {
+		kvps, err := up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: nil,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		for i := range kvps {
+			Expect(kvps[i].Value == nil).To(BeTrue(), kvps[i].Key.String())
+		}
+	})
+
 	It("should properly convert nodes into blocks for Felix", func() {
 		By("converting a node with PodCIDRs set")
 		res := apiv3.NewNode()
