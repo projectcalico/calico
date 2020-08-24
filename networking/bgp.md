@@ -113,6 +113,7 @@ spec:
   asNumber: 64567
   nodeSelector: rack == 'rack-1'
 ```
+
 #### Configure a node to act as a route reflector
 
 {{site.prodname}} nodes can be configured to act as route reflectors. To do this, each node that you want to act as a route reflector must have a cluster ID - typically an unused IPv4 address.
@@ -138,6 +139,17 @@ metadata:
 spec:
   nodeSelector: all()
   peerSelector: route-reflector == 'true'
+```
+
+Last, you will need to disable the node-to-node mesh, e.g. by configuring
+
+```
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: false
 ```
 
 #### View BGP peering status for a node
