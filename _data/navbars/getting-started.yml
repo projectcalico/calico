@@ -108,8 +108,6 @@ section:
       path: /getting-started/kubernetes/hardway/istio-integration
   - title: System requirements
     path: /getting-started/kubernetes/requirements
-  - title: Try out the eBPF tech preview
-    path: /getting-started/kubernetes/trying-ebpf
 - title: OpenStack
   path: /getting-started/openstack/
   section:
