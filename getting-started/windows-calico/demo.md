@@ -8,7 +8,7 @@ This guide provides a simple demo to illustrate basic pod-to-pod connectivity an
 ## Prerequisites
 
 To run this demo, you will need a [{{site.prodnameWindows}} cluster]({{site.baseurl}}/getting-started/windows-calico/quickstart) with
-Windows Server 1809 (build 10.0.17763). More recent versions of Windows Server may be used with a change to the demo manifests.
+Windows Server 1809 (build 10.0.17763). More recent versions of Windows Server can be used with a change to the demo manifests.
 
 >**Note**: Windows Server 1809 (build 10.0.17763) does not currently support [direct server return](https://techcommunity.microsoft.com/t5/networking-blog/direct-server-return-dsr-in-a-nutshell/ba-p/693710). This means that policy support is limited to only pod IP addresses.
 {: .alert .alert-info}
@@ -69,7 +69,7 @@ EOF
 
 ## Create pods on Window nodes
 
-Next we'll create a client (powershell) and server (porter) pod on the Windows nodes. First the create the powershell pod.
+Next, we'll create a client (powershell) and server (porter) pod on the Windows nodes. First the create the powershell pod.
 
 >**Note**: The powershell and porter pod manifests below use images based on `mcr.microsoft.com/windows/servercore:1809`.
 If you are using a more recent Windows Server version, update the manifests to use a [servercore image](https://hub.docker.com/_/microsoft-windows-servercore)
@@ -99,7 +99,7 @@ spec:
 EOF
 ```
 
-Next we'll create the porter server pod:
+Next, we'll create the porter server pod:
 
 ```bash
 kubectl apply -f - <<EOF
@@ -113,7 +113,7 @@ metadata:
 spec:
   containers:
   - name: porter
-    image: songtjiang/porter:1809
+    image: calico/porter:1809
     ports:
     - containerPort: 80
     env:
@@ -125,10 +125,10 @@ spec:
 EOF
 ```
 
-## Check basic connectivity between pods on Linux and Windows nodes
+## Check connectivity between pods on Linux and Windows nodes
 
 Now that client and server pods are running on both Linux and Windows nodes, let's verify that client pods
-on Linux nodes can reach server pods on Windows nodes. First we will need the porter pod IP:
+on Linux nodes can reach server pods on Windows nodes. First, we will need the porter pod IP:
 
 ```bash
 kubectl get po porter -n calico-demo -o 'jsonpath={.status.podIP}'
@@ -146,19 +146,19 @@ To combine both of the above steps:
 kubectl exec -n calico-demo busybox -- nc -vz $(kubectl get po porter -n calico-demo -o 'jsonpath={.status.podIP}') 80
 ```
 
-If the connection from the busybox pod to the porter pod succeeded, we will get output similar to the following:
+If the connection from the busybox pod to the porter pod succeeds, we will get output similar to the following:
 
 ```
 192.168.40.166 (192.168.40.166:80) open
 ```
 
-Now let's check that the powershell pod can reach the nginx pod:
+Now let's verify that the powershell pod can reach the nginx pod:
 
 ```bash
 kubectl exec -n calico-demo pwsh -- powershell Invoke-WebRequest -Uri http://$(kubectl get po nginx -n calico-demo -o 'jsonpath={.status.podIP}') -UseBasicParsing -TimeoutSec 5
 ```
 
-If the connection succeeded, we will get output similar to:
+If the connection succeeds, we will get output similar to:
 
 ```
 StatusCode        : 200
@@ -184,7 +184,7 @@ Finally, let's verify that the powershell pod can reach the porter pod:
 kubectl exec -n calico-demo pwsh -- powershell Invoke-WebRequest -Uri http://$(kubectl get po porter -n calico-demo -o 'jsonpath={.status.podIP}') -UseBasicParsing -TimeoutSec 5
 ```
 
-If that went well, we will see something like:
+If that succeeds, we will see something like:
 
 ```
 StatusCode        : 200
@@ -241,7 +241,7 @@ However, the powershell pod will not able to reach the porter pod:
 kubectl exec -n calico-demo pwsh -- powershell Invoke-WebRequest -Uri http://$(kubectl get po porter -n calico-demo -o 'jsonpath={.status.podIP}') -UseBasicParsing -TimeoutSec 5
 ```
 
-The request will have timed out with a message like:
+The request times out with a message like:
 
 ```
 Invoke-WebRequest : The operation has timed out.
