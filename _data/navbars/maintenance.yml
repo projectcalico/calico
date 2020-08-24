@@ -13,6 +13,8 @@ section:
     path: /maintenance/openstack-upgrade
 - title: Migrate datastore from etcd to Kubernetes
   path: /maintenance/datastore-migration
+- title: Enable eBPF dataplane mode
+  path: /maintenance/enabling-bpf
 - title: Monitor
   path: /maintenance/monitor/
   section: 
