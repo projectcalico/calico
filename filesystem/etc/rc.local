@@ -8,8 +8,8 @@ if [ -n "$CALICO_NETWORKING" ]; then
 	fi
 fi
 
-# Run the startup initialisation script.  These ensure the node is correctly
-# configured to run.
+# Run the startup initialisation script.
+# These ensure the node is correctly configured to run.
 calico-node -startup || exit 1
 
 # Set the nodename based on the value picked by the startup procedure.
@@ -20,13 +20,13 @@ fi
 NODENAME=$(cat /var/lib/calico/nodename)
 export NODENAME
 
-# If possible pre-allocate any tunnel addresses. 
+# If possible pre-allocate any tunnel addresses.
 calico-node -allocate-tunnel-addrs -allocate-tunnel-addrs-run-once || exit 1
 
 # Create a directly to put enabled service files
 mkdir /etc/service/enabled
 
-# XXX: Here and below we do all manupulations on /etc/service avoiding rm'ing
+# XXX: Here and below we do all manipulations on /etc/service avoiding rm'ing
 # dirs contained in Docker image. This is due to bug in Docker with graphdriver
 # overlay on CentOS 7.X kernels (https://github.com/docker/docker/issues/15314)
 
@@ -35,6 +35,9 @@ mkdir /etc/service/enabled
 if [ -z "$CALICO_DISABLE_FELIX" ]; then
   cp -a /etc/service/available/felix /etc/service/enabled/
 fi
+
+# Monitor change in node IP addresses and subnets.
+cp -a /etc/service/available/monitor-addresses  /etc/service/enabled/
 
 # Enable the allocate tunnel IP service
 cp -a /etc/service/available/allocate-tunnel-addrs  /etc/service/enabled/
@@ -77,6 +80,7 @@ if [ "$CALICO_DISABLE_FILE_LOGGING" = "true" ]; then
 	rm -rf /etc/service/enabled/felix/log
 	rm -rf /etc/service/enabled/calico-bgp-daemon/log
 	rm -rf /etc/service/enabled/cni/log
+	rm -rf /etc/service/enabled/monitor-addresses/log
 fi
 
 echo "Calico node started successfully"
