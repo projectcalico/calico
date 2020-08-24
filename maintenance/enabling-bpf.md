@@ -262,7 +262,7 @@ To revert to standard Linux networking:
 1. Disable Calico eBPF mode:
 
    ```
-   calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
+   calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": false}}'
    ```
 
 1. If you disabled `kube-proxy`, re-enable it (for example, by removing the node selector added above).
