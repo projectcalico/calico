@@ -495,6 +495,7 @@ endif
 	$(MAKE) tag-images-all RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
 	$(MAKE) tag-images-all RELEASE=true IMAGETAG=latest
+	$(MAKE) release-windows-archive
 
 ## Produces the Windows ZIP archive for the release.
 release-windows-archive $(WINDOWS_ARCHIVE): release-prereqs
@@ -514,11 +515,21 @@ release-notes: release-prereqs
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
+ifeq (, $(shell which ghr))
+	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
+endif
 	# Push the git tag.
 	git push origin $(VERSION)
 
 	# Push images.
 	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=$(VERSION)
+
+	# Push Windows artifacts to GitHub release.
+	# Requires ghr: https://github.com/tcnksm/ghr
+	# Requires GITHUB_TOKEN environment variable set.
+	ghr -u projectcalico -r node \
+		-n $(VERSION) \
+		$(VERSION) $(WINDOWS_ARCHIVE)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
