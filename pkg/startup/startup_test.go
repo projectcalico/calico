@@ -26,12 +26,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/libcalico-go/lib/set"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -1066,3 +1067,14 @@ var _ = DescribeTable("UT for extractKubeadmCIDRs",
     apiVersion: kubeadm.k8s.io/v1alpha3
     kind: ClusterStatus`}}, "192.168.0.0/16", "", false),
 )
+
+var _ = Describe("UTs for monitor-addresses option", func() {
+	It("poll-interval handles invalid values", func() {
+		os.Setenv("AUTODETECT_POLL_INTERVAL", "foobar")
+		Expect(getMonitorPollInterval()).To(Equal(DEFAULT_MONITOR_IP_POLL_INTERVAL))
+	})
+	It("poll-interval handles valid values", func() {
+		os.Setenv("AUTODETECT_POLL_INTERVAL", "30m")
+		Expect(getMonitorPollInterval()).To(Equal(30 * time.Minute))
+	})
+})
