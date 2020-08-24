@@ -9,7 +9,7 @@ description: Learn about Kubernetes services!
 
 In this guide you will learn:
 - What are Kubernetes Services?
-- What are the differences between the main service types and what do you use them for?
+- What are the differences between the three main service types and what do you use them for?
 - How do services and network policy interact?
 - Some options for optimizing how services are handled.
 
