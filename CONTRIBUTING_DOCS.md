@@ -27,7 +27,6 @@ The doc contribution process works as follows.
 
 We also encourage you to review [Doc site organization](#doc-site-organization), [Organizational changes](#organizational-changes), [Link syntax](#link-syntax), and [RELEASING.md](RELEASING.md) for additional information.
 
-
 ## Previewing your changes
 
 ### Building the doc site locally
@@ -41,7 +40,6 @@ Navigate into the root of the repo and issue the following command from a termin
 ```
 make serve
 ```
-
 
 Once the build completes, it returns a URL as the value of `Server address:`. Copy and paste this URL into your browser to view the site.
 
@@ -69,7 +67,6 @@ The submission of a PR kicks off a continuous integration process which includes
 
 However, you can also run this after submitting your PR and experiencing an `htmlproofer` failure from the Semaphore job.
 
-
 ## How to quickly apply changes in master to a previous release
 
 Let's say there's a single commit that makes changes to the `master` directory which I want to apply to the `v1.5` directory.
@@ -93,43 +90,48 @@ Let's say there's a single commit that makes changes to the `master` directory w
 
 ## Doc site organization
 
-### Overview
-
-The docs (currently) are split into four main sections.
+The docs are divided into the following sections:
 
 - [Introduction](#introduction)
-- [Getting started](#getting-started)
-- [Usage](#usage)
+- [Install](#install)
+- [Operations](#operations)
+- [Networking](#networking)
+- [Security](#security)
 - [Reference](#reference)
+
+Except for Introduction and Reference, content should be tasked-based. All top-level titles in topics should use an action verb (e.g. configure, enable, modify) with initial caps. For example:
+
+- Configure BGP peers
+- Enable overlay networking
+- Troubleshoot Calico
+- Use calicoctl in a Kubernetes deployment
+- Configure egress policy in Kubernetes
+
+Detailed description of components or tabulated configuration information should go in the [Reference](#reference) section.
 
 ### Introduction
 
-Landing page for new users covering Calico's purpose and high-level topics.
+This page describes Calico and the primary reasons for using it.
 
-### Getting started
+### Install
 
-This should be where new users go. It includes quick-start guides, some basic tutorials to show off Calico's capabilities, and links to more advanced topics once users are comfortable with the basics.
+Calico can be installed in many different deployments including on-premises and cloud providers. This section includes how to install a standalone Calico cluster for workloads, and how to install Calico on non-cluster hosts. This section covers steps to an "up and running" state. Any task beyond "up and running" should be added to other tabs. 
 
-Each orchestrator has a landing page that is targeted at people who are coming to see Calico for the first time. It's a transition from the "marketing" type material (why is Calico great) to some quick commands people can run to see it firsthand, and then funnels people off to the Usage section for more details.
+### Operations
 
-### Usage
+This section contains post-install, task-based content.  
 
-This section contains task-based information. All top-level titles in this section should start with a gerund. Each topic should include why you want to perform the task, a goal, and a set of steps you can follow to achieve it.
+### Networking
 
-Examples:
+This section contains task-based content for networking using the Calico CNI and Calico IPAM.
 
-- Configuring BGP peers
-- Enabling IP-in-IP in AWS
-- Troubleshooting Calico
-- Using calicoctl in a Kubernetes deployment
-- Configuring egress policy in Kubernetes
+### Security
 
-Do not include detailed description of components or tabulated
-configuration information in this section. This type of content should be located in the [Reference](#reference) section.
+This section contains task-based content for securing Calico components, workloads, and non-cluster hosts using Calico network policy.
 
 ### Reference
 
-These docs contain complete reference information for Calico. If there's a configuration option you're looking for, it goes here in one of the per-component references. Not every option has a "how to" guide, but has enough description. The caveats and considerations when enabling options should be listed here.
+This section contain reference content including full details of APIs and Resources. Add configuration options in one of the per-component references, and list any caveats and considerations when enabling options.
 
 Examples:
 
@@ -137,18 +139,32 @@ Examples:
 - `calicoctl` help text
 - Calico API schema reference (policy, ip pool, etcd)
 
-
 ## Organizational changes
 
 ### Creating new pages
 
-- To create a top level splash page for a URL path, simply name the file `index.md`.
+- To create a top level splash page for a URL path, name the file `index.md`. 
 
+  If the index.md has child topics, copy the following content and update. All name/keys should be lowercase for consistency. Descriptions should be approximately 50-160 words.
+
+  ```
+  ---
+  title: Install Calico
+  description: Install Calico on nodes and hosts for popular orchestrators, and install the calicoctl command line interface (CLI) tool. 
+  canonical_url: '/getting-started/index'
+  show_read_time: false
+  show_toc: false
+  ---
+
+  {{ page.description }}
+
+  {% capture content %}{% include index.html %}{% endcapture %}
+  {{ content | replace: "    ", "" }}
+  ```
 
 - [Add the new page to the side navigation bar](#linking-content).
 
 - Within the copies of the page in the `master` and previous release directories, add a `canonical_url` line below the `title` line in the metadata of the page. This should contain the absolute path to the page in the current latest directory. Example: `canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/'`. For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
-
 
 ### Deleting or renaming pages
 
@@ -228,6 +244,18 @@ Will render as:
 
 ```
 kubectl apply -f `https://docs.tigera.io/v3.4/manifests/calicoctl.yaml`
+```
+### Syntax for links outside the doc site
+
+Use the following syntax for any link that takes the user outside the docs site; so the link opens in a separate window.
+
+```
+{% include open-new-window.html text='NAME' url='URL' %}
+```
+**Example**
+
+```
+{% include open-new-window.html text='Create an AKS cluster and enable network policy' url='https://docs.microsoft.com/en-us/azure/aks/use-network-policies' %}
 ```
 
 ### Case sensitivity
