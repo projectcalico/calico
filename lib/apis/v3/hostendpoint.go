@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // HostEndpoint contains information about a HostEndpoint resource that represents a “bare-metal”
-// interface attached to the host that is running Calico’s agent, Felix. By default, Calico doesn’t
+// interface attached to the host that is running Calico's agent, Felix. By default, Calico doesn’t
 // apply any policy to such interfaces.
 type HostEndpoint struct {
 	metav1.TypeMeta `json:",inline"`

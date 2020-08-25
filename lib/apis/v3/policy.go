@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ type ICMPFields struct {
 	// (i.e. pings).
 	Type *int `json:"type,omitempty" validate:"omitempty,gte=0,lte=254"`
 	// Match on a specific ICMP code.  If specified, the Type value must also be specified.
-	// This is a technical limitation imposed by the kernel’s iptables firewall, which
+	// This is a technical limitation imposed by the kernel's iptables firewall, which
 	// Calico uses to enforce the rule.
 	Code *int `json:"code,omitempty" validate:"omitempty,gte=0,lte=255"`
 }
