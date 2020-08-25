@@ -137,13 +137,18 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		utils.Config.FelixImage,
 	)
 
-	c := containers.RunWithFixedName(containerName,
-		containers.RunOpts{
-			AutoRemove: true,
-			StopSignal: "SIGKILL",
-		},
-		args...,
-	)
+	felixOpts := containers.RunOpts{
+		AutoRemove: true,
+	}
+	if options.FelixStopGraceful {
+		// Leave StopSignal defaulting to SIGTERM, and allow 10 seconds for Felix
+		// to handle that gracefully.
+		felixOpts.StopTimeoutSecs = 10
+	} else {
+		// Use SIGKILL to stop Felix immediately.
+		felixOpts.StopSignal = "SIGKILL"
+	}
+	c := containers.RunWithFixedName(containerName, felixOpts, args...)
 
 	if options.EnableIPv6 {
 		c.Exec("sysctl", "-w", "net.ipv6.conf.all.disable_ipv6=0")
