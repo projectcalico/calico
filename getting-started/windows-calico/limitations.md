@@ -73,8 +73,8 @@ On Windows nodes, kube-proxy unconditionally applies source NAT to traffic from 
 
 **Managed EKS**
 
-Currently, managed EKS Linux nodes ship with kube-proxy WinDSR disabled. However, WinDSR is required for network policy to be enforced for service ClusterIPs.
-This means that managed EKS is not currently recommended for production usage. For production EKS usage, we recommend using self-managed EKS Linux nodes.
+Currently, managed EKS Windows nodes ship with kube-proxy WinDSR disabled. However, WinDSR is required for network policy to be enforced for service ClusterIPs.
+This means that managed EKS is not currently recommended for production usage.
 
 ### Network policy and using selectors
 
