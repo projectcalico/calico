@@ -47,7 +47,10 @@ By default, EKS uses Ubuntu 18.04 as its base image for EKS.  One way to create 
 
 #### Create a cluster with the custom AMI
 
-Using `eksctl`: start your cluster as normal, but use the `--node-ami` and `--node-ami-family` settings.  `--node-ami-family` should be set to `Ubuntu1804`, in spite of the upgrade.
+Using `eksctl`: start your cluster as normal, but use the `--node-ami` and `--node-ami-family` settings.  
+
+* `--node-ami` should be set to the AMI ID of the image built above.
+* `--node-ami-family` should be set to `Ubuntu1804` (in spite of the upgrade).
 
 Use the AWS VPC CNI plugin rather than the Calico CNI when setting up your cluster.  This is because EKS bundles an older version of Calico with EKS, which does not support eBPF mode. 
 
