@@ -50,6 +50,11 @@ spec:
         - name: upgrade-ipam
           image: {{.Values.cni.image}}:{{ .Values.cni.tag }}
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
           env:
 {{- if .Values.bpf }}
             # Overrides for kubernetes API server host/port. Needed in BPF mode.
@@ -86,6 +91,11 @@ spec:
         - name: install-cni
           image: {{.Values.cni.image}}:{{ .Values.cni.tag }}
           command: ["/opt/cni/bin/install"]
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
           env:
 {{- if .Values.bpf }}
             # Overrides for kubernetes API server host/port. Needed in BPF mode.
@@ -183,6 +193,11 @@ spec:
         # host.
         - name: calico-node
           image: {{.Values.node.image}}:{{.Values.node.tag}}
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
           env:
 {{- if .Values.bpf }}
             # Overrides for kubernetes API server host/port. Needed in BPF mode.
@@ -397,13 +412,13 @@ spec:
 {{- end }}
             - name: policysync
               mountPath: /var/run/nodeagent
-{{- if .Values.bpf }}
-            # We need to mount the BPF filesystem at /sys/fs/bpf and we need that mount to persist
-            # even if {{ include "nodeName" . }} is restarted.
+            # For eBPF mode, we need to be able to mount the BPF filesystem at /sys/fs/bpf so we mount in the
+            # parent directory.
             - name: sysfs
               mountPath: /sys/fs/
+              # Bidirectional means that, if we mount the BPF filesystem at /sys/fs/bpf it will propagate to the host.
+              # If the host is known to mount that filesystem already then Bidirectional can be omitted.
               mountPropagation: Bidirectional
-{{- end }}
 {{- if eq .Values.network "flannel" }}
   {{- if eq .Values.datastore "kubernetes" }}
         # This container runs flannel using the kube-subnet-mgr backend
@@ -533,12 +548,10 @@ spec:
           hostPath:
             path: /run/xtables.lock
             type: FileOrCreate
-{{- if .Values.bpf }}
         - name: sysfs
           hostPath:
             path: /sys/fs/
             type: DirectoryOrCreate
-{{- end }}
 {{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
         # Used by flannel.
         - name: flannel-cfg

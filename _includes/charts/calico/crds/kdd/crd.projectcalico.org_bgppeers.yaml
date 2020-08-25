@@ -67,7 +67,7 @@ spec:
                   peering between the local node and selected remote nodes, we configure
                   an IPv4 peering if both ends have NodeBGPSpec.IPv4Address specified,
                   and an IPv6 peering if both ends have NodeBGPSpec.IPv6Address specified.  The
-                  remote AS number comes from the remote node’s NodeBGPSpec.ASNumber,
+                  remote AS number comes from the remote node's NodeBGPSpec.ASNumber,
                   or the global default if that is not set.
                 type: string
             required:

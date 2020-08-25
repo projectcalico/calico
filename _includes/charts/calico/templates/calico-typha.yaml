@@ -69,6 +69,11 @@ spec:
         - containerPort: 5473
           name: calico-typha
           protocol: TCP
+        envFrom:
+        - configMapRef:
+            # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+            name: kubernetes-services-endpoint
+            optional: true
         env:
 {{- if .Values.bpf }}
           # Overrides for kubernetes API server host/port. Needed in BPF mode.
