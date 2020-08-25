@@ -126,8 +126,10 @@ deploying the service.
 
 ### Calico eBPF native service handling
 
-As an alternative to using Kubernetes standard kube-proxy, {{site.prodname}}'s eBPF dataplane supports native service
-handling. This preserves source IP to simplify network policy, uses DSR (Direct Server Return) to reduce the number of network hops for return traffic, and provides even load balancing independent of topology, with reduced CPU and latency compared to kube-proxy.
+As an alternative to using Kubernetes standard kube-proxy, {{site.prodname}}'s [eBPF
+dataplane]({{site.baseurl}}/maintenance/enabling-bpf) supports native service handling. This preserves source IP to
+simplify network policy, offers DSR (Direct Server Return) to reduce the number of network hops for return traffic, and
+provides even load balancing independent of topology, with reduced CPU and latency compared to kube-proxy.
 
 ![kube-proxy service advertisement]({{site.baseurl}}/images/calico-native-service-handling.svg)
 
