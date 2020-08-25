@@ -43,20 +43,20 @@ backing the service may change over time.
 In a typical Kubernetes deployment, kube-proxy runs on every node and is responsible for intercepting connections to
 Cluster IP addresses and load balancing across the group of pods backing each service. As part of this process
 [DNAT]({{site.baseurl}}/about/about-networking#nat) is used to map the destination IP address from the Cluster IP to the
-chosen backing pod. Response packets on the connection then have the NAT reverse on their way back to the pod which
+chosen backing pod. Response packets on the connection then have the NAT reverse on their way back to the pod that
 initiated the connection.
 
 ![kube-proxy cluster IP]({{site.baseurl}}/images/kube-proxy-cluster-ip.svg)
 
 Importantly, network policy is enforced based on the pods, not the service Cluster IP.  (i.e. Egress network policy is
 enforced for the client pod after the DNAT has changed the connection's destination IP to the chosen service backing
-pod. And as only the destination IP for the connection is changed, ingress network policy for the backing pod sees the
+pod. And because only the destination IP for the connection is changed, ingress network policy for the backing pod sees the
 original client pod as the source of the connection.)
 
 ### Node port services
 
 The most basic way to access a service from outside the cluster is to use a service of type `NodePort`. A Node Port is a
-port reserved on each node in the cluster through with the service can be accessed. In a typical Kubernetes deployment,
+port reserved on each node in the cluster through which the service can be accessed. In a typical Kubernetes deployment,
 kube-proxy is responsible for intercepting connections to Node Ports and load balancing them across the pods backing
 each service.  
 
