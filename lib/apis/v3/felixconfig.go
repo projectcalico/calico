@@ -57,15 +57,15 @@ type FelixConfigurationSpec struct {
 
 	IPv6Support *bool `json:"ipv6Support,omitempty" confignamev1:"Ipv6Support"`
 
-	// RouterefreshInterval is the period at which Felix re-checks the routes
-	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
+	// RouteRefreshInterval is the period at which Felix re-checks the routes
+	// in the dataplane to ensure that no other process has accidentally broken Calico's rules.
 	// Set to 0 to disable route refresh. [Default: 90s]
 	RouteRefreshInterval *metav1.Duration `json:"routeRefreshInterval,omitempty" configv1timescale:"seconds"`
 	// InterfaceRefreshInterval is the period at which Felix rescans local interfaces to verify their state.
 	// The rescan can be disabled by setting the interval to 0.
 	InterfaceRefreshInterval *metav1.Duration `json:"interfaceRefreshInterval,omitempty" configv1timescale:"seconds"`
 	// IptablesRefreshInterval is the period at which Felix re-checks the IP sets
-	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
+	// in the dataplane to ensure that no other process has accidentally broken Calico's rules.
 	// Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the
 	// other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel
 	// version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value
@@ -74,10 +74,10 @@ type FelixConfigurationSpec struct {
 	// IptablesPostWriteCheckInterval is the period after Felix has done a write
 	// to the dataplane that it schedules an extra read back in order to check the write was not
 	// clobbered by another process. This should only occur if another application on the system
-	// doesn’t respect the iptables lock. [Default: 1s]
+	// doesn't respect the iptables lock. [Default: 1s]
 	IptablesPostWriteCheckInterval *metav1.Duration `json:"iptablesPostWriteCheckInterval,omitempty" configv1timescale:"seconds" confignamev1:"IptablesPostWriteCheckIntervalSecs"`
 	// IptablesLockFilePath is the location of the iptables lock file. You may need to change this
-	// if the lock file is not in its standard location (for example if you have mapped it into Felix’s
+	// if the lock file is not in its standard location (for example if you have mapped it into Felix's
 	// container at a different path). [Default: /run/xtables.lock]
 	IptablesLockFilePath string `json:"iptablesLockFilePath,omitempty"`
 	// IptablesLockTimeout is the time that Felix will wait for the iptables lock,
@@ -97,7 +97,7 @@ type FelixConfigurationSpec struct {
 	// auto-detected.
 	FeatureDetectOverride string `json:"featureDetectOverride,omitempty" validate:"omitempty,keyValueList"`
 	// IpsetsRefreshInterval is the period at which Felix re-checks all iptables
-	// state to ensure that no other process has accidentally broken Calico’s rules. Set to 0 to
+	// state to ensure that no other process has accidentally broken Calico's rules. Set to 0 to
 	// disable iptables refresh. [Default: 90s]
 	IpsetsRefreshInterval *metav1.Duration `json:"ipsetsRefreshInterval,omitempty" configv1timescale:"seconds"`
 	MaxIpsetSize          *int             `json:"maxIpsetSize,omitempty"`
@@ -117,7 +117,7 @@ type FelixConfigurationSpec struct {
 	// set up any NAT rule for the metadata path. [Default: 127.0.0.1]
 	MetadataAddr string `json:"metadataAddr,omitempty"`
 	// MetadataPort is the port of the metadata server. This, combined with global.MetadataAddr (if
-	// not ‘None’), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort.
+	// not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort.
 	// In most cases this should not need to be changed [Default: 8775].
 	MetadataPort *int `json:"metadataPort,omitempty"`
 
@@ -129,8 +129,8 @@ type FelixConfigurationSpec struct {
 
 	// InterfacePrefix is the interface name prefix that identifies workload endpoints and so distinguishes
 	// them from host endpoint interfaces. Note: in environments other than bare metal, the orchestrators
-	// configure this appropriately. For example our Kubernetes and Docker integrations set the ‘cali’ value,
-	// and our OpenStack integration sets the ‘tap’ value. [Default: cali]
+	// configure this appropriately. For example our Kubernetes and Docker integrations set the 'cali' value,
+	// and our OpenStack integration sets the 'tap' value. [Default: cali]
 	InterfacePrefix string `json:"interfacePrefix,omitempty"`
 	// InterfaceExclude is a comma-separated list of interfaces that Felix should exclude when monitoring for host
 	// endpoints. The default value ensures that Felix ignores Kubernetes' IPVS dummy interface, which is used
@@ -140,9 +140,9 @@ type FelixConfigurationSpec struct {
 	// 'veth1'. [Default: kube-ipvs0]
 	InterfaceExclude string `json:"interfaceExclude,omitempty"`
 
-	// ChainInsertMode controls whether Felix hooks the kernel’s top-level iptables chains by inserting a rule
+	// ChainInsertMode controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule
 	// at the top of the chain or by appending a rule at the bottom. insert is the safe default since it prevents
-	// Calico’s rules from being bypassed. If you switch to append mode, be sure that the other rules in the chains
+	// Calico's rules from being bypassed. If you switch to append mode, be sure that the other rules in the chains
 	// signal acceptance by falling through to the Calico rules, otherwise the Calico policy will be bypassed.
 	// [Default: insert]
 	ChainInsertMode string `json:"chainInsertMode,omitempty"`
@@ -222,7 +222,7 @@ type FelixConfigurationSpec struct {
 	// FailsafeOutboundHostPorts is a comma-delimited list of UDP/TCP ports that Felix will allow outgoing traffic from host endpoints to
 	// irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. Each port
 	// should be specified as tcp:<port-number> or udp:<port-number>. For back-compatibility, if the protocol is not specified, it defaults
-	// to “tcp”. To disable all outbound host ports, use the value none. The default value opens etcd’s standard ports to ensure that Felix
+	// to “tcp”. To disable all outbound host ports, use the value none. The default value opens etcd's standard ports to ensure that Felix
 	// does not get cut off from etcd as well as allowing DHCP and DNS.
 	// [Default: tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667, udp:53, udp:67]
 	FailsafeOutboundHostPorts *[]ProtoPort `json:"failsafeOutboundHostPorts,omitempty"`

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ type BGPPeerSpec struct {
 	// selected remote nodes, we configure an IPv4 peering if both ends have
 	// NodeBGPSpec.IPv4Address specified, and an IPv6 peering if both ends have
 	// NodeBGPSpec.IPv6Address specified.  The remote AS number comes from the remote
-	// node’s NodeBGPSpec.ASNumber, or the global default if that is not set.
+	// node's NodeBGPSpec.ASNumber, or the global default if that is not set.
 	PeerSelector string `json:"peerSelector,omitempty" validate:"omitempty,selector"`
 	// Option to keep the original nexthop field when routes are sent to a BGP Peer.
 	// Setting "true" configures the selected BGP Peers node to use the "next hop keep;"
