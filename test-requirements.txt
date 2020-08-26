@@ -18,3 +18,4 @@ testtools>=2.2.0 # MIT
 
 neutron>=16,<17
 neutron-lib==2.3.0
+mock>=3.0.0 # BSD
