@@ -175,6 +175,12 @@ func (t *TyphaDaemon) ParseCommandLineArgs(argv []string) {
 // LoadConfiguration uses the command-line configuration and environment variables to load our configuration.
 // It initializes the datastore connection.
 func (t *TyphaDaemon) LoadConfiguration(ctx context.Context) error {
+	// Log out the kubernetes server details that we use in BPF mode.
+	log.WithFields(log.Fields{
+		"KUBERNETES_SERVICE_HOST": os.Getenv("KUBERNETES_SERVICE_HOST"),
+		"KUBERNETES_SERVICE_PORT": os.Getenv("KUBERNETES_SERVICE_PORT"),
+	}).Info("Kubernetes server override env vars.")
+
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
