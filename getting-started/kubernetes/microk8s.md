@@ -19,7 +19,7 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
 - Make sure you have a linux host that meets the following requirements:
   - 4GB RAM
   - 20GB free disk space
-  - Ubuntu 20.04 LTS, 18.04 LTS or 16.04 LTS (or anotherr operating system that supports `snapd`)
+  - Ubuntu 20.04 LTS, 18.04 LTS or 16.04 LTS (or another operating system that supports `snapd`)
 
 ### How to
 
@@ -30,12 +30,10 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
    ```
 
 1. Enable dns services.
-   
+ 
    ```
    microk8s enable dns
    ```
-   > **Note**: DNS service is not required. However, it is recommended to enable this feature.
-   {: .alert .alert-info}
 
 1. Check your cluster status
    
@@ -47,8 +45,9 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
 
    ```
    NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE
-   kube-system   calico-node-drmr8                          1/1     Running   0          62s
-   kube-system   calico-kube-controllers-555fc8cc5c-dbx8j   1/1     Running   0          62s
+   kube-system   calico-node-b82zp                          1/1     Running   0          64s
+   kube-system   calico-kube-controllers-555fc8cc5c-b7cp6   1/1     Running   0          64s
+   kube-system   coredns-588fd544bf-mbc7n                   1/1     Running   0          39s
    ```
 
 The geeky details of what you get:
