@@ -154,6 +154,12 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	// Register this function as a reporter of liveness and readiness, with no timeout.
 	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
 
+	// Log out the kubernetes server details that we use in BPF mode.
+	log.WithFields(log.Fields{
+		"KUBERNETES_SERVICE_HOST": os.Getenv("KUBERNETES_SERVICE_HOST"),
+		"KUBERNETES_SERVICE_PORT": os.Getenv("KUBERNETES_SERVICE_PORT"),
+	}).Info("Kubernetes server override env vars.")
+
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
