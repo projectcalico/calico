@@ -247,7 +247,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             return
 
         if hostname != self.hostname:
-            LOG.debug("Endpoint is not on this node; %s", name)
+            LOG.info("Endpoint not on this node: %s", name)
             return
 
         # Get the endpoint spec.
@@ -270,7 +270,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # when a resync from the mechanism driver overlaps with a port/VM being
         # deleted.
         if not endpoint['ipNetworks']:
-            LOG.info("Endpoint has no ipNetworks")
+            LOG.info("Endpoint has no ipNetworks: %s", endpoint)
             self.on_endpoint_delete(None, name)
             return
 
@@ -303,6 +303,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
                                         'ip_address': ip_addr,
                                         'fqdn': fqdn})
         if not fixed_ips:
+            LOG.warning("Endpoint has no DHCP-served IPs: %s", endpoint)
             return
 
         port = {'id': endpoint_id,
@@ -327,7 +328,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             return
 
         # Add this port into the NetModel.
-        LOG.debug("new port: %s", port)
+        LOG.info("New port: %s", port)
         self.agent.cache.put_port(dhcp.DictModel(port))
 
         # Schedule updating Dnsmasq.
