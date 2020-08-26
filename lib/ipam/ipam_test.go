@@ -692,6 +692,57 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(v4Node1)).To(Equal(1))
 		})
+
+		It("should borrow and release borrowed IPs as normal", func() {
+			ctx := context.Background()
+
+			bc.Clean()
+			deleteAllPools()
+
+			err := applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Only one block can be created out of the pool.
+			// When StrictAffinity is false, both nodes will be able to assign IP addresses
+			// When StrictAffinity is true, only one node, the ones that gets the block, will
+			// be able to assign IP address
+
+			// StrictAffinity is false
+			cfg := IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: false}
+			err = ic.SetIPAMConfig(ctx, cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			applyPoolWithBlockSize("10.0.0.0/28", true, `foo == "bar"`, 28)
+
+			handle1 := "handle-1"
+			handle2 := "handle-2"
+			v4Node0, _, errNode0 := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node1,
+				HandleID: &handle1,
+			})
+			Expect(errNode0).ToNot(HaveOccurred())
+			Expect(len(v4Node0)).To(Equal(1))
+
+			v4Node1, _, errNode1 := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node2,
+				HandleID: &handle2,
+			})
+			Expect(errNode1).ToNot(HaveOccurred())
+			Expect(len(v4Node1)).To(Equal(1))
+
+			err = ic.ReleaseByHandle(context.Background(), handle2)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = ic.ReleaseByHandle(context.Background(), handle1)
+			Expect(err).ToNot(HaveOccurred())
+		})
 	})
 
 	Describe("IPAM AutoAssign from any pool", func() {
