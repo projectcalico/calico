@@ -138,6 +138,12 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 	case *proto.IPSetDeltaUpdate:
 		log.WithField("ipSetId", msg.Id).Info("Processing IPSetDeltaUpdate")
 		m.ProcessIpSetUpdate(msg.Id)
+	case *proto.ActivePolicyUpdate:
+		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyUpdate")
+		m.ProcessPolicyProfileUpdate(policysets.PolicyNamePrefix + msg.Id.Name)
+	case *proto.ActiveProfileUpdate:
+		log.WithField("profileId", msg.Id).Info("Processing ActiveProfileUpdate")
+		m.ProcessPolicyProfileUpdate(policysets.ProfileNamePrefix + msg.Id.Name)
 	}
 }
 
@@ -220,13 +226,8 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 	return nil
 }
 
-// ProcessIpSetUpdate is called when a IPSet has changed. The ipSetsManager will have already updated
-// the IPSet itself, but the endpointManager is responsible for requesting all impacted policy sets
-// to be updated and for marking all impacted endpoints as pending so that updated policies can be
-// pushed to them.
-func (m *endpointManager) ProcessIpSetUpdate(ipSetId string) {
-	log.WithField("ipSetId", ipSetId).Debug("Requesting PolicySetsDataplane to process the IP set update")
-	updatedPolicies := m.policysetsDataplane.ProcessIpSetUpdate(ipSetId)
+// Refresh pendingWlEpUpdates on the event of Policy, Profile or IPSet updates.
+func (m *endpointManager) refreshPendingWlEpUpdates(updatedPolicies []string) {
 	if updatedPolicies == nil {
 		return
 	}
@@ -265,6 +266,26 @@ func (m *endpointManager) ProcessIpSetUpdate(ipSetId string) {
 			}
 		}
 	}
+}
+
+// ProcessIpSetUpdate is called when a IPSet has changed. The ipSetsManager will have already updated
+// the IPSet itself, but the endpointManager is responsible for requesting all impacted policy sets
+// to be updated and for marking all impacted endpoints as pending so that updated policies can be
+// pushed to them.
+func (m *endpointManager) ProcessIpSetUpdate(ipSetId string) {
+	log.WithField("ipSetId", ipSetId).Debug("Requesting PolicySetsDataplane to process the IP set update")
+	updatedPolicies := m.policysetsDataplane.ProcessIpSetUpdate(ipSetId)
+	m.refreshPendingWlEpUpdates(updatedPolicies)
+}
+
+// ProcessPolicyProfileUpdate is called when a Policy or Profile has changed. The policySetsDataplane will have
+// already updated the Policy or Profile itself, but the endpointManager is responsible for marking all
+// impacted endpoints as pending so that updated policies can be pushed to them.
+func (m *endpointManager) ProcessPolicyProfileUpdate(policySetId string) {
+	// PolicySets updates will be done by policySetsDataplane on the update event.
+	// Here we just need to refresh pendingWlEpUpdates.
+	log.WithField("policySetId", policySetId).Debug("Refresh pendingWlEpUpdates")
+	m.refreshPendingWlEpUpdates([]string{policySetId})
 }
 
 // CompleteDeferredWork will apply all pending updates by gathering the rules to be updated per
