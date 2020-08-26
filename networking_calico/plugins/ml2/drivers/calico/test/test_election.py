@@ -21,17 +21,12 @@ from etcd3gw import exceptions as e3e
 import eventlet
 import logging
 import mock
-import sys
+import unittest
 
 from networking_calico.compat import log
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico.test import stub_etcd
-
-if sys.version_info < (2, 7):
-    import unittest2 as unittest
-else:
-    import unittest
 
 
 LOG = logging.getLogger(__name__)
