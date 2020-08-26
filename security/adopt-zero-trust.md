@@ -110,9 +110,9 @@ Follow the [install instructions]({{ site.baseurl }}/getting-started/kubernetes/
 
 #### Install Istio and enable {{site.prodname}} integration
 
-Follow the instructions to [Enable application layer policy[Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).
+Follow the instructions to [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).
 
-The instructions include a “demo” install of Istio for quickly testing out functionality. For a production installation to support a Zero Trust Network, you should instead follow the official Istio install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled to true**.
+The instructions include a “demo” install of Istio for quickly testing out functionality. For a production installation to support a Zero Trust Network, you should instead follow the official Istio install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled** to **true**.
 
 #### Establish workload identity by using Service Accounts
 
@@ -180,7 +180,7 @@ spec:
   - Ingress
   ingress:
   - action: Allow
-    source
+    source:
       serviceAccount:
         names: ["api", "search"]
       namespaceSelector: app == 'microblog'
@@ -200,7 +200,6 @@ Things to notice in this example:
   metadata:
     name: post-allow-list
     namespace: microblog
-  spec:
   </pre>
   {:.no-select-button}
 
@@ -230,9 +229,10 @@ Things to notice in this example:
   Service Accounts are uniquely identified by name and namespace. Use a **namespaceSelector** to fully-qualify the Service Accounts you are allowing, so if names are repeated in other namespaces they will not be granted access to the service.
 
   <pre>
-  source
+  source:
     serviceAccount:
-    namespacSelector: app == 'microblog'
+      names: ["api", "search"]
+    namespaceSelector: app == 'microblog'
   </pre>
   {:.no-select-button}
 
@@ -251,7 +251,7 @@ The above example lists the identities that need access to the post service by n
 
 However, some development teams don’t explicitly know who needs access to their service, and don’t need to know. The service might be very generic and used by lots of different applications across the organization---for example: a logging service. Instead of listing the Service Accounts that get access to the service explicitly one-by-one, you can use a label selector that selects on Service Accounts.
 
-In the following example, we have changed the **serviceAccount** clause. Instead of a name, we use a label selector. The **selector: svc-post = access** label grants access to the post service. 
+In the following example, we have changed the **serviceAccount** clause. Instead of a name, we use a label selector. The **selector: svc-post == access** label grants access to the post service. 
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -265,7 +265,7 @@ spec:
   - Ingress
   ingress:
   - action: Allow
-    source
+    source:
       serviceAccount:
         selector: svc-post == 'access'
       namespaceSelector: app == 'microblog'
@@ -274,7 +274,7 @@ spec:
       ports:
       - 8080
 ```
-Define labels that indicate permission to access services in the cluster. Then, modify the ServiceAccounts for each identity that needs access. In this example, we would add the label **svc-post = access** to the **api** and **search** Service Accounts.
+Define labels that indicate permission to access services in the cluster. Then, modify the ServiceAccounts for each identity that needs access. In this example, we would add the label **svc-post == access** to the **api** and **search** Service Accounts.
 
 Whether you choose to explicitly name the Service Accounts or use a label selector is up to you, and you can make a different choice for different services. Using explicit names works best for services that have a small number of clients, or when you want the service owner to be involved in the decision to allow something new to access the service. If some other team wants to get access to the service, they call up the owner of the service and ask them to grant access. In contrast, using labels is good when you want more decentralized control. The service owner defines the labels that grant access to the service and trusts the other development teams to label their Service Accounts when they need access. 
 
