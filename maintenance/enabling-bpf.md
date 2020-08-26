@@ -159,7 +159,7 @@ data:
   KUBERNETES_SERVICE_PORT: "<API server port>"
 ```
 
-Then, restart the operator to pick up the change:
+Wait 60s for kubelet to pick up the `ConfigMap` (see Kubernetes [issue #30189](https://github.com/kubernetes/kubernetes/issues/30189)); then, restart the operator to pick up the change:
 
 ```
 kubectl delete pod -n tigera-operator -l k8s-app=tigera-operator
@@ -170,6 +170,8 @@ The operator will then do a rolling update of {{site.prodname}} to pass on the c
 ```
 watch kubectl get pods -n calico-system
 ```
+
+If you do not see the pods restart then it's possible that the `ConfigMap` wasn't picked up (sometimes Kubernetes is slow to propagate `ConfigMap`s due the above issue).  You can try restarting the operator again.
 
 %>
 <label:Manifest>
@@ -192,6 +194,7 @@ Wait 60s for kubelet to pick up the `ConfigMap` (see Kubernetes [issue #30189](h
 
 ```
 kubectl delete pod -n kube-system -l k8s-app=calico-node
+kubectl delete pod -n kube-system -l k8s-app=calico-kube-controllers
 ```
 
 And, if using Typha:
@@ -204,6 +207,32 @@ Confirm that pods restart and then reach the `Running` state with the following 
 
 ```
 watch "kubectl get pods -n kube-system | grep calico"
+```
+
+You can verify that the change was picked up by checking the logs of one of the  {{ site.nodecontainer }} pods.  
+
+```
+kubectl get po -n kube-system -l k8s-app=calico-node
+```
+
+Should show one or more pods:
+
+```
+NAME                                       READY   STATUS    RESTARTS   AGE
+{{site.noderunning}}-d6znw                          1/1     Running   0          48m
+...
+```
+
+Then, to search the logs, choose a pod and run:
+
+```
+kubectl logs -n kube-system <pod name> | grep KUBERNETES_SERVICE_HOST
+```
+
+You should see the following log, with the correct `KUBERNETES_SERVICE_...` values.
+
+```
+2020-08-26 12:26:29.025 [INFO][7] daemon.go 182: Kubernetes server override env vars. KUBERNETES_SERVICE_HOST="172.16.101.157" KUBERNETES_SERVICE_PORT="6443"
 ```
 
 %>
