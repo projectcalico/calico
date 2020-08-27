@@ -170,7 +170,7 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
 
 1. Apply the edited manifest with `kubectl apply -f`.
 
-   New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
+   New pods will get both IPv4 and IPv6 addresses, and can communicate with each other and the outside world over IPv4 or IPv6.
 
 <!--
 %>
