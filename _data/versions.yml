@@ -1,25 +1,25 @@
-- title: v3.16.0-pre-release
+- title: v3.16.0
   note: ""
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: release-v1.10
+   version: v1.10.0
   components:
      typha:
-      version: release-v3.16
+      version: v3.16.0
      calicoctl:
-      version: release-v3.16
+      version: v3.16.0
      calico/node:
-      version: release-v3.16
+      version: v3.16.0
      calico/cni:
-      version: release-v3.16
+      version: v3.16.0
      calico/kube-controllers:
-      version: release-v3.16
+      version: v3.16.0
      networking-calico:
-      version: release-v3.16
+      version: v3.16.0
      flannel:
       version: v0.12.0
      calico/dikastes:
-      version: release-v3.16
+      version: v3.16.0
      flexvol:
-      version: release-v3.16
+      version: v3.16.0
