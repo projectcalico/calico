@@ -78,7 +78,7 @@ Description:
 	}
 
 	// Set the Kubernetes client QPS to 50 if not explicitly set.
-	if cfg.Spec.K8sClientQPS != float32(0) {
+	if cfg.Spec.K8sClientQPS == float32(0) {
 		cfg.Spec.K8sClientQPS = float32(50)
 	}
 
