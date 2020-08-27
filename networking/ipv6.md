@@ -31,7 +31,7 @@ This how-to guide uses the following {{site.prodname}} features:
 - **CNI plugin configuration** with `assign_ipv6` and `assign_ipv4` flags
 - **IPPool**
 
-### Before you begin...
+### Before you begin
 
 **{{site.prodname}} requirements**
 
