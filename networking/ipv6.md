@@ -1,217 +1,182 @@
 ---
-title: Enabling IPv6 support
-description: Enable IPv6 support for workloads on Kubernetes and OpenStack.
+title: Configure dual stack or IPv6 only
+description: Configure dual stack or IPv6 only for workloads.
 canonical_url: '/networking/ipv6'
 ---
 
-### About enabling IPv6
+### Big picture
 
-After enabling IPv6:
-- Workloads can communicate over IPv6.
-- Workloads can initiate connections to IPv6 services.
-- Workloads can terminate incoming IPv6 connections.
+Configure {{site.prodname}} IP address allocation to use dual stack or IPv6 only for workload communications.
 
-Support for IPv6 and the procedure for enabling it varies by orchestrator.
-Refer to the section that corresponds to your orchestrator for details.
+### Value
 
-- [Enabling IPv6 with Kubernetes](#enabling-ipv6-with-kubernetes)
-- [Enabling IPv6 with OpenStack](#enabling-ipv6-with-openstack)
+Workload communication over IPv6 is increasingly desirable, as well as or instead of IPv4. {{site.prodname}} supports:
 
-## Enabling IPv6 with Kubernetes
+- **IPv4 only** (default)
 
-### Limitations
+  Each workload gets an IPv4 address, and can communicate over IPv4.
 
-- Kubernetes 1.15 and earlier only support one IP stack version at a time. This
-  means that if you configure Kubernetes for IPv6 then {{site.prodname}}
-  should be configured to assign only IPv6 addresses. Starting with 1.16, it is
-  possible to configure a dual-stack environment.
-- The steps and setup here have not been tested against an existing IPv4
-  cluster and are intended only for new clusters.
+- **Dual stack**
 
-### Prerequisites
+  Each workload gets an IPv4 and an IPv6 address, and can communicate over IPv4 or IPv6.
 
-#### Host prerequisites
+- **IPv6 only**
 
-- Each Kubernetes host must have an IPv6 address that is reachable from
-  the other hosts.
-- Each host must have the sysctl setting `net.ipv6.conf.all.forwarding`
-  setting it to `1`.  This ensures both Kubernetes service traffic
-  and {{site.prodname}} traffic is forwarded appropriately.
-- Each host must have a default IPv6 route.
+  Each workload gets an IPv6 address, and can communicate over IPv6.
 
-#### Kubernetes components prerequisites
+### Features
 
-Kubernetes components must be configured to operate with IPv6.
-To enable IPv6, set the following flags.
+This how-to guide uses the following {{site.prodname}} features:
 
-##### kube-apiserver
+- **CNI plugin configuration** with `assign_ipv6` and `assign_ipv4` flags
+- **IPPool**
 
-| Flag | Value/Content |
-| ---- | ------------- |
-| `--bind-address` or `--insecure-bind-address` | Should be set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
-| `--advertise-address` | Should be set to the IPv6 address that nodes should use to access the kube-apiserver. |
-| `--service-cluster-ip-range` | Should be set to an IPv6 CIDR that will be used for the Service IPs, the DNS service address must be in this range. |
+### Before you begin
 
-##### kube-controller-manager
+**{{site.prodname}} requirements**
 
-| Flag | Value/Content |
-| ---- | ------------- |
-| `--master` | Should be set with the IPv6 address where the kube-apiserver can be accessed. |
-| `--cluster-cidr` | Should be set to match the {{site.prodname}} IPv6 IPPool. |
+- {{site.prodname}} IPAM
 
-##### kube-scheduler
+**Kubernetes version requirements**
+  - For dual stack, 1.16 and later
+  - For one IP stack at a time (IPv4 or IPv6), any Kubernetes version
 
-| Flag | Value/Content |
-| ---- | ------------- |
-| `--master` | Should be set with the IPv6 address where the kube-apiserver can be accessed. |
+**Kubernetes IPv6 host requirements**
+  - An IPv6 address that is reachable from the other hosts
+  - The sysctl setting, `net.ipv6.conf.all.forwarding`, is set to `1`.
+    This ensures both Kubernetes service traffic and {{site.prodname}} traffic is forwarded appropriately.
+  - A default IPv6 route
 
-##### kubelet
+**Kubernetes IPv4 host requirements**
+  - An IPv4 address that is reachable from the other hosts
+  - The sysctl setting, `net.ipv4.conf.all.forwarding`, is set to `1`.
+    This ensures both Kubernetes service traffic and {{site.prodname}} traffic is forwarded appropriately.
+  - A default IPv4 route
 
-| Flag | Value/Content |
-| ---- | ------------- |
-| `--address` | Should be set to the appropriate IPv6 address or `::` for all IPv6 addresses. |
-| `--cluster-dns` | Should be set to the IPv6 address that will be used for the service DNS, this must be in the range used for `--service-cluster-ip-range`. |
-| `--node-ip` | Should be set to the IPv6 address of the node. |
+### How to
 
-##### kube-proxy
-
-| Flag | Value/Content |
-| ---- | ------------- |
-| `--bind-address` | Should be set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
-| `--master` | Should be set with the IPv6 address where the kube-apiserver can be accessed. |
-| `--cluster-cidr` | Should be set to match the {{site.prodname}} IPv6 IPPool. |
-
-### Enabling IPv6 support in {{site.prodname}}
-
-To enable IPv6 support when installing {{site.prodname}} follow the
-steps below.
-
-1. Download the {{site.prodname}} manifest you wish to update for IPv6
-   deployment and save it as `calico.yaml`.
-1. If the ipam section in the `cni_network_config` in the `calico.yaml` file
-   has `"type": "calico-ipam"` then it should be modified to
-   [disable IPv4 assignments and enable IPv6
-   assigments](/reference/cni-plugin/configuration#ipam).
-1. Add the following environment variable to the calico-node DaemonSet in
-   the `calico.yaml` file.
-   
-   ```yaml
-   - name: IP6
-     value: "autodetect"
-   ```
-1. For clusters **not** provisioned with kubeadm (see note below), also add the following environment variable to the calico-node DaemonSet in
-   the `calico.yaml` file. Be sure to set the value for `CALICO_IPV6POOL_CIDR`
-   to the desired pool, it should match the `--cluster-cidr` passed to the
-   kube-controller-manager and to kube-proxy.
-
-   ```yaml
-   - name: CALICO_IPV6POOL_CIDR
-     value: "fd20::0/112"
-   ```
-
-1. Ensure in the `calico.yaml` file that the environment variable
-   `FELIX_IPV6SUPPORT` is set `true` on the calico-node DaemonSet.
-1. Apply the `calico.yaml` manifest with `kubectl apply -f calico.yaml`.
-
->**Note**: For clusters provisioned with kubeadm, {{site.prodname}} autodetects the IPv4 and IPv6 pod CIDRs and does not require configuration.
+>**Note**: The following tasks are only for new clusters.
 {: .alert .alert-info}
 
-#### Using only IPv6
+- [Enable IPv6 only](#enable-ipv6-only)
+- [Enable dual stack](#enable-dual-stack)
 
-If you wish to only use IPv6 (by disabling IPv4) or your hosts only have
-IPv6 addresses, you must disable autodetection of IPv4 by setting `IP`
-to `none`.
+#### Enable IPv6 only
 
-With IPv4 enabled, Calico uses the node's IPv4 address as the BGP router ID. With IPv4 disabled,
-you must configure another method to calculate the BGP router ID. There are two ways to do this:
+<!--
+{% tabs %}
+   <label:Operator,active:true>
+   <%
+1. TBD.
+1. TBD.
 
-- Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}. This will configure {{site.prodname}} to calculate the router ID based on the hostname.
-- Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
+%>
+<label:Manifest>
+<%
+-->
 
-### Modifying your DNS for IPv6
+1. Set up a new Kubernetes cluster with an IPv6 pod CIDR and service IP range.
 
-It will probably be necessary to modify your DNS pod for IPv6. If you are using
-[kube-dns](/getting-started/kubernetes/installation/manifests/kubedns.yaml),
-then the following changes will ensure IPv6 operation.
+1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type.
 
-- Update the image versions to at least `1.14.8`.
-- Ensure the clusterIP for the DNS service matches the one specified to
-  the kubelet as `--cluster-dns`.
-- Add `--dns-bind-address=[::]` to the arguments for the kubedns container.
-- Add `--no-negcache` to the arguments for the dnsmasq container.
-- Switch the arguments on the sidecar container from
-  ```
-  --probe=kubedns,127.0.0.1:10053,kubernetes.default.svc.cluster.local,5,A
-  --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local,5,A
-  ```
-  {: .no-select-button}
-  to
-  ```
-  --probe=kubedns,127.0.0.1:10053,kubernetes.default.svc.cluster.local,5,SRV
-  --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local,5,SRV
-  ```
-  {: .no-select-button}
+1. Edit the CNI config (calico-config ConfigMap in the manifest) to disable IPv4 assignments and enable IPv6 assignments.
+   ```
+       "ipam": {
+           "type": "calico-ipam",
+           "assign_ipv4": "false",
+           "assign_ipv6": "true"
+       },
+   ```
 
-## Enabling IPv6 with OpenStack
+1. Configure IPv6 support by adding the following variable settings to the environment for the `calico-node` container:
 
-### Prerequisites
+   | Variable name | Value |
+   | ------------- | ----- |
+   | `IP6`         | `autodetect` |
+   | `FELIX_IPV6SUPPORT` | `true` |
 
-When using {{site.prodname}} with a VM platform (e.g., OpenStack), obtaining IPv6
-connectivity requires certain configuration in the guest VM image:
+1. For clusters **not** provisioned with kubeadm (see note below), configure the default IPv6 IP pool by adding the following variable setting to the environment for the `calico-node` container:
 
--  When it boots up, the VM should issue a DHCPv6 request for each of
-   its interfaces, so that it can learn the IPv6 addresses that
-   OpenStack has allocated for it.
--  The VM must be configured to accept router advertisements.
--  If the VM uses the widely deployed DHCP client from ISC, it must
-   have a fix or workaround for {% include open-new-window.html text='this known
-   issue' url='https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html' %}.
+   | Variable name | Value |
+   | ------------- | ----- |
+   | `CALICO_IPV6POOL_CIDR` | the same as the IPv6 range you configured as the cluster CIDR to kube-controller-manager and kube-proxy |
 
-These requirements are not yet all met in common cloud images—but it
-is easy to remedy that by launching an image, making appropriate changes
-to its configuration files, taking a snapshot, and then using that
-snapshot thereafter instead of the original image.
+   >**Note**: For clusters provisioned with kubeadm, {{site.prodname}} autodetects the IPv4 and IPv6 pod CIDRs and does not require configuration.
+   {: .alert .alert-info}
 
-For example, starting from an Ubuntu cloud image, the following
-changes will suffice to meet the requirements just listed.
+1. Apply the edited manifest with `kubectl apply -f`.
 
--   In `/etc/network/interfaces.d/eth0.cfg`, add:
+   New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
-        iface eth0 inet6 dhcp
-                accept_ra 1
+<!--
+%>
+{% endtabs %}
+-->
 
--   In `/sbin/dhclient-script`, add at the start of the script:
+**(Optional) Update host to not look for IPv4 addresses**
 
-        new_ip6_prefixlen=128
+If you want your workloads to have IPv6 addresses only, because you do not have IPv4 addresses or connectivity
+between your nodes, complete these additional steps to tell {{site.prodname}} not to look for any IPv4 addresses.
 
--   In `/etc/sysctl.d`, create a file named `30-eth0-rs-delay.conf` with
-    contents:
+1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
+1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
+   - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.
+     This configures {{site.prodname}} to calculate the router ID based on the hostname.
+   - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
 
-        net.ipv6.conf.eth0.router_solicitation_delay = 10
+#### Enable dual stack
 
-For CentOS, these additions to a cloud-init script have been reported to be effective:
+<!--
+{% tabs id:installation-method-bbb %}
+<id:opbbb,name:Operator,active:true>
+<%
+1. TBD.
+1. TBD.
 
-	runcmd:
-	- sed -i -e '$a'"IPV6INIT=yes" /etc/sysconfig/network-scripts/ifcfg-eth0
-	- sed -i -e '$a'"DHCPV6C=yes" /etc/sysconfig/network-scripts/ifcfg-eth0
-	- sed -i '/PATH/i\new_ip6_prefixlen=128' /sbin/dhclient-script
-	- systemctl restart network
+%>
+<id:manbbb,name:Manifest>
+<%
+-->
 
+1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
-### Enabling IPv6 support in {{site.prodname}}
+1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type.
 
-In OpenStack, IPv6 connectivity requires defining an IPv6 subnet, in
-each Neutron network, with:
+1. Edit the CNI config (`calico-config` ConfigMap in the manifest), and enable IPv4 and IPv6 address allocation by setting both fields to true.
 
--   the IPv6 address range that you want your VMs to use
--   DHCP enabled
--   IPv6 address mode set to DHCPv6 stateful.
+   ```
+       "ipam": {
+           "type": "calico-ipam",
+           "assign_ipv4": "true",
+           "assign_ipv6": "true"
+       },
+   ```
 
-We suggest initially configuring both IPv4 and IPv6 subnets in each
-network. This allows handling VM images that support only IPv4 alongside
-those that support both IPv4 and IPv6, and allows a VM to be accessed
-over IPv4 in case this is needed to troubleshoot any issues with its
-IPv6 configuration.
+1. Configure IPv6 support by adding the following variable settings to the environment for the `calico-node` container:
 
-In principle, though, we are not aware of any problems with configuring
-and using IPv6-only networks in OpenStack.
+   | Variable name | Value |
+   | ------------- | ----- |
+   | `IP6`         | `autodetect` |
+   | `FELIX_IPV6SUPPORT` | `true` |
+
+1. For clusters **not** provisioned with kubeadm (see note below), configure the default IPv6 IP pool by adding the following variable setting to the environment for the `calico-node` container:
+
+   | Variable name | Value |
+   | ------------- | ----- |
+   | `CALICO_IPV6POOL_CIDR` | the same as the IPv6 range you configured as the IPv6 cluster CIDR to kube-controller-manager and kube-proxy |
+
+   >**Note**: For clusters provisioned with kubeadm, {{site.prodname}} autodetects the IPv4 and IPv6 pod CIDRs and does not require configuration.
+   {: .alert .alert-info}
+
+1. Apply the edited manifest with `kubectl apply -f`.
+
+   New pods will get both IPv4 and IPv6 addresses, and can communicate with each other and the outside world over IPv4 or IPv6.
+
+<!--
+%>
+{% endtabs %}
+-->
+
+### Above and beyond
+
+- [Configure Kubernetes control plane to operate over IPv6]({{site.baseurl}}/networking/ipv6-control-plane)

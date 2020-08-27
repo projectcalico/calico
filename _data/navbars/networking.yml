@@ -28,10 +28,10 @@ section:
      path: /networking/get-started-ip-addresses
    - title: Configure IP autodetection
      path: /networking/ip-autodetection
-   - title: Enable dual stack
-     path: /networking/dual-stack
-   - title: Enable IPv6
+   - title: Configure dual stack or IPv6 only
      path: /networking/ipv6
+   - title: Configure Kubernetes control plane to operate over IPv6
+     path: /networking/ipv6-control-plane  
    - title: Add a floating IP to a pod
      path: /networking/add-floating-ip
    - title: Use specific IP address for a pod
@@ -49,6 +49,8 @@ section:
   section:
   - title: Set up a development machine
     path:  /networking/openstack/dev-machine-setup
+  - title: Prepare a VM guest OS for IPv6
+    path: /networking/openstack/ipv6
   - title: IP addressing and connectivity
     path: /networking/openstack/connectivity
   - title: Endpoint labels and operator policy
