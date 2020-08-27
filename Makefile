@@ -384,8 +384,9 @@ endif
 
 	# Copy artifacts for upload to GitHub.
 	mkdir -p bin/github
-	$(foreach var,$(VALIDARCHES), cp bin/$(var)/calico bin/github/calico-$(var);)
-	$(foreach var,$(VALIDARCHES), cp bin/$(var)/calico-ipam bin/github/calico-ipam-$(var);)
+	$(foreach var,$(VALIDARCHES), cp bin/$(var)/install bin/github/install-$(var);)
+	cp bin/windows/calico.exe bin/github/calico.exe
+	cp bin/windows/calico-ipam.exe bin/github/calico-ipam.exe
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
