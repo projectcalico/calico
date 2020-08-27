@@ -88,14 +88,14 @@ This how-to guide uses the following {{site.prodname}} features:
        },
    ```
 
-1. Configure IPv6 support and the default IPv6 IP pool by adding the following variable settings to the environment for the `calico-node` container:
+1. Configure IPv6 support by adding the following variable settings to the environment for the `calico-node` container:
 
    | Variable name | Value |
    | ------------- | ----- |
    | `IP6`         | `autodetect` |
    | `FELIX_IPV6SUPPORT` | `true` |
 
-1. For clusters **not** provisioned with kubeadm (see note below), also add the following environment variable to the environment for the `calico-node` container:
+1. For clusters **not** provisioned with kubeadm (see note below), configure the default IPv6 IP pool by adding the following variable setting to the environment for the `calico-node` container:
 
    | Variable name | Value |
    | ------------- | ----- |
@@ -152,14 +152,14 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
        },
    ```
 
-1. Configure IPv6 support and the default IPv6 IP pool by adding the following variable settings to the environment for the `calico-node` container:
+1. Configure IPv6 support by adding the following variable settings to the environment for the `calico-node` container:
 
    | Variable name | Value |
    | ------------- | ----- |
    | `IP6`         | `autodetect` |
    | `FELIX_IPV6SUPPORT` | `true` |
 
-1. For clusters **not** provisioned with kubeadm (see note below), also add the following environment variable to the environment for the `calico-node` container:
+1. For clusters **not** provisioned with kubeadm (see note below), configure the default IPv6 IP pool by adding the following variable setting to the environment for the `calico-node` container:
 
    | Variable name | Value |
    | ------------- | ----- |
