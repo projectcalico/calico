@@ -155,10 +155,18 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
 1. Configure IPv6 support and the default IPv6 IP pool by adding the following variable settings to the environment for the `calico-node` container:
 
    | Variable name | Value |
-| ------------- | ----- |
-| `IP6`         | `autodetect` |
-| `CALICO_IPV6POOL_CIDR` | The same as the IPv6 range you configured as the cluster CIDR to kube-controller-manager and kube-proxy |
-| `FELIX_IPV6SUPPORT` | `true` |
+   | ------------- | ----- |
+   | `IP6`         | `autodetect` |
+   | `FELIX_IPV6SUPPORT` | `true` |
+
+1. For clusters **not** provisioned with kubeadm (see note below), also add the following environment variable to the environment for the `calico-node` container:
+
+   | Variable name | Value |
+   | ------------- | ----- |
+   | `CALICO_IPV6POOL_CIDR` | the same as the IPv6 range you configured as the IPv6 cluster CIDR to kube-controller-manager and kube-proxy |
+
+   >**Note**: For clusters provisioned with kubeadm, {{site.prodname}} autodetects the IPv4 and IPv6 pod CIDRs and does not require configuration.
+   {: .alert .alert-info}
 
 1. Apply the edited manifest with `kubectl apply -f`.
 
