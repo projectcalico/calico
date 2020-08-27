@@ -75,7 +75,7 @@ This how-to guide uses the following {{site.prodname}} features:
 <%
 -->
 
-1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
+1. Set up a new Kubernetes cluster with an IPv6 pod CIDR and service IP range.
 
 1. Using the [{{site.prodname}} Kubernetes install guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the correct {{site.prodname}} manifest for the cluster and datastore type.
 
