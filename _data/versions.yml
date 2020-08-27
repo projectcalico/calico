@@ -15,6 +15,8 @@
       version: v3.16.0
      calico/kube-controllers:
       version: v3.16.0
+     calico/flannel-migration-controller:
+      version: v3.16.0
      networking-calico:
       version: v3.16.0
      flannel:
