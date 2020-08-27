@@ -63,6 +63,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Enable IPv6 only
 
+<!--
 {% tabs %}
    <label:Operator,active:true>
    <%
@@ -72,6 +73,7 @@ This how-to guide uses the following {{site.prodname}} features:
 %>
 <label:Manifest>
 <%
+-->
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
@@ -106,8 +108,10 @@ This how-to guide uses the following {{site.prodname}} features:
 
    New pods will get IPv6 addresses, and can communicate with each other and the outside world over IPv6.
 
+<!--
 %>
 {% endtabs %}
+-->
 
 **(Optional) Update host to not look for IPv4 addresses**
 
@@ -122,6 +126,7 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
 
 #### Enable dual stack
 
+<!--
 {% tabs id:installation-method-bbb %}
 <id:opbbb,name:Operator,active:true>
 <%
@@ -131,6 +136,7 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
 %>
 <id:manbbb,name:Manifest>
 <%
+-->
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
@@ -158,8 +164,10 @@ between your nodes, complete these additional steps to tell {{site.prodname}} no
 
    New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
 
+<!--
 %>
 {% endtabs %}
+-->
 
 ### Above and beyond
 
