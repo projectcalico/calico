@@ -501,6 +501,7 @@ release-test: release-test-image
 	docker run --rm \
 	-v $(PWD):/docs \
 	-e RELEASE_STREAM=$(RELEASE_STREAM) \
+	-e VERSION=$(VERSION) \
 	$(DOCS_TEST_CONTAINER) sh -c \
 	"nosetests . -e "$(EXCLUDE_REGEX)" \
 	-s -v --with-xunit \
