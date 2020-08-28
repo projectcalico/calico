@@ -153,6 +153,20 @@ will additionally compare the auto-detected value to the specified value to conf
 </tr>
 <tr>
 <td>
+<code>cni</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CNISpec">
+CNISpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CNI specifies the CNI that will be used by this installation.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>calicoNetwork</code><br>
 <em>
 <a href="#operator.tigera.io/v1.CalicoNetworkSpec">
@@ -162,25 +176,7 @@ CalicoNetworkSpec
 </td>
 <td>
 <em>(Optional)</em>
-<p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>clusterManagementType</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ClusterManagementType">
-ClusterManagementType
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
-Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
-a single view to manage any number of Managed clusters, which are a lighter weight installation.
-This option is applicable only when variant is TigeraSecureEnterprise.
-Default: Standalone</p>
+<p>CalicoNetwork specifies networking configuration options for Calico.</p>
 </td>
 </tr>
 <tr>
@@ -244,7 +240,7 @@ field.</p>
 <code>componentResources</code><br>
 <em>
 <a href="#operator.tigera.io/v1.ComponentResource">
-[]*github.com/tigera/operator/pkg/apis/operator/v1.ComponentResource
+[]ComponentResource
 </a>
 </em>
 </td>
@@ -343,6 +339,55 @@ TigeraStatusStatus
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.BGPOption">BGPOption
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<h3 id="operator.tigera.io/v1.CNIPluginType">CNIPluginType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CNISpec">CNISpec</a>)
+</p>
+<p>CNIPluginType describe the type of CNI plugin used.</p>
+<h3 id="operator.tigera.io/v1.CNISpec">CNISpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CNIPluginType">
+CNIPluginType
+</a>
+</em>
+</td>
+<td>
+<p>Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
+For KubernetesProvider GKE, this field defaults to GKE. For KubernetesProvider AKE, this field
+defaults to AzureVNET. For KubernetesProvider EKS, this field defaults to AmazonVPC. For all other
+KubernetesProviders this field defaults to Calico.
+For the value Calico, the CNI plugin binaries and CNI config will be installed as part of deployment,
+for all other values the CNI plugin binaries and CNI config is a dependency that is expected
+to be installed separately.</p>
+<p>Default: Calico</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec
 </h3>
 <p>
@@ -360,6 +405,20 @@ TigeraStatusStatus
 <tbody>
 <tr>
 <td>
+<code>bgp</code><br>
+<em>
+<a href="#operator.tigera.io/v1.BGPOption">
+BGPOption
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>BGP configures whether or not to enable Calico&rsquo;s BGP capabilities.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>ipPools</code><br>
 <em>
 <a href="#operator.tigera.io/v1.IPPool">
@@ -369,8 +428,8 @@ TigeraStatusStatus
 </td>
 <td>
 <em>(Optional)</em>
-<p>IPPools contains a list of IP pools to use for allocating pod IP addresses. At most one IP pool
-may be specified. If omitted, a single pool will be configured when needed.</p>
+<p>IPPools contains a list of IP pools to create if none exist. At most one IP pool of each
+address family may be specified. If omitted, a single pool will be configured if needed.</p>
 </td>
 </tr>
 <tr>
@@ -382,7 +441,7 @@ int32
 </td>
 <td>
 <em>(Optional)</em>
-<p>MTU specifies the maximum transmission unit to use for pods on the Calico network.
+<p>MTU specifies the maximum transmission unit to use on the pod network.
 Default: 1410</p>
 </td>
 </tr>
@@ -412,7 +471,7 @@ NodeAddressAutodetection
 </td>
 <td>
 <em>(Optional)</em>
-<p>NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv4 addresses. If not specified,
+<p>NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
 IPv6 addresses will not be auto-detected.</p>
 </td>
 </tr>
@@ -427,7 +486,7 @@ HostPortsType
 </td>
 <td>
 <em>(Optional)</em>
-<p>HostPorts configures whether or not Calico will support Kubernetes HostPorts.
+<p>HostPorts configures whether or not Calico will support Kubernetes HostPorts. Valid only when using the Calico CNI plugin.
 Default: Enabled</p>
 </td>
 </tr>
@@ -442,20 +501,28 @@ MultiInterfaceMode
 </td>
 <td>
 <em>(Optional)</em>
-<p>MultiInterfaceMode configures what will configure multiple interface per pod. Only valid for Calico Enterprise installations.
+<p>MultiInterfaceMode configures what will configure multiple interface per pod. Only valid for Calico Enterprise installations
+using the Calico CNI plugin.
 Default: None</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerIPForwarding</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ContainerIPForwardingType">
+ContainerIPForwardingType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ContainerIPForwarding configures whether ip forwarding will be enabled for containers in the CNI configuration.
+Default: Disabled</p>
 </td>
 </tr>
 </tbody>
 </table>
-<h3 id="operator.tigera.io/v1.ClusterManagementType">ClusterManagementType
-(<code>string</code> alias)</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
-</p>
-<p>ClusterManagementType represents the type of multicluster management to use. Valid options for this field are: &ldquo;Standalone&rdquo;,
-&ldquo;Management&rdquo;, &ldquo;Managed&rdquo;.</p>
 <h3 id="operator.tigera.io/v1.ComponentName">ComponentName
 (<code>string</code> alias)</h3>
 <p>
@@ -465,6 +532,10 @@ Default: None</p>
 <p>ComponentName CRD enum</p>
 <h3 id="operator.tigera.io/v1.ComponentResource">ComponentResource
 </h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
 <p>The ComponentResource struct associates a ResourceRequirements with a component by name</p>
 <table>
 <thead>
@@ -509,6 +580,13 @@ Kubernetes core/v1.ResourceRequirements
 <a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
 </p>
 <p>ConditionStatus represents the status of a particular condition. A condition may be one of: True, False, Unknown.</p>
+<h3 id="operator.tigera.io/v1.ContainerIPForwardingType">ContainerIPForwardingType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>ContainerIPForwardingType specifies whether the CNI config for container ip forwarding is enabled.</p>
 <h3 id="operator.tigera.io/v1.EncapsulationType">EncapsulationType
 (<code>string</code> alias)</h3>
 <p>
@@ -707,6 +785,20 @@ will additionally compare the auto-detected value to the specified value to conf
 </tr>
 <tr>
 <td>
+<code>cni</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CNISpec">
+CNISpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CNI specifies the CNI that will be used by this installation.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>calicoNetwork</code><br>
 <em>
 <a href="#operator.tigera.io/v1.CalicoNetworkSpec">
@@ -716,25 +808,7 @@ CalicoNetworkSpec
 </td>
 <td>
 <em>(Optional)</em>
-<p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>clusterManagementType</code><br>
-<em>
-<a href="#operator.tigera.io/v1.ClusterManagementType">
-ClusterManagementType
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
-Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
-a single view to manage any number of Managed clusters, which are a lighter weight installation.
-This option is applicable only when variant is TigeraSecureEnterprise.
-Default: Standalone</p>
+<p>CalicoNetwork specifies networking configuration options for Calico.</p>
 </td>
 </tr>
 <tr>
@@ -798,7 +872,7 @@ field.</p>
 <code>componentResources</code><br>
 <em>
 <a href="#operator.tigera.io/v1.ComponentResource">
-[]*github.com/tigera/operator/pkg/apis/operator/v1.ComponentResource
+[]ComponentResource
 </a>
 </em>
 </td>
