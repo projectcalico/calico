@@ -688,6 +688,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.AllowVXLANPacketsFromWorkloads != nil {
+		in, out := &in.AllowVXLANPacketsFromWorkloads, &out.AllowVXLANPacketsFromWorkloads
+		*out = new(bool)
+		**out = **in
+	}
+	if in.AllowIPIPPacketsFromWorkloads != nil {
+		in, out := &in.AllowIPIPPacketsFromWorkloads, &out.AllowIPIPPacketsFromWorkloads
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ReportingInterval != nil {
 		in, out := &in.ReportingInterval, &out.ReportingInterval
 		*out = new(v1.Duration)

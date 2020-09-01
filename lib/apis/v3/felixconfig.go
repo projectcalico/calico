@@ -180,6 +180,13 @@ type FelixConfigurationSpec struct {
 	VXLANPort *int `json:"vxlanPort,omitempty"`
 	VXLANVNI  *int `json:"vxlanVNI,omitempty"`
 
+	// AllowVXLANPacketsFromWorkloads controls whether Felix will add a rule to drop VXLAN encapsulated traffic
+	// from workloads [Default: false]
+	AllowVXLANPacketsFromWorkloads *bool `json:"allowVXLANPacketsFromWorkloads,omitempty"`
+	// AllowIPIPPacketsFromWorkloads controls whether Felix will add a rule to drop IPIP encapsulated traffic
+	// from workloads [Default: false]
+	AllowIPIPPacketsFromWorkloads *bool `json:"allowIPIPPacketsFromWorkloads,omitempty"`
+
 	// ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable.
 	// Must be non-zero in OpenStack deployments. [Default: 30s]
 	ReportingInterval *metav1.Duration `json:"reportingInterval,omitempty" configv1timescale:"seconds" confignamev1:"ReportingIntervalSecs"`
