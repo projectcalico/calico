@@ -7,13 +7,13 @@ you want to install the binary.
 
 1. Use the following command to download the `calicoctl` binary.
 
-   ```
+   ```bash
    curl -O -L  {% include urls component="calicoctl" %}
    ```
 
 1. Set the file to be executable.
 
-   ```
+   ```bash
    chmod +x calicoctl
    ```
 
