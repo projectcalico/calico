@@ -40,30 +40,41 @@ type BGPPeer struct {
 
 // BGPPeerSpec contains the specification for a BGPPeer resource.
 type BGPPeerSpec struct {
-	// The node name identifying the Calico node instance that is peering with this peer.
-	// If this is not set, this represents a global peer, i.e. a peer that peers with
-	// every node in the deployment.
+	// The node name identifying the Calico node instance that is targeted by this peer.
+	// If this is not set, and no nodeSelector is specified, then this BGP peer selects all
+	// nodes in the cluster.
+	// +optional
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
+
+	// Selector for the nodes that should have this peering.  When this is set, the Node
+	// field must be empty.
+	// +optional
+	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
+
 	// The IP address of the peer followed by an optional port number to peer with.
 	// If port number is given, format should be `[<IPv6>]:port` or `<IPv4>:<port>` for IPv4.
 	// If optional port number is not set, and this peer IP and ASNumber belongs to a calico/node
 	// with ListenPort set in BGPConfiguration, then we use that port to peer.
-	PeerIP string `json:"peerIP" validate:"omitempty,IP:port"`
+	// +optional
+	PeerIP string `json:"peerIP,omitempty" validate:"omitempty,IP:port"`
+
 	// The AS Number of the peer.
-	ASNumber numorstring.ASNumber `json:"asNumber"`
-	// Selector for the nodes that should have this peering.  When this is set, the Node
-	// field must be empty.
-	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
+	// +optional
+	ASNumber numorstring.ASNumber `json:"asNumber,omitempty"`
+
 	// Selector for the remote nodes to peer with.  When this is set, the PeerIP and
 	// ASNumber fields must be empty.  For each peering between the local node and
 	// selected remote nodes, we configure an IPv4 peering if both ends have
 	// NodeBGPSpec.IPv4Address specified, and an IPv6 peering if both ends have
 	// NodeBGPSpec.IPv6Address specified.  The remote AS number comes from the remote
 	// node's NodeBGPSpec.ASNumber, or the global default if that is not set.
+	// +optional
 	PeerSelector string `json:"peerSelector,omitempty" validate:"omitempty,selector"`
+
 	// Option to keep the original nexthop field when routes are sent to a BGP Peer.
 	// Setting "true" configures the selected BGP Peers node to use the "next hop keep;"
 	// instead of "next hop self;"(default) in the specific branch of the Node on "bird.cfg".
+	// +kubebuilder:default=false
 	KeepOriginalNextHop bool `json:"keepOriginalNextHop,omitempty"`
 }
 
