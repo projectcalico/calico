@@ -73,6 +73,8 @@ The full list of parameters which can be set is as follows.
 | `VXLANPort`                       | `FELIX_VXLANPORT`                       | The UDP port to use for VXLAN. [Default: `4789`] | int |
 | `VXLANTunnelMACAddr`              |                                         | MAC address of the VXLAN tunnel. This is system configured and should not be updated manually. | string |
 | `VXLANVNI`                        | `FELIX_VXLANVNI`                        | The virtual network ID to use for VXLAN. [Default: `4096`] | int |
+| `AllowVXLANPacketsFromWorkload`   | `FELIX_ALLOWVXLANPACKETSFROMWORKLOAD`   | Set to `true` to allow VXLAN encapsulated traffic from workloads. [Default: `false`] | boolean |
+| `AllowIPIPPacketsFromWorkload`    | `FELIX_ALLOWIPIPPACKETSFROMWORKLOAD`    | Set to `true` to allow IPIP encapsulated traffic from workloads. [Default: `false`] | boolean |
 | `XDPRefreshInterval`              | `FELIX_XDPREFRESHINTERVAL`              | Period, in seconds, at which Felix re-checks the XDP state in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable XDP refresh. [Default: `90`] | int |
 | `XDPEnabled`                      | `FELIX_XDPENABLED`                      | Enable XDP acceleration for host endpoint policies. [Default: `true`] | boolean |
 | `TyphaAddr`                       | `FELIX_TYPHAADDR`                       | IPv4 address at which Felix should connect to Typha. [Default: none] | string |
