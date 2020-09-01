@@ -36,6 +36,16 @@ spec:
           spec:
             description: FelixConfigurationSpec contains the values of the Felix configuration.
             properties:
+              allowIPIPPacketsFromWorkloads:
+                description: 'AllowIPIPPacketsFromWorkloads controls whether Felix
+                  will add a rule to drop IPIP encapsulated traffic from workloads
+                  [Default: false]'
+                type: boolean
+              allowVXLANPacketsFromWorkloads:
+                description: 'AllowVXLANPacketsFromWorkloads controls whether Felix
+                  will add a rule to drop VXLAN encapsulated traffic from workloads
+                  [Default: false]'
+                type: boolean
               bpfConnectTimeLoadBalancingEnabled:
                 description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode,
                   controls whether Felix installs the connection-time load balancer.  The
