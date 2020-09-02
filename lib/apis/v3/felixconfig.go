@@ -182,9 +182,11 @@ type FelixConfigurationSpec struct {
 
 	// AllowVXLANPacketsFromWorkloads controls whether Felix will add a rule to drop VXLAN encapsulated traffic
 	// from workloads [Default: false]
+	// +optional
 	AllowVXLANPacketsFromWorkloads *bool `json:"allowVXLANPacketsFromWorkloads,omitempty"`
 	// AllowIPIPPacketsFromWorkloads controls whether Felix will add a rule to drop IPIP encapsulated traffic
 	// from workloads [Default: false]
+	// +optional
 	AllowIPIPPacketsFromWorkloads *bool `json:"allowIPIPPacketsFromWorkloads,omitempty"`
 
 	// ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable.
