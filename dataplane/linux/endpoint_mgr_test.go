@@ -169,12 +169,12 @@ func chainsForIfaces(ifaceMetadata []string,
 			Match: iptables.Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(VXLANPort)),
 			Action:  iptables.DropAction{},
-			Comment: []string{"Drop VXLAN encapped packets originating in pods"},
+			Comment: []string{"Drop VXLAN encapped packets originating in workloads"},
 		},
 		{
 			Match:   iptables.Match().ProtocolNum(ProtoIPIP),
 			Action:  iptables.DropAction{},
-			Comment: []string{"Drop IPinIP encapped packets originating in pods"},
+			Comment: []string{"Drop IPinIP encapped packets originating in workloads"},
 		},
 	}
 

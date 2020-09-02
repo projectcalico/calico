@@ -213,6 +213,11 @@ type Config struct {
 	IpInIpMtu        int    `config:"int;1440;non-zero"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
 
+	// Knobs provided to explicitly control whether we add rules to drop encap traffic
+	// from workloads. We always add them unless explicitly requested not to add them.
+	AllowVXLANPacketsFromWorkloads bool `config:"bool;false"`
+	AllowIPIPPacketsFromWorkloads  bool `config:"bool;false"`
+
 	AWSSrcDstCheck string `config:"oneof(DoNothing,Enable,Disable);DoNothing;non-zero"`
 
 	ReportingIntervalSecs time.Duration `config:"seconds;30"`

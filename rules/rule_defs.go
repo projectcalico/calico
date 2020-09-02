@@ -265,6 +265,9 @@ type Config struct {
 	// Same for VXLAN.
 	VXLANTunnelAddress net.IP
 
+	AllowVXLANPacketsFromWorkloads bool
+	AllowIPIPPacketsFromWorkloads  bool
+
 	WireguardEnabled       bool
 	WireguardInterfaceName string
 
