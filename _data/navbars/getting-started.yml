@@ -58,7 +58,7 @@ section:
     - title: Quickstart
       path: /getting-started/windows-calico/quickstart
     - title: Standard install
-      path: /getting-started/windows-calico/
+      path: /getting-started/windows-calico/requirements
       section:
       - title: Requirements
         path: /getting-started/windows-calico/requirements
