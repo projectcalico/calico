@@ -383,8 +383,8 @@ func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, err
 
 	// Work out list of nodes not running Calico. It could happen that all nodes are running Calico and it returns an empty list.
 	items := c.indexer.List()
-	var controllerNode *v1.Node
-	var masterNode *v1.Node
+	var controllerNodes []*v1.Node
+	var masterNodes []*v1.Node
 	for _, obj := range items {
 		node := obj.(*v1.Node)
 
@@ -404,17 +404,20 @@ func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, err
 			addToList := true
 			// check if migration controller is running on this node.
 			// If it is, make sure it is the last node we try to process.
+			// Note: we should only ever have a list with a single element. However, to be safe,
+			// we use a list so that we don't accidentally skip any nodes if multiple trigger this branch.
 			if node.Name == c.config.PodNodeName {
 				log.Infof("Migration controller is running on node %s.", node.Name)
-				controllerNode = node
+				controllerNodes = append(controllerNodes, node)
 				addToList = false
 			}
+
 			// check if this node is master node.
-			// If it is, make sure it is the second last node we try to process.
+			// If it is, make sure it is added at the end of the processing list.
 			_, err := getNodeLabelValue(node, "node-role.kubernetes.io/master")
 			if err == nil {
 				log.Infof("Master node is %s.", node.Name)
-				masterNode = node
+				masterNodes = append(masterNodes, node)
 				addToList = false
 			}
 
@@ -424,21 +427,23 @@ func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, err
 		}
 	}
 
-	// Now we have a list of nodes which does not include master node and controllerNode.
+	// Now we have a list of nodes which does not include control plane nodes, nor any node running this controller.
 	// We need to sort the list so that, if controller failed and restarted, it will start
 	// to process the same node again. This is to prevent migration controller to migrate another
 	// node without addressing previous failure.
 	sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 
-	if masterNode != nil {
-		log.Infof("Master node %s is last node to be migrated.", masterNode.Name)
-		nodes = append(nodes, masterNode)
+	if len(masterNodes) != 0 {
+		log.Infof("Adding control plane nodes to end of queue: %v", masterNodes)
+		nodes = append(nodes, masterNodes...)
 	}
 
-	if controllerNode != nil {
-		log.Infof("Controller node %s is last node to be migrated.", controllerNode.Name)
-		if controllerNode != masterNode {
-			nodes = append(nodes, controllerNode)
+	if len(controllerNodes) != 0 {
+		for _, cn := range controllerNodes {
+			if !nodeInList(cn, masterNodes) {
+				log.Infof("Adding node hosting migration controller to end of queue: %s", cn)
+				nodes = append(nodes, cn)
+			}
 		}
 	}
 
@@ -452,6 +457,15 @@ func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, err
 	}
 
 	return nodes, nil
+}
+
+func nodeInList(node *v1.Node, nodes []*v1.Node) bool {
+	for _, n := range nodes {
+		if n.Name == node.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // For each Flannel nodes, run network migration process.
