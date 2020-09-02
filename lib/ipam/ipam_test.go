@@ -820,6 +820,110 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			err = ic.ReleaseByHandle(context.Background(), handle1)
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		It("should respect MaxBlocksPerHost", func() {
+			ctx := context.Background()
+			bc.Clean()
+			deleteAllPools()
+
+			err := applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
+			Expect(err).NotTo(HaveOccurred())
+
+			// StrictAffinity is true, max blocks per host is 2
+			cfg := IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: true, MaxBlocksPerHost: 2}
+			err = ic.SetIPAMConfig(ctx, cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pool is a /28, with /30 blocks. e.g., 4 blocks with 4 addresses each.
+			applyPoolWithBlockSize("10.0.0.0/28", true, `foo == "bar"`, 30)
+
+			// We should be able to assign 8 addresses to node0, fully using its two blocks.
+			for i := 0; i < 8; i++ {
+				v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+					Num4:     1,
+					Num6:     0,
+					Hostname: node1,
+					HandleID: &node1,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+			}
+
+			// Attempting to allocate a ninth address should fail, since
+			// it would require allcoating a third block.
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node1,
+				HandleID: &node1,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(len(v4)).To(Equal(0))
+
+			// Allocate a block for the OTHER node with a single address.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node2,
+				HandleID: &node2,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4)).To(Equal(1))
+
+			// Attempting to allocate a ninth address should still fail, due to
+			// strict affinity.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node1,
+				HandleID: &node1,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(len(v4)).To(Equal(0))
+
+			// And, we should respect the global config even if a per-request value is provided,
+			// if it is more restrictive.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:             1,
+				Num6:             0,
+				Hostname:         node1,
+				HandleID:         &node1,
+				MaxBlocksPerHost: 3,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(len(v4)).To(Equal(0))
+
+			// Increase the global limit.
+			cfg = IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: true, MaxBlocksPerHost: 3}
+			err = ic.SetIPAMConfig(ctx, cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Try again, but with a more restrictive per-request value that will still fail,
+			// since the more restrictive value takes precedence.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:             1,
+				Num6:             0,
+				Hostname:         node1,
+				HandleID:         &node1,
+				MaxBlocksPerHost: 2,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(len(v4)).To(Equal(0))
+
+			// Finally, send a request with no-limit. Now that the global value is higher,
+			// we should get a new block.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node1,
+				HandleID: &node1,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4)).To(Equal(1))
+		})
 	})
 
 	Describe("IPAM AutoAssign from any pool", func() {

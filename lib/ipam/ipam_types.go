@@ -94,6 +94,10 @@ type IPAMConfig struct {
 	// allocate blocks of IP address to hosts as needed to assign addresses.
 	// If false, then StrictAffinity must be true.  The default value is true.
 	AutoAllocateBlocks bool
+
+	// If non-zero, MaxBlocksPerHost specifies the max number of blocks that may
+	// be affine to a node.
+	MaxBlocksPerHost int
 }
 
 // GetUtilizationArgs defines the set of arguments for requesting IP utilization.

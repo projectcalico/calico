@@ -70,6 +70,7 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 		Value: &model.IPAMConfig{
 			StrictAffinity:     v3obj.Spec.StrictAffinity,
 			AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
+			MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
 		},
 		Revision: kvpv3.Revision,
 		UID:      &kvpv3.Value.(*apiv3.IPAMConfig).UID,
@@ -97,6 +98,7 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			Spec: apiv3.IPAMConfigSpec{
 				StrictAffinity:     v1obj.StrictAffinity,
 				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
+				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
 			},
 		},
 		Revision: kvpv1.Revision,

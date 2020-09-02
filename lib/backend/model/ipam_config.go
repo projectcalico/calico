@@ -51,4 +51,5 @@ func (key IPAMConfigKey) String() string {
 type IPAMConfig struct {
 	StrictAffinity     bool `json:"strict_affinity,omitempty"`
 	AutoAllocateBlocks bool `json:"auto_allocate_blocks,omitempty"`
+	MaxBlocksPerHost   int  `json:"maxBlocksPerHost,omitempty"`
 }

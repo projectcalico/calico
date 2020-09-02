@@ -29,8 +29,10 @@ const (
 // IPAMConfig contains information about a block for IP address assignment.
 type IPAMConfig struct {
 	metav1.TypeMeta `json:",inline"`
+
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
+
 	// Specification of the IPAMConfig.
 	Spec IPAMConfigSpec `json:"spec,omitempty"`
 }
@@ -39,6 +41,11 @@ type IPAMConfig struct {
 type IPAMConfigSpec struct {
 	StrictAffinity     bool `json:"strictAffinity"`
 	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`
+
+	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
+	// affine to each host.
+	// +optional
+	MaxBlocksPerHost int `json:"maxBlocksPerHost,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
