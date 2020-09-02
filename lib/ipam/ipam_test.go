@@ -369,7 +369,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			bc.Clean()
 
 			// Create an IP pool
-			applyPool("10.0.0.0/24", true, "all()")
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
 
 			// Create the node object.
 			hostname = "host-affinity-fvs"
@@ -412,6 +412,41 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(blocks.KVPairs)).To(Equal(0))
+		})
+
+		It("should release all non-empty blocks if there are multiple", func() {
+			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
+			// per each block.
+			handle := "test-handle"
+			for i := 0; i < 12; i++ {
+				v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, HandleID: &handle})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+			}
+
+			// Release them all, leaving just the empty blocks.
+			err := ic.ReleaseByHandle(context.Background(), handle)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect three empty blocks.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(3))
+
+			// Allocate a single address, which will make one of the blocks non empty.
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, HandleID: &handle})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4)).To(Equal(1))
+
+			// Release host affinities. It should clean up the two empty blocks, but leave the block with an address allocated.
+			// It should return an error because it cannot release all three.
+			err = ic.ReleaseHostAffinities(context.Background(), hostname, true)
+			Expect(err).To(HaveOccurred())
+
+			// Expect one remaining block.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
 		})
 	})
 

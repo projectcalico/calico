@@ -1111,6 +1111,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, must
 		return err
 	}
 
+	var storedError error
 	versions := []int{4, 6}
 	for _, version := range versions {
 		blockCIDRs, _, err := c.blockReaderWriter.getAffineBlocks(ctx, hostname, version, nil)
@@ -1124,12 +1125,15 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, must
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Claimed by a different host.
 				} else {
-					return err
+					// Store the error for later so we can return it.
+					// We don't want to return just yet so we can do a best-effort
+					// attempt at releasing the other CIDRs for this host.
+					storedError = err
 				}
 			}
 		}
 	}
-	return nil
+	return storedError
 }
 
 // ReleasePoolAffinities releases affinity for all blocks within
