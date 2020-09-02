@@ -93,15 +93,15 @@ of how the services are load balanced at the network layer (L3-4).
 
 #### In-cluster ingress solution exposed as service type `LoadBalancer` with `externalTrafficPolicy:local`
 
-![In-cluster ingress with NLB local]({{site.baseurl/images/ingress-in-cluster-nlb-local.svg}})
+![In-cluster ingress with NLB local]({{site.baseurl}}/images/ingress-in-cluster-nlb-local.svg)
 
 #### External ingress solution via node ports 
 
-![External ingress via node port]({{site.baseurl/images/ingress-external-node-ports.svg}})
+![External ingress via node port]({{site.baseurl}}/images/ingress-external-node-ports.svg)
 
 #### External ingress solution direct to pods
 
-![External ingress direct to pods]({{site.baseurl/images/ingress-external-direct-to-pods.svg}})
+![External ingress direct to pods]({{site.baseurl}}/images/ingress-external-direct-to-pods.svg)
 
 ### Above and beyond
 
