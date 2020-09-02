@@ -1120,15 +1120,23 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, must
 		}
 
 		for _, blockCIDR := range blockCIDRs {
-			err := c.ReleaseAffinity(ctx, blockCIDR, hostname, mustBeEmpty)
-			if err != nil {
-				if _, ok := err.(errBlockClaimConflict); ok {
-					// Claimed by a different host.
-				} else {
-					// Store the error for later so we can return it.
-					// We don't want to return just yet so we can do a best-effort
-					// attempt at releasing the other CIDRs for this host.
-					storedError = err
+			logCtx := log.WithField("cidr", blockCIDR)
+			for i := 0; i < datastoreRetries; i++ {
+				err := c.blockReaderWriter.releaseBlockAffinity(ctx, host, blockCIDR, mustBeEmpty)
+				if err != nil {
+					if _, ok := err.(errBlockClaimConflict); ok {
+						// Claimed by a different host.
+					} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+						// Block does not exist - ignore.
+					} else if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+						logCtx.WithError(err).Debug("CAS error releasing block affinity - retry")
+						continue
+					} else {
+						// Store the error for later so we can return it.
+						// We don't want to return just yet so we can do a best-effort
+						// attempt at releasing the other CIDRs for this host.
+						storedError = err
+					}
 				}
 			}
 		}

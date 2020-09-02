@@ -284,7 +284,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		sentinelIP := net.ParseIP("10.0.0.1")
 
 		It("Should return ResourceNotExist on no valid pool", func() {
-			attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+			attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 			Expect(attrs).To(BeEmpty())
 			Expect(handle).To(BeNil())
@@ -308,7 +308,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			It("Should return ResourceNotExist error on no block", func() {
-				attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+				attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 				Expect(attrs).To(BeEmpty())
 				Expect(handle).To(BeNil())
@@ -321,7 +321,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					AttributeType: AttributeTypeVXLAN,
 				}
 				args := AssignIPArgs{
-					IP:       cnet.IP{sentinelIP},
+					IP:       cnet.IP{IP: sentinelIP},
 					Hostname: hostname,
 					Attrs:    ipAttr,
 					HandleID: &handle,
@@ -329,7 +329,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				err := ic.AssignIP(context.Background(), args)
 				Expect(err).NotTo(HaveOccurred())
 
-				attrs, returnedHandle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+				attrs, returnedHandle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(attrs).To(Equal(ipAttr))
 				Expect(returnedHandle).NotTo(BeNil())
@@ -343,7 +343,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					AttributeType: AttributeTypeVXLAN,
 				}
 				args := AssignIPArgs{
-					IP:       cnet.IP{net.ParseIP("10.0.0.2")},
+					IP:       cnet.IP{IP: net.ParseIP("10.0.0.2")},
 					Hostname: hostname,
 					Attrs:    ipAttr,
 				}
@@ -351,7 +351,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(err).NotTo(HaveOccurred())
 
 				// Block exists but sentinel ip is not allocated.
-				attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+				attrs, handle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 				Expect(attrs).To(BeEmpty())
 				Expect(handle).To(BeNil())
@@ -448,6 +448,48 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(blocks.KVPairs)).To(Equal(1))
 		})
+
+		It("should release host affinifies even if the pool has been deleted", func() {
+			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
+			// per each block.
+			handle := "test-handle"
+			for i := 0; i < 12; i++ {
+				v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, HandleID: &handle})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+			}
+
+			// Expect three blocks.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(3))
+
+			// Delete the IP pool.
+			deletePool("10.0.0.0/24")
+
+			// Free the affinities for the node.
+			err = ic.ReleaseHostAffinities(context.Background(), hostname, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect no affinities.
+			affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(affs.KVPairs)).To(Equal(0))
+
+			// The blocks should still exist, though.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(3))
+
+			// Release the addresses, triggering deletion of the blocks.
+			err = ic.ReleaseByHandle(context.Background(), handle)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect no blocks.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(0))
+		})
 	})
 
 	Describe("IPAM ReleaseIPs with duplicates in the request should be safe", func() {
@@ -478,15 +520,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Releasing the same IP multiple times in a single request
 			// should be handled gracefully by the IPAM Block allocator
 			_, releaseErr := ic.ReleaseIPs(context.Background(), []cnet.IP{
-				cnet.IP{sentinelIP},
-				cnet.IP{sentinelIP},
+				{IP: sentinelIP},
+				{IP: sentinelIP},
 			})
 			Expect(releaseErr).NotTo(HaveOccurred())
 		})
 
 		It("Should be able to re-assign the sentinel IP", func() {
 			assignIPutil(ic, sentinelIP, host)
-			attrs, handle, attrErr := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+			attrs, handle, attrErr := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
 			Expect(attrErr).NotTo(HaveOccurred())
 			Expect(attrs).To(BeEmpty())
 			Expect(handle).To(BeNil())
@@ -1080,7 +1122,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			var v4IPs []cnet.IP
 			for _, a := range v4nets {
 				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
-				v4IPs = append(v4IPs, cnet.IP{a.IP})
+				v4IPs = append(v4IPs, cnet.IP{IP: a.IP})
 			}
 
 			// Release one of the IPs.
@@ -1296,7 +1338,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			var v4IPs []cnet.IP
 			for _, a := range v4nets {
 				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
-				v4IPs = append(v4IPs, cnet.IP{a.IP})
+				v4IPs = append(v4IPs, cnet.IP{IP: a.IP})
 			}
 
 			// Release all IPs.
@@ -1333,7 +1375,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			v4IPs = []cnet.IP{}
 			for _, a := range v4nets {
 				Expect(pool2.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool2))
-				v4IPs = append(v4IPs, cnet.IP{a.IP})
+				v4IPs = append(v4IPs, cnet.IP{IP: a.IP})
 			}
 
 			// The block should only have one affinity to this host.
@@ -1378,7 +1420,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			var v4IPs []cnet.IP
 			for _, a := range v4nets {
 				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
-				v4IPs = append(v4IPs, cnet.IP{a.IP})
+				v4IPs = append(v4IPs, cnet.IP{IP: a.IP})
 			}
 
 			// Release all IPs.
@@ -1701,7 +1743,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		It("Should skip blocks having insufficient ip", func() {
 			// Assign an IP from first block
 			args := AssignIPArgs{
-				IP:       cnet.IP{net.ParseIP("10.0.0.2")},
+				IP:       cnet.IP{IP: net.ParseIP("10.0.0.2")},
 				Hostname: host,
 			}
 			outErr := ic.AssignIP(context.Background(), args)
@@ -1719,7 +1761,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Assign an IP from second block
 			args = AssignIPArgs{
-				IP:       cnet.IP{net.ParseIP("10.0.0.6")},
+				IP:       cnet.IP{IP: net.ParseIP("10.0.0.6")},
 				Hostname: host,
 			}
 			outErr = ic.AssignIP(context.Background(), args)
@@ -1838,7 +1880,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	DescribeTable("AssignIP: requested IP vs returned error",
 		func(inIP net.IP, host string, cleanEnv bool, pool []string, expError error) {
 			args := AssignIPArgs{
-				IP:       cnet.IP{inIP},
+				IP:       cnet.IP{IP: inIP},
 				Hostname: host,
 			}
 			if cleanEnv {
@@ -1881,7 +1923,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
 		func(inIP net.IP, cleanEnv bool, pool []string, assignIP net.IP, autoAssignNumIPv4 int, expUnallocatedIPs []cnet.IP, expError error) {
-			inIPs := []cnet.IP{{inIP}}
+			inIPs := []cnet.IP{{IP: inIP}}
 			hostname := "host-release"
 
 			// If we cleaned the datastore then recreate the pools.
@@ -1899,7 +1941,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			if len(assignIP) != 0 {
 				err := ic.AssignIP(context.Background(), AssignIPArgs{
-					IP: cnet.IP{assignIP},
+					IP: cnet.IP{IP: assignIP},
 				})
 				if err != nil {
 					Fail(fmt.Sprintf("Error assigning IP %s", assignIP))
@@ -1908,7 +1950,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// Re-initialize it to an empty slice to flush out any IP if passed in by mistake.
 				inIPs = []cnet.IP{}
 
-				inIPs = append(inIPs, cnet.IP{assignIP})
+				inIPs = append(inIPs, cnet.IP{IP: assignIP})
 
 			}
 
@@ -1943,10 +1985,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Test cases (ReleaseIPs):
 		// Test 1: release an IP that's not configured in any pools - expect a slice with the same IP as unallocatedIPs and no error.
-		Entry("Release an IP that's not configured in any pools", net.ParseIP("1.1.1.1"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{net.ParseIP("1.1.1.1")}}, nil),
+		Entry("Release an IP that's not configured in any pools", net.ParseIP("1.1.1.1"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{IP: net.ParseIP("1.1.1.1")}}, nil),
 
 		// Test 2: release an IP that's not allocated in the pool - expect a slice with one (unallocatedIPs) and no error.
-		Entry("Release an IP that's not allocated in the pool", net.ParseIP("192.168.1.0"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{net.ParseIP("192.168.1.0")}}, nil),
+		Entry("Release an IP that's not allocated in the pool", net.ParseIP("192.168.1.0"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{IP: net.ParseIP("192.168.1.0")}}, nil),
 
 		// Test 3: Assign 1 IPv4 with AssignIP from a configured pool and then release it.
 		// - Assign should not return an error.
@@ -2051,8 +2093,8 @@ var _ = DescribeTable("determinePools tests",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
 		ipPools.pools = map[string]pool{
-			"10.0.0.0/24": pool{enabled: pool1Enabled, nodeSelector: pool1Selector},
-			"20.0.0.0/24": pool{enabled: pool2Enabled, nodeSelector: pool2Selector},
+			"10.0.0.0/24": {enabled: pool1Enabled, nodeSelector: pool1Selector},
+			"20.0.0.0/24": {enabled: pool2Enabled, nodeSelector: pool2Selector},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
@@ -2114,7 +2156,7 @@ var _ = DescribeTable("determinePools tests",
 func assignIPutil(ic Interface, assignIP net.IP, host string) {
 	if len(assignIP) != 0 {
 		err := ic.AssignIP(context.Background(), AssignIPArgs{
-			IP:       cnet.IP{assignIP},
+			IP:       cnet.IP{IP: assignIP},
 			Hostname: host,
 		})
 		log.Printf("Assigning IP: %s\n", assignIP)
@@ -2157,6 +2199,10 @@ func applyPoolWithBlockSize(cidr string, enabled bool, nodeSelector string, bloc
 	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, blockSize: blockSize}
 }
 
+func deletePool(cidr string) {
+	delete(ipPools.pools, cidr)
+}
+
 func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) error {
 	if kc != nil {
 		// If a k8s clientset was provided, create the node in Kubernetes.
@@ -2192,7 +2238,7 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 			Value: v3.Node{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: v3.NodeSpec{OrchRefs: []v3.OrchRef{
-					v3.OrchRef{Orchestrator: "k8s", NodeName: host},
+					{Orchestrator: "k8s", NodeName: host},
 				}},
 			},
 		})
