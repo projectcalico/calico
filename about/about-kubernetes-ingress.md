@@ -91,15 +91,15 @@ of how the services are load balanced at the network layer (L3-4).
 > Note: you can successfully use ingress without needing to understand this next level of detail! So feel free to skip
 > over these diagrams if you don't want to dig deeper into how services and ingress interact under the covers.
 
-#### In-cluster ingress solution exposed as service type `LoadBalancer` with `externalTrafficPolicy:local`
+*In-cluster ingress solution exposed as service type `LoadBalancer` with `externalTrafficPolicy:local`*
 
 ![In-cluster ingress with NLB local]({{site.baseurl}}/images/ingress-in-cluster-nlb-local.svg)
 
-#### External ingress solution via node ports 
+*External ingress solution via node ports*
 
 ![External ingress via node port]({{site.baseurl}}/images/ingress-external-node-ports.svg)
 
-#### External ingress solution direct to pods
+*External ingress solution direct to pods*
 
 ![External ingress direct to pods]({{site.baseurl}}/images/ingress-external-direct-to-pods.svg)
 
