@@ -216,12 +216,13 @@ github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZ
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
-github.com/projectcalico/libcalico-go v1.7.2-0.20200825110335-c2bce79a365e h1:CeGNOUJWV1qJK3ocfo4D2Dv03iDCpmOySeG8/GOtjaQ=
-github.com/projectcalico/libcalico-go v1.7.2-0.20200825110335-c2bce79a365e/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200902200911-4aa52a0b4ca1/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200902213822-e88dcdc91e43 h1:xDj4oqaT3hYcoaFw+6d7JA8elt0/vRJAwDDTAz/RWW4=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200902213822-e88dcdc91e43/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
-github.com/projectcalico/typha v0.7.3-0.20200826104019-a778d5e56702 h1:GK/1z3c9HlAvt+4aqucDE5/Q8pAU1gLN6pqAOBhDuR0=
-github.com/projectcalico/typha v0.7.3-0.20200826104019-a778d5e56702/go.mod h1:cJtv+djYS1twwgXAVPgnUXbLiAnBiUjUt0aYnl8K7Xc=
+github.com/projectcalico/typha v0.7.3-0.20200902223258-f99ee7797a64 h1:2SYlblt0eJ2ifAtUcVclMGX503iQwdgzuRrZ4BFi6zw=
+github.com/projectcalico/typha v0.7.3-0.20200902223258-f99ee7797a64/go.mod h1:wzu0TheNVGg5O+LjksymjFwtybwFViy38a8nnNAHywA=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0 h1:vrDKnkGzuGvhNAL56c7DBz29ZL+KxnoR0x7enabFceM=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
