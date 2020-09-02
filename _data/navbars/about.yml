@@ -13,3 +13,5 @@ section:
   path: /about/about-network-policy
 - title: Kubernetes Services
   path: /about/about-kubernetes-services
+- title: Kubernetes Ingress
+  path: /about/about-kubernetes-ingress
