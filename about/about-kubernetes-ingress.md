@@ -37,10 +37,10 @@ balancer, but cannot restrict access to specific original clients.
 Given that Kubernetes [Services]({{site.baseurl}}/about/about-kubernetes-services) already provide a mechanism for load
 balancing access to services from outside of the cluster, why might you want to use Kubernetes Ingress?
 
-The mainline use case is if you have multiple HTTP / HTTPS services which you want to expose through a single external IP
-address, perhaps with each service having a different URL path, or perhaps as multiple different domains. This can be a
-lot simpler from a client configuration point of view compared to exposing each service outside of the cluster using
-Kubernetes Services which gives each service it's own external IP address.
+The mainline use case is if you have multiple HTTP / HTTPS services that you want to expose through a single external IP
+address, perhaps with each service having a different URL path, or perhaps as multiple different domains. This is lot
+simpler from a client configuration point of view than exposing each service outside of the cluster using Kubernetes
+Services, which would give each service a separate external IP address.
 
 If on the other hand, your application architecture is fronted by a single "front end" microservice then Kubernetes
 Services likely already meet your needs and you might prefer to not add Ingress to the picture, both from a simplicity
