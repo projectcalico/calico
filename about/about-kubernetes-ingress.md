@@ -1,6 +1,6 @@
 ---
-title: About Kubernetes ingress
-description: Learn about Kubernetes ingress!
+title: About Kubernetes Ingress
+description: Learn about Kubernetes Ingress!
 ---
 
 > <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional background education, including
@@ -43,16 +43,16 @@ simpler from a client configuration point of view than exposing each service out
 Services, which would give each service a separate external IP address.
 
 If on the other hand, your application architecture is fronted by a single "front end" microservice then Kubernetes
-Services likely already meet your needs and you might prefer to not add Ingress to the picture, both from a simplicity
-point of view, and potentially also so you can more easily restrict access to specific clients using network policy.
-In effect, your "front end" microservice already plays the role of Kubernetes Ingress, not that dissimilar to
-[in-cluster ingress](#in-cluster-ingress-solutions) solutions discussed below.
+Services likely already meet your needs. In this case you might prefer to not add Ingress to the picture, both from a
+simplicity point of view, and potentially also so you can more easily restrict access to specific clients using network
+policy. In effect, your "front end" microservice already plays the role of Kubernetes Ingress, in a way that is not that
+dissimilar to [in-cluster ingress](#in-cluster-ingress-solutions) solutions discussed below.
 
 ### Types of Ingress solutions
 
 Broadly speaking there are two types of ingress solutions:
-- In-cluster ingress - where the ingress load balancing is performed by pods within the cluster itself.
-- External ingress - where the ingress load balancing is implemented outside of the cluster by
+- In-cluster ingress - where ingress load balancing is performed by pods within the cluster itself.
+- External ingress - where ingress load balancing is implemented outside of the cluster by
   appliances or cloud provider capabilities.
 
 #### In-cluster ingress solutions
@@ -66,10 +66,10 @@ The advantages of this approach are that you can:
   algorithms, or security options.
 
 To get your ingress traffic to the in-cluster ingress pods, the ingress pods are normally exposed externally as a
-Kubernetes service, and any of the standard ways of accessing the service from outside of the cluster can be used. A
-common approach is use an external network load balancer, or service IP advertisement, with
-`externalTrafficPolicy:local` to minimize the number of network hops, and to retain client source IP address, which
-allows network policy to be used to restrict access to the ingress pods to particular clients if desired.
+Kubernetes service, so you can use any of the standard ways of accessing the service from outside of the cluster. A
+common approach is use an external network load balancer or service IP advertisement, with `externalTrafficPolicy:local`.
+This minimizes the number of network hops, and the retains client source IP address, which allows network policy to be used
+to restrict access to the ingress pods to particular clients if desired.
 
 ![In-cluster ingress]({{site.baseurl}}/images/ingress-in-cluster.svg)
 
@@ -79,7 +79,7 @@ External ingress solutions use application load balancers outside of the cluster
 features depend on which ingress controller you are using, but most cloud providers include an ingress controller that
 automates the provisioning and management of the cloud provider's application load balancers to provide ingress.
 
-The advantages of this type of ingress solutions are that your cloud provider handles the operational complexity of the
+The advantages of this type of ingress solution is that your cloud provider handles the operational complexity of the
 ingress for you.  The downsides are a potentially more limited set of features compared to the rich range of in-cluster
 ingress solutions, and the maximum number of services exposed by ingress being constrained by cloud provider specific
 limits.
@@ -100,12 +100,11 @@ solution is likely the better fit for you.
 
 ### Show me everything!
 
-All the above diagram focus on connection level (L5-7) representation of ingress and services. You can learn more about
+All the above diagrams focus on connection level (L5-7) representation of ingress and services. You can learn more about
 the network level (L3-4) interactions involved in handling the connections, including which scenarios client source IP
 addresses are maintained, in the [About Kubernetes Services]({{site.baseurl/about/about-kubernetes-services}}) guide.
 
-If you are already up to speed on how services work under the covers, here's some more complete diagrams show how the details
-of how the services are load balanced at the network layer (L3-4). 
+If you are already up to speed on how services work under the covers, here are some more complete diagrams that show details of how services are load balanced at the network layer (L3-4).
 
 > Note: you can successfully use ingress without needing to understand this next level of detail! So feel free to skip
 > over these diagrams if you don't want to dig deeper into how services and ingress interact under the covers.
