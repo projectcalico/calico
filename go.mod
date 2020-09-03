@@ -5,7 +5,6 @@ go 1.14
 require (
 	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 // indirect
 	github.com/Microsoft/hcsshim v0.8.6
-	github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae // indirect
 	github.com/buger/jsonparser v1.0.0
 	github.com/containernetworking/cni v0.7.1
 	github.com/containernetworking/plugins v0.8.5
@@ -21,7 +20,7 @@ require (
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200817173207-401e6844179e
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200902233834-d4bd7b4025b7
 	github.com/prometheus/common v0.4.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
