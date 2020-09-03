@@ -12,7 +12,7 @@ To select a different version, click **Releases** in the top navigation bar.
 {% for release in site.data.versions %}
 ## {{ release.title }}
 {% unless release.title == "master" %}
-[Release archive](https://github.com/projectcalico/calico/releases/download/{{ release.title }}/release-{{ release.title }}.tgz) with Kubernetes manifests, Docker images and binaries.
+{% include open-new-window.html text='Release archive' url='https://github.com/projectcalico/calico/releases/download/{{ release.title }}/release-{{ release.title }}.tgz' %} with Kubernetes manifests, Docker images and binaries.
 {% endunless %}
 
 {% if release.note %}

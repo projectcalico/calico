@@ -41,7 +41,7 @@ Finally, you must add an **applyOnForward: true expression** for a **doNotTrack 
 
 ### Before you begin...
 
-Before creating a **doNotTrack** network policy, read this [blog](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/) to understand use cases, benefits, and trade offs. 
+Before creating a **doNotTrack** network policy, read this {% include open-new-window.html text='blog' url='https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/' %} to understand use cases, benefits, and trade offs. 
 
 ### How to
 

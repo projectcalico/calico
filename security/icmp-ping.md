@@ -32,7 +32,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 {{site.prodname}} network policy also lets you deny and allow ICMP traffic based on specific types and codes. For example, you can specify ICMP type 5, code 2 to match specific ICMP redirect packets.
 
-For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol#Control_messages).
+For details, see {% include open-new-window.html text='ICMP type and code' url='https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol#Control_messages' %}.
 
 ### How to
 

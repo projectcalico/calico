@@ -207,6 +207,6 @@ kubectl delete ns policy-demo
 ```
 
 This was just a simple example of the Kubernetes NetworkPolicy API and how Calico can secure your Kubernetes cluster.  For more
-information on network policy in Kubernetes, see the [Kubernetes user-guide](http://kubernetes.io/docs/user-guide/networkpolicies/).
+information on network policy in Kubernetes, see the {% include open-new-window.html text='Kubernetes user-guide' url='https://kubernetes.io/docs/concepts/services-networking/network-policies/' %}.
 
 For a slightly more detailed demonstration of policy, check out the [Kubernetes policy demo](kubernetes-policy-demo/kubernetes-demo).

@@ -56,7 +56,7 @@ Calico Enterprise maintains a version history for all policy changes including w
 
 ### Configuration auditing
 
-Your security team or auditor may also ask about the configuration of your Kubernetes cluster to ensure it aligns with best-practices for security. The industry standard spec for Kubernetes security configuration is the [Center for Internet Security Benchmark for Kubernetes](https://www.cisecurity.org/benchmark/kubernetes/) (CIS).
+Your security team or auditor may also ask about the configuration of your Kubernetes cluster to ensure it aligns with best-practices for security. The industry standard spec for Kubernetes security configuration is the {% include open-new-window.html text='Center for Internet Security Benchmark for Kubernetes' url='https://www.cisecurity.org/benchmark/kubernetes/' %} (CIS).
 
 Calico Enterprise audits the configuration of your cluster and reports on compliance and noncompliance for CIS Level 1 and Level 2 security. Configuration audits are periodically executed, enabling a historical view of the configuration over time. 
 

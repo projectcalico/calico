@@ -27,7 +27,7 @@ For a tutorial on how application layer policy provides second-factor authentica
 - [{{site.prodname}} is installed]({{site.baseurl}}/getting-started/kubernetes/)
 - [calicoctl is installed and configured]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
-See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.
+See this {% include open-new-window.html text='issue' url='https://github.com/projectcalico/calico/issues/2943' %} for details and workaround.
 
 ### How to
 
@@ -51,7 +51,7 @@ calicoctl patch FelixConfiguration default --patch \
 #### Install Istio
 
 1. Verify [application layer policy requirements]({{site.baseurl}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
-1. Install Istio using the [Istio project documentation](https://istio.io/docs/setup/install/). Istio can be installed in both strict mode or permissive mode. For example to install Istio in strict mode:
+1. Install Istio using the {% include open-new-window.html text='Istio project documentation' url='https://istio.io/docs/setup/install/' %}. Istio can be installed in both strict mode or permissive mode. For example to install Istio in strict mode:
 
 ```bash
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.4.2 sh -
@@ -67,7 +67,7 @@ Application layer policies work with both Istio in strict or permissive mode. Wh
 
 The sidecar injector automatically modifies pods as they are created to work with Istio. This step modifies the injector configuration to add Dikastes (a {{site.prodname}} component), as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection) to install the sidecar injector and enable it in your chosen namespace(s).
+1. Follow the {% include open-new-window.html text='Automatic sidecar injection instructions' url='https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection' %} to install the sidecar injector and enable it in your chosen namespace(s).
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
 
 ```

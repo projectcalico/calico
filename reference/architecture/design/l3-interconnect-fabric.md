@@ -72,8 +72,8 @@ Furthermore, in most current virtualized environments, the actual
 endpoint is not addressed by the fabric. If it is a VM, it is usually
 encapsulated in an overlay, and if it is a container, it may be
 encapsulated in an overlay, or NATed by some form of proxy, such as is
-done in the [weave](http://www.weave.works/) project network model, or
-the router in standard [docker](http://www.docker.io/) networking.
+done in the {% include open-new-window.html text='weave' url='http://www.weave.works/' %} project network model, or
+the router in standard {% include open-new-window.html text='docker' url='http://www.docker.io/' %} networking.
 
 The two approaches are outlined below, in this technical note, we will
 cover the second option, as it is more common in the scale-out world. If
@@ -119,10 +119,10 @@ The two methods are:
     System (AS)](https://en.wikipedia.org/wiki/Autonomous_System_(Internet))
     and they are interconnected via either an Ethernet switching plane
     provided by the spine switches in a
-    [leaf/spine](http://bradhedlund.com/2012/10/24/video-a-basic-introduction-to-the-leafspine-data-center-networking-fabric-design/)
+    {% include open-new-window.html text='leaf/spine' url='http://bradhedlund.com/2012/10/24/video-a-basic-introduction-to-the-leafspine-data-center-networking-fabric-design/' %}
     architecture, or via a set of spine switches, each of which is also
     a unique AS. We'll refer to this as the *AS per rack* model. This
-    model is detailed in [IETF RFC 7938](https://tools.ietf.org/search/rfc7938).
+    model is detailed in {% include open-new-window.html text='IETF RFC 7938' url='https://tools.ietf.org/search/rfc7938' %}.
 2.  A BGP fabric where each of the compute servers is a unique AS, and
     the TOR switches make up a transit AS. We'll refer to this as the
     *AS per server* model.
@@ -192,7 +192,7 @@ The designs discussed below address these considerations.
 
 ### The *AS Per Rack* model
 
-This model is the closest to the model suggested by [IETF RFC 7938](https://tools.ietf.org/search/rfc7938).
+This model is the closest to the model suggested by {% include open-new-window.html text='IETF RFC 7938' url='https://tools.ietf.org/search/rfc7938' %}.
 
 As mentioned earlier, there are two versions of this model, one with an
 set of Ethernet planes interconnecting the ToR switches, and the other
@@ -259,7 +259,7 @@ routes internal to the rack.
 ### The *AS per Compute Server* model
 
 This model takes the concept of an AS per rack to its logical
-conclusion. In the earlier referenced [IETF RFC 7938](https://tools.ietf.org/search/rfc7938)
+conclusion. In the earlier referenced {% include open-new-window.html text='IETF RFC 7938' url='https://tools.ietf.org/search/rfc7938' %}
 the assumption in the overall model is that the ToR is first tier
 aggregating and routing element. In {{site.prodname}}, the ToR, if it is an L3
 router, is actually the second tier. Remember, in {{site.prodname}}, the compute
@@ -289,7 +289,7 @@ the other where that is done by a set of independent routers.
 The real difference in this model, is that the compute servers as well
 as the ToR switches are all independent autonomous systems. To make this
 work at scale, the use of four byte AS numbers as discussed in
-[RFC 4893](http://www.faqs.org/rfcs/rfc4893.html "RFC 4893"). Without
+{% include open-new-window.html text='RFC 4893' url='http://www.faqs.org/rfcs/rfc4893.html "RFC 4893"' %}. Without
 using four byte AS numbering, the total number of ToRs and compute
 servers in a {{site.prodname}} fabric would be limited to the approximately five
 thousand available private AS [^5] numbers. If four byte AS numbers are
@@ -481,7 +481,7 @@ network).
 
 Conveniently, large scale/Internet scale networks solved this problem
 almost 20 years ago by deploying BGP route reflection as described in
-[RFC 1966](http://www.faqs.org/rfcs/rfc1966.html "RFC 1966"). This is a
+{% include open-new-window.html text='RFC 1966' url='http://www.faqs.org/rfcs/rfc1966.html "RFC 1966"' %}. This is a
 technique supported by almost all BGP routers today. In a large network,
 a number of route reflectors [^9] are evenly distributed and each iBGP
 router is *peered* with one or more route reflectors (usually 2 or 3).

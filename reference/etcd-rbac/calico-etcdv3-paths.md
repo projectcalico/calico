@@ -60,7 +60,7 @@ component needs access to in etcd to function successfully.
 > compaction of the etcd data store. If you limit it to just these
 > paths it will be unauthorized to perform this compaction, as that
 > operation requires root privileges on the etcd cluster. You should
-> [configure auto-compaction](https://etcd.io/docs/v3.3.12/op-guide/maintenance/)
+> {% include open-new-window.html text='configure auto-compaction' url='https://etcd.io/docs/v3.3.12/op-guide/maintenance/' %}
 > on your etcd cluster and
 > [disable `calico/kube-controllers` periodic compaction](/reference/kube-controllers/configuration).
 {: .alert .alert-info}

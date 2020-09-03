@@ -37,7 +37,7 @@ metadata:
 {: .no-select-button}
 
 Annotations follow the
-[same rules as Kubernetes for valid syntax and character set](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/#syntax-and-character-set).
+{% include open-new-window.html text='same rules as Kubernetes for valid syntax and character set' url='https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/#syntax-and-character-set' %}.
 
 On Linux with the iptables dataplane, rule annotations are rendered as comments in the form `-m comment --comment "<key>=<value>"` on the iptables rule(s) that correspond
 to the {{site.prodname}} rule.

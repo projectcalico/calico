@@ -20,7 +20,7 @@ To view logs, use the following command:
 To view debug logs on some Calico components, set the `LogSeverityScreen` through the associated environment variable. 
 
 
-To report a problem, please [open an issue in GitHub](https://github.com/projectcalico/calico/issues).
+To report a problem, please {% include open-new-window.html text='open an issue in GitHub' url='https://github.com/projectcalico/calico/issues' %}.
 
 
 ### Containers do not have network connectivity
@@ -105,7 +105,7 @@ If you do not see this, please check the following.
 
 #### Configure NetworkManager
 
-Configure [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before
+Configure {% include open-new-window.html text='NetworkManager' url='https://help.ubuntu.com/community/NetworkManager' %} before
 attempting to use {{site.prodname}} networking.
 
 NetworkManager manipulates the routing table for interfaces in the default network

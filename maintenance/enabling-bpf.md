@@ -159,7 +159,7 @@ data:
   KUBERNETES_SERVICE_PORT: "<API server port>"
 ```
 
-Wait 60s for kubelet to pick up the `ConfigMap` (see Kubernetes [issue #30189](https://github.com/kubernetes/kubernetes/issues/30189)); then, restart the operator to pick up the change:
+Wait 60s for kubelet to pick up the `ConfigMap` (see Kubernetes {% include open-new-window.html text='issue #30189' url='https://github.com/kubernetes/kubernetes/issues/30189' %}); then, restart the operator to pick up the change:
 
 ```
 kubectl delete pod -n tigera-operator -l k8s-app=tigera-operator
@@ -190,7 +190,7 @@ data:
   KUBERNETES_SERVICE_PORT: "<API server port>"
 ```
 
-Wait 60s for kubelet to pick up the `ConfigMap` (see Kubernetes [issue #30189](https://github.com/kubernetes/kubernetes/issues/30189)); then, restart the {{site.prodname}} pods to pick up the change:
+Wait 60s for kubelet to pick up the `ConfigMap` (see Kubernetes {% include open-new-window.html text='issue #30189' url='https://github.com/kubernetes/kubernetes/issues/30189' %}); then, restart the {{site.prodname}} pods to pick up the change:
 
 ```
 kubectl delete pod -n kube-system -l k8s-app=calico-node

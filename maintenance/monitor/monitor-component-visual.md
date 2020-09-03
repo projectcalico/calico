@@ -65,12 +65,12 @@ EOF
 
 Grafana datasources are storage backends for your time series data. Each data source has a specific Query Editor that is customized for the features and capabilities that the particular data source exposes.
 
-> **Note**: Guide with greater detail about Grafana datasources can be found [at this link](https://grafana.com/docs/grafana/latest/features/datasources/).
+> **Note**: Guide with greater detail about Grafana datasources can be found {% include open-new-window.html text='at this link' url='https://grafana.com/docs/grafana/latest/features/datasources/' %}.
    {: .alert .alert-info}
 
 In this section you will use Grafana provisioning capabilities to create a prometheus datasource.
 
-> **Note**: Guide with greater detail about provisioning can be found [at this link](https://grafana.com/docs/grafana/latest/administration/provisioning/).
+> **Note**: Guide with greater detail about provisioning can be found {% include open-new-window.html text='at this link' url='https://grafana.com/docs/grafana/latest/administration/provisioning/' %}.
    {: .alert .alert-info}
 
 Here You setup a datasource and pointing it to the prometheus service in your cluster.
@@ -113,7 +113,7 @@ kubectl apply -f {{ "/manifests/grafana-dashboards.yaml" | absolute_url }}
 
 In this step you are going to create your Grafana pod using the config file that was created earlier.
 
-> **Note**: Grafana uses port 3000 by default. A more detailed guide about how to modify this port can be found [at this link](https://grafana.com/docs/grafana/latest/installation/configuration/#comments-in-ini-files).
+> **Note**: Grafana uses port 3000 by default. A more detailed guide about how to modify this port can be found {% include open-new-window.html text='at this link' url='https://grafana.com/docs/grafana/latest/installation/configuration/#comments-in-ini-files' %}.
    {: .alert .alert-info}
 
 ```bash
@@ -164,7 +164,7 @@ By using `port-forward` feature expose Grafana to your local machine.
 kubectl port-forward pod/grafana-pod 3000:3000 -n calico-monitoring
 ```
 
-You can now access Grafana web-ui at [http://localhost:3000](http://localhost:3000), if you prefer to visit Felix dashboard directly [click here](http://localhost:3000/d/calico-felix-dashboard/felix-dashboard-calico?orgId=1).
+You can now access Grafana web-ui at {% include open-new-window.html text='http://localhost:3000' url='http://localhost:3000' %}, if you prefer to visit Felix dashboard directly {% include open-new-window.html text='click here' url='http://localhost:3000/d/calico-felix-dashboard/felix-dashboard-calico?orgId=1' %}.
 
 > **Note**: Both username and password are `admin`.
    {: .alert .alert-info}
@@ -173,7 +173,7 @@ After login you will be prompted to change the default password, you can either 
 
 Congratulation you have arrived at your Felix dashboard.
 
-In this tutorial we have also prepared a [Typha dashboard](http://localhost:3000/d/calico-typha-dashboard/typha-dashborad-calico?orgId=1) for you, if you are not using Typha in your cluster you can delete it safely via Grafana web-ui.
+In this tutorial we have also prepared a {% include open-new-window.html text='Typha dashboard' url='http://localhost:3000/d/calico-typha-dashboard/typha-dashborad-calico?orgId=1' %} for you, if you are not using Typha in your cluster you can delete it safely via Grafana web-ui.
 
 > **Note**: A more detailed guide about Typha detection and setup can be found [at this link]({{ site.baseurl }}/maintenance/monitor/monitor-component-metrics#typha-configuration).
    {: .alert .alert-warning}

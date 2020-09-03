@@ -2,7 +2,7 @@
 
 ### Prerequisite
 
-This procedure requires etcdctl v3. The etcdctl tool is installed along with etcd. To install just etcdctl, [download the etcd release binary](https://github.com/coreos/etcd/releases), untar it, and extract the etcdctl binary.
+This procedure requires etcdctl v3. The etcdctl tool is installed along with etcd. To install just etcdctl, {% include open-new-window.html text='download the etcd release binary' url='https://github.com/coreos/etcd/releases' %}, untar it, and extract the etcdctl binary.
   
 ### Deleting Calico data from etcdv2
 
@@ -11,7 +11,7 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
 > to etcdctl to achieve a connection. We include just the `--endpoint` flag in the
 > following commands. Depending on your etcd configuration, you may need to include
 > additional parameters in these commands. Refer to the 
-> [etcdctl documentation for etcdv2 datastores](https://github.com/coreos/etcd/blob/master/etcdctl/READMEv2.md) 
+> {% include open-new-window.html text='etcdctl documentation for etcdv2 datastores' url='https://github.com/coreos/etcd/blob/master/etcdctl/READMEv2.md' %} 
 > for more information about the flags and environment variables.
 {: .alert .alert-info}
 
@@ -42,7 +42,7 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
 
 ### Prerequisites
 
-This procedure requires etcdctl v3. The etcdctl tool is installed along with etcd. To install just etcdctl, [download the etcd release binary](https://github.com/coreos/etcd/releases), untar it, and extract the etcdctl binary.
+This procedure requires etcdctl v3. The etcdctl tool is installed along with etcd. To install just etcdctl, {% include open-new-window.html text='download the etcd release binary' url='https://github.com/coreos/etcd/releases' %}, untar it, and extract the etcdctl binary.
   
 
 ### Deleting Calico data from etcdv3
@@ -52,7 +52,7 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
 > to etcdctl to achieve a connection. We include just the `--endpoints` flag in the
 > following commands. Depending on your etcd configuration, you may need to include
 > additional parameters in these commands or set environment variables. Refer to the 
-> [etcdctl documentation for etcdv3 datastores](https://github.com/coreos/etcd/blob/master/etcdctl/README.md) 
+> {% include open-new-window.html text='etcdctl documentation for etcdv3 datastores' url='https://github.com/coreos/etcd/blob/master/etcdctl/README.md' %} 
 > for more information about the flags and environment variables.
 {: .alert .alert-info}
 

@@ -36,7 +36,7 @@ These steps are detailed in this section.
     add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
     ```
 
-1.  Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
+1.  Add the official {% include open-new-window.html text='BIRD' url='http://bird.network.cz/' %} PPA. This PPA contains
     fixes to BIRD that are not yet available in Ubuntu. To add the PPA, run:
 
     ```bash

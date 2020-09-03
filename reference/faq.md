@@ -22,7 +22,7 @@ policy that is automatically rendered into distributed firewall rules
 across a cluster of containers, VMs, and/or servers.
 
 For a more detailed discussion of this topic, see our blog post at
-[Why Calico?](https://www.projectcalico.org/why-calico/).
+{% include open-new-window.html text='Why Calico?' url='https://www.projectcalico.org/why-calico/' %}.
 
 ## Does {{site.prodname}} work with IPv6?
 
@@ -106,7 +106,7 @@ cali\* interfaces.
 
 ## Can I prevent my Kubernetes pods from initiating outgoing connections?
 
-Yes! The Kubernetes [`NetworkPolicy`](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+Yes! The Kubernetes {% include open-new-window.html text='`NetworkPolicy`' url='https://kubernetes.io/docs/concepts/services-networking/network-policies/' %}
 API added support for egress policies in v1.8. You can also use `calicoctl`
 to configure egress policy to prevent Kubernetes pods from initiating outgoing
 connections based on the full set of supported {{site.prodname}} policy primitives
@@ -308,7 +308,7 @@ If this describes your infrastructure,
 what to do. Otherwise, if you have a layer 3 (IP) fabric, then there are
 detailed datacenter networking recommendations given
 in [{{site.prodname}} over IP fabrics]({{ site.baseurl }}/reference/architecture/design/l3-interconnect-fabric).
-We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
+We'd also encourage you to {% include open-new-window.html text='get in touch' url='https://www.projectcalico.org/contact/' %}
 to discuss your environment.
 
 ### How can I enable NAT for outgoing traffic from containers with private IP addresses?

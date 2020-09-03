@@ -27,7 +27,7 @@ The image is hosted on DockerHub at `calico/iptables-remover:latest`
 
 ### Instructions
 
-> **Note:** The following steps assume you're running [Calico on GCE via kube-up](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/calico-policy-controller)
+> **Note:** The following steps assume you're running {% include open-new-window.html text='Calico on GCE via kube-up' url='https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/calico-policy-controller' %}
 using the add-on manager and that you have permissions to create resources in the `kube-system` namespace.
 
 #### Disabling and Removing Calico Policy

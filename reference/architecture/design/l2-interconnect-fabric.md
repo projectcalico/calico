@@ -31,8 +31,8 @@ deployments.
 It has been acknowledged by the industry for years that, beyond a
 certain size, classical Ethernet networks are unsuitable for production
 deployment. Although there have been
-[multiple](https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering)
-[attempts](https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html) [to address](https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service)
+{% include open-new-window.html text='multiple' url='https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering' %}
+{% include open-new-window.html text='attempts' url='https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html' %} {% include open-new-window.html text='to address' url='https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service' %}
 these issues, the scale-out networking community has, largely abandoned
 Ethernet for anything other than providing physical point-to-point links
 in the networking fabric. The principal reasons for Ethernet failures at
@@ -146,7 +146,7 @@ but the *leaf/spine* is the predominant architectural model in use in
 scale-out infrastructure today.
 
 Since {{site.prodname}} is an IP routed fabric, a {{site.prodname}} network can use
-[ECMP](https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing) to
+{% include open-new-window.html text='ECMP' url='https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing' %} to
 distribute traffic across multiple links (instead of using Ethernet
 techniques such as MLAG). By leveraging ECMP load balancing on the
 {{site.prodname}} compute servers, it is possible to build the fabric out of

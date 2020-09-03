@@ -121,7 +121,7 @@ spec:
 This tutorial will lock down Kubernetes node ingress to only allow SSH and required ports for Kubernetes to function.
 We will apply two policies: one for the master nodes. and one for the worker nodes.
 
-> Note: This tutorial was tested on a cluster created with kubeadm v1.18.2 on AWS, using a "stacked etcd" [topology](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/). Stacked etcd topology means the etcd pods are running on the masters. kubeadm uses stacked etcd by default.
+> Note: This tutorial was tested on a cluster created with kubeadm v1.18.2 on AWS, using a "stacked etcd" {% include open-new-window.html text='topology' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/' %}. Stacked etcd topology means the etcd pods are running on the masters. kubeadm uses stacked etcd by default.
 >
 > If your Kubernetes cluster is on a different platform, is running a variant of Kubernetes, or is running a topology with an external etcd cluster,
 > please review the required ports for master and worker nodes in your cluster and adjust the policies in this tutorial as needed.
