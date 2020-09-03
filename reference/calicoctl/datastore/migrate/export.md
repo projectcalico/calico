@@ -42,6 +42,7 @@ Description:
     - GlobalNetworkPolicies
     - GlobalNetworkSets
     - HostEndpoints
+    - KubeControllersConfigurations
     - NetworkPolicies
     - Networksets
     - Nodes
