@@ -289,7 +289,7 @@ the other where that is done by a set of independent routers.
 The real difference in this model, is that the compute servers as well
 as the ToR switches are all independent autonomous systems. To make this
 work at scale, the use of four byte AS numbers as discussed in
-{% include open-new-window.html text='RFC 4893' url='http://www.faqs.org/rfcs/rfc4893.html "RFC 4893"' %}. Without
+{% include open-new-window.html text='RFC 4893' url='http://www.faqs.org/rfcs/rfc4893.html' %}. Without
 using four byte AS numbering, the total number of ToRs and compute
 servers in a {{site.prodname}} fabric would be limited to the approximately five
 thousand available private AS [^5] numbers. If four byte AS numbers are
@@ -481,7 +481,7 @@ network).
 
 Conveniently, large scale/Internet scale networks solved this problem
 almost 20 years ago by deploying BGP route reflection as described in
-{% include open-new-window.html text='RFC 1966' url='http://www.faqs.org/rfcs/rfc1966.html "RFC 1966"' %}. This is a
+{% include open-new-window.html text='RFC 1966' url='http://www.faqs.org/rfcs/rfc1966.html' %}. This is a
 technique supported by almost all BGP routers today. In a large network,
 a number of route reflectors [^9] are evenly distributed and each iBGP
 router is *peered* with one or more route reflectors (usually 2 or 3).
