@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
@@ -15,6 +17,8 @@ import (
 // LoadClientConfig loads the ClientConfig from the specified file (if specified)
 // or from environment variables (if the file is not specified).
 func LoadClientConfig(filename string) (*CalicoAPIConfig, error) {
+	var c *CalicoAPIConfig
+	var err error
 
 	// Override / merge with values loaded from the specified file.
 	if filename != "" {
@@ -23,13 +27,28 @@ func LoadClientConfig(filename string) (*CalicoAPIConfig, error) {
 			return nil, err
 		}
 
-		c, err := LoadClientConfigFromBytes(b)
+		c, err = LoadClientConfigFromBytes(b)
 		if err != nil {
 			return nil, fmt.Errorf("syntax error in %s: %v", filename, err)
 		}
-		return c, nil
+
+	} else {
+		c,err = LoadClientConfigFromEnvironment()
 	}
-	return LoadClientConfigFromEnvironment()
+
+	// If EtcdEndpoints is set and DatastoreType is missing set it to EtcdV3
+	// otherwise set default Datastoretype to Kubernetes
+	if c.Spec.DatastoreType == "" && c.Spec.EtcdEndpoints != "" {
+		c.Spec.DatastoreType = EtcdV3
+	} else if c.Spec.DatastoreType == "" {
+		c.Spec.DatastoreType = Kubernetes
+	}
+
+	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" && c.Spec.DatastoreType == Kubernetes && c.Spec.Kubeconfig == "" {
+		c.Spec.Kubeconfig = filepath.Join(os.Getenv("HOME"),".kube","config")
+	}
+
+	return c, err
 }
 
 // LoadClientConfig loads the ClientConfig from the supplied bytes containing
@@ -37,14 +56,7 @@ func LoadClientConfig(filename string) (*CalicoAPIConfig, error) {
 func LoadClientConfigFromBytes(b []byte) (*CalicoAPIConfig, error) {
 	var c CalicoAPIConfig
 
-	// Default the backend type to be etcd v3.  This will be overridden if
-	// explicitly specified in the file.
 	log.Debug("Loading config from JSON or YAML data")
-	c = CalicoAPIConfig{
-		Spec: CalicoAPIConfigSpec{
-			DatastoreType: EtcdV3,
-		},
-	}
 
 	if err := yaml.UnmarshalStrict(b, &c); err != nil {
 		return nil, err
