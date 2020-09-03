@@ -190,6 +190,9 @@ func StartDataplaneDriver(configParams *config.Config,
 				IPIPTunnelAddress:  configParams.IpInIpTunnelAddr,
 				VXLANTunnelAddress: configParams.IPv4VXLANTunnelAddr,
 
+				AllowVXLANPacketsFromWorkloads: configParams.AllowVXLANPacketsFromWorkloads,
+				AllowIPIPPacketsFromWorkloads:  configParams.AllowIPIPPacketsFromWorkloads,
+
 				WireguardEnabled:       configParams.WireguardEnabled,
 				WireguardInterfaceName: configParams.WireguardInterfaceName,
 

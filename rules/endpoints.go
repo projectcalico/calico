@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	dropEncap     = true
-	dontDropEncap = false
+	alwaysAllowVXLANEncap = true
+	alwaysAllowIPIPEncap  = true
 )
 
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
@@ -35,6 +35,8 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	egressPolicies []string,
 	profileIDs []string,
 ) []*Chain {
+	allowVXLANEncapFromWorkloads := r.Config.AllowVXLANPacketsFromWorkloads
+	allowIPIPEncapFromWorkloads := r.Config.AllowIPIPPacketsFromWorkloads
 	result := []*Chain{}
 	result = append(result,
 		// Chain for traffic _to_ the endpoint.
@@ -49,9 +51,12 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			chainTypeNormal,
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 		// Chain for traffic _from_ the endpoint.
+		// Encap traffic is blocked by default from workload endpoints
+		// unless explicitly overridden.
 		r.endpointIptablesChain(
 			egressPolicies,
 			profileIDs,
@@ -63,7 +68,8 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			chainTypeNormal,
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
-			dropEncap,
+			allowVXLANEncapFromWorkloads,
+			allowIPIPEncapFromWorkloads,
 		),
 	)
 
@@ -105,7 +111,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -119,7 +126,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
@@ -133,7 +141,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -147,7 +156,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 	)
 
@@ -184,7 +194,8 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
 			AcceptAction{},
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -198,7 +209,8 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
 			AcceptAction{},
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 	}
 }
@@ -222,7 +234,8 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 			chainTypePreDNAT,
 			true, // Host endpoints are always admin up.
 			r.mangleAllowAction,
-			dontDropEncap,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
 		),
 	}
 }
@@ -269,7 +282,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	chainType endpointChainType,
 	adminUp bool,
 	allowAction Action,
-	dropEncap bool,
+	allowVXLANEncap bool,
+	allowIPIPEncap bool,
 ) *Chain {
 	rules := []Rule{}
 	chainName := EndpointChainName(endpointPrefix, name)
@@ -308,17 +322,19 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		},
 	})
 
-	if dropEncap {
+	if !allowVXLANEncap {
 		rules = append(rules, Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(r.Config.VXLANPort)),
 			Action:  DropAction{},
-			Comment: []string{"Drop VXLAN encapped packets originating in pods"},
+			Comment: []string{"Drop VXLAN encapped packets originating in workloads"},
 		})
+	}
+	if !allowIPIPEncap {
 		rules = append(rules, Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
 			Action:  DropAction{},
-			Comment: []string{"Drop IPinIP encapped packets originating in pods"},
+			Comment: []string{"Drop IPinIP encapped packets originating in workloads"},
 		})
 	}
 
