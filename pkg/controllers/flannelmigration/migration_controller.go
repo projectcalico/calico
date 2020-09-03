@@ -414,8 +414,7 @@ func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, err
 
 			// check if this node is master node.
 			// If it is, make sure it is added at the end of the processing list.
-			_, err := getNodeLabelValue(node, "node-role.kubernetes.io/master")
-			if err == nil {
+			if nodeIsMaster(node) {
 				log.Infof("Master node is %s.", node.Name)
 				masterNodes = append(masterNodes, node)
 				addToList = false
@@ -465,6 +464,18 @@ func nodeInList(node *v1.Node, nodes []*v1.Node) bool {
 			return true
 		}
 	}
+	return false
+}
+
+func nodeIsMaster(node *v1.Node) bool {
+	// node-role.kubernetes.io/controlplane: true is the label attached to rancher master nodes.
+	for _, key := range []string{"node-role.kubernetes.io/master", "node-role.kubernetes.io/controlplane"} {
+		_, err := getNodeLabelValue(node, key)
+		if err == nil {
+			return true
+		}
+	}
+
 	return false
 }
 
