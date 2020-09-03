@@ -9,6 +9,7 @@ description: Learn about Kubernetes ingress!
 
 In this guide you will learn:
 - What is Kubernetes Ingress?
+- Why use ingress?
 - What are the differences between different ingress implementations?
 - How does ingress and network policy interact?
 - How does ingress and services fit together under the covers?
@@ -31,12 +32,30 @@ HTTPS requests. The requests are then forwarded via separate connections from th
 backing pods. As a result, network policy applied to the backing pods can restrict access to only allow connections from the load
 balancer, but cannot restrict access to specific original clients.
 
+### Why use Kubernetes Ingress?
+
+Given that Kubernetes [Services]({{site.baseurl}}/about/about-kubernetes-services) already provide a mechanism for load
+balancing access to services from outside of the cluster, why might you want to use Kubernetes Ingress?
+
+The mainline use case is if you have multiple HTTP / HTTPS services which you want to expose through a single external IP
+address, perhaps with each service having a different URL path, or perhaps as multiple different domains. This can be a
+lot simpler from a client configuration point of view compared to exposing each service outside of the cluster using
+Kubernetes Services which gives each service it's own external IP address.
+
+If on the other hand, your application architecture is fronted by a single "front end" microservice then Kubernetes
+Services likely already meet your needs and you might prefer to not add Ingress to the picture, both from a simplicity
+point of view, and potentially also so you can more easily restrict access to specific clients using network policy.
+In effect, your "front end" microservice already plays the role of Kubernetes Ingress, not that dissimilar to
+[in-cluster ingress](#in-cluster-ingress-solutions) solutions discussed below.
+
+### Types of Ingress solutions
+
 Broadly speaking there are two types of ingress solutions:
 - In-cluster ingress - where the ingress load balancing is performed by pods within the cluster itself.
 - External ingress - where the ingress load balancing is implemented outside of the cluster by
   appliances or cloud provider capabilities.
 
-### In-cluster ingress solutions
+#### In-cluster ingress solutions
 
 In-cluster ingress solutions use software load balancers running in pods within the cluster itself. There are many
 different ingress controllers to consider that follow this pattern, including for example the NGINX ingress controller.
@@ -54,7 +73,7 @@ allows network policy to be used to restrict access to the ingress pods to parti
 
 ![In-cluster ingress]({{site.baseurl}}/images/ingress-in-cluster.svg)
 
-### External ingress solutions
+#### External ingress solutions
 
 External ingress solutions use application load balancers outside of the cluster. The exact details and
 features depend on which ingress controller you are using, but most cloud providers include an ingress controller that
