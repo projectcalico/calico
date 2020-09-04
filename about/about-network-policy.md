@@ -40,7 +40,7 @@ addresses or IP address ranges.
 
 ### Why is network policy important?
 
-In age where attackers are becoming more and more sophisticated, network security as a line of defense is more important
+In an age where attackers are becoming more and more sophisticated, network security as a line of defense is more important
 than ever. 
 
 While you can (and should) use firewalls to restrict traffic at the perimeters of your network (commonly referred to as
