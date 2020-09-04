@@ -27,12 +27,13 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
+- [Install WireGuard](#install-wireguard)
 - [Enable WireGuard for a cluster](#enable-wireguard-for-a-cluster)
 - [Disable WireGuard for an individual node](#disable-wireguard-for-an-individual-node)
 - [Verify configuration](#verify-configuration)
 - [Disable WireGuard for a cluster](#disable-wireguard-for-a-cluster)
 
-#### Enable WireGuard for a cluster
+#### Install WireGuard
 
 Install WireGuard on cluster nodes using {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}. Note that you may need to reboot your nodes after installing WireGuard to make the kernel modules available on your system.
 
@@ -120,6 +121,9 @@ To install WireGuard for OpenShift v4.3:
    ```
 %>
 {% endtabs %}
+
+#### Enable WireGuard for a cluster
+
    > **Note**: Nodes that do not support WireGuard will not be secured by WireGuard tunnels, even if traffic running on the node to and from the pods goes to nodes that do support WireGuard.
    {: .alert .alert-info}
 
