@@ -472,7 +472,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					expJumpMaps := func(numWorkloads int) int {
 						numHostIfaces := 1
-						expectedNumMaps := 2 * (numWorkloads + numHostIfaces)
+						expectedNumMaps := 2*numWorkloads + 1*numHostIfaces
 						return expectedNumMaps
 					}
 
