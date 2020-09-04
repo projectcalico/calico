@@ -22,6 +22,9 @@ To view debug logs on some Calico components, set the `LogSeverityScreen` throug
 
 To report a problem, please [open an issue in GitHub](https://github.com/projectcalico/calico/issues).
 
+### Switching networking modes after initial install
+
+If you make a mistake during initial install configure your network mode (full Calico or network policy only), there is no clean way to manually back out files to make it work. For example, if you installed Calico CNI on an EKS cluster (which supports only installing network policy), do not try to back out individual files. Tear down your cluster and try again.  
 
 ### Containers do not have network connectivity
 
