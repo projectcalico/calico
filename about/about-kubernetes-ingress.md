@@ -68,7 +68,7 @@ The advantages of this approach are that you can:
 To get your ingress traffic to the in-cluster ingress pods, the ingress pods are normally exposed externally as a
 Kubernetes service, so you can use any of the standard ways of accessing the service from outside of the cluster. A
 common approach is use an external network load balancer or service IP advertisement, with `externalTrafficPolicy:local`.
-This minimizes the number of network hops, and the retains client source IP address, which allows network policy to be used
+This minimizes the number of network hops, and retains the client source IP address, which allows network policy to be used
 to restrict access to the ingress pods to particular clients if desired.
 
 ![In-cluster ingress]({{site.baseurl}}/images/ingress-in-cluster.svg)
