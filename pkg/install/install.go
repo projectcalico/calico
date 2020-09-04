@@ -353,23 +353,22 @@ func writeCNIConfig(c config) {
 
 	// Replace etcd datastore variables.
 	hostSecretsDir := c.CNINetDir + "/calico-tls"
-
-	etcdCertFile := fmt.Sprintf("%s/etcd-cert", hostSecretsDir)
-	if fileExists(etcdCertFile) {
+	if fileExists("/host/etc/cni/net.d/calico-tls/etcd-cert") {
+		etcdCertFile := fmt.Sprintf("%s/etcd-cert", hostSecretsDir)
 		netconf = strings.Replace(netconf, "__ETCD_CERT_FILE__", etcdCertFile, -1)
 	} else {
 		netconf = strings.Replace(netconf, "__ETCD_CERT_FILE__", "", -1)
 	}
 
-	etcdCACertFile := fmt.Sprintf("%s/etcd-ca", hostSecretsDir)
-	if fileExists(etcdCACertFile) {
+	if fileExists("/host/etc/cni/net.d/calico-tls/etcd-ca") {
+		etcdCACertFile := fmt.Sprintf("%s/etcd-ca", hostSecretsDir)
 		netconf = strings.Replace(netconf, "__ETCD_CA_CERT_FILE__", etcdCACertFile, -1)
 	} else {
 		netconf = strings.Replace(netconf, "__ETCD_CA_CERT_FILE__", "", -1)
 	}
 
-	etcdKeyFile := fmt.Sprintf("%s/etcd-key", hostSecretsDir)
-	if fileExists(etcdKeyFile) {
+	if fileExists("/host/etc/cni/net.d/calico-tls/etcd-key") {
+		etcdKeyFile := fmt.Sprintf("%s/etcd-key", hostSecretsDir)
 		netconf = strings.Replace(netconf, "__ETCD_KEY_FILE__", etcdKeyFile, -1)
 	} else {
 		netconf = strings.Replace(netconf, "__ETCD_KEY_FILE__", "", -1)
