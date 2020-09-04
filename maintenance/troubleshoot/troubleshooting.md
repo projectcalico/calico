@@ -17,14 +17,14 @@ To view logs, use the following command:
 `kubectl logs -n kube-system <pod_name>`
 
 
-To view debug logs on some Calico components, set the `LogSeverityScreen` through the associated environment variable. 
+To view debug logs on some {{site.prodname}} components, set the `LogSeverityScreen` through the associated environment variable. 
 
 
 To report a problem, please [open an issue in GitHub](https://github.com/projectcalico/calico/issues).
 
 ### Switching networking modes after initial install
 
-If you make a mistake during initial install configure your network mode (full Calico or network policy only), there is no clean way to manually back out files to make it work. For example, if you installed Calico CNI on an EKS cluster (which supports only installing network policy), do not try to back out individual files. Tear down your cluster and try again.  
+If you make a mistake during initial install configuring your network mode (full {{site.prodname}} or network policy only), there is no clean way to manually back out files to make it work. For example, if you installed the Calico CNI on an EKS cluster (which supports only installing network policy), do not try to back out individual files. Tear down your cluster and try again.  
 
 ### Containers do not have network connectivity
 
