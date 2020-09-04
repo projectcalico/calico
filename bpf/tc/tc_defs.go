@@ -27,4 +27,6 @@ const (
 	MarkSeenBypassSkipRPFMask        = MarkSeenBypassMask | 0x00f00000
 	MarkSeenNATOutgoing              = MarkSeenBypass | 0x00800000
 	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | MarkSeenNATOutgoing
+
+	MarksMask = 0xfff00000
 )
