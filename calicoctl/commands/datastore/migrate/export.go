@@ -43,27 +43,29 @@ var allV3Resources []string = []string{
 	"globalnetworkpolicies",
 	"globalnetworksets",
 	"heps",
+	"kubecontrollersconfigs",
 	"networkpolicies",
 	"networksets",
 	"nodes",
 }
 
 var resourceDisplayMap map[string]string = map[string]string{
-	"ipamBlocks":            "IPAMBlocks",
-	"blockaffinities":       "BlockAffinities",
-	"ipamhandles":           "IPAMHandles",
-	"ipamconfigs":           "IPAMConfigurations",
-	"ippools":               "IPPools",
-	"bgpconfig":             "BGPConfigurations",
-	"bgppeers":              "BGPPeers",
-	"clusterinfos":          "ClusterInformations",
-	"felixconfigs":          "FelixConfigurations",
-	"globalnetworkpolicies": "GlobalNetworkPolicies",
-	"globalnetworksets":     "GlobalNetworkSets",
-	"heps":                  "HostEndpoints",
-	"networkpolicies":       "NetworkPolicies",
-	"networksets":           "Networksets",
-	"nodes":                 "Nodes",
+	"ipamBlocks":             "IPAMBlocks",
+	"blockaffinities":        "BlockAffinities",
+	"ipamhandles":            "IPAMHandles",
+	"ipamconfigs":            "IPAMConfigurations",
+	"ippools":                "IPPools",
+	"bgpconfig":              "BGPConfigurations",
+	"bgppeers":               "BGPPeers",
+	"clusterinfos":           "ClusterInformations",
+	"felixconfigs":           "FelixConfigurations",
+	"globalnetworkpolicies":  "GlobalNetworkPolicies",
+	"globalnetworksets":      "GlobalNetworkSets",
+	"heps":                   "HostEndpoints",
+	"kubecontrollersconfigs": "KubeControllersConfigurations",
+	"networkpolicies":        "NetworkPolicies",
+	"networksets":            "Networksets",
+	"nodes":                  "Nodes",
 }
 
 var namespacedResources map[string]struct{} = map[string]struct{}{
@@ -99,6 +101,7 @@ Description:
     - GlobalNetworkPolicies
     - GlobalNetworkSets
     - HostEndpoints
+    - KubeControllersConfigurations
     - NetworkPolicies
     - Networksets
     - Nodes
