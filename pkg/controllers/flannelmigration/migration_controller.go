@@ -427,16 +427,21 @@ func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, err
 	}
 
 	// Now we have a list of nodes which does not include control plane nodes, nor any node running this controller.
-	// We need to sort the list so that, if controller failed and restarted, it will start
-	// to process the same node again. This is to prevent migration controller to migrate another
-	// node without addressing previous failure.
+	// We need to sort the list so that we would have a deterministic ordering of nodes.
+	// If controller failed and restarted, it will start to process the same node again.
+	// This is to prevent migration controller to migrate another node without addressing previous failure.
 	sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 
+	// Migrate master nodes after worker nodes (except node running migration controller).
+	// The advantage is we would have more confidence migration process works on worker nodes before running
+	// it on master nodes.
 	if len(masterNodes) != 0 {
+		sort.SliceStable(masterNodes, func(i, j int) bool { return masterNodes[i].Name < masterNodes[j].Name })
 		log.Infof("Adding control plane nodes to end of queue: %v", masterNodes)
 		nodes = append(nodes, masterNodes...)
 	}
 
+	// Currently only a single controllerNode is used but leave it as a slice for now.
 	if len(controllerNodes) != 0 {
 		for _, cn := range controllerNodes {
 			if !nodeInList(cn, masterNodes) {
