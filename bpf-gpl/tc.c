@@ -695,13 +695,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (CALI_F_HEP) {
 		/* We don't support host-endpoint policy yet, skip straight to
 		 * the epilogue program.
-		 * FIXME we really want to just call calico_tc_skb_accepted()
-		 * here but that runs out of stack space.
 		 */
-		map_state->pol_rc = CALI_POL_ALLOW;
-		bpf_tail_call(skb, &cali_jump, EPILOGUE_PROG_INDEX);
-		CALI_DEBUG("Tail call to epilogue program failed: ALLOW\n");
-		return TC_ACT_UNSPEC;
+		state.pol_rc = CALI_POL_ALLOW;
+		goto skip_policy;
 	}
 
 	CALI_DEBUG("About to jump to policy program; lack of further "
