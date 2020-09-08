@@ -297,10 +297,16 @@ else
     REL_NOTES_PATH:=release-notes
 endif
 
+UPLOAD_DIR?=$(OUTPUT_DIR)/upload
+$(UPLOAD_DIR):
+	mkdir -p $(UPLOAD_DIR)
+
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs
+release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
 	git push origin $(CALICO_VER)
+
+	cp $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -308,7 +314,7 @@ release-publish: release-prereqs
 	ghr -u projectcalico -r calico \
 		-b 'Release notes can be found at https://docs.projectcalico.org/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
 		-n $(CALICO_VER) \
-		$(CALICO_VER) $(RELEASE_DIR).tgz
+		$(CALICO_VER) $(UPLOAD_DIR)
 
 	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
@@ -346,6 +352,7 @@ RELEASE_DIR?=$(OUTPUT_DIR)/$(RELEASE_DIR_NAME)
 RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
+RELEASE_WINDOWS_ZIP=$(OUTPUT_DIR)/calico-windows-$(NODE_VER).zip
 
 # Determine where the manifests live. For older versions we used
 # a different location, but we still need to package them up for patch
@@ -357,8 +364,11 @@ DEFAULT_MANIFEST_SRC=./_site/$(RELEASE_STREAM)/getting-started/kubernetes/instal
 endif
 MANIFEST_SRC?=$(DEFAULT_MANIFEST_SRC)
 
-## Create an archive that contains a complete "Calico" release
-release-archive: release-prereqs $(RELEASE_DIR).tgz
+$(RELEASE_WINDOWS_ZIP):
+	wget https://github.com/projectcalico/node/releases/download/$(NODE_VER)/calico-windows-$(NODE_VER).zip -P $(OUTPUT_DIR)
+
+## Create an archive that contains a complete "Calico" release. This includes the release tarball (which bundles manifests, images, and binaries) and the Calico for Windows installation archive.
+release-archive: release-prereqs $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP)
 
 $(RELEASE_DIR).tgz: $(RELEASE_DIR) $(RELEASE_DIR_K8S_MANIFESTS) $(RELEASE_DIR_IMAGES) $(RELEASE_DIR_BIN) $(RELEASE_DIR)/README
 	tar -czvf $(RELEASE_DIR).tgz -C $(OUTPUT_DIR) $(RELEASE_DIR_NAME)
