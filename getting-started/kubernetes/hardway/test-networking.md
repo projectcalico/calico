@@ -11,13 +11,13 @@ In this lab we will test the {{site.prodname}} cluster to demonstrate networking
 Create three busybox instances
 
 ```bash
-kubectl run pingtest --image=busybox --replicas=3 -- sleep infinity
+kubectl create deployment pingtest --image=busybox --replicas=3 -- sleep infinity
 ```
 
 Check their IP addresses
 
 ```bash
-kubectl get pod -l run=pingtest -o wide
+kubectl get pods --field-selector=app=pingtest -o wide
 ```
 
 Result
