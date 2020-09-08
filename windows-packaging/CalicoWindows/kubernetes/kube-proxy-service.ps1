@@ -16,10 +16,12 @@ Param(
     [string]$NetworkName = "Calico"
 )
 
-# Import HNS libraries, included in the package.
-ipmo -Force c:\CalicoWindows\libs\hns\hns.psm1
+$baseDir = "$PSScriptRoot\.."
 
-. c:\CalicoWindows\config.ps1
+# Import HNS libraries, included in the package.
+ipmo -Force $baseDir\libs\hns\hns.psm1
+
+. $baseDir\config.ps1
 
 Write-Host "Running kub-proxy service."
 
@@ -92,6 +94,6 @@ if ($policyLists) {
 
 Write-Host "Start to run c:\k\kube-proxy.exe"
 # We'll also pick up a network name env var from the Calico config file.  Override it
-# since hte value in the config file may be a regex.
+# since the value in the config file may be a regex.
 $env:KUBE_NETWORK=$NetworkName
 c:\k\kube-proxy.exe $argList

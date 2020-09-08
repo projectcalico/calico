@@ -3,7 +3,6 @@ that works with Calico For Windows.
 
 The scripts assume that:
 
-- Calico is installed to c:\CalicoWindows.
 - kube-proxy.exe and kubelet.exe are installed to c:\k\.
 - The HNS network name is "Calico".
 
