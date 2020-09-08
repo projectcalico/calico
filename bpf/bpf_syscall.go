@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -330,9 +331,17 @@ func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err err
 	cDataOut := C.malloc(dataOutBufSize)
 	defer C.free(cDataOut)
 
-	C.bpf_attr_setup_prog_run(bpfAttr, C.uint(fd), C.uint(len(dataIn)), cDataIn, C.uint(dataOutBufSize), cDataOut, C.uint(repeat))
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_TEST_RUN, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
-
+	var errno syscall.Errno
+	for attempts := 1; attempts > 0; attempts-- {
+		C.bpf_attr_setup_prog_run(bpfAttr, C.uint(fd), C.uint(len(dataIn)), cDataIn, C.uint(dataOutBufSize), cDataOut, C.uint(repeat))
+		_, _, errno = unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_TEST_RUN, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
+		if errno == unix.EINTR {
+			// We hit this if a Go profiling timer pops while we're in the syscall.
+			log.Debug("BPF_PROG_TEST_RUN hit EINTR")
+			continue
+		}
+		break
+	}
 	if errno != 0 {
 		err = errno
 		return
