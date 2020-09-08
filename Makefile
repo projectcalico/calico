@@ -85,8 +85,6 @@ bin/calicoctl-linux-%: BUILDOS=linux
 # and ARCH are defined with default values (Linux and amd64).
 bin/calicoctl-%: $(LOCAL_BUILD_DEP) $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
-bin/calicoctl-wait-%: $(LOCAL_BUILD_DEP) $(SRC_FILES)
-	$(MAKE) build-calicoctl-wait BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
 	mkdir -p bin
 	$(DOCKER_RUN) \
@@ -94,15 +92,8 @@ build-calicoctl:
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) \
 	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
-build-calicoctl-wait:
-	$(DOCKER_RUN) $(EXTRA_DOCKER_ARGS) \
-	  -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go build -v -o bin/calicoctl-wait-$(BUILDOS)-$(ARCH) $(LDFLAGS) "./calicoctl-wait/calicoctl-wait.go"'
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
-	cp $< $@
-bin/calicoctl-wait: bin/calicoctl-linux-amd64
 	cp $< $@
 bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 	mv $< $@
@@ -125,7 +116,7 @@ remote-deps: mod-download
 .PHONY: image $(BUILD_IMAGE)
 image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(CTL_CONTAINER_CREATED)
-$(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) bin/calicoctl-wait-linux-$(ARCH)
+$(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH)
 	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest

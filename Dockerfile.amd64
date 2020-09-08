@@ -30,7 +30,6 @@ LABEL name="Calico CLI tool" \
 
 COPY --from=ubi /licenses /licenses
 ADD bin/calicoctl-linux-amd64 /calicoctl
-ADD bin/calicoctl-wait-linux-amd64 /calicoctl-wait
 
 ENV CALICO_CTL_CONTAINER=TRUE
 ENV PATH=$PATH:/
