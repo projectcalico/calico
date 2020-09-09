@@ -298,9 +298,8 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
 	}
-	// If that didn't set the datastore type (in which case the field will have been set to its
-	// default 'etcdv3' value), copy it from the Felix config.
-	if cfg.Spec.DatastoreType == "etcdv3" {
+	// If that didn't set the datastore type, use our config parameter.
+	if cfg.Spec.DatastoreType == "" {
 		cfg.Spec.DatastoreType = apiconfig.DatastoreType(config.DatastoreType)
 	}
 	return *cfg
