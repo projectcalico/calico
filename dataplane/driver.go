@@ -127,7 +127,7 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		// Mark bits for endpoint mark. Currently Felix takes the rest bits from mask available for use.
 		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
-		if kubeIPVSSupportEnabled && allocated == 0 {
+		if kubeIPVSSupportEnabled {
 			if allocated == 0 {
 				log.WithFields(log.Fields{
 					"Name":     "felix-iptables",
