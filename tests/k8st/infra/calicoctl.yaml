@@ -24,7 +24,11 @@ spec:
   containers:
   - name: calicoctl
     image: calico/ctl:master
-    command: ["/calicoctl-wait"]
+    command:
+      - /calicoctl
+    args:
+      - version
+      - --poll=1m
     env:
     - name: DATASTORE_TYPE
       value: kubernetes
