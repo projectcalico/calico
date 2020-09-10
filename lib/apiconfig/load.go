@@ -33,7 +33,7 @@ func LoadClientConfig(filename string) (*CalicoAPIConfig, error) {
 		}
 
 	} else {
-		c,err = LoadClientConfigFromEnvironment()
+		c, err = LoadClientConfigFromEnvironment()
 	}
 
 	// If EtcdEndpoints is set and DatastoreType is missing set it to EtcdV3
@@ -44,8 +44,19 @@ func LoadClientConfig(filename string) (*CalicoAPIConfig, error) {
 		c.Spec.DatastoreType = Kubernetes
 	}
 
-	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" && c.Spec.DatastoreType == Kubernetes && c.Spec.Kubeconfig == "" {
-		c.Spec.Kubeconfig = filepath.Join(os.Getenv("HOME"),".kube","config")
+	if c.Spec.DatastoreType == Kubernetes {
+		// Default to using $(HOME)/.kube/config, unless another means has been configured.
+		switch {
+		case c.Spec.Kubeconfig != "":
+			// A kubeconfig has already been provided.
+		case c.Spec.K8sAPIEndpoint != "":
+			// A k8s API endpoint has been specified explicitly.
+		case os.Getenv("HOME") == "":
+			// No home directory, can't build a default config path.
+		default:
+			// Default the kubeconfig.
+			c.Spec.Kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		}
 	}
 
 	return c, err
