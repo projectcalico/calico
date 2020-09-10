@@ -146,12 +146,13 @@ func (c *NodeController) syncIPAMCleanup() error {
 			pod := a.AttrSecondary[ipam.AttributePod]
 			ipip := a.AttrSecondary[ipam.AttributeType] == ipam.AttributeTypeIPIP
 			vxlan := a.AttrSecondary[ipam.AttributeType] == ipam.AttributeTypeVXLAN
+			wg := a.AttrSecondary[ipam.AttributeType] == ipam.AttributeTypeWireguard
 
 			// Skip any allocations which are not either a Kubernetes pod, or a node's
-			// IPIP or VXLAN address. In practice, we don't expect these, but they might exist.
+			// IPIP, VXLAN or Wireguard address. In practice, we don't expect these, but they might exist.
 			// When they do, they will need to be released outside of this controller in order for
 			// the block to be cleaned up.
-			if (ns == "" || pod == "") && !ipip && !vxlan {
+			if (ns == "" || pod == "") && !ipip && !vxlan && !wg {
 				logc.Info("IP allocation on node is from an unknown source. Will be unable to cleanup block until it is removed.")
 				canDelete = false
 				continue
