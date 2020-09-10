@@ -288,6 +288,13 @@ type Config struct {
 	BPFEnabled         bool
 }
 
+var unusedBitsInBPFMode = map[string]bool{
+	"IptablesMarkPass":            true,
+	"IptablesMarkScratch1":        true,
+	"IptablesMarkEndpoint":        true,
+	"IptablesMarkNonCaliEndpoint": true,
+}
+
 func (c *Config) validate() {
 	// Scan for unset iptables mark bits.  We use reflection so that we have a hope of catching
 	// newly-added fields.
@@ -298,6 +305,10 @@ func (c *Config) validate() {
 	for i := 0; i < myValue.NumField(); i++ {
 		fieldName := myType.Field(i).Name
 		if strings.HasPrefix(fieldName, "IptablesMark") && fieldName != "IptablesMarkNonCaliEndpoint" {
+			if c.BPFEnabled && unusedBitsInBPFMode[fieldName] {
+				log.WithField("field", fieldName).Debug("Ignoring unused field in BPF mode.")
+				continue
+			}
 			bits := myValue.Field(i).Interface().(uint32)
 			if bits == 0 {
 				log.WithField("field", fieldName).Panic(

@@ -201,15 +201,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
-			infra          infrastructure.DatastoreInfra
-			felixes        []*infrastructure.Felix
-			calicoClient   client.Interface
-			cc             *Checker
-			externalClient *containers.Container
-			deadWorkload   *workload.Workload
-			bpfLog         *containers.Container
-			options        infrastructure.TopologyOptions
-			numericProto   uint8
+			infra              infrastructure.DatastoreInfra
+			felixes            []*infrastructure.Felix
+			calicoClient       client.Interface
+			cc                 *Checker
+			externalClient     *containers.Container
+			deadWorkload       *workload.Workload
+			bpfLog             *containers.Container
+			options            infrastructure.TopologyOptions
+			numericProto       uint8
+			felixPanicExpected bool
 		)
 
 		switch testOpts.protocol {
@@ -222,6 +223,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		}
 
 		BeforeEach(func() {
+			felixPanicExpected = false
 			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
 				"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 			infra = getInfra()
@@ -293,7 +295,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		AfterEach(func() {
 			log.Info("AfterEach starting")
 			for _, f := range felixes {
-				f.Exec("calico-bpf", "connect-time", "clean")
+				if !felixPanicExpected {
+					f.Exec("calico-bpf", "connect-time", "clean")
+				}
 				f.Stop()
 			}
 			infra.Stop()
@@ -367,6 +371,43 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				pol = createPolicy(pol)
 			})
+
+			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "tcp" {
+				Describe("with custom IptablesMarkMask", func() {
+					BeforeEach(func() {
+						// Disable core dumps, we know we're about to cause a panic.
+						options.ExtraEnvVars["GOTRACEBACK"] = ""
+						felixPanicExpected = true
+					})
+
+					It("0xffff000 not covering BPF bits should panic", func() {
+						felixPanicExpected = true
+						panicC := felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask doesn't cover bits that are used"))
+
+						fc := api.NewFelixConfiguration()
+						fc.Name = "default"
+						mark := uint32(0x0ffff000)
+						fc.Spec.IptablesMarkMask = &mark
+						fc, err := calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(panicC, "5s", "100ms").Should(BeClosed())
+					})
+
+					It("0xfff00000 only covering BPF bits should panic", func() {
+						panicC := felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*Not enough mark bits available"))
+
+						fc := api.NewFelixConfiguration()
+						fc.Name = "default"
+						mark := uint32(0xfff00000)
+						fc.Spec.IptablesMarkMask = &mark
+						fc, err := calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(panicC, "5s", "100ms").Should(BeClosed())
+					})
+				})
+			}
 
 			Describe("with DefaultEndpointToHostAction=DROP", func() {
 				BeforeEach(func() {

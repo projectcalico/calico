@@ -20,20 +20,15 @@ import (
 	"math/bits"
 	"net"
 	"os/exec"
-
-	"github.com/projectcalico/felix/bpf"
-
-	"github.com/projectcalico/felix/wireguard"
-
-	"github.com/projectcalico/felix/bpf/conntrack"
-
-	"k8s.io/client-go/kubernetes"
-
-	log "github.com/sirupsen/logrus"
-
 	"runtime/debug"
 
+	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/projectcalico/felix/aws"
+	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/config"
 	extdataplane "github.com/projectcalico/felix/dataplane/external"
 	"github.com/projectcalico/felix/dataplane/inactive"
@@ -44,6 +39,7 @@ import (
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/markbits"
 	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/felix/wireguard"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
@@ -61,53 +57,86 @@ func StartDataplaneDriver(configParams *config.Config,
 
 	if configParams.UseInternalDataplaneDriver {
 		log.Info("Using internal (linux) dataplane driver.")
-		// If kube ipvs interface is present, enable ipvs support.
-		kubeIPVSSupportEnabled := ifacemonitor.IsInterfacePresent(intdataplane.KubeIPVSInterface)
-		if kubeIPVSSupportEnabled {
-			log.Info("Kube-proxy in ipvs mode, enabling felix kube-proxy ipvs support.")
+		// If kube ipvs interface is present, enable ipvs support.  In BPF mode, we bypass kube-proxy so IPVS
+		// is irrelevant.
+		kubeIPVSSupportEnabled := false
+		if ifacemonitor.IsInterfacePresent(intdataplane.KubeIPVSInterface) {
+			if configParams.BPFEnabled {
+				log.Info("kube-proxy IPVS device found but we're in BPF mode, ignoring.")
+			} else {
+				kubeIPVSSupportEnabled = true
+				log.Info("Kube-proxy in ipvs mode, enabling felix kube-proxy ipvs support.")
+			}
 		}
 		if configChangedRestartCallback == nil {
 			log.Panic("Starting dataplane with nil callback func.")
 		}
 
-		markBitsManager := markbits.NewMarkBitsManager(configParams.IptablesMarkMask, "felix-iptables")
-		// Dedicated mark bits for accept and pass actions.  These are long lived bits
-		// that we use for communicating between chains.
-		markAccept, _ := markBitsManager.NextSingleBitMark()
-		markPass, _ := markBitsManager.NextSingleBitMark()
+		allowedMarkBits := configParams.IptablesMarkMask
+		if configParams.BPFEnabled {
+			// In BPF mode, the BPF programs use mark bits that are not configurable.  Make sure that those
+			// bits are covered by our allowed mask.
+			if allowedMarkBits&tc.MarksMask != tc.MarksMask {
+				log.WithFields(log.Fields{
+					"Name":            "felix-iptables",
+					"MarkMask":        allowedMarkBits,
+					"RequiredBPFBits": tc.MarksMask,
+				}).Panic("IptablesMarkMask doesn't cover bits that are used (unconditionally) by eBPF mode.")
+			}
+			allowedMarkBits ^= allowedMarkBits & tc.MarksMask
+			log.WithField("updatedBits", allowedMarkBits).Info(
+				"Removed BPF program bits from available mark bits.")
+		}
 
-		var markWireguard uint32
+		markBitsManager := markbits.NewMarkBitsManager(allowedMarkBits, "felix-iptables")
+
+		// Allocate mark bits; only the accept, scratch-0 and Wireguard bits are used in BPF mode so we
+		// avoid allocating the others to minimize the number of bits in use.
+
+		// The accept bit is a long-lived bit used to communicate between chains.
+		var markAccept, markPass, markScratch0, markScratch1, markWireguard, markEndpointNonCaliEndpoint uint32
+		markAccept, _ = markBitsManager.NextSingleBitMark()
+		if !configParams.BPFEnabled {
+			// The pass bit is used to communicate from a policy chain up to the endpoint chain.
+			markPass, _ = markBitsManager.NextSingleBitMark()
+		}
+
+		// Scratch bits are short-lived bits used for calculating multi-rule results.
+		markScratch0, _ = markBitsManager.NextSingleBitMark()
+		if !configParams.BPFEnabled {
+			markScratch1, _ = markBitsManager.NextSingleBitMark()
+		}
 		if configParams.WireguardEnabled {
 			log.Info("Wireguard enabled, allocating a mark bit")
 			markWireguard, _ = markBitsManager.NextSingleBitMark()
 			if markWireguard == 0 {
 				log.WithFields(log.Fields{
 					"Name":     "felix-iptables",
-					"MarkMask": configParams.IptablesMarkMask,
+					"MarkMask": allowedMarkBits,
 				}).Panic("Failed to allocate a mark bit for wireguard, not enough mark bits available.")
 			}
 		}
 
-		// Short-lived mark bits for local calculations within a chain.
-		markScratch0, _ := markBitsManager.NextSingleBitMark()
-		markScratch1, _ := markBitsManager.NextSingleBitMark()
-		if markAccept == 0 || markPass == 0 || markScratch0 == 0 || markScratch1 == 0 {
+		// markPass and the scratch-1 bits are only used in iptables mode.
+		if markAccept == 0 || markScratch0 == 0 || !configParams.BPFEnabled && (markPass == 0 || markScratch1 == 0) {
 			log.WithFields(log.Fields{
 				"Name":     "felix-iptables",
-				"MarkMask": configParams.IptablesMarkMask,
+				"MarkMask": allowedMarkBits,
 			}).Panic("Not enough mark bits available.")
 		}
 
-		// Mark bits for end point mark. Currently felix takes the rest bits from mask available for use.
+		// Mark bits for endpoint mark. Currently Felix takes the rest bits from mask available for use.
 		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
-		if kubeIPVSSupportEnabled && allocated == 0 {
-			log.WithFields(log.Fields{
-				"Name":     "felix-iptables",
-				"MarkMask": configParams.IptablesMarkMask,
-			}).Panic("Not enough mark bits available for endpoint mark.")
+		if kubeIPVSSupportEnabled {
+			if allocated == 0 {
+				log.WithFields(log.Fields{
+					"Name":     "felix-iptables",
+					"MarkMask": allowedMarkBits,
+				}).Panic("Not enough mark bits available for endpoint mark.")
+			}
+			// Take lowest bit position (position 1) from endpoint mark mask reserved for non-calico endpoint.
+			markEndpointNonCaliEndpoint = uint32(1) << uint(bits.TrailingZeros32(markEndpointMark))
 		}
-		// Take lowest bit position (position 1) from endpoint mark mask reserved for non-calico endpoint.
-		markEndpointNonCaliEndpoint := uint32(1) << uint(bits.TrailingZeros32(markEndpointMark))
 		log.WithFields(log.Fields{
 			"acceptMark":          markAccept,
 			"passMark":            markPass,
