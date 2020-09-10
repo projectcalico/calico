@@ -140,6 +140,14 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 				log.WithError(err).Warnf("Failed to parse VXLAN tunnel address CIDR: %s", n.Spec.IPv4VXLANTunnelAddr)
 			}
 		}
+		if n.Spec.Wireguard != nil && n.Spec.Wireguard.InterfaceIPv4Address != "" {
+			ipAddr, _, err := cnet.ParseCIDROrIP(n.Spec.Wireguard.InterfaceIPv4Address)
+			if err == nil {
+				ips = append(ips, *ipAddr)
+			} else {
+				log.WithError(err).Warnf("Failed to parse Wireguard tunnel address CIDR: %s", n.Spec.Wireguard.InterfaceIPv4Address)
+			}
+		}
 	}
 
 	_, err = r.client.IPAM().ReleaseIPs(context.Background(), ips)
