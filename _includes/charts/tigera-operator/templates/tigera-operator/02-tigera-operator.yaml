@@ -16,6 +16,8 @@ spec:
         name: tigera-operator
         k8s-app: tigera-operator
     spec:
+      nodeSelector:
+        kubernetes.io/os: linux
       tolerations:
         - effect: NoExecute
           operator: Exists
