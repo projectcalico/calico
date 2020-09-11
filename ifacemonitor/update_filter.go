@@ -101,7 +101,7 @@ mainLoop:
 				})
 		case routeUpd := <-routeInC:
 			logrus.WithField("route", routeUpd).Debug("Route update")
-			if routeUpd.Route.Type&unix.RTN_LOCAL == 0 {
+			if !routeIsLocalUnicast(routeUpd.Route) {
 				logrus.WithField("route", routeUpd).Debug("Ignoring non-local route.")
 				continue
 			}
@@ -226,4 +226,8 @@ func ipNetsEqual(a *net.IPNet, b *net.IPNet) bool {
 	aSize, aBits := a.Mask.Size()
 	bSize, bBits := b.Mask.Size()
 	return a.IP.Equal(b.IP) && aSize == bSize && aBits == bBits
+}
+
+func routeIsLocalUnicast(route netlink.Route) bool {
+	return route.Type == unix.RTN_LOCAL
 }

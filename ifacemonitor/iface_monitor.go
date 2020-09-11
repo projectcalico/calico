@@ -319,7 +319,8 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 				log.WithError(err).Warn("Netlink route list operation failed.")
 			}
 			for _, route := range routes {
-				if route.Type != unix.RTN_LOCAL {
+				if !routeIsLocalUnicast(route) {
+					log.WithField("route", route).Debug("Ignoring non-local route.")
 					continue
 				}
 				newAddrs.Add(route.Dst.IP.String())
