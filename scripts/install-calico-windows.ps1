@@ -15,24 +15,35 @@ layout: null
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+{%- if site.prodname == "Calico" %}
+{%- assign installName = "Calico for Windows" %}
+{%- assign rootDir = "CalicoWindows" %}
+{%- assign zipFileName = "calico-windows.zip" %}
+{%- else %}
+{%- assign installName = "Tigera Calico for Windows" %}
+{%- assign rootDir = "TigeraCalico" %}
+{%- assign zipFileName = "tigera-calico-windows.zip" %}
+{%- endif %}
+
 <#
 .DESCRIPTION
-    This script installs and starts Calico services on a Windows node.
+    This script installs and starts {{site.prodname}} services on a Windows node.
 
     Note: EKS requires downloading kubectl.exe to c:\k before running this script: https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html
 #>
 
 Param(
+{%- if site.prodname == "Calico" %}
 {%- if site.url == "https://docs.projectcalico.org" %}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.components["calico/node"].version}}/",
 {%- else %}
     [parameter(Mandatory = $false)] $ReleaseBaseURL="{{site.url}}/files/windows/",
 {%- endif %}
-    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.components["calico/node"].version}}.zip",
+{%- endif %}
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
-    [parameter(Mandatory = $false)] $EtcdEndpoints="",
+    [parameter(Mandatory = $false)] $EtcdEndpoints="N/A",
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
     [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10"
 )
@@ -104,12 +115,46 @@ function GetPlatformType()
     if (-Not [string]::IsNullOrEmpty($awsNodeName)) {
         return ("ec2")
     }
+
+    return ("bare-metal")
+}
+
+function GetBackendType()
+{
+    param(
+      [parameter(Mandatory=$true)] $CalicoNamespace,
+      [parameter(Mandatory=$false)] $KubeConfigPath = "$RootDir\calico-kube-config"
+    )
+
+    $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
+    if ($encap -EQ "true") {
+        throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
+    }
+
+    $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
+    if ($encap -EQ "true") {
+        return ("vxlan")
+    }
+    return ("bgp")
+}
+
+function GetCalicoNamespace() {
+    param(
+      [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
+    )
+
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
+    if ([string]::IsNullOrEmpty($name)) {
+        return ("kube-system")
+    }
+    return ("calico-system")
 }
 
 function GetCalicoKubeConfig()
 {
     param(
-      [parameter(Mandatory=$true)] $SecretName,
+      [parameter(Mandatory=$true)] $CalicoNamespace,
+      [parameter(Mandatory=$false)] $SecretName = "calico-node",
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
@@ -120,17 +165,17 @@ function GetCalicoKubeConfig()
         Import-Module $eksAWSToolsModulePath
     }
 
-    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n kube-system | findstr $SecretName | % { $_.Split(" ") | select -first 1 }
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace | findstr $SecretName | % { $_.Split(" ") | select -first 1 }
     if ([string]::IsNullOrEmpty($name)) {
         throw "$SecretName service account does not exist."
     }
-    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n kube-system
-    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n kube-system
+    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
+    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
     $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
 
     $server=findstr https:// $KubeConfigPath
 
-    (Get-Content c:\CalicoWindows\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content c:\CalicoWindows\calico-kube-config -Force
+    (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force
 }
 
 function SetConfigParameters {
@@ -139,22 +184,29 @@ function SetConfigParameters {
         [parameter(Mandatory=$true)] $NewString
     )
 
-    (Get-Content c:\CalicoWindows\config.ps1).replace($OldString, $NewString) | Set-Content c:\CalicoWindows\config.ps1 -Force
+    (Get-Content $RootDir\config.ps1).replace($OldString, $NewString) | Set-Content $RootDir\config.ps1 -Force
 }
 
 function StartCalico()
 {
-    Write-Host "`nStart Calico...`n"
+    Write-Host "`nStart {{installName}}...`n"
 
     pushd
-    cd c:\CalicoWindows
+    cd $RootDir
     .\install-calico.ps1
     popd
-    Write-Host "`nCalico Started`n"
+    Write-Host "`n{{installName}} Started`n"
 }
 
-$Backend="vxlan"
 $BaseDir="c:\k"
+$RootDir="c:\{{rootDir}}"
+$CalicoZip="c:\{{zipFileName}}"
+
+if (!(Test-Path $CalicoZip))
+{
+    throw "Cannot find {{installName}} zip file $CalicoZip."
+}
+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $helper = "$BaseDir\helper.psm1"
@@ -177,45 +229,69 @@ if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
     PrepareKubernetes
 }
 
-Write-Host "Download Calico for Windows release..."
-DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\calico-windows.zip
-Write-Host "Unzip Calico for Windows release..."
-Expand-Archive c:\calico-windows.zip c:\
+{%- if site.prodname == "Calico" %}
+Write-Host "Download {{installName}} release..."
+DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\{{zipFileName}}
+{%- endif %}
 
-Write-Host "Setup Calico for Windows..."
+Write-Host "Unzip {{installName}} release..."
+Expand-Archive $CalicoZip c:\
+
+Write-Host "Setup {{installName}}..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
 SetConfigParameters -OldString '<your etcd endpoints>' -NewString "$EtcdEndpoints"
 SetConfigParameters -OldString '<your service cidr>' -NewString $ServiceCidr
 SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
-SetConfigParameters -OldString 'KUBECONFIG = "c:\k\config"' -NewString 'KUBECONFIG = "c:\CalicoWindows\calico-kube-config"'
 
 if ($platform -EQ "azure") {
-    Write-Host "Setup Calico for Windows for azure..."
+    Write-Host "Setup {{installName}} for Azure..."
     $Backend="none"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
-    GetCalicoKubeConfig -SecretName 'calico-windows'
+
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs -SecretName 'calico-windows'
 }
 if ($platform -EQ "eks") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for eks, node name $awsNodeName ..."
-    $Backend="none"
+    Write-Host "Setup {{installName}} for EKS, node name $awsNodeName ..."
+    $Backend = "none"
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "vpc.*"'
-    GetCalicoKubeConfig -SecretName 'calico-node' -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
+
+    $calicoNs = GetCalicoNamespace -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs -SecretName 'calico-node' -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
 }
 if ($platform -EQ "ec2") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for aws, node name $awsNodeName ..."
+    Write-Host "Setup {{installName}} for aws, node name $awsNodeName ..."
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
-    GetCalicoKubeConfig -SecretName 'calico-node'
+
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs
+    $Backend = GetBackendType -CalicoNamespace $calicoNs
+
+    Write-Host "Backend networking is $Backend"
+    if ($Backend -EQ "bgp") {
+        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+    }
+}
+if ($platform -EQ "bare-metal") {
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs
+    $Backend = GetBackendType -CalicoNamespace $calicoNs
+
+    Write-Host "Backend networking is $Backend"
+    if ($Backend -EQ "bgp") {
+        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+    }
 }
 
 if ($DownloadOnly -EQ "yes") {
-    Write-Host "Dowloaded Calico for Windows. Update c:\CalicoWindows\config.ps1 and run c:\CalicoWindows\install-calico.ps1"
+    Write-Host "Downloaded {{installName}}. Update $RootDir\config.ps1 and run $RootDir\install-calico.ps1"
     Exit
 }
 
