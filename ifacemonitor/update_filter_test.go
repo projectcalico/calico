@@ -17,6 +17,7 @@ package ifacemonitor_test
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,6 +134,22 @@ func TestUpdateFilter_FilterUpdates_MultipleIPs(t *testing.T) {
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
+func TestUpdateFilter_FilterUpdates_Broadcast(t *testing.T) {
+	t.Log("Broadcast IPs should be ignored.")
+	harness, cancel := setUpFilterTest(t)
+	defer cancel()
+
+	broadRouteUpd := routeUpdate("10.0.0.255/16", true, 2)
+	harness.RouteIn <- broadRouteUpd
+	harness.Time.IncrementTime(100 * time.Millisecond)
+	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+
+	routeUpd := routeUpdate("10.0.0.1/16", true, 2)
+	harness.RouteIn <- routeUpd
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeUpd)))
+	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
+}
+
 func TestUpdateFilter_FilterUpdates_MultipleIPsWithSquash(t *testing.T) {
 	t.Log("Multiple IP updates should get queued.")
 	harness, cancel := setUpFilterTest(t)
@@ -234,7 +251,11 @@ func routeUpdate(cidrStr string, up bool, ifaceIdx int) netlink.RouteUpdate {
 	cidr.IP = ip.To4()
 	routeUpd := netlink.RouteUpdate{}
 	routeUpd.Dst = cidr
-	routeUpd.Route.Type = unix.RTN_LOCAL
+	if strings.Contains(cidrStr, ".255") {
+		routeUpd.Route.Type = unix.RTN_BROADCAST
+	} else {
+		routeUpd.Route.Type = unix.RTN_LOCAL
+	}
 	routeUpd.LinkIndex = ifaceIdx
 	if up {
 		routeUpd.Type = unix.RTM_NEWROUTE
