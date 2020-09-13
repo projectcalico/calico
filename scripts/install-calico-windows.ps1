@@ -33,6 +33,7 @@ Param(
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $Datastore="kubernetes",
     [parameter(Mandatory = $false)] $EtcdEndpoints="",
+    [parameter(Mandatory = $false)] $CalicoKubeConfigSecret="",
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
     [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10"
 )
@@ -212,6 +213,9 @@ if ($platform -EQ "ec2") {
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     GetCalicoKubeConfig -SecretName 'calico-node'
+}
+if([string]::IsNullOrEmpty($platform) -and (-not [string]::IsNullOrEmpty($CalicoKubeConfigSecret))) {
+    GetCalicoKubeConfig -SecretName "$CalicoKubeConfigSecret"
 }
 
 if ($DownloadOnly -EQ "yes") {
