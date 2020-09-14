@@ -109,8 +109,7 @@ func applyConfigDefaults(c *CalicoAPIConfig) {
 			log.WithField("kubeconfig", c.Spec.Kubeconfig).Debug("kubeconfig provided.")
 		case c.Spec.K8sAPIEndpoint != "":
 			log.WithField("apiEndpoint", c.Spec.K8sAPIEndpoint).Debug("API endpoint provided.")
-		case os.Getenv("HOME") == "",
-			os.Getenv("HOME") == "/" /* scratch container */ :
+		case os.Getenv("HOME") == "":
 			// No home directory, can't build a default config path.
 			log.Debug("No home directory, default path doesn't apply.")
 		default:
