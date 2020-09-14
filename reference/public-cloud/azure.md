@@ -18,7 +18,7 @@ While Azure does not support {{site.prodname}} networking, you can use
   for specific instructions and a manifest. This option does use overlays.
 
 - **Azure CNI IPAM plug-in**: Configure {{site.prodname}} to use the
-  [Azure CNI plug-in](https://github.com/Azure/azure-container-networking/blob/master/docs/cni.md)
+  [Azure CNI plug-in](https://github.com/Azure/azure-container-networking/blob/master/docs/cni.md){:target="_blank"}
   instead of the {{site.prodname}} CNI plug-in.
 
 

@@ -65,12 +65,12 @@ EOF
 
 Grafana datasources are storage backends for your time series data. Each data source has a specific Query Editor that is customized for the features and capabilities that the particular data source exposes.
 
-> **Note**: Guide with greater detail about Grafana datasources can be found [at this link](https://grafana.com/docs/grafana/latest/features/datasources/).
+> **Note**: Guide with greater detail about Grafana datasources can be found [at this link](https://grafana.com/docs/grafana/latest/features/datasources/){:target="_blank"}.
    {: .alert .alert-info}
 
 In this section you will use Grafana provisioning capabilities to create a prometheus datasource.
 
-> **Note**: Guide with greater detail about provisioning can be found [at this link](https://grafana.com/docs/grafana/latest/administration/provisioning/).
+> **Note**: Guide with greater detail about provisioning can be found [at this link](https://grafana.com/docs/grafana/latest/administration/provisioning/){:target="_blank"}.
    {: .alert .alert-info}
 
 Here You setup a datasource and pointing it to the prometheus service in your cluster.
@@ -113,7 +113,7 @@ kubectl apply -f {{ "/manifests/grafana-dashboards.yaml" | absolute_url }}
 
 In this step you are going to create your Grafana pod using the config file that was created earlier.
 
-> **Note**: Grafana uses port 3000 by default. A more detailed guide about how to modify this port can be found [at this link](https://grafana.com/docs/grafana/latest/installation/configuration/#comments-in-ini-files).
+> **Note**: Grafana uses port 3000 by default. A more detailed guide about how to modify this port can be found [at this link](https://grafana.com/docs/grafana/latest/installation/configuration/#comments-in-ini-files){:target="_blank"}.
    {: .alert .alert-info}
 
 ```bash

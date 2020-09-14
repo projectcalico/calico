@@ -10,7 +10,7 @@ This guide provides a simple demo to illustrate basic pod-to-pod connectivity an
 To run this demo, you will need a [{{site.prodnameWindows}} cluster]({{site.baseurl}}/getting-started/windows-calico/quickstart) with
 Windows Server 1809 (build 10.0.17763). More recent versions of Windows Server can be used with a change to the demo manifests.
 
->**Note**: Windows Server 1809 (build 10.0.17763) does not currently support [direct server return](https://techcommunity.microsoft.com/t5/networking-blog/direct-server-return-dsr-in-a-nutshell/ba-p/693710). This means that policy support is limited to only pod IP addresses.
+>**Note**: Windows Server 1809 (build 10.0.17763) does not currently support [direct server return](https://techcommunity.microsoft.com/t5/networking-blog/direct-server-return-dsr-in-a-nutshell/ba-p/693710){:target="_blank"}. This means that policy support is limited to only pod IP addresses.
 {: .alert .alert-info}
 
 You will also need [calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) installed and configured.
@@ -72,7 +72,7 @@ EOF
 Next, we'll create a client (powershell) and server (porter) pod on the Windows nodes. First the create the powershell pod.
 
 >**Note**: The powershell and porter pod manifests below use images based on `mcr.microsoft.com/windows/servercore:1809`.
-If you are using a more recent Windows Server version, update the manifests to use a [servercore image](https://hub.docker.com/_/microsoft-windows-servercore)
+If you are using a more recent Windows Server version, update the manifests to use a [servercore image](https://hub.docker.com/_/microsoft-windows-servercore){:target="_blank"}
 that matches your Windows Server version.
 {: .alert .alert-info}
 

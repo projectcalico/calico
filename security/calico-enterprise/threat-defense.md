@@ -25,7 +25,7 @@ When suspicious traffic is detected, Calico Enterprise can be aligned or integra
 
 ### Domain generation algorithm detection
 
-Advanced Persistent Threats (APTs) are becoming more complex, long-lived, and harder to identify. Some advanced malware avoids detection and skirts threat feeds by using [Domain Generation Algorithms](https://en.wikipedia.org/wiki/Domain_generation_algorithm).
+Advanced Persistent Threats (APTs) are becoming more complex, long-lived, and harder to identify. Some advanced malware avoids detection and skirts threat feeds by using [Domain Generation Algorithms](https://en.wikipedia.org/wiki/Domain_generation_algorithm){:target="_blank"}.
 
 Calico Enterprise monitors egress traffic and uses machine learning to identify DGA patterns, helping you and your security team to isolate those workloads from the network to eliminate the threat.
 

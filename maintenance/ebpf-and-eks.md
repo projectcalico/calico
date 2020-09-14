@@ -43,7 +43,7 @@ By default, EKS uses Ubuntu 18.04 as its base image for EKS.  One way to create 
 
 2. Log into the instance with `ssh` and upgrade it to Ubuntu 20.04.
 
-3. [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html) and make a note of the AMI ID
+3. [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html){:target="_blank"} and make a note of the AMI ID
 
 #### Create a cluster with the custom AMI
 

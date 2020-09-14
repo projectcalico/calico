@@ -169,7 +169,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    mkdir c:\k
    ```
 
-1. [Install kubectl](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#windows) and move the kubectl binary to **c:\k**.
+1. [Install kubectl](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#windows){:target="_blank"} and move the kubectl binary to **c:\k**.
 
 1. Download the powershell script, **install-calico-windows.ps1**.
 

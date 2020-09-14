@@ -1,6 +1,6 @@
 ## Installing calico-upgrade
 
-1. [Download the `calico-upgrade` binary appropriate to your operating system](https://github.com/projectcalico/calico-upgrade/releases/latest).
+1. [Download the `calico-upgrade` binary appropriate to your operating system](https://github.com/projectcalico/calico-upgrade/releases/latest){:target="_blank"}.
 
    > **Tip**: Consider downloading it to a location that's already in your `PATH`. For example, 
    > `/usr/local/bin/`. Alternatively, add its location to your `PATH`. Once it's in your `PATH`, 

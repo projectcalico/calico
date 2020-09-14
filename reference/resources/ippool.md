@@ -65,7 +65,7 @@ For details on configuring IP-in-IP on your deployment, please refer to
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `ipip` enabled.
 When `ipip` is enabled without `natOutgoing` routing between Workloads and
 Hosts running {{site.prodname}} is asymmetric and may cause traffic to be filtered due to
-[RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding) checks failing.
+[RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding){:target="_blank"} checks failing.
 {: .alert .alert-info}
 
 #### VXLAN
@@ -79,7 +79,7 @@ determined when running the `{{site.nodecontainer}}` service).
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `vxlan` enabled.
 When `vxlan` is enabled without `natOutgoing` routing between Workloads and
 Hosts running {{site.prodname}} is asymmetric and may cause traffic to be filtered due to
-[RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding) checks failing.
+[RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding){:target="_blank"} checks failing.
 {: .alert .alert-info}
 
 #### Block sizes

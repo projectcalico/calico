@@ -128,7 +128,7 @@ node (which would typically be co-located with the
 state to etcd from the OpenStack database.
 
 In larger deployments, the core cluster can be scaled up, as per the
-[etcd admin guide](https://coreos.com/etcd/docs/latest/admin_guide.html#optimal-cluster-size).
+[etcd admin guide](https://coreos.com/etcd/docs/latest/admin_guide.html#optimal-cluster-size){:target="_blank"}.
 
 Additionally, on each machine that hosts either a [Felix](#felix)
 or a [plugin](#orchestrator-plugin), we run an etcd proxy. This reduces the load
@@ -192,7 +192,7 @@ seamlessly. The route reflectors are purely involved in the control of
 the network: no endpoint data passes through them.
 
 In Calico, this BGP component is also most commonly
-[BIRD](http://bird.network.cz/), configured as a route reflector rather
+[BIRD](http://bird.network.cz/){:target="_blank"}, configured as a route reflector rather
 than as a standard BGP client.
 
 The BGP route reflector is responsible for the following task:
