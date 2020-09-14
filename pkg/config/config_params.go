@@ -290,7 +290,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	}
 
 	// Kubernetes mode, which is now the default for LoadClientConfigFromEnvironment so we let
-	// it do it's thing...
+	// it do its thing...
 	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
