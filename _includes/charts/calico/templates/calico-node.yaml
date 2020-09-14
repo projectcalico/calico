@@ -419,6 +419,9 @@ spec:
               # Bidirectional means that, if we mount the BPF filesystem at /sys/fs/bpf it will propagate to the host.
               # If the host is known to mount that filesystem already then Bidirectional can be omitted.
               mountPropagation: Bidirectional
+            - name: cni-log-dir
+              mountPath: /var/log/calico/cni
+              readOnly: true
 {{- if eq .Values.network "flannel" }}
   {{- if eq .Values.datastore "kubernetes" }}
         # This container runs flannel using the kube-subnet-mgr backend
@@ -573,6 +576,10 @@ spec:
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
+        # Used to access CNI logs.
+        - name: cni-log-dir
+          hostPath:
+            path: /var/log/calico/cni
 {{- if eq .Values.datastore "etcd" }}
         # Mount in the etcd TLS secrets with mode 400.
         # See https://kubernetes.io/docs/concepts/configuration/secret/
