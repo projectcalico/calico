@@ -109,13 +109,21 @@ func applyConfigDefaults(c *CalicoAPIConfig) {
 			log.WithField("kubeconfig", c.Spec.Kubeconfig).Debug("kubeconfig provided.")
 		case c.Spec.K8sAPIEndpoint != "":
 			log.WithField("apiEndpoint", c.Spec.K8sAPIEndpoint).Debug("API endpoint provided.")
-		case os.Getenv("HOME") == "":
+		case os.Getenv("HOME") == "",
+			os.Getenv("HOME") == "/" /* scratch container */ :
 			// No home directory, can't build a default config path.
 			log.Debug("No home directory, default path doesn't apply.")
 		default:
 			// Default the kubeconfig.
-			c.Spec.Kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
-			log.WithField("kubeconfig", c.Spec.Kubeconfig).Debug("Using default kubeconfig path.")
+			kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+			if _, err := os.Stat(kubeconfig); err == nil {
+				c.Spec.Kubeconfig = kubeconfig
+				log.WithField("kubeconfig", c.Spec.Kubeconfig).Debug("Using default kubeconfig path.")
+			} else {
+				// The Kubernetes client can try other defaults if we leave the field blank (for example, the
+				// in cluster config).
+				log.Debug("No kubeconfig file at default path, leaving blank.")
+			}
 		}
 	}
 }
