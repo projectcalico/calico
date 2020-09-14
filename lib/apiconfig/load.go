@@ -55,7 +55,7 @@ func LoadClientConfigFromFile(filename string) (*CalicoAPIConfig, error) {
 	return c, nil
 }
 
-// LoadClientConfig loads the ClientConfig from the supplied bytes containing YAML or JSON format data.
+// LoadClientConfigFromBytes loads the ClientConfig from the supplied bytes containing YAML or JSON format data.
 // The datastore type is defaulted if not specified.
 func LoadClientConfigFromBytes(b []byte) (*CalicoAPIConfig, error) {
 	var c CalicoAPIConfig
