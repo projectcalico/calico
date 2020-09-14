@@ -264,10 +264,10 @@ func (config *Config) resolve() (changed bool, err error) {
 }
 
 func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
-	// Special case for etcdv3 datastore, where we want to honour established Felix-specific
+	// Special case for etcdv3 datastore, where we want to honour established
 	// config mechanisms.
 	if config.DatastoreType == "etcdv3" {
-		// Build a CalicoAPIConfig with the etcd fields filled in from Felix-specific
+		// Build a CalicoAPIConfig with the etcd fields filled in from our config.
 		// config.
 		var etcdEndpoints string
 		if len(config.EtcdEndpoints) == 0 {
@@ -289,18 +289,11 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		}
 	}
 
-	// Build CalicoAPIConfig from the environment.  This means that any XxxYyy field in
-	// CalicoAPIConfigSpec can be set by a corresponding XXX_YYY or CALICO_XXX_YYY environment
-	// variable, and that the datastore type can be set by a DATASTORE_TYPE or
-	// CALICO_DATASTORE_TYPE variable.  (Except in the etcdv3 case which is handled specially
-	// above.)
+	// Kubernetes mode, which is now the default for LoadClientConfigFromEnvironment so we let
+	// it do it's thing...
 	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
-	}
-	// If that didn't set the datastore type, use our config parameter.
-	if cfg.Spec.DatastoreType == "" {
-		cfg.Spec.DatastoreType = apiconfig.DatastoreType(config.DatastoreType)
 	}
 	return *cfg
 }
