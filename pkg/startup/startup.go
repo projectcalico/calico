@@ -250,6 +250,21 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 		terminate()
 	}
 
+	if node.Spec.BGP.IPv4Address == "" && node.Spec.BGP.IPv6Address == "" {
+		if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
+			log.Error("No IPv4 or IPv6 addresses configured or detected, required for Calico networking")
+			// Unrecoverable error, terminate to restart.
+			terminate()
+		} else {
+			log.Warn("No IPv4 or IPv6 addresses configured or detected. Some features may not work properly.")
+			// Bail here setting BGPSpec to nil (if empty) to pass validation.
+			if reflect.DeepEqual(node.Spec.BGP, &api.NodeBGPSpec{}) {
+				node.Spec.BGP = nil
+			}
+			return checkConflicts
+		}
+	}
+
 	// If we report an IP change (v4 or v6) we should verify there are no
 	// conflicts between Nodes.
 	if checkConflicts && os.Getenv("DISABLE_NODE_IP_CHECK") != "true" {
@@ -551,11 +566,6 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 			node.Spec.BGP.IPv6Address = parseIPEnvironment("IP6", ipv6Env, 6)
 		}
 		validateIP(node.Spec.BGP.IPv6Address)
-	}
-
-	if ipv4Env == "none" && (ipv6Env == "" || ipv6Env == "none") && node.Spec.BGP.IPv4Address == "" && node.Spec.BGP.IPv6Address == "" {
-		log.Warn("No IP Addresses configured, and autodetection is not enabled")
-		terminate()
 	}
 
 	// Detect if we've seen the IP address change, and flag that we need to check for conflicting Nodes
