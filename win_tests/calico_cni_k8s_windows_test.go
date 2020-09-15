@@ -994,8 +994,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(hnsNetwork.Subnets[0].AddressPrefix).Should(Equal("10.254.112.0/20"))
 					Expect(hnsNetwork.Subnets[0].GatewayAddress).Should(Equal("10.254.112.1"))
 					Expect(hnsNetwork.Type).Should(Equal("L2Bridge"))
-					Expect(hnsNetwork.DNSSuffix).Should(Equal("pod.cluster.local"))
-					Expect(hnsNetwork.DNSServerList).Should(Equal("10.96.0.10"))
 
 					// Ensure host and container endpoints are created
 					hostEP, err := hcsshim.GetHNSEndpointByName("calico-fv_ep")
@@ -1004,8 +1002,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(hostEP.IPAddress.String()).Should(Equal("10.254.112.2"))
 					Expect(hostEP.VirtualNetwork).Should(Equal(hnsNetwork.Id))
 					Expect(hostEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
-					Expect(hostEP.DNSSuffix).Should(Equal("pod.cluster.local"))
-					Expect(hostEP.DNSServerList).Should(Equal("10.96.0.10"))
 
 					containerEP, err := hcsshim.GetHNSEndpointByName(containerID + "_calico-fv")
 					Expect(containerEP.GatewayAddress).Should(Equal("10.254.112.2"))
@@ -1656,17 +1652,13 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(endpoints.Items).Should(HaveLen(1))
 
-				// Ensure network is created and has DNS RuntimeConfig values
-				hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
+				// Ensure network is created.
+				_, err = hcsshim.GetHNSNetworkByName(networkName)
 				Expect(err).ShouldNot(HaveOccurred())
-				Expect(hnsNetwork.DNSSuffix).Should(Equal("svc.cluster.local"))
-				Expect(hnsNetwork.DNSServerList).Should(Equal("10.96.0.11"))
 
-				// Ensure host endpoints are created and has DNS RuntimeConfig values
-				hostEP, err := hcsshim.GetHNSEndpointByName("calico-fv_ep")
+				// Ensure host endpoints are created
+				_, err = hcsshim.GetHNSEndpointByName("calico-fv_ep")
 				Expect(err).ShouldNot(HaveOccurred())
-				Expect(hostEP.DNSSuffix).Should(Equal("svc.cluster.local"))
-				Expect(hostEP.DNSServerList).Should(Equal("10.96.0.11"))
 
 				// Ensure container endpoints are created and has DNS RuntimeConfig values
 				containerEP, err := hcsshim.GetHNSEndpointByName(containerID + "_calico-fv")

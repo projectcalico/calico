@@ -27,7 +27,6 @@ import (
 	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/buger/jsonparser"
 	"github.com/containernetworking/cni/pkg/skel"
-	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/juju/clock"
@@ -85,8 +84,8 @@ func acquireLock() (mutex.Releaser, error) {
 	return m, nil
 }
 
-func SetupL2bridgeNetwork(networkName string, subNet *net.IPNet, dns cnitypes.DNS, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
-	hnsNetwork, err := EnsureNetworkExists(networkName, subNet, dns, logger)
+func SetupL2bridgeNetwork(networkName string, subNet *net.IPNet, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
+	hnsNetwork, err := EnsureNetworkExists(networkName, subNet, logger)
 	if err != nil {
 		logger.Errorf("Unable to create hns network %s", networkName)
 		return nil, err
@@ -194,7 +193,7 @@ func (d *windowsDataplane) DoNetworking(
 	if d.conf.Mode == "vxlan" {
 		hnsNetwork, err = SetupVxlanNetwork(networkName, subNet, d.conf.VXLANVNI, d.logger)
 	} else {
-		hnsNetwork, err = SetupL2bridgeNetwork(networkName, subNet, result.DNS, d.logger)
+		hnsNetwork, err = SetupL2bridgeNetwork(networkName, subNet, d.logger)
 	}
 	if err != nil {
 		d.logger.Errorf("Unable to create hns network %s", networkName)
@@ -385,7 +384,7 @@ func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64,
 	return existingNetwork, nil
 }
 
-func EnsureNetworkExists(networkName string, subNet *net.IPNet, dns cnitypes.DNS, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
+func EnsureNetworkExists(networkName string, subNet *net.IPNet, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
 	var err error
 	createNetwork := true
 	addressPrefix := subNet.String()
@@ -423,8 +422,6 @@ func EnsureNetworkExists(networkName string, subNet *net.IPNet, dns cnitypes.DNS
 					"GatewayAddress": gatewayAddress,
 				},
 			},
-			"DNSServerList": strings.Join(dns.Nameservers, ","),
-			"DNSSuffix":     strings.Join(dns.Search, ","),
 		}
 
 		reqStr, err := json.Marshal(req)
