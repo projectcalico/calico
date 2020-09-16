@@ -556,8 +556,8 @@ github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prY
 github.com/pquerna/ffjson v0.0.0-20180717144149-af8b230fcd20/go.mod h1:YARuvh7BUWHNhzDq2OM5tzR2RiCcN2D7sapiKyCel/M=
 github.com/projectcalico/cni-plugin v1.11.1-0.20200811150549-55fa20e1ad20 h1:xFRAlj7ItZJjUSPcVNQ9g8GhkC4GmPh5heC/Rw6Cs2E=
 github.com/projectcalico/cni-plugin v1.11.1-0.20200811150549-55fa20e1ad20/go.mod h1:CExVuYK6uAt7G6x+RJw5q96iqA9R3nDUXFEdEDUOaPs=
-github.com/projectcalico/confd v1.0.1-0.20200911080659-a40f61e64a2e h1:8BvpFiwbXG/6sWRtMrIgpoLCEUSiQXZ8T+YMcGXDUPM=
-github.com/projectcalico/confd v1.0.1-0.20200911080659-a40f61e64a2e/go.mod h1:rxnAqZwuNW7bwh+2DFMsD98MiSjROcxxyjCJc3i7Rwk=
+github.com/projectcalico/confd v1.0.1-0.20200915080829-c9c4e42e32ce h1:77uzkqJWlhwnhdHznIy12WuX2M95qZyGjQTEBqP3kHU=
+github.com/projectcalico/confd v1.0.1-0.20200915080829-c9c4e42e32ce/go.mod h1:yTBiI1mMH2nSsBx8isw4lL8MiAUC1/3efhBedOz1KWs=
 github.com/projectcalico/felix v0.0.0-20200911161946-7a7ffc82e2a8 h1:jQr+ActcR/TWLA+kEA9RNzXtlPn+UL+Qdc60Nh5xuwQ=
 github.com/projectcalico/felix v0.0.0-20200911161946-7a7ffc82e2a8/go.mod h1:qIfT5nFaMBv4tnMY379naKL5u3bRvQ+CvwfKKK1T06Q=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
@@ -569,7 +569,6 @@ github.com/projectcalico/hcsshim v0.8.9-calico/go.mod h1:5692vkUqntj1idxauYlpoIN
 github.com/projectcalico/libcalico-go v1.7.2-0.20200807225946-83627ff7d609 h1:w4K1PSID/A1ZkeoRyqhcjOc7I65JqIJoc1ind20mtHM=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200807225946-83627ff7d609/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200902233834-d4bd7b4025b7/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
-github.com/projectcalico/libcalico-go v1.7.2-0.20200910175914-28120f09b019/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200914144038-956cc91d8a15 h1:cvLf/xrqHmVriZaKZMC/GY8UVzyPcNqPrW/PR13yCzc=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200914144038-956cc91d8a15/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
@@ -578,8 +577,8 @@ github.com/projectcalico/pod2daemon v0.0.0-20200814164722-4bedcf682d20 h1:GC9FGv
 github.com/projectcalico/pod2daemon v0.0.0-20200814164722-4bedcf682d20/go.mod h1:bmtxGPEug34TbG/rPrGdPGt/ewR2OBksgA7P9TPKHIk=
 github.com/projectcalico/typha v0.7.3-0.20200903040722-5ee47fb9b583 h1:EVf51PgsmAiyeH6cTMhBDCBfJ+sWFFrYHwWM4kb6leo=
 github.com/projectcalico/typha v0.7.3-0.20200903040722-5ee47fb9b583/go.mod h1:T8piPSimoYDrXkJLhr40KGislNNn+tf+zZg4ucDJOAg=
-github.com/projectcalico/typha v0.7.3-0.20200910193553-ca27485e2699 h1:gQAjAkY2l+SMLZF+3CRo6Coc9qipQAL8VS5EkL8hU0w=
-github.com/projectcalico/typha v0.7.3-0.20200910193553-ca27485e2699/go.mod h1:XSUudiaFfUTm5lI7HavAYZ/DsW9OlNy3RwwRqGKGzsg=
+github.com/projectcalico/typha v0.7.3-0.20200914145742-e7ef5a60716d h1:s3pBG3K4IX3k8fJNl6NyxuZhbvX3ZQmSvGxslH+hq5M=
+github.com/projectcalico/typha v0.7.3-0.20200914145742-e7ef5a60716d/go.mod h1:EnqB7b+c5nEjPhzMa77T9cB2vjtBzEa5Bm+7nvhrg28=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
 github.com/prometheus/client_golang v1.0.0 h1:vrDKnkGzuGvhNAL56c7DBz29ZL+KxnoR0x7enabFceM=
