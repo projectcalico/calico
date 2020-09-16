@@ -8,9 +8,23 @@ agent:
     os_image: ubuntu1804
 blocks:
   - name: Build
+    dependencies: []
     task:
       jobs:
         - name: Build
           commands:
             - checkout
             - make ci
+
+  - name: Trigger pin updates
+    dependencies: []
+    skip:
+      when: "(branch != 'master') and (branch !~ 'release-v\d*\.\d*')"
+    task:
+      secrets:
+        - name: semaphore-api
+      jobs:
+        - name: Trigger pin updates
+          commands:
+            - checkout
+            - make semaphore-run-auto-pin-update-workflows
