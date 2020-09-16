@@ -124,7 +124,7 @@ divided into two groups of machines: the core cluster, and the proxies.
 For small deployments, the core cluster can be an etcd cluster of one
 node (which would typically be co-located with the
 [orchestrator plugin](#orchestrator-plugin) component). This deployment model is simple but provides no redundancy for etcd -- in the case of etcd failure the
-[orchstrator plugin](#orchestrator-plugin) would have to rebuild the database which, as noted for OpenStack, will simply require that the plugin resynchronizes
+[orchestrator plugin](#orchestrator-plugin) would have to rebuild the database which, as noted for OpenStack, will simply require that the plugin resynchronizes
 state to etcd from the OpenStack database.
 
 In larger deployments, the core cluster can be scaled up, as per the
