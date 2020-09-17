@@ -41,7 +41,7 @@ TEST_CERT_PATH := test/etcd-ut-certs/
 
 .PHONY: clean
 clean:
-	rm -rf .go-pkg-cache vendor $(BINDIR) checkouts
+	rm -rf .go-pkg-cache vendor $(BINDIR) checkouts Makefile.common*
 	find . -name '*.coverprofile' -type f -delete
 
 ###############################################################################
