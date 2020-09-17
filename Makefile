@@ -1,9 +1,11 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.45
+GO_BUILD_VER=v0.47
 
 # This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/cni
+
+SEMAPHORE_PROJECT_ID=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
@@ -65,6 +67,7 @@ clean:
 	# If the vendor directory exists then the build fails with golang 1.14, and this folder exists in semaphore v1 but it's
 	# empty
 	rm -rf vendor/
+	rm Makefile.common*
 
 ###############################################################################
 # Updating pins
