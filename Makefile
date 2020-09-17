@@ -65,7 +65,8 @@ clean:
 		build \
 		report/*.xml \
 		release-notes-* \
-		vendor
+		vendor \
+		Makefile.common*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
