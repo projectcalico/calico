@@ -3,10 +3,9 @@ title: Project Calico Documentation Archives
 description: Home
 layout: docwithnav
 ---
-This page contains permalinks to all Project Calico documentation for specific
-versions, as well as to the latest (always the most recently released version) and the nightly build of
-documentation. Each set of versioned docs includes a Release Nodes
-page for that particular version.
+This page contains permalinks to specific versions of Project Calico documentation, as well as links to the latest released
+and the nightly build of documentation. Each set of versioned docs includes a Release Nodes page for that particular
+version.
 {%- if site.archive %}
 - [latest](/) (currently {{site.data.versions.first.title}})
 - [nightly](/master/){: data-proofer-ignore=""} (master)
