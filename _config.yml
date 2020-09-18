@@ -24,17 +24,17 @@ noderunning: calico-node
 
 # DEPRECATED: use imageNames stored in per-directory defaults, e.g. 'page.imageNames'
 imageNames:
-  node: calico/node
-  calicoctl: calico/ctl
-  typha: calico/typha
-  cni: calico/cni
-  kubeControllers: calico/kube-controllers
-  calico-upgrade: calico/upgrade
+  node: docker.io/calico/node
+  calicoctl: docker.io/calico/ctl
+  typha: docker.io/calico/typha
+  cni: docker.io/calico/cni
+  kubeControllers: docker.io/calico/kube-controllers
+  calico-upgrade: docker.io/calico/upgrade
   flannel: quay.io/coreos/flannel
-  flannelMigration: calico/flannel-migration-controller
-  dikastes: calico/dikastes
-  pilot-webhook: calico/pilot-webhook
-  flexvol: calico/pod2daemon-flexvol
+  flannelMigration: docker.io/calico/flannel-migration-controller
+  dikastes: docker.io/calico/dikastes
+  pilot-webhook: docker.io/calico/pilot-webhook
+  flexvol: docker.io/calico/pod2daemon-flexvol
 
 # List of files to exclude. These files won't get included in the deployed site.
 exclude:
