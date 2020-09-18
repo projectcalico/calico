@@ -80,7 +80,7 @@ A similar change may be needed for other Kubernetes services (such as `kube-dns`
 
 #### Prepare Windows nodes to join the Linux cluster
 
-On each Windows node, follow these step to prepare the Windows nodes to your the Kubernetes cluster. {% include open-new-window.html text='Microsoft guide' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/kubernetes/joining-windows-workers' %}.
+On each Windows node, follow these step to prepare the Windows nodes to your the Kubernetes cluster. {% include open-new-window.html text='Microsoft guide' url='https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/' %}.
 
 **Step 1: Configure kubelet**
 
