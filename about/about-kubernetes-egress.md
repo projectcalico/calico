@@ -106,6 +106,6 @@ deployments. In these scenarios, using egress gateways is likely to be a better 
 - [Enforce network policy using Istio]({{site.baseurl}}/security/enforce-policy-istio)
 - [Use HTTP methods and paths in policy rules]({{site.baseurl}}/security/http-methods)
 - [Restrict a pod to use an IP address in a specific range]({{site.baseurl}}/networking/legacy-firewalls)
-- [Assign IP addresses based on topology https://docs.projectcalico.org/networking/assign-ip-addresses-topology
+- [Assign IP addresses based on topology]({{site.baseurl}}/networking/assign-ip-addresses-topology)
 - {% include enterprise_icon.html %}[Advanced egress access controls]({{ site.baseurl }}/security/calico-enterprise/egress-access-controls)
 
