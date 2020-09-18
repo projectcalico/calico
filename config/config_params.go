@@ -520,10 +520,12 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	if config.setByConfigFileOrEnvironment("EtcdEndpoints") && len(config.EtcdEndpoints) > 0 {
 		log.Infof("Overriding EtcdEndpoints from felix config to %s", config.EtcdEndpoints)
 		cfg.Spec.EtcdEndpoints = strings.Join(config.EtcdEndpoints, ",")
+		cfg.Spec.DatastoreType = apiconfig.EtcdV3
 	} else if config.setByConfigFileOrEnvironment("EtcdAddr") {
 		etcdEndpoints := config.EtcdScheme + "://" + config.EtcdAddr
 		log.Infof("Overriding EtcdEndpoints from felix config to %s", etcdEndpoints)
 		cfg.Spec.EtcdEndpoints = etcdEndpoints
+		cfg.Spec.DatastoreType = apiconfig.EtcdV3
 	}
 	// TLS.
 	if config.setByConfigFileOrEnvironment("EtcdKeyFile") {
