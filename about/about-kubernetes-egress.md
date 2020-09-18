@@ -20,7 +20,7 @@ In this guide we are using the term Kubernetes egress to describe connections be
 In contrast to ingress traffic, where Kubernetes has the [Ingress]({{site.baseurl}}/about/about-kubernetes-ingress)
 resource type to help manage the traffic, there is no Kubernetes Egress resource. Instead, how the egress traffic is
 handled at a networking level is determined by the Kubernetes network implementation / CNI plugin being used by the
-cluster. In addition, if a service mesh is being used, this can add additional egress behaviors on top of what the
+cluster. In addition, if a service mesh is being used, this can add egress behaviors on top of those the
 network implementation provides.
 
 There are three areas of behavior worth understanding for egress traffic, so you can choose a networking and/or service
@@ -33,13 +33,13 @@ mesh setup that best suits your needs:
 
 It's a common security requirement and best practice to restrict outgoing connections from the cluster. This is normally
 achieved using [Network Policy]({{site.baseurl}}/about/about-network-policy) to define egress rules for each
-microservices, often in conjunction with a [default deny]({{site.baseurl}}/about/about-network-policy#default-deny)
+microservice, often in conjunction with a [default deny]({{site.baseurl}}/about/about-network-policy#default-deny)
 policy that ensures outgoing connections are denied by default, until a policy is defined to explicitly allow specific
 traffic.
 
-One limitation when using Kubernetes Network Policy to restrict access to specific external resources, that the external
+One limitation when using Kubernetes Network Policy to restrict access to specific external resources, is that the external
 resources need to be specified as IP addresses (or IP address ranges) within the policy rules. If the IP addresses
-associated with an external resource change, then every policy that referenced those IP addresses needs to updated with
+associated with an external resource change, then every policy that referenced those IP addresses needs to be updated with
 the new IP addresses. This limitation can be circumvented using Calico [Network
 Sets]({{site.baseurl}}/security/external-ips-policy), or Calico Enterprise's support for [domain
 names]({{site.baseurl}}/security/calico-enterprise/egress-access-controls) in policy rules.
@@ -51,7 +51,7 @@ learn more about the benefits of this kind of approach, read our [Adopt a zero t
 ]({{site.baseurl}}/security/adopt-zero-trust) guide.
 
 Note in addition to everything mentioned so far, perimeter firewalls can also be used to restrict outgoing connections,
-for example to only allow connections to particular external IP address ranges, or external services. However, since
+for example to allow connections only to particular external IP address ranges, or external services. However, since
 perimeter firewalls typically cannot distinguish individual pods, the rules apply equally to all pods in the cluster.
 This provides some defense in depth, but cannot replace the requirement for network policy.
 
@@ -67,7 +67,7 @@ have IP addresses that are not routable outside of the cluster (for example, if 
 
 For example, if a pod in an overlay network attempts to connect to an IP address outside of the cluster, then the
 node hosting the pod uses SNAT (Source Network Address Translation) to map the non-routable source IP address of tha
-packet to the node's IP address before forwarding the packet on.  The node then maps response packets coming in the
+packet to the node's IP address before forwarding on the packet.  The node then maps response packets coming in the
 opposite direction back to the original pod IP address, so packets flow end-to-end in both directions, with neither
 pod or external service being aware the mapping is happening.
 
@@ -84,7 +84,7 @@ SNAT (Source Network Address Translation) the connections so the external servic
 as coming from the egress gateway. The main use case is to improve security, either with the egress gateway performing a
 direct security role in terms of what connections it allows, or in conjunction with perimeter firewalls (or other
 external entities). For example, so that perimeter firewalls see the connections coming from well know IP
-addresses (the egress gateways) rather than from dynamic pod IP address they don't understand.
+addresses (the egress gateways) rather than from dynamic pod IP addresses they don't understand.
 
 Egress gateways are not a native concept in Kubernetes itself, but are implemented by some Kubernetes network
 implementations and some service meshes. For example, Calico Enterprise provides egress gateway functionality, plus the
@@ -95,17 +95,17 @@ to dynamic pod IP addresses.
 As an alternative approach to egress gateways, {{site.prodname}} allows you to control pod IP address ranges based on
 namespace, or node, or even at the individual pod level. Assuming no outgoing NAT is required, this provides a very
 simple way for perimeter firewalls (or other external security entities) to integrate with Kubernetes for both ingress
-and egress traffic. (Note that this approach relies on having enough address space available to sensible assign IP
-address ranges, for example to each namespace, so in can lead to IP address range exhaustion challenges for large scale
+and egress traffic. (Note that this approach relies on having enough address space available to sensibly assign IP
+address ranges, for example to each namespace, so it can lead to IP address range exhaustion challenges for large scale
 deployments. In these scenarios, using egress gateways is likely to be a better option.)
 
 ### Above and beyond
 
-- [Adopt a zero trust network model for security]({{site.baseurl}}/security/adopt-zero-trust
-- [Use external IPs or networks rules in policy]({{site.baseurl}}/security/external-ips-policy
-- [Enforce network policy using Istio]({{site.baseurl}}/security/enforce-policy-istio
-- [Use HTTP methods and paths in policy rules]({{site.baseurl}}/security/http-methods
-- [Restrict a pod to use an IP address in a specific range]({{site.baseurl}}/networking/legacy-firewalls
+- [Adopt a zero trust network model for security]({{site.baseurl}}/security/adopt-zero-trust)
+- [Use external IPs or networks rules in policy]({{site.baseurl}}/security/external-ips-policy)
+- [Enforce network policy using Istio]({{site.baseurl}}/security/enforce-policy-istio)
+- [Use HTTP methods and paths in policy rules]({{site.baseurl}}/security/http-methods)
+- [Restrict a pod to use an IP address in a specific range]({{site.baseurl}}/networking/legacy-firewalls)
 - [Assign IP addresses based on topology https://docs.projectcalico.org/networking/assign-ip-addresses-topology
 - {% include enterprise_icon.html %}[Advanced egress access controls]({{ site.baseurl }}/security/calico-enterprise/egress-access-controls)
 
