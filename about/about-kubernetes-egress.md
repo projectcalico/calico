@@ -45,7 +45,7 @@ Sets]({{site.baseurl}}/security/external-ips-policy), or Calico Enterprise's sup
 names]({{site.baseurl}}/security/calico-enterprise/egress-access-controls) in policy rules.
 
 In addition to using network policy, service meshes typically allow you to configure which external services each pod
-can access. In the case of Istio, {{site.prodname} can be integrated to enforce network policy at the service mesh
+can access. In the case of Istio, {{site.prodname}} can be integrated to enforce network policy at the service mesh
 layer, including [L5-7 rules]({{site.baseurl}}/security/http-methods), as another alternative to using IP addresses in rules. To
 learn more about the benefits of this kind of approach, read our [Adopt a zero trust network model for security
 ]({{site.baseurl}}/security/adopt-zero-trust) guide.
@@ -73,7 +73,7 @@ pod or external service being aware the mapping is happening.
 
 In most clusters this NAT behavior is configured statically across the whole of the cluster. When using
 {{site.prodname}}, the NAT behavior can be configured at a more granular level for particular address ranges using [IP
-pools]({{site.prodname}}/reference/resources/ippool). This effectively allows the scope of "non-routable" to be more
+pools]({{site.baseurl}}/reference/resources/ippool). This effectively allows the scope of "non-routable" to be more
 tightly defined than just "inside the cluster vs outside the cluster", which can be useful in some enterprise deployment
 scenarios.
 
