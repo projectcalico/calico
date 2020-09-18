@@ -210,11 +210,12 @@ ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 # unnecessary rebuilds of anything that depends on the BPF prgrams.)
 .PHONY: build-bpf clean-bpf
 build-bpf:
-	rm -f bpf-gpl/*.d
+	rm -f bpf-gpl/*.d bpf-apache/*.d
 	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache all && \
 	                          make -j -C bpf-gpl all ut-objs"
 
 clean-bpf:
+	rm -f bpf-gpl/*.d bpf-apache/*.d
 	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
 	                          make -j -C bpf-gpl clean"
 
