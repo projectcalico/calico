@@ -106,7 +106,6 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
                                  -Datastore etcdv3
                                  -EtcdEndpoints <your etcd endpoint ip>
-                                 -CalicoKubeConfigSecret <name of calico-node service account> (default not generating Calico kubeconfig automatically)
                                  -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
                                  -DNSServerIPs <your DNS server IPs (default 10.96.0.10)>
    ```
