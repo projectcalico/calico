@@ -1,0 +1,34 @@
+version: v1.0
+name: Confd
+
+execution_time_limit:
+  hours: 2
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+global_job_config:
+  prologue:
+    commands:
+      - checkout
+
+blocks:
+  - name: 'CI'
+    dependencies: []
+    task:
+      jobs:
+        - name: CI
+          commands:
+            - make ci
+
+promotions:
+  # Run the pin update process in case there were a backlog of pin update requests
+  - name: Update Pins
+    pipeline_file: update_pins.yml
+    auto_promote:
+      # If the block has passed and the branch is for master or a release branch then run the pin updates. Note that
+      # this doesn't try to restrict which release branches, as the presence of this auto promotion code means that
+      # it can handle updating the pins in this fashion.
+      when: "(result = 'passed') and ((branch = 'master') or (branch =~ 'release-v\d*\.\d*'))"
