@@ -1,9 +1,11 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.45
+GO_BUILD_VER?=v0.47
 
 # This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/node
+
+SEMAPHORE_PROJECT_ID=$(SEMAPHORE_NODE_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
@@ -132,6 +134,7 @@ clean:
 	rm -rf filesystem/etc/calico/confd/conf.d filesystem/etc/calico/confd/config filesystem/etc/calico/confd/templates
 	rm -rf config/
 	rm -rf vendor
+	rm Makefile.common*
 	# Delete images that we built in this repo
 	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
