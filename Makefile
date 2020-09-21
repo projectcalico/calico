@@ -28,7 +28,9 @@
 #
 ###############################################################################
 PACKAGE_NAME?=github.com/projectcalico/felix
-GO_BUILD_VER?=v0.45
+GO_BUILD_VER?=v0.47
+
+SEMAPHORE_PROJECT_ID=$(SEMAPHORE_FELIX_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
@@ -128,7 +130,8 @@ clean:
 	       go/docs/calc.pdf \
 	       release-notes-* \
 	       fv/infrastructure/crds/ \
-	       vendor
+	       vendor \
+	       Makefile.common*
 	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
