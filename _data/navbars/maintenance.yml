@@ -16,8 +16,8 @@ section:
 - title: Enable eBPF dataplane mode
   path: /maintenance/enabling-bpf
   section:
-    - title: ePBF and EKS
-      path: /maintenance/ebpf-and-eks  
+  - title: ePBF and EKS
+    path: /maintenance/ebpf-and-eks  
 - title: Monitor
   path: /maintenance/monitor/
   section: 
