@@ -1,5 +1,7 @@
 PACKAGE_NAME=github.com/kelseyhightower/confd
-GO_BUILD_VER=v0.45
+GO_BUILD_VER=v0.47
+
+SEMAPHORE_PROJECT_ID=$(SEMAPHORE_CONFD_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
@@ -54,6 +56,7 @@ clean:
 	rm -rf vendor
 	rm -rf bin/*
 	rm -rf tests/logs
+	rm Makefile.common*
 
 ###############################################################################
 # Updating pins
