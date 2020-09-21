@@ -15,6 +15,9 @@ section:
   path: /maintenance/datastore-migration
 - title: Enable eBPF dataplane mode
   path: /maintenance/enabling-bpf
+  section:
+  - title: eBPF and EKS
+    path: /maintenance/ebpf-and-eks  
 - title: Monitor
   path: /maintenance/monitor/
   section: 
