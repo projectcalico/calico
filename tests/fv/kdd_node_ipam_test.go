@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -154,12 +154,12 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 			apiserver.Stop()
 
 			By("Waiting for the readiness to change")
-			Eventually(func() []byte {
+			Eventually(func() string {
 				cmd := exec.Command("docker", "exec", policyController.Name, "/usr/bin/check-status", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error reaching apiserver"))
+				return string(stdoutStderr)
+			}, 21*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error reaching apiserver"))
 		})
 	})
 
