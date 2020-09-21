@@ -27,9 +27,9 @@ $env:KUBECONFIG = "c:\k\config"
 # For the "etcdv3" datastore only: set ETCD_ENDPOINTS, format: "http://<host>:<port>,..."
 $env:ETCD_ENDPOINTS = "<your etcd endpoints>"
 # For etcd over TLS, set these lines to point to your keys/certs:
-$env:ETCD_KEY_FILE = ""
-$env:ETCD_CERT_FILE = ""
-$env:ETCD_CA_CERT_FILE = ""
+$env:ETCD_KEY_FILE = "<your etcd key>"
+$env:ETCD_CERT_FILE = "<your etcd cert>"
+$env:ETCD_CA_CERT_FILE = "<your etcd ca cert>"
 
 
 ## CNI configuration, only used for the "vxlan" networking backends.
