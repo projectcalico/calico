@@ -15,3 +15,5 @@ section:
   path: /about/about-kubernetes-services
 - title: Kubernetes Ingress
   path: /about/about-kubernetes-ingress
+- title: Kubernetes Egress
+  path: /about/about-kubernetes-egress
