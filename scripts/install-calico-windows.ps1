@@ -213,7 +213,7 @@ if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
 Write-Host "Download Calico for Windows release..."
 DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\calico-windows.zip
 Write-Host "Unzip Calico for Windows release..."
-Expand-Archive c:\calico-windows.zip c:\
+Expand-Archive -Force c:\calico-windows.zip c:\
 
 Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
