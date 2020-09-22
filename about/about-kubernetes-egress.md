@@ -66,7 +66,7 @@ In the context of Kubernetes egress, NAT is used to allow pods to connect to ser
 have IP addresses that are not routable outside of the cluster (for example, if the pod network is an overlay).
 
 For example, if a pod in an overlay network attempts to connect to an IP address outside of the cluster, then the
-node hosting the pod uses SNAT (Source Network Address Translation) to map the non-routable source IP address of tha
+node hosting the pod uses SNAT (Source Network Address Translation) to map the non-routable source IP address of the
 packet to the node's IP address before forwarding on the packet.  The node then maps response packets coming in the
 opposite direction back to the original pod IP address, so packets flow end-to-end in both directions, with neither
 pod or external service being aware the mapping is happening.
@@ -83,7 +83,7 @@ Another approach to Kubernetes egress is to route all outbound connections via o
 SNAT (Source Network Address Translation) the connections so the external service being connected to sees the connection
 as coming from the egress gateway. The main use case is to improve security, either with the egress gateway performing a
 direct security role in terms of what connections it allows, or in conjunction with perimeter firewalls (or other
-external entities). For example, so that perimeter firewalls see the connections coming from well know IP
+external entities). For example, so that perimeter firewalls see the connections coming from well known IP
 addresses (the egress gateways) rather than from dynamic pod IP addresses they don't understand.
 
 Egress gateways are not a native concept in Kubernetes itself, but are implemented by some Kubernetes network
