@@ -1,5 +1,7 @@
 PACKAGE_NAME=github.com/projectcalico/calicoctl
-GO_BUILD_VER=v0.45
+GO_BUILD_VER=v0.47
+
+SEMAPHORE_PROJECT_ID=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
@@ -50,7 +52,7 @@ LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} \;
-	rm -rf .go-pkg-cache bin build certs *.tar vendor
+	rm -rf .go-pkg-cache bin build certs *.tar vendor Makefile.common*
 	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH) || true
 ifeq ($(ARCH),amd64)
