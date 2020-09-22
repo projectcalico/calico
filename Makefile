@@ -3,6 +3,9 @@ GO_BUILD_VER=v0.47
 
 SEMAPHORE_PROJECT_ID=$(SEMAPHORE_TYPHA_PROJECT_ID)
 
+# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
+SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_FELIX_PROJECT_ID)
+
 # This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/typha
