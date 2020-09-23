@@ -182,6 +182,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- if $data.password}}
   password "{{$data.password}}";
 {{- end}}
+{{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
 }
 {{- end}}
 {{end}}
