@@ -1,0 +1,18 @@
+version: v1.0
+name: Clear Cache
+
+execution_time_limit:
+  minutes: 10
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+blocks:
+  - name: 'Clear Cache'
+    task:
+      jobs:
+        - name: Clear Cache
+          commands:
+            - 'cache clear'
