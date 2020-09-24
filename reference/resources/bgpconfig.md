@@ -55,25 +55,25 @@ spec:
 | logSeverityScreen | Global log level | Debug, Info, Warning, Error, Fatal | string | `Info` |
 | nodeToNodeMeshEnabled | Full BGP node-to-node mesh. Only valid on the global `default` BGPConfiguration. | true, false  | string | true |
 | asNumber | The default local AS Number that {{site.prodname}} should use when speaking with BGP peers. Only valid on the global `default` BGPConfiguration; to set a per-node override, use the `bgp` field on the [Node resource](./node). | A valid AS Number, may be specified in dotted notation. | integer/string | 64512 |
-| serviceClusterIPs | The CIDR blocks for Kubernetes Service Cluster IPs to be advertised over BGP. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 CIDR blocks. | List of `cidr: XXX.XXX.XXX.XXX/XX` values. | Empty List |
-| serviceExternalIPs | The CIDR blocks for Kubernetes Service External IPs to be advertised over BGP. Kubernetes Service External IPs will only be advertised if they are within one of these blocks. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 CIDR blocks. | List of `cidr: XXX.XXX.XXX.XXX/XX` values. | Empty List |
+| serviceClusterIPs | The CIDR blocks for Kubernetes Service Cluster IPs to be advertised over BGP. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 or IPv6 CIDR blocks. | List of `cidr: <ip>/<prefix length>` values. | Empty List |
+| serviceExternalIPs | The CIDR blocks for Kubernetes Service External IPs to be advertised over BGP. Kubernetes Service External IPs will only be advertised if they are within one of these blocks. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 or IPv6 CIDR blocks. | List of `cidr: <ip>/<prefix length>` values. | Empty List |
 | listenPort | The port where BGP protocol should listen.| A valid port number. | integer | 179 |
 | communities | List of BGP community names and their values, communities are not advertised unless they are used in [prefixAdvertisements](#prefixadvertisements). || List of [communities](#communities) |
 | prefixAdvertisements | List of per-prefix advertisement properties, like BGP communities.|| List of [prefixAdvertisements](#prefixadvertisements) |
 
 #### communities
 
-| Field       | Description                 | Accepted Values   | Schema | 
+| Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
 | name | Name or identifier for the community. This should be used in [prefixAdvertisements](#prefixAdvertisements) to advertise the community value. | | string |
 | value | Standard or large BGP community value. |For standard community, value should be in `aa:nn` format, where both `aa` and `nn` are 16 bit integers.<br/> For large community, value should be `aa:nn:mm` format, where `aa`, `nn` and `mm` are all 32 bit integers. <br/>Where `aa` is an AS Number, `nn` and `mm` are per-AS identifier. | string |
-  
+
 #### prefixAdvertisements
 
-| Field       | Description                 | Accepted Values   | Schema | 
+| Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
 | cidr | CIDR for which properties should be advertised. |`cidr: XXX.XXX.XXX.XXX/XX`| string |
-| communities | BGP communities to be advertised. | Communities can be list of either community names already defined in [communities](#communities) or community value of format `aa:nn` or `aa:nn:mm`. <br/>For standard community, value should be in `aa:nn` format, where both `aa` and `nn` are 16 bit integers.<br/> For large community, value should be `aa:nn:mm` format, where `aa`, `nn` and `mm` are all 32 bit integers. <br/>Where `aa` is an AS Number, `nn` and `mm` are per-AS identifier. | List of string | 
+| communities | BGP communities to be advertised. | Communities can be list of either community names already defined in [communities](#communities) or community value of format `aa:nn` or `aa:nn:mm`. <br/>For standard community, value should be in `aa:nn` format, where both `aa` and `nn` are 16 bit integers.<br/> For large community, value should be `aa:nn:mm` format, where `aa`, `nn` and `mm` are all 32 bit integers. <br/>Where `aa` is an AS Number, `nn` and `mm` are per-AS identifier. | List of string |
 
 ### Supported operations
 
