@@ -180,7 +180,7 @@ If you aren’t using AKS, and prefer to avoid dependencies on a specific cloud 
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:VXLAN,Routing:Calico' %}
 
-You can learn more about Kubernetes Networking on Azure, including how each of the above options works under the covers, in this short video: {% include open-new-window.html text='Everything you need to know about Kubernetes networking on Azure' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-azure/' %}.
+You can learn more about Kubernetes Networking on Azure, including how each of the above options works under the covers, in this short video: {% include open-new-window.html text='Everything you need to know about Kubernetes networking on Azure' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-azure/' %}.
 
 #### Google Cloud
 If you would like pod IP addresses to be routable outside of the cluster then you must use the Google cloud provider integration in conjunction with host-local IPAM CNI plugin. This is supported by {% include open-new-window.html text='GKE' url='https://cloud.google.com/kubernetes-engine' %}, with Calico for network policy.  Pod IP addresses are allocated from the underlying VPC, and corresponding Alias IP addresses are automatically assigned to nodes.
@@ -197,7 +197,7 @@ If you prefer to avoid dependencies on a specific cloud provider, or allocating 
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP' %}
 
-You can learn more about Kubernetes Networking on Google cloud, including how each of the above options works under the covers, in this short video: {% include open-new-window.html text='Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-google-cloud/' %}.
+You can learn more about Kubernetes Networking on Google cloud, including how each of the above options works under the covers, in this short video: {% include open-new-window.html text='Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %}.
 
 #### IBM Cloud
 If you are using IBM Cloud then we recommend using {% include open-new-window.html text='IKS' url='https://www.ibm.com/cloud/container-service/' %}, which has Calico built in to provide cross-subnet IP-in-IP overlay.  In addition to providing network policy for pods, IKS also uses Calico network policies to {% include open-new-window.html text='secure the hosts nodes' url='https://cloud.ibm.com/docs/containers?topic=containers-network_policies#default_policy' %} within the cluster. 
