@@ -43,21 +43,22 @@ By default, EKS uses Ubuntu 18.04 as its base image for EKS.  One way to create 
 
 2. Log into the instance with `ssh` and upgrade it to Ubuntu 20.04.
 
-3. [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html).
+3. [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html) and make a note of the AMI ID
 
 #### Create a cluster with the custom AMI
 
-Using `eksctl`: start your cluster as normal, but use the `--node-ami` and `--node-ami-family` settings.  
+You must use the Calico CNI plugin rather than the AWS CNI plugin when setting up your cluster.  This is because EKS bundles an older version of Calico with EKS, which does not support eBPF mode.
+
+Using `eksctl`: start your cluster as normal following the [EKS with Calico CNI install doc](../getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking), but when creating the nodegroup, add the `--node-ami` and `--node-ami-family` settings.
 
 * `--node-ami` should be set to the AMI ID of the image built above.
 * `--node-ami-family` should be set to `Ubuntu1804` (in spite of the upgrade).
 
-Use the AWS VPC CNI plugin rather than the Calico CNI when setting up your cluster.  This is because EKS bundles an older version of Calico with EKS, which does not support eBPF mode. 
+For example:
+```
+eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100 --node-ami-family Ubuntu1804 --node-ami <AMI ID>
+```
 
 #### Adjust Calico settings for EKS
 
-Before [enabling eBPF mode](./enabling-bpf), change the following Felix configuration parameter to prevent Felix from incorrectly detecting workload ENI interfaces as host interfaces:
-```bash
-calicoctl patch felixconfiguration default  '{"spec": {"bpfDataIfacePattern": "^(en[opsx].*|eth.*|tunl0$|wireguard.cali$)"}}'
-```
-
+You can now [enable eBPF mode](./enabling-bpf).
