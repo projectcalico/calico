@@ -129,9 +129,21 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		// capacity so that the caller blocks in the same way as it did before when its
 		// calls were processed synchronously.
 		syncerC: make(chan interface{}),
+
+		// This channel holds a trigger for existing BGP peerings to be recomputed.  We only
+		// ever need 1 pending trigger, hence capacity 1.  recheckPeerConfig() does a
+		// non-blocking write into this channel, so as not to block if a trigger is already
+		// pending.
+		recheckC: make(chan struct{}, 1),
 	}
 	for k, v := range globalDefaults {
 		c.cache[k] = v
+	}
+
+	// Create secret watcher.  Must do this before the syncer, because updates from
+	// the syncer can trigger calling c.secretWatcher.MarkStale().
+	if c.secretWatcher, err = NewSecretWatcher(c); err != nil {
+		log.WithError(err).Warning("Failed to create secret watcher, not running under Kubernetes?")
 	}
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
@@ -203,14 +215,20 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 
 	// Start a goroutine to process updates in a way that's decoupled from their sources.
 	go func() {
-		for e := range c.syncerC {
-			switch event := e.(type) {
-			case []api.Update:
-				c.onUpdates(event)
-			case api.SyncStatus:
-				c.onStatusUpdated(event)
-			default:
-				log.Panicf("Unknown type %T in syncer channel", event)
+		for {
+			select {
+			case e := <-c.syncerC:
+				switch event := e.(type) {
+				case []api.Update:
+					c.onUpdates(event, false)
+				case api.SyncStatus:
+					c.onStatusUpdated(event)
+				default:
+					log.Panicf("Unknown type %T in syncer channel", event)
+				}
+			case <-c.recheckC:
+				log.Info("Recompute v1 BGP peerings")
+				c.onUpdates(nil, true)
 			}
 		}
 	}()
@@ -274,8 +292,12 @@ type client struct {
 	externalIPNets []*net.IPNet // same as externalIPs but parsed
 	clusterCIDRs   []string
 
-	// Channel used to decouple update and status processing.
-	syncerC chan interface{}
+	// Subcomponent for accessing and watching secrets (that hold BGP passwords).
+	secretWatcher *secretWatcher
+
+	// Channels used to decouple update and status processing.
+	syncerC  chan interface{}
+	recheckC chan struct{}
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -361,6 +383,7 @@ type bgpPeer struct {
 	PeerIP      cnet.IP              `json:"ip"`
 	ASNum       numorstring.ASNumber `json:"as_num,string"`
 	RRClusterID string               `json:"rr_cluster_id"`
+	Password    *string              `json:"password"`
 	Port        uint16               `json:"port"`
 	KeepNextHop bool                 `json:"keep_next_hop"`
 }
@@ -368,6 +391,20 @@ type bgpPeer struct {
 type bgpPrefix struct {
 	CIDR        string   `json:"cidr"`
 	Communities []string `json:"communities"`
+}
+
+func (c *client) getPassword(v3res *apiv3.BGPPeer) *string {
+	if c.secretWatcher != nil && v3res.Spec.Password != nil && v3res.Spec.Password.SecretKeyRef != nil {
+		password, err := c.secretWatcher.GetSecret(
+			v3res.Spec.Password.SecretKeyRef.Name,
+			v3res.Spec.Password.SecretKeyRef.Key,
+		)
+		if err == nil {
+			return &password
+		}
+		log.WithError(err).Warningf("Can't read password for BGPPeer %v", v3res.Name)
+	}
+	return nil
 }
 
 func (c *client) updatePeersV1() {
@@ -399,7 +436,7 @@ func (c *client) updatePeersV1() {
 		// already have a global peering to that IP, skip emitting the node-specific
 		// one.
 		if nodeKey, ok := key.(model.NodeBGPPeerKey); ok {
-			globalKey := model.GlobalBGPPeerKey{PeerIP: nodeKey.PeerIP, Port:nodeKey.Port}
+			globalKey := model.GlobalBGPPeerKey{PeerIP: nodeKey.PeerIP, Port: nodeKey.Port}
 			globalPath, _ := model.KeyToDefaultPath(globalKey)
 			if _, ok = peersV1[globalPath]; ok {
 				log.Debug("Global peering already exists")
@@ -414,6 +451,12 @@ func (c *client) updatePeersV1() {
 			return
 		}
 		peersV1[k] = string(value)
+	}
+
+	// Mark currently watched secrets as stale, so that they can be cleaned up if no
+	// longer needed.
+	if c.secretWatcher != nil {
+		c.secretWatcher.MarkStale()
 	}
 
 	// Loop through v3 BGPPeers twice, first to emit global peerings, then for
@@ -473,6 +516,12 @@ func (c *client) updatePeersV1() {
 			}
 			log.Debugf("Peers %#v", peers)
 
+			if len(peers) == 0 {
+				continue
+			}
+
+			c.setPeerConfigFieldsFromV3Resource(peers, v3res)
+
 			for _, peer := range peers {
 				log.Debugf("Peer: %#v", peer)
 				if globalPass {
@@ -521,14 +570,31 @@ func (c *client) updatePeersV1() {
 		}
 		log.Debugf("Peers %#v", peerNodeNames)
 
+		if len(peerNodeNames) == 0 {
+			continue
+		}
+
+		var peers []*bgpPeer
 		for _, peerNodeName := range peerNodeNames {
-			for _, peer := range c.nodeAsBGPPeers(peerNodeName) {
-				for _, localNodeName := range localNodeNames {
-					key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port:peer.Port}
-					emit(key, peer)
-				}
+			peers = append(peers, c.nodeAsBGPPeers(peerNodeName)...)
+		}
+		if len(peers) == 0 {
+			continue
+		}
+
+		c.setPeerConfigFieldsFromV3Resource(peers, v3res)
+
+		for _, peer := range peers {
+			for _, localNodeName := range localNodeNames {
+				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
+				emit(key, peer)
 			}
 		}
+	}
+
+	// Clean up any secrets that are no longer of interest.
+	if c.secretWatcher != nil {
+		c.secretWatcher.SweepStale()
 	}
 
 	// Now reconcile against the cache.
@@ -688,7 +754,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 	c.syncerC <- updates
 }
 
-func (c *client) onUpdates(updates []api.Update) {
+func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 
 	// Update our cache from the updates.
 	c.cacheLock.Lock()
@@ -698,7 +764,6 @@ func (c *client) onUpdates(updates []api.Update) {
 	c.incrementCacheRevision()
 
 	// Track whether these updates require BGP peerings to be recomputed.
-	needUpdatePeersV1 := false
 	needUpdatePeersReasons := []string{}
 
 	// Track whether these updates require service advertisement to be recomputed.
@@ -917,7 +982,7 @@ func (c *client) getPrefixAdvertisementsKVPair(v3res *apiv3.BGPConfiguration, ke
 		for _, prefixAdvertisement := range v3res.Spec.PrefixAdvertisements {
 			cidr := prefixAdvertisement.CIDR
 
-			communitiesSet:= set.New()
+			communitiesSet := set.New()
 			for _, c := range prefixAdvertisement.Communities {
 				isCommunity := isValidCommunity(c)
 				// if c is a community value, use it directly, else get the community value from defined definedCommunities.
@@ -1165,7 +1230,17 @@ func (c *client) onNewUpdates() {
 	}
 }
 
-// updateChache will update a cache entry. It returns true if the entry was
+func (c *client) recheckPeerConfig() {
+	log.Info("Trigger to recheck BGP peers following possible password update")
+	select {
+	// Non-blocking write into the recheckC channel.  The idea here is that we don't need to add
+	// a second trigger if there is already one pending.
+	case c.recheckC <- struct{}{}:
+	default:
+	}
+}
+
+// updateCache will update a cache entry. It returns true if the entry was
 // updated and false if there was an error or if the cache was already
 // up-to-date.
 func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool {
@@ -1397,4 +1472,14 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 	c.incrementCacheRevision()
 	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, cidrs)
 	c.onNewUpdates()
+}
+
+func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
+
+	// Get the password, if one is configured.
+	password := c.getPassword(v3res)
+
+	for _, peer := range peers {
+		peer.Password = password
+	}
 }

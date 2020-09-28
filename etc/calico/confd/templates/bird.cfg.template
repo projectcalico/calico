@@ -2,7 +2,7 @@ function apply_communities ()
 {
   {{- $prefix_advertisements_key := ""}}
   {{- $node_prefix_advertisements_key := printf "/host/%s/prefix_advertisements/ip_v4" (getenv "NODENAME")}}
-  {{- if exists $node_prefix_advertisements_key}}  
+  {{- if exists $node_prefix_advertisements_key}}
     {{- $prefix_advertisements_key = $node_prefix_advertisements_key}}
   {{- else if exists "/global/prefix_advertisements/ip_v4"}}
     {{- $prefix_advertisements_key = "/global/prefix_advertisements/ip_v4"}}
@@ -154,7 +154,7 @@ template bgp bgp_template {
        - peer A sees the new connection and aborts the graceful restart, causing a route flap.
   */ -}}
   {{if gt $onode_ip $node_ip}}
-  passive on; # Mesh is unidirectional, peer will connect to us. 
+  passive on; # Mesh is unidirectional, peer will connect to us.
   {{- end}}
 }{{end}}{{end}}{{end}}
 {{else}}
@@ -179,6 +179,9 @@ protocol bgp Global_{{$id}} from bgp_template {
   rr client;
   rr cluster id {{$node_cluster_id}};
 {{- end}}
+{{- if $data.password}}
+  password "{{$data.password}}";
+{{- end}}
 }
 {{- end}}
 {{end}}
@@ -202,6 +205,9 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
+{{- end}}
+{{- if $data.password}}
+  password "{{$data.password}}";
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
   next hop keep;
