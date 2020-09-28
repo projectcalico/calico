@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"context"
@@ -49,6 +50,13 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		Node:     "node2",
 		PeerIP:   "20.0.0.1",
 		ASNumber: numorstring.ASNumber(6511),
+		Password: &apiv3.BGPPassword{
+			SecretKeyRef: &k8sv1.SecretKeySelector{
+				LocalObjectReference: k8sv1.LocalObjectReference{
+					Name: "bgp-passwords"},
+				Key: "p2",
+			},
+		},
 	}
 	spec3 := apiv3.BGPPeerSpec{
 		NodeSelector: "has(routeReflectorClusterID)",
