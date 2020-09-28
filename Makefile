@@ -1,7 +1,7 @@
 PACKAGE_NAME?=github.com/projectcalico/typha
 GO_BUILD_VER=v0.47
 
-SEMAPHORE_PROJECT_ID=$(SEMAPHORE_TYPHA_PROJECT_ID)
+SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_TYPHA_PROJECT_ID)
 
 # Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
 SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_FELIX_PROJECT_ID)
