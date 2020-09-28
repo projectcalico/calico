@@ -382,6 +382,7 @@ rules:
   - apiGroups: [""]
     resources:
       - endpoints
+      - secrets
       - services
     verbs:
       # Used to discover service IPs for advertisement.
