@@ -1,5 +1,10 @@
 PACKAGE_NAME?=github.com/projectcalico/pod2daemon
-GO_BUILD_VER?=v0.45
+GO_BUILD_VER?=v0.47
+
+SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_POD2DAEMON_PROJECT_ID)
+
+# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
+SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PRIVATE_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common before anything else
