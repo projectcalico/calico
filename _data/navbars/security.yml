@@ -27,8 +27,8 @@ section:
       path: /security/tutorials/kubernetes-policy-basic
     - title: Kubernetes policy, advanced tutorial
       path: /security/tutorials/kubernetes-policy-advanced
-  - title: Enable default deny 
-    path: /security/kubernetes-default-deny    
+  - title: Enable default deny
+    path: /security/kubernetes-default-deny
 - title: Policy rules
   path: /security/policy-rules
   section:
@@ -87,14 +87,16 @@ section:
     path: /security/comms/reduce-nodes
   - title: Secure Calico Prometheus endpoints
     path: /security/comms/secure-metrics
+  - title: Secure BGP sessions
+    path: /security/comms/secure-bgp
 - title: Calico Enterprise
   path: /security/calico-enterprise/
   section:
   - title: Network visibility
     path: /security/calico-enterprise/network-visibility
-  - title: Advanced egress access controls 
+  - title: Advanced egress access controls
     path: /security/calico-enterprise/egress-access-controls
-  - title: Advanced compliance controls 
+  - title: Advanced compliance controls
     path: /security/calico-enterprise/compliance
   - title: Federation
     path: /security/calico-enterprise/federation
