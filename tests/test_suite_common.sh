@@ -21,7 +21,12 @@ execute_test_suite() {
     rm $LOGPATH/log* || true
     rm $LOGPATH/rendered/*.cfg || true
 
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        run_extra_test test_bgp_password_deadlock
+    fi
+
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+        run_extra_test test_bgp_password
         run_extra_test test_node_deletion
         run_extra_test test_idle_peers
         run_extra_test test_router_id_hash
@@ -52,6 +57,306 @@ run_extra_test() {
     echo "==============================="
     eval $1
     echo "==============================="
+}
+
+test_bgp_password() {
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=node1 BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off.
+    turn_mesh_off
+
+    # Create 4 nodes with various password peerings.
+    calicoctl apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node1
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.1/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node2
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.2/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node3
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.3/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node4
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.4/24
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  nodeSelector: has(node)
+  peerIP: 10.24.0.2
+  asNumber: 64512
+  password:
+    secretKeyRef:
+      name: my-secrets-1
+      key: a
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-2
+spec:
+  nodeSelector: has(node)
+  peerIP: 10.24.0.3
+  asNumber: 64512
+  password:
+    secretKeyRef:
+      name: my-secrets-1
+      key: b
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-3
+spec:
+  node: node1
+  peerIP: 10.24.10.10
+  asNumber: 64512
+  password:
+    secretKeyRef:
+      name: my-secrets-2
+      key: c
+EOF
+
+    # Expect 3 peerings, all with no password because we haven't
+    # created the secrets yet.
+    test_confd_templates password/step1
+
+    # Create my-secrets-1 secret with only one of the required keys.
+    kubectl create -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  b: password-b
+EOF
+
+    # Expect password now on the peering using my-secrets-1/b.
+    test_confd_templates password/step2
+
+    # Update my-secrets-1 secret with the other required key.
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  b: password-b
+  a: password-a
+EOF
+
+    # Also create my-secrets-2 secret.
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-2
+  namespace: kube-system
+type: Opaque
+stringData:
+  c: password-c
+EOF
+
+    # Expect passwords on all peerings.
+    test_confd_templates password/step3
+
+    # Delete a secret.
+    kubectl delete secret my-secrets-2 -n kube-system
+
+    # Expect password-c to have disappeared.
+    test_confd_templates password/step4
+
+    # Change the passwords in the other secret.
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  b: new-password-b
+  a: new-password-a
+EOF
+
+    # Expect peerings to have new passwords.
+    test_confd_templates password/step5
+
+    # Delete one of the keys from that secret.
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  b: new-password-b
+EOF
+
+    # Expect new-password-a to have disappeared.
+    test_confd_templates password/step6
+
+    # Delete the remaining secret.
+    kubectl delete secret my-secrets-1 -n kube-system
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    calicoctl delete node node1
+    calicoctl delete node node2
+    calicoctl delete node node3
+    calicoctl delete node node4
+    calicoctl delete bgppeer bgppeer-1
+    calicoctl delete bgppeer bgppeer-2
+
+    # Check that passwords were not logged.
+    password_logs="`grep 'password-' $LOGPATH/logd1 || true`"
+    echo "$password_logs"
+    if [ "$password_logs"  ]; then
+        echo "ERROR: passwords were logged"
+        return 1
+    fi
+}
+
+test_bgp_password_deadlock() {
+    # For this test we populate the datastore before starting confd.
+    # Also we use Typha.
+    start_typha
+
+    # Clean up the output directory.
+    rm -f /etc/calico/confd/config/*
+
+    # Turn the node-mesh off.
+    turn_mesh_off
+
+    # Adjust this number until confd's iteration through BGPPeers
+    # takes longer than 100ms.  That is what's needed to see the
+    # deadlock.
+    SCALE=99
+
+    # Create $SCALE nodes and BGPPeer configs.
+    for ii in `seq 1 $SCALE`; do
+        kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Node
+metadata:
+  annotations:
+    node.alpha.kubernetes.io/ttl: "0"
+    volumes.kubernetes.io/controller-managed-attach-detach: "true"
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/hostname: node$ii
+  name: node$ii
+  namespace: ""
+spec:
+  externalID: node$ii
+EOF
+        calicoctl apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node$ii
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.$ii/24
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-$ii
+spec:
+  node: node$ii
+  peerIP: 10.24.0.2
+  asNumber: 64512
+  password:
+    secretKeyRef:
+      name: my-secrets-1
+      key: a
+EOF
+    done
+
+    # Create the required secret.
+    kubectl create -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secrets-1
+  namespace: kube-system
+type: Opaque
+stringData:
+  a: password-a
+EOF
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=node1 BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Expect BIRD config to be generated.
+    test_confd_templates password-deadlock
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Kill Typha.
+    kill_typha
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete resources.
+    kubectl delete secret my-secrets-1 -n kube-system
+    for ii in `seq 1 $SCALE`; do
+        calicoctl delete bgppeer bgppeer-$ii
+        kubectl delete node node$ii
+    done
 }
 
 test_node_deletion() {
@@ -483,10 +788,10 @@ compare_templates() {
         fi
         expected=/tests/compiled_templates/${testdir}/${f}
         actual=/etc/calico/confd/config/${f}
-        
+
         # Order of line in templates is not guaranteed for communities test, so sort and compare
         if [[ $(diff --ignore-blank-lines -q ${expected} ${actual}) != "" ]] \
-          && [[ "${testdir}" != *"mesh/communities"* || $(diff <(sort ${expected}) <(sort ${actual})) != "" ]] ; then       
+          && [[ "${testdir}" != *"mesh/communities"* || $(diff <(sort ${expected}) <(sort ${actual})) != "" ]] ; then
             if ! $record; then
                 rc=1;
             fi
