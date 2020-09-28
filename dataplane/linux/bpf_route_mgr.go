@@ -265,6 +265,12 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
 		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
 		routeVal := routes.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP).(ip.V4Addr))
 		route = &routeVal
+	case proto.RouteType_LOCAL_HOST:
+		// It may be a localhost IP that is not assigned to a device like an
+		// k8s ExternalIP. Route resolver knew that it was assigned to our
+		// hostname.
+		flags |= routes.FlagsLocalHost
+		fallthrough
 	default: // proto.RouteType_CIDR_INFO / LOCAL_HOST or no route at all
 		if flags != 0 {
 			// We have something to say about this route.
