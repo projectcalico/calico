@@ -53,6 +53,7 @@ protocol bgp Mesh_with_master_node from bgp_template {
 protocol bgp Mesh_with_node_1 from bgp_template {
   neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
+  password "very-secret";
 }
 
 protocol bgp Mesh_with_node_2 from bgp_template {
