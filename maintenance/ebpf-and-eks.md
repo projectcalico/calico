@@ -47,7 +47,7 @@ By default, EKS uses Ubuntu 18.04 as its base image for EKS.  One way to create 
 
 #### Create a cluster with the custom AMI
 
-You must use the Calico CNI plugin rather than the AWS CNI when setting up your cluster.  This is because EKS bundles an older version of Calico with EKS, which does not support eBPF mode.
+You must use the Calico CNI plugin rather than the AWS CNI plugin when setting up your cluster.  This is because EKS bundles an older version of Calico with EKS, which does not support eBPF mode.
 
 Using `eksctl`: start your cluster as normal following the [EKS with Calico CNI install doc](../getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking), but when creating the nodegroup, add the `--node-ami` and `--node-ami-family` settings.
 
