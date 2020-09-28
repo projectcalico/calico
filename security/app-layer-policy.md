@@ -1,6 +1,6 @@
 ---
-title: Enforce network policy using Istio
-description: Seamlessly enable Calico integration with Istio service mesh to enforce network policy including matching on HTTP methods and paths.
+title: Enforce network policy for Istio
+description: Enforce network policy for Istio service mesh including matching on HTTP methods and paths.
 canonical_url: '/security/app-layer-policy'
 ---
 
