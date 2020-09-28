@@ -1042,6 +1042,25 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_output_contains("has(rr)")
         assert "global" not in rc.output
 
+    def test_bgppeer_password(self):
+        rc = calicoctl("create", data={
+            'apiVersion': API_VERSION,
+            'kind': 'BGPPeer',
+            'metadata': {
+                'name': 'bp1'
+            },
+            'spec': {
+                'password': {'secretKeyRef': {'name': 'bgp-passwords', 'key': 'bp1p'}},
+                'peerSelector': "has(rr)",
+            },
+        })
+        rc.assert_no_error()
+
+        rc = calicoctl("get bgpp")
+        rc.assert_no_error()
+        rc.assert_output_contains("bp1")
+        rc.assert_output_contains("global")
+
     def test_label_command(self):
         """
         Test calicoctl label command.
@@ -1099,7 +1118,7 @@ class TestCalicoctlCommands(TestBase):
         """
         Test that a basic CRUD flow for patch command works.
         """
-        
+
         # test patching a node
         rc = calicoctl("create", data=node_name1_rev1)
         rc.assert_no_error()
@@ -1111,7 +1130,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         node1_rev1 = rc.decoded
         self.assertEqual("192.168.0.1",node1_rev1['spec']['bgp']['routeReflectorClusterID'])
-        
+
         # test patching an ippool
         rc = calicoctl("create", data=ippool_name1_rev1_v4)
         rc.assert_no_error()
