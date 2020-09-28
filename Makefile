@@ -5,7 +5,10 @@ GO_BUILD_VER=v0.47
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/cni
 
-SEMAPHORE_PROJECT_ID=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
+SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
+
+# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
+SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
