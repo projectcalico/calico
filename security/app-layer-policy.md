@@ -20,15 +20,15 @@ The {{site.prodname}} support for Istio service mesh has the following benefits:
 
 - **Pod traffic controls**
 
-  {{site.prodname}} network policy with Istio lets you restrict ingress traffic inside and outside pods and mitigate common threats to Istio-enabled apps.
+  Lets you restrict ingress traffic inside and outside pods and mitigate common threats to Istio-enabled apps.
 
 - **Supports security goals**
 
-  {{site.prodname}} network policy with Istio enables adoption of a zero trust network model for security, including traffic encryption, multiple enforcement points, and multiple identity criteria for authentication.
+  Enables adoption of a zero trust network model for security, including traffic encryption, multiple enforcement points, and multiple identity criteria for authentication.
 
 - **Familiar policy language**
 
-  Users do not need to learn another network policy model when adopting Istio; Kubernetes network policies and {{site.prodname}} network policies work as is.
+  Kubernetes network policies and {{site.prodname}} network policies work as is; users do not need to learn another network policy model to adopt Istio.
 
 See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio) to learn how application layer policy provides second-factor authentication for the mythical Yao Bank. 
 
