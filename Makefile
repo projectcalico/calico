@@ -30,7 +30,9 @@
 PACKAGE_NAME?=github.com/projectcalico/felix
 GO_BUILD_VER?=v0.47
 
-SEMAPHORE_PROJECT_ID=$(SEMAPHORE_FELIX_PROJECT_ID)
+SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_FELIX_PROJECT_ID)
+
+SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PROJECT_ID) $(SEMAPHORE_KUBE_CONTROLLER_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
