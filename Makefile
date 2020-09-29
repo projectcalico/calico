@@ -5,7 +5,7 @@ GO_BUILD_VER?=v0.47
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/node
 
-SEMAPHORE_PROJECT_ID=$(SEMAPHORE_NODE_PROJECT_ID)
+SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_NODE_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
