@@ -1,7 +1,7 @@
 PACKAGE_NAME=github.com/projectcalico/calicoctl
 GO_BUILD_VER=v0.47
 
-SEMAPHORE_PROJECT_ID=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
+SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
 
 ###############################################################################
 # Download and include Makefile.common
