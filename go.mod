@@ -5,12 +5,12 @@ go 1.14
 require (
 	github.com/aws/aws-sdk-go v1.33.17 // indirect
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
-	github.com/onsi/ginkgo v1.12.0
-	github.com/onsi/gomega v1.9.0
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/cni-plugin v1.11.1-0.20200811150549-55fa20e1ad20
-	github.com/projectcalico/felix v0.0.0-20200924080351-1f7f81f6ebf3
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200928111126-69f9edd033c1
+	github.com/projectcalico/felix v0.0.0-20200929170554-13410ed19852
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200928204352-d0d6051b9923
 	github.com/projectcalico/typha v0.7.3-0.20200928112754-bade8a5ca4ab
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v1.0.1-0.20181108222139-023a6dafdcdf
@@ -23,7 +23,7 @@ require (
 
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200928120502-e1d4258687ed
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200929080724-98b877b86456
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
