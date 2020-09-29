@@ -35,11 +35,13 @@ import (
 )
 
 // All of the resources we can retrieve via the v3 API.
+// Any resources which have references to node names MUST come after
+// nodes since the Kubernetes node names are not known until after nodes
+// are processed.
 var allV3Resources []string = []string{
 	"ippools",
 	"bgpconfig",
 	"bgppeers",
-	"felixconfigs",
 	"globalnetworkpolicies",
 	"globalnetworksets",
 	"heps",
@@ -47,6 +49,7 @@ var allV3Resources []string = []string{
 	"networkpolicies",
 	"networksets",
 	"nodes",
+	"felixconfigs",
 }
 
 var resourceDisplayMap map[string]string = map[string]string{
@@ -147,6 +150,7 @@ Description:
 	}
 
 	rp := common.ResourcePrinterYAML{}
+	etcdToKddNodeMap := make(map[string]string)
 	// Loop through all the resource types to retrieve every resource available by the v3 API.
 	for _, r := range allV3Resources {
 		mockArgs := map[string]interface{}{
@@ -229,12 +233,36 @@ Description:
 						return fmt.Errorf("Node %s missing a 'k8s' orchestrator reference. Unable to export data unless every node has a 'k8s' orchestrator reference", node.GetObjectMeta().GetName())
 					}
 
+					etcdToKddNodeMap[node.GetObjectMeta().GetName()] = newNodeName
 					node.GetObjectMeta().SetName(newNodeName)
 
 					return nil
 				})
 				if err != nil {
 					return fmt.Errorf("Unable to process metadata for export for Node resource: %s", err)
+				}
+			}
+
+			// Felix configs may also need to be modified if node names do not match the Kubernetes node names.
+			// Felix configs must come after nodes in the allV3Resources list since we populate the node mapping when nodes are exported.
+			if r == "felixconfigs" {
+				err := meta.EachListItem(resource, func(obj runtime.Object) error {
+					felixConfig, ok := obj.(*apiv3.FelixConfiguration)
+					if !ok {
+						return fmt.Errorf("Failed to convert resource to FelixConfiguration object for migration processing: %+v", obj)
+					}
+
+					if strings.HasPrefix(felixConfig.GetObjectMeta().GetName(), "node.") {
+						etcdNodeName := strings.TrimPrefix(felixConfig.GetObjectMeta().GetName(), "node.")
+						if nodename, ok := etcdToKddNodeMap[etcdNodeName]; ok {
+							felixConfig.GetObjectMeta().SetName(fmt.Sprintf("node.%s", nodename))
+						}
+					}
+
+					return nil
+				})
+				if err != nil {
+					return fmt.Errorf("Unable to process metadata for export for FelixConfiguration resource: %s", err)
 				}
 			}
 		}
@@ -297,6 +325,7 @@ Description:
 
 	// Use the v1 API in order to retrieve IPAM resources
 	ipam := NewMigrateIPAM(client)
+	ipam.SetNodeMap(etcdToKddNodeMap)
 	err = ipam.PullFromDatastore()
 	if err != nil {
 		return err
