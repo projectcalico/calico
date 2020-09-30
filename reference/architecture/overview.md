@@ -1,204 +1,146 @@
+
 ---
-title: Calico architecture
-description: Understand the Calico components and the basics of BGP networking.
-canonical_url: '/reference/architecture/index'
+title: Architecture
+description: Learn the basic Calico components.
+canonical_url: /reference/architecture/architecture
 ---
 
-This document discusses the various pieces of {{site.prodname}}'s architecture,
-with a focus on what specific role each component plays in
-the {{site.prodname}} network.
+### {{site.prodname}} components
 
-<!-- TODO(smc) data-model: Link to new data model docs. -->
+The following diagram shows the required and optional {{site.prodname}} components for a Kubernetes, on-premises deployment with networking and network policy.
 
-# Components
+![calico-components]({{site.baseurl}}/images/architecture-calico.svg)
 
-{{site.prodname}} is made up of the following interdependent components:
+**{{site.prodname}} components**
 
--   [Felix](#felix), the primary {{site.prodname}} agent that runs on each
-    machine that hosts endpoints.
--   The [Orchestrator plugin](#orchestrator-plugin),
-    orchestrator-specific code that tightly integrates {{site.prodname}} into
-    that orchestrator.
--   [etcd](#etcd), the data store.
--   [BIRD](#bgp-client-bird), a BGP client that
-    distributes routing information.
--   [BGP Route Reflector (BIRD)](#bgp-route-reflector-bird), an optional BGP
-    route reflector for higher scale.
+ - [Felix](#felix)
+ - [BIRD](#bird)
+ - [confd](#confd)
+ - [Dikastes](#dikastes)
+ - [CNI plugin](#cni-plugin)
+ - [Datastore plugin](#datastore-plugin)
+ - [IPAM plugin](#ipam-plugin)
+ - [kube-controllers](#kube-controllers)
+ - [Typha](#typha)
+ - [calicoctl](#calicoctl)
 
-The following sections break down each component in more detail.
+**Cloud orchestrator plugins**
 
-## Felix
+ - [Plugins for cloud orchestrators](#plugins-for-cloud-orchestrators)
 
-Felix is a daemon that runs on every machine that provides endpoints: in
-most cases that means on nodes that host containers or VMs. It is
-responsible for programming routes and ACLs, and anything else required
-on the host, in order to provide the desired connectivity for the
-endpoints on that host.
+### Felix
 
-Depending on the specific orchestrator environment, Felix is responsible
-for the following tasks:
+**Main task**: Programs routes and ACLs, and anything else required on the host to provide desired connectivity for the endpoints on that host. Runs on each machine that hosts endpoints. Runs as an agent daemon. [Felix resource]({{site.baseurl}}/reference/resources/felixconfig).
 
-#### Interface management
+Depending on the specific orchestrator environment, Felix is responsible for:
 
-Felix programs some information about interfaces into the kernel in
-order to get the kernel to correctly handle the traffic emitted by that
-endpoint. In particular, it will ensure that the host responds to ARP
-requests from each workload with the MAC of the host, and will enable IP
-forwarding for interfaces that it manages.
+- **Interface management**
+    
+    Programs information about interfaces into the kernel so the kernel can correctly handle the traffic from that endpoint. In particular, it ensures that the host responds to ARP requests from each workload with the MAC of the host, and enables IP forwarding for interfaces that it manages. It also monitors interfaces to ensure that the programming is applied at the appropriate time.
 
-It also monitors for interfaces to appear and disappear so that it can
-ensure that the programming for those interfaces is applied at the
-appropriate time.
+- **Route programming**
+   
+    Programs routes to the endpoints on its host into the Linux kernel FIB (Forwarding Information Base). This ensures that packets destined for those endpoints that arrive on at the host are forwarded accordingly.
 
-#### Route programming
+- **ACL programming**
+    
+    Programs ACLs into the Linux kernel to ensure that only valid traffic can be sent between endpoints, and that endpoints cannot circumvent {{site.prodname}} security measures.
 
-Felix is responsible for programming routes to the endpoints on its host
-into the Linux kernel FIB (Forwarding Information Base) . This ensures that packets destined for those
-endpoints that arrive on at the host are forwarded accordingly.
+- **State reporting**
 
-#### ACL programming
+    Provides network health data. In particular, it reports errors and problems when configuring its host. This data is written to the datastore so it visible to other components and operators of the network.
 
-Felix is also responsible for programming ACLs into the Linux kernel.
-These ACLs are used to ensure that only valid traffic can be sent
-between endpoints, and ensure that endpoints are not capable of
-circumventing {{site.prodname}}'s security measures.
+> **Note**: `{{site.nodecontainer}}` can be run in *policy only mode* where Felix runs without BIRD and confd. This provides policy management without route distribution between hosts, and is used for deployments like managed cloud providers. You enable this mode by setting the environment variable, `CALICO_NETWORKING=false` before starting the node.
+{: .alert .alert-info}
 
-#### State reporting
+### BIRD
 
-Felix is responsible for providing data about the health of the network.
-In particular, it reports errors and problems with configuring its host.
-This data is written into etcd, to make it visible to other components
-and operators of the network.
+**Main task**: Gets routes from Felix and distributes to BGP peers on the network for inter-host routing. Runs on each node that hosts a Felix agent. Open source, internet routing daemon. [BIRD]({{site.baseurl}}/reference/node/configuration#content-main).
 
-## Orchestrator plugin
+The BGP client is responsible for:
 
-Unlike Felix there is no single 'orchestrator plugin': instead, there
-are separate plugins for each major cloud orchestration platform (e.g.
-OpenStack, Kubernetes). The purpose of these plugins is to bind {{site.prodname}}
-more tightly into the orchestrator, allowing users to manage the {{site.prodname}}
-network just as they'd manage network tools that were built into the
-orchestrator.
+- **Route distribution**
 
-A good example of an orchestrator plugin is the {{site.prodname}} Neutron ML2
-mechanism driver. This component integrates with Neutron's ML2 plugin,
-and allows users to configure the {{site.prodname}} network by making Neutron API
-calls. This provides seamless integration with Neutron.
+    When Felix inserts routes into the Linux kernel FIB, the BGP client distributes them to other nodes in the deployment. This ensures efficient traffic routing for the deployment.
 
-The orchestrator plugin is responsible for the following tasks:
+- **BGP route reflector configuration**
 
-#### API translation
+    BGP route reflectors are often configured for large deployments rather than a standard BGP client. BGP route reflectors acts as a central point for connecting BGP clients. (Standard BGP requires that every BGP client be connected to every other BGP client in a mesh topology, which is difficult to maintain.)
 
-The orchestrator will inevitably have its own set of APIs for managing
-networks. The orchestrator plugin's primary job is to translate those
-APIs into {{site.prodname}}'s data-model and then store it in
-{{site.prodname}}'s datastore.
+    For redundancy, you can seamlessly deploy multiple BGP route reflectors. BGP route reflectors are involved only in control of the network: no endpoint data passes through them. When the {{site.prodname}} BGP client advertises routes from its FIB to the route reflector, the route reflector advertises those routes out to the other nodes in the deployment.
 
-Some of this translation will be very simple, other bits may be more
-complex in order to render a single complex operation (e.g. live
-migration) into the series of simpler operations the rest of the
-{{site.prodname}} network expects.
+### confd
 
-#### Feedback
+**Main task**: Monitors {{site.prodname}} datastore for changes to BGP configuration and global defaults such as AS number, logging levels, and IPAM information. Open source, lightweight configuration management tool. 
 
-If necessary, the orchestrator plugin will provide feedback from the
-{{site.prodname}} network into the orchestrator. Examples include: providing
-information about Felix liveness; marking certain endpoints as failed if
-network setup failed.
+Confd dynamically generates BIRD configuration files based on the updates to data in the datastore. When the configuration file changes, confd triggers BIRD to load the new files. [Configure confd]({{site.baseurl}}/reference/node/configuration#content-main), and {% include open-new-window.html text='confd project' url='https://github.com/kelseyhightower/confd' %}.
 
-## etcd
 
-etcd is a distributed key-value store that has a focus on consistency.
-{{site.prodname}} uses etcd to provide the communication between components and as
-a consistent data store, which ensures {{site.prodname}} can always build an
-accurate network.
+### Dikastes
 
-Depending on the orchestrator plugin, etcd may either be the master data
-store or a lightweight mirror of a separate data store. For example, in
-an OpenStack deployment, the OpenStack database is considered the
-"source of truth" and etcd is used to mirror information about the
-network to the other {{site.prodname}} components.
+**Main task**: Enforces network policy for Istio service mesh. Runs on a cluster as a sidecar proxy to Istio Envoy. 
 
-The etcd component is distributed across the entire deployment. It is
-divided into two groups of machines: the core cluster, and the proxies.
+(Optional) {{site.prodname}} enforces network policy for workloads at both the Linux kernel (using iptables, L3-L4), and at L3-L7 using a Envoy sidecar proxy called Dikastes, with cryptographic authentication of requests. Using multiple enforcement points establishes the identity of the remote endpoint based on multiple criteria. The host Linux kernel enforcement protects your workloads even if the workload pod is compromised, and the Envoy proxy is bypassed. [Dikastes]({{site.baseurl}}/reference/dikastes/configuration), and {% include open-new-window.html text='Istio docs' url='https://istio.io/latest/docs/setup/install/' %}.
 
-For small deployments, the core cluster can be an etcd cluster of one
-node (which would typically be co-located with the
-[orchestrator plugin](#orchestrator-plugin) component). This deployment model is simple but provides no redundancy for etcd -- in the case of etcd failure the
-[orchestrator plugin](#orchestrator-plugin) would have to rebuild the database which, as noted for OpenStack, will simply require that the plugin resynchronizes
-state to etcd from the OpenStack database.
 
-In larger deployments, the core cluster can be scaled up, as per the
-[etcd admin guide](https://coreos.com/etcd/docs/latest/admin_guide.html#optimal-cluster-size).
+### CNI plugin
 
-Additionally, on each machine that hosts either a [Felix](#felix)
-or a [plugin](#orchestrator-plugin), we run an etcd proxy. This reduces the load
-on the core cluster and shields nodes from the specifics of the etcd
-cluster. In the case where the etcd cluster has a member on the same
-machine as a [plugin](#orchestrator-plugin), we can forgo the proxy on that
-machine.
+**Main task**: Provides {{site.prodname}} networking for Kubernetes clusters. 
 
-etcd is responsible for performing the following tasks:
+The {{site.prodname}} binary that presents this API to Kubernetes is called the CNI plugin, and must be installed on every node in the Kubernetes cluster. The {{site.prodname}} CNI plugin allows you to use {{site.prodname}} networking for any orchestrator that makes use of the CNI networking specification. Configured through the standard {% include open-new-window.html text='CNI configuration mechanism' 
+url='https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration' %}, and [{{site.prodname}} CNI plugin]({{site.baseurl}}/reference/cni-plugin/configuration).
 
-#### Data storage
 
-etcd stores the data for the {{site.prodname}} network in a distributed,
-consistent, fault-tolerant manner (for cluster sizes of at least three
-etcd nodes). This set of properties ensures that the {{site.prodname}} network is
-always in a known-good state, while allowing for some number of the
-machines hosting etcd to fail or become unreachable.
+### Datastore plugin
 
-This distributed storage of {{site.prodname}} data also improves the ability of the
-Calico components to read from the database (which is their most common
-operation), as they can distribute their reads around the cluster.
+**Main task**: Increases scale by reducing each node’s impact on the datastore. It is one of the {{site.prodname}} [CNI plugins]({{site.baseurl}}/reference/cni-plugin/configuration).
 
-#### Communication
+- **Kubernetes API datastore (kdd)**
 
-etcd is also used as a communication bus between components. We do this
-by having the non-etcd components watch certain points in the keyspace
-to ensure that they see any changes that have been made, allowing them
-to respond to those changes in a timely manner. This allows the act of
-committing the state to the database to cause that state to be programmed
-into the network.
+   The advantages of using the Kubernetes API datastore (kdd) with {{site.prodname}} are:
 
-## BGP client (BIRD)
+   - Simpler to manage because it does not require an extra datastore
+   - Use Kubernetes RBAC to control access to {{site.prodname}} resources
+   - Use Kubernetes audit logging to generate audit logs of changes to {{site.prodname}} resources
 
-{{site.prodname}} deploys a BGP client on every node that also hosts a [Felix](#felix). The role of the BGP client is to read routing state that [Felix](#felix) programs into the kernel and
-distribute it around the data center.
+- **etcd**
 
-The BGP client is responsible for performing the following task:
+   etcd is a consistent, highhly-available distributed key-value store that provides data storage for the {{site.prodname}} network, and forcommunications between components. etcd is supported only for protecting non-cluster hosts (as of {{site.prodname}} v3.1). For completeness, etcd advantages are:
 
-#### Route distribution
+   - Lets you run {{site.prodname}} on non-Kubernetes platforms
+   - Separation of concerns between Kubernetes and {{site.prodname}} resources, for example allowing you to scale the datastores independently
+   - Lets you run a {{site.prodname}} cluster that contains more than just a single Kubernetes cluster, for example, bare metal servers with {{site.prodname}} host protection interworking with a Kubernetes cluster; or multiple Kubernetes clusters.
+   
 
-When [Felix](#felix) inserts routes into the Linux kernel FIB,
-the BGP client will pick them up and distribute them to the other nodes
-in the deployment. This ensures that traffic is efficiently routed
-around the deployment.
+### IPAM plugin
 
-## BGP route reflector (BIRD)
+**Main task**: Uses {{site.prodname}}’s IP pool resource to control how IP addresses are allocated to pods within the cluster. It is the default plugin used by most {{site.prodname}} installations. It is one of the {{site.prodname}} [CNI plugins]({{site.baseurl}}/reference/cni-plugin/configuration).
 
-For larger deployments, simple BGP can become a limiting factor because
-it requires every BGP client to be connected to every other BGP client
-in a mesh topology. This requires an increasing number of connections
-that rapidly become tricky to maintain, due to the N^2 nature of the
-increase.
 
-For that reason, in larger deployments, Calico will deploy a BGP route
-reflector. This component, commonly used in the Internet, acts as a
-central point to which the BGP clients connect, preventing them from
-needing to talk to every single BGP client in the cluster.
+### kube-controllers
 
-For redundancy, multiple BGP route reflectors can be deployed
-seamlessly. The route reflectors are purely involved in the control of
-the network: no endpoint data passes through them.
+**Main task**: Monitors the Kubernetes API and performs actions based on cluster state. [kube-controllers]({{site.baseurl}}/reference/kube-controllers/configuration).
 
-In Calico, this BGP component is also most commonly
-[BIRD](http://bird.network.cz/), configured as a route reflector rather
-than as a standard BGP client.
+The `tigera/kube-controllers` container includes the following controllers:
 
-The BGP route reflector is responsible for the following task:
+- Policy controller
+- Namespace controller
+- Serviceaccount controller
+- Workloadendpoint controller
+- Node controller
 
-#### Centralized route distribution
+### Typha
 
-When the [Calico BGP client](#bgp-client-bird) advertises routes
-from its FIB to the route reflector, the route reflector advertises
-those routes out to the other nodes in the deployment.
+**Main task**: Increases scale by reducing each node’s impact on the datastore. Runs as a daemon between the datastore and instances of Felix. Installed by default, but not configured. {% include open-new-window.html text='Typha description' url='https://github.com/projectcalico/typha' %}, and [Typha component]({{site.baseurl}}/reference/typha/).
+
+Typha maintains a single datastore connection on behalf of all of its clients like Felix and confd. It caches the datastore state and deduplicates events so that they can be fanned out to many listeners. Because one Typha instance can support hundreds of Felix instances, it reduces the load on the datastore by a large factor. And because Typha can filter out updates that are not relevant to Felix, it also reduces Felix’s CPU usage. In a high-scale (100+ node) Kubernetes cluster, this is essential because the number of updates generated by the API server scales with the number of nodes.
+
+### calicoctl
+
+**Main task**: Command line interface to create, read, update, and delete {{site.prodname}} objects. `calicoctl` command line is available on any host with network access to the {{site.prodname}} datastore as either a binary or a container. Requires separate installation. [calicoctl]({{site.baseurl}}/reference/calicoctl/).
+
+### Plugins for cloud orchestrators
+
+**Main task**: Translates the orchestrator APIs for managing networks to the {{site.prodname}} data-model and datastore.
+
+For cloud providers, {{site.prodname}} has a separate plugin for each major cloud orchestration platform. This allows {{site.prodname}} to tightly bind to the orchestrator, so users can manage the {{site.prodname}} network using their orchestrator tools. When required, the orchestrator plugin provides feedback from the {{site.prodname}} network to the orchestrator. For example, providing information about Felix liveness, and marking specific endpoints as failed if network setup fails.
