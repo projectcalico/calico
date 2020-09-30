@@ -63,10 +63,8 @@ section:
 - title: Policy for Istio
   path: /security/istio
   section:
-  - title: Enable network policy for Istio
+  - title: Enforce network policy for Istio
     path: /security/app-layer-policy
-  - title: Enforce network policy using Istio
-    path: /security/enforce-policy-istio
   - title: Use HTTP methods and paths in policy rules
     path: /security/http-methods
   - title: Enforce network policy using Istio tutorial
