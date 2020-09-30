@@ -1,4 +1,3 @@
-
 ---
 title: Component architecture
 description: Learn the basic Calico components.
