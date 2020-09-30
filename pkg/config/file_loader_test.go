@@ -21,7 +21,7 @@ import (
 	"runtime"
 
 	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 const confFileSingleParamNoNewLine = `[ignored]
@@ -39,8 +39,8 @@ LogSeveritySys=DEBUG`
 var _ = DescribeTable("File parameter parsing",
 	func(fileContent string, expected map[string]string) {
 		actual, err := LoadConfigFileData([]byte(fileContent))
-		Expect(err).To(BeNil())
-		Expect(actual).To(Equal(expected))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(actual).To(gomega.Equal(expected))
 	},
 	Entry("Empty", "", map[string]string{}),
 	Entry("Single param", confFileSingleParamNoNewLine, map[string]string{
@@ -62,11 +62,11 @@ var _ = DescribeTable("File load tests",
 		path := path.Join(myDir, "testdata", filename)
 		value, err := LoadConfigFile(path)
 		if errExpected {
-			Expect(err).ToNot(BeNil())
+			gomega.Expect(err).ToNot(gomega.BeNil())
 		} else {
-			Expect(err).To(BeNil())
+			gomega.Expect(err).To(gomega.BeNil())
 		}
-		Expect(value).To(Equal(expected))
+		gomega.Expect(value).To(gomega.Equal(expected))
 	},
 	Entry("Missing", "missing.cfg", nil, false),
 	Entry("Empty", "empty.cfg", map[string]string{}, false),

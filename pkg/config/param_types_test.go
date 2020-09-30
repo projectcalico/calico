@@ -18,7 +18,7 @@ import (
 	. "github.com/projectcalico/typha/pkg/config"
 
 	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 var _ = DescribeTable("Endpoint list parameter parsing",
@@ -27,8 +27,8 @@ var _ = DescribeTable("Endpoint list parameter parsing",
 			Name: "Endpoints",
 		}}
 		actual, err := p.Parse(raw)
-		Expect(err).To(BeNil())
-		Expect(actual).To(Equal(expected))
+		gomega.Expect(err).To(gomega.BeNil())
+		gomega.Expect(actual).To(gomega.Equal(expected))
 	},
 	Entry("Empty", "", []string{}),
 	Entry("Single URL", "http://10.0.0.1:1234/", []string{"http://10.0.0.1:1234/"}),
