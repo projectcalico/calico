@@ -2,7 +2,7 @@
 ---
 title: Component architecture
 description: Learn the basic Calico components.
-canonical_url: /reference/architecture/overview
+`canonical_url: /reference/architecture/overview`
 ---
 
 ### {{site.prodname}} components
