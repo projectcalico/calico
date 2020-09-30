@@ -55,6 +55,15 @@ type NodeSpec struct {
 
 	// Wireguard configuration for this node.
 	Wireguard *NodeWireguardSpec `json:"wireguard,omitempty" validate:"omitempty"`
+
+	// Addresses list address that a client can reach the node at.
+	Addresses []NodeAddress `json:"addresses,omitempty" validate:"omitempty"`
+}
+
+// NodeAddress represents an address assigned to a node.
+type NodeAddress struct {
+	// Address is a string representation of the actual address.
+	Address string `json:"address" validate:"net"`
 }
 
 type NodeStatus struct {

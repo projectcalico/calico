@@ -289,6 +289,9 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 		}
 	}
 
+	// Fill the list of all addresses from the calico Node
+	fillAllAddresses(calicoNode, k8sNode)
+
 	// Create the resource key from the node name.
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -298,6 +301,26 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 		Value:    calicoNode,
 		Revision: k8sNode.ObjectMeta.ResourceVersion,
 	}, nil
+}
+
+func fillAllAddresses(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) {
+	if bgp := calicoNode.Spec.BGP; bgp != nil {
+		if addr := bgp.IPv4Address; addr != "" {
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: addr})
+		}
+		if addr := bgp.IPv6Address; addr != "" {
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: addr})
+		}
+	}
+
+	for _, kaddr := range k8sNode.Status.Addresses {
+		switch kaddr.Type {
+		case kapiv1.NodeInternalIP, kapiv1.NodeExternalIP:
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: kaddr.Address})
+		default:
+			continue
+		}
+	}
 }
 
 // mergeCalicoNodeIntoK8sNode takes a k8s node and a Calico node and puts the values from the Calico
