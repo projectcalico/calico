@@ -7,6 +7,8 @@ section:
   path: /about/about-calico
 - title: Networking
   path: /about/about-networking
+- title: eBPF
+  path: /about/about-ebpf
 - title: Kubernetes Networking
   path: /about/about-kubernetes-networking
 - title: Network Policy

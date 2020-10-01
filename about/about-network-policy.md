@@ -145,11 +145,11 @@ rules for restricting access to specific external services.
 ### Best practices for network policies
 
 #### Ingress and egress
-At a minimum it is recommended that every pod is protected by network policy ingress rules that restrict what is allowed
-to connect to the pod and on which pods. The best practice is also to define network policy egress rules that restrict
+At a minimum we recommend that every pod is protected by network policy ingress rules that restrict what is allowed
+to connect to the pod and on which ports. The best practice is also to define network policy egress rules that restrict
 the outgoing connections that are allowed by pods themselves. Ingress rules protect your pod from attacks outside of the
 pod. Egress rules help protect everything outside of the pod if the pod gets compromised, reducing the attack surface to
-make moving laterally (east-west) or to prevent exfiltrate compromised data from your cluster (north-south).
+make moving laterally (east-west) or to prevent an attacker from exfiltrating compromised data from your cluster (north-south).
 
 #### Policy schemas
 Due to the flexibility of network policy and labelling, there are often multiple different ways of labelling and writing
