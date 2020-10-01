@@ -233,14 +233,13 @@ github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZ
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
-github.com/projectcalico/libcalico-go v1.7.2-0.20200928111126-69f9edd033c1 h1:0SJJsGkCw8ORBXCjPKaZwp3xt8PgbUOwboObJnDZ5Fw=
-github.com/projectcalico/libcalico-go v1.7.2-0.20200928111126-69f9edd033c1/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
-github.com/projectcalico/libcalico-go v1.7.2-0.20200930163114-854723e347f4 h1:T/A+saFW4fhrc5oyD04t0FSl51KJrc45dqarhB1amrw=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200930163114-854723e347f4/go.mod h1:LFBH34Uh3bM2m70XQ+uGAxKmBip2QAEGSoNnUE8aaaI=
+github.com/projectcalico/libcalico-go v1.7.2-0.20201001222343-890268f01ec2 h1:H0f2dFetar9PBV0HSD2w0urtmJak3qOEIwnGlZNHeuI=
+github.com/projectcalico/libcalico-go v1.7.2-0.20201001222343-890268f01ec2/go.mod h1:LFBH34Uh3bM2m70XQ+uGAxKmBip2QAEGSoNnUE8aaaI=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
-github.com/projectcalico/typha v0.7.3-0.20200930215657-c6a89df8c5ea h1:Y1gdwbyabvFwqE7mY0TTRzoaIgKP5QaaHmbG0zwC6B0=
-github.com/projectcalico/typha v0.7.3-0.20200930215657-c6a89df8c5ea/go.mod h1:lnZB0S0mm7Pq3/YSkRFCHm5Y3hP4SmMUzKHXcMRof+8=
+github.com/projectcalico/typha v0.7.3-0.20201001150028-c5c0ff304b0f h1:YMdgn8GnpsIaUi74s/vMnADh8GxB7RC7RoUcBLZFUqY=
+github.com/projectcalico/typha v0.7.3-0.20201001150028-c5c0ff304b0f/go.mod h1:JUsOHXTk0fQeRbru+0s6f5jNRcLecBiC8tlaESs3nWY=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0 h1:vrDKnkGzuGvhNAL56c7DBz29ZL+KxnoR0x7enabFceM=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
@@ -455,8 +454,6 @@ gopkg.in/yaml.v2 v2.0.0-20170812160011-eb3733d160e7/go.mod h1:JAlM8MvJe8wmxCU4Bl
 gopkg.in/yaml.v2 v2.2.1/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.4/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
-gopkg.in/yaml.v2 v2.2.8 h1:obN1ZagJSUGI0Ek/LBmuj4SNLPfIny3KsKFopxRdj10=
-gopkg.in/yaml.v2 v2.2.8/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.3.0 h1:clyUAQHOM3G0M3f5vQj7LuJrETvjVot3Z5el9nffUtU=
 gopkg.in/yaml.v2 v2.3.0/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
