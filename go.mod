@@ -8,9 +8,9 @@ require (
 	github.com/go-ini/ini v0.0.0-20190327024845-3be5ad479f69
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
-	github.com/onsi/ginkgo v1.10.1
-	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200928111126-69f9edd033c1
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.1
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200930163114-854723e347f4
 	github.com/prometheus/client_golang v1.0.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190710185942-9d28bd7c0945 // indirect
