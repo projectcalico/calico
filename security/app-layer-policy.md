@@ -1,26 +1,38 @@
 ---
-title: Enable Calico application layer policy for Istio
-description: Enable Calico application layer policy for Istio service mesh.
+title: Enforce network policy for Istio
+description: Enforce network policy for Istio service mesh including matching on HTTP methods and paths.
 canonical_url: '/security/app-layer-policy'
 ---
 
 ### Big picture
 
-Enable {{site.prodname}} application layer network policy in Istio service mesh.
+{{site.prodname}} integrates seamlessly with Istio to enforce network policy within the Istio service mesh.
 
 ### Value
 
-{{site.prodname}} application layer policy lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities for Istio-enabled apps.
+{{site.prodname}} network policy for Istio lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities for Istio-enabled apps.
 
 ### Concepts
 
-#### Mitigate threats with {{site.prodname}} network policy
+#### Benefits of the Istio integration
 
-Although Istio policy is ideal for operational goals, security inside and outside the cluster requires {{site.prodname}} network policy. {{site.prodname}} supports a special integration for Istio, called **application layer policy**. This policy lets you restrict ingress traffic inside and outside pods, and mitigate common threats to Istio-enabled apps.
+The {{site.prodname}} support for Istio service mesh has the following benefits:
 
-For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio).
+- **Pod traffic controls**
 
-### Before you begin...
+  Lets you restrict ingress traffic inside and outside pods and mitigate common threats to Istio-enabled apps.
+
+- **Supports security goals**
+
+  Enables adoption of a zero trust network model for security, including traffic encryption, multiple enforcement points, and multiple identity criteria for authentication.
+
+- **Familiar policy language**
+
+  Kubernetes network policies and {{site.prodname}} network policies work as is; users do not need to learn another network policy model to adopt Istio.
+
+See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio) to learn how application layer policy provides second-factor authentication for the mythical Yao Bank. 
+
+### Before you begin
 
 **Required**
 
@@ -106,5 +118,4 @@ If the namespace already has pods in it, you must recreate them for this to take
 ### Above and beyond
 
 - [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio)
-- [Enforce network policy using Istio]({{site.baseurl}}/security/enforce-policy-istio)
 - [Use HTTP methods and paths in policy rules]({{site.baseurl}}/security/http-methods)
