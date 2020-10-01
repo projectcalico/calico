@@ -36,6 +36,7 @@ const (
 	IPAMBlockAttributeTypeIPIP      = "ipipTunnelAddress"
 	IPAMBlockAttributeTypeVXLAN     = "vxlanTunnelAddress"
 	IPAMBlockAttributeTypeWireguard = "wireguardTunnelAddress"
+	IPAMBlockAttributeTypeUID       = "uid"
 )
 
 var (

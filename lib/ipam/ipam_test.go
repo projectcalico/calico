@@ -21,6 +21,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -41,6 +42,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // Implement an IP pools accessor for the IPAM client.  This is a "mock" version
@@ -127,6 +129,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	var bc bapi.Client
 	var ic Interface
 	var kc *kubernetes.Clientset
+	var crdClient *rest.RESTClient
 	BeforeEach(func() {
 		var err error
 		bc, err = backend.NewClient(config)
@@ -136,6 +139,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		// If running in KDD mode, extract the k8s clientset.
 		if config.Spec.DatastoreType == "kubernetes" {
 			kc = bc.(*k8s.KubeClient).ClientSet
+			crdClient = bc.(*k8s.KubeClient).GetCRDClient()
 		}
 	})
 
@@ -357,6 +361,187 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(handle).To(BeNil())
 			})
 		})
+	})
+
+	Describe("Allocation with owner reference and finalizer", func() {
+		var hostname string
+		sentinelIP := net.ParseIP("10.0.0.1")
+
+		BeforeEach(func() {
+			// Remove all data in the datastore.
+			bc.Clean()
+
+			// Create an IP pool
+			applyPool("10.0.0.0/24", true, "all()")
+
+			// Create the node object.
+			hostname = "test-ipam-ownerref-node"
+			applyNode(bc, kc, hostname, nil)
+		})
+
+		AfterEach(func() {
+			bc.Clean()
+		})
+
+		It("should assign a pod IP address when a UID is given", func() {
+			handle := "ipam-with-uid-test-handle"
+			uid := "e9040fd2-cb0c-2bcf-51e9-2b5ad1fb9b9b"
+			ipAttr := map[string]string{
+				AttributeNode:    hostname,
+				AttributePod:     "test-pod",
+				AttributeTypeUID: uid,
+			}
+			args := AssignIPArgs{
+				IP:       cnet.IP{IP: sentinelIP},
+				Hostname: hostname,
+				Attrs:    ipAttr,
+				HandleID: &handle,
+			}
+			err := ic.AssignIP(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+
+			attrs, returnedHandle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(attrs).To(Equal(ipAttr))
+			Expect(returnedHandle).NotTo(BeNil())
+			Expect(*returnedHandle).To(Equal(handle))
+
+			// We should be able to see the ownerreference and finalizer in the k8s object
+			// when running in kdd mode.
+			if config.Spec.DatastoreType == "kubernetes" {
+				// Get the actual CRD.
+				h := v3.NewIPAMHandle()
+				err = crdClient.Get().
+					Context(context.Background()).
+					Resource("ipamhandles").
+					Name(handle).
+					Do().Into(h)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect the IPAM handle to have proper owner references.
+				Expect(h.OwnerReferences).To(HaveLen(1))
+				Expect(string(h.OwnerReferences[0].UID)).To(Equal(uid))
+				Expect(h.OwnerReferences[0].Kind).To(Equal("Pod"))
+				Expect(h.OwnerReferences[0].Name).To(Equal("test-pod"))
+
+				// Expect the IPAM handle to have proper finalizers.
+				Expect(h.Finalizers).To(HaveLen(1))
+				Expect(h.Finalizers[0]).To(Equal("ipam.projectcalico.org"))
+			}
+
+			// Part 2: Test support for multiple addresses with the same handle. This is a
+			// rare scenario that probably never happens in Kubernetes but our IPAM data model
+			// does support it.
+			By("Allocating a second address with the same handle")
+			uid2 := "f9151ae3-cb0c-2bcf-51e9-2b5ad000000c"
+			ipAttr2 := map[string]string{
+				AttributeNode:    hostname,
+				AttributePod:     "test-pod-2",
+				AttributeTypeUID: uid2,
+			}
+			ip2 := net.ParseIP("10.0.0.2")
+			args = AssignIPArgs{
+				IP:       cnet.IP{IP: ip2},
+				Hostname: hostname,
+				Attrs:    ipAttr2,
+				HandleID: &handle,
+			}
+			err = ic.AssignIP(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			if config.Spec.DatastoreType == "kubernetes" {
+				// Get the actual CRD.
+				h := v3.NewIPAMHandle()
+				err = crdClient.Get().
+					Context(context.Background()).
+					Resource("ipamhandles").
+					Name(handle).
+					Do().Into(h)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect the IPAM handle to have proper owner references.
+				// There should be two now.
+				Expect(h.OwnerReferences).To(HaveLen(2))
+				Expect(string(h.OwnerReferences[0].UID)).To(Equal(uid))
+				Expect(h.OwnerReferences[0].Kind).To(Equal("Pod"))
+				Expect(h.OwnerReferences[0].Name).To(Equal("test-pod"))
+				Expect(string(h.OwnerReferences[1].UID)).To(Equal(uid2))
+				Expect(h.OwnerReferences[1].Kind).To(Equal("Pod"))
+				Expect(h.OwnerReferences[1].Name).To(Equal("test-pod-2"))
+
+				// Expect the IPAM handle to have proper finalizers.
+				Expect(h.Finalizers).To(HaveLen(1))
+				Expect(h.Finalizers[0]).To(Equal("ipam.projectcalico.org"))
+			}
+		})
+
+		It("should assign a node IP address when a UID is given", func() {
+			handle := "ipam-with-uid-test-handle"
+			uid := "e9040fd2-cb0c-2bcf-51e9-2b5ad1fb9b9b"
+			ipAttr := map[string]string{
+				AttributeNode:    hostname,
+				AttributeType:    AttributeTypeVXLAN,
+				AttributeTypeUID: uid,
+			}
+			args := AssignIPArgs{
+				IP:       cnet.IP{IP: sentinelIP},
+				Hostname: hostname,
+				Attrs:    ipAttr,
+				HandleID: &handle,
+			}
+			err := ic.AssignIP(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+
+			attrs, returnedHandle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{IP: sentinelIP})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(attrs).To(Equal(ipAttr))
+			Expect(returnedHandle).NotTo(BeNil())
+			Expect(*returnedHandle).To(Equal(handle))
+
+			// We should be able to see the ownerreference and finalizer in the k8s object
+			// when running in kdd mode.
+			if config.Spec.DatastoreType == "kubernetes" {
+				// Get the actual CRD.
+				h := v3.NewIPAMHandle()
+				err = crdClient.Get().
+					Context(context.Background()).
+					Resource("ipamhandles").
+					Name(handle).
+					Do().Into(h)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Expect the IPAM handle to have proper owner references.
+				Expect(h.OwnerReferences).To(HaveLen(1))
+				Expect(string(h.OwnerReferences[0].UID)).To(Equal(uid))
+				Expect(h.OwnerReferences[0].Kind).To(Equal("Node"))
+				Expect(h.OwnerReferences[0].Name).To(Equal(hostname))
+
+				// Expect the IPAM handle to have proper finalizers.
+				Expect(h.Finalizers).To(HaveLen(1))
+				Expect(h.Finalizers[0]).To(Equal("ipam.projectcalico.org"))
+
+				// Delete the node in the k8s API.
+				Expect(deleteNode(bc, kc, hostname)).NotTo(HaveOccurred())
+
+				// Deleting the node should trigger the handle to go into "finalizing" state,
+				// setting the deletion timestamp.
+				h = v3.NewIPAMHandle()
+				Eventually(func() error {
+					err = crdClient.Get().
+						Context(context.Background()).
+						Resource("ipamhandles").
+						Name(handle).
+						Do().Into(h)
+					if err != nil {
+						return err
+					}
+					if h.DeletionTimestamp == nil {
+						return fmt.Errorf("Expected non-nil deletion timestamp")
+					}
+					return nil
+				}, 10*time.Second).Should(BeNil())
+			}
+		})
+
 	})
 
 	Describe("Affinity FV tests", func() {
@@ -2353,10 +2538,12 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 	return nil
 }
 
-func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
+func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) error {
+	var err error
 	if kc != nil {
-		kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
+		err = kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
 	} else {
-		c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: v3.KindNode}, "")
+		_, err = c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: v3.KindNode}, "")
 	}
+	return err
 }

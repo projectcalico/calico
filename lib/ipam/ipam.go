@@ -22,6 +22,8 @@ import (
 	"runtime"
 
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -48,6 +50,7 @@ const (
 	AttributeTypeIPIP      = model.IPAMBlockAttributeTypeIPIP
 	AttributeTypeVXLAN     = model.IPAMBlockAttributeTypeVXLAN
 	AttributeTypeWireguard = model.IPAMBlockAttributeTypeWireguard
+	AttributeTypeUID       = model.IPAMBlockAttributeTypeUID
 )
 
 var (
@@ -783,7 +786,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 		// Increment handle.
 		if args.HandleID != nil {
-			c.incrementHandle(ctx, *args.HandleID, blockCIDR, 1)
+			c.incrementHandle(ctx, *args.HandleID, blockCIDR, 1, args.Attrs)
 		}
 
 		// Update the block using the original KVPair to do a CAS.  No need to
@@ -962,7 +965,9 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	// Increment handle count.
 	if handleID != nil {
 		logCtx.Debug("Incrementing handle")
-		c.incrementHandle(ctx, *handleID, blockCIDR, num)
+		if err = c.incrementHandle(ctx, *handleID, blockCIDR, num, attrs); err != nil {
+			return nil, err
+		}
 	}
 
 	// Update the block using CAS by passing back the original
@@ -1325,9 +1330,20 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 	}
 	handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
-	for blockStr, _ := range handle.Block {
+	for blockStr := range handle.Block {
 		_, blockCIDR, _ := net.ParseCIDR(blockStr)
 		if err := c.releaseByHandle(ctx, handleID, *blockCIDR); err != nil {
+			return err
+		}
+	}
+
+	// Defensively delete the handle itself. This may have already happened as a side-effect of
+	// decrementing the handle. However, if for some reason there are no IPs allocated with this handle,
+	// we will never decrement it and thus it will never otherwise be deleted.
+	if err = c.blockReaderWriter.deleteHandle(ctx, obj); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			// We expect the handle to either not exist, or be deleted cleanly.
+			// If it's not either of these things, return an error.
 			return err
 		}
 	}
@@ -1409,7 +1425,55 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 	return errors.New("Hit max retries")
 }
 
-func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int) error {
+func buildOwnerReferencesFromAttrs(attrs map[string]string) *v1.OwnerReference {
+	// Determine who owns this handle, if possible.
+	var ownerKind, ownerName, ownerUID string
+	if _, ok := attrs[model.IPAMBlockAttributePod]; ok {
+		// This is a pod.
+		ownerKind = "Pod"
+		ownerName = attrs[model.IPAMBlockAttributePod]
+	} else if _, ok := attrs[model.IPAMBlockAttributeNode]; ok {
+		// Pod attr not defined, but node attr is. This is a node.
+		ownerKind = "Node"
+		ownerName = attrs[model.IPAMBlockAttributeNode]
+	}
+	ownerUID = attrs[model.IPAMBlockAttributeTypeUID]
+
+	// Check if we have enough information to add a reference to the owner
+	// of this IPAM allocation. Currently, we only do this for IPs belong to pods
+	// and IPs belonging to nodes.
+	if ownerKind != "" && ownerName != "" && ownerUID != "" {
+		// Add a reference to the parent object so it is automatically
+		// cleaned up when the parent is deleted.
+		return &v1.OwnerReference{
+			APIVersion: "v1",
+			UID:        types.UID(ownerUID),
+			Kind:       ownerKind,
+			Name:       ownerName,
+		}
+	}
+	return nil
+}
+
+// mergeOwnerReferences ensures the given IPAM handle has owner references for the given attrs.
+func mergeOwnerReferences(kvp *model.KVPair, attrs map[string]string) {
+	ref := buildOwnerReferencesFromAttrs(attrs)
+	if ref == nil {
+		return
+	}
+
+	// Make sure the ref doesn't already exist.
+	h := kvp.Value.(*model.IPAMHandle)
+	for _, r := range h.OwnerReferences {
+		if ref.UID == r.UID {
+			// Already present.
+			return
+		}
+	}
+	h.OwnerReferences = append(h.OwnerReferences, *ref)
+}
+
+func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int, attrs map[string]string) error {
 	var obj *model.KVPair
 	var err error
 	for i := 0; i < datastoreRetries; i++ {
@@ -1431,6 +1495,9 @@ func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockC
 				return err
 			}
 		}
+
+		// Merge in owner references from this particular allocation.
+		mergeOwnerReferences(obj, attrs)
 
 		// Get the handle from the KVPair.
 		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}

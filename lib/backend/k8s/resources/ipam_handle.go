@@ -35,6 +35,7 @@ import (
 const (
 	IPAMHandleResourceName = "IPAMHandles"
 	IPAMHandleCRDName      = "ipamhandles.crd.projectcalico.org"
+	IPAMFinalizer          = "ipam.projectcalico.org"
 )
 
 func NewIPAMHandleClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
@@ -69,13 +70,15 @@ type ipamHandleClient struct {
 func (c ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
 	handle := kvpv3.Value.(*apiv3.IPAMHandle).Spec.HandleID
 	block := kvpv3.Value.(*apiv3.IPAMHandle).Spec.Block
+	refs := kvpv3.Value.(*apiv3.IPAMHandle).OwnerReferences
 	return &model.KVPair{
 		Key: model.IPAMHandleKey{
 			HandleID: handle,
 		},
 		Value: &model.IPAMHandle{
-			HandleID: handle,
-			Block:    block,
+			HandleID:        handle,
+			Block:           block,
+			OwnerReferences: refs,
 		},
 		Revision: kvpv3.Revision,
 	}
@@ -89,6 +92,15 @@ func (c ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	name := c.parseKey(kvpv1.Key)
 	handle := kvpv1.Key.(model.IPAMHandleKey).HandleID
 	block := kvpv1.Value.(*model.IPAMHandle).Block
+	ownerRef := kvpv1.Value.(*model.IPAMHandle).OwnerReferences
+
+	var finalizers []string
+	if len(ownerRef) != 0 {
+		// Add a finalizer so that when the parent is deleted, we have an
+		// opportunity to take action on related resources (e.g. blocks).
+		finalizers = []string{IPAMFinalizer}
+	}
+
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
@@ -102,6 +114,8 @@ func (c ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,
 				ResourceVersion: kvpv1.Revision,
+				Finalizers:      finalizers,
+				OwnerReferences: ownerRef,
 			},
 			Spec: apiv3.IPAMHandleSpec{
 				HandleID: handle,
@@ -137,6 +151,7 @@ func (c *ipamHandleClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 	kvp.Value.(*model.IPAMHandle).Deleted = true
 	v1kvp, err := c.Update(ctx, kvp)
 	if err != nil {
+		log.WithError(err).Debug("Error marking IPAM handle as deleted")
 		return nil, err
 	}
 
@@ -146,7 +161,37 @@ func (c *ipamHandleClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 	if err != nil {
 		return nil, err
 	}
+
+	// If needed, remove finalizers.
+	kvp, err = c.finalizeDeletion(ctx, kvp)
+	if err != nil {
+		log.WithError(err).Debug("Error finalizing deletion")
+		return nil, err
+	}
+
 	return c.toV1(kvp), nil
+}
+
+func (c *ipamHandleClient) finalizeDeletion(ctx context.Context, v3kvp *model.KVPair) (*model.KVPair, error) {
+	// Get current state.
+	kvp, err := c.rc.Get(ctx, v3kvp.Key, v3kvp.Revision)
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			// Resource doesn't exist, no need to finalize.
+			return v3kvp, nil
+		}
+		log.WithError(err).Debug("Error querying IPAM handle")
+		return v3kvp, err
+	}
+
+	// Remove finalizers.
+	kvp.Value.(*apiv3.IPAMHandle).Finalizers = nil
+	kvp, err = c.rc.Update(ctx, kvp)
+	if err != nil {
+		log.WithError(err).Debug("Error removing finalizers")
+		return nil, err
+	}
+	return kvp, nil
 }
 
 func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
@@ -175,7 +220,7 @@ func (c *ipamHandleClient) Get(ctx context.Context, key model.Key, revision stri
 		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
 			return nil, err
 		}
-		return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), key}
+		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
 	}
 
 	return v1kvp, nil
