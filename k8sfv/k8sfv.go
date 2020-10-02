@@ -14,6 +14,14 @@
 
 package main
 
+// XXX staticcheck disabled for the whole import as golangci-lint ignores
+// specific directives, still an open issue:
+// https://github.com/golangci/golangci-lint/issues/741
+//
+// SA1019 prometheus is using that lib and so need we
+// github.com/golang/protobuf/proto is deprecated and fails lint
+
+//nolint:staticcheck
 import (
 	"context"
 	"fmt"
