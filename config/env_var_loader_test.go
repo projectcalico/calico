@@ -15,7 +15,7 @@
 package config_test
 
 import (
-	. "github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/config"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -23,7 +23,7 @@ import (
 
 var _ = DescribeTable("Environment parameter parsing",
 	func(environ []string, expected map[string]string) {
-		actual := LoadConfigFromEnvironment(environ)
+		actual := config.LoadConfigFromEnvironment(environ)
 		Expect(actual).To(Equal(expected))
 	},
 	Entry("Empty", []string{}, map[string]string{}),
