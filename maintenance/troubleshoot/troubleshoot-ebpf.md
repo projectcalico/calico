@@ -12,7 +12,7 @@ If pods or hosts within your cluster have trouble accessing services, check the 
 
 * Either {{site.prodname}}'s eBPF mode or `kube-proxy` must be active on a host for services to function.  If you
   disabled `kube-proxy` when enabling  eBPF mode, verify that eBPF mode is actually functioning.  If {{site.prodname}}
-  detects that the kernel is not supported it will fall back to standard dataplane mode (which does not support 
+  detects that the kernel is not supported, it will fall back to standard dataplane mode (which does not support 
   services).
   
   To verify that eBPF mode is correctly enabled, examine the log for a `{{site.noderunning}}` container; if
@@ -25,7 +25,7 @@ If pods or hosts within your cluster have trouble accessing services, check the 
       BPF enabled, starting BPF endpoint manager and map manager.
       
 * In eBPF mode, external client access to services (typically NodePorts) is implemented using VXLAN encapsulation.
-  If NodePorts time out when the backing pod is on another node, check that your underlying netowrk fabric allows
+  If NodePorts time out when the backing pod is on another node, check your underlying network fabric allows
   VXLAN traffic between the nodes.  VXLAN is a UDP protocol; by default it uses port 4789.
   
 * In DSR mode, {{site.prodname}} requires that the underlying network fabric allows one node to respond on behalf of
@@ -68,7 +68,7 @@ If you notice `{{site.noderunning}}` using high CPU:
   
 * If your cluster is very large, or your workload involves significant service churn, you can increase the interval
   at which Felix updates the services dataplane by increasing the `bpfKubeProxyMinSyncPeriod` setting. The default is
-  1 second.  Increasing the value has the trade off that service updates will happen more slowly.
+  1 second.  Increasing the value has the trade-off that service updates will happen more slowly.
   
 * {{site.prodname}} supports endpoint slices, similarly to `kube-proxy`.  If your Kubernetes cluster supports endpoint
   slices and they are enabled, then you can enable endpoint slice support in {{site.prodname}} with the 
@@ -76,14 +76,14 @@ If you notice `{{site.noderunning}}` using high CPU:
   
 ## eBPF program debug logs
 
-{{site.prodname}}'s eBPF programs contain optional detailed debug logging.  While the logs can be very verbose (because
+{{site.prodname}}'s eBPF programs contain optional detailed debug logging.  Although the logs can be very verbose (because
 the programs will log every packet), they can be invaluable to diagnose eBPF program issues.  To enable the log, set the 
 `bpfLogLevel` Felix configuration setting to `Debug`.  
 
  >**WARNING!** Enabling logs in this way has a significant impact on eBPF program performance.
 {: .alert .alert-danger}
 
-The logs are emitted to the kernel trace buffer, they can be examined using the following command:
+The logs are emitted to the kernel trace buffer, and they can be examined using the following command:
 ```
 tc exec bpf debug
 ```
@@ -94,15 +94,15 @@ Logs have the following format:
 
 The parts of the log are explained below:
 
-* `<...>-84582` gives an indication about what program (or kernel process) was handing the 
+* `<...>-84582` gives an indication about what program (or kernel process) was handling the 
   packet.  For packets that are being sent, this is usually the name and PID of the program that is actually sending 
-  the packet.  For packets that are received, it is typically a kernel process or an unrelated program that happend to
+  the packet.  For packets that are received, it is typically a kernel process, or an unrelated program that happens to
   trigger the processing.
   
 * `6851.690474` is the log timestamp.
 
 * `ens192---E` is the {{site.prodname}} log tag. For programs attached to interfaces, the first part contains the 
-  first few characters of the itnerface name.  The suffix is either `-I` or `-E` indicating "Ingress" or "Egress".
+  first few characters of the interface name.  The suffix is either `-I` or `-E` indicating "Ingress" or "Egress".
   "Ingress" and "Egress" have the same meaning as for policy:
   
     * A workload ingress program is executed on the path from the host network namespace to the workload.
@@ -110,7 +110,7 @@ The parts of the log are explained below:
     * A host endpoint ingress program is executed on the path from external node to the host.
     * A host endpoint egress program is executed on the path from host to external host.  
     
-* `Final result=ALLOW (-1). Program execution time: 7366ns` is the message.  In this case logging the final result of 
+* `Final result=ALLOW (-1). Program execution time: 7366ns` is the message.  In this case, logging the final result of 
   the program.  Note that the timestamp is massively distorted by the time spent logging.
   
 ## The `calico-bpf` tool
@@ -123,7 +123,7 @@ will need `git`, `docker` and GNU `make` installed on a Linux system (Ubuntu 20.
   ```
   git clone https://github.com/projectcalico/felix.git
   ```
-* Check out the tag matching hte release that you are using; for example:
+* Check out the tag matching the release that you are using; for example:
   ```
   git checkout v3.16.1
   ```
