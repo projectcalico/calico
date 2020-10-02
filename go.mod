@@ -6,11 +6,11 @@ require (
 	github.com/apparentlymart/go-cidr v1.0.1
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
-	github.com/onsi/ginkgo v1.12.0
-	github.com/onsi/gomega v1.9.0
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.1
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20200831171424-37f23af7619e
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200901232259-ff61058d907e
+	github.com/projectcalico/felix v0.0.0-20200929170554-13410ed19852
+	github.com/projectcalico/libcalico-go v1.7.2-0.20201002165715-79bef43e1a47
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
@@ -18,7 +18,6 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/mod v0.3.0 // indirect
 	golang.org/x/tools v0.0.0-20200601175630-2caf76543d99 // indirect
-	gopkg.in/yaml.v2 v2.3.0 // indirect
 	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
