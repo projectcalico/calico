@@ -17,7 +17,7 @@ package config_test
 import (
 	"regexp"
 
-	. "github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/testutils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 
@@ -84,7 +84,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 	BeforeEach(func() {
 		fcFields = fieldsByName(v3.FelixConfigurationSpec{})
 
-		cpFields = fieldsByName(Config{})
+		cpFields = fieldsByName(config.Config{})
 		for _, name := range cpFieldsToIgnore {
 			delete(cpFields, name)
 		}
@@ -127,9 +127,9 @@ func fieldsByName(example interface{}) map[string]reflect.StructField {
 }
 
 var _ = Describe("Config override empty", func() {
-	var cp *Config
+	var cp *config.Config
 	BeforeEach(func() {
-		cp = New()
+		cp = config.New()
 	})
 
 	It("should allow config override", func() {
@@ -141,7 +141,7 @@ var _ = Describe("Config override empty", func() {
 
 	Describe("with a param set", func() {
 		BeforeEach(func() {
-			_, err := cp.UpdateFrom(map[string]string{"BPFEnabled": "true"}, DatastorePerHost)
+			_, err := cp.UpdateFrom(map[string]string{"BPFEnabled": "true"}, config.DatastorePerHost)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -157,7 +157,7 @@ var _ = Describe("Config override empty", func() {
 
 			By("Ignoring a lower-priority config update")
 			// Env vars get converted to lower-case before calling UpdateFrom.
-			changed, err = cp.UpdateFrom(map[string]string{"bpfenabled": "true"}, EnvironmentVariable)
+			changed, err = cp.UpdateFrom(map[string]string{"bpfenabled": "true"}, config.EnvironmentVariable)
 			Expect(changed).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cp.BPFEnabled).To(BeFalse())
@@ -167,7 +167,7 @@ var _ = Describe("Config override empty", func() {
 	Describe("with env var set", func() {
 		BeforeEach(func() {
 			// Env vars get converted to lower-case before calling UpdateFrom.
-			changed, err := cp.UpdateFrom(map[string]string{"bpfenabled": "true"}, EnvironmentVariable)
+			changed, err := cp.UpdateFrom(map[string]string{"bpfenabled": "true"}, config.EnvironmentVariable)
 			Expect(changed).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cp.BPFEnabled).To(BeTrue())
@@ -184,20 +184,20 @@ var _ = Describe("Config override empty", func() {
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
-		config := New()
-		_, err := config.UpdateFrom(map[string]string{key: value},
-			EnvironmentVariable)
-		configPtr := reflect.ValueOf(config)
+		cfg := config.New()
+		_, err := cfg.UpdateFrom(map[string]string{key: value},
+			config.EnvironmentVariable)
+		configPtr := reflect.ValueOf(cfg)
 		configElem := configPtr.Elem()
 		fieldRef := configElem.FieldByName(key)
 		newVal := fieldRef.Interface()
 		Expect(newVal).To(Equal(expected))
 		if len(errorExpected) > 0 && errorExpected[0] {
 			Expect(err).To(HaveOccurred())
-			Expect(config.Err).To(HaveOccurred())
+			Expect(cfg.Err).To(HaveOccurred())
 		} else {
 			Expect(err).NotTo(HaveOccurred())
-			Expect(config.Err).NotTo(HaveOccurred())
+			Expect(cfg.Err).NotTo(HaveOccurred())
 		}
 	},
 
@@ -332,41 +332,41 @@ var _ = DescribeTable("Config parsing",
 	Entry("PrometheusProcessMetricsEnabled", "PrometheusProcessMetricsEnabled", "false", false),
 
 	Entry("FailsafeInboundHostPorts old syntax", "FailsafeInboundHostPorts", "1,2,3,4",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 1},
 			{Protocol: "tcp", Port: 2},
 			{Protocol: "tcp", Port: 3},
 			{Protocol: "tcp", Port: 4},
 		}),
 	Entry("FailsafeOutboundHostPorts old syntax", "FailsafeOutboundHostPorts", "1,2,3,4",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 1},
 			{Protocol: "tcp", Port: 2},
 			{Protocol: "tcp", Port: 3},
 			{Protocol: "tcp", Port: 4},
 		}),
 	Entry("FailsafeInboundHostPorts new syntax", "FailsafeInboundHostPorts", "tcp:1,udp:2",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 1},
 			{Protocol: "udp", Port: 2},
 		}),
 	Entry("FailsafeOutboundHostPorts new syntax", "FailsafeOutboundHostPorts", "tcp:1,udp:2",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 1},
 			{Protocol: "udp", Port: 2},
 		}),
 	Entry("FailsafeInboundHostPorts mixed syntax", "FailsafeInboundHostPorts", "1,udp:2",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 1},
 			{Protocol: "udp", Port: 2},
 		}),
 	Entry("FailsafeOutboundHostPorts mixed syntax", "FailsafeOutboundHostPorts", "1,udp:2",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 1},
 			{Protocol: "udp", Port: 2},
 		}),
 	Entry("FailsafeInboundHostPorts bad syntax -> defaulted", "FailsafeInboundHostPorts", "foo:1",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 22},
 			{Protocol: "udp", Port: 68},
 			{Protocol: "tcp", Port: 179},
@@ -380,7 +380,7 @@ var _ = DescribeTable("Config parsing",
 		true,
 	),
 	Entry("FailsafeInboundHostPorts too many parts -> defaulted", "FailsafeInboundHostPorts", "tcp:1:bar",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 22},
 			{Protocol: "udp", Port: 68},
 			{Protocol: "tcp", Port: 179},
@@ -394,11 +394,11 @@ var _ = DescribeTable("Config parsing",
 		true,
 	),
 
-	Entry("FailsafeInboundHostPorts none", "FailsafeInboundHostPorts", "none", []ProtoPort(nil)),
-	Entry("FailsafeOutboundHostPorts none", "FailsafeOutboundHostPorts", "none", []ProtoPort(nil)),
+	Entry("FailsafeInboundHostPorts none", "FailsafeInboundHostPorts", "none", []config.ProtoPort(nil)),
+	Entry("FailsafeOutboundHostPorts none", "FailsafeOutboundHostPorts", "none", []config.ProtoPort(nil)),
 
 	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "tcp", Port: 22},
 			{Protocol: "udp", Port: 68},
 			{Protocol: "tcp", Port: 179},
@@ -411,7 +411,7 @@ var _ = DescribeTable("Config parsing",
 		},
 	),
 	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "",
-		[]ProtoPort{
+		[]config.ProtoPort{
 			{Protocol: "udp", Port: 53},
 			{Protocol: "udp", Port: 67},
 			{Protocol: "tcp", Port: 179},
@@ -442,7 +442,7 @@ var _ = DescribeTable("Config parsing",
 
 var _ = DescribeTable("OpenStack heuristic tests",
 	func(clusterType, metadataAddr, metadataPort, ifacePrefixes interface{}, expected bool) {
-		c := New()
+		c := config.New()
 		values := make(map[string]string)
 		if clusterType != nil {
 			values["ClusterType"] = clusterType.(string)
@@ -456,7 +456,7 @@ var _ = DescribeTable("OpenStack heuristic tests",
 		if ifacePrefixes != nil {
 			values["InterfacePrefix"] = ifacePrefixes.(string)
 		}
-		_, err := c.UpdateFrom(values, EnvironmentVariable)
+		_, err := c.UpdateFrom(values, config.EnvironmentVariable)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.OpenstackActive()).To(Equal(expected))
 	},
@@ -481,10 +481,10 @@ var _ = DescribeTable("OpenStack heuristic tests",
 )
 
 var _ = Describe("DatastoreConfig tests", func() {
-	var c *Config
+	var c *config.Config
 	Describe("with IPIP enabled", func() {
 		BeforeEach(func() {
-			c = New()
+			c = config.New()
 			c.DatastoreType = "k8s"
 			c.IpInIpEnabled = true
 		})
@@ -494,7 +494,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 	})
 	Describe("with IPIP disabled", func() {
 		BeforeEach(func() {
-			c = New()
+			c = config.New()
 			c.DatastoreType = "k8s"
 			c.IpInIpEnabled = false
 		})
@@ -505,7 +505,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 
 	Describe("with the configuration set only from the common calico configuration", func() {
 		BeforeEach(func() {
-			c = New()
+			c = config.New()
 			c.SetLoadClientConfigFromEnvironmentFunction(func() (*apiconfig.CalicoAPIConfig, error) {
 				return &apiconfig.CalicoAPIConfig{
 					Spec: apiconfig.CalicoAPIConfigSpec{
@@ -531,13 +531,13 @@ var _ = Describe("DatastoreConfig tests", func() {
 	})
 	Describe("without setting the DatastoreType and setting the etcdv3 suboptions through the felix configuration", func() {
 		BeforeEach(func() {
-			c = New()
+			c = config.New()
 			_, err := c.UpdateFrom(map[string]string{
 				"EtcdEndpoints": "http://localhost:1234",
 				"EtcdKeyFile":   testutils.TestDataFile("etcdkeyfile.key"),
 				"EtcdCertFile":  testutils.TestDataFile("etcdcertfile.cert"),
 				"EtcdCaFile":    testutils.TestDataFile("etcdcacertfile.cert"),
-			}, EnvironmentVariable)
+			}, config.EnvironmentVariable)
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the etcd suboptions", func() {
@@ -551,7 +551,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 	})
 	Describe("with the configuration set from the common calico configuration and the felix configuration", func() {
 		BeforeEach(func() {
-			c = New()
+			c = config.New()
 
 			c.SetLoadClientConfigFromEnvironmentFunction(func() (*apiconfig.CalicoAPIConfig, error) {
 				return &apiconfig.CalicoAPIConfig{
@@ -573,7 +573,7 @@ var _ = Describe("DatastoreConfig tests", func() {
 				"EtcdKeyFile":   testutils.TestDataFile("etcdkeyfile.key"),
 				"EtcdCertFile":  testutils.TestDataFile("etcdcertfile.cert"),
 				"EtcdCaFile":    testutils.TestDataFile("etcdcacertfile.cert"),
-			}, EnvironmentVariable)
+			}, config.EnvironmentVariable)
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the configuration to what the felix configuration is", func() {
@@ -589,8 +589,8 @@ var _ = Describe("DatastoreConfig tests", func() {
 
 var _ = DescribeTable("Config validation",
 	func(settings map[string]string, ok bool) {
-		cfg := New()
-		_, err := cfg.UpdateFrom(settings, ConfigFile)
+		cfg := config.New()
+		_, err := cfg.UpdateFrom(settings, config.ConfigFile)
 		log.WithError(err).Info("UpdateFrom result")
 		if err == nil {
 			err = cfg.Validate()
@@ -659,8 +659,8 @@ var _ = DescribeTable("Config validation",
 
 var _ = DescribeTable("Config InterfaceExclude",
 	func(excludeList string, expected []*regexp.Regexp) {
-		cfg := New()
-		_, err := cfg.UpdateFrom(map[string]string{"InterfaceExclude": excludeList}, EnvironmentVariable)
+		cfg := config.New()
+		_, err := cfg.UpdateFrom(map[string]string{"InterfaceExclude": excludeList}, config.EnvironmentVariable)
 		Expect(err).NotTo(HaveOccurred())
 		regexps := cfg.InterfaceExclude
 		Expect(regexps).To(Equal(expected))

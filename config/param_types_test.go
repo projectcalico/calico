@@ -15,7 +15,7 @@
 package config_test
 
 import (
-	. "github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/config"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -23,7 +23,7 @@ import (
 
 var _ = DescribeTable("Endpoint list parameter parsing",
 	func(raw string, expected interface{}) {
-		p := EndpointListParam{Metadata{
+		p := config.EndpointListParam{config.Metadata{
 			Name: "Endpoints",
 		}}
 		actual, err := p.Parse(raw)
@@ -41,7 +41,7 @@ var _ = DescribeTable("Endpoint list parameter parsing",
 
 var _ = DescribeTable("CIDR list parameter parsing",
 	func(raw string, expected interface{}, expectSuccess bool) {
-		p := CIDRListParam{Metadata{
+		p := config.CIDRListParam{config.Metadata{
 			Name: "CIDRs",
 		}}
 		actual, err := p.Parse(raw)
@@ -62,7 +62,7 @@ var _ = DescribeTable("CIDR list parameter parsing",
 
 var _ = DescribeTable("KeyValue list parameter parsing",
 	func(raw string, expected map[string]string) {
-		p := KeyValueListParam{Metadata{
+		p := config.KeyValueListParam{config.Metadata{
 			Name: "FeatureOverride",
 		}}
 		actual, err := p.Parse(raw)
