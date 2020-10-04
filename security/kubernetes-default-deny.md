@@ -1,6 +1,7 @@
 ---
 title: Enable default deny for Kubernetes pods
 description: Create a default deny network policy so pods that are missing policy are not allowed traffic until appropriate network policy is defined.
+canonical_url: '/security/kubernetes-default-deny'
 ---
 
 ### Big picture
@@ -44,7 +45,10 @@ Although you can use any of the following policies to create default deny policy
 
 #### Enable default deny {{site.prodname}} global network policy, non-namespaced
 
-In the following example, we enable a default deny **GlobalNetworkPolicy** for all workloads and hosts.
+You can use a {{site.prodname}} global network policy to enable a default deny across the whole of your cluster. Following example applies to all workloads (VMs and containers) in all namespaces, as well as hosts (computers that run the hypervisor for VMs, or container runtime for containers).
+
+> **Note**: Before applying the following policy please continue reading the rest of this section to find out why this might not be the best policy to apply to your cluster.
+{: .alert .alert-info }
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -57,6 +61,57 @@ spec:
   - Ingress
   - Egress
 ```
+
+The above policy applies to all pods, hosts and endpoints, including Kubernetes and {{site.prodname}} control plane pods. Such policy has the potential to interrupt your cluster if you have not the correct "Allow" policies in place to keep the control plane functioning properly.
+
+As a best practice we recommend to use the following examples depending on your {{site.prodname}} installation method.
+
+{% tabs %}
+<label:Manifest,active:true>
+<%
+```yaml
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-app-policy
+spec:
+  selector: 'projectcalico.org/namespace != "kube-system"'
+  types:
+  - Ingress
+  - Egress
+  egress:
+  # allow all namespaces to communicate to DNS pods
+  - action: Allow
+    protocol: UDP
+    destination:
+      selector: 'k8s-app == "kube-dns"'
+      ports:
+      - 53
+```
+%>
+<label:Operator>
+<%
+```yaml
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-app-policy
+spec:
+  selector: 'projectcalico.org/namespace != "kube-system" || projectcalico.org/namespace != "calico-system"'
+  types:
+  - Ingress
+  - Egress
+  egress:
+  # allow all namespaces to communicate to DNS pods
+  - action: Allow
+    protocol: UDP
+    destination:
+      selector: 'k8s-app == "kube-dns"'
+      ports:
+      - 53
+```
+%>
+{% endtabs %}
 
 #### Enable default deny {{site.prodname}} network policy, namespaced
 
