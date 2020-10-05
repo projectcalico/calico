@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
 	. "github.com/onsi/ginkgo"
@@ -484,6 +486,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 			cc.ResetExpectations()
 
+			policy = api.NewGlobalNetworkPolicy()
 			policy.Name = "f01-egress-allow"
 			order = float64(10)
 			policy.Spec.Order = &order // prioritized over deny policy above.
@@ -496,9 +499,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				return readPolicy(policy.Name, api.Allow)
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
 
+			cc.OnFail = func(msg string) {
+				log.WithField("msg", msg).Info("Connectivity Failed after 30seconds")
+				log.Info("Checking connectivity using ping between wls0 and wls1")
+
+				err, errstr := wls[0].SendPacketsTo(wls[1].IP, 5, 100)
+				log.Infof("wls0 to wls1: err=%v, errstr=%s", err, errstr)
+				err, errstr = wls[1].SendPacketsTo(wls[0].IP, 5, 100)
+				log.Infof("wls1 to wls0: err=%v, errstr=%s", err, errstr)
+			}
 			cc.ExpectSome(wls[0], wls[1])
 			cc.ExpectSome(wls[1], wls[0])
-			cc.CheckConnectivity()
+			cc.CheckConnectivityWithTimeout(30 * time.Second)
 
 			By("verifying tunnelled packet count is non-zero")
 			for i := range felixes {
