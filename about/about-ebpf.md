@@ -20,11 +20,11 @@ In this guide you will learn:
 ### What is eBPF?
 
 eBPF is a virtual machine embedded within the Linux kernel.  It allows small programs to be loaded into the kernel,
-which are triggered when some event occurs, allowing the behaviour of the kernel to be (sometimes heavily) customised.
-While the eBPF virtual machine is the same for each type of hook, the capabilities of the hooks vary considerably.
-Since loading programs into the kernel could be dangerous; the kernel runs all programs through a very strict static 
-verifier; the verifier sandboxes the program, ensuring it can only access allowed parts of memory and ensuring that 
-it must terminate quickly.
+and attached to hooks, which are triggered when some event occurs. This allows the behaviour of the kernel to be 
+(sometimes heavily) customised. While the eBPF virtual machine is the same for each type of hook, the capabilities 
+of the hooks vary considerably. Since loading programs into the kernel could be dangerous; the kernel runs all 
+programs through a very strict static verifier; the verifier sandboxes the program, ensuring it can only access 
+allowed parts of memory and ensuring that it must terminate quickly.
 
 ### Why is it called eBPF?
 
@@ -44,26 +44,26 @@ eBPF program depend hugely on the hook to which it is attached:
 * **Tracing** programs can be attached to a significant proportion of the functions in the kernel.  Tracing 
   programs are useful for collecting statistics and deep-dive debugging of the kernel.  *Most* tracing hooks only allow
   read-only access to the data that the function is processing but there are some that allow data to be modified.
-  The {{site.prodname}} team use tracing programs to help debug {{site.prodname}}; for example, to figure out why the
-  kernel unexpectedly dropped a packet.
+  The {{site.prodname}} team use tracing programs to help debug {{site.prodname}} during development; for example, 
+  to figure out why the kernel unexpectedly dropped a packet.
 
 * **Traffic Control** (`tc`) programs can be attached at ingress and egress to a given network device.  The kernel
   executes the programs once for each packet.  Since the hooks are for packet processing, the kernel allows
   the programs to modify or extend the packet, drop the packet, mark it for queueing, or redirect the packet to
   another interface.  {{site.prodname}}'s eBPF dataplane is based on this type of hook; we use tc programs to load
-  balance Kubernetes services, to implement network policy, and, to create a fast-path for traffic of establishe 
+  balance Kubernetes services, to implement network policy, and, to create a fast-path for traffic of established 
   connections.
   
 * **XDP**, or "eXpress Data Path", is actually the name of an eBPF hook.  Each network device has an XDP ingress hook
   that is triggered once for each incoming packet before the kernel allocates a socket buffer for the packet.  XDP
-  can give outstanding performance for use cases such as DoS protection (as supported in {{site.prodname}}'s standard Linu 
+  can give outstanding performance for use cases such as DoS protection (as supported in {{site.prodname}}'s standard Linux 
   dataplane) and ingress load balancing (as used in facebook's Katran).  The downside of XDP is that it requires 
   network device driver support to get good performance, and it doesn't inter-work with pod networking very well.
   
 * Several types of **socket** programs hook into various operations on sockets, allowing the eBPF program to, for 
   example, change the destination IP of a newly-created socket, or force a socket to bind to the "correct" source 
   IP address.  {{site.prodname}} uses such programs to do connect-time load balancing of Kubernetes Services; this
-  reduces overhead because there is no DNAT on the packet processing path.
+  reduces overhead because there is no [DNAT](./about-networking#NAT) on the packet processing path.
   
 * There are various security-related hooks that allow for program behaviour to be policed in various ways. For
   example, the **seccomp** hooks allow for syscalls to be policed in fine-grained ways.
@@ -71,7 +71,7 @@ eBPF program depend hugely on the hook to which it is attached:
 * And... probably a few more hooks by the time you ready this; eBPF is under heavy development in the kernel.
 
 The kernel exposes the capabilities of each hook via "helper functions". For example, the `tc` hook has a helper
-function to resize the packet, but that helper would not be available in a tracing hook. One of the frustrations of
+function to resize the packet, but that helper would not be available in a tracing hook. One of the challenges of
 working with eBPF is that different kernel versions support different helpers and lack of a helper can make it 
 impossible to implement a particular feature.
 
@@ -155,6 +155,7 @@ NAT overhead from service connections.
 
 ![Diagram showing BPF program attached to socket connect call; it does NAT at connect time,]({{site.baseurl}}/images/bpf-connect-time.svg "BPF program attached to socket connect call.")
 
-### Try out Calico eBPF mode
+### Above and beyond
 
-If you'd like to try eBPF mode in your Kubernetes cluster, follow the [Enable the eBPF dataplane]({{site.baseurl}}/maintenance/enabling-bpf) guide.
+* For more information and performance metrics for the eBPF dataplane, see the [announcement blog post](https://www.projectcalico.org/introducing-the-calico-ebpf-dataplane/).
+* If you'd like to try eBPF mode in your Kubernetes cluster, follow the [Enable the eBPF dataplane]({{site.baseurl}}/maintenance/enabling-bpf) guide.
