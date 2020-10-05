@@ -9,7 +9,7 @@ data center, or between a workload and the Internet, without additional
 encapsulation.
 
 In the {{site.prodname}} approach, IP packets to or from a workload are routed and
-firewalled by the Linux routing table and iptables or ebpf infrastructure on the
+firewalled by the Linux routing table and iptables or eBPF infrastructure on the
 workload’s host. For a workload that is sending packets, {{site.prodname}} ensures
 that the host is always returned as the next hop MAC address regardless
 of whatever routing the workload itself might configure. For packets
@@ -58,7 +58,7 @@ indirect routes appear also.
 
 As far as the static data path is concerned, yes. It’s just a
 combination of responding to workload ARP requests with the host MAC, IP
-routing and iptables or ebpf. There’s a great deal more to {{site.prodname}} in terms of
+routing and iptables or eBPF. There’s a great deal more to {{site.prodname}} in terms of
 how the required routing and security information is managed, and for
 handling dynamic things such as workload migration – but the basic data
 path really is that simple.
