@@ -71,6 +71,7 @@ func (c ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
 	handle := kvpv3.Value.(*apiv3.IPAMHandle).Spec.HandleID
 	block := kvpv3.Value.(*apiv3.IPAMHandle).Spec.Block
 	refs := kvpv3.Value.(*apiv3.IPAMHandle).OwnerReferences
+	del := kvpv3.Value.(*apiv3.IPAMHandle).Spec.Deleted
 	return &model.KVPair{
 		Key: model.IPAMHandleKey{
 			HandleID: handle,
@@ -79,8 +80,10 @@ func (c ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
 			HandleID:        handle,
 			Block:           block,
 			OwnerReferences: refs,
+			Deleted:         del,
 		},
 		Revision: kvpv3.Revision,
+		UID:      kvpv3.UID,
 	}
 }
 
@@ -93,6 +96,12 @@ func (c ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	handle := kvpv1.Key.(model.IPAMHandleKey).HandleID
 	block := kvpv1.Value.(*model.IPAMHandle).Block
 	ownerRef := kvpv1.Value.(*model.IPAMHandle).OwnerReferences
+	del := kvpv1.Value.(*model.IPAMHandle).Deleted
+
+	var uid types.UID
+	if kvpv1.UID != nil {
+		uid = *kvpv1.UID
+	}
 
 	var finalizers []string
 	if len(ownerRef) != 0 {
@@ -116,10 +125,12 @@ func (c ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				ResourceVersion: kvpv1.Revision,
 				Finalizers:      finalizers,
 				OwnerReferences: ownerRef,
+				UID:             uid,
 			},
 			Spec: apiv3.IPAMHandleSpec{
 				HandleID: handle,
 				Block:    block,
+				Deleted:  del,
 			},
 		},
 		Revision: kvpv1.Revision,
@@ -168,7 +179,6 @@ func (c *ipamHandleClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 		log.WithError(err).Debug("Error finalizing deletion")
 		return nil, err
 	}
-
 	return c.toV1(kvp), nil
 }
 
