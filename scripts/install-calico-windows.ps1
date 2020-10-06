@@ -213,6 +213,9 @@ if ($platform -EQ "ec2") {
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     GetCalicoKubeConfig -SecretName 'calico-node'
 }
+if([string]::IsNullOrEmpty($platform)) {
+    GetCalicoKubeConfig -SecretName "calico-node"
+}
 
 if ($DownloadOnly -EQ "yes") {
     Write-Host "Dowloaded Calico for Windows. Update c:\CalicoWindows\config.ps1 and run c:\CalicoWindows\install-calico.ps1"
