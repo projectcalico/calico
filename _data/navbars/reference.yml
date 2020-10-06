@@ -174,7 +174,7 @@ section:
 - title: Architecture
   path: /reference/architecture/
   section:
-  - title: Introduction
+  - title: Component architecture
     path: /reference/architecture/overview
   - title: Data path
     path: /reference/architecture/data-path
