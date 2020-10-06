@@ -1,7 +1,7 @@
 # Calico Version v3.7.3
 # https://docs.projectcalico.org/v3.7/releases#v3.7.3
 # This manifest includes the following component versions:
-#   calico/ctl:v3.7.3
+#   calico/ctl:release-v3.16
 
 apiVersion: v1
 kind: Pod
@@ -14,7 +14,7 @@ spec:
   hostNetwork: true
   containers:
   - name: calicoctl
-    image: calico/ctl:master
+    image: calico/ctl:release-v3.16
     command: ["/calicoctl-wait"]
     env:
     - name: ETCD_ENDPOINTS

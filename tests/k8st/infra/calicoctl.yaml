@@ -1,7 +1,7 @@
 # Calico Version master
 # https://docs.projectcalico.org/master/releases#master
 # This manifest includes the following component versions:
-#   calico/ctl:master
+#   calico/ctl:release-v3.16
 
 apiVersion: v1
 kind: ServiceAccount
@@ -23,7 +23,7 @@ spec:
   serviceAccountName: calicoctl
   containers:
   - name: calicoctl
-    image: calico/ctl:master
+    image: calico/ctl:release-v3.16
     command: ["/calicoctl-wait"]
     env:
     - name: DATASTORE_TYPE
