@@ -512,3 +512,10 @@ For example:
       type: DirectoryOrCreate
       path: /var/lib/kubelet/volumeplugins/nodeagent~uds
 ```
+
+## Can Calico do IP multicast?
+
+Calico is a routed L3 network where each pod gets a /32.  There's no broadcast domain for pods.
+That means that multicast doesn't just work as a side effect of broadcast.  To get multicast to
+work, the host needs to act as a multicast gateway of some kind.  Calico's architecture was designed
+to extend to cover that case but it's not part of the product as yet.
