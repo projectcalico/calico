@@ -1141,9 +1141,9 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, must
 				err := c.blockReaderWriter.releaseBlockAffinity(ctx, host, blockCIDR, mustBeEmpty)
 				if err != nil {
 					if _, ok := err.(errBlockClaimConflict); ok {
-						// Claimed by a different host.
+						// Claimed by a different host. Move to next block.
 					} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-						// Block does not exist - ignore.
+						// Block does not exist - move to next block.
 					} else if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 						logCtx.WithError(err).Debug("CAS error releasing block affinity - retry")
 						continue
@@ -1154,6 +1154,9 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, must
 						storedError = err
 					}
 				}
+
+				// Break out of the inner retry loop.
+				break
 			}
 		}
 	}
