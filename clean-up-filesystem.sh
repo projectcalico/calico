@@ -213,7 +213,7 @@ while read -r path; do
     continue
   fi
   # Well-known plugins, not directly linked.
-  if [[ "$path" =~ xtables|netfilter|conntrack|ct_|pam|libnss ]] && ! [[ "$path" =~ systemd ]] ; then
+  if [[ "$path" =~ xtables|netfilter|conntrack|ct_|pam|libnss|libresolv ]] && ! [[ "$path" =~ systemd ]] ; then
     echo "PLUGIN: $path"
     libs_to_keep[$path]=true
     continue
