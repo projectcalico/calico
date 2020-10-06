@@ -45,9 +45,9 @@ Although you can use any of the following policies to create default deny policy
 
 #### Enable default deny {{site.prodname}} global network policy, non-namespaced
 
-You can use a {{site.prodname}} global network policy to enable a default deny across the whole of your cluster. Following example applies to all workloads (VMs and containers) in all namespaces, as well as hosts (computers that run the hypervisor for VMs, or container runtime for containers).
+You can use a {{site.prodname}} global network policy to enable a default deny across your whole cluster. The following example applies to all workloads (VMs and containers) in all namespaces, as well as hosts (computers that run the hypervisor for VMs, or container runtime for containers).
 
-> **Note**: Before applying the following policy please continue reading the rest of this section to find out why this might not be the best policy to apply to your cluster.
+> **Note**: Before applying the following please continue reading the rest of this section to find out why this might not be the best policy to apply to your cluster.
 {: .alert .alert-info }
 
 ```yaml
