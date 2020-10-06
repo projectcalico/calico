@@ -115,8 +115,12 @@ func IPToBigInt(ip IP) *big.Int {
 }
 
 func BigIntToIP(ipInt *big.Int) IP {
-	ip := IP{net.IP(ipInt.Bytes())}
-	return ip
+	ip := net.IP(ipInt.Bytes())
+	if ip.To4() != nil {
+	       return IP{ip}
+	}
+	a := ipInt.FillBytes(make([]byte, 16))
+	return IP{net.IP(a)}
 }
 
 func IncrementIP(ip IP, increment *big.Int) IP {

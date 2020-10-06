@@ -522,6 +522,10 @@ func randomBlockGenerator(ipPool v3.IPPool, hostName string) func() *cnet.IPNet 
 		// The `big.NewInt(0)` part creates a temp variable and assigns the result of multiplication of `i` and `big.NewInt(blockSize)`
 		// Note: we are not using `i.Mul()` because that will assign the result of the multiplication to `i`, which will cause unexpected issues
 		ip := cnet.IncrementIP(baseIP, big.NewInt(0).Mul(i, blockSize))
+		if ip.IP.To16() == nil && ip.IP.To4() == nil {
+			log.Errorf("failed to generate ip(%v)", ip.IP.String())
+			return nil
+		}
 
 		ipnet := net.IPNet{ip.IP, blockMask}
 
