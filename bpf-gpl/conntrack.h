@@ -377,6 +377,7 @@ enum calico_ct_result_type {
 
 #define ct_result_rc(rc)		((rc) & 0xff)
 #define ct_result_flags(rc)		((rc) & ~0xff)
+#define ct_result_set_rc(val, rc)	((val) = ct_result_flags(val) | (rc))
 #define ct_result_set_flag(val, flags)	((val) |= (flags))
 
 #define ct_result_is_related(rc)	((rc) & CALI_CT_RELATED)
@@ -803,6 +804,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			} else {
 				CALI_CT_DEBUG("RPF expected %d to equal %d\n",
 						src_to_dst->ifindex, ctx->skb->ingress_ifindex);
+				if (ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_BYPASS) {
+					ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
+				}
 				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
 			}
 		} else {
