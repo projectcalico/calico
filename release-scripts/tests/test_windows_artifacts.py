@@ -1,8 +1,11 @@
 import os
 import requests
+from bs4 import BeautifulSoup
 
-assert os.environ.get('VERSION')
-version = os.environ.get('VERSION')
+req = requests.get("https://docs.projectcalico.org/release-notes/")
+soup = BeautifulSoup(req.content, "html.parser")
+version = soup.find("td", text="calico/node").find_next_sibling().text
+assert version != ""
 
 def test_node_release_has_windows_zip():
     req = requests.head("https://github.com/projectcalico/node/releases/download/%s/calico-windows-%s.zip" % (version, version))
