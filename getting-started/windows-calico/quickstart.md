@@ -26,7 +26,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 - Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
 - Additionally, for EKS:
     - The VPC controllers must be installed be installed to run Windows pods.
-    - The Windows instance role must have access to `secrets` in the kube-system namespace.
+    - The Windows instance role must have access to `secrets` in the kube-system namespace. For EKS, see the documention on {% include open-new-window.html text='mapping IAM users and roles to groups' url='https://docs.aws.amazon.com/eks/latest/userguide/add-user-role.html' %}.
 
 **Linux control node requirements**
 - Installed with {{site.prodname}} v3.12+
@@ -169,7 +169,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    mkdir c:\k
    ```
 
-1. [Install kubectl](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#windows) and move the kubectl binary to **c:\k**.
+1. {% include open-new-window.html text='Install kubectl' url='https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#install-kubectl-windows' %} and move the kubectl binary to **c:\k**.
 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
