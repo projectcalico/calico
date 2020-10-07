@@ -110,10 +110,23 @@ function GetPlatformType()
     }
 }
 
+function GetCalicoNamespace() {
+    param(
+      [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
+    )
+
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
+    if ([string]::IsNullOrEmpty($name)) {
+        return ("kube-system")
+    }
+    return ("calico-system")
+}
+
 function GetCalicoKubeConfig()
 {
     param(
-      [parameter(Mandatory=$true)] $SecretName,
+      [parameter(Mandatory=$true)] $CalicoNamespace,
+      [parameter(Mandatory=$true)] $SecretName = "calico-node",
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
@@ -124,12 +137,12 @@ function GetCalicoKubeConfig()
         Import-Module $eksAWSToolsModulePath
     }
 
-    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n kube-system | findstr $SecretName | % { $_.Split(" ") | select -first 1 }
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
     if ([string]::IsNullOrEmpty($name)) {
         throw "$SecretName service account does not exist."
     }
-    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n kube-system
-    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n kube-system
+    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
+    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
     $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
 
     $server=findstr https:// $KubeConfigPath
@@ -231,30 +244,42 @@ SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
 SetConfigParameters -OldString 'KUBECONFIG = "c:\k\config"' -NewString 'KUBECONFIG = "c:\CalicoWindows\calico-kube-config"'
 
 if ($platform -EQ "azure") {
-    Write-Host "Setup Calico for Windows for azure..."
+    Write-Host "Setup Calico for Windows for Azure..."
     $Backend="none"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
-    GetCalicoKubeConfig -SecretName 'calico-windows'
+
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs -SecretName 'calico-windows'
 }
 if ($platform -EQ "eks") {
-    $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for eks, node name $awsNodeName ..."
-    $Backend="none"
+    $hostname = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
+    $awsNodeName = c:\k\kubectl.exe --kubeconfig=C:\ProgramData\kubernetes\kubeconfig get node -l kubernetes.io/hostname=$hostname -o custom-columns=":metadata.name" --no-headers
+
+    Write-Host "Setup Calico for Windows for EKS, node name $awsNodeName (hostname: $hostname)..."
+    $Backend = "none"
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "vpc.*"'
-    GetCalicoKubeConfig -SecretName 'calico-node' -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
+
+    $calicoNs = GetCalicoNamespace -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
 }
 if ($platform -EQ "ec2") {
+    $hostname = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
+    $awsNodeName = c:\k\kubectl.exe --kubeconfig=C:\ProgramData\kubernetes\kubeconfig get node -l kubernetes.io/hostname=$hostname -o custom-columns=":metadata.name" --no-headers
+
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for aws, node name $awsNodeName ..."
+    Write-Host "Setup Calico for Windows for AWS, node name $awsNodeName ..."
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
-    GetCalicoKubeConfig -SecretName 'calico-node'
+
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs
 }
 if([string]::IsNullOrEmpty($platform)) {
+    $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -SecretName "calico-node"
 }
 
