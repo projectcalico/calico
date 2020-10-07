@@ -17,3 +17,5 @@ section:
   path: /about/about-kubernetes-ingress
 - title: Kubernetes Egress
   path: /about/about-kubernetes-egress
+- title: eBPF
+  path: /about/about-ebpf
