@@ -84,6 +84,20 @@ rules:
       - delete
       - watch
   - apiGroups:
+    - crd.projectcalico.org
+    resources:
+    - felixconfigurations
+    verbs:
+    - patch
+  - apiGroups:
+    - crd.projectcalico.org
+    resources:
+    - ippools
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
       - scheduling.k8s.io
     resources:
       - priorityclasses
