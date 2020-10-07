@@ -137,7 +137,7 @@ function GetCalicoKubeConfig()
         Import-Module $eksAWSToolsModulePath
     }
 
-    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace | findstr $SecretName | % { $_.Split(" ") | select -first 1 }
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
     if ([string]::IsNullOrEmpty($name)) {
         throw "$SecretName service account does not exist."
     }
@@ -254,7 +254,7 @@ if ($platform -EQ "azure") {
 }
 if ($platform -EQ "eks") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for eks, node name $awsNodeName ..."
+    Write-Host "Setup Calico for Windows for EKS, node name $awsNodeName ..."
     $Backend = "none"
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
@@ -266,7 +266,7 @@ if ($platform -EQ "eks") {
 }
 if ($platform -EQ "ec2") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for aws, node name $awsNodeName ..."
+    Write-Host "Setup Calico for Windows for AWS, node name $awsNodeName ..."
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
 
