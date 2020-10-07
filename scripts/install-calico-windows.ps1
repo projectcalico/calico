@@ -238,8 +238,9 @@ if ($platform -EQ "azure") {
     GetCalicoKubeConfig -SecretName 'calico-windows'
 }
 if ($platform -EQ "eks") {
-    $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for eks, node name $awsNodeName ..."
+    $hostname = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
+    $awsNodeName = c:\k\kubectl.exe --kubeconfig=C:\ProgramData\kubernetes\kubeconfig get node -l kubernetes.io/hostname=$hostname -o custom-columns=":metadata.name" --no-headers
+    Write-Host "Setup Calico for Windows for eks, node name $awsNodeName (hostname: $hostname) ..."
     $Backend="none"
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
@@ -248,8 +249,9 @@ if ($platform -EQ "eks") {
     GetCalicoKubeConfig -SecretName 'calico-node' -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
 }
 if ($platform -EQ "ec2") {
-    $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    Write-Host "Setup Calico for Windows for aws, node name $awsNodeName ..."
+    $hostname = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
+    $awsNodeName = c:\k\kubectl.exe --kubeconfig=c:\k\config get node -l kubernetes.io/hostname=$hostname -o custom-columns=":metadata.name" --no-headers
+    Write-Host "Setup Calico for Windows for aws, node name $awsNodeName (hostname: $hostname) ..."
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     GetCalicoKubeConfig -SecretName 'calico-node'
