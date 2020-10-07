@@ -136,21 +136,17 @@ through a fast-path that bypasses iptables and other packet processing that the 
 ![Diagram showing the packet path for pod-to-pod networking; a BPF program is attached to the client pod's veth interface; it does a conntrack lookup in a BPF map, and forwards the packet to the second pod directly, bypassing iptables]({{site.baseurl}}/images/bpf-pod-to-pod.svg "Pod-to-pod packet path with eBPF enabled")
 
 The logic to implement load balancing and packet parsing is pre-compiled ahead of time and relies on a set of BPF 
-maps to store the NAT frontend and backend information.  The frontend map stores the metadata of the service, allowing
-for `externalTrafficPolicy` and "sticky" services to be honoured.  NodePorts are handled as a special case: after a
-miss in the service map, a second lookup is performed to check if the destination IP is local and whether the port is an
-active node port.
-
-![Detail of BPF program showing that conntrack happens first and a conntrack hit results in taking the fast path, possibly including applying NAT to the packet.  On conntrack miss, the frontend and backend NAT maps are consulted; after a hit, the program applies NAT to the packet. The packets then take a slower path that includes the kernel's RPF check,]({{site.baseurl}}/images/bpf-nat.svg "Expanded view of tc program with conntrack and NAT.")
+maps to store the NAT frontend and backend information.  One map stores the metadata of the service, allowing
+for `externalTrafficPolicy` and "sticky" services to be honoured. A second map stores the IPs of the backing pods.
 
 In eBPF mode, {{site.prodname}} converts your policy into optimised eBPF bytecode, using BPF maps to store the IP sets
 matched by policy selectors.
 
-![Detail of BPF program showing that, after conntrack and NAT, packets are sent to a separate (generated) policy program,]({{site.baseurl}}/images/bpf-policy.svg "Expanded view of tc program showing policy.")
+![Detail of BPF program showing that packets are sent to a separate (generated) policy program,]({{site.baseurl}}/images/bpf-policy.svg "Expanded view of tc program showing policy.")
 
 To improve performance for services, {{site.prodname}} also does connect-time load balancing by hooking into the
 socket BPF hooks.  When a program tries to connect to a Kubernetes service, {{site.prodname}} intercepts the connection
-attempt and changes and configures the socket to connect directly to the backend pod's IP instead.  This removes all
+attempt and configures the socket to connect directly to the backend pod's IP instead.  This removes _all_
 NAT overhead from service connections.
 
 ![Diagram showing BPF program attached to socket connect call; it does NAT at connect time,]({{site.baseurl}}/images/bpf-connect-time.svg "BPF program attached to socket connect call.")
