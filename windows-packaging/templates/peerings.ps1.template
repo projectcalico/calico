@@ -1,0 +1,73 @@
+
+{{- $node_ip_key := printf "/host/%s/ip_addr_v4" (getenv "NODENAME")}}
+{{- $node_ip := getv $node_ip_key}}
+$local_ip = "{{$node_ip}}"
+
+{{- $bgp_id := getenv "CALICO_ROUTER_ID" ""}}
+$bgp_id = "{{if ne "" ($bgp_id)}}{{$bgp_id}}{{else}}{{$node_ip}}{{end}}"
+
+{{- $node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
+$local_asn = {{if exists $node_as_key}}{{getv $node_as_key}}{{else}}{{getv "/global/as_num"}}{{end}}
+
+$peerings =
+{{- if eq "" ($node_ip)}}
+    # IPv4 is disabled on this node.
+{{- else}}
+    # IPv4 is enabled on this node.
+
+    # ------------- Node-to-node mesh -------------
+    {{- if (json (getv "/global/node_mesh")).enabled}}
+        {{- range $host := lsdir "/host"}}
+            {{- $onode_as_key := printf "/host/%s/as_num" .}}
+            {{- $onode_ip_key := printf "/host/%s/ip_addr_v4" .}}
+    	{{- if exists $onode_ip_key}}
+                {{- $onode_ip := getv $onode_ip_key}}
+                {{- $nums := split $onode_ip "."}}{{$id := join $nums "_"}}
+    # For peer {{$onode_ip_key}}
+                {{- if eq $onode_ip ($node_ip) }}
+    # Skipping ourselves ({{$node_ip}})
+                {{- else if ne "" $onode_ip}}
+    @{ Name = "Mesh_{{$id}}"; IP = "{{$onode_ip}}"; AS = {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}} },
+                {{- end}}
+            {{- end}}
+        {{- end}}
+    {{- else}}
+    # Node-to-node mesh disabled
+    {{- end}}
+
+    # ------------- Global peers -------------
+    {{- if ls "/global/peer_v4"}}
+        {{- range gets "/global/peer_v4/*"}}
+            {{- $data := json .Value}}
+            {{- $nums := split $data.ip "."}}
+            {{- $id := join $nums "_"}}
+    # For peer {{.Key}}
+            {{- if eq $data.ip ($node_ip) }}
+    # Skipping ourselves ({{$node_ip}})
+            {{- else}}
+    @{ Name = "Global_{{$id}}"; IP = "{{$data.ip}}"; AS = {{$data.as_num}} },
+            {{- end}}
+        {{- end}}
+    {{- else}}
+    # No global peers configured.
+    {{- end}}
+
+    # ------------- Node-specific peers -------------
+    {{- $node_peers_key := printf "/host/%s/peer_v4" (getenv "NODENAME")}}
+    {{- if ls $node_peers_key}}
+        {{- range gets (printf "%s/*" $node_peers_key)}}
+            {{- $data := json .Value}}
+            {{- $nums := split $data.ip "."}}
+            {{- $id := join $nums "_"}}
+    # For peer {{.Key}}
+            {{- if eq $data.ip ($node_ip) }}
+    # Skipping ourselves ({{$node_ip}})
+            {{- else}}
+    @{ Name = "Node_{{$id}}"; IP = "{{$data.ip}}"; AS = {{$data.as_num}} },
+            {{- end}}
+        {{- end}}
+    {{- else}}
+    # No node-specific peers configured.
+    {{- end}}
+{{- end}}
+    @{}

@@ -1,0 +1,8 @@
+[template]
+src = "blocks.ps1.template"
+dest = "blocks.ps1"
+prefix = "/calico/ipam/v2"
+keys = [
+    "/host",
+]
+reload_cmd = ".\\config-bgp.ps1"

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
@@ -55,6 +56,7 @@ type TemplateResource struct {
 	store         memkv.Store
 	storeClient   backends.StoreClient
 	syncOnly      bool
+	shellCmd      string
 }
 
 var ErrEmptySrc = errors.New("empty src template")
@@ -83,6 +85,12 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	tr.store = memkv.New()
 	tr.syncOnly = config.SyncOnly
 	addFuncs(tr.funcMap, tr.store.FuncMap)
+
+	if runtime.GOOS == "windows" {
+		tr.shellCmd = "powershell"
+	} else {
+		tr.shellCmd = "/bin/sh"
+	}
 
 	if config.Prefix != "" {
 		tr.Prefix = config.Prefix
@@ -177,9 +185,14 @@ func (t *TemplateResource) createStageFile() error {
 		log.WithError(err).WithField("filename", temp.Name()).Error("error changing mode")
 		return err
 	}
-	if err := os.Chown(temp.Name(), t.Uid, t.Gid); err != nil {
-		log.WithError(err).WithField("filename", temp.Name()).Error("error changing ownership")
-		return err
+
+	if runtime.GOOS != "windows" {
+		// Windows doesn't support chown, apparently:
+		// resource.go 178: error changing ownership error=chown .peerings.ps1761844858: not supported by windows filename=".peerings.ps1761844858"
+		if err := os.Chown(temp.Name(), t.Uid, t.Gid); err != nil {
+			log.WithError(err).WithField("filename", temp.Name()).Error("error changing ownership")
+			return err
+		}
 	}
 	t.StageFile = temp
 	return nil
@@ -286,7 +299,7 @@ func (t *TemplateResource) check() error {
 		return err
 	}
 	log.Debug("Running checkcmd: " + cmdBuffer.String())
-	c := exec.Command("/bin/sh", "-c", cmdBuffer.String())
+	c := exec.Command(t.shellCmd, "-c", cmdBuffer.String())
 	output, err := c.CombinedOutput()
 	if err != nil {
 		log.Errorf("Error from checkcmd %q: %q", cmdBuffer.String(), string(output))
@@ -300,7 +313,7 @@ func (t *TemplateResource) check() error {
 // It returns nil if the reload command returns 0.
 func (t *TemplateResource) reload() error {
 	log.Debug("Running reloadcmd: " + t.ReloadCmd)
-	c := exec.Command("/bin/sh", "-c", t.ReloadCmd)
+	c := exec.Command(t.shellCmd, "-c", t.ReloadCmd)
 	output, err := c.CombinedOutput()
 	if err != nil {
 		log.Error(fmt.Sprintf("Error from reloadcmd: %q", string(output)))
