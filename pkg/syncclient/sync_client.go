@@ -278,7 +278,6 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 		}
 		logCxt.WithFields(log.Fields{
 			"handshake": state.HandshakeComplete,
-			"mutual":    state.NegotiatedProtocolIsMutual,
 		}).Debug("TLS negotiation")
 	}
 
