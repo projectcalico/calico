@@ -601,7 +601,7 @@ func (s *Syncer) applyDerived(
 }
 
 func (s *Syncer) apply(state DPSyncerState) error {
-	log.Debug("applying new state")
+	log.Infof("applying new state, %d service", len(state.SvcMap))
 
 	// we need to copy the maps from the new state to compute the diff in the
 	// next call. We cannot keep the provided maps as the generic k8s proxy code
@@ -697,7 +697,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		log.Infof("removed stale service %q", skey)
 	}
 
-	log.Debug("new state written")
+	log.Info("new state written")
 
 	s.runExpandNPFixup(expNPMisses)
 
