@@ -16,3 +16,8 @@
 
 Start-Service CalicoNode
 Start-Service CalicoFelix
+
+if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
+{
+    Start-Service CalicoConfd
+}

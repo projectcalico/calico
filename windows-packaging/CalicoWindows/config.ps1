@@ -7,6 +7,7 @@ $env:KUBE_NETWORK = "Calico.*"
 
 # Set this to one of the following values:
 # - "vxlan" for Calico VXLAN networking
+# - "windows-bgp" for Calico BGP networking using the Windows BGP router.
 # - "none" to disable the Calico CNI plugin (so that you can use another plugin).
 $env:CALICO_NETWORKING_BACKEND="vxlan"
 
@@ -22,7 +23,7 @@ $env:DNS_SEARCH = "svc.cluster.local"
 $env:CALICO_DATASTORE_TYPE = "<your datastore type>"
 
 # Set KUBECONFIG to the path of your kubeconfig file.
-$env:KUBECONFIG = "c:\k\config"
+$env:KUBECONFIG = "$PSScriptRoot\calico-kube-config"
 
 # For the "etcdv3" datastore only: set ETCD_ENDPOINTS, format: "http://<host>:<port>,..."
 $env:ETCD_ENDPOINTS = "<your etcd endpoints>"
@@ -83,3 +84,6 @@ $env:CALICO_LOG_DIR = "$PSScriptRoot\logs"
 $env:FELIX_LOGSEVERITYFILE = "none"
 # Disable syslog logging, which is not supported on Windows.
 $env:FELIX_LOGSEVERITYSYS = "none"
+# confd logs to screen at info level by default.  Uncomment this line to override the log
+# level.
+#$env:BGP_LOGSEVERITYSCREEN = "debug"

@@ -43,9 +43,14 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
     }
     Install-CNIPlugin
 }
+elseif ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
+{
+    Install-ConfdService
+    Install-CNIPlugin
+}
 else
 {
-    Write-Host "Calico for Windows uses third party CNI plugin."
+    Write-Host "Using third party CNI plugin."
 }
 
 Write-Host "Starting Calico..."
@@ -54,6 +59,11 @@ Write-Host "This may take several seconds if the vSwitch needs to be created."
 Start-Service CalicoNode
 Wait-ForCalicoInit
 Start-Service CalicoFelix
+
+if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
+{
+    Start-Service CalicoConfd
+}
 
 while ((Get-Service | where Name -Like 'Calico*' | where Status -NE Running) -NE $null) {
     Write-Host "Waiting for the Calico services to be running..."
