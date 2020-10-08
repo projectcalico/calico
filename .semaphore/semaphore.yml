@@ -11,6 +11,7 @@ blocks:
         - name: 'Unit and FV tests (tox)'
           commands:
             - checkout
+            - sudo apt-get update
             - sudo apt-get install -y tox
             - tox
         - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
@@ -19,6 +20,7 @@ blocks:
             - git checkout -b devstack-test
             - mkdir -p ~/calico
             - ln -s `pwd` ~/calico/networking-calico
+            - sudo apt-get update
             - sudo apt-get install -y python-all-dev python3-all-dev python3-pip
             - sudo pip install tox
             - export LIBVIRT_TYPE=qemu
