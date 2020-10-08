@@ -6,7 +6,7 @@ canonical_url: '/getting-started/openshift/installation'
 
 ### Big picture
 
-Install an OpenShift 4 cluster on AWS with {{site.prodname}} with Windows nodes.
+Install an OpenShift 4 cluster on AWS with {{site.prodname}} on Windows nodes.
 
 ### Value
 
@@ -164,7 +164,7 @@ $ ./wni aws create \
    ```powershell
    Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
-1. Run the installation script, replacing the Kubernetes version with the version corresponding to your version of OpenShift:
+1. Run the installation script, replacing the Kubernetes version with the version corresponding to your version of OpenShift. For example, `1.18.3`:
 
    ```powershell
    c:\install-calico-windows.ps1 -KubeVersion <kube version> -ServiceCidr 172.30.0.0/16 -DNSServerIPs 172.30.0.10
