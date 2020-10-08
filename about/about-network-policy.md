@@ -194,7 +194,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: default-app-policy
 spec:
-  selector: projectcalico.org/namespace != "kube-system"
+  namespaceSelector: projectcalico.org/name != "kube-system"
   types:
   - Ingress
   - Egress
