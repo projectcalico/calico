@@ -25,6 +25,21 @@ with open('%s/_data/versions.yml' % DOCS_PATH) as f:
     RELEASE_VERSION = versions[0]['title']
     print('[INFO] using _data/versions.yaml, discovered version: %s' % RELEASE_VERSION)
 
+def test_operator_image_present():
+    with open('%s/_data/versions.yml' % DOCS_PATH) as versionsFile:
+        versions = yaml.safe_load(versionsFile)
+        for version in versions:
+            if version["title"] == RELEASE_VERSION:
+                # Found matching version. Perform the test.
+                operator = version["tigera-operator"]
+                img = "%s/%s:%s" % (operator["registry"], operator["image"], operator["version"])
+                print('[INFO] checking %s' % img)
+                headers = {'content-type': 'application/json'}
+                req = requests.get("https://quay.io/api/v1/repository/tigera/operator/tag/%s/images" % (
+                    operator["version"]), headers=headers)
+                assert req.status_code == 200
+                return
+        assert False, "Unable to find matching version"
 
 def test_quay_release_tag_present():
     with open('%s/_config.yml' % DOCS_PATH) as config:
