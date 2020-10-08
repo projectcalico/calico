@@ -122,13 +122,12 @@ as IPv4 or IPv6 addresses.
 
 - {% include open-new-window.html text='The Kubernetes Network Model'
   url='https://kubernetes.io/docs/concepts/cluster-administration/networking/#the-kubernetes-network-model' %} 
-- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on AWS'
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on AWS'
   url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/' %}
-- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on Azure'
-  url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-azure/' %}
-- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes pod networking on Google
-  Cloud'
-  url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-google-cloud/' %}
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Azure'
+  url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-azure/' %}
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Google Cloud'
+  url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %}
 
 
 
