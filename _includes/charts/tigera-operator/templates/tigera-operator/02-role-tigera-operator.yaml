@@ -171,11 +171,23 @@ rules:
       - globalnetworkpolicies
       - globalnetworksets
       - hostendpoints
-      - ippools
       - networkpolicies
       - networksets
     verbs:
       - create
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - ippools
+    verbs:
+      - create
+      - list
+  - apiGroups:
+     - crd.projectcalico.org
+    resources:
+      - ipamblocks
+    verbs:
+      - list
   # For AWS security group setup.
   - apiGroups:
       - batch
