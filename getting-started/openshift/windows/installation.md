@@ -205,7 +205,13 @@ Remote into the Windows node and configure the kubelet:
  ./wmcb.exe initialize-kubelet --ignition-file worker.ign --kubelet-path c:\k\kubelet.exe
 ```
 
-Next, configure kubelet to use Calico CNI:
+> **Note**: The kubelet configuration installed by Windows Machine Config
+> Bootstrapper includes `--register-with-taints="os=Windows:NoSchedule"` which
+> will require Windows pods to tolerate that taint.
+{: .alert .alert-info}
+
+Next, we make a copy of the kubeconfig because `wmcb.exe` expects the kubeconfig to be the file `c:\k\kubeconfig`.
+Then we configure kubelet to use Calico CNI:
 
 ```powershell
 cp c:\k\config c:\k\kubeconfig
@@ -249,6 +255,12 @@ $ oc get csr -o name | xargs oc adm certificate approve
 certificatesigningrequest.certificates.k8s.io/csr-55brx approved
 certificatesigningrequest.certificates.k8s.io/csr-bmnfd approved
 certificatesigningrequest.certificates.k8s.io/csr-hwl89 approved
+```
+
+Finally, clean up the additional files:
+
+```powershell
+rm c:\k\kubeconfig c:\wmcb.exe c:\worker.ign
 ```
 
 ### Next steps
