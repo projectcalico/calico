@@ -53,6 +53,7 @@ type TopologyOptions struct {
 	AutoHEPsEnabled           bool
 	TriggerDelayedFelixStart  bool
 	FelixStopGraceful         bool
+	ExternalIPs               bool
 }
 
 func DefaultTopologyOptions() TopologyOptions {
@@ -205,6 +206,10 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 
 		expectedIPs := []string{felix.IP}
 
+		if kdd, ok := infra.(*K8sDatastoreInfra); ok && opts.ExternalIPs {
+			kdd.SetExternalIP(felix, i)
+			expectedIPs = append(expectedIPs, felix.ExternalIP)
+		}
 		if opts.IPIPEnabled {
 			infra.SetExpectedIPIPTunnelAddr(felix, i, bool(n > 1))
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)

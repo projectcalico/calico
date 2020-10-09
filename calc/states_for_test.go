@@ -1113,7 +1113,9 @@ var vxlanWithBlock = empty.withKVUpdates(
 		Ipv4Addr:       remoteHostVXLANTunnelIP,
 		ParentDeviceIp: remoteHostIP.String(),
 	},
-).withRoutes(
+).withRoutes(vxlanWithBlockRoutes...)
+
+var vxlanWithBlockRoutes = []proto.RouteUpdate{
 	routeUpdateIPPoolVXLAN,
 	routeUpdateRemoteHost,
 	// Single route for the block.
@@ -1125,7 +1127,8 @@ var vxlanWithBlock = empty.withKVUpdates(
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
 	},
-)
+}
+
 var remoteNodeResKey = ResourceKey{Name: remoteHostname, Kind: apiv3.KindNode}
 var localNodeResKey = ResourceKey{Name: localHostname, Kind: apiv3.KindNode}
 
@@ -1677,6 +1680,165 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		NatOutgoing: true,
 	},
 )
+
+// we start from vxlan setup as the test framework expects vxlan enabled
+var nodesWithMoreIPs = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: remoteHostIPWithPrefix,
+			},
+			Addresses: []apiv3.NodeAddress{
+				{
+					Address: remoteHostIPWithPrefix,
+				},
+				{
+					Address: "1.2.3.4",
+				},
+			},
+		}}},
+	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: localHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: localHostIPWithPrefix,
+			},
+			Addresses: []apiv3.NodeAddress{
+				{
+					Address: localHostIPWithPrefix,
+				},
+				{
+					Address: "4.3.2.1",
+				},
+			},
+		}}},
+).withRoutes(nodesWithMoreIPsRoutes...).
+	withName("routes for nodes with more IPs")
+
+var nodesWithMoreIPsRoutes = append(vxlanWithBlockRoutes[0:len(vxlanWithBlockRoutes):len(vxlanWithBlockRoutes) /* force copy */],
+	proto.RouteUpdate{
+		Type:        proto.RouteType_REMOTE_HOST,
+		Dst:         "1.2.3.4/32",
+		DstNodeIp:   remoteHostIP.String(),
+		DstNodeName: remoteHostname,
+	},
+	proto.RouteUpdate{
+		Type:        proto.RouteType_LOCAL_HOST,
+		Dst:         localHostIP.String() + "/32",
+		DstNodeIp:   localHostIP.String(),
+		DstNodeName: localHostname,
+	},
+	proto.RouteUpdate{
+		Type:        proto.RouteType_LOCAL_HOST,
+		Dst:         "4.3.2.1/32",
+		DstNodeIp:   localHostIP.String(),
+		DstNodeName: localHostname,
+	},
+)
+
+var nodesWithMoreIPsAndDuplicates = nodesWithMoreIPs.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: remoteHostIPWithPrefix,
+			},
+			Addresses: []apiv3.NodeAddress{
+				{
+					Address: "1.2.3.4",
+				},
+				{
+					Address: remoteHostIPWithPrefix,
+				},
+				{
+					Address: remoteHostIPWithPrefix,
+				},
+				{
+					Address: "1.2.3.4/19",
+				},
+				{
+					Address: "1.2.3.4",
+				},
+			},
+		},
+	},
+	},
+).withName("routes for nodes with more IPs and duplicates")
+
+var nodesWithDifferentAddressTypes = nodesWithMoreIPs.withKVUpdates(
+	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: localHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: localHostIPWithPrefix,
+			},
+			Addresses: []apiv3.NodeAddress{
+				{
+					Address: localHostIPWithPrefix,
+				},
+				{
+					Address: "4.3.2.1",
+				},
+				{
+					Address: "feed:dead:beef::/64",
+				},
+				{
+					Address: "some.thing.like.a.domain.name",
+				},
+			},
+		}}},
+).withRoutes(nodesWithMoreIPsRoutes...).
+	withName("routes for nodes with more IPs someof them unexpected/invalid")
+
+var nodesWithMoreIPsRoutesDeletedExtras = append(vxlanWithBlockRoutes[0:len(vxlanWithBlockRoutes):len(vxlanWithBlockRoutes) /* force copy */],
+	proto.RouteUpdate{
+		Type:        proto.RouteType_LOCAL_HOST,
+		Dst:         localHostIP.String() + "/32",
+		DstNodeIp:   localHostIP.String(),
+		DstNodeName: localHostname,
+	},
+)
+
+var nodesWithMoreIPsDeleted = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: remoteHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: remoteHostIPWithPrefix,
+			},
+			Addresses: []apiv3.NodeAddress{
+				{
+					Address: remoteHostIPWithPrefix,
+				},
+			},
+		}}},
+	KVPair{Key: localNodeResKey, Value: &apiv3.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: localHostname,
+		},
+		Spec: apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
+				IPv4Address: localHostIPWithPrefix,
+			},
+			Addresses: []apiv3.NodeAddress{
+				{
+					Address: localHostIPWithPrefix,
+				},
+			},
+		}}},
+).withRoutes(nodesWithMoreIPsRoutesDeletedExtras...).
+	withName("routes for nodes with more IPs deleted the extra IPs")
 
 type StateList []State
 

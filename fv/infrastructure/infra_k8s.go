@@ -529,6 +529,11 @@ func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx i
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedWireguardTunnelAddr)
 }
 
+func (kds *K8sDatastoreInfra) SetExternalIP(felix *Felix, idx int) {
+	felix.ExternalIP = fmt.Sprintf("111.222.%d.1", idx)
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExternalIP)
+}
+
 func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	nodeIn := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -538,6 +543,19 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 			},
 		},
 		Spec: v1.NodeSpec{PodCIDR: fmt.Sprintf("10.65.%d.0/24", idx)},
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{{
+				Address: felix.IP,
+				Type:    v1.NodeInternalIP,
+			}},
+		},
+	}
+	if felix.ExternalIP != "" {
+		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses,
+			v1.NodeAddress{
+				Address: felix.ExternalIP,
+				Type:    v1.NodeInternalIP,
+			})
 	}
 	if felix.ExpectedIPIPTunnelAddr != "" {
 		nodeIn.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"] = felix.ExpectedIPIPTunnelAddr

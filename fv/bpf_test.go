@@ -155,6 +155,9 @@ const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
 FELIX_0/32: local host idx -
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
@@ -166,6 +169,9 @@ const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
 10.65.0.4/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
 10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
 FELIX_0/32: local host idx -
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
@@ -270,6 +276,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
+			options.ExternalIPs = true
 		})
 
 		JustAfterEach(func() {
@@ -1498,9 +1505,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 						It("should have connectivity via the node port to workload 0", func() {
 							node1IP := felixes[1].IP
+							node1IPExt := felixes[1].ExternalIP
 							cc.ExpectSome(w[0][1], TargetIP(node1IP), npPort)
 							cc.ExpectSome(w[1][0], TargetIP(node1IP), npPort)
 							cc.ExpectSome(w[1][1], TargetIP(node1IP), npPort)
+							cc.ExpectSome(w[0][1], TargetIP(node1IPExt), npPort)
+							cc.ExpectSome(w[1][0], TargetIP(node1IPExt), npPort)
+							cc.ExpectSome(w[1][1], TargetIP(node1IPExt), npPort)
 							cc.CheckConnectivity()
 						})
 

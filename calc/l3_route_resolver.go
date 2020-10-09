@@ -76,10 +76,66 @@ type l3rrNodeInfo struct {
 	IPIPAddr      ip.Addr
 	VXLANAddr     ip.Addr
 	WireguardAddr ip.Addr
+
+	Addresses []ip.Addr
+}
+
+func (i l3rrNodeInfo) Equal(b l3rrNodeInfo) bool {
+	if i.Addr == b.Addr &&
+		i.CIDR == b.CIDR &&
+		i.IPIPAddr == b.IPIPAddr &&
+		i.VXLANAddr == b.VXLANAddr &&
+		i.WireguardAddr == b.WireguardAddr {
+
+		if len(i.Addresses) != len(b.Addresses) {
+			return false
+		}
+
+		// We expect a small single number of addresses in single digits and
+		// mostly in the same order.
+		l := len(i.Addresses)
+		for ia, a := range i.Addresses {
+			found := false
+			for j := 0; j < l; j++ {
+				if a == b.Addresses[(ia+j)%l] {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return false
 }
 
 func (i l3rrNodeInfo) AddrAsCIDR() ip.V4CIDR {
 	return i.Addr.AsCIDR().(ip.V4CIDR)
+}
+
+func (i l3rrNodeInfo) AddresesV4AsCIDRs() []ip.V4CIDR {
+	addrs4 := make(map[ip.V4Addr]struct{})
+
+	addrs4[i.Addr] = struct{}{}
+
+	for _, a := range i.Addresses {
+		if a.Version() == 4 {
+			addrs4[a.(ip.V4Addr)] = struct{}{}
+		}
+	}
+
+	cidrs := make([]ip.V4CIDR, len(addrs4))
+	idx := 0
+	for a := range addrs4 {
+		cidrs[idx] = a.AsCIDR().(ip.V4CIDR)
+		idx++
+	}
+
+	return cidrs
 }
 
 func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeResourceUpdates bool, routeSource string) *L3RouteResolver {
@@ -299,6 +355,15 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 			if node.Spec.IPv4VXLANTunnelAddr != "" {
 				nodeInfo.VXLANAddr = ip.FromString(node.Spec.IPv4VXLANTunnelAddr)
 			}
+
+			for _, a := range node.Spec.Addresses {
+				parsed, _, err := cnet.ParseCIDROrIP(a.Address)
+				if err == nil && parsed != nil {
+					nodeInfo.Addresses = append(nodeInfo.Addresses, ip.FromCalicoIP(*parsed))
+				} else {
+					logrus.WithError(err).WithField("addr", a.Address).Warn("not an IP")
+				}
+			}
 		}
 	}
 
@@ -336,7 +401,7 @@ func (c *L3RouteResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInfo) {
 	oldNodeInfo, nodeExisted := c.nodeNameToNodeInfo[nodeName]
 
-	if (newNodeInfo == nil && !nodeExisted) || (newNodeInfo != nil && nodeExisted && oldNodeInfo == *newNodeInfo) {
+	if (newNodeInfo == nil && !nodeExisted) || (newNodeInfo != nil && nodeExisted && oldNodeInfo.Equal(*newNodeInfo)) {
 		// No change.
 		return
 	}
@@ -397,11 +462,15 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 	// Process the node CIDR and cache the node info.
 	if nodeExisted {
 		delete(c.nodeNameToNodeInfo, nodeName)
-		c.trie.RemoveHost(oldNodeInfo.AddrAsCIDR(), nodeName)
+		for _, a := range oldNodeInfo.AddresesV4AsCIDRs() {
+			c.trie.RemoveHost(a, nodeName)
+		}
 	}
 	if newNodeInfo != nil {
 		c.nodeNameToNodeInfo[nodeName] = *newNodeInfo
-		c.trie.AddHost(newNodeInfo.AddrAsCIDR(), nodeName)
+		for _, a := range newNodeInfo.AddresesV4AsCIDRs() {
+			c.trie.AddHost(a, nodeName)
+		}
 	}
 
 	c.markAllNodeRoutesDirty(nodeName)
