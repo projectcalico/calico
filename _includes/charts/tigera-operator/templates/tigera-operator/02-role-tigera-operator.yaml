@@ -190,6 +190,12 @@ rules:
       - networksets
     verbs:
       - create
+  - apiGroups:
+     - crd.projectcalico.org
+    resources:
+      - ipamblocks
+    verbs:
+      - list
   # For AWS security group setup.
   - apiGroups:
       - batch
