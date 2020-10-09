@@ -126,7 +126,7 @@ function GetCalicoKubeConfig()
 {
     param(
       [parameter(Mandatory=$true)] $CalicoNamespace,
-      [parameter(Mandatory=$true)] $SecretName = "calico-node",
+      [parameter(Mandatory=$false)] $SecretName = "calico-node",
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 

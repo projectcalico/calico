@@ -108,9 +108,7 @@ Next, install calicoctl and [ensure that strict affinity is true]({{site.baseurl
 
 #### Add Windows nodes to the cluster
 
-Download the latest [Windows Node Installer
-(WNI)](https://github.com/openshift/windows-machine-config-bootstrapper/releases) binaries `wni` and `wmcb.exe` for your OpenShift
-version.
+Download the latest {% include open-new-window.html text='Windows Node Installer (WNI)' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %} binaries `wni` and `wmcb.exe` for your OpenShift version.
 
 Next, determine the AMI id corresponding to Windows Server 1903 (build 18317) or greater. `wni` defaults to using Windows Server 2019 (build 10.0.17763) which does not include WinDSR support.
 One way to do this is by searching for AMI's matching the string `Windows_Server-1903-English-Core-ContainersLatest` in the Amazon EC2 console
