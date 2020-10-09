@@ -43,6 +43,8 @@ section:
       path: /getting-started/openshift/requirements
     - title: Installation
       path: /getting-started/openshift/installation
+    - title: Calico for Windows Installation
+      path: /getting-started/openshift/windows/installation
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
