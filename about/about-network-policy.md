@@ -192,18 +192,19 @@ For example, you might use the following policy to default-deny all (non-system)
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: default-deny-except-dns
+  name: default-app-policy
 spec:
-  selector: projectcalico.org/namespace != "kube-system"
+  namespaceSelector: projectcalico.org/name != "kube-system"
   types:
   - Ingress
   - Egress
   egress:
     - action: Allow
-        destination:
+      protocol: UDP
+      destination:
+        selector: k8s-app == "kube-dns"
         ports:
         - 53
-        selector: k8s-app == "kube-dns"
 ```
 
 #### Hierarchical policy
