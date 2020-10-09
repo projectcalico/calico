@@ -335,8 +335,6 @@ func CreateNetwork(netconf string) (*hcsshim.HNSNetwork, error) {
 		panic(err)
 	}
 
-	result := &current.Result{}
-
 	_, subNet, _ := net.ParseCIDR(conf.IPAM.Subnet)
 
 	var logger *log.Entry
@@ -352,7 +350,7 @@ func CreateNetwork(netconf string) (*hcsshim.HNSNetwork, error) {
 		networkName = windows.CreateNetworkName(conf.Name, subNet)
 	}
 
-	hnsNetwork, err := windows.EnsureNetworkExists(networkName, subNet, result.DNS, logger)
+	hnsNetwork, err := windows.EnsureNetworkExists(networkName, subNet, logger)
 	if err != nil {
 		logger.Errorf("Unable to create hns network %s", networkName)
 		return nil, err
