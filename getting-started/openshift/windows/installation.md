@@ -1,6 +1,6 @@
 ---
-title: Install an OpenShift 4 cluster with Windows nodes
-description: Install Calico on an OpenShift 4 cluster with Windows nodes
+title: Install an OpenShift 4 cluster on Windows nodes
+description: Install Calico on an OpenShift 4 cluster on Windows nodes
 canonical_url: '/getting-started/openshift/installation'
 ---
 
@@ -212,13 +212,9 @@ cp c:\k\config c:\k\kubeconfig
 ./wmcb.exe configure-cni --cni-dir c:\k\cni --cni-config c:\k\cni\config\10-calico.conf
 ```
 
-Restart the `calico-felix` service:
-
-```powershell
-Restart-Service -Name CalicoFelix
-```
-
-Next, we need to override the pod infra image used by kubelet by tagging
+Then, we need to override the pod infra image used by kubelet. This is to ensure
+the pod infrastructure image used is using the same base Windows Server OS as
+the node. (For more details, see this {% include open-new-window.html text='upstream issue' url='https://github.com/kubernetes/kubernetes/issues/87339' %}.) 
 
 ```powershell
 docker tag kubeletwin/pause mcr.microsoft.com/k8s/core/pause:1.2.0
