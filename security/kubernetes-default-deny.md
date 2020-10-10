@@ -67,7 +67,7 @@ Such policy has the potential to break your cluster if you do have not already h
 Calico [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place to ensure control plane traffic does not get blocked.
 
 As an alternative best practice we recommend to use the following examples depending on your {{site.prodname}} installation method, which apply 
-a default-deny behaviour to all non-system pods. (Separately you can specific policies for each control plane component to secure the 
+a default-deny behaviour to all non-system pods. (Separately you can write specific policies for each control plane component to secure the 
 control plane.)
 
 {% tabs %}
