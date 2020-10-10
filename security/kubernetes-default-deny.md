@@ -64,10 +64,11 @@ spec:
 
 The above policy applies to all pods, hosts and endpoints, including Kubernetes control plane and {{site.prodname}} control plane pods.
 Such policy has the potential to break your cluster if you do have not already have the correct "Allow" policies and 
-Calico [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place so thatcontrol plane traffic does not get blocked.
+Calico [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place to ensure control plane traffic does not get blocked.
 
-As a best practice we recommend to use the following examples depending on your {{site.prodname}} installation method, which apply 
-a default-deny behaviour to all non-system pods.
+As an alternative best practice we recommend to use the following examples depending on your {{site.prodname}} installation method, which apply 
+a default-deny behaviour to all non-system pods. (Separately you can specific policies for each control plane component to secure the 
+control plane.)
 
 {% tabs %}
 <label:Manifest,active:true>
