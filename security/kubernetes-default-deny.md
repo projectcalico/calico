@@ -62,9 +62,12 @@ spec:
   - Egress
 ```
 
-The above policy applies to all pods, hosts and endpoints, including Kubernetes and {{site.prodname}} control plane pods. Such policy has the potential to interrupt your cluster if you have not the correct "Allow" policies in place to keep the control plane functioning properly.
+The above policy applies to all pods, hosts and endpoints, including Kubernetes control plane and {{site.prodname}} control plane pods.
+Such policy has the potential to break your cluster if you do have not already have the correct "Allow" policies and 
+Calico [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place so thatcontrol plane traffic does not get blocked.
 
-As a best practice we recommend to use the following examples depending on your {{site.prodname}} installation method.
+As a best practice we recommend to use the following examples depending on your {{site.prodname}} installation method, which apply 
+a default-deny behaviour to all non-system pods.
 
 {% tabs %}
 <label:Manifest,active:true>
@@ -97,7 +100,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: deny-app-policy
 spec:
-  selector: 'projectcalico.org/namespace != "kube-system" || projectcalico.org/namespace != "calico-system"'
+  selector: 'projectcalico.org/namespace != "kube-system" && projectcalico.org/namespace != "calico-system"'
   types:
   - Ingress
   - Egress
