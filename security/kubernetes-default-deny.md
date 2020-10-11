@@ -71,37 +71,9 @@ spec:
 The above policy applies to all pods, hosts and endpoints, including Kubernetes control plane and {{site.prodname}} control plane pods.
 Such policy has the potential to break your cluster if you already do not have the correct "Allow" policies or {{site.prodname}} [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place to ensure control plane traffic does not get blocked.
 
-As an alternative best practice we recommend to use the following examples depending on your {{site.prodname}} installation method, which apply 
+As an alternative best practice we recommend to use the following example, which apply 
 a default-deny behaviour to all non-system pods.
 
-{% tabs %}
-<label:Manifest,active:true>
-<%
-```yaml
-apiVersion: projectcalico.org/v3
-kind: GlobalNetworkPolicy
-metadata:
-  name: deny-app-policy
-spec:
-  namespaceSelector: 'projectcalico.org/name != "kube-system"'
-  types:
-  - Ingress
-  - Egress
-  egress:
-  # allow all namespaces to communicate to DNS pods
-  - action: Allow
-    protocol: UDP
-    destination:
-      selector: 'k8s-app == "kube-dns"'
-      ports:
-      - 53
-```
-
-It is important to note with above policy you are bypassing rule enforcement in `kube-system` namespace by using a negative `namespaceSelector`; therefore, make sure you create a specific `networkpolicy` to secure this namespace separately. 
-
-%>
-<label:Operator>
-<%
 ```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
@@ -123,8 +95,7 @@ spec:
 ```
 
 It is important to note with above policy you are bypassing rule enforcement in `kube-system` and `calico-system` namespaces by using a negative `namespaceSelector`; therefore, make sure you create specific `networkpolicy` to secure these namespaces individually. 
-%>
-{% endtabs %}
+
 
 > **Note:**  If you like to learn more about selectors please [visit this page]({{site.baseurl}}/reference/resources/globalnetworkpolicy#selector).
 {: .alert .alert-info}
