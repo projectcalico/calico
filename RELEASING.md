@@ -371,3 +371,12 @@ release notes for a given version, perform the following steps.
 
    - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.1.0/_includes/v3.1/release-notes/v3.1.0-release-notes.md)
    - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/7d5594dbca14cb1b765b65eb11bdd8239d23dfb3/_includes/v3.0/release-notes/v3.0.5-release-notes.md)
+
+# Verifying the release
+
+The final steps in the process are to check it all worked.  This is important, so please don't skip it.
+
+1. Checkout the relevant docs branch (i.e. the release-vX.Y branch)
+1. run `make release-test`.  The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.  They do NOT check that the _contents_ of those are valid, but are a good test that the release process itself worked correctly.
+1. check the output of the tests - if any test failed, dig in and understand why.
+1. Kick off some e2e tests to test the contents of the release.
