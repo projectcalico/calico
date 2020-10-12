@@ -140,3 +140,45 @@ calico-bpf conntrack dump
 
 > **Tip**: If you find yourself needing to dive this deep, please reach out on the [Calico Users slack](https://slack.projectcalico.org/); we're always happy to help.
 {: .alert .alert-success}
+
+## Poor performance
+
+A number of problems can reduce the performance of the eBPF dataplane.
+
+* Verify that you are using the best networking mode for your cluster.  If possible, avoid using an overlay network;
+  a routed network with no overlay is considerably faster. If you must use one of {{site.prodname}}'s overlay modes, 
+  use VXLAN, not IPIP.  IPIP performs poorly in eBPF mode due to kernel limitations.
+  
+* If you are not using an overlay, verify that the [Felix configuration parameters](../../reference/felix/configuration) 
+  `ipInIpEnabled` and `vxlanEnabled` are set to `false`.  Those parameters control whether Felix configured itself to 
+  allow IPIP or VXLAN, even if you have no IP pools that use an overlay.  The parameters also disable certain eBPF 
+  mode optimisations for compatibility with IPIP and VXLAN.
+  
+  To examine the configuration:
+  ```bash
+  calicoctl get felixconfiguration -o yaml
+  ```
+  
+  ```yaml
+  apiVersion: projectcalico.org/v3
+  items:
+  - apiVersion: projectcalico.org/v3
+    kind: FelixConfiguration
+    metadata:
+      creationTimestamp: "2020-10-05T13:41:20Z"
+      name: default
+      resourceVersion: "767873"
+      uid: 8df8d751-7449-4b19-a4f9-e33a3d6ccbc0
+    spec:
+      ...
+      ipipEnabled: false
+      ...
+      vxlanEnabled: false
+  kind: FelixConfigurationList
+  metadata:
+    resourceVersion: "803999"
+  ```
+
+* If you are running your cluster in a cloud such as AWS, then your cloud provider may limit the bandwidth between
+  nodes in your cluster.  For example, most AWS nodes are limited to 5GBit per connection.
+
