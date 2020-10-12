@@ -28,6 +28,11 @@ Run Windows workloads on OpenShift 4 with {{site.prodname}}.
 
 - Ensure that you have {% include open-new-window.html text='generated a local SSH private key' url='https://docs.openshift.com/container-platform/4.4/installing/installing_aws/installing-aws-default.html#ssh-agent-using_installing-aws-default' %} and have added it to your ssh-agent
 
+**Limitations**
+
+Due to an {% include open-new-window.html text='upstream issue' url='https://bugzilla.redhat.com/show_bug.cgi?id=1768858' %}, Windows pods can only be run in specific namespaces if you disable SCC.
+To do this, label the namespace with `openshift.io/run-level: "1"`.
+
 #### Create a configuration file for the OpenShift installer
 
 First, create a staging directory for the installation. This directory will contain the configuration file, along with cluster state files, that OpenShift installer will create:
@@ -187,6 +192,22 @@ $ ./wni aws create \
    PS C:\> New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex <interface_index>
    ```
 
+1. Install and start kube-proxy service. Execute following powershell script/commands.
+
+   ```powershell
+   C:\CalicoWindows\kubernetes\install-kube-services.ps1 -service kube-proxy
+   Start-Service -Name kube-proxy
+   ```
+1. Verify kube-proxy service is running.
+
+   ```powershell
+   PS C:\> Get-Service -Name kube-proxy
+
+   Status   Name               DisplayName
+   ------   ----               -----------
+   Running  kube-proxy         kube-proxy service
+   ```
+
 #### Configure kubelet
 
 Copy the previously downloaded file `wmcb.exe` and your worker's ignition file (worker.ign) to the Windows node.
@@ -200,7 +221,7 @@ oc -n openshift-kube-apiserver exec ${apiserver} -- curl -ks https://localhost:2
 Remote into the Windows node and configure the kubelet:
 
 ```powershell
- ./wmcb.exe initialize-kubelet --ignition-file worker.ign --kubelet-path c:\k\kubelet.exe
+./wmcb.exe initialize-kubelet --ignition-file worker.ign --kubelet-path c:\k\kubelet.exe
 ```
 
 > **Note**: The kubelet configuration installed by Windows Machine Config
@@ -258,7 +279,7 @@ certificatesigningrequest.certificates.k8s.io/csr-hwl89 approved
 Finally, clean up the additional files:
 
 ```powershell
-rm c:\k\kubeconfig c:\wmcb.exe c:\worker.ign
+rm c:\k\kubeconfig,c:\wmcb.exe,c:\worker.ign
 ```
 
 ### Next steps
