@@ -66,7 +66,7 @@ spec:
 ```
 
 The above policy applies to all pods, hosts and endpoints, including Kubernetes control plane and {{site.prodname}} control plane pods.
-Such policy has the potential to break your cluster if you already do not have the correct "Allow" policies and {{site.prodname}} [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place to ensure control plane traffic does not get blocked.
+Such policy has the potential to break your cluster if you do not already have the correct "Allow" policies and {{site.prodname}} [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place to ensure control plane traffic does not get blocked.
 
 As an alternative best practice we recommend to use the following example, which applies 
 a default-deny behaviour to all non-system pods.
