@@ -134,10 +134,11 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    ------   ----               -----------
    Running  CalicoFelix        Calico Windows Agent
    ```
-1. Install and start kubelet/kube-proxy service. Execute following powershell script/commands.
+1. Install and start kubelet and kube-proxy services. Execute following powershell script/commands.
 
    ```powershell
-   C:\CalicoWindows\kubernetes\install-kube-services.ps1
+   C:\CalicoWindows\kubernetes\install-kubelet.ps1
+   C:\CalicoWindows\kubernetes\install-kube-proxy.ps1
    Start-Service -Name kubelet
    Start-Service -Name kube-proxy
    ```

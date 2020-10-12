@@ -49,12 +49,13 @@ The following steps removes {{site.prodnameWindows}} (for example to change conf
 
 #### Uninstall kubelet and kube-proxy services from Windows nodes
 
-The following steps uninstall kubelet/kube-proxy services if they were installed by running `C:\CalicoWindows\kubernetes\install-kube-services.ps1`.
+The following steps uninstall kubelet/kube-proxy services if they were installed by running `C:\CalicoWindows\kubernetes\install-kubelet.ps1` and `C:\CalicoWindows\kubernetes\install-kube-proxy.ps1`.
 
 1. Remove all pods from the Windows nodes.
 1. On each Windows node, run the uninstall script:
    ```
-   PS C:\CalicoWindows\kubernetes > .\uninstall-kube-services.ps1
+   PS C:\CalicoWindows\kubernetes > .\uninstall-kubelet.ps1
+   PS C:\CalicoWindows\kubernetes > .\uninstall-kube-proxy.ps1
    ```
 
 1. If desired, delete the `CalicoWindows` directory.
