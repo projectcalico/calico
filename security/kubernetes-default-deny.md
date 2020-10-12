@@ -68,8 +68,8 @@ spec:
 The above policy applies to all pods and host endpoints, including Kubernetes control plane and {{site.prodname}} control plane nodes and pods.
 Such policy has the potential to break your cluster if you do not already have the correct "Allow" policies and {{site.prodname}} [failsafe ports]({{site.baseurl}}/reference/felix/configuration) in place to ensure control plane traffic does not get blocked.
 
-As an alternative best practice we recommend to use the following example, which applies 
-a default-deny behaviour to all non-system pods.
+As an alternative best practice we recommend to use the following example, which applies a default-deny behaviour to all non-system pods. The policy
+also allows access kube-dns, which simplifies per pod policies since you don't need to duplicate the DNS rules in every policy.
 
 ```yaml
 apiVersion: projectcalico.org/v3
