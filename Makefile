@@ -83,6 +83,17 @@ WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
 WINDOWS_NSSM_VERSION=2.24
+# Explicit list of files that we copy in from the mod cache.  This is required because the copying rules we use are pattern-based
+# and they only work with an explicit rule of the form "$(WINDOWS_MOD_CACHED_FILES): <file path from project root>" (otherwise,
+# make has no way to know that the mod cache target produces the files we need).
+WINDOWS_MOD_CACHED_FILES := \
+    windows-packaging/config-bgp.ps1 \
+    windows-packaging/config-bgp.psm1 \
+    windows-packaging/conf.d/blocks.toml \
+    windows-packaging/conf.d/peerings.toml \
+    windows-packaging/templates/blocks.ps1.template \
+    windows-packaging/templates/peerings.ps1.template \
+
 # Files to include in the Windows ZIP archive.  We need to list some of these explicitly
 # because we need to force them to be built/copied into place.
 WINDOWS_ARCHIVE_FILES := \
@@ -91,11 +102,21 @@ WINDOWS_ARCHIVE_FILES := \
     $(WINDOWS_ARCHIVE_ROOT)/*.ps1 \
     $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 \
     $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 \
+    $(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 \
+    $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 \
+    $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 \
+    $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml \
+    $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
+    $(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
+    $(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
     $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe \
     $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt \
     $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1
+
+MICROSOFT_SDN_VERSION := 0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44
+MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/$(MICROSOFT_SDN_VERSION)
 
 # Variables used by the tests
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
@@ -641,11 +662,32 @@ sub-tag-images-%:
 ###############################################################################
 # Windows packaging
 ###############################################################################
+# Pull the BGP configuration scripts and templates from the confd repo.
+$(WINDOWS_MOD_CACHED_FILES): mod-download
+
+$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+        $(GIT_CONFIG_SSH) \
+        cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/$< $@'; \
+        chmod +w $@
+
+$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/%: windows-packaging/conf.d/%
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+        $(GIT_CONFIG_SSH) \
+        cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/$< $@'; \
+        chmod +w $@
+
+$(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+        $(GIT_CONFIG_SSH) \
+        cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/$< $@'; \
+        chmod +w $@
+
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	wget -O windows-packaging/CalicoWindows/libs/hns/hns.psm1 https://raw.githubusercontent.com/microsoft/SDN/0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44/Kubernetes/windows/hns.psm1
+	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	wget -O windows-packaging/CalicoWindows/libs/hns/License.txt https://raw.githubusercontent.com/microsoft/SDN/0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44/License.txt
+	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
 
 ## Download NSSM.
 windows-packaging/nssm-$(WINDOWS_NSSM_VERSION).zip:

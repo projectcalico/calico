@@ -23,6 +23,11 @@ $ErrorActionPreference = 'SilentlyContinue'
 Write-Host "Stopping Calico if it is running..."
 & $PSScriptRoot\stop-calico.ps1
 
+if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
+{
+    Remove-ConfdService
+    Remove-CNIPlugin
+}
 Remove-NodeService
 Remove-FelixService
 

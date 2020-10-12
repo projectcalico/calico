@@ -63,6 +63,7 @@ var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshol
 var runConfd = flagSet.Bool("confd", false, "Run confd")
 var confdRunOnce = flagSet.Bool("confd-run-once", false, "Run confd in oneshot mode")
 var confdKeep = flagSet.Bool("confd-keep-stage-file", false, "Keep stage file when running confd")
+var confdConfDir = flagSet.String("confd-confdir", "/etc/calico/confd", "Confd configuration directory.")
 
 func main() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
@@ -119,7 +120,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		cfg.ConfDir = "/etc/calico/confd"
+		cfg.ConfDir = *confdConfDir
 		cfg.KeepStageFile = *confdKeep
 		cfg.Onetime = *confdRunOnce
 		confd.Run(cfg)

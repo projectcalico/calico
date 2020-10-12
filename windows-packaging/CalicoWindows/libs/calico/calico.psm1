@@ -29,6 +29,18 @@ function Test-CalicoConfiguration()
     {
         throw "Config not loaded?."
     }
+    if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_BACKEND -EQ "vxlan") {
+        if (fileIsMissing($env:CNI_BIN_DIR))
+        {
+            throw "CNI binary directory $env:CNI_BIN_DIR doesn't exist.  Please create it and ensure kubelet " +  `
+                    "is configured with matching --cni-bin-dir."
+        }
+        if (fileIsMissing($env:CNI_CONF_DIR))
+        {
+            throw "CNI config directory $env:CNI_CONF_DIR doesn't exist.  Please create it and ensure kubelet " +  `
+                    "is configured with matching --cni-conf-dir."
+        }
+    }
     if ($env:CALICO_NETWORKING_BACKEND -EQ "vxlan") {
         if (fileIsMissing($env:CNI_BIN_DIR))
         {
@@ -223,6 +235,53 @@ function Install-FelixService()
 
 function Remove-FelixService() {
     & $NSSMPath remove CalicoFelix confirm
+}
+
+function Install-ConfdService()
+{
+    Write-Host "Installing confd service..."
+
+    # Ensure our service file can run.
+    Unblock-File $baseDir\confd\confd-service.ps1
+
+    # We run confd via a wrapper script to make it easier to update env vars.
+    & $NSSMPath install CalicoConfd $powerShellPath
+    & $NSSMPath set CalicoConfd AppParameters $baseDir\confd\confd-service.ps1
+    & $NSSMPath set CalicoConfd AppDirectory $baseDir
+    & $NSSMPath set CalicoConfd DependOnService "CalicoNode"
+    & $NSSMPath set CalicoConfd DisplayName "Calico BGP Agent"
+    & $NSSMPath set CalicoConfd Description "Calico BGP Agent, confd, configures BGP routing."
+
+    # Configure it to auto-start by default.
+    & $NSSMPath set CalicoConfd Start SERVICE_AUTO_START
+    & $NSSMPath set CalicoConfd ObjectName LocalSystem
+    & $NSSMPath set CalicoConfd Type SERVICE_WIN32_OWN_PROCESS
+
+    # Throttle process restarts if confd restarts in under 1500ms.
+    & $NSSMPath set CalicoConfd AppThrottle 1500
+
+    # Create the log directory if needed.
+    if (-Not(Test-Path "$env:CALICO_LOG_DIR"))
+    {
+        write "Creating log directory."
+        md -Path "$env:CALICO_LOG_DIR"
+    }
+    & $NSSMPath set CalicoConfd AppStdout $env:CALICO_LOG_DIR\calico-confd.log
+    & $NSSMPath set CalicoConfd AppStderr $env:CALICO_LOG_DIR\calico-confd.err.log
+
+    # Configure online file rotation.
+    & $NSSMPath set CalicoConfd AppRotateFiles 1
+    & $NSSMPath set CalicoConfd AppRotateOnline 1
+    # Rotate once per day.
+    & $NSSMPath set CalicoConfd AppRotateSeconds 86400
+    # Rotate after 10MB.
+    & $NSSMPath set CalicoConfd AppRotateBytes 10485760
+
+    Write-Host "Done installing confd service."
+}
+
+function Remove-ConfdService() {
+    & $NSSMPath remove CalicoConfd confirm
 }
 
 function Wait-ForManagementIP($NetworkName)

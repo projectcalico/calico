@@ -16,5 +16,9 @@
 
 $ErrorActionPreference = 'SilentlyContinue'
 
+if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
+{
+    Stop-Service CalicoConfd
+}
 Stop-Service CalicoFelix
 Stop-Service CalicoNode

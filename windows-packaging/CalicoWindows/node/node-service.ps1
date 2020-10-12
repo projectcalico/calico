@@ -31,7 +31,7 @@ if ($env:CNI_IPAM_TYPE -EQ "host-local") {
     $env:USE_POD_CIDR = "false"
 }
 
-if ($env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
+if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
 {
     Write-Host "Calico $env:CALICO_NETWORKING_BACKEND networking enabled."
 
@@ -104,6 +104,11 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
     $mgmtIP = Wait-ForManagementIP "External"
     Write-Host "Management IP detected on vSwitch: $mgmtIP."
     Start-Sleep 10
+
+    if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp") {
+        Write-Host "Restarting BGP service to pick up any interface renumbering..."
+        Restart-Service RemoteAccess
+    }
 }
 
 $env:CALICO_NODENAME_FILE = ".\nodename"
