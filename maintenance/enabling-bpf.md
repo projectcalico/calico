@@ -281,7 +281,8 @@ To enable eBPF mode, change Felix configuration parameter  `BPFEnabled` to `true
 calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
 ```
 
-Enabling eBPF node can disrupt existing workload connections.  After enabling eBPF mode you may need to restart workload pods in order for them to restart connections. 
+Enabling eBPF node can disrupt existing workload connections.  After enabling eBPF mode you may need to restart workload pods in order for them to restart connections.  In particular, it's a good idea to restart `kube-dns`
+since its connection to the API server can be disrupted.
 
 #### Try out DSR mode
 

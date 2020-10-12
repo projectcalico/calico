@@ -96,6 +96,11 @@ container-optimised OS with an emphasis on security; it has a recent enough kern
   kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
   ```
   
+  > **Note**: This will use the {{site.prodname}} CNI plugin (rather than the AWS VPC CNI plugin).  We recommend
+  > sticking the {{site.prodname}} CNI plugin in this release because there are a couple of known issues with the
+  > combination of eBPF mode and the AWS VPC CNI plugin. Fixes for those issues are in progress.
+  {: .alert .alert-info}
+                                                                                                                                                          
 %>
 <label:Custom AMI>
 <%
@@ -124,6 +129,11 @@ which is suitable:
   ```
   eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100 --node-ami-family Ubuntu1804 --node-ami <AMI ID>
   ```
+  
+  > **Note**: We recommend that you use the {{site.prodname}} CNI plugin (rather than the AWS VPC CNI plugin)
+  > because there are a couple of known issues with the combination of eBPF mode and the AWS VPC CNI plugin.
+  > Fixes for those issues are in progress.
+  {: .alert .alert-info}
 %>
 {% endtabs %}
 
