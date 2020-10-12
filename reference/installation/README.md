@@ -1,6 +1,6 @@
 # Generating API reference docs
 
-The api.html doc in this directory is generated using https://github.com/caseydavenport/gen-crd-api-reference-docs.
+The api.html doc in this directory is generated using https://github.com/tmjd/gen-crd-api-reference-docs/tree/kb_v2.
 
 To generate a new file, you must follow the instructions in that repository to clone the project.
 
@@ -22,7 +22,7 @@ Then, run the following.
 1. Run it, passing the location of the APIs
 
    ```
-   ./gen-crd-api-reference-docs -config ./example-config.json -api-dir github.com/tigera/operator/pkg/apis/operator/v1 -out-file api.html
+   ./gen-crd-api-reference-docs -config ./example-config.json -api-dir github.com/tigera/operator/api -out-file api.html
    ```
 
 Then, there are a few bits of cleanup you'll need to do
