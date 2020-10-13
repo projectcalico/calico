@@ -22,7 +22,10 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 - Kubernetes clusters with versions 1.18, 1.17, or 1.16
 
 **Windows node requirements**
-- Windows Server 1903 (AKA 19H1) build 18317 or greater, with Docker service enabled
+- Versions:  
+  - Windows Server 1809 (build Build 17763.1432 or greater)
+  - Windows Server 1903 (AKA 19H1 build 18362.1049 or greater)
+  - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater), with Docker service enabled
 - Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
 - Additionally, for EKS:
     - The VPC controllers must be installed be installed to run Windows pods.
@@ -66,6 +69,11 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 {% tabs %}
   <label:Kubernetes,active:true>
   <%
+  
+1. Disable BGP since we are using VXLAN:
+   ```bash
+   kubectl patch installation default --type=merge -p '{"spec": {"calicoNetwork": {"bgp": "Disabled"}}}'
+   ```
 
 1. Prepare directory for Kubernetes files on Windows node.
 
@@ -73,7 +81,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    mkdir c:\k
    ```
 
-1. Copy the Kubernetes kubeconfig file from the master node (default, Location $HOME/.kube/config), to **c:\k**.
+1. Copy the Kubernetes kubeconfig file from the master node (default, Location $HOME/.kube/config), to **c:\k\config**.
 
 1. Download the powershell script, **install-calico-windows.ps1**.
 

@@ -104,3 +104,65 @@ If the error includes 'loading config file "<path-to-kubeconfig>"', follow the i
 #### Felix starts, but does not output logs
 
 By default, Felix waits to connect to the datastore before logging (in case the datastore configuration intentionally disables logging). To start logging at startup, update the [FELIX_LOGSEVERITYSCREEN environment variable]({{site.baseurl}}/reference/felix/configuration#general-configuration) to "info" or "debug" level.
+
+#### {{site.prodname}} BGP mode: connectivity issues, Linux calico/node pods report unready
+
+Check the detailed health output that shows which health check failed:
+
+```
+kubectl describe pod -n kube-system <calico-node-pod>
+```
+
+If the health check reports a BGP peer failure, check the IP address of the peer is either an
+expected IP of a node or an external BGP peer. If the IP of the failed peering is a Windows node:
+
+- Check that the node is up a reachable over IP
+- Check that the RemoteAccess service is installed and running:
+
+  ```powershell
+  PS C:\> Get-Service | ? Name -EQ RemoteAccess
+  ``` 
+- Check the logs for the confd service in the configured log directory for errors
+(default C:\TigeraCalico\logs).
+
+**Examine BGP state on a Windows host**
+
+The Windows BGP router exposes its configuration and state as Powershell commandlets.
+
+**To show BGP peers**:
+
+```powershell
+PS C:\> Get-BgpPeer
+PeerName LocalIPAddress PeerIPAddress PeerASN OperationMode ConnectivityStatus
+-------- -------------- ------------- ------- ------------- ------------------
+Mesh_172_20_48_43 172.20.55.101 172.20.48.43 64512 Mixed Connected
+Mesh_172_20_51_170 172.20.55.101 172.20.51.170 64512 Mixed Connected
+Mesh_172_20_54_3 172.20.55.101 172.20.54.3 64512 Mixed Connected
+Mesh_172_20_58_252 172.20.55.101 172.20.58.252 64512 Mixed Connected
+For an established peering, the ConnectivityStatus column should be "Connected".
+```
+**To examine routes learned from other hosts**:
+
+```powershell
+PS C:\> Get-BgpRouteInformation -Type all
+DestinationNetwork NextHop LearnedFromPeer State LocalPref MED
+------------------ ------- --------------- ----- --------- ---
+10.243.128.192/26 172.20.58.252 Mesh_172_20_58_252 Best 100
+10.244.115.128/26 172.20.48.43 Mesh_172_20_48_43 Best 100
+10.244.128.192/26 172.20.58.252 Mesh_172_20_58_252 Best 100
+```
+For active routes, the State should show as "Best". Routes with State equal to "Unresolved"
+indicate that the BGP router could not resolve a route to the peer and the route will not be
+used. This can occur if the networking state changes after the BGP router is started;
+restarting the BGP router may solve the problem:
+```powershell
+PS C:\> Restart-Service RemoteAccess
+```
+To see the routes being exported by this host:
+```powershell
+PS C:\> (Get-BgpCustomRoute).Network
+10.243.214.152/29
+10.243.214.160/29
+10.243.214.168/29
+10.244.42.0/26
+```
