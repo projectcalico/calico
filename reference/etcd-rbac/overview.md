@@ -47,7 +47,7 @@ that allow access to the appropriate data in etcd.
 1. [Generate CA, certificates, and keys](certificate-generation).
 2. Setup etcd with the CA certificate and the certificates generated in step 1.
    See the
-   [etcd security op-guide](https://coreos.com/etcd/docs/latest/op-guide/security.html)
+   [etcd security op-guide](https://coreos.com/etcd/docs/latest/op-guide/security.html){:target="_blank"}
    for help configuing etcd.
 3. [Create Users and Roles in etcd](users-and-roles).
 4. Configure components. For example:

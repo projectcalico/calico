@@ -5,7 +5,7 @@ canonical_url: '/reference/cni-plugin/configuration'
 ---
 
 The {{site.prodname}} CNI plugin is configured through the standard CNI
-[configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration)
+[configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration){:target="_blank"}
 
 A minimal configuration file that uses {{site.prodname}} for networking
 and IPAM looks like this
@@ -103,7 +103,7 @@ When using {{site.prodname}} IPAM, the following flags determine what IP address
 * `assign_ipv4` (default: `"true"`)
 * `assign_ipv6` (default: `"false"`)
 
-A specific IP address can be chosen by using [`CNI_ARGS`](https://github.com/appc/cni/blob/master/SPEC.md#parameters) and setting `IP` to the desired value.
+A specific IP address can be chosen by using [`CNI_ARGS`](https://github.com/appc/cni/blob/master/SPEC.md#parameters){:target="_blank"} and setting `IP` to the desired value.
 
 By default, {{site.prodname}} IPAM will assign IP addresses from all the available IP pools.
 
@@ -270,7 +270,7 @@ When using `host-local` IPAM with the Kubernetes API datastore, you must configu
 
 #### Specifying IP pools on a per-namespace or per-pod basis
 
-In addition to specifying IP pools in the CNI config as discussed above, {{site.prodname}} IPAM supports specifying IP pools per-namespace or per-pod using the following [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/).
+In addition to specifying IP pools in the CNI config as discussed above, {{site.prodname}} IPAM supports specifying IP pools per-namespace or per-pod using the following [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/){:target="_blank"}.
 
 - `cni.projectcalico.org/ipv4pools`: A list of configured IPv4 Pools from which to choose an address for the pod.
 
@@ -306,7 +306,7 @@ If provided, these IP pools will override any IP pools specified in the CNI conf
 
 #### Requesting a specific IP address
 
-You can also request a specific IP address through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with {{site.prodname}} IPAM.
+You can also request a specific IP address through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/){:target="_blank"} with {{site.prodname}} IPAM.
 There are two annotations to request a specific IP address:
 
 - `cni.projectcalico.org/ipAddrs`: A list of IPv4 and/or IPv6 addresses to assign to the Pod. The requested IP addresses will be assigned from {{site.prodname}} IPAM and must exist within a configured IP pool.
@@ -356,7 +356,7 @@ There are two annotations to request a specific IP address:
 
 #### Requesting a floating IP
 
-You can request a floating IP address for a pod through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with {{site.prodname}}.
+You can request a floating IP address for a pod through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/){:target="_blank"} with {{site.prodname}}.
 
 > **Note**:
 > The specified address must belong to an IP Pool for advertisement to work properly.
@@ -430,7 +430,7 @@ for a full example.
 
 ### CNI network configuration lists
 
-The CNI 0.3.0 [spec](https://github.com/containernetworking/cni/blob/spec-v0.3.0/SPEC.md#network-configuration-lists) supports "chaining" multiple CNI plugins together. {{site.prodname}} supports the following Kubernetes CNI plugins, which are enabled by default. Although chaining other CNI plugins may work, we support only the following tested CNI plugins. 
+The CNI 0.3.0 [spec](https://github.com/containernetworking/cni/blob/spec-v0.3.0/SPEC.md#network-configuration-lists){:target="_blank"} supports "chaining" multiple CNI plugins together. {{site.prodname}} supports the following Kubernetes CNI plugins, which are enabled by default. Although chaining other CNI plugins may work, we support only the following tested CNI plugins. 
 
 **Port mapping plugin**
 
