@@ -48,7 +48,8 @@ struct cali_tc_state {
 };
 
 enum cali_state_flags {
-	CALI_ST_NAT_OUTGOING = 1,
+	CALI_ST_NAT_OUTGOING	= (1 << 0),
+	CALI_ST_SKIP_FIB	= (1 << 1),
 };
 
 CALI_MAP_V1(cali_v4_state,
