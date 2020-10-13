@@ -18,6 +18,7 @@ Extend your Kubernetes deployment to Windows environments.
 
 - Install and configure [calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/)
 - Linux and Windows nodes [meet requirements]({{site.baseurl}}/getting-started/windows-calico/requirements)
+- If using {{site.prodname}} networking, copy the kubeconfig file (used by kubelet) to each Windows node to the file, `c:\k\config`.
 - Download {{site.prodnameWindows}} and Kubernetes binaries to each Windows nodes to prepare for install:
 
   On each of your Windows nodes, download and run {{site.prodnameWindows}} installation scripts:
@@ -150,6 +151,21 @@ adjust other kube-proxy parameters.
 
 #### Install Calico on Linux control and worker nodes
 
+**If using {{site.prodname}} BGP networking** 
+
+1. Disable the default {{site.prodname}} IP-in-IP networking (which is not compatible with Windows), by modifying the {{site.prodname}} manifest, and setting the `CALICO_IPV4POOL_IPIP` environment variable to "Never" before applying the manifest.
+
+   If you do apply the manifest with the incorrect value, changing the manifest and re-applying will have no effect. To adjust the already-created IP pool:
+   ```bash
+   kubectl get ippool -o yaml > ippool.yaml
+   ```
+   Then, modify ippool.yaml by setting the `ipipMode` to `Never` and then apply the updated manifest:
+   ```bash
+   kubectl apply -f ippool.yaml
+   ```
+      
+**If using {{site.prodname}} VXLAN networking** 
+
 1. Modify VXLAN as described in [Customize the manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options) guide. Note the following:
    - Windows can support only a single type of IP pool so it is important that you use only a single VXLAN IP pool in this mode.
    - Windows supports only VXLAN on port 4789 and VSID >=4096. {{site.prodname}}'s default (on Linux and Windows) is to use port 4789 and VSID 4096.
@@ -169,13 +185,39 @@ This is required to prevent Linux nodes from borrowing IP addresses from Windows
 
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
 
+**If using {{site.prodname}} BGP**
+
+Install the RemoteAccess service using the following Powershell commands:
+
+```powershell
+PS C:\> Install-WindowsFeature RemoteAccess
+PS C:\> Install-WindowsFeature RSAT-RemoteAccess-PowerShell
+PS C:\> Install-WindowsFeature Routing
+```
+
+Then restart the computer:
+
+```powershell
+PS C:\> Restart-Computer -Force
+```
+
+before running:
+
+```powershell
+PS C:\> Install-RemoteAccess -VpnType RoutingOnly
+```
+Sometimes the remote access service fails to start automatically after install. To make sure it is running, execute the following command:
+
+```powershell
+PS C:\> Start-Service RemoteAccess
+```
 1. If using a non-{{site.prodname}} network plugin for networking, install and verify it now. 
-2. Edit the install configuration file, `config.ps1` as follows:     
+2. Edit the install configuration file, `config.ps1` as follows:
 
    | **Set this variable...** | To...                   |
    | ----------- | ----------------------------------------------------- |
    | $env:KUBE_NETWORK | CNI plugin you plan to use. For {{site.prodname}}, set the variable to `{{site.prodname}}.*` |
-   | $env:CALICO_NETWORKING_BACKEND | `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
+   | $env:CALICO_NETWORKING_BACKEND | `windows-bgp` `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
    | $env:CNI_ variables | Location of your Kubernetes installation. |
    | $env:K8S_SERVICE_CIDR | Your Kubernetes service cluster IP CIDR. |
    | $env:CALICO_DATASTORE_TYPE | {{site.prodname}} datastore you want to use. |
@@ -183,7 +225,7 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
    | $env:ETCD_ parameters | etcd3 datastore parameters. **Note**: Because of a limitation of the Windows dataplane, a Kubernetes service ClusterIP cannot    be used for the etcd endpoint (the host compartment cannot reach Kubernetes services). |
    | $env:NODENAME | Hostname used by kubelet. The default uses the node's hostname. **Note**: If you are using the sample kubelet start-up script from the    {{site.prodname}} package, kubelet is started with a hostname override that forces it to use this value. |
    |  | For AWS to work properly, kubelet should use the node's internal domain name for the AWS integration. |
-
+        
 3. Run the installer.
   
    - Change directory to the location that you unpacked the archive. For example:
