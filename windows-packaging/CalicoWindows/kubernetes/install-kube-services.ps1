@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+param
+(
+     [string][parameter(Mandatory=$false)]$service
+)
+
 # We require the 64-bit version of Powershell, which should live at the following path.
 $powerShellPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $baseDir = "$PSScriptRoot\.."
@@ -88,5 +93,23 @@ function Install-KubeProxyService()
     Write-Host "Done installing kube-proxy service."
 }
 
-Install-KubeletService
-Install-KubeProxyService
+if (($service -ne "") -and ($service -notin "kubelet", "kube-proxy"))
+{
+    Write-Host "Invalid -service value. Valid values are: 'kubelet' or 'kube-proxy'"
+    Exit
+}
+
+Write-Host the param is $service
+if ($service -eq "")
+{
+    Install-KubeletService
+    Install-KubeProxyService
+}
+elseif ($service -eq "kubelet")
+{
+    Install-KubeletService
+}
+else
+{
+    Install-KubeProxyService
+}

@@ -12,15 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+param
+(
+     [string][parameter(Mandatory=$false)]$service
+)
+
 $baseDir = "$PSScriptRoot\.."
 $NSSMPath = "$baseDir\nssm-2.24\win64\nssm.exe"
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-Write-Host "Stopping kubelet kube-proxy service if it is running..."
-Stop-Service kubelet
-Stop-Service kube-proxy
+if (($service -ne "") -and ($service -notin "kubelet", "kube-proxy"))
+{
+    Write-Host "Invalid -service value. Valid values are: 'kubelet' or 'kube-proxy'"
+    Exit
+}
 
-& $NSSMPath remove kube-proxy confirm
-& $NSSMPath remove kubelet confirm
-Write-Host "Done"
+if ($service -eq "")
+{
+    Write-Host "Stopping kubelet kube-proxy services if they are running..."
+    Stop-Service kubelet
+    Stop-Service kube-proxy
+    
+    & $NSSMPath remove kube-proxy confirm
+    & $NSSMPath remove kubelet confirm
+    Write-Host "Done"
+}
+else
+{
+    Write-Host "Stopping $service service if it is running..."
+    Stop-Service $service
+    & $NSSMPath remove $service confirm
+    Write-Host "Done"
+}
