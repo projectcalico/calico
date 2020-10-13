@@ -921,14 +921,12 @@ func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
 		return err
 	}
 
-	// Build maps based on desired target state, used below to clean up
-	// stale entries. Each L2 target results in an ARP entry as well as
-	// a FDB entry.
-	expectedARPEntries := map[string]net.HardwareAddr{}
-	expectedFDBEntries := map[string]net.HardwareAddr{}
+	// Build a map of expected targets by hwaddr for easier lookup,
+	// so we can compare the expected L2 targets against the programmed ones
+	// for this link.
+	expected := map[string]bool{}
 	for _, target := range expectedTargets {
-		expectedARPEntries[target.GW.String()] = target.VTEPMAC
-		expectedFDBEntries[target.IP.String()] = target.VTEPMAC
+		expected[target.VTEPMAC.String()] = true
 	}
 
 	// Get the current set of neighbors on this interface.
@@ -937,27 +935,41 @@ func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
 		return err
 	}
 
-	// For each existing neighbor, if it is not present in the expected set, then remove it.
+	// For each existing neighbor, if we don't expect an entry for its MAC address to be programmed
+	// on this link, then delete it.
 	var updatesFailed bool
+
 	for _, existing := range existingNeigh {
-		if existing.Family == syscall.AF_BRIDGE {
-			// FDB entries have family set to bridge.
-			if _, ok := expectedFDBEntries[existing.IP.String()]; !ok {
-				logCxt.WithField("neighbor", existing).Info("Removing old neighbor entry (FDB)")
-				if err := netlink.NeighDel(&existing); err != nil {
-					updatesFailed = true
-					continue
-				}
+		if _, ok := expected[existing.HardwareAddr.String()]; !ok {
+			logCxt.WithField("neighbor", existing).Debug("Neighbor should no longer be programmed")
+
+			// Remove the FDB entry for this neighbor.
+			n := netlink.Neigh{
+				LinkIndex:    existing.LinkIndex,
+				State:        netlink.NUD_PERMANENT,
+				Family:       syscall.AF_BRIDGE,
+				Flags:        netlink.NTF_SELF,
+				IP:           existing.IP,
+				HardwareAddr: existing.HardwareAddr,
 			}
-		} else {
-			if _, ok := expectedARPEntries[existing.IP.String()]; !ok {
-				logCxt.WithField("neighbor", existing).Info("Removing old neighbor entry (ARP)")
-				if err := netlink.NeighDel(&existing); err != nil {
+			if err := netlink.NeighDel(&n); err != nil {
+				if !strings.Contains(err.Error(), "no such file or directory") {
+					logCxt.WithError(err).Warnf("Failed to delete neighbor FDB entry %+v", n)
 					updatesFailed = true
-					continue
 				}
+			} else {
+				logCxt.WithField("neighbor", existing).Info("Removed old neighbor FDB entry")
 			}
 
+			// Delete the ARP entry.
+			if err := netlink.NeighDel(&existing); err != nil {
+				if !strings.Contains(err.Error(), "no such file or directory") {
+					logCxt.WithError(err).Warnf("Failed to delete neighbor ARP entry %+v", existing)
+					updatesFailed = true
+				}
+			} else {
+				logCxt.WithField("neighbor", existing).Info("Removed old neighbor ARP entry")
+			}
 		}
 	}
 
