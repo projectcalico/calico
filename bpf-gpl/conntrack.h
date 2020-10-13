@@ -61,6 +61,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NAT_OUT	(1 << 0)
 #define CALI_CT_FLAG_DSR_FWD	(1 << 1) /* marks entry into the tunnel on the fwd node when dsr */
 #define CALI_CT_FLAG_NP_FWD	(1 << 2) /* marks entry into the tunnel on the fwd node */
+#define CALI_CT_FLAG_SKIP_FIB	(1 << 3) /* marks traffic that should pass through host IP stack */
 
 #define ct_result_np_node(res)		((res).flags & CALI_CT_FLAG_NP_FWD)
 
