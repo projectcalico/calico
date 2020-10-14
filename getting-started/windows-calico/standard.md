@@ -27,7 +27,7 @@ Extend your Kubernetes deployment to Windows environments.
   Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
   c:\install-calico-windows.ps1 -DownloadOnly yes -KubeVersion <your Kubernetes version>
   ```
-  cd into `c:\CalicoWindows`, you will see the calico-node.exe binary, install scripts, and other files.
+  cd into `{{site.rootDirWindows}}`, you will see the calico-node.exe binary, install scripts, and other files.
 
 ### How to
 
@@ -116,7 +116,7 @@ In addition, it's important that `kubelet` is started after the vSwitch has been
 
 --hostname-override=<aws instance private DNS name> (and set the {{site.prodname}} nodename variable to match). In addition, you should add KubernetesCluster=<cluster-name> as a tag when creating your Windows instance.
 
-**As a quickstart**, the {{site.prodname}} package includes a sample script at `CalicoWindows\kubernetes\kubelet-service.ps1` that:
+**As a quickstart**, the {{site.prodname}} package includes a sample script at `{{site.rootDirWindows}}\kubernetes\kubelet-service.ps1` that:
 
 - Waits for {{site.prodname}} to initialise the vSwitch
 - Atarts `kubelet` with
@@ -138,7 +138,7 @@ See the README in the same directory for more details. Feel free to modify the s
 - For VXLAN, with the source VIP for the pod subnet allocated to the node. This is the IP that kube-proxy uses when it does SNAT for a NodePort. For {{site.prodname}}, the source VIP should be the second IP address in the subnet chosen for the host. For example, if {{site.prodname}} chooses an IP block 10.0.0.0/26 then the source VIP should be 10.0.0.2. The script below will automatically wait for the block to be chosen and configure kube-proxy accordingly.
 - For {{site.prodname}} policy to function correctly with Kubernetes services, the WinDSR feature gate must be enabled. This requires Windows 1903 build 18317 or greater and Kubernetes v1.14 or greater.
 
-kube-proxy should be started via a script that waits for the Calico HNS network to be provisioned. The {{site.prodname}} package contains a suitable script for use with {{site.prodname}} networking at `CalicoWindows\kubernetes\kube-proxy-service.ps1`. The script:
+kube-proxy should be started via a script that waits for the Calico HNS network to be provisioned. The {{site.prodname}} package contains a suitable script for use with {{site.prodname}} networking at `{{site.rootDirWindows}}\kubernetes\kube-proxy-service.ps1`. The script:
 
 - Waits for {{site.prodname}} to initialise the vSwitch.
 - Calculates the correct source VIP for the local subnet.
@@ -157,11 +157,11 @@ adjust other kube-proxy parameters.
 
    If you do apply the manifest with the incorrect value, changing the manifest and re-applying will have no effect. To adjust the already-created IP pool:
    ```bash
-   kubectl get ippool -o yaml > ippool.yaml
+   calicoctl get ippool -o yaml > ippool.yaml
    ```
    Then, modify ippool.yaml by setting the `ipipMode` to `Never` and then apply the updated manifest:
    ```bash
-   kubectl apply -f ippool.yaml
+   calicoctl apply -f ippool.yaml
    ```
       
 **If using {{site.prodname}} VXLAN networking** 
@@ -230,7 +230,7 @@ PS C:\> Start-Service RemoteAccess
   
    - Change directory to the location that you unpacked the archive. For example:
   ```
-  PS C:\... > cd c:\CalicoWindows
+  PS C:\... > cd {{site.rootDirWindows}}
   ```
   
    - Run the install script:
