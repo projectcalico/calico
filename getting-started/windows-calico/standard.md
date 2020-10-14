@@ -18,6 +18,7 @@ Extend your Kubernetes deployment to Windows environments.
 
 - Install and configure [calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/)
 - Linux and Windows nodes [meet requirements]({{site.baseurl}}/getting-started/windows-calico/requirements)
+- If using {{site.prodname}} networking, copy the kubeconfig file (used by kubelet) to each Windows node to the file, `c:\k\config`.
 - Download {{site.prodnameWindows}} and Kubernetes binaries to each Windows nodes to prepare for install:
 
   On each of your Windows nodes, download and run {{site.prodnameWindows}} installation scripts:
@@ -26,7 +27,7 @@ Extend your Kubernetes deployment to Windows environments.
   Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
   c:\install-calico-windows.ps1 -DownloadOnly yes -KubeVersion <your Kubernetes version>
   ```
-  cd into `c:\CalicoWindows`, you will see the calico-node.exe binary, install scripts, and other files.
+  cd into `{{site.rootDirWindows}}`, you will see the calico-node.exe binary, install scripts, and other files.
 
 ### How to
 
@@ -115,7 +116,7 @@ In addition, it's important that `kubelet` is started after the vSwitch has been
 
 --hostname-override=<aws instance private DNS name> (and set the {{site.prodname}} nodename variable to match). In addition, you should add KubernetesCluster=<cluster-name> as a tag when creating your Windows instance.
 
-**As a quickstart**, the {{site.prodname}} package includes a sample script at `CalicoWindows\kubernetes\kubelet-service.ps1` that:
+**As a quickstart**, the {{site.prodname}} package includes a sample script at `{{site.rootDirWindows}}\kubernetes\kubelet-service.ps1` that:
 
 - Waits for {{site.prodname}} to initialise the vSwitch
 - Atarts `kubelet` with
@@ -137,7 +138,7 @@ See the README in the same directory for more details. Feel free to modify the s
 - For VXLAN, with the source VIP for the pod subnet allocated to the node. This is the IP that kube-proxy uses when it does SNAT for a NodePort. For {{site.prodname}}, the source VIP should be the second IP address in the subnet chosen for the host. For example, if {{site.prodname}} chooses an IP block 10.0.0.0/26 then the source VIP should be 10.0.0.2. The script below will automatically wait for the block to be chosen and configure kube-proxy accordingly.
 - For {{site.prodname}} policy to function correctly with Kubernetes services, the WinDSR feature gate must be enabled. This requires Windows 1903 build 18317 or greater and Kubernetes v1.14 or greater.
 
-kube-proxy should be started via a script that waits for the Calico HNS network to be provisioned. The {{site.prodname}} package contains a suitable script for use with {{site.prodname}} networking at `CalicoWindows\kubernetes\kube-proxy-service.ps1`. The script:
+kube-proxy should be started via a script that waits for the Calico HNS network to be provisioned. The {{site.prodname}} package contains a suitable script for use with {{site.prodname}} networking at `{{site.rootDirWindows}}\kubernetes\kube-proxy-service.ps1`. The script:
 
 - Waits for {{site.prodname}} to initialise the vSwitch.
 - Calculates the correct source VIP for the local subnet.
@@ -149,6 +150,21 @@ adjust other kube-proxy parameters.
 >**Note**: The script will pause at the first stage until {{site.prodname}} is installed by following the instructions in the next section.
 
 #### Install Calico on Linux control and worker nodes
+
+**If using {{site.prodname}} BGP networking** 
+
+1. Disable the default {{site.prodname}} IP-in-IP networking (which is not compatible with Windows), by modifying the {{site.prodname}} manifest, and setting the `CALICO_IPV4POOL_IPIP` environment variable to "Never" before applying the manifest.
+
+   If you do apply the manifest with the incorrect value, changing the manifest and re-applying will have no effect. To adjust the already-created IP pool:
+   ```bash
+   calicoctl get ippool -o yaml > ippool.yaml
+   ```
+   Then, modify ippool.yaml by setting the `ipipMode` to `Never` and then apply the updated manifest:
+   ```bash
+   calicoctl apply -f ippool.yaml
+   ```
+      
+**If using {{site.prodname}} VXLAN networking** 
 
 1. Modify VXLAN as described in [Customize the manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options) guide. Note the following:
    - Windows can support only a single type of IP pool so it is important that you use only a single VXLAN IP pool in this mode.
@@ -169,13 +185,39 @@ This is required to prevent Linux nodes from borrowing IP addresses from Windows
 
 Follow the steps below on each Windows node to install Kubernetes and {{site.prodname}}:
 
+**If using {{site.prodname}} BGP**
+
+Install the RemoteAccess service using the following Powershell commands:
+
+```powershell
+PS C:\> Install-WindowsFeature RemoteAccess
+PS C:\> Install-WindowsFeature RSAT-RemoteAccess-PowerShell
+PS C:\> Install-WindowsFeature Routing
+```
+
+Then restart the computer:
+
+```powershell
+PS C:\> Restart-Computer -Force
+```
+
+before running:
+
+```powershell
+PS C:\> Install-RemoteAccess -VpnType RoutingOnly
+```
+Sometimes the remote access service fails to start automatically after install. To make sure it is running, execute the following command:
+
+```powershell
+PS C:\> Start-Service RemoteAccess
+```
 1. If using a non-{{site.prodname}} network plugin for networking, install and verify it now. 
-2. Edit the install configuration file, `config.ps1` as follows:     
+2. Edit the install configuration file, `config.ps1` as follows:
 
    | **Set this variable...** | To...                   |
    | ----------- | ----------------------------------------------------- |
    | $env:KUBE_NETWORK | CNI plugin you plan to use. For {{site.prodname}}, set the variable to `{{site.prodname}}.*` |
-   | $env:CALICO_NETWORKING_BACKEND | `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
+   | $env:CALICO_NETWORKING_BACKEND | `windows-bgp` `vxlan` or `none` (if using a non-{{site.prodname}} CNI plugin). |
    | $env:CNI_ variables | Location of your Kubernetes installation. |
    | $env:K8S_SERVICE_CIDR | Your Kubernetes service cluster IP CIDR. |
    | $env:CALICO_DATASTORE_TYPE | {{site.prodname}} datastore you want to use. |
@@ -183,12 +225,12 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
    | $env:ETCD_ parameters | etcd3 datastore parameters. **Note**: Because of a limitation of the Windows dataplane, a Kubernetes service ClusterIP cannot    be used for the etcd endpoint (the host compartment cannot reach Kubernetes services). |
    | $env:NODENAME | Hostname used by kubelet. The default uses the node's hostname. **Note**: If you are using the sample kubelet start-up script from the    {{site.prodname}} package, kubelet is started with a hostname override that forces it to use this value. |
    |  | For AWS to work properly, kubelet should use the node's internal domain name for the AWS integration. |
-
+        
 3. Run the installer.
   
    - Change directory to the location that you unpacked the archive. For example:
   ```
-  PS C:\... > cd c:\CalicoWindows
+  PS C:\... > cd {{site.rootDirWindows}}
   ```
   
    - Run the install script:
