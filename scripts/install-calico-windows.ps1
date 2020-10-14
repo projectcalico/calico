@@ -15,9 +15,19 @@ layout: null
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+{%- if site.prodname == "Calico" %}
+{%- assign installName = "Calico for Windows" %}
+{%- assign rootDir = "CalicoWindows" %}
+{%- assign zipFileName = "calico-windows.zip" %}
+{%- else %}
+{%- assign installName = "Tigera Calico for Windows" %}
+{%- assign rootDir = "TigeraCalico" %}
+{%- assign zipFileName = "tigera-calico-windows.zip" %}
+{%- endif %}
+
 <#
 .DESCRIPTION
-    This script installs and starts Calico services on a Windows node.
+    This script installs and starts {{site.prodname}} services on a Windows node.
 
     Note: EKS requires downloading kubectl.exe to c:\k before running this script: https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html
 #>
@@ -108,6 +118,27 @@ function GetPlatformType()
     if (-Not [string]::IsNullOrEmpty($awsNodeName)) {
         return ("ec2")
     }
+
+    return ("bare-metal")
+}
+
+function GetBackendType()
+{
+    param(
+        [parameter(Mandatory=$true)] $CalicoNamespace,
+        [parameter(Mandatory=$false)] $KubeConfigPath = "$RootDir\calico-kube-config"
+    )
+
+    $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
+    if ($encap -EQ "true") {
+        throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
+    }
+
+    $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
+    if ($encap -EQ "true") {
+        return ("vxlan")
+    }
+    return ("bgp")
 }
 
 function GetCalicoNamespace() {
@@ -147,26 +178,27 @@ function GetCalicoKubeConfig()
 
     $server=findstr https:// $KubeConfigPath
 
-    (Get-Content c:\CalicoWindows\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content c:\CalicoWindows\calico-kube-config -Force
+    (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force
 }
 
 function SetupEtcdTlsFiles()
 {
     param(
+      [parameter(Mandatory=$true)] $CalicoNamespace,
       [parameter(Mandatory=$true)] $SecretName,
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
-    $path = "C:\CalicoWindows\etcd-tls"
+    $path = "$RootDir\etcd-tls"
 
-    $found=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -n kube-system
+    $found=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -n $CalicoNamespace
     if ([string]::IsNullOrEmpty($found)) {
         throw "$SecretName does not exist."
     }
 
-    $keyB64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -o jsonpath='{.data.etcd-key}' -n kube-system
-    $certB64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -o jsonpath='{.data.etcd-cert}' -n kube-system
-    $caB64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -o jsonpath='{.data.etcd-ca}' -n kube-system
+    $keyB64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -o jsonpath='{.data.etcd-key}' -n $CalicoNamespace
+    $certB64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -o jsonpath='{.data.etcd-cert}' -n $CalicoNamespace
+    $caB64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$SecretName -o jsonpath='{.data.etcd-ca}' -n $CalicoNamespace
 
     New-Item -Type Directory -Path $path -Force
 
@@ -185,22 +217,31 @@ function SetConfigParameters {
         [parameter(Mandatory=$true)] $NewString
     )
 
-    (Get-Content c:\CalicoWindows\config.ps1).replace($OldString, $NewString) | Set-Content c:\CalicoWindows\config.ps1 -Force
+    (Get-Content $RootDir\config.ps1).replace($OldString, $NewString) | Set-Content $RootDir\config.ps1 -Force
 }
 
 function StartCalico()
 {
-    Write-Host "`nStart Calico...`n"
+    Write-Host "`nStart {{installName}}...`n"
 
     pushd
-    cd c:\CalicoWindows
+    cd $RootDir
     .\install-calico.ps1
     popd
-    Write-Host "`nCalico Started`n"
+    Write-Host "`n{{installName}} Started`n"
 }
 
-$Backend="vxlan"
 $BaseDir="c:\k"
+$RootDir="c:\{{rootDir}}"
+$CalicoZip="c:\{{zipFileName}}"
+
+{%- if site.prodname != "Calico" %}
+if (!(Test-Path $CalicoZip))
+{
+throw "Cannot find {{installName}} zip file $CalicoZip."
+}
+{%- endif %}
+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $helper = "$BaseDir\helper.psm1"
@@ -223,28 +264,36 @@ if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
     PrepareKubernetes
 }
 
-Write-Host "Download Calico for Windows release..."
-DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\calico-windows.zip
-Write-Host "Unzip Calico for Windows release..."
-Expand-Archive c:\calico-windows.zip c:\
+{%- if site.prodname == "Calico" %}
+Write-Host "Download {{installName}} release..."
+DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\{{zipFileName}}
+{%- endif %}
+
+if ((Get-Service | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
+Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
+Exit
+}
+
+Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
+Write-Host "Unzip {{installName}} release..."
+Expand-Archive $CalicoZip c:\
 
 Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
 SetConfigParameters -OldString '<your etcd endpoints>' -NewString "$EtcdEndpoints"
 
 if (-Not [string]::IsNullOrEmpty($EtcdTlsSecretName)) {
-    SetupEtcdTlsFiles -SecretName "$EtcdTlsSecretName"
+    $calicoNs = GetCalicoNamespace
+    SetupEtcdTlsFiles -SecretName "$EtcdTlsSecretName" -CalicoNamespace $calicoNs
 }
 SetConfigParameters -OldString '<your etcd key>' -NewString "$EtcdKey"
 SetConfigParameters -OldString '<your etcd cert>' -NewString "$EtcdCert"
 SetConfigParameters -OldString '<your etcd ca cert>' -NewString "$EtcdCaCert"
-
 SetConfigParameters -OldString '<your service cidr>' -NewString $ServiceCidr
 SetConfigParameters -OldString '<your dns server ips>' -NewString $DNSServerIPs
-SetConfigParameters -OldString 'KUBECONFIG = "c:\k\config"' -NewString 'KUBECONFIG = "c:\CalicoWindows\calico-kube-config"'
 
-if ($platform -EQ "azure") {
-    Write-Host "Setup Calico for Windows for Azure..."
+if ($platform -EQ "aks") {
+    Write-Host "Setup Calico for Windows for AKS..."
     $Backend="none"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
@@ -272,10 +321,22 @@ if ($platform -EQ "ec2") {
 
     $calicoNs = GetCalicoNamespace
     GetCalicoKubeConfig -CalicoNamespace $calicoNs
+    $Backend = GetBackendType -CalicoNamespace $calicoNs
+
+    Write-Host "Backend networking is $Backend"
+    if ($Backend -EQ "bgp") {
+        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+    }
 }
-if([string]::IsNullOrEmpty($platform)) {
+if ($platform -EQ "bare-metal") {
     $calicoNs = GetCalicoNamespace
-    GetCalicoKubeConfig -SecretName "calico-node"
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs
+    $Backend = GetBackendType -CalicoNamespace $calicoNs
+
+    Write-Host "Backend networking is $Backend"
+    if ($Backend -EQ "bgp") {
+        SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="windows-bgp"'
+    }
 }
 
 if ($DownloadOnly -EQ "yes") {
