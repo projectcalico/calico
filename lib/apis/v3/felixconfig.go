@@ -356,6 +356,11 @@ type FelixConfigurationSpec struct {
 	// Set source-destination-check on AWS EC2 instances. Accepted value must be one of "DoNothing", "Enabled" or "Disabled".
 	// [Default: DoNothing]
 	AWSSrcDstCheck *AWSSrcDstCheckOption `json:"awsSrcDstCheck,omitempty" validate:"omitempty,oneof=DoNothing Enable Disable"`
+
+	// Prevent routing loops to service IPs that are not in use, by dropping or rejecting
+	// packets that do not get DNAT'd by kube-proxy.  Unless set to "Disabled", in which case
+	// such routing loops continue to be allowed.  [Default: Drop]
+	ServiceLoopPrevention string `json:"serviceLoopPrevention,omitempty" validate:"omitempty,oneof=Drop Reject Disabled"`
 }
 
 type RouteTableRange struct {

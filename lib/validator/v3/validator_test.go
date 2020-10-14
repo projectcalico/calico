@@ -2028,6 +2028,12 @@ func init() {
 		Entry("should accept valid Wireguard interface", api.FelixConfigurationSpec{WireguardInterfaceName: "wg0"}, true),
 		Entry("should reject valid Wireguard interface", api.FelixConfigurationSpec{WireguardInterfaceName: "wg&0"}, false),
 
+		// FelixConfigurationSpec.ServiceLoopPrevention
+		Entry("should accept ServiceLoopPrevention Drop", api.FelixConfigurationSpec{ServiceLoopPrevention: "Drop"}, true),
+		Entry("should accept ServiceLoopPrevention Reject", api.FelixConfigurationSpec{ServiceLoopPrevention: "Reject"}, true),
+		Entry("should accept ServiceLoopPrevention Disabled", api.FelixConfigurationSpec{ServiceLoopPrevention: "Disabled"}, true),
+		Entry("should reject ServiceLoopPrevention Wibbly", api.FelixConfigurationSpec{ServiceLoopPrevention: "Wibbly"}, false),
+
 		// KubeControllersConfiguration validation
 		Entry("should not accept invalid HealthChecks",
 			api.KubeControllersConfigurationSpec{HealthChecks: "invalid"}, false,
