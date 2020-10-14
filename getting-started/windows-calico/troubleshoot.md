@@ -11,7 +11,7 @@ canonical_url: /getting-started/windows-calico/troubleshoot
 When using the {{site.prodname}} CNI plugin, each {{site.prodname}} IPAM block (or the single podCIDR in host-local IPAM mode), is represented as a HNS l2bridge network. Use the following command to inspect the networks.
 
 ```
-PS C:\> ipmo c:\CalicoWindows\libs\hns\hns.psm1
+PS C:\> ipmo {{site.rootDirWindows}}\libs\hns\hns.psm1
 PS C:\> Get-HNSNetwork
 ```
 
@@ -20,7 +20,7 @@ PS C:\> Get-HNSNetwork
 Use the following command to view the HNS endpoints on the system. There should be one HNS endpoint per pod networked with {{site.prodname}}:
 
 ```
-PS C:\> ipmo c:\CalicoWindows\libs\hns\hns.psm1
+PS C:\> ipmo {{site.rootDirWindows}}\libs\hns\hns.psm1
 PS C:\> Get-HNSEndpoint
 ```
 
@@ -110,8 +110,11 @@ By default, Felix waits to connect to the datastore before logging (in case the 
 Check the detailed health output that shows which health check failed:
 
 ```
-kubectl describe pod -n kube-system <calico-node-pod>
+kubectl describe pod -n calico-system <calico-node-pod>
 ```
+>**Note**: Use namespace `kube-system` instead of `calico-system` if your Calico installation is non operator-managed.
+{: .alert .alert-info}
+
 
 If the health check reports a BGP peer failure, check the IP address of the peer is either an
 expected IP of a node or an external BGP peer. If the IP of the failed peering is a Windows node:
@@ -123,7 +126,7 @@ expected IP of a node or an external BGP peer. If the IP of the failed peering i
   PS C:\> Get-Service | ? Name -EQ RemoteAccess
   ``` 
 - Check the logs for the confd service in the configured log directory for errors
-(default C:\TigeraCalico\logs).
+(default {{site.rootDirWindows}}\logs).
 
 **Examine BGP state on a Windows host**
 
