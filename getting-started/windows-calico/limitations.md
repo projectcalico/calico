@@ -22,7 +22,67 @@ canonical_url: '/getting-started/windows-calico/limitations'
 |             | Service IP advertisement                                     |
 |             | IPv6 and dual stack                                          |
 
-### Networking limitations with {{site.prodname}} VXLAN 
+### {{site.prodname}} BGP networking limitations 
+
+If you are using {{site.prodname}} with BGP, note these current limitations with Windows.
+
+| Feature                  | Limitation                                                   |
+| ------------------------ | ------------------------------------------------------------ |
+| IP mobility/ borrowing   | {{site.prodname}} IPAM allocates IPs to host in blocks for aggregation purposes.<br/>If the IP pool is full, nodes can also "borrow" IPs from another node's block. In BGP terms, the borrower then advertises a more specific "/32" route for the borrowed IP and traffic for that IP only is routed to the borrowing host. <br /><br />Windows nodes do not support this borrowing mechanism; they will not borrow IPs even if the IP pool is full and they mark their blocks so that Linux nodes will not borrow from them. |
+| IPs reserved for Windows | {{site.prodname}} IPAM allocates IPs in CIDR blocks. Due to networking requirements on Windows, four IPs per Windows node-owned block must be reserved for internal purposes.<br /><br/>For example, with the default block size of /26, each block contains 64 IP addresses, 4 are reserved for Windows, leaving 60 for pod networking.<br /><br />To reduce the impact of these reservations, a larger block size can be configured at the IP pool scope (before any pods are created). |
+| Single IP block per host | {{site.prodname}} IPAM is designed to allocate blocks of IPs (default size /26) to hosts on demand. While the {{site.prodname}} CNI plugin was written to do the same, kube-proxy currently only supports a single IP block per host.<br/><br />To work around the default limit of one /26 per host there some options:<br/><br />- With {{site.prodname}} BGP networking and the etcd datastore before creating any blocks, change the block size used by the IP pool so that it is sufficient for the largest number of Pods that are to be used on a single Windows host.<br/>- Use {{site.prodname}} BGP networking with the kubernetes datastore. In that mode, {{site.prodname}} IPAM is not used and the CNI host-local IPAM plugin is used with the node's Pod CIDR.<br/><br />To allow multiple IPAM blocks per host (at the expense of kube-proxy compatibility), set the `windows_use_single_network` flag to `false` in the `cni.conf.template` before installing {{site.prodname}}. Changing that setting after pods are networked is not recommended because it may leak HNS endpoints. |
+| IP-in-IP overlay         | {{site.prodname}}'s IPIP overlay mode cannot be used in clusters that contain Windows nodes because Windows does not support IP-in-IP. |
+| NAT-outgoing             | {{site.prodname}} IP pools support a "NAT outgoing" setting with the following behaviour: <br /><br />- Traffic between {{site.prodname}} workloads (in any IP pools) is not NATted. <br />- Traffic leaving the configured IP pools is NATted if the workload has an IP within an IP pool that has NAT outgoing enabled. {{ site.prodNameWindows }} honors the above setting but it is only applied at pod creation time. If the IP pool configuration is updated after a pod is created, the pod's traffic will continue to be NATted (or not) as before. NAT policy for newly-networked pods will honor the new configuration. {{ site.prodNameWindows }} automatically adds the host itself and its subnet to the NAT exclusion list. This behaviour can be disabled by setting flag `windows_disable_host_subnet_nat_exclusion` to `true` in `cni.conf.template` before running the install script. |
+| Service IP advertisement | This {{site.prodname}} feature is not supported on Windows.  |
+
+#### Check your network configuration 
+
+If you are using a networking type that requires layer 2 reachability (such as {{site.prodname}} with a BGP mesh and no peering to your fabric), you can check that your network has layer 2 reachability as follows: 
+
+On each of your nodes, check the IP network of the network adapter that you plan to use for pod networking. For example, on Linux, assuming your network adapter is eth0, you can run: 
+
+```
+$ ip addr show eth0 
+     2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000 
+
+    link/ether 00:0c:29:cb:c8:19 brd ff:ff:ff:ff:ff:ff 
+    inet 192.168.171.136/24 brd 192.168.171.255 scope 
+
+    global eth0 
+      valid_lft forever preferred_lft forever 
+      inet6 fe80::20c:29ff:fecb:c819/64 scope 
+      link 
+
+      valid_lft forever preferred_lft 
+      forever 
+```    
+In this case, the IPv4 is 192.168.171.136/24; which, after applying the /24 mask gives 192.168.171.0/24 for the IP network. 
+
+Similarly, on Windows, you can run 
+
+```
+PS C:\> 
+ipconfig 
+
+Windows IP 
+Configuration 
+
+Ethernet adapter vEthernet (Ethernet 
+2): 
+
+  Connection-specific DNS Suffix . : 
+  us-west-2.compute.internal Link-local IPv6 Address . . . . 
+  . : fe80::6d10:ccdd:bfbe:bce2%15 IPv4 Address. . . . . . . 
+  . . . . : 172.20.41.103 Subnet Mask . . . . . . . . . . . 
+  : 255.255.224.0 Default Gateway . . . . . . . . . : 
+  172.20.32.1
+
+``` 
+In this case, the IPv4 address is 172.20.41.103 and the mask is represented as bytes 255.255.224.0 rather than CIDR notation. Applying the mask, we get a network address 172.20.32.0/19. 
+
+Because the linux node has network 192.168.171.136/24 and the Windows node has a different network, 172.20.32.0/19, they are unlikely to be on the same layer 2 network. 
+
+### {{site.prodname}} VXLAN networking limitations 
 
 Because of differences between the Linux and Windows dataplane feature sets, the following {{site.prodname}} features are not supported on Windows.
 
@@ -51,7 +111,7 @@ One example is the VXLAN VNI setting. To change such parameters:
 - Delete the {{site.prodname}} HNS network:
 
    ```
-   PS C:\> Import-Module C:\CalicoWindows\libs\hns\hns.psm1
+   PS C:\> Import-Module {{site.rootDirWindows}}\libs\hns\hns.psm1
    PS C:\> Get-HNSNetwork | ? Name -EQ "{{site.prodname}}" | Remove-HNSNetwork
    ```
 - Update the configuration in `config.ps1`, run `uninstall-calico.ps1` and then `install-calico.ps1` to regenerate the CNI configuration.
