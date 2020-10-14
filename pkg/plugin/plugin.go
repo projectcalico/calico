@@ -139,6 +139,16 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logrus.Debug("/var/lib/calico/nodename exists")
 	}
 
+	// Determine MTU to use.
+	if mtu, err := utils.MTUFromFile("/var/lib/calico/mtu"); err != nil {
+		return fmt.Errorf("failed to read MTU file: %s", err)
+	} else if conf.MTU == 0 && mtu != 0 {
+		// No MTU specified in config, but an MTU file was found on disk.
+		// Use the value from the file.
+		logrus.WithField("mtu", mtu).Debug("Using MTU from /var/lib/calico/mtu")
+		conf.MTU = mtu
+	}
+
 	// Determine which node name to use.
 	nodename := utils.DetermineNodename(conf)
 
