@@ -86,6 +86,18 @@ func (g DropAction) String() string {
 	return "Drop"
 }
 
+type RejectAction struct {
+	TypeReject struct{}
+}
+
+func (g RejectAction) ToFragment(features *Features) string {
+	return "--jump REJECT"
+}
+
+func (g RejectAction) String() string {
+	return "Reject"
+}
+
 type LogAction struct {
 	Prefix  string
 	TypeLog struct{}

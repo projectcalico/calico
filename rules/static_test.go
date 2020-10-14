@@ -225,6 +225,7 @@ var _ = Describe("Static", func() {
 									Action: JumpAction{Target: ChainToWorkloadDispatch}},
 								// Outgoing host endpoint chains.
 								{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
+								{Action: JumpAction{Target: ChainCIDRBlock}},
 							},
 						}))
 					})
@@ -312,6 +313,7 @@ var _ = Describe("Static", func() {
 										Action:  AcceptAction{},
 										Comment: []string{"Host endpoint policy accepted packet."},
 									},
+									{Action: JumpAction{Target: ChainCIDRBlock}},
 								},
 							}))
 						} else {
@@ -334,6 +336,7 @@ var _ = Describe("Static", func() {
 										Action:  AcceptAction{},
 										Comment: []string{"Host endpoint policy accepted packet."},
 									},
+									{Action: JumpAction{Target: ChainCIDRBlock}},
 								},
 							}))
 						}
@@ -698,6 +701,7 @@ var _ = Describe("Static", func() {
 						Action:  AcceptAction{},
 						Comment: []string{"Host endpoint policy accepted packet."},
 					},
+					{Action: JumpAction{Target: ChainCIDRBlock}},
 				},
 			}
 
@@ -728,6 +732,7 @@ var _ = Describe("Static", func() {
 						Action:  AcceptAction{},
 						Comment: []string{"Host endpoint policy accepted packet."},
 					},
+					{Action: JumpAction{Target: ChainCIDRBlock}},
 				},
 			}
 
@@ -755,6 +760,7 @@ var _ = Describe("Static", func() {
 						Action:  AcceptAction{},
 						Comment: []string{"Host endpoint policy accepted packet."},
 					},
+					{Action: JumpAction{Target: ChainCIDRBlock}},
 				},
 			}
 
@@ -776,6 +782,7 @@ var _ = Describe("Static", func() {
 						Action:  AcceptAction{},
 						Comment: []string{"Host endpoint policy accepted packet."},
 					},
+					{Action: JumpAction{Target: ChainCIDRBlock}},
 				},
 			}
 
@@ -1201,6 +1208,7 @@ var _ = Describe("Static", func() {
 							Action: JumpAction{Target: ChainToWorkloadDispatch}},
 						// Outgoing host endpoint chains.
 						{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
+						{Action: JumpAction{Target: ChainCIDRBlock}},
 					},
 				}))
 			})
@@ -1247,6 +1255,7 @@ var _ = Describe("Static", func() {
 							Action:  ReturnAction{},
 							Comment: []string{"Host endpoint policy accepted packet."},
 						},
+						{Action: JumpAction{Target: ChainCIDRBlock}},
 					},
 				}))
 			})
