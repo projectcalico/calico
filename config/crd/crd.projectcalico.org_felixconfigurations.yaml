@@ -467,6 +467,12 @@ spec:
                 - max
                 - min
                 type: object
+              serviceLoopPrevention:
+                description: 'Prevent routing loops to service IPs that are not in
+                  use, by dropping or rejecting packets that do not get DNAT''d by
+                  kube-proxy.  Unless set to "Disabled", in which case such routing
+                  loops continue to be allowed.  [Default: Drop]'
+                type: string
               sidecarAccelerationEnabled:
                 description: 'SidecarAccelerationEnabled enables experimental sidecar
                   acceleration [Default: false]'
