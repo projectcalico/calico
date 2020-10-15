@@ -94,7 +94,26 @@ container-optimised OS with an emphasis on security; it has a recent enough kern
   > **Note**: Due to Bottlerocket's read-only file system, it is not possible to install {{site.prodname}} in 
   > {{site.prodname}} CNI mode at present.
   {: .alert .alert-info}
-                                                                                                                                                          
+
+* [Install `calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/install); it is needed for the following step.
+
+* To work around an incompatibility between the AWS VPC CNI and eBPF mode, create a {{site.prodname}} IP pool that matches
+  your VPC subnet and has the `natOutgoing` flag set.  The IP pool will now be used for IPAM since AWS VPC CNI has its own
+  IPAM, but it will tell {{site.prodname}} to SNAT traffic that is leaving the confines of your VPC.
+  
+  ```
+  calicoctl apply -f - <<EOF 
+  apiVersion: projectcalico.org/v3
+  kind: IPPool
+  metadata:
+    name: vpc-subnet
+  spec:
+    cidr: <your VPC subnet>
+    natOutgoing: true
+    nodeSelector: !all()
+  EOF
+  ```  
+ 
 %>
 <label:Custom AMI>
 <%
@@ -123,15 +142,35 @@ which is suitable:
   eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100 --node-ami-family Ubuntu1804 --node-ami <AMI ID>
   ```
  
-* To use {{site.prodname}} with the AWS VPC CNI, install {{site.prodname}} using the following pre-release manifest
-  from the AWS VPC CNI project:
-  ```bash
-  kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/56851f0905dba4852eb895ec1c7bd5b1876a9c67/config/master/calico.yaml
-  ```
+* To use {{site.prodname}} with the AWS VPC CNI: 
+
+  * install {{site.prodname}} using the following pre-release manifest from the AWS VPC CNI project:
+    ```bash
+    kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/56851f0905dba4852eb895ec1c7bd5b1876a9c67/config/master/calico.yaml
+    ```
   
-  > **Note**: It's important to use this pre-release manifest because the released version uses a version of {{site.prodname}}
-  > that is too old and only has partial support for eBPF mode.
-  {: .alert .alert-info}
+    > **Note**: It's important to use this pre-release manifest because the released version uses a version of {{site.prodname}}
+    > that is too old and only has partial support for eBPF mode.
+    {: .alert .alert-info}
+
+  * [Install `calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/install); it is needed for the following step.
+
+  * To work around an incompatibility between the AWS VPC CNI and eBPF mode, create a {{site.prodname}} IP pool that matches
+    your VPC subnet and has the `natOutgoing` flag set.  The IP pool will now be used for IPAM since AWS VPC CNI has its own
+    IPAM, but it will tell {{site.prodname}} to SNAT traffic that is leaving the confines of your VPC.
+  
+    ```
+    calicoctl apply -f - <<EOF 
+    apiVersion: projectcalico.org/v3
+    kind: IPPool
+    metadata:
+      name: vpc-subnet
+    spec:
+      cidr: <your VPC subnet>
+      natOutgoing: true
+      nodeSelector: !all()
+    EOF
+    ```  
 
 * Alternatively, follow the "Install EKS with {{site.prodname}} networking" section of the 
   [this guide](../../getting-started/kubernetes/managed-public-cloud/eks.md).
