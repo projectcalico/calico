@@ -98,7 +98,7 @@ container-optimised OS with an emphasis on security; it has a recent enough kern
 * [Install `calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/install); it is needed for the following step.
 
 * To work around an incompatibility between the AWS VPC CNI and eBPF mode, create a {{site.prodname}} IP pool that matches
-  your VPC subnet and has the `natOutgoing` flag set.  The IP pool will now be used for IPAM since AWS VPC CNI has its own
+  your VPC subnet and has the `natOutgoing` flag set.  The IP pool will not be used for IPAM since AWS VPC CNI has its own
   IPAM, but it will tell {{site.prodname}} to SNAT traffic that is leaving the confines of your VPC.
   
   ```
@@ -172,8 +172,25 @@ which is suitable:
     EOF
     ```  
 
-* Alternatively, follow the "Install EKS with {{site.prodname}} networking" section of the 
-  [this guide](../../getting-started/kubernetes/managed-public-cloud/eks.md).
+* Alternatively, to use {{site.prodname}} networking:
+
+  * Delete the `aws-node` daemon set to disable AWS VPC networking for pods.
+    
+    ```bash
+    kubectl delete daemonset -n kube-system aws-node
+    ```
+    
+  * Install {{site.prodname}}.
+    
+    ```bash
+    kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
+    ```
+    
+  * Restart any pods that were created before {{site.prodname}} was installed.  Typically, this is only `kube-dns`:
+  
+    ```
+    kubectl delete pod -n kube-system -l k8s-app=kube-dns
+    ```
 
 %>
 {% endtabs %}
