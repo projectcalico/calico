@@ -73,7 +73,7 @@ eBPF mode has the following pre-requisites:
 - The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
 
 > **Note**: The default kernel used by EKS is not compatible with eBPF mode.  If you wish to try eBPF mode with EKS, 
-> follow [these instructions](./ebpf-and-eks), which explain how to set up a suitable cluster.
+> follow the [Creating an EKS cluster for eBPF mode](./ebpf-and-eks) guide, which explain how to set up a suitable cluster.
 {: .alert .alert-info}
 
 ### How to
@@ -281,8 +281,13 @@ To enable eBPF mode, change Felix configuration parameter  `BPFEnabled` to `true
 calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
 ```
 
-Enabling eBPF node can disrupt existing workload connections.  After enabling eBPF mode you may need to restart workload pods in order for them to restart connections.  In particular, it's a good idea to restart `kube-dns`
-since its connection to the API server can be disrupted.
+Enabling eBPF node can disrupt existing workload connections.  After enabling eBPF mode you may need to restart 
+workload pods in order for them to restart connections.  In particular, it's a good idea to restart `kube-dns`
+since its connection to the API server can be disrupted:
+
+```
+kubectl delete pod -n kube-system -l k8s-app=kube-dns
+```
 
 #### Try out DSR mode
 
