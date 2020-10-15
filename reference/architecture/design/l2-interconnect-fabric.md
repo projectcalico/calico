@@ -12,7 +12,7 @@ network.
 Any technology that is capable of transporting IP packets can be used as
 the interconnect fabric in a {{site.prodname}} network (the first person to test
 and publish the results of using [IP over Avian
-Carrier](http://tools.ietf.org/html/rfc1149) as a transport for {{site.prodname}}
+Carrier](http://tools.ietf.org/html/rfc1149){:target="_blank"} as a transport for {{site.prodname}}
 will earn a very nice dinner on or with the core {{site.prodname}} team). This
 means that the standard tools used to transport IP, such as MPLS and
 Ethernet can be used in a {{site.prodname}} network.
@@ -31,8 +31,8 @@ deployments.
 It has been acknowledged by the industry for years that, beyond a
 certain size, classical Ethernet networks are unsuitable for production
 deployment. Although there have been
-[multiple](https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering)
-[attempts](https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html) [to address](https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service)
+[multiple](https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering){:target="_blank"}
+[attempts](https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html){:target="_blank"} [to address](https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service){:target="_blank"}
 these issues, the scale-out networking community has, largely abandoned
 Ethernet for anything other than providing physical point-to-point links
 in the networking fabric. The principal reasons for Ethernet failures at
@@ -146,7 +146,7 @@ but the *leaf/spine* is the predominant architectural model in use in
 scale-out infrastructure today.
 
 Since {{site.prodname}} is an IP routed fabric, a {{site.prodname}} network can use
-[ECMP](https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing) to
+[ECMP](https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing){:target="_blank"} to
 distribute traffic across multiple links (instead of using Ethernet
 techniques such as MLAG). By leveraging ECMP load balancing on the
 {{site.prodname}} compute servers, it is possible to build the fabric out of
@@ -163,7 +163,7 @@ that is possible with today's designs.
 A more in-depth discussion is possible, so if you'd like, please make a
 request, and I will put up a post or white paper. In the meantime, it
 may be interesting to venture over to Facebook's [blog
-post](https://code.facebook.com/posts/360346274145943/introducing-data-center-fabric-the-next-generation-facebook-data-center-network/)
+post](https://code.facebook.com/posts/360346274145943/introducing-data-center-fabric-the-next-generation-facebook-data-center-network/){:target="_blank"}
 on their fabric approach. A quick picture to visualize the idea is shown
 below.
 

@@ -106,7 +106,7 @@ oc get tigerastatus
 
 #### Optionally integrate with Operator Lifecycle Manager (OLM)
 
-In OpenShift Container Platform, the [Operator Lifecycle Manager](https://docs.openshift.com/container-platform/4.4/operators/understanding_olm/olm-understanding-olm.html#olm-overview_olm-understanding-olm) helps
+In OpenShift Container Platform, the [Operator Lifecycle Manager](https://docs.openshift.com/container-platform/4.4/operators/understanding_olm/olm-understanding-olm.html#olm-overview_olm-understanding-olm){:target="_blank"} helps
 cluster administrators manage the lifecycle of operators in their cluster. Managing the {{site.prodname}}
 operator with OLM gives administrators a single place to manage operators.
 

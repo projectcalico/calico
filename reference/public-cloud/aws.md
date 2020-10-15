@@ -8,19 +8,19 @@ canonical_url: '/reference/public-cloud/aws'
 
 - **Network Policy for Containers**: {{site.prodname}} provides fine-grained network security policy for individual containers.
 - **No Overlays**: Within each VPC subnet {{site.prodname}} doesn't need an overlay, which means high performance networking for your containers.
-- **No 50 Node Limit**: {{site.prodname}} allows you to surpass the 50 node limit, which exists as a consequence of the [AWS 50 route limit](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Appendix_Limits.html#vpc-limits-route-tables) when using the VPC routing table.
+- **No 50 Node Limit**: {{site.prodname}} allows you to surpass the 50 node limit, which exists as a consequence of the [AWS 50 route limit](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Appendix_Limits.html#vpc-limits-route-tables){:target="_blank"} when using the VPC routing table.
 
 ## Routing traffic within a single VPC subnet
 
 Since {{site.prodname}} assigns IP addresses outside the range used by AWS for EC2 instances, you must disable AWS src/dst
 checks on each EC2 instance in your cluster
-[as described in the AWS documentation](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck).  This
+[as described in the AWS documentation](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck){:target="_blank"}.  This
 allows {{site.prodname}} to route traffic natively within a single VPC subnet without using an overlay or any of the limited VPC routing table entries.
 
 ## Routing traffic across different VPC subnets / VPCs
 
 If you need to split your deployment across multiple AZs for high availability then each AZ will have its own VPC subnet.  To
-use {{site.prodname}} across multiple different VPC subnets or [peered VPCs](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/vpc-peering.html),
+use {{site.prodname}} across multiple different VPC subnets or [peered VPCs](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/vpc-peering.html){:target="_blank"},
 in addition to disabling src/dst checks as described above you must also enable IPIP encapsulation and outgoing NAT
 on your {{site.prodname}} IP pools.
 

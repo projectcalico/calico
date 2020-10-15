@@ -128,7 +128,7 @@ which is suitable:
 
 * Log into the instance with `ssh` and upgrade it to Ubuntu 20.04.
 
-* [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html) 
+* [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html){:target="_blank"} 
   and make a note of the AMI ID
 
 * Using `eksctl`: start your cluster as normal, but when creating the nodegroup, add the `--node-ami` and

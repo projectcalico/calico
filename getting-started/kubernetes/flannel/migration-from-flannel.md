@@ -21,7 +21,7 @@ Flannel networking uses the host-local IPAM (IP address management) CNI plugin, 
 
 - Because each node has a pre-allocated CIDR, pods must always have an IP address assigned based on the node it is running on. Being able to allocate IP addresses based on other attributes (for example, the pod’s namespace), provides flexiblity to meet use cases that arise.
 
-Migrating to {{site.prodname}} IPAM solves these use cases and more. For advantages of Calico IPAM, see [Blog: Live Migration from Flannel to Calico](https://www.projectcalico.org/live-migration-from-flannel-to-calico/).
+Migrating to {{site.prodname}} IPAM solves these use cases and more. For advantages of Calico IPAM, see [Blog: Live Migration from Flannel to Calico](https://www.projectcalico.org/live-migration-from-flannel-to-calico/){:target="_blank"}.
 
 #### Methods for migrating to {{site.prodname}} networking
 

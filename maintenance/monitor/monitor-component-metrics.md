@@ -101,7 +101,7 @@ kube-system     calico-typha-horizontal-autoscaler-74f77cd87c-6hx27   1/1     Ru
 You can enable Typha metrics to be consumed by Prometheus via [two ways]({{ site.baseurl }}/reference/typha/configuration).
 ##### **Creating a service to expose Typha metrics**
 
-> **Note**: Typha uses **port 9091** TCP by default to publish its metrics. However, if {{site.prodname}} is installed using [Amazon yaml file](https://github.com/aws/amazon-vpc-cni-k8s/blob/b001dc6a8fff52926ed9a93ee6c4104f02d365ab/config/v1.5/calico.yaml#L535-L536) this port will be 9093 as its set manually via **TYPHA_PROMETHEUSMETRICSPORT** environment variable.
+> **Note**: Typha uses **port 9091** TCP by default to publish its metrics. However, if {{site.prodname}} is installed using [Amazon yaml file](https://github.com/aws/amazon-vpc-cni-k8s/blob/b001dc6a8fff52926ed9a93ee6c4104f02d365ab/config/v1.5/calico.yaml#L535-L536){:target="_blank"} this port will be 9093 as its set manually via **TYPHA_PROMETHEUSMETRICSPORT** environment variable.
    {: .alert .alert-warning}
 
 ``` bash
@@ -125,7 +125,7 @@ EOF
 ##### **Namespace creation**
 
 `Namespace` isolates resources in your cluster. Here you will create a Namespace called `calico-monitoring` to hold your monitoring resources.
-> **Note**: Kubernetes namespaces guide can be [found at this link](https://kubernetes.io/docs/tasks/administer-cluster/namespaces/).
+> **Note**: Kubernetes namespaces guide can be [found at this link](https://kubernetes.io/docs/tasks/administer-cluster/namespaces/){:target="_blank"}.
    {: .alert .alert-info}
 
 ```bash
@@ -144,7 +144,7 @@ EOF
 
 You need to provide Prometheus a serviceAccount with required permissions to collect information from {{site.prodname}}.
 
-> **Note**: A comprehensive guide to user roles and authentication can be [found at this link](https://kubernetes.io/docs/reference/access-authn-authz/rbac/).
+> **Note**: A comprehensive guide to user roles and authentication can be [found at this link](https://kubernetes.io/docs/reference/access-authn-authz/rbac/){:target="_blank"}.
    {: .alert .alert-info}
 
 ```bash
@@ -188,7 +188,7 @@ EOF
 
 We can configure Prometheus using a ConfigMap to persistently store the desired settings. 
 
-> **Note**: A comprehensive guide about configuration file can be [found at this link](https://prometheus.io/docs/prometheus/latest/configuration/configuration/).
+> **Note**: A comprehensive guide about configuration file can be [found at this link](https://prometheus.io/docs/prometheus/latest/configuration/configuration/){:target="_blank"}.
    {: .alert .alert-info}
 
 ```bash
