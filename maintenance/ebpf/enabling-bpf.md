@@ -69,7 +69,7 @@ eBPF mode has the following pre-requisites:
 - The underlying network must be configured to allow VXLAN packets between {{site.prodname}} hosts.  In eBPF mode, 
   VXLAN is used to forward traffic to Kubernetes NodePorts, while preserving source IP.
 - A stable way to address the Kubernetes API server. Since eBPF mode takes over from kube-proxy, {{site.prodname}} 
-  Creating an needs a way to reach the API server directly.
+  needs a way to reach the API server directly.
 - The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
 
 > **Note**: The default kernel used by EKS is not compatible with eBPF mode.  If you wish to try eBPF mode with EKS, 
