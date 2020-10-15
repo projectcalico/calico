@@ -553,5 +553,5 @@ message WireguardEndpointRemove {
 }
 
 message GlobalBGPConfigUpdate {
-  repeated string service_cluster_ips = 1;
+  repeated string service_cluster_cidrs = 1;
 }

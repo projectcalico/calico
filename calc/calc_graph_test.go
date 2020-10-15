@@ -134,7 +134,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			},
 		},
 		proto.GlobalBGPConfigUpdate{
-			ServiceClusterIps: []string{"1.2.0.0/16", "fd5f::/120"},
+			ServiceClusterCidrs: []string{"1.2.0.0/16", "fd5f::/120"},
 		},
 		proto.GlobalBGPConfigUpdate{}),
 )

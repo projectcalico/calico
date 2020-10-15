@@ -66,10 +66,10 @@ func (m *serviceLoopManager) OnUpdate(protoBufMsg interface{}) {
 
 func (m *serviceLoopManager) CompleteDeferredWork() error {
 	if m.pendingGlobalBGPConfig != nil {
-		clusterIPs := m.pendingGlobalBGPConfig.GetServiceClusterIps()
+		clusterCIDRs := m.pendingGlobalBGPConfig.GetServiceClusterCidrs()
 
-		// Render chains for those cluster IPs.
-		newFilterChains := m.ruleRenderer.BlockedCIDRsToIptablesChains(clusterIPs, m.ipVersion)
+		// Render chains for those cluster CIDRs.
+		newFilterChains := m.ruleRenderer.BlockedCIDRsToIptablesChains(clusterCIDRs, m.ipVersion)
 
 		// Update iptables if they have changed.
 		if !reflect.DeepEqual(m.activeFilterChains, newFilterChains) {

@@ -772,7 +772,7 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 	buf.pendingGlobalBGPConfig = &proto.GlobalBGPConfigUpdate{}
 	if cfg != nil {
 		for _, block := range cfg.Spec.ServiceClusterIPs {
-			buf.pendingGlobalBGPConfig.ServiceClusterIps = append(buf.pendingGlobalBGPConfig.ServiceClusterIps, block.CIDR)
+			buf.pendingGlobalBGPConfig.ServiceClusterCidrs = append(buf.pendingGlobalBGPConfig.ServiceClusterCidrs, block.CIDR)
 		}
 	}
 }
