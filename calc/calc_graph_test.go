@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -118,6 +119,24 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		proto.HostMetadataRemove{
 			Hostname: "foo",
 		}),
+	Entry("Global BGPConfiguration",
+		model.ResourceKey{Kind: v3.KindBGPConfiguration, Name: "default"},
+		&v3.BGPConfiguration{
+			Spec: v3.BGPConfigurationSpec{
+				ServiceClusterIPs: []v3.ServiceClusterIPBlock{
+					{
+						CIDR: "1.2.0.0/16",
+					},
+					{
+						CIDR: "fd5f::/120",
+					},
+				},
+			},
+		},
+		proto.GlobalBGPConfigUpdate{
+			ServiceClusterIps: []string{"1.2.0.0/16", "fd5f::/120"},
+		},
+		proto.GlobalBGPConfigUpdate{}),
 )
 
 var _ = Describe("Host IP duplicate squashing test", func() {
