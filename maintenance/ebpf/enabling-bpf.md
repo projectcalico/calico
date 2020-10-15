@@ -54,18 +54,26 @@ eBPF mode has the following pre-requisites:
     
   If {{site.prodname}} does not detect a compatible kernel, {{site.prodname}} will emit a warning and fall back to standard linux networking.
   
-- On each node, the BPF filesystem must be mounted at `/sys/fs/bpf`.  This is required so that the BPF filesystem persists when {{site.prodname}} is restarted.  (If the filesystem does not persist then pods will temporarily lose connectivity when {{site.prodname}} is restarted.)
+- On each node, the BPF filesystem must be mounted at `/sys/fs/bpf`.  This is required so that the BPF filesystem persists 
+  when {{site.prodname}} is restarted.  (If the filesystem does not persist then pods will temporarily lose connectivity when
+  {{site.prodname}} is restarted.)
 - For best pod-to-pod performance, an underlying network that doesn't require Calico to use an overlay.  For example:
  
   - A cluster within a single AWS subnet.
   - A cluster using a compatible cloud provider's CNI (such as the AWS VPC CNI plugin).
   - An on-prem cluster with BGP peering configured.
   
-- The underlying network must be configured to allow VXLAN packets between {{site.prodname}} hosts.  In eBPF mode, VXLAN is used to forward traffic to Kubernetes NodePorts, while preserving source IP.
-- A stable way to address the Kubernetes API server. Since eBPF mode takes over from kube-proxy, {{site.prodname}} needs a way to reach the API server directly.
+  If you must use an overlay, we recommend that you use VXLAN, not IPIP.  This is because IPIP performs poorly with eBPF mode due 
+  to technical limitations in the kernel.
+  
+- The underlying network must be configured to allow VXLAN packets between {{site.prodname}} hosts.  In eBPF mode, 
+  VXLAN is used to forward traffic to Kubernetes NodePorts, while preserving source IP.
+- A stable way to address the Kubernetes API server. Since eBPF mode takes over from kube-proxy, {{site.prodname}} 
+  Creating an needs a way to reach the API server directly.
 - The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
 
-> **Note**: The default kernel used by EKS is not compatible with eBPF mode.  If you wish to try eBPF mode with EKS, follow [these instructions](./ebpf-and-eks).
+> **Note**: The default kernel used by EKS is not compatible with eBPF mode.  If you wish to try eBPF mode with EKS, 
+> follow [these instructions](./ebpf-and-eks), which explain how to set up a suitable cluster.
 {: .alert .alert-info}
 
 ### How to
@@ -138,7 +146,16 @@ First, make a note of the address of the API server:
      
    * If using DNS load balancing (as used by `kops`), use the FQDN and port of the API server `api.internal.<clustername>`.
    * If you have multiple API servers with a load balancer in front, you should use the IP and port of the load balancer.
-
+   
+> **Tip**: If your cluster uses a ConfigMap to configure `kube-proxy` you can find the "right" way to reach the API 
+> server by examining the config map.  For example:
+> ``` 
+> $ kubectl get configmap -n kube-system kube-proxy -o jsonpath='{.data.kubeconfig}' | grep server`
+>     server: https://d881b853ae312e00302a84f1e346a77.gr7.us-west-2.eks.amazonaws.com
+> ```
+> In this case, the server is `d881b853aea312e00302a84f1e346a77.gr7.us-west-2.eks.amazonaws.com` and the port is
+> 443 (the standard HTTPS port).
+{: .alert .alert-success}
 
 The next step depends on whether you installed {{site.prodname}} using the operator, or a manifest:
 
@@ -264,7 +281,8 @@ To enable eBPF mode, change Felix configuration parameter  `BPFEnabled` to `true
 calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
 ```
 
-Enabling eBPF node can disrupt existing workload connections.  After enabling eBPF mode you may need to restart workload pods in order for them to restart connections. 
+Enabling eBPF node can disrupt existing workload connections.  After enabling eBPF mode you may need to restart workload pods in order for them to restart connections.  In particular, it's a good idea to restart `kube-dns`
+since its connection to the API server can be disrupted.
 
 #### Try out DSR mode
 
