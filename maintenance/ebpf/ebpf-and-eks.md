@@ -33,9 +33,9 @@ and in particular, pushing the networking capabilities of the latest Linux kerne
 
 EKS is Amazon's managed Kubernetes offering.
 
-> **Note**: The EKS docs include instructions for installing {{site.prodname}} with the AWS VPC CNI.  The current 
-> version of those docs uses an older version of {{site.prodname}} that does not include the GA version of eBPF mode.
-> The instructions below guide you through installing {{site.prodname}} with the {{site.prodname}} CNI.
+> **Note**: The EKS docs include instructions for installing {{site.prodname}}. However, those instructions use
+> a version of {{site.prodname}} that pre-dates eBPF mode GA.  The instructions below use a pre-release manifest
+> in order to install a suitable version of {{site.prodname}}.
 {: .alert .alert-info}
 
 ### How to
@@ -85,20 +85,14 @@ container-optimised OS with an emphasis on security; it has a recent enough kern
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
   EOF
   ```
- 
-* Then, remove the AWS CNI DaemonSet: 
-  ```bash
-  kubectl delete daemonset -n kube-system aws-node
-  ```
 
-* Install {{site.prodname}} in VXLAN mode using the manifest:
+* Install {{site.prodname}} using the following pre-release manifest from the AWS VPC CNI project:
   ```bash
-  kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
+  kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/56851f0905dba4852eb895ec1c7bd5b1876a9c67/config/master/calico.yaml
   ```
   
-  > **Note**: This will use the {{site.prodname}} CNI plugin (rather than the AWS VPC CNI plugin).  We recommend
-  > sticking the {{site.prodname}} CNI plugin in this release because there are a couple of known issues with the
-  > combination of eBPF mode and the AWS VPC CNI plugin. Fixes for those issues are in progress.
+  > **Note**: Due to Bottlerocket's read-only file system, it is not possible to install {{site.prodname}} in 
+  > {{site.prodname}} CNI mode at present.
   {: .alert .alert-info}
                                                                                                                                                           
 %>
@@ -118,9 +112,8 @@ which is suitable:
 * [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html) 
   and make a note of the AMI ID
 
-* Using `eksctl`: start your cluster as normal following the 
-  [EKS with Calico CNI install doc](../getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking), 
-  but when creating the nodegroup, add the `--node-ami` and `--node-ami-family` settings.
+* Using `eksctl`: start your cluster as normal, but when creating the nodegroup, add the `--node-ami` and
+  `--node-ami-family` settings.
 
   * `--node-ami` should be set to the AMI ID of the image built above.
   * `--node-ami-family` should be set to `Ubuntu1804` (in spite of the upgrade).
@@ -129,11 +122,20 @@ which is suitable:
   ```
   eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100 --node-ami-family Ubuntu1804 --node-ami <AMI ID>
   ```
+ 
+* To use {{site.prodname}} with the AWS VPC CNI, install {{site.prodname}} using the following pre-release manifest
+  from the AWS VPC CNI project:
+  ```bash
+  kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/56851f0905dba4852eb895ec1c7bd5b1876a9c67/config/master/calico.yaml
+  ```
   
-  > **Note**: We recommend that you use the {{site.prodname}} CNI plugin (rather than the AWS VPC CNI plugin)
-  > because there are a couple of known issues with the combination of eBPF mode and the AWS VPC CNI plugin.
-  > Fixes for those issues are in progress.
+  > **Note**: It's important to use this pre-release manifest because the released version uses a version of {{site.prodname}}
+  > that is too old and only has partial support for eBPF mode.
   {: .alert .alert-info}
+
+* Alternatively, follow the "Install EKS with {{site.prodname}} networking" section of the 
+  [this guide](../../getting-started/kubernetes/managed-public-cloud/eks.md).
+
 %>
 {% endtabs %}
 
