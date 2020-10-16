@@ -653,35 +653,34 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		})
 
 		const numNodes = 3
+		var (
+			w     [numNodes][2]*workload.Workload
+			hostW [numNodes]*workload.Workload
+		)
 
-		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
-			var (
-				w     [numNodes][2]*workload.Workload
-				hostW [numNodes]*workload.Workload
-			)
+		setupCluster := func() {
+			felixes, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
-			BeforeEach(func() {
-				felixes, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
+			addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
+				if labels == nil {
+					labels = make(map[string]string)
+				}
 
-				addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
-					if labels == nil {
-						labels = make(map[string]string)
-					}
+				wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+				wName := fmt.Sprintf("w%d%d", ii, wi)
 
-					wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
-					wName := fmt.Sprintf("w%d%d", ii, wi)
+				w := workload.New(felixes[ii], wName, "default",
+					wIP, strconv.Itoa(port), testOpts.protocol)
+				if run {
+					w.Start()
+				}
 
-					w := workload.New(felixes[ii], wName, "default",
-						wIP, strconv.Itoa(port), testOpts.protocol)
-					if run {
-						w.Start()
-					}
+				labels["name"] = w.Name
+				labels["workload"] = "regular"
 
-					labels["name"] = w.Name
-					labels["workload"] = "regular"
-
-					w.WorkloadEndpoint.Labels = labels
-					w.ConfigureInInfra(infra)
+				w.WorkloadEndpoint.Labels = labels
+				w.ConfigureInInfra(infra)
+				if options.UseIPPools {
 					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
 					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 						IP:       cnet.MustParseIP(wIP),
@@ -692,50 +691,56 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Hostname: felixes[ii].Hostname,
 					})
 					Expect(err).NotTo(HaveOccurred())
-
-					return w
 				}
 
-				// Start a host networked workload on each host for connectivity checks.
-				for ii := range felixes {
-					// We tell each host-networked workload to open:
-					// TODO: Copied from another test
-					// - its normal (uninteresting) port, 8055
-					// - port 2379, which is both an inbound and an outbound failsafe port
-					// - port 22, which is an inbound failsafe port.
-					// This allows us to test the interaction between do-not-track policy and failsafe
-					// ports.
-					hostW[ii] = workload.Run(
-						felixes[ii],
-						fmt.Sprintf("host%d", ii),
-						"default",
-						felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
-						"8055",
-						testOpts.protocol)
+				return w
+			}
 
-					hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
-					hostW[ii].ConfigureInInfra(infra)
-
-					// Two workloads on each host so we can check the same host and other host cases.
-					w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
-					w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
-				}
-
-				// Create a workload on node 0 that does not run, but we can use it to set up paths
-				deadWorkload = addWorkload(false, 0, 2, 8057, nil)
-
-				// We will use this container to model an external client trying to connect into
-				// workloads on a host.  Create a route in the container for the workload CIDR.
+			// Start a host networked workload on each host for connectivity checks.
+			for ii := range felixes {
+				// We tell each host-networked workload to open:
 				// TODO: Copied from another test
-				externalClient = containers.Run("external-client",
-					containers.RunOpts{AutoRemove: true},
-					"--privileged", // So that we can add routes inside the container.
-					utils.Config.BusyboxImage,
-					"/bin/sh", "-c", "sleep 1000")
-				_ = externalClient
+				// - its normal (uninteresting) port, 8055
+				// - port 2379, which is both an inbound and an outbound failsafe port
+				// - port 22, which is an inbound failsafe port.
+				// This allows us to test the interaction between do-not-track policy and failsafe
+				// ports.
+				hostW[ii] = workload.Run(
+					felixes[ii],
+					fmt.Sprintf("host%d", ii),
+					"default",
+					felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
+					"8055",
+					testOpts.protocol)
 
-				err := infra.AddDefaultDeny()
-				Expect(err).NotTo(HaveOccurred())
+				hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
+				hostW[ii].ConfigureInInfra(infra)
+
+				// Two workloads on each host so we can check the same host and other host cases.
+				w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
+				w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
+			}
+
+			// Create a workload on node 0 that does not run, but we can use it to set up paths
+			deadWorkload = addWorkload(false, 0, 2, 8057, nil)
+
+			// We will use this container to model an external client trying to connect into
+			// workloads on a host.  Create a route in the container for the workload CIDR.
+			// TODO: Copied from another test
+			externalClient = containers.Run("external-client",
+				containers.RunOpts{AutoRemove: true},
+				"--privileged", // So that we can add routes inside the container.
+				utils.Config.BusyboxImage,
+				"/bin/sh", "-c", "sleep 1000")
+			_ = externalClient
+
+			err := infra.AddDefaultDeny()
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
+			BeforeEach(func() {
+				setupCluster()
 			})
 
 			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
@@ -830,7 +835,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					sort.Strings(filteredLines)
 					return strings.Join(filteredLines, "\n")
 				}
-				Eventually(dumpRoutes).Should(Equal(expectedRoutes))
+				Eventually(dumpRoutes).Should(Equal(expectedRoutes), dumpRoutes)
 			})
 
 			It("should only allow traffic from the local host by default", func() {
@@ -2483,6 +2488,75 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 						})
 					})
+				})
+			})
+		})
+
+		Describe("3rd party CNI", func() {
+			// We do not use tunnel in such environments, no need to test.
+			if testOpts.tunnel != "none" {
+				return
+			}
+
+			BeforeEach(func() {
+				// To mimic 3rd party CNI, we do not install IPPools and set the source to
+				// learn routes to WorkloadIPs as IPAM/CNI is not going to provide either.
+				options.UseIPPools = false
+				options.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
+				setupCluster()
+			})
+
+			Describe("CNI installs NAT outgoing iptable rules", func() {
+				var extWorkload *workload.Workload
+				BeforeEach(func() {
+					c := containers.Run("external-workload",
+						containers.RunOpts{AutoRemove: true},
+						"--privileged", // So that we can add routes inside the container.
+						utils.Config.BusyboxImage,
+						"/bin/sh", "-c", "sleep 1000")
+
+					extWorkload = &workload.Workload{
+						C:        c,
+						Name:     "ext-workload",
+						Ports:    "4321",
+						Protocol: testOpts.protocol,
+						IP:       c.IP,
+					}
+
+					err := extWorkload.Start()
+					Expect(err).NotTo(HaveOccurred())
+
+					for _, felix := range felixes {
+						felix.Exec("iptables", "-t", "nat", "-A", "POSTROUTING", "-d", extWorkload.IP, "-j", "MASQUERADE")
+					}
+				})
+
+				It("should have connectivity to external workload", func() {
+					By("allowing any traffic", func() {
+						pol := api.NewGlobalNetworkPolicy()
+						pol.Namespace = "fv"
+						pol.Name = "policy-1"
+						pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
+						pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
+						pol.Spec.Selector = "all()"
+
+						pol = createPolicy(pol)
+
+						cc.ExpectSome(w[1][0], w[0][0])
+						cc.ExpectSome(w[1][1], w[0][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+					})
+
+					By("checking connectivity to the external workload", func() {
+						cc.Expect(Some, w[0][0], extWorkload, ExpectWithPorts(4321), ExpectWithSrcIPs(felixes[0].IP))
+						cc.Expect(Some, w[1][0], extWorkload, ExpectWithPorts(4321), ExpectWithSrcIPs(felixes[1].IP))
+						cc.CheckConnectivity()
+					})
+				})
+
+				AfterEach(func() {
+					extWorkload.Stop()
 				})
 			})
 		})
