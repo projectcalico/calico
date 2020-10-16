@@ -126,6 +126,14 @@ func (d *MockNetlinkDataplane) ConfigureDevice(name string, cfg wgtypes.Config) 
 	defer d.mutex.Unlock()
 	defer GinkgoRecover()
 
+	// Track the last set of wireguard device updates. Note that we should only get each peer appearing at most once in
+	// the update.
+	d.LastWireguardUpdates = make(map[wgtypes.Key]wgtypes.PeerConfig)
+	for _, p := range cfg.Peers {
+		d.LastWireguardUpdates[p.PublicKey] = p
+	}
+	Expect(cfg.Peers).To(HaveLen(len(d.LastWireguardUpdates)))
+
 	Expect(d.WireguardOpen).To(BeTrue())
 	if d.shouldFail(FailNextWireguardConfigureDevice) {
 		return SimulatedError

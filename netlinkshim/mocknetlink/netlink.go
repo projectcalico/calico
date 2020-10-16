@@ -224,6 +224,7 @@ type MockNetlinkDataplane struct {
 	NumRuleAddCalls        int
 	NumRuleDelCalls        int
 	WireguardConfigUpdated bool
+	LastWireguardUpdates   map[wgtypes.Key]wgtypes.PeerConfig
 
 	PersistentlyFailToConnect bool
 
