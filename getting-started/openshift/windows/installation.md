@@ -18,7 +18,7 @@ Run Windows workloads on OpenShift 4 with {{site.prodname}}.
 
 - Ensure that your environment meets the {{site.prodname}} [system requirements]({{site.baseurl}}/getting-started/openshift/requirements).
 
-- **If installing on AWS**, ensure that you have {% include open-new-window.html text='configured an AWS account' url='https://docs.openshift.com/container-platform/4.4/installing/installing_aws/installing-aws-account.html' %} appropriate for OpenShift 4,
+- Ensure that you have {% include open-new-window.html text='configured an AWS account' url='https://docs.openshift.com/container-platform/4.4/installing/installing_aws/installing-aws-account.html' %} appropriate for OpenShift 4,
   and have {% include open-new-window.html text='set up your AWS credentials' url='https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html' %}.
   Note that the OpenShift installer supports a subset of {% include open-new-window.html text='AWS regions' url='https://docs.openshift.com/container-platform/4.4/installing/installing_aws/installing-aws-account.html#installation-aws-regions_installing-aws-account' %}.
 

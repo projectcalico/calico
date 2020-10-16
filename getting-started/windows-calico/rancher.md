@@ -6,7 +6,7 @@ canonical_url: '/getting-started/windows-calico/rancher'
 
 ### Big picture
 
-Install {{site.prodnameWindows}} on your Rancher Kubernetes Engine (RKE) cluster.
+Install {{site.prodnameWindows}} on a Rancher Kubernetes Engine (RKE) cluster.
 
 ### Value
 
@@ -17,7 +17,7 @@ Run Linux and Windows workloads on a RKE cluster with {{site.prodname}}.
 **You will need**
 
 - An RKE cluster provisioned with {% include open-new-window.html text='no network plugin' url='https://rancher.com/docs/rke/latest/en/config-options/add-ons/network-plugins#disabling-deployment-of-a-network-plug-in' %}
-but otherwise meets the {{site.prodnameWindows}} Kubernetes [cluster requirements]({{site.baseurl}}/getting-started/windows-calico/requirements). This guide was tested with RKE v1.18.9.
+but which otherwise meets the {{site.prodnameWindows}} Kubernetes [cluster requirements]({{site.baseurl}}/getting-started/windows-calico/requirements). This guide was tested with RKE v1.18.9.
 - One or more Windows nodes that meet the [requirements]({{site.baseurl}}/getting-started/windows-calico/requirements).
 
 ### How to
