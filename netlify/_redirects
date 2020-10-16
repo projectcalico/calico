@@ -152,6 +152,10 @@
 /getting-started/rkt/upgrade /archive/v1.6/getting-started/rkt/upgrade 301
 /getting-started/rkt/vagrant/ /archive/v1.6/getting-started/rkt/vagrant/ 301
 /introduction/deployments /introduction/ 301
+/maintenance/enabling-ebpf /maintenance/ebpf/enabling-ebpf
+/maintenance/eks-and-ebpf /maintenance/ebpf/eks-and-ebpf
+/archive/v3.16/maintenance/enabling-ebpf /archive/v3.16/maintenance/ebpf/enabling-ebpf
+/archive/v3.16/maintenance/eks-and-ebpf /archive/v3.16/maintenance/ebpf/eks-and-ebpf
 /networking/assigning-ip-addresses-topology /networking/assign-ip-addresses-topology 301
 /networking/changing-ip-pools /networking/migrate-pools 301
 /networking/conntrack /maintenance/troubleshooting 301
