@@ -68,6 +68,8 @@ section:
         path: /getting-started/windows-calico/requirements
       - title: Install Calico for Windows
         path: /getting-started/windows-calico/standard
+    - title: Install on Rancher
+      path: /getting-started/windows-calico/rancher
     - title: Create kubeconfig for Windows nodes
       path: /getting-started/windows-calico/kubeconfig
     - title: Start and stop Calico for Windows services
