@@ -52,6 +52,7 @@ type TopologyOptions struct {
 	DelayFelixStart           bool
 	AutoHEPsEnabled           bool
 	TriggerDelayedFelixStart  bool
+	UseIPPools                bool
 }
 
 func DefaultTopologyOptions() TopologyOptions {
@@ -65,6 +66,7 @@ func DefaultTopologyOptions() TopologyOptions {
 		TyphaLogSeverity:  "info",
 		IPIPEnabled:       true,
 		IPIPRoutesEnabled: true,
+		UseIPPools:        true,
 	}
 }
 
@@ -158,19 +160,21 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		Eventually(func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			ipPool := api.NewIPPool()
-			ipPool.Name = "test-pool"
-			ipPool.Spec.CIDR = "10.65.0.0/16"
-			ipPool.Spec.NATOutgoing = opts.NATOutgoingEnabled
-			if opts.IPIPEnabled {
-				ipPool.Spec.IPIPMode = api.IPIPModeAlways
-			} else {
-				ipPool.Spec.IPIPMode = api.IPIPModeNever
+			if opts.UseIPPools {
+				ipPool := api.NewIPPool()
+				ipPool.Name = "test-pool"
+				ipPool.Spec.CIDR = "10.65.0.0/16"
+				ipPool.Spec.NATOutgoing = opts.NATOutgoingEnabled
+				if opts.IPIPEnabled {
+					ipPool.Spec.IPIPMode = api.IPIPModeAlways
+				} else {
+					ipPool.Spec.IPIPMode = api.IPIPModeNever
+				}
+
+				ipPool.Spec.VXLANMode = opts.VXLANMode
+
+				_, err = client.IPPools().Create(ctx, ipPool, options.SetOptions{})
 			}
-
-			ipPool.Spec.VXLANMode = opts.VXLANMode
-
-			_, err = client.IPPools().Create(ctx, ipPool, options.SetOptions{})
 			return err
 		}).ShouldNot(HaveOccurred())
 	}

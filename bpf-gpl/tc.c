@@ -587,6 +587,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* skip policy if we get conntrack hit */
 	if (ct_result_rc(state.ct_result.rc) != CALI_CT_NEW) {
+		if (state.ct_result.flags & CALI_CT_FLAG_SKIP_FIB) {
+			state.flags |= CALI_ST_SKIP_FIB;
+		}
 		goto skip_policy;
 	}
 
@@ -659,6 +662,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				CALI_DEBUG("Source is in NAT-outgoing pool "
 					   "but dest is not, need to SNAT.\n");
 				state.flags |= CALI_ST_NAT_OUTGOING;
+			}
+		} if (!(r->flags & CALI_RT_IN_POOL)) {
+			CALI_DEBUG("Source %x not in IP pool\n", be32_to_host(state.ip_src));
+			r = cali_rt_lookup(state.post_nat_ip_dst);
+			if (!r || !(r->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
+				CALI_DEBUG("Outside cluster dest %x\n", be32_to_host(state.post_nat_ip_dst));
+				state.flags |= CALI_ST_SKIP_FIB;
 			}
 		}
 	}
@@ -797,10 +807,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		// to trigger that and leave the fib lookup disabled.
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
-		// Non-SNAT case, allow FIB lookup only if RPF check passed.  Note: tried to pass in
-		// the calculated value from calico_tc but hit verifier issues so recalculate it
-		// here.
-		if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
+		if (state->flags & CALI_ST_SKIP_FIB) {
+			fib = false;
+		} else if (CALI_F_TO_HOST && !ct_result_rpf_failed(state->ct_result.rc)) {
+			// Non-SNAT case, allow FIB lookup only if RPF check passed.
+			// Note: tried to pass in the calculated value from calico_tc but
+			// hit verifier issues so recalculate it here.
 			fib = true;
 		}
 		seen_mark = CALI_SKB_MARK_SEEN;
@@ -940,6 +952,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		ct_nat_ctx.tun_ip = state->tun_ip;
 		if (state->flags & CALI_ST_NAT_OUTGOING) {
 			ct_nat_ctx.flags |= CALI_CT_FLAG_NAT_OUT;
+		}
+		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
+			ct_nat_ctx.flags |= CALI_CT_FLAG_SKIP_FIB;
 		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
