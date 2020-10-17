@@ -83,6 +83,8 @@ section:
         path: /getting-started/kubernetes/k3s/multi-node-install
   - title: MicroK8s
     path: /getting-started/kubernetes/microk8s
+  - title: Minikube
+    path: /getting-started/kubernetes/minikube
   - title: Calico the hard way
     path: /getting-started/kubernetes/hardway/
     section:
