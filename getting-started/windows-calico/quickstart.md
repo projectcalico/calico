@@ -171,7 +171,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   <label:EKS>
   <%
 
-1. Prepare directory for Kubernetes files on Windows node.
+1. Prepare directory for Kubernetes files on the Windows node.
 
    ```powershell
    mkdir c:\k
