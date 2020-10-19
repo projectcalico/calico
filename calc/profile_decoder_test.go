@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -174,6 +175,10 @@ func (p *passthruCallbackRecorder) OnNamespaceUpdate(update *proto.NamespaceUpda
 
 func (p *passthruCallbackRecorder) OnNamespaceRemove(id proto.NamespaceID) {
 	p.nsRemoves = append(p.nsRemoves, id)
+}
+
+func (p *passthruCallbackRecorder) OnGlobalBGPConfigUpdate(*v3.BGPConfiguration) {
+	Fail("OnGlobalBGPConfigUpdate received")
 }
 
 func labelsKV(name string, labels interface{}) model.KVPair {

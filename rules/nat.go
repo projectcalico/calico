@@ -17,6 +17,7 @@ package rules
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/iptables"
@@ -146,6 +147,26 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 	}
 	return []*iptables.Chain{{
 		Name:  ChainFIPSnat,
+		Rules: rules,
+	}}
+}
+
+func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain {
+	rules := []iptables.Rule{}
+	if r.blockCIDRAction != nil {
+		// Sort CIDRs so we can program rules in a determined order.
+		sort.Strings(cidrs)
+		for _, cidr := range cidrs {
+			if strings.Contains(cidr, ":") == (ipVersion == 6) {
+				rules = append(rules, iptables.Rule{
+					Match:  iptables.Match().DestNet(cidr),
+					Action: r.blockCIDRAction,
+				})
+			}
+		}
+	}
+	return []*iptables.Chain{{
+		Name:  ChainCIDRBlock,
 		Rules: rules,
 	}}
 }

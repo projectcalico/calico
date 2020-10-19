@@ -220,6 +220,8 @@ type Config struct {
 
 	AWSSrcDstCheck string `config:"oneof(DoNothing,Enable,Disable);DoNothing;non-zero"`
 
+	ServiceLoopPrevention string `config:"oneof(Drop,Reject,Disabled);Drop"`
+
 	ReportingIntervalSecs time.Duration `config:"seconds;30"`
 	ReportingTTLSecs      time.Duration `config:"seconds;90"`
 

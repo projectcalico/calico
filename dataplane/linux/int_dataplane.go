@@ -645,6 +645,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard)
 	dp.RegisterManager(dp.wireguardManager) // IPv4-only
 
+	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
+
 	if config.IPv6Enabled {
 		mangleTableV6 := iptables.NewTable(
 			"mangle",
@@ -715,6 +717,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			callbacks))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
+		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
 	}
 
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesMangleTables...)

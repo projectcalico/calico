@@ -244,6 +244,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesNATOutgoingInterfaceFilter: configParams.IptablesNATOutgoingInterfaceFilter,
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
 				BPFEnabled:                         configParams.BPFEnabled,
+				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 			},
 			Wireguard: wireguard.Config{
 				Enabled:             wireguardEnabled,

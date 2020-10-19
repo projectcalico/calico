@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/dispatcher"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -43,6 +44,7 @@ func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
 	dispatcher.Register(model.IPPoolKey{}, h.OnUpdate)
 	dispatcher.Register(model.WireguardKey{}, h.OnUpdate)
+	dispatcher.Register(model.ResourceKey{}, h.OnUpdate)
 }
 
 func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
@@ -84,6 +86,14 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			log.WithField("update", update).Debug("Passing-through Wireguard update")
 			wg := update.Value.(*model.Wireguard)
 			h.callbacks.OnWireguardUpdate(key.NodeName, wg)
+		}
+	case model.ResourceKey:
+		if key.Kind == v3.KindBGPConfiguration && key.Name == "default" {
+			log.WithField("update", update).Debug("Passing through global BGPConfiguration")
+			bgpConfig, _ := update.Value.(*v3.BGPConfiguration)
+			h.callbacks.OnGlobalBGPConfigUpdate(bgpConfig)
+		} else {
+			log.WithField("key", key).Debug("Ignoring v3 resource other than global BGPConfiguration")
 		}
 	}
 	return

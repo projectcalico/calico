@@ -18,10 +18,10 @@ service PolicySync {
   //  - ServiceAccountRemove
   //  - NamespaceUpdate
   //  - NamespaceRemove
-  //  - RouteUpdate 
+  //  - RouteUpdate
   //  - RouteRemove
-  //  - VXLANTunnelEndpointUpdate 
-  //  - VXLANTunnelEndpointRemove 
+  //  - VXLANTunnelEndpointUpdate
+  //  - VXLANTunnelEndpointRemove
   rpc Sync(SyncRequest) returns (stream ToDataplane);
 }
 
@@ -116,6 +116,9 @@ message ToDataplane {
     WireguardEndpointUpdate wireguard_endpoint_update = 27;
     // WireguardEndpointRemove is sent to undo wireguard on the host.
     WireguardEndpointRemove wireguard_endpoint_remove = 28;
+
+    // GlobalBGPConfigUpdate is sent when global BGPConfiguration changes.
+    GlobalBGPConfigUpdate global_bgp_config_update = 29;
   }
 }
 
@@ -547,4 +550,8 @@ message WireguardEndpointUpdate {
 message WireguardEndpointRemove {
   // The name of the wireguard host.
   string hostname = 1;
+}
+
+message GlobalBGPConfigUpdate {
+  repeated string service_cluster_cidrs = 1;
 }

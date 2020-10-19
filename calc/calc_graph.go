@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/felix/proto"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -79,6 +80,7 @@ type passthruCallbacks interface {
 	OnNamespaceRemove(proto.NamespaceID)
 	OnWireguardUpdate(string, *model.Wireguard)
 	OnWireguardRemove(string)
+	OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
 }
 
 type routeCallbacks interface {

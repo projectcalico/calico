@@ -26,6 +26,9 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/GoogleCloudPlatform/k8s-cloud-provider v0.0.0-20190822182118-27a4ced34534/go.mod h1:iroGtC8B3tQiqtds1l+mgk/BBOrxbqjH+eUfFQYRc14=
 github.com/JeffAshton/win_pdh v0.0.0-20161109143554-76bb4ee9f0ab/go.mod h1:3VYc5hodBMJ5+l/7J4xAyMeuM2PNuepvHlGs8yilUCA=
 github.com/MakeNowJust/heredoc v0.0.0-20170808103936-bb23615498cd/go.mod h1:64YHyfSL2R96J44Nlwm39UHepQbyR5q10x7iYa1ks2E=
+github.com/Masterminds/goutils v1.1.0/go.mod h1:8cTjp+g8YejhMuvIA5y2vz3BpJxksy863GQaJW2MFNU=
+github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
+github.com/Masterminds/sprig v2.22.0+incompatible/go.mod h1:y6hNFY5UBTIWBxnzTeuNhlNS5hqE0NB0E6fgfo2Br3o=
 github.com/Microsoft/go-winio v0.4.11 h1:zoIOcVf0xPN1tnMVbTtEdI+P8OofVk3NObnwOQ6nK2Q=
 github.com/Microsoft/go-winio v0.4.11/go.mod h1:VhR8bwka0BXejwEJY73c50VrPtXAaKcyvVC4A4RozmA=
 github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 h1:ygIc8M6trr62pF5DucadTWGdEB4mEyvzi0e2nbcmcyA=
@@ -45,6 +48,8 @@ github.com/Rican7/retry v0.1.0/go.mod h1:FgOROf8P5bebcC1DS0PdOQiqGUridaZvikzUmkF
 github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
 github.com/Workiva/go-datastructures v1.0.50/go.mod h1:Z+F2Rca0qCsVYDS8z7bAGm8f3UkzuWYS/oBZz5a7VVA=
 github.com/agnivade/levenshtein v1.0.1/go.mod h1:CURSv5d9Uaml+FovSIICkLbAUZ9S4RqaHDIsdSBg7lM=
+github.com/alecthomas/participle v0.6.0/go.mod h1:HfdmEuwvr12HXQN44HPWXR0lHmVolVYe4dyL6lQ3duY=
+github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1/go.mod h1:xTS7Pm1pD1mvyM075QCDSRqH6qRLXylzS24ZTpRiSzQ=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
 github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae/go.mod h1:CgnQgUtFrFz9mxFNtED3jI5tLDjKlOM+oUF/sTk6ps0=
@@ -102,6 +107,8 @@ github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20/go.mod h1:Cm3kw
 github.com/containernetworking/cni v0.7.0/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
 github.com/containernetworking/cni v0.7.1 h1:fE3r16wpSEyaqY4Z4oFrLMmIGfBYIKpPrHK31EJ9FzE=
 github.com/containernetworking/cni v0.7.1/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
+github.com/containernetworking/cni v0.8.0 h1:BT9lpgGoH4jw3lFC7Odz2prU5ruiYKcgAjMCbgybcKI=
+github.com/containernetworking/cni v0.8.0/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
 github.com/containernetworking/plugins v0.8.2 h1:5lnwfsAYO+V7yXhysJKy3E1A2Gy9oVut031zfdOzI9w=
 github.com/containernetworking/plugins v0.8.2/go.mod h1:TxALKWZpWL79BC3GOYKJzzXr7U8R23PdhwaLp6F3adc=
 github.com/coredns/corefile-migration v1.0.4 h1:GpAwsgzgLA9HOnt3+Z69xsMVLl0doNnyVfBX79d/P5A=
@@ -371,6 +378,7 @@ github.com/heketi/heketi v9.0.1-0.20190917153846-c2e2a4ab7ab9+incompatible/go.mo
 github.com/heketi/tests v0.0.0-20151005000721-f3775cbcefd6/go.mod h1:xGMAM8JLi7UkZt1i4FQeQy0R2T8GLUwQhOP5M1gBhy4=
 github.com/hpcloud/tail v1.0.0 h1:nfCOvKYfkgYP8hkirhJocXT2+zOD8yUNjXaWfTlyFKI=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
+github.com/huandu/xstrings v1.3.2/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
 github.com/imdario/mergo v0.3.5 h1:JboBksRwiiAJWvIYJVo46AfV+IAIKZpfrSzVKj42R4Q=
 github.com/imdario/mergo v0.3.5/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NHg9XEKhtSvM=
@@ -477,6 +485,7 @@ github.com/mindprince/gonvml v0.0.0-20190828220739-9ebdce4bb989/go.mod h1:2eu9pR
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba h1:IcYRolrKyyT0xX/j6mHzigZnwEN7NCzaaUBL2E75V7A=
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba/go.mod h1:cktvQyh8cOIjSrvwci34qvQq2seh3CvrJNn3qqH//CE=
 github.com/mistifyio/go-zfs v2.1.1+incompatible/go.mod h1:8AuVvqP/mXw1px98n46wfvcGfQ4ci2FwoAjKYxuo3Z4=
+github.com/mitchellh/copystructure v1.0.0/go.mod h1:SNtv71yrdKgLRyLFxmLdkAbkKEFWgYaq1OVrnRcwhnw=
 github.com/mitchellh/go-homedir v1.0.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
 github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=
 github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
@@ -485,6 +494,7 @@ github.com/mitchellh/go-wordwrap v1.0.0/go.mod h1:ZXFpozHsX6DPmq2I0TCekCxypsnAUb
 github.com/mitchellh/mapstructure v0.0.0-20180220230111-00c29f56e238/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
 github.com/mitchellh/mapstructure v1.1.2 h1:fmNYVwqnSfB9mZU6OS2O6GsXM+wcskZDuKQzvN1EDeE=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
+github.com/mitchellh/reflectwalk v1.0.0/go.mod h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
@@ -561,14 +571,14 @@ github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:J
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/hcsshim v0.8.9-calico h1:aRrOWouDTzKwaIoRGMV/I1QikR+ikwj1G9T9h3wD090=
 github.com/projectcalico/hcsshim v0.8.9-calico/go.mod h1:5692vkUqntj1idxauYlpoINNKeqCiG6Sg38RRsjT5y8=
-github.com/projectcalico/libcalico-go v1.7.2-0.20201006212057-d414dc7c1c75 h1:8U1j4ONUL2a4hx55mWJsj+QMUOlPJGrceGWtxWr29oo=
-github.com/projectcalico/libcalico-go v1.7.2-0.20201006212057-d414dc7c1c75/go.mod h1:LFBH34Uh3bM2m70XQ+uGAxKmBip2QAEGSoNnUE8aaaI=
+github.com/projectcalico/libcalico-go v1.7.2-0.20201019124004-13fd39e829ce h1:7NPOLIYHmha1BJlkjdbvAaFlhOXGgtHZqA6K8EFqQfk=
+github.com/projectcalico/libcalico-go v1.7.2-0.20201019124004-13fd39e829ce/go.mod h1:E4u7FYxNZ8SMeEtCbTZEaSPYxKRIsorcS13tAfxpICU=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799 h1:9jp4YoHqZvEKDW3Z9464x/whSRCWEinIo4/JifaKR+g=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20200929223531-dfc3c9936e90 h1:A4h3ZVhkHu0ohq8aV0a8YZkzQTGLUKP3IY2qg5CvDVI=
 github.com/projectcalico/pod2daemon v0.0.0-20200929223531-dfc3c9936e90/go.mod h1:bmtxGPEug34TbG/rPrGdPGt/ewR2OBksgA7P9TPKHIk=
-github.com/projectcalico/typha v0.7.3-0.20201007232318-2dba00d728ad h1:sPD+oYtf139K2vqnPJCevOCNfHltQZ91OhTmt7gsZk8=
-github.com/projectcalico/typha v0.7.3-0.20201007232318-2dba00d728ad/go.mod h1:u3tFLDxvBIYNmSplCAcxRKF+RMAktgeRajeKOfi0rMM=
+github.com/projectcalico/typha v0.7.3-0.20201019125644-ce843a421a61 h1:ZWv4fYvztfs4hzwLOinhW7Xc90gFKghviTso4P/Tpiw=
+github.com/projectcalico/typha v0.7.3-0.20201019125644-ce843a421a61/go.mod h1:WeLKIXxb2DF6uP8nrXgJPCPKdWq6zx0iMdkrfyno3eg=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
 github.com/prometheus/client_golang v1.0.0 h1:vrDKnkGzuGvhNAL56c7DBz29ZL+KxnoR0x7enabFceM=
