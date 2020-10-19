@@ -268,6 +268,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 | EtcdCaCert         | Path to CA certificate file for etcd TLS connection. | "" |
 | ServiceCidr        | Service IP range of the Kubernetes cluster. Not required for most managed Kubernetes clusters. Note: EKS has non-default value. | 10.96.0.0/12 |
 | DNSServerIPs       | Comma-delimited list of DNS service IPs used by Windows pod. Not required for most managed Kubernetes clusters. Note: EKS has a non-default value. | 10.96.0.10 |
+| CalicoBackend      | Calico backend network type (`vxlan` or `bgp`). If value is empty string (default), backend network type is auto detected. | "" |
 
 >**Note**: Use namespace `kube-system` instead of `calico-system` if your Calico installation is non operator-managed.
 {: .alert .alert-info}
