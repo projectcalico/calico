@@ -121,6 +121,7 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | `NATOutgoingAddress`                 | `FELIX_NATOUTGOINGADDRESS`                 | Source address used by iptables for an SNAT rule when doing outgoing NAT. [Default: an iptables `MASQUERADE` rule is used for outgoing NAT which will use the address on the interface traffic is leaving on.]  | `<IPv4-address>` |
 | `NetlinkTimeoutSecs`                 | `FELIX_NETLINKTIMEOUTSECS`                 | Time, in seconds, that Felix will wait for netlink (i.e. routing table list/update) operations to complete before giving up and retrying. [Default: `10`] | float |
 | `RouteRefreshInterval`               | `FELIX_ROUTEREFRESHINTERVAL`               | Period, in seconds, at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. [Default: `90`] | int |
+| `ServiceLoopPrevention`              | `FELIX_SERVICELOOPPREVENTION`              | When [service IP advertisement is enabled]({{ site.baseurl }}/networking/advertise-service-ips), prevent routing loops to service IPs that are not in use, by dropping or rejecting packets that do not get DNAT'd by kube-proxy.  Unless set to "Disabled", in which case such routing loops continue to be allowed. [Default: `Drop`] | `Drop`, `Reject`, `Disabled` |
 
 #### eBPF dataplane configuration
 
