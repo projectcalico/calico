@@ -48,7 +48,8 @@ Param(
     [parameter(Mandatory = $false)] $EtcdCert="",
     [parameter(Mandatory = $false)] $EtcdCaCert="",
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
-    [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10"
+    [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10",
+    [parameter(Mandatory = $false)] $CalicoBackend=""
 )
 
 function DownloadFiles()
@@ -129,16 +130,29 @@ function GetBackendType()
         [parameter(Mandatory=$false)] $KubeConfigPath = "$RootDir\calico-kube-config"
     )
 
-    $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
-    if ($encap -EQ "true") {
-        throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
+    if (-Not [string]::IsNullOrEmpty($CalicoBackend)) {
+        return $CalicoBackend
     }
 
-    $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
-    if ($encap -EQ "true") {
-        return ("vxlan")
+    # Auto detect backend type
+    if ($Datastore -EQ "kubernetes") {
+        $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.ipipEnabled}' -n $CalicoNamespace
+        if ($encap -EQ "true") {
+            throw "{{site.prodname}} on Linux has IPIP enabled. IPIP is not supported on Windows nodes."
+        }
+
+        $encap=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get felixconfigurations.crd.projectcalico.org default -o jsonpath='{.spec.vxlanEnabled}' -n $CalicoNamespace
+        if ($encap -EQ "true") {
+            return ("vxlan")
+        }
+        return ("bgp")
+    } else {
+        $CalicoBackend=c:\k\kubectl.exe --kubeconfig="$RootDir\calico-kube-config" get configmap calico-config -n $CalicoNamespace -o jsonpath='{.data.calico_backend}'
+        if ($CalicoBackend -EQ "vxlan") {
+            return ("vxlan")
+        }
+        return ("bgp")
     }
-    return ("bgp")
 }
 
 function GetCalicoNamespace() {
@@ -148,8 +162,10 @@ function GetCalicoNamespace() {
 
     $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
     if ([string]::IsNullOrEmpty($name)) {
+        write-host "Calico running in kube-system namespace"
         return ("kube-system")
     }
+    write-host "Calico running in calico-system namespace"
     return ("calico-system")
 }
 
