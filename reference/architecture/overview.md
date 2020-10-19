@@ -109,11 +109,7 @@ url='https://github.com/containernetworking/cni/blob/master/SPEC.md#network-conf
    - Lets you run {{site.prodname}} on non-Kubernetes platforms
    - Separation of concerns between Kubernetes and {{site.prodname}} resources, for example allowing you to scale the datastores independently
    - Lets you run a {{site.prodname}} cluster that contains more than just a single Kubernetes cluster, for example, bare metal servers with {{site.prodname}} host protection interworking with a Kubernetes cluster; or multiple Kubernetes clusters.
-<<<<<<< HEAD
-   
-=======
 
->>>>>>> 27cde330... Fix link to open in new window
    {% include open-new-window.html text='etcd admin guide' url='https://coreos.com/etcd/docs/latest/admin_guide.html#optimal-cluster-size' %}
 
 ### IPAM plugin
