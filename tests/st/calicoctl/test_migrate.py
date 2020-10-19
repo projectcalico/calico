@@ -55,6 +55,15 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("get bgpconfig -o yaml")
         rc.assert_list("BGPConfiguration", [bgpconfig_name1_rev1])
 
+        # Create a BGP Config that should reference a node.
+        # This node reference will change since the node's orchrefs reference a different node.
+        rc = calicoctl("create", data=bgpconfig_name3_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("get bgpconfig %s -o yaml" % name(bgpconfig_name3_rev1))
+        rc.assert_data(bgpconfig_name3_rev1)
+        rc = calicoctl("get bgpconfig -o yaml")
+        rc.assert_list("BGPConfiguration", [bgpconfig_name1_rev1, bgpconfig_name3_rev1])
+
         # Create a BGP Peer
         rc = calicoctl("create", data=bgppeer_name1_rev1_v4)
         rc.assert_no_error()
@@ -67,6 +76,13 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("create", data=felixconfig_name1_rev1)
         rc.assert_no_error()
         rc = calicoctl("get felixconfig %s -o yaml" % name(felixconfig_name1_rev1))
+        rc.assert_no_error()
+
+        # Create a Felix config that should reference a node.
+        # This node reference will change since the node's orchrefs reference a different node.
+        rc = calicoctl("create", data=felixconfig_name2_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("get felixconfig %s -o yaml" % name(felixconfig_name2_rev1))
         rc.assert_no_error()
 
         # Create a Global Network policy
@@ -141,9 +157,13 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("delete bgpconfig %s" % name(bgpconfig_name1_rev1))
         rc.assert_no_error()
+        rc = calicoctl("delete bgpconfig %s" % name(bgpconfig_name3_rev1))
+        rc.assert_no_error()
         rc = calicoctl("delete bgppeer %s" % name(bgppeer_name1_rev1_v4))
         rc.assert_no_error()
         rc = calicoctl("delete felixconfig %s" % name(felixconfig_name1_rev1))
+        rc.assert_no_error()
+        rc = calicoctl("delete felixconfig %s" % name(felixconfig_name2_rev1))
         rc.assert_no_error()
         rc = calicoctl("delete globalnetworkpolicy %s" % name(globalnetworkpolicy_name1_rev1))
         rc.assert_no_error()
@@ -173,9 +193,19 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_data(ippool_name2_rev1_v6)
         rc = calicoctl("get bgpconfig %s -o yaml" % name(bgpconfig_name1_rev1), kdd=True)
         rc.assert_data(bgpconfig_name1_rev1)
+        # bgpconfig_name3_rev1 should be changed to bgpconfig_name4_rev1
+        rc = calicoctl("get bgpconfig %s -o yaml" % name(bgpconfig_name3_rev1), kdd=True)
+        rc.assert_error(text=NOT_FOUND)
+        rc = calicoctl("get bgpconfig %s -o yaml" % name(bgpconfig_name4_rev1), kdd=True)
+        rc.assert_no_error()
         rc = calicoctl("get bgppeer %s -o yaml" % name(bgppeer_name1_rev1_v4), kdd=True)
         rc.assert_data(bgppeer_name1_rev1_v4)
         rc = calicoctl("get felixconfig %s -o yaml" % name(felixconfig_name1_rev1), kdd=True)
+        rc.assert_no_error()
+        # felixconfig_name2_rev1 should be changed to felixconfig_name3_rev1
+        rc = calicoctl("get felixconfig %s -o yaml" % name(felixconfig_name2_rev1), kdd=True)
+        rc.assert_error(text=NOT_FOUND)
+        rc = calicoctl("get felixconfig %s -o yaml" % name(felixconfig_name3_rev1), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("get globalnetworkpolicy %s -o yaml" % name(globalnetworkpolicy_name1_rev1), kdd=True)
         rc.assert_data(globalnetworkpolicy_name1_rev1)
@@ -203,9 +233,13 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("delete bgpconfig %s" % name(bgpconfig_name1_rev1), kdd=True)
         rc.assert_no_error()
+        rc = calicoctl("delete bgpconfig %s" % name(bgpconfig_name4_rev1), kdd=True)
+        rc.assert_no_error()
         rc = calicoctl("delete bgppeer %s" % name(bgppeer_name1_rev1_v4), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("delete felixconfig %s" % name(felixconfig_name1_rev1), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("delete felixconfig %s" % name(felixconfig_name3_rev1), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("delete globalnetworkpolicy %s" % name(globalnetworkpolicy_name1_rev1), kdd=True)
         rc.assert_no_error()
