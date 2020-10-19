@@ -67,7 +67,6 @@ spec:
             - allocations
             - attributes
             - cidr
-            - deleted
             - strictAffinity
             - unallocated
             type: object
