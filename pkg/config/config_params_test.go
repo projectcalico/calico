@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,26 +15,26 @@
 package config_test
 
 import (
-	. "github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/typha/pkg/config"
 
 	"reflect"
 
 	. "github.com/onsi/ginkgo/extensions/table"
-	"github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 )
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
-		config := New()
-		_, err := config.UpdateFrom(map[string]string{key: value},
-			EnvironmentVariable)
-		newVal := reflect.ValueOf(config).Elem().FieldByName(key).Interface()
-		gomega.Expect(newVal).To(gomega.Equal(expected))
+		cfg := config.New()
+		_, err := cfg.UpdateFrom(map[string]string{key: value},
+			config.EnvironmentVariable)
+		newVal := reflect.ValueOf(cfg).Elem().FieldByName(key).Interface()
+		Expect(newVal).To(Equal(expected))
 		if len(errorExpected) > 0 && errorExpected[0] {
-			gomega.Expect(err).To(gomega.HaveOccurred())
+			Expect(err).To(HaveOccurred())
 		} else {
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		}
 	},
 
@@ -85,15 +85,15 @@ var _ = DescribeTable("Config parsing",
 
 var _ = DescribeTable("Config validation",
 	func(settings map[string]string, ok bool) {
-		cfg := New()
-		_, err := cfg.UpdateFrom(settings, ConfigFile)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		cfg := config.New()
+		_, err := cfg.UpdateFrom(settings, config.ConfigFile)
+		Expect(err).NotTo(HaveOccurred())
 		err = cfg.Validate()
 		log.WithError(err).Info("Validation result")
 		if !ok {
-			gomega.Expect(err).To(gomega.HaveOccurred())
+			Expect(err).To(HaveOccurred())
 		} else {
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		}
 	},
 

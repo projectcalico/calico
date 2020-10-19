@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,12 @@
 package config_test
 
 import (
-	. "github.com/projectcalico/typha/pkg/config"
-
 	"path"
 	"runtime"
 
 	. "github.com/onsi/ginkgo/extensions/table"
-	"github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
+	"github.com/projectcalico/typha/pkg/config"
 )
 
 const confFileSingleParamNoNewLine = `[ignored]
@@ -38,9 +37,9 @@ LogSeveritySys=DEBUG`
 
 var _ = DescribeTable("File parameter parsing",
 	func(fileContent string, expected map[string]string) {
-		actual, err := LoadConfigFileData([]byte(fileContent))
-		gomega.Expect(err).To(gomega.BeNil())
-		gomega.Expect(actual).To(gomega.Equal(expected))
+		actual, err := config.LoadConfigFileData([]byte(fileContent))
+		Expect(err).To(BeNil())
+		Expect(actual).To(Equal(expected))
 	},
 	Entry("Empty", "", map[string]string{}),
 	Entry("Single param", confFileSingleParamNoNewLine, map[string]string{
@@ -60,13 +59,13 @@ var _ = DescribeTable("File load tests",
 	func(filename string, expected map[string]string, errExpected bool) {
 		myDir := myDir()
 		path := path.Join(myDir, "testdata", filename)
-		value, err := LoadConfigFile(path)
+		value, err := config.LoadConfigFile(path)
 		if errExpected {
-			gomega.Expect(err).ToNot(gomega.BeNil())
+			Expect(err).ToNot(BeNil())
 		} else {
-			gomega.Expect(err).To(gomega.BeNil())
+			Expect(err).To(BeNil())
 		}
-		gomega.Expect(value).To(gomega.Equal(expected))
+		Expect(value).To(Equal(expected))
 	},
 	Entry("Missing", "missing.cfg", nil, false),
 	Entry("Empty", "empty.cfg", map[string]string{}, false),
