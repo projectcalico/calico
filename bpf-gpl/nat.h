@@ -131,20 +131,6 @@ CALI_MAP_V1(cali_v4_nat_aff,
 		struct calico_nat_v4_affinity_key, struct calico_nat_v4_affinity_val,
 		510000, 0, MAP_PIN_GLOBAL)
 
-/* fast hash by Bob Jenkins suitable for modulo
- * http://burtleburtle.net/bob/hash/integer.html
- */
-static CALI_BPF_INLINE uint32_t nat_aff_ip_hash(uint32_t a)
-{
-    a = (a+0x7ed55d16) + (a<<12);
-    a = (a^0xc761c23c) ^ (a>>19);
-    a = (a+0x165667b1) + (a<<5);
-    a = (a+0xd3a2646c) ^ (a<<9);
-    a = (a+0xfd7046c5) + (a<<3);
-    a = (a^0xb55a4f09) ^ (a>>16);
-    return a;
-}
-
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src,
 								     __be32 ip_dst,
 								     __u8 ip_proto,
@@ -265,26 +251,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		return &affval->nat_dest;
 	}
 	CALI_DEBUG("NAT: affinity invalid, new lookup for %x\n", be32_to_host(ip_dst));
+	/* To be k8s conformant, fall through to pick a random backend. */
 
 skip_affinity:
 	nat_lv2_key.id = nat_lv1_val->id;
-	if (nat_lv1_val->affinity_timeo == 0) {
-		nat_lv2_key.ordinal = bpf_get_prandom_u32();
-	} else {
-		/* primitive stable hash, dest ip:port are constant, source port
-		 * must not be considered so we use the source ip only. That
-		 * means the same client always picks the same ordinal as long
-		 * as the backends did not change. When they change, they
-		 * may reshuffle or the modulo changes.
-		 *
-		 * There is a slight race when affinity expires and the backends
-		 * change at the same time. There is no guarantee what goes
-		 * first anyway.
-		 *
-		 * Different clients likely pick different backends.
-		 */
-		nat_lv2_key.ordinal = nat_aff_ip_hash(ip_src);
-	}
+	nat_lv2_key.ordinal = bpf_get_prandom_u32();
 	nat_lv2_key.ordinal %= count;
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
