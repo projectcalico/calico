@@ -9,7 +9,7 @@ canonical_url: '/security/comms/crypto-auth'
 If you are using the etcd datastore, we recommend enabling mutual TLS authentication on
 its connections as follows.
 
-- [Configure etcd](https://coreos.com/etcd/docs/latest/op-guide/security.html) to encrypt its
+- [Configure etcd](https://coreos.com/etcd/docs/latest/op-guide/security.html){:target="_blank"} to encrypt its
   communications with TLS and require clients to present certificates signed by the etcd certificate
   authority.
 
@@ -39,9 +39,9 @@ To do so, you must provision Typha with a server certificate and Felix with a cl
 certificate. Each service will need the private key associated with their certificate.
 In addition, you must configure one of the following.
 
-- **SPIFFE identifiers** (recommended): Generate a [SPIFFE](https://github.com/spiffe/spiffe) identifier for Felix,
+- **SPIFFE identifiers** (recommended): Generate a [SPIFFE](https://github.com/spiffe/spiffe){:target="_blank"} identifier for Felix,
   set `ClientURISAN` on Typha to Felix's SPIFFE ID, and include Felix's SPIFFE ID in the `URI SAN` field
-  of its certificate. Similarly, generate a [SPIFFE](https://github.com/spiffe/spiffe) identifier for Typha,
+  of its certificate. Similarly, generate a [SPIFFE](https://github.com/spiffe/spiffe){:target="_blank"} identifier for Typha,
   set `TyphaURISAN` on Felix to Typha's SPIFFE ID, and include Typha's SPIFFE ID in the `URI SAN` field
   of its certificate.
 
@@ -91,11 +91,11 @@ cluster:
 
     -  `TyphaURISAN` unset.
 
-For a [SPIFFE](https://github.com/spiffe/spiffe)-compliant deployment you can
+For a [SPIFFE](https://github.com/spiffe/spiffe){:target="_blank"}-compliant deployment you can
 follow the same procedure as above, except:
 
 1.  Choose [SPIFFE
-    Identities](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity)
+    Identities](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity){:target="_blank"}
     to represent Felix and Typha.
 
 1.  When generating leaf certificates for Felix and Typha, put the relevant

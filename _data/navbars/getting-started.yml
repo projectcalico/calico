@@ -43,6 +43,8 @@ section:
       path: /getting-started/openshift/requirements
     - title: Installation
       path: /getting-started/openshift/installation
+    - title: Calico for Windows Installation
+      path: /getting-started/openshift/windows/installation
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
@@ -81,6 +83,8 @@ section:
         path: /getting-started/kubernetes/k3s/multi-node-install
   - title: MicroK8s
     path: /getting-started/kubernetes/microk8s
+  - title: Minikube
+    path: /getting-started/kubernetes/minikube
   - title: Calico the hard way
     path: /getting-started/kubernetes/hardway/
     section:

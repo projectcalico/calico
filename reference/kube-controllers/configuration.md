@@ -42,7 +42,7 @@ The `*_FILE` variables are _paths_ to the corresponding certificates/keys. As su
 must ensure that the files exist within the pod. This is usually done in one of two ways:
 
 * Mount the certificates from the host. This requires that the certificates be present on the host running the controller.
-* Use Kubernetes [Secrets](http://kubernetes.io/docs/user-guide/secrets/) to mount the certificates into the pod as files.
+* Use Kubernetes [Secrets](http://kubernetes.io/docs/user-guide/secrets/){:target="_blank"} to mount the certificates into the pod as files.
 
 #### kubernetes
 
@@ -66,7 +66,7 @@ The following environment variables can be used to configure the {{site.prodname
 | `KUBECONFIG`          | Path to a kubeconfig file for Kubernetes API access | path |
 | `SYNC_NODE_LABELS`    | When enabled, Kubernetes node labels will be copied to Calico node objects. | boolean | true
 | `AUTO_HOST_ENDPOINTS` | When set to enabled, automatically create a host endpoint for each node. | enabled, disabled | disabled
-| `COMPACTION_PERIOD` | Compact the etcd database on this interval. Set to "0" to disable. | [duration](https://golang.org/pkg/time/#ParseDuration) | 10m
+| `COMPACTION_PERIOD` | Compact the etcd database on this interval. Set to "0" to disable. | [duration](https://golang.org/pkg/time/#ParseDuration){:target="_blank"} | 10m
 
 ## About each controller
 

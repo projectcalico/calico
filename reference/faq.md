@@ -22,7 +22,7 @@ policy that is automatically rendered into distributed firewall rules
 across a cluster of containers, VMs, and/or servers.
 
 For a more detailed discussion of this topic, see our blog post at
-[Why Calico?](https://www.projectcalico.org/why-calico/).
+[Why Calico?](https://www.projectcalico.org/why-calico/){:target="_blank"}.
 
 ## Does {{site.prodname}} work with IPv6?
 
@@ -106,7 +106,7 @@ cali\* interfaces.
 
 ## Can I prevent my Kubernetes pods from initiating outgoing connections?
 
-Yes! The Kubernetes [`NetworkPolicy`](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+Yes! The Kubernetes [`NetworkPolicy`](https://kubernetes.io/docs/concepts/services-networking/network-policies/){:target="_blank"}
 API added support for egress policies in v1.8. You can also use `calicoctl`
 to configure egress policy to prevent Kubernetes pods from initiating outgoing
 connections based on the full set of supported {{site.prodname}} policy primitives
@@ -308,7 +308,7 @@ If this describes your infrastructure,
 what to do. Otherwise, if you have a layer 3 (IP) fabric, then there are
 detailed datacenter networking recommendations given
 in [{{site.prodname}} over IP fabrics]({{ site.baseurl }}/reference/architecture/design/l3-interconnect-fabric).
-We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
+We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/){:target="_blank"}
 to discuss your environment.
 
 ### How can I enable NAT for outgoing traffic from containers with private IP addresses?
@@ -512,3 +512,10 @@ For example:
       type: DirectoryOrCreate
       path: /var/lib/kubelet/volumeplugins/nodeagent~uds
 ```
+
+## Can Calico do IP multicast?
+
+Calico is a routed L3 network where each pod gets a /32.  There's no broadcast domain for pods.
+That means that multicast doesn't just work as a side effect of broadcast.  To get multicast to
+work, the host needs to act as a multicast gateway of some kind.  Calico's architecture was designed
+to extend to cover that case but it's not part of the product as yet.

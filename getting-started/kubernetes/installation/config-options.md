@@ -229,7 +229,7 @@ an additional lightweight sidecar called Dikastes which receives {{site.prodname
 from Felix and applies it to incoming connections and requests.
 
 If you haven't already done so, download an
-[Istio release](https://github.com/istio/istio/releases) and untar it to a
+[Istio release](https://github.com/istio/istio/releases){:target="_blank"} and untar it to a
 working directory.
 
 Open the `install/kubernetes/istio-demo-auth.yaml` file in an

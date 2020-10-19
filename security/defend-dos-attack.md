@@ -106,5 +106,5 @@ spec:
 - [Global network sets]({{ site.baseurl }}/reference/resources/globalnetworkset)
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - [Create a host endpoint]({{ site.baseurl }}/reference/resources/hostendpoint)
-- [Introduction to XDP](https://www.iovisor.org/technology/xdp)
-- [Advanced XDP documentation](https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/index.html)
+- [Introduction to XDP](https://www.iovisor.org/technology/xdp){:target="_blank"}
+- [Advanced XDP documentation](https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/index.html){:target="_blank"}

@@ -13,7 +13,7 @@ http:
 
 | Field | Description | Schema |
 |-------|-------------|--------|
-| methods | Match HTTP methods. Case sensitive. [Standard HTTP method descriptions.](https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html) | list of strings |
+| methods | Match HTTP methods. Case sensitive. [Standard HTTP method descriptions.](https://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html){:target="_blank"} | list of strings |
 | paths | Match HTTP paths. Case sensitive. | list of [HTTPPathMatch](#httppathmatch) |
 
 #### HTTPPathMatch

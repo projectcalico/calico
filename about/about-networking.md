@@ -23,7 +23,7 @@ In this guide you will learn:
 ### Network layers
 
 The process of sending and receiving data over a network is commonly categorized into 7 layers (referred to as the {%
-include open-new-window.html text='OSI model' url='https://en.wikipedia.org/wiki/OSI_model' %}). They layers are
+include open-new-window.html text='OSI model' url='https://en.wikipedia.org/wiki/OSI_model' %}). The layers are
 typically abbreviated as L1 - L7. You can think of data as passing through each of these layers in turn as it is sent or
 received from an application, which each layer being responsible for a particular part of the processing required to
 send the data over the network.

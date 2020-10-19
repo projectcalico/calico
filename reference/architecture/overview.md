@@ -110,6 +110,7 @@ url='https://github.com/containernetworking/cni/blob/master/SPEC.md#network-conf
    - Separation of concerns between Kubernetes and {{site.prodname}} resources, for example allowing you to scale the datastores independently
    - Lets you run a {{site.prodname}} cluster that contains more than just a single Kubernetes cluster, for example, bare metal servers with {{site.prodname}} host protection interworking with a Kubernetes cluster; or multiple Kubernetes clusters.
    
+   [etcd admin guide](https://coreos.com/etcd/docs/latest/admin_guide.html#optimal-cluster-size){:target="_blank"}
 
 ### IPAM plugin
 

@@ -14,15 +14,15 @@ The components in the `{{site.nodecontainer}}` container all log to the director
 Each component (described below) logs to its own directory. Files are
 automatically rotated, and by default 10 files of 1MB each are kept. The
 current log file is called `current` and rotated files have @ followed by a
-timestamp detailing when the files was rotated in [tai64n](http://cr.yp.to/libtai/tai64.html#tai64n) format.
+timestamp detailing when the files was rotated in [tai64n](http://cr.yp.to/libtai/tai64.html#tai64n){:target="_blank"} format.
 
-All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html).
+All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html){:target="_blank"}.
 Each component can be configured by dropping a file named `config` into that
 component's logging directory.
 
 svlogd can be configured to forward logs to syslog, to prefix each line
 and to filter logs.
-See the [documentation](http://smarden.org/runit/svlogd.8.html) for further details.
+See the [documentation](http://smarden.org/runit/svlogd.8.html){:target="_blank"} for further details.
 
 e.g. to configure bird to only log 4 files of 10KB each, create a file called `config` in the `/var/log/calico/bird` directory containing
 ```
@@ -114,4 +114,4 @@ By default, the confd logging level is "debug" and cannot be changed without
 editing configuration within the node image.
 
 For more information on the allowed levels, see the
-[documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md)
+[documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md){:target="_blank"}

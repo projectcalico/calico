@@ -1,33 +1,45 @@
 ---
-title: Enable Calico application layer policy for Istio
-description: Enable Calico application layer policy for Istio service mesh.
+title: Enforce network policy for Istio
+description: Enforce network policy for Istio service mesh including matching on HTTP methods and paths.
 canonical_url: '/security/app-layer-policy'
 ---
 
 ### Big picture
 
-Enable {{site.prodname}} application layer network policy in Istio service mesh.
+{{site.prodname}} integrates seamlessly with Istio to enforce network policy within the Istio service mesh.
 
 ### Value
 
-{{site.prodname}} application layer policy lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities for Istio-enabled apps.
+{{site.prodname}} network policy for Istio lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities for Istio-enabled apps.
 
 ### Concepts
 
-#### Mitigate threats with {{site.prodname}} network policy
+#### Benefits of the Istio integration
 
-Although Istio policy is ideal for operational goals, security inside and outside the cluster requires {{site.prodname}} network policy. {{site.prodname}} supports a special integration for Istio, called **application layer policy**. This policy lets you restrict ingress traffic inside and outside pods, and mitigate common threats to Istio-enabled apps.
+The {{site.prodname}} support for Istio service mesh has the following benefits:
 
-For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio).
+- **Pod traffic controls**
 
-### Before you begin...
+  Lets you restrict ingress traffic inside and outside pods and mitigate common threats to Istio-enabled apps.
+
+- **Supports security goals**
+
+  Enables adoption of a zero trust network model for security, including traffic encryption, multiple enforcement points, and multiple identity criteria for authentication.
+
+- **Familiar policy language**
+
+  Kubernetes network policies and {{site.prodname}} network policies work as is; users do not need to learn another network policy model to adopt Istio.
+
+See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio) to learn how application layer policy provides second-factor authentication for the mythical Yao Bank. 
+
+### Before you begin
 
 **Required**
 
 - [{{site.prodname}} is installed]({{site.baseurl}}/getting-started/kubernetes/)
 - [calicoctl is installed and configured]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
-See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.
+See this [issue](https://github.com/projectcalico/calico/issues/2943){:target="_blank"} for details and workaround.
 
 ### How to
 
@@ -51,7 +63,7 @@ calicoctl patch FelixConfiguration default --patch \
 #### Install Istio
 
 1. Verify [application layer policy requirements]({{site.baseurl}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
-1. Install Istio using the [Istio project documentation](https://istio.io/docs/setup/install/). Istio can be installed in both strict mode or permissive mode. For example to install Istio in strict mode:
+1. Install Istio using the [Istio project documentation](https://istio.io/docs/setup/install/){:target="_blank"}. Istio can be installed in both strict mode or permissive mode. For example to install Istio in strict mode:
 
 ```bash
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.4.2 sh -
@@ -67,7 +79,7 @@ Application layer policies work with both Istio in strict or permissive mode. Wh
 
 The sidecar injector automatically modifies pods as they are created to work with Istio. This step modifies the injector configuration to add Dikastes (a {{site.prodname}} component), as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection) to install the sidecar injector and enable it in your chosen namespace(s).
+1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection){:target="_blank"} to install the sidecar injector and enable it in your chosen namespace(s).
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
 
 ```
@@ -106,5 +118,4 @@ If the namespace already has pods in it, you must recreate them for this to take
 ### Above and beyond
 
 - [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio)
-- [Enforce network policy using Istio]({{site.baseurl}}/security/enforce-policy-istio)
 - [Use HTTP methods and paths in policy rules]({{site.baseurl}}/security/http-methods)

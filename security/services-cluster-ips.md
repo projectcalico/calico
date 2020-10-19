@@ -38,7 +38,7 @@ Cluster IPs were originally designed for use within the Kubernetes cluster. {{si
 
 #### Traffic routing: local versus cluster modes
 
-{{site.prodname}} implements [Kubernetes service external traffic policy](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip), which controls whether external traffic is routed to node-local or cluster-wide endpoints. The following table summarizes key differences between these settings. The default is **cluster mode**.
+{{site.prodname}} implements [Kubernetes service external traffic policy](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip){:target="_blank"}, which controls whether external traffic is routed to node-local or cluster-wide endpoints. The following table summarizes key differences between these settings. The default is **cluster mode**.
 
 
 | **Service setting**                         | **Traffic is load balanced...**                     | **Pros and cons**                                            | **Required service type**                                    |
