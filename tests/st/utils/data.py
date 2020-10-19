@@ -687,7 +687,7 @@ node_name5_rev1 = {
         },
         'orchRefs': [
             {
-                'nodeName': 'node5',
+                'nodeName': 'node4',
                 'orchestrator': 'k8s',
             },
         ],
@@ -754,6 +754,28 @@ bgpconfig_name2_rev3 = {
     'spec': {
         'logSeverityScreen': 'Debug',
         'nodeToNodeMeshEnabled': True,
+    }
+}
+
+bgpconfig_name3_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPConfiguration',
+    'metadata': {
+        'name': 'node.node5',
+    },
+    'spec': {
+        'logSeverityScreen': 'Debug',
+    }
+}
+
+bgpconfig_name4_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPConfiguration',
+    'metadata': {
+        'name': 'node.node4',
+    },
+    'spec': {
+        'logSeverityScreen': 'Debug',
     }
 }
 
@@ -832,6 +854,98 @@ felixconfig_name1_rev3 = {
         'logSeverityScreen': 'Debug',
         'netlinkTimeout': '125s',
         'reportingTTL': '9910s',
+    }
+}
+
+felixconfig_name2_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'FelixConfiguration',
+    'metadata': {
+        'name': 'node.node5',
+    },
+    'spec': {
+        'chainInsertMode': 'append',
+        'defaultEndpointToHostAction': 'Accept',
+        'failsafeInboundHostPorts': [
+            {'protocol': 'TCP', 'port': 666},
+            {'protocol': 'UDP', 'port': 333}, ],
+        'failsafeOutboundHostPorts': [
+            {'protocol': 'TCP', 'port': 999},
+            {'protocol': 'UDP', 'port': 222},
+            {'protocol': 'UDP', 'port': 422}, ],
+        'interfacePrefix': 'humperdink',
+        'ipipMTU': 1521,
+        'ipsetsRefreshInterval': '44s',
+        'iptablesFilterAllowAction': 'Return',
+        'iptablesLockFilePath': '/run/fun',
+        'iptablesLockProbeInterval': '500ms',
+        'iptablesLockTimeout': '22s',
+        'iptablesMangleAllowAction': 'Accept',
+        'iptablesMarkMask': 0xff0000,
+        'iptablesPostWriteCheckInterval': '12s',
+        'iptablesRefreshInterval': '22s',
+        'ipv6Support': True,
+        'logFilePath': '/var/log/fun.log',
+        'logPrefix': 'say-hello-friend',
+        'logSeverityScreen': 'Info',
+        'maxIpsetSize': 8192,
+        'metadataAddr': '127.1.1.1',
+        'metadataPort': 8999,
+        'netlinkTimeout': '10s',
+        'prometheusGoMetricsEnabled': True,
+        'prometheusMetricsEnabled': True,
+        'prometheusMetricsPort': 11,
+        'prometheusProcessMetricsEnabled': True,
+        'reportingInterval': '10s',
+        'reportingTTL': '99s',
+        'routeRefreshInterval': '33s',
+        'usageReportingEnabled': False,
+    }
+}
+
+felixconfig_name3_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'FelixConfiguration',
+    'metadata': {
+        'name': 'node.node4',
+    },
+    'spec': {
+        'chainInsertMode': 'append',
+        'defaultEndpointToHostAction': 'Accept',
+        'failsafeInboundHostPorts': [
+            {'protocol': 'TCP', 'port': 666},
+            {'protocol': 'UDP', 'port': 333}, ],
+        'failsafeOutboundHostPorts': [
+            {'protocol': 'TCP', 'port': 999},
+            {'protocol': 'UDP', 'port': 222},
+            {'protocol': 'UDP', 'port': 422}, ],
+        'interfacePrefix': 'humperdink',
+        'ipipMTU': 1521,
+        'ipsetsRefreshInterval': '44s',
+        'iptablesFilterAllowAction': 'Return',
+        'iptablesLockFilePath': '/run/fun',
+        'iptablesLockProbeInterval': '500ms',
+        'iptablesLockTimeout': '22s',
+        'iptablesMangleAllowAction': 'Accept',
+        'iptablesMarkMask': 0xff0000,
+        'iptablesPostWriteCheckInterval': '12s',
+        'iptablesRefreshInterval': '22s',
+        'ipv6Support': True,
+        'logFilePath': '/var/log/fun.log',
+        'logPrefix': 'say-hello-friend',
+        'logSeverityScreen': 'Info',
+        'maxIpsetSize': 8192,
+        'metadataAddr': '127.1.1.1',
+        'metadataPort': 8999,
+        'netlinkTimeout': '10s',
+        'prometheusGoMetricsEnabled': True,
+        'prometheusMetricsEnabled': True,
+        'prometheusMetricsPort': 11,
+        'prometheusProcessMetricsEnabled': True,
+        'reportingInterval': '10s',
+        'reportingTTL': '99s',
+        'routeRefreshInterval': '33s',
+        'usageReportingEnabled': False,
     }
 }
 
