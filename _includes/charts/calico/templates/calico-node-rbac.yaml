@@ -15,14 +15,6 @@ rules:
       - get
   - apiGroups: [""]
     resources:
-      - secrets
-    verbs:
-      # Needed when configuring bgp password in bgppeer
-      - watch
-      - list
-      - get
-  - apiGroups: [""]
-    resources:
       - endpoints
       - services
     verbs:
