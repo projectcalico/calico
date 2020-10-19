@@ -37,6 +37,8 @@ spec:
                 additionalProperties:
                   type: integer
                 type: object
+              deleted:
+                type: boolean
               handleID:
                 type: string
             required:
