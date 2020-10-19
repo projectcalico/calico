@@ -154,7 +154,7 @@ $ ./wni aws create \
 
 #### Install {{site.prodnameWindows}}
 
-1. Prepare directory for Kubernetes files on Windows node.
+1. Prepare directory for Kubernetes files on the Windows node.
 
    ```powershell
    mkdir c:\k
@@ -210,15 +210,21 @@ $ ./wni aws create \
 
 #### Configure kubelet
 
-Copy the previously downloaded file `wmcb.exe` and your worker's ignition file (worker.ign) to the Windows node.
-To download the worker.ign:
+Copy the previously downloaded file `wmcb.exe` to the Windows node.
+From the Windows node, download the worker.ign from an API server pod:
 
-```shell
-apiserver=$(oc get po -n  openshift-kube-apiserver -l apiserver=true --no-headers -o custom-columns=":metadata.name" | head -n 1)
-oc -n openshift-kube-apiserver exec ${apiserver} -- curl -ks https://localhost:22623/config/worker > worker.ign
+```powershell
+$apiServer = c:\k\kubectl --kubeconfig c:\k\config get po -n  openshift-kube-apiserver -l apiserver=true --no-headers -o custom-columns=":metadata.name" | select -first 1
+c:\k\kubectl --kubeconfig c:\k\config -n openshift-kube-apiserver exec $apiserver -- curl -ks https://localhost:22623/config/worker > worker.ign
 ```
 
-Remote into the Windows node and configure the kubelet:
+Fix the line endings in worker.ign:
+
+```powershell
+((Get-Content worker.ign) -join "`n") + "`n" | Set-Content -NoNewline worker.ign
+```
+
+Now configure the kubelet:
 
 ```powershell
 ./wmcb.exe initialize-kubelet --ignition-file worker.ign --kubelet-path c:\k\kubelet.exe
