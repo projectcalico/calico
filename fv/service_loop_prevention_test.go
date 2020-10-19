@@ -154,18 +154,18 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		felixes[0].Exec("ip", "r", "a", "10.96.0.0/17", "via", externalGW.IP)
 		felixes[0].Exec("iptables", "-P", "FORWARD", "ACCEPT")
 
-		tryPing := func() int {
-			// Start monitoring all packets, on the Felix, to or from a specific (but
-			// unused) service IP.
-			tcpdumpF := felixes[0].AttachTCPDump("eth0")
-			tcpdumpF.AddMatcher("serviceIPPackets", regexp.MustCompile("10\\.96\\.0\\.19"))
-			tcpdumpF.Start()
-			defer tcpdumpF.Stop()
+		// Start monitoring all packets, on the Felix, to or from a specific (but
+		// unused) service IP.
+		tcpdumpF := felixes[0].AttachTCPDump("eth0")
+		tcpdumpF.AddMatcher("serviceIPPackets", regexp.MustCompile("10\\.96\\.0\\.19"))
+		tcpdumpF.Start()
+		defer tcpdumpF.Stop()
 
-			// Send a single ping from the external client to the unused service IP.
-			err := externalClient.ExecMayFail("ping", "-c", "1", "-W", "1", "10.96.0.19")
-			Expect(err).To(HaveOccurred())
+		// Send a single ping from the external client to the unused service IP.
+		err := externalClient.ExecMayFail("ping", "-c", "1", "-W", "1", "10.96.0.19")
+		Expect(err).To(HaveOccurred())
 
+		countServiceIPPackets := func() int {
 			// Return the number of packets observed to/from 10.96.0.19.
 			return tcpdumpF.MatchCount("serviceIPPackets")
 		}
@@ -175,11 +175,11 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 			// packets would be Felix receiving the ping and then forwarding it out
 			// again.  I want to check here that it's also looped around again by the
 			// gateway, resulting in MORE THAN 2 packets.
-			Expect(tryPing()).To(BeNumerically(">", 2))
+			Eventually(countServiceIPPackets).Should(BeNumerically(">", 2))
 		} else {
 			// Tcpdump should see just 1 packet, the request, with no response (because
 			// we DROP) and no looping.
-			Expect(tryPing()).To(BeNumerically("==", 1))
+			Eventually(countServiceIPPackets).Should(BeNumerically("==", 1))
 		}
 	}
 
