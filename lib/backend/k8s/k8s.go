@@ -72,10 +72,6 @@ type KubeClient struct {
 	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
-func (kc *KubeClient) GetCRDClient() *rest.RESTClient {
-	return kc.crdClientV1
-}
-
 func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	config, cs, err := CreateKubernetesClientset(ca)
 	if err != nil {
