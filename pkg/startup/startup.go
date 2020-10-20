@@ -627,7 +627,7 @@ func validateIP(ipn string) {
 	for _, i := range ifaces {
 		for _, c := range i.Cidrs {
 			if ipAddr.Equal(c.IP) {
-				log.Infof("IPv%d address %s discovered on interface %s", ipAddr.Version(), ipAddr.String(), i.Name)
+				log.Debugf("IPv%d address %s discovered on interface %s", ipAddr.Version(), ipAddr.String(), i.Name)
 				return
 			}
 		}
