@@ -106,10 +106,25 @@ function GetPlatformType()
     }
 }
 
+function GetCalicoNamespace() {
+    param(
+      [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
+    )
+
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get ns calico-system
+    if ([string]::IsNullOrEmpty($name)) {
+        write-host "Calico running in kube-system namespace"
+        return ("kube-system")
+    }
+    write-host "Calico running in calico-system namespace"
+    return ("calico-system")
+}
+
 function GetCalicoKubeConfig()
 {
     param(
-      [parameter(Mandatory=$true)] $SecretName,
+      [parameter(Mandatory=$true)] $CalicoNamespace,
+      [parameter(Mandatory=$false)] $SecretName = "calico-node",
       [parameter(Mandatory=$false)] $KubeConfigPath = "c:\\k\\config"
     )
 
@@ -120,17 +135,17 @@ function GetCalicoKubeConfig()
         Import-Module $eksAWSToolsModulePath
     }
 
-    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n kube-system | findstr $SecretName | % { $_.Split(" ") | select -first 1 }
+    $name=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretName | select -first 1
     if ([string]::IsNullOrEmpty($name)) {
         throw "$SecretName service account does not exist."
     }
-    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n kube-system
-    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n kube-system
+    $ca=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.ca\.crt}' -n $CalicoNamespace
+    $tokenBase64=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret/$name -o jsonpath='{.data.token}' -n $CalicoNamespace
     $token=[System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($tokenBase64))
 
     $server=findstr https:// $KubeConfigPath
 
-    (Get-Content c:\CalicoWindows\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content c:\CalicoWindows\calico-kube-config -Force
+    (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force
 }
 
 function SetConfigParameters {
@@ -194,7 +209,8 @@ if ($platform -EQ "azure") {
     $Backend="none"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
-    GetCalicoKubeConfig -SecretName 'calico-windows'
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs -SecretName 'calico-windows'
 }
 if ($platform -EQ "eks") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
@@ -204,17 +220,21 @@ if ($platform -EQ "eks") {
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "vpc.*"'
-    GetCalicoKubeConfig -SecretName 'calico-node' -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
+
+    $calicoNs = GetCalicoNamespace -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs -KubeConfigPath C:\ProgramData\kubernetes\kubeconfig
 }
 if ($platform -EQ "ec2") {
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for aws, node name $awsNodeName ..."
     $awsNodeNameQuote = """$awsNodeName"""
     SetConfigParameters -OldString '$(hostname).ToLower()' -NewString "$awsNodeNameQuote"
-    GetCalicoKubeConfig -SecretName 'calico-node'
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs
 }
 if([string]::IsNullOrEmpty($platform)) {
-    GetCalicoKubeConfig -SecretName "calico-node"
+    $calicoNs = GetCalicoNamespace
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs
 }
 
 if ($DownloadOnly -EQ "yes") {
