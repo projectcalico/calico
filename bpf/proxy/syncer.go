@@ -723,7 +723,7 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		s.prevEpsMap = s.newEpsMap
 	}
 
-	// preallocate maps the track sticky service for cleanup
+	// preallocate maps to track sticky services for cleanup
 	s.stickySvcs = make(map[nat.FrontEndAffinityKey]stickyFrontend)
 	s.stickyEps = make(map[uint32]map[nat.BackendValue]struct{})
 	s.stickySvcDeleted = false
