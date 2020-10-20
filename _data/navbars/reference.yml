@@ -72,34 +72,34 @@ section:
 - title: Resource definitions
   path: /reference/resources/
   section:
-    - title: Overview
-      path: /reference/resources/overview
-    - title: BGP configuration
-      path: /reference/resources/bgpconfig
-    - title: BGP peer
-      path: /reference/resources/bgppeer
-    - title: Felix configuration
-      path: /reference/resources/felixconfig
-    - title: Global network policy
-      path: /reference/resources/globalnetworkpolicy
-    - title: Global network set
-      path: /reference/resources/globalnetworkset
-    - title: Host endpoint
-      path: /reference/resources/hostendpoint
-    - title: IP pool
-      path: /reference/resources/ippool
-    - title: Kubernetes controllers configuration
-      path: /reference/resources/kubecontrollersconfig
-    - title: Network policy
-      path: /reference/resources/networkpolicy
-    - title: Network set
-      path: /reference/resources/networkset
-    - title: Node
-      path: /reference/resources/node
-    - title: Profile
-      path: /reference/resources/profile
-    - title: Workload endpoint
-      path: /reference/resources/workloadendpoint
+  - title: Overview
+    path: /reference/resources/overview
+  - title: BGP configuration
+    path: /reference/resources/bgpconfig
+  - title: BGP peer
+    path: /reference/resources/bgppeer
+  - title: Felix configuration
+    path: /reference/resources/felixconfig
+  - title: Global network policy
+    path: /reference/resources/globalnetworkpolicy
+  - title: Global network set
+    path: /reference/resources/globalnetworkset
+  - title: Host endpoint
+    path: /reference/resources/hostendpoint
+  - title: IP pool
+    path: /reference/resources/ippool
+  - title: Kubernetes controllers configuration
+    path: /reference/resources/kubecontrollersconfig
+  - title: Network policy
+    path: /reference/resources/networkpolicy
+  - title: Network set
+    path: /reference/resources/networkset
+  - title: Node
+    path: /reference/resources/node
+  - title: Profile
+    path: /reference/resources/profile
+  - title: Workload endpoint
+    path: /reference/resources/workloadendpoint
 - title: Configuring etcd RBAC
   path: /reference/etcd-rbac/
   section:
@@ -153,28 +153,28 @@ section:
 - title: Host endpoints
   path: /reference/host-endpoints/
   section:
-    - title: Overview
-      path: /reference/host-endpoints/overview
-    - title: Creating policy for basic connectivity
-      path: /reference/host-endpoints/connectivity
-    - title: Creating host endpoint objects
-      path: /reference/host-endpoints/objects
-    - title: Selector-based policies
-      path: /reference/host-endpoints/selector
-    - title: Failsafe rules
-      path: /reference/host-endpoints/failsafe
-    - title: Pre-DNAT policy
-      path: /reference/host-endpoints/pre-dnat
-    - title: Apply on forwarded traffic
-      path: /reference/host-endpoints/forwarded
-    - title: Summary
-      path: /reference/host-endpoints/summary
-    - title: Connection tracking
-      path: /reference/host-endpoints/conntrack
+  - title: Overview
+    path: /reference/host-endpoints/overview
+  - title: Creating policy for basic connectivity
+    path: /reference/host-endpoints/connectivity
+  - title: Creating host endpoint objects
+    path: /reference/host-endpoints/objects
+  - title: Selector-based policies
+    path: /reference/host-endpoints/selector
+  - title: Failsafe rules
+    path: /reference/host-endpoints/failsafe
+  - title: Pre-DNAT policy
+    path: /reference/host-endpoints/pre-dnat
+  - title: Apply on forwarded traffic
+    path: /reference/host-endpoints/forwarded
+  - title: Summary
+    path: /reference/host-endpoints/summary
+  - title: Connection tracking
+    path: /reference/host-endpoints/conntrack
 - title: Architecture
   path: /reference/architecture/
   section:
-  - title: Introduction
+  - title: Component architecture
     path: /reference/architecture/overview
   - title: Data path
     path: /reference/architecture/data-path
