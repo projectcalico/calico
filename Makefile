@@ -18,7 +18,7 @@ ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-GO_BUILD_VER?=v0.22
+GO_BUILD_VER?=v0.40
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calico
@@ -516,3 +516,22 @@ release-test: release-test-image
 	-s -v --with-xunit \
 	--xunit-file='/docs/nosetests.xml' \
 	--with-timer $(EXTRA_NOSE_ARGS)"
+
+API_GEN_REPO?=tmjd/gen-crd-api-reference-docs
+API_GEN_BRANCH?=kb_v2
+OPERATOR_VERSION?=master
+OPERATOR_REPO?=tigera/operator
+build-operator-reference:
+	mkdir -p .go-pkg-cache && \
+	   docker run --rm \
+	   --net=host \
+	   -v $$(pwd):/go/src/$(PACKAGE_NAME):rw \
+	   -v $$(pwd)/.go-pkg-cache:/go/pkg:rw \
+	   -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	   -w /go/src/$(PACKAGE_NAME) \
+	   $(CALICO_BUILD) /bin/bash -c 'export GO111MODULE=on && rm -rf builder && mkdir builder && cd builder && \
+	           git clone --depth=1 -b $(API_GEN_BRANCH) https://github.com/$(API_GEN_REPO) api-gen && cd api-gen && \
+	           go mod edit -replace github.com/tigera/operator=github.com/$(OPERATOR_REPO)@$(OPERATOR_VERSION) && \
+	           go mod download && go build && \
+	           ./gen-crd-api-reference-docs -config ./example-config.json \
+	                   -api-dir github.com/tigera/operator/api -out-file /go/src/$(PACKAGE_NAME)/reference/installation/_api.html'
