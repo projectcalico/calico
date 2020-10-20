@@ -19,8 +19,9 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 var (
