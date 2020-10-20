@@ -9,7 +9,7 @@ require (
 	github.com/onsi/gomega v1.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/cni-plugin v1.11.1-0.20200819094939-dc51a5d3b132
-	github.com/projectcalico/felix v0.0.0-20200911161951-73605aac90ce
+	github.com/projectcalico/felix v0.0.0-20201016221920-3dd5abf74a02
 	github.com/projectcalico/libcalico-go v1.7.2-0.20201006092128-6c4ea9eb1b45
 	github.com/projectcalico/typha v0.7.3-0.20201006115548-e273ebcc2f98
 	github.com/sirupsen/logrus v1.4.2
