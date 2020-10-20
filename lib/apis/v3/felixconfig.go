@@ -309,7 +309,6 @@ type FelixConfigurationSpec struct {
 	// in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic
 	// flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the
 	// cluster.  It should not match the workload interfaces (usually named cali...).
-	// [Default: ^(en[opsx].*|eth.*|tunl0$|wireguard.cali$)]
 	BPFDataIfacePattern string `json:"bpfDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 	// BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load
 	// balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services
@@ -362,6 +361,12 @@ type FelixConfigurationSpec struct {
 	// Unless set to "Disabled", in which case such routing loops continue to be allowed.
 	// [Default: Drop]
 	ServiceLoopPrevention string `json:"serviceLoopPrevention,omitempty" validate:"omitempty,oneof=Drop Reject Disabled"`
+
+	// MTUIfacePattern is a regular expression that controls which interfaces Felix should scan in order
+	// to calculate the host's MTU.
+	// This should not match workload interfaces (usually named cali...).
+	// +optional
+	MTUIfacePattern string `json:"mtuIfacePattern,omitempty" validate:"omitempty,regexp"`
 }
 
 type RouteTableRange struct {

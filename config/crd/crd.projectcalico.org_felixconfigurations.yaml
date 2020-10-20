@@ -61,13 +61,13 @@ spec:
                   true]'
                 type: boolean
               bpfDataIfacePattern:
-                description: 'BPFDataIfacePattern is a regular expression that controls
+                description: BPFDataIfacePattern is a regular expression that controls
                   which interfaces Felix should attach BPF programs to in order to
                   catch traffic to/from the network.  This needs to match the interfaces
                   that Calico workload traffic flows over as well as any interfaces
                   that handle incoming traffic to nodeports and services from outside
                   the cluster.  It should not match the workload interfaces (usually
-                  named cali...). [Default: ^(en[opsx].*|eth.*|tunl0$|wireguard.cali$)]'
+                  named cali...).
                 type: string
               bpfDisableUnprivileged:
                 description: 'BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled
@@ -374,6 +374,11 @@ spec:
                   set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort.
                   In most cases this should not need to be changed [Default: 8775].'
                 type: integer
+              mtuIfacePattern:
+                description: MTUIfacePattern is a regular expression that controls
+                  which interfaces Felix should scan in order to calculate the host's
+                  MTU. This should not match workload interfaces (usually named cali...).
+                type: string
               natOutgoingAddress:
                 description: NATOutgoingAddress specifies an address to use when performing
                   source NAT for traffic in a natOutgoing pool that is leaving the

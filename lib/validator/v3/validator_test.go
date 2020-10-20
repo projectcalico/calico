@@ -632,6 +632,9 @@ func init() {
 		Entry("should reject route table range max too large", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 1, Max: 253}}, false),
 		Entry("should accept route table range with min == max", api.FelixConfigurationSpec{RouteTableRange: &api.RouteTableRange{Min: 8, Max: 8}}, true),
 
+		Entry("should reject an invalid MTUIfacePattern value '*'", api.FelixConfigurationSpec{MTUIfacePattern: "*"}, false),
+		Entry("should accept a valid MTUIfacePattern value 'eth.*'", api.FelixConfigurationSpec{MTUIfacePattern: "eth.*"}, true),
+
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),
 		Entry("should accept protocol UDP", protocolFromString("UDP"), true),
