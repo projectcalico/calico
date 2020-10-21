@@ -105,7 +105,7 @@ function GetPlatformType()
     # AKS
     $hnsNetwork = Get-HnsNetwork | ? Name -EQ azure
     if ($hnsNetwork.name -EQ "azure") {
-        return ("azure")
+        return ("aks")
     }
 
     # EKS
@@ -115,8 +115,13 @@ function GetPlatformType()
     }
 
     # EC2
-    $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
-    if (-Not [string]::IsNullOrEmpty($awsNodeName)) {
+    $restError = $null
+    Try {
+        $awsNodeName=Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
+    } Catch {
+        $restError = $_
+    }
+    if ($restError -eq $null) {
         return ("ec2")
     }
 
