@@ -5,7 +5,7 @@ canonical_url: '/reference/resources/networkpolicy'
 ---
 
 A network policy resource (`NetworkPolicy`) represents an ordered set of rules which are applied
-to a collection of endpoints that match a [label selector](#selector).
+to a collection of endpoints that match a [label selector](#selectors).
 
 `NetworkPolicy` is a namespaced resource. `NetworkPolicy` in a specific namespace
 only applies to [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint)
@@ -66,11 +66,11 @@ spec:
 | Field    | Description                                                                                         | Accepted Values | Schema                | Default |
 |----------|-----------------------------------------------------------------------------------------------------|-----------------|-----------------------|---------|
 | order    | Controls the order of precedence. {{site.prodname}} applies the policy with the lowest value first. |                 | float                 |         |
-| selector | Selects the endpoints to which this policy applies.                                                 |                 | [selector](#selector) | all()   |
+| selector | Selects the endpoints to which this policy applies.                                                 |                 | [selector](#selectors) | all()   |
 | types    | Applies the policy based on the direction of the traffic. To apply the policy to inbound traffic, set to `Ingress`. To apply the policy to outbound traffic, set to `Egress`. To apply the policy to both, set to `Ingress, Egress`. | `Ingress`, `Egress` | List of strings | Depends on presence of ingress/egress rules\* |
 | ingress  | Ordered list of ingress rules applied by policy.                                                    |                 | List of [Rule](#rule) |         |
 | egress   | Ordered list of egress rules applied by this policy.                                                |                 | List of [Rule](#rule) |         |
-| serviceAccountSelector | Selects the service account(s) to which this policy applies. Select a specific service account by name using the `projectcalico.org/name` label.  |                 | [selector](#selector) | all()   |
+| serviceAccountSelector | Selects the service account(s) to which this policy applies. Select a specific service account by name using the `projectcalico.org/name` label.  |                 | [selector](#selectors) | all()   |
 
 \* If `types` has no value, {{site.prodname}} defaults as follows.
 
@@ -94,9 +94,10 @@ spec:
 
 {% include content/entityrule.md %}
 
-#### Selector
+#### Selectors
 
 {% include content/selectors.md %}
+{% include content/selector-scopes.md %}
 
 #### Ports
 
