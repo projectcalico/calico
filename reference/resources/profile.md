@@ -70,9 +70,10 @@ spec:
 
 {% include content/entityrule.md %}
 
-#### Selector
+#### Selectors
 
 {% include content/selectors.md %}
+{% include content/selector-scopes.md %}
 
 #### Ports
 
