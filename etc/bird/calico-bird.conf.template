@@ -29,6 +29,7 @@ protocol kernel {
   import all;
   graceful restart;
   export all;     # Default is export none
+  merge paths on; # Allow export multipath routes (ECMP)
 }
 
 # Watch interface up/down events.
