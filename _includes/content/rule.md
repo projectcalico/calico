@@ -17,7 +17,7 @@ are executed in order.
 After a `Log` action, processing continues with the next rule; `Allow` and `Deny` are immediate
 and final and no further rules are processed.
 
-An `action` of `Pass` in a `NetowrkPolicy` or `GlobalNetworkPolicy` will skip over the remaining policies and jump to the
+An `action` of `Pass` in a `NetworkPolicy` or `GlobalNetworkPolicy` will skip over the remaining policies and jump to the
 first [profile]({{ site.baseurl }}/reference/resources/profile) assigned to the endpoint, applying the policy configured in the
 profile; if there are no Profiles configured for the endpoint the default applied action is `Deny`.
 

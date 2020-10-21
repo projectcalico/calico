@@ -42,5 +42,5 @@ It would match:
 * Any resource that did not have label "my-label".
 * Any resource that both:
   * Has a value for `my-label` that starts with "prod", and,
-  * Has a role label with value either "frontend", or "backend".
+  * Has a role label with value either "frontend", or "business".
 

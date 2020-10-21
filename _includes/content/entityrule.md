@@ -1,5 +1,5 @@
 Entity rules specify the attributes of the source or destination of a packet that must match for the rule as a whole 
-to match.  Packets are matched on their IP and ports, if the rule contains multiple match criteria (for example, an 
+to match.  Packets are matched on their IPs and ports.  If the rule contains multiple match criteria (for example, an 
 IP and a port) then all match criteria must match for the rule as a whole to match.
 
 [Selectors](#selectors) offer a powerful way to select the source or destination to match based on labels.  
