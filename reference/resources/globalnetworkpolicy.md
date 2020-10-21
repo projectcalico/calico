@@ -5,7 +5,7 @@ canonical_url: '/reference/resources/globalnetworkpolicy'
 ---
 
 A global network policy resource (`GlobalNetworkPolicy`) represents an ordered set of rules which are applied
-to a collection of endpoints that match a [label selector](#selector).
+to a collection of endpoints that match a [label selector](#selectors).
 
 `GlobalNetworkPolicy` is not a namespaced resource. `GlobalNetworkPolicy` applies to [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint) in all namespaces, and to [host endpoint resources]({{ site.baseurl }}/reference/resources/hostendpoint).
 Select a namespace in a `GlobalNetworkPolicy` in the standard selector by using
@@ -63,9 +63,9 @@ spec:
 | Field                  | Description                                                                                                                                                                                                                          | Accepted Values     | Schema                | Default                                       |
 |------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------|-----------------------|-----------------------------------------------|
 | order                  | Controls the order of precedence. {{site.prodname}} applies the policy with the lowest value first.                                                                                                                                  |                     | float                 |                                               |
-| selector               | Selects the endpoints to which this policy applies.                                                                                                                                                                                  |                     | [selector](#selector) | all()                                         |
-| serviceAccountSelector | Selects the service account(s) to which this policy applies. Select all service accounts in the cluster with a specific name using the `projectcalico.org/name` label.                                                               |                     | [selector](#selector) | all()                                         |
-| namespaceSelector      | Selects the namespace(s) to which this policy applies. Select a specific namespace by name using the `projectcalico.org/name` label.                                                                                                 |                     | [selector](#selector) | all()                                         |
+| selector               | Selects the endpoints to which this policy applies.                                                                                                                                                                                  |                     | [selector](#selectors) | all()                                         |
+| serviceAccountSelector | Selects the service account(s) to which this policy applies. Select all service accounts in the cluster with a specific name using the `projectcalico.org/name` label.                                                               |                     | [selector](#selectors) | all()                                         |
+| namespaceSelector      | Selects the namespace(s) to which this policy applies. Select a specific namespace by name using the `projectcalico.org/name` label.                                                                                                 |                     | [selector](#selectors) | all()                                         |
 | types                  | Applies the policy based on the direction of the traffic. To apply the policy to inbound traffic, set to `Ingress`. To apply the policy to outbound traffic, set to `Egress`. To apply the policy to both, set to `Ingress, Egress`. | `Ingress`, `Egress` | List of strings       | Depends on presence of ingress/egress rules\* |
 | ingress                | Ordered list of ingress rules applied by policy.                                                                                                                                                                                     |                     | List of [Rule](#rule) |                                               |
 | egress                 | Ordered list of egress rules applied by this policy.                                                                                                                                                                                 |                     | List of [Rule](#rule) |                                               |
@@ -108,9 +108,10 @@ for how `doNotTrack` and `preDNAT` and `applyOnForward` can be useful for host e
 
 {% include content/entityrule.md %}
 
-#### Selector
+#### Selectors
 
 {% include content/selectors.md %}
+{% include content/selector-scopes.md %}
 
 #### Ports
 
