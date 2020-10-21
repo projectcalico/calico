@@ -73,17 +73,17 @@ spec:
 | preDNAT\*\*            | Indicates to apply the rules in this policy before any DNAT.                                                                                                                                                                         | true, false         | boolean               | false                                         |
 | applyOnForward\*\*     | Indicates to apply the rules in this policy on forwarded traffic as well as to locally terminated traffic.                                                                                                                           | true, false         | boolean               | false                                         |
 
-If `types` has no value, {{site.prodname}} defaults as follows.
+\* If `types` has no value, {{site.prodname}} defaults as follows.
 
-| Ingress Rules Present | Egress Rules Present | `Types` value       |
-|-----------------------|----------------------|---------------------|
-| No                    | No                   | `Ingress`           |
-| Yes                   | No                   | `Ingress`           |
-| No                    | Yes                  | `Egress`            |
-| Yes                   | Yes                  | `Ingress, Egress`   |
+>| Ingress Rules Present | Egress Rules Present | `Types` value       |
+ |-----------------------|----------------------|---------------------|
+ | No                    | No                   | `Ingress`           |
+ | Yes                   | No                   | `Ingress`           |
+ | No                    | Yes                  | `Egress`            |
+ | Yes                   | Yes                  | `Ingress, Egress`   |
 
-The `doNotTrack` and `preDNAT` and `applyOnForward` fields are meaningful only when applying policy to a 
-[host endpoint]({{ site.baseurl }}/reference/resources/hostendpoint).
+\*\* The `doNotTrack` and `preDNAT` and `applyOnForward` fields are meaningful
+only when applying policy to a [host endpoint]({{ site.baseurl }}/reference/resources/hostendpoint).
 
 Only one of `doNotTrack` and `preDNAT` may be set to `true` (in a given policy). If they are both `false`, or when applying the policy to a
 [workload endpoint]({{ site.baseurl }}/reference/resources/workloadendpoint),
