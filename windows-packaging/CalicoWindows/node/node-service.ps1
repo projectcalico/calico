@@ -31,6 +31,8 @@ if ($env:CNI_IPAM_TYPE -EQ "host-local") {
     $env:USE_POD_CIDR = "false"
 }
 
+$platform = Get-PlatformType
+
 if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_BACKEND -EQ "vxlan")
 {
     Write-Host "Calico $env:CALICO_NETWORKING_BACKEND networking enabled."
@@ -104,6 +106,10 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_
     $mgmtIP = Wait-ForManagementIP "External"
     Write-Host "Management IP detected on vSwitch: $mgmtIP."
     Start-Sleep 10
+
+    if ($platform -EQ "ec2") {
+        Set-AwsMetaDataServerRoute -mgmtIP $mgmtIP
+    }
 
     if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp") {
         Write-Host "Restarting BGP service to pick up any interface renumbering..."

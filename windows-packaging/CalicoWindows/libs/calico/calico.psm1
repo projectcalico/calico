@@ -353,6 +353,55 @@ function Wait-ForCalicoInit()
     Write-Host "Calico initialisation finished."
 }
 
+function Get-PlatformType()
+{
+    # AKS
+    $hnsNetwork = Get-HnsNetwork | ? Name -EQ azure
+    if ($hnsNetwork.name -EQ "azure") {
+        return ("aks")
+    }
+    
+    # EKS
+    $hnsNetwork = Get-HnsNetwork | ? Name -like "vpcbr*"
+    if ($hnsNetwork.name -like "vpcbr*") {
+        return ("eks")
+    }
+    
+    # EC2
+    $restError = $null
+    Try {
+        $awsNodeName=Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
+    } Catch {
+        $restError = $_
+    }
+    if ($restError -eq $null) {
+        return ("ec2")
+    }
+    
+    return ("bare-metal")
+}
+
+function Set-AwsMetaDataServerRoute($mgmtIP)
+{
+    $route = $null
+    Try {
+        $route=Get-NetRoute -DestinationPrefix 169.254.169.254/32 2>$null
+    } Catch {
+        Write-Host "AWS metadata server route not found."
+    }
+    if ($route -eq $null) {
+        Write-Host "Restore AWS metadata server route."
+    
+        $routePrefix= $mgmtIP + "/32"
+        Try {
+            $ifIndex=Get-NetRoute -DestinationPrefix $routePrefix | Select-Object -ExpandProperty ifIndex
+            New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex $ifIndex
+        } Catch {
+            Write-Host "Warning! Failed to restore AWS metadata server route."
+        }
+    }
+}
+
 Export-ModuleMember -Function 'Test-*'
 Export-ModuleMember -Function 'Install-*'
 Export-ModuleMember -Function 'Remove-*'
