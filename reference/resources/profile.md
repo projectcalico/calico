@@ -70,9 +70,15 @@ spec:
 
 {% include content/entityrule.md %}
 
-#### Selector
+#### Selectors
 
 {% include content/selectors.md %}
+{% include content/selector-scopes.md %}
+
+> **Tip**: When using selectors in network profile, remember that selectors match resources, but _rules_ match
+> packets. A rule with a selector `all()` won't match "all packets", it'll match "packets from all known 
+> endpoints and network sets".  To match all packets, simply leave out the selector(s) in your rule.   
+{: .alert .alert-success}
 
 #### Ports
 
