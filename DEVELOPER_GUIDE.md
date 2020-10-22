@@ -4,7 +4,7 @@ This document describes how to set up a development environment for Calico, as w
 
 This guide is broken into the following main sections:
 
-- [Building the code](#building-the-code)
+- [Building Calico from scratch](#building-calico-from-scratch)
 - [Deploying your code on Kubernetes](#deploying-your-code-on-kubernetes)
 - [Running automated tests](#running-automated-tests)
 
@@ -95,6 +95,10 @@ Each repository can also be built on its own. The following are the standard `Ma
 * `make test`: run all tests
 * `make ci`: run all CI steps for build and test, likely other targets. **WARNING:** It is **not** recommended to run `make ci` locally, as the actions it takes may be destructive.
 * `make cd`: run all CD steps, normally pushing images out to registries. **WARNING:** It is **not** recommended to run `make cd` locally, as the actions it takes may be destructive, e.g. pushing out images. For your safety, it only will work if you run `make cd CONFIRM=true`, which only should be run by the proper CI system.
+
+### Building Calico on Linux (s390x)
+
+To build Calico and its components for Linux on IBM Z (s390x), follow the instructions provided [here](https://github.com/linux-on-ibm-z/docs/wiki/Building-Calico). 
 
 ## Deploying your code on Kubernetes
 
