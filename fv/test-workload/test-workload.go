@@ -103,7 +103,7 @@ func main() {
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
 				Name: interfaceName,
-				MTU:  1410, // XXX tie it with felix configuration
+				MTU:  1450, // XXX tie it with felix configuration
 			},
 			PeerName: peerName,
 		}

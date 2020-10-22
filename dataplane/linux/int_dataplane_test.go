@@ -16,6 +16,7 @@ package intdataplane_test
 
 import (
 	"net"
+	"regexp"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -77,6 +78,8 @@ var _ = Describe("Constructor test", func() {
 			},
 			IPIPMTU:          configParams.IpInIpMtu,
 			HealthAggregator: healthAggregator,
+
+			MTUIfacePattern: regexp.MustCompile(".*"),
 
 			LookPathOverride: func(file string) (string, error) {
 				return file, nil

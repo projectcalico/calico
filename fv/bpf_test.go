@@ -2191,7 +2191,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								const (
 									npEncapOverhead = 50
 									hostIfaceMTU    = 1500
-									podIfaceMTU     = 1410
+									podIfaceMTU     = 1450
 									sendLen         = hostIfaceMTU
 									recvLen         = podIfaceMTU - npEncapOverhead
 								)

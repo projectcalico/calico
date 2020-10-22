@@ -350,12 +350,13 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 				})
 
 				It("should configure the vxlan device correctly", func() {
-					// The VXLAN device should appear with default MTU, etc.
+					// The VXLAN device should appear with default MTU, etc. FV environment uses MTU 1500,
+					// which means that we should expect 1450 after subracting VXLAN overhead.
 					for _, felix := range felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
-						}, "10s", "100ms").Should(ContainSubstring("mtu 1410"))
+						}, "10s", "100ms").Should(ContainSubstring("mtu 1450"))
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
@@ -366,10 +367,32 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						}, "10s", "100ms").Should(ContainSubstring("dstport 4789"))
 					}
 
-					// Change the MTU.
+					// Change the host device's MTU, and expect the VXLAN device to be updated.
+					for _, felix := range felixes {
+						Eventually(func() error {
+							_, err := felix.ExecOutput("ip", "link", "set", "eth0", "mtu", "1400")
+							return err
+						}, "10s", "100ms").Should(BeNil())
+					}
+
+					// MTU should be auto-detected, and updated to the host MTU minus 50 bytes overhead.
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+							return out
+						}, "30s", "100ms").Should(ContainSubstring("mtu 1350"))
+
+						// And expect the MTU file on disk to be updated.
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
+							return out
+						}, "30s", "100ms").Should(ContainSubstring("1350"))
+					}
+
+					// Explicitly configure the MTU.
 					felixConfig, err := client.FelixConfigurations().Get(context.Background(), "default", options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
-					mtu := 1400
+					mtu := 1300
 					vni := 4097
 					port := 4790
 					felixConfig.Spec.VXLANMTU = &mtu
@@ -383,7 +406,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
-						}, "10s", "100ms").Should(ContainSubstring("mtu 1400"))
+						}, "30s", "100ms").Should(ContainSubstring("mtu 1300"))
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
@@ -393,6 +416,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 							return out
 						}, "10s", "100ms").Should(ContainSubstring("dstport 4790"))
 					}
+
 				})
 
 				It("should delete the vxlan device when vxlan is disabled", func() {
@@ -401,7 +425,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
-						}, "10s", "100ms").Should(ContainSubstring("mtu 1410"))
+						}, "10s", "100ms").Should(ContainSubstring("mtu 1450"))
 					}
 
 					// Disable VXLAN in Felix.
@@ -417,7 +441,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
-						}, "10s", "100ms").ShouldNot(ContainSubstring("mtu 1410"))
+						}, "10s", "100ms").ShouldNot(ContainSubstring("mtu 1450"))
 					}
 				})
 			})
