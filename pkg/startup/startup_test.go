@@ -546,7 +546,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			nodeName := determineNodeName()
 			node := getNode(ctx, c, nodeName)
 
-			err = ensureDefaultConfig(ctx, cfg, c, node, nil, nil)
+			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, nil, nil)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -589,7 +589,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			os.Setenv("CLUSTER_TYPE", "theType")
 
 			localRancherState := &v1.ConfigMap{Data: map[string]string{"foo": "bar"}}
-			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig, localRancherState)
+			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeWindows, kubeadmConfig, localRancherState)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -600,7 +600,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			})
 
 			It("should have the set value", func() {
-				Expect(clusterInfo.Spec.ClusterType).To(Equal("theType,kubeadm,rancher"))
+				Expect(clusterInfo.Spec.ClusterType).To(Equal("theType,kubeadm,rancher,win"))
 			})
 		})
 		Context("With env var and Cluster Type prepopulated, Cluster Type should have both", func() {
@@ -636,7 +636,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).ToNot(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "theType")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig, rancherState)
+			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -695,7 +695,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).ToNot(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "theType")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig, rancherState)
+			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -756,7 +756,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).NotTo(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig, rancherState)
+			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -804,7 +804,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).ToNot(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "type1,type1")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig, rancherState)
+			err = ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, kubeadmConfig, rancherState)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -955,7 +955,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			wg.Add(1)
 			go func(n api.Node) {
 				defer wg.Done()
-				err = ensureDefaultConfig(ctx, cfg, c, &n, kubeadmConfig, rancherState)
+				err = ensureDefaultConfig(ctx, cfg, c, &n, OSTypeLinux, kubeadmConfig, rancherState)
 				if err != nil {
 					errors = append(errors, err)
 				}

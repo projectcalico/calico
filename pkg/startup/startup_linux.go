@@ -34,6 +34,10 @@ var DEFAULT_INTERFACES_TO_EXCLUDE []string = []string{
 
 const defaultNodenameFile = "/var/lib/calico/nodename"
 
+func getOSType() string {
+	return OSTypeLinux
+}
+
 // Checks that the filesystem is as expected and fix it if possible
 func ensureFilesystemAsExpected() {
 	// BIRD requires the /var/run/calico directory in order to provide status
