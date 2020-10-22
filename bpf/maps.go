@@ -151,6 +151,31 @@ func DumpMapCmd(m Map) ([]string, error) {
 	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
+func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
+	if pm, ok := m.(*PinnedMap); ok {
+		keyData := make([]string, len(key))
+		for i, b := range key {
+			keyData[i] = fmt.Sprintf("%d", b)
+		}
+		cmd := []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"delete",
+			"pinned",
+			pm.versionedFilename(),
+			"key",
+		}
+
+		cmd = append(cmd, keyData...)
+
+		return cmd, nil
+	}
+
+	return nil, errors.Errorf("unrecognized map type %T", m)
+}
+
 // IterMapCmdOutput iterates over the outout of a command obtained by DumpMapCmd
 func IterMapCmdOutput(output []byte, f IterCallback) error {
 	var mp []mapEntry
