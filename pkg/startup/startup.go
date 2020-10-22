@@ -70,6 +70,9 @@ const (
 	KubeadmConfigConfigMap = "kubeadm-config"
 	// Rancher clusters store their state in this config map in the kube-system namespace.
 	RancherStateConfigMap = "full-cluster-state"
+
+	OSTypeLinux   = "lin"
+	OSTypeWindows = "win"
 )
 
 // Version string, set during build.
@@ -202,7 +205,7 @@ func Run() {
 	configureIPPools(ctx, cli, kubeadmConfig)
 
 	// Set default configuration required for the cluster.
-	if err := ensureDefaultConfig(ctx, cfg, cli, node, kubeadmConfig, rancherState); err != nil {
+	if err := ensureDefaultConfig(ctx, cfg, cli, node, getOSType(), kubeadmConfig, rancherState); err != nil {
 		log.WithError(err).Errorf("Unable to set global default configuration")
 		terminate()
 	}
@@ -1129,7 +1132,7 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 
 // ensureDefaultConfig ensures all of the required default settings are
 // configured.
-func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node, kubeadmConfig, rancherState *v1.ConfigMap) error {
+func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node, osType string, kubeadmConfig, rancherState *v1.ConfigMap) error {
 	// Ensure the ClusterInformation is populated.
 	// Get the ClusterType from ENV var. This is set from the manifest.
 	clusterType := os.Getenv("CLUSTER_TYPE")
@@ -1147,6 +1150,14 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 			clusterType = "rancher"
 		} else {
 			clusterType += ",rancher"
+		}
+	}
+
+	if osType != OSTypeLinux {
+		if len(clusterType) == 0 {
+			clusterType = osType
+		} else {
+			clusterType += "," + osType
 		}
 	}
 

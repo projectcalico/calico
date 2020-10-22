@@ -39,6 +39,10 @@ var DEFAULT_INTERFACES_TO_EXCLUDE = []string{
 	"Loopback.*",
 }
 
+func getOSType() string {
+	return OSTypeWindows
+}
+
 // Checks that the filesystem is as expected and fix it if possible
 func ensureFilesystemAsExpected() {
 	logrus.Debug("ensureFilesystemAsExpected called on Windows; nothing to do.")
