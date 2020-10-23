@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -498,6 +499,68 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 
 				_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("when /var/lib/calico/mtu file exists", func() {
+			mtuNetconfTemplate := `
+			{
+			  "cniVersion": "%s",
+			  "name": "net1",
+			  "type": "calico",
+			  "etcd_endpoints": "http://%s:2379",
+			  "datastore_type": "%s",
+			  "ipam": {
+			    "type": "host-local",
+			    "subnet": "10.0.0.0/8"
+			  },
+			  "kubernetes": {
+			    "k8s_api_root": "http://127.0.0.1:8080"
+			  },
+			  "policy": {"type": "k8s"},
+			  "nodename_file_optional": true,
+			  "log_level":"info"
+			}`
+
+			It("should create pods with the right MTU", func() {
+				config, err := clientcmd.DefaultClientConfig.ClientConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				clientset, err := kubernetes.NewForConfig(config)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create the /var/lib/calico/mtu file with MTU 3000
+
+				err = os.MkdirAll("/var/lib/calico", os.ModePerm)
+				Expect(err).NotTo(HaveOccurred())
+				err = ioutil.WriteFile("/var/lib/calico/mtu", []byte("3000"), 0644)
+				Expect(err).NotTo(HaveOccurred())
+				defer os.Remove("/var/lib/calico/mtu")
+
+				// Create a K8s pod/container
+				name1 := fmt.Sprintf("mtutest%d", rand.Uint32())
+				mtuNetconf1 := fmt.Sprintf(mtuNetconfTemplate, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+				ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{Name: name1},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{{
+							Name:  name1,
+							Image: "ignore",
+						}},
+						NodeName: hostname,
+					},
+				})
+				defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name1)
+
+				// Run CNI plugin, expect MTU to match the value from file.
+				_, _, contVeth1, _, _, contNs1, err := testutils.CreateContainer(mtuNetconf1, name1, testutils.K8S_TEST_NS, "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(contVeth1.Attrs().MTU).Should(Equal(3000))
+
+				// Cleanup
+				_, err = testutils.DeleteContainer(mtuNetconf1, contNs1.Path(), name1, testutils.K8S_TEST_NS)
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 		})
@@ -1926,8 +1989,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						ExternalIP: "2001:647f::21",
 					},
 				},
-				ContainerID:   containerID,
-				Orchestrator:  api.OrchestratorKubernetes,
+				ContainerID:  containerID,
+				Orchestrator: api.OrchestratorKubernetes,
 			}))
 
 			// Check the pod's IP annotations.
