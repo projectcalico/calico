@@ -113,7 +113,12 @@ Next, install calicoctl and [ensure that strict affinity is true]({{site.baseurl
 
 #### Add Windows nodes to the cluster
 
-Download the latest {% include open-new-window.html text='Windows Node Installer (WNI)' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %} binaries `wni` and `wmcb.exe` for your OpenShift version.
+Download the latest `wni` binary from {% include open-new-window.html text='Windows Machine Config Bootstrapper releases' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %} for your OpenShift version. The `wni` tool is a Linux binary that creates Windows nodes for OpenShift clusters. For example, for OpenShift 4.5.x:
+
+```bash
+wget https://github.com/openshift/windows-machine-config-bootstrapper/releases/download/v4.5.2-alpha/wni
+chmod +x ./wni
+```
 
 Next, determine the AMI id corresponding to Windows Server 1903 (build 18317) or greater. `wni` defaults to using Windows Server 2019 (build 10.0.17763) which does not include WinDSR support.
 One way to do this is by searching for AMI's matching the string `Windows_Server-1903-English-Core-ContainersLatest` in the Amazon EC2 console
@@ -210,24 +215,30 @@ $ ./wni aws create \
 
 #### Configure kubelet
 
-Copy the previously downloaded file `wmcb.exe` to the Windows node.
-From the Windows node, download the worker.ign from an API server pod:
+Download the latest `wmcb.exe` for your OpenShift version from {% include open-new-window.html text='Windows Machine Config Bootstrapper releases' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %}.
+For example, from the Windows node:
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/openshift/windows-machine-config-bootstrapper/releases/download/v4.5.2-alpha/wmcb.exe" -OutFile "c:\wmcb.exe"
+```
+
+Next, download the worker.ign from an API server pod:
 
 ```powershell
 $apiServer = c:\k\kubectl --kubeconfig c:\k\config get po -n  openshift-kube-apiserver -l apiserver=true --no-headers -o custom-columns=":metadata.name" | select -first 1
-c:\k\kubectl --kubeconfig c:\k\config -n openshift-kube-apiserver exec $apiserver -- curl -ks https://localhost:22623/config/worker > worker.ign
+c:\k\kubectl --kubeconfig c:\k\config -n openshift-kube-apiserver exec $apiserver -- curl -ks https://localhost:22623/config/worker > c:\worker.ign
 ```
 
 Fix the line endings in worker.ign:
 
 ```powershell
-((Get-Content worker.ign) -join "`n") + "`n" | Set-Content -NoNewline worker.ign
+((Get-Content c:\worker.ign) -join "`n") + "`n" | Set-Content -NoNewline c:\worker.ign
 ```
 
 Now configure the kubelet:
 
 ```powershell
-./wmcb.exe initialize-kubelet --ignition-file worker.ign --kubelet-path c:\k\kubelet.exe
+c:\wmcb.exe initialize-kubelet --ignition-file c:\worker.ign --kubelet-path c:\k\kubelet.exe
 ```
 
 > **Note**: The kubelet configuration installed by Windows Machine Config
@@ -240,7 +251,7 @@ Then we configure kubelet to use Calico CNI:
 
 ```powershell
 cp c:\k\config c:\k\kubeconfig
-./wmcb.exe configure-cni --cni-dir c:\k\cni --cni-config c:\k\cni\config\10-calico.conf
+c:\wmcb.exe configure-cni --cni-dir c:\k\cni --cni-config c:\k\cni\config\10-calico.conf
 ```
 
 Then, we need to override the pod infra image used by kubelet. This is to ensure
