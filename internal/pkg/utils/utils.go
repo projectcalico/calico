@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -92,6 +93,25 @@ func nodenameFromFile(filename string) string {
 		return ""
 	}
 	return string(data)
+}
+
+// MTUFromFile reads the /var/lib/calico/mtu file if it exists and
+// returns the MTU within.
+func MTUFromFile(filename string) (int, error) {
+	if filename == "" {
+		filename = "/var/lib/calico/mtu"
+	}
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return zero.
+			logrus.Infof("File %s does not exist", filename)
+			return 0, nil
+		}
+		logrus.WithError(err).Errorf("Failed to read %s", filename)
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(data)))
 }
 
 // CreateOrUpdate creates the WorkloadEndpoint if ResourceVersion is not specified,
