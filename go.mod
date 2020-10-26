@@ -6,7 +6,7 @@ require (
 	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 // indirect
 	github.com/Microsoft/hcsshim v0.8.6
 	github.com/buger/jsonparser v1.0.0
-	github.com/containernetworking/cni v0.7.1
+	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.5
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/howeyc/fsnotify v0.9.0
@@ -18,17 +18,17 @@ require (
 	github.com/mcuadros/go-version v0.0.0-20190308113854-92cdf37c5b75
 	github.com/natefinch/atomic v0.0.0-20150920032501-a62ce929ffcc
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
-	github.com/onsi/ginkgo v1.10.1
-	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200917183058-1de9c1579a93
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.1
+	github.com/projectcalico/libcalico-go v1.7.2-0.20201020165728-728c26dd8282
 	github.com/prometheus/common v0.4.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200401174654-e694b7bb0875
-	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
-	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5
+	golang.org/x/net v0.0.0-20200520004742-59133d7f0dd7
+	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
 	google.golang.org/grpc v1.23.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 
