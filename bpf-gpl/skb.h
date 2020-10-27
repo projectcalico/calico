@@ -97,6 +97,16 @@ static CALI_BPF_INLINE long skb_l4hdr_offset(struct __sk_buff *skb, __u8 ihl)
 	return skb_iphdr_offset(skb) + ihl;
 }
 
+static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)
+{
+#ifdef UNITTEST
+	/* ingress_ifindex is not set in PROG_RUN */
+	return skb->ingress_ifindex ? : skb->ifindex;
+#else
+	return skb->ingress_ifindex;
+#endif
+}
+
 #define skb_is_gso(skb) ((skb)->gso_segs > 1)
 
 #endif /* __SKB_H__ */

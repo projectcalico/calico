@@ -291,6 +291,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
 					felix.Exec("calico-bpf", "conntrack", "dump")
+					felix.Exec("calico-bpf", "arp", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
@@ -2109,8 +2110,53 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 						} else if !testOpts.connTimeEnabled {
 							It("should have connectivity from external to w[0] via node1->node0 fwd", func() {
-								cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
-								cc.CheckConnectivity()
+								By("checking the connectivity and thus populating the  neigh table", func() {
+									cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
+									cc.CheckConnectivity()
+								})
+
+								// The test does not make sense in DSR mode as the neigh
+								// table is not used on the return path.
+								if !testOpts.dsr {
+									var srcMAC, dstMAC string
+
+									By("making sure that neigh table is populated", func() {
+										out, err := felixes[0].ExecOutput("calico-bpf", "arp", "dump")
+										Expect(err).NotTo(HaveOccurred())
+
+										arpRegexp := regexp.MustCompile(fmt.Sprintf(".*%s : (.*) -> (.*)", felixes[1].IP))
+
+										lines := strings.Split(out, "\n")
+										for _, l := range lines {
+											if strings.Contains(l, felixes[1].IP) {
+												MACs := arpRegexp.FindStringSubmatch(l)
+												Expect(MACs).To(HaveLen(3))
+												srcMAC = MACs[1]
+												dstMAC = MACs[2]
+											}
+										}
+
+										Expect(srcMAC).NotTo(Equal(""))
+										Expect(dstMAC).NotTo(Equal(""))
+									})
+
+									// Since local-host networking ignores L2 addresses, we
+									// need to make sure by other means that they are set
+									// correctly.
+									By("making sure that return VXLAN has the right MACs using tcpdump", func() {
+										tcpdump := felixes[0].AttachTCPDump("eth0")
+										tcpdump.SetLogEnabled(true)
+										tcpdump.AddMatcher("MACs", regexp.MustCompile(fmt.Sprintf("%s > %s", srcMAC, dstMAC)))
+										tcpdump.Start("-e", "udp", "and", "src", felixes[0].IP, "and", "port", "4789")
+										defer tcpdump.Stop()
+
+										cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
+										cc.CheckConnectivity()
+
+										Eventually(func() int { return tcpdump.MatchCount("MACs") }).
+											Should(BeNumerically(">", 0), "MACs do not match")
+									})
+								}
 							})
 
 							if !testOpts.dsr {

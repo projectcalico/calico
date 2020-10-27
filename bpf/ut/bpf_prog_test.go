@@ -48,6 +48,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/arp"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
@@ -246,8 +247,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap bpf.Map
-	allMaps                                                                              []bpf.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap bpf.Map
+	allMaps                                                                                      []bpf.Map
 )
 
 func initMapsOnce() {
@@ -263,8 +264,9 @@ func initMapsOnce() {
 		testStateMap = state.MapForTest(mc)
 		jumpMap = jump.MapForTest(mc)
 		affinityMap = nat.AffinityMap(mc)
+		arpMap = arp.Map(mc)
 
-		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap}
+		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -306,6 +308,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 		"map", "name", jumpMap.GetName(), "pinned", jumpMap.Path(),
 		"map", "name", stateMap.GetName(), "pinned", stateMap.Path(),
 		"map", "name", affinityMap.GetName(), "pinned", affinityMap.Path(),
+		"map", "name", arpMap.GetName(), "pinned", arpMap.Path(),
 	)
 	if err != nil {
 		return err
@@ -533,6 +536,22 @@ func restoreRTMap(rtMap bpf.Map, m routes.MapMem) {
 		err := rtMap.Update(k[:], v[:])
 		Expect(err).NotTo(HaveOccurred())
 	}
+}
+
+func dumpARPMap(arpMap bpf.Map) {
+	ct, err := arp.LoadMapMem(arpMap)
+	Expect(err).NotTo(HaveOccurred())
+	fmt.Printf("ARP dump:\n")
+	for k, v := range ct {
+		fmt.Printf("- %s : %s\n", k, v)
+	}
+	fmt.Printf("\n")
+}
+
+func saveARPMap(ctMap bpf.Map) arp.MapMem {
+	m, err := arp.LoadMapMem(arpMap)
+	Expect(err).NotTo(HaveOccurred())
+	return m
 }
 
 var ethDefault = &layers.Ethernet{
