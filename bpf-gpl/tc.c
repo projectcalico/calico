@@ -39,6 +39,7 @@
 #include "jump.h"
 #include "reasons.h"
 #include "icmp.h"
+#include "arp.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true
@@ -179,7 +180,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		goto deny;
 	}
 
-	if (rc == CALI_RES_REDIR_IFINDEX) {
+	if (rc == CALI_RES_REDIR_BACK) {
 		int redir_flags = 0;
 		if  (CALI_F_FROM_HOST) {
 			redir_flags = BPF_F_INGRESS;
@@ -200,12 +201,47 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 
 		rc = bpf_redirect(skb->ifindex, redir_flags);
 		if (rc == TC_ACT_REDIRECT) {
-			CALI_DEBUG("Redirect to the same interface (%d) succeeded\n", skb->ifindex);
+			CALI_DEBUG("Redirect to the same interface (%d) succeeded.\n", skb->ifindex);
 			goto skip_fib;
 		}
 
-		CALI_DEBUG("Redirect to the same interface (%d) failed\n", skb->ifindex);
+		CALI_DEBUG("Redirect to the same interface (%d) failed.\n", skb->ifindex);
 		goto deny;
+	} else if (rc == CALI_RES_REDIR_IFINDEX) {
+		struct arp_value *arpv;
+		__u32 iface = state->ct_result.ifindex_fwd;
+
+		struct arp_key arpk = {
+			.ip = state->ip_dst,
+			.ifindex = iface,
+		};
+
+		arpv = cali_v4_arp_lookup_elem(&arpk);
+		if (!arpv) {
+			CALI_DEBUG("ARP lookup failed for %x dev %d\n",
+					be32_to_host(state->ip_dst), iface);
+			goto skip_redir_ifindex;
+		}
+
+		/* Revalidate the access to the packet */
+		if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
+			reason = CALI_REASON_SHORT;
+			goto deny;
+		}
+		/* Patch in the MAC addresses that should be set on the next hop. */
+		struct ethhdr *eth_hdr = (void *)(long)skb->data;
+		__builtin_memcpy(&eth_hdr->h_dest, arpv->mac_dst, ETH_ALEN);
+		__builtin_memcpy(&eth_hdr->h_source, arpv->mac_src, ETH_ALEN);
+
+		rc = bpf_redirect(iface, 0);
+		if (rc == TC_ACT_REDIRECT) {
+			CALI_DEBUG("Redirect directly to interface (%d) succeeded.\n", iface);
+			goto skip_fib;
+		}
+
+skip_redir_ifindex:
+		CALI_DEBUG("Redirect directly to interface (%d) failed.\n", iface);
+		/* fall through to FIB if enabled or the IP stack, don't give up yet. */
 	}
 
 #if FIB_ENABLED
@@ -391,6 +427,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			if (ip_src == HOST_IP) {
 				CALI_DEBUG("src ip fixup not needed %x\n", be32_to_host(ip_src));
 				goto allow;
+			} else {
+				CALI_DEBUG("src ip fixup %x\n", be32_to_host(HOST_IP));
 			}
 
 			/* XXX do a proper CT lookup to find this */
@@ -444,6 +482,18 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	ip_header = skb_iphdr(skb);
+	/* N.B. we need to grab the eth header here, instead of in the vxlan
+	 * decap branch, to make verifier happy.
+	 */
+	struct ethhdr *eth = (void *)(long)skb->data;
+
+	/* N.B. we need to create the arp key here otherwise the number of
+	 * states the verifier needs to inspect explodes.
+	 */
+	struct arp_key arpk = {
+		.ip = ip_header->saddr,
+		.ifindex = skb->ifindex,
+	};
 
 	if (dnat_should_decap() && is_vxlan_tunnel(ip_header)) {
 		struct udphdr *udp_header = (void*)(ip_header+1);
@@ -454,6 +504,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				vxlan_size_ok(skb, udp_header) &&
 				vxlan_vni_is_valid(skb, udp_header) &&
 				vxlan_vni(skb, udp_header) == CALI_VXLAN_VNI) {
+
+			/* We update the map straight with the packet data, eth header is
+			 * dst:src but the value is src:dst so it flips it automatically
+			 * when we use it on xmit.
+			 */
+			cali_v4_arp_update_elem(&arpk, eth, 0);
+			CALI_DEBUG("ARP update for ifindex %d ip %x\n", arpk.ifindex, be32_to_host(arpk.ip));
+
 			state.tun_ip = ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
@@ -1258,6 +1316,12 @@ nat_encap:
 	state->sport = state->dport = CALI_VXLAN_PORT;
 	state->ip_proto = IPPROTO_UDP;
 
+	CALI_DEBUG("vxlan return %d ifindex_fwd %d\n",
+			dnat_return_should_encap(), state->ct_result.ifindex_fwd);
+	if (dnat_return_should_encap() && state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
+		rc = CALI_RES_REDIR_IFINDEX;
+	}
+
 allow:
 	{
 		struct fwd fwd = {
@@ -1305,7 +1369,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 		if (CALI_F_FROM_WEP) {
 			/* we know it came from workload, just send it back the same way */
-			rc = CALI_RES_REDIR_IFINDEX;
+			rc = CALI_RES_REDIR_BACK;
 		}
 	}
 
