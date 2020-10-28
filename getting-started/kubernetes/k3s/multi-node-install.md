@@ -28,12 +28,12 @@ K3s is a lightweight implementation of Kubernetes packaged as a single binary.
 ### How to
 
 #### Initializing master instance
-   K3s installation script can be modified by {% include open-new-window.html text='environment variables' url='https://rancher.com/docs/k3s/latest/en/installation/install-options/#options-for-installation-with-script' %}. Here you are providing some extra arguments in order to disable `flannel` and change the pod ip CIDR.
+   K3s installation script can be modified by {% include open-new-window.html text='environment variables' url='https://rancher.com/docs/k3s/latest/en/installation/install-options/#options-for-installation-with-script' %}. Here you are providing some extra arguments in order to disable `flannel`, disable k3s default network policy and change the pod ip CIDR.
 
    > **Note**: Full list of arguments can be viewed {% include open-new-window.html text='at this link' url='https://rancher.com/docs/k3s/latest/en/installation/install-options/server-config/' %}.
    {: .alert .alert-info}
 
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --cluster-cidr=192.168.0.0/16" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--flannel-backend=none --disable-network-policy --cluster-cidr=192.168.0.0/16" sh -
 
    > **Note**: If 192.168.0.0/16 is already in use within your network you must select a different pod network
    > CIDR by replacing 192.168.0.0/16 in the above command. 
