@@ -438,7 +438,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   }
 
   @media (min-width: $screen-sm-min) {
-    grid-template-columns: [sidebar] 20% [article] auto;
+    grid-template-columns: [sidebar] 20% [article] calc(100% - 18% - 40px) auto;
   }
 
   @media (min-width: $screen-md-min) {
