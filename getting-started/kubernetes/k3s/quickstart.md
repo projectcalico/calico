@@ -33,7 +33,7 @@ Use this quickstart to quickly and easily try {{side.prodname}} features. To dep
 - Initialize the master using the following command.
 
 ```bash
-curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-backend=none --cluster-cidr=192.168.0.0/16 --disable=traefik" sh -
+curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-backend=none --cluster-cidr=192.168.0.0/16 --disable-network-policy --disable=traefik" sh -
 ```
 
 > **Note**: If 192.168.0.0/16 is already in use within your network you must select a different pod network
