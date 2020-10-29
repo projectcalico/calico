@@ -171,16 +171,6 @@ func UpdateErrorIdentifier(err error, id interface{}) error {
 	return err
 }
 
-// Error indicating the watcher has been terminated.
-type ErrorWatchTerminated struct {
-	Err            error
-	ClosedByRemote bool
-}
-
-func (e ErrorWatchTerminated) Error() string {
-	return fmt.Sprintf("watch terminated (closedByRemote:%v): %v", e.ClosedByRemote, e.Err)
-}
-
 // Error indicating the datastore has failed to parse an entry.
 type ErrorParsingDatastoreEntry struct {
 	RawKey   string

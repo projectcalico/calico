@@ -174,10 +174,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r1, genError)
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
-
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r1, emptyList)
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUnchanged()
 		//rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r1, nil)
 		rs.clientListResponse(r2, emptyList)
@@ -248,13 +247,13 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientWatchResponse(r3, nil)
 		rs.sendEvent(r3, api.WatchEvent{
 			Type:  api.WatchError,
-			Error: cerrors.ErrorWatchTerminated{Err: dsError},
+			Error: dsError,
 		})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r3, emptyList)
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r3, nil)
-		rs.ExpectStatusUpdate(api.InSync)
+		rs.ExpectStatusUnchanged()
 
 		// Watch fails, but gets created again immediately.  This should happen without
 		// additional pauses.
@@ -291,9 +290,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		By("Syncing no results for resource 2, failing to create a watch, retrying successfully.")
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, genError)
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r2, emptyList)
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r2, nil)
 		time.Sleep(130 * watchersyncer.WatchPollInterval / 100)
 		rs.expectAllEventsHandled()
@@ -308,13 +307,13 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientWatchResponse(r3, nil)
 		rs.sendEvent(r3, api.WatchEvent{
 			Type:  api.WatchError,
-			Error: cerrors.ErrorWatchTerminated{Err: dsError},
+			Error: dsError,
 		})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r3, emptyList)
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r3, nil)
-		rs.ExpectStatusUpdate(api.InSync)
+		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r3, nil)
 		// All events should be handled.
 		rs.expectAllEventsHandled()
@@ -378,7 +377,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// The retry thread will be blocked for the watch poll interval.
 		rs.clientWatchResponse(r1, genError)
 		time.Sleep(watchersyncer.WatchPollInterval)
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUnchanged()
 
 		By("returning a sync list with one entry removed and a new one added")
 		rs.clientListResponse(r1, &model.KVPairList{
@@ -390,8 +389,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			},
 		})
 
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
-		rs.ExpectStatusUpdate(api.InSync)
+		rs.ExpectStatusUnchanged()
 
 		rs.clientWatchResponse(r1, nil)
 
@@ -433,9 +431,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		By("Failing the watch, and resyncing with another modified entry")
 		rs.sendEvent(r1, api.WatchEvent{
 			Type:  api.WatchError,
-			Error: cerrors.ErrorWatchTerminated{Err: dsError},
+			Error: dsError,
 		})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r1, &model.KVPairList{
 			Revision: "12347",
 			KVPairs: []*model.KVPair{
@@ -443,8 +441,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				eventL1Modified4_2.New,
 			},
 		})
-		rs.ExpectStatusUpdate(api.ResyncInProgress)
-		rs.ExpectStatusUpdate(api.InSync)
+		rs.ExpectStatusUnchanged()
 
 		By("Expecting mod, delete, mod updates")
 		rs.ExpectUpdates([]api.Update{
