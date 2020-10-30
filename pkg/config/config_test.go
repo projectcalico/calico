@@ -338,12 +338,12 @@ var _ = Describe("Config", func() {
 				m.geterror = nil
 				m.get = m.create
 
-				// send watch terminated
+				// send watch error, all errors trigger a full resync.
 				m.watchchan <- watch.Event{
 					Type:     watch.Error,
 					Previous: nil,
 					Object:   nil,
-					Error:    errors.ErrorWatchTerminated{ClosedByRemote: true},
+					Error:    errors.ErrorDatastoreError{},
 				}
 
 				// this should not trigger an update, since the spec hasn't changed
@@ -379,62 +379,6 @@ var _ = Describe("Config", func() {
 				close(done)
 
 			}, 3)
-
-			It("should handle watch error not closed by remote", func(done Done) {
-				// initial config
-				<-ctrl.ConfigChan()
-
-				// Wait for the watch
-				Eventually(func() int { return m.watchcount }).Should(Equal(1))
-
-				// before terminating, update get to succeed the second time
-				// around
-				m.geterror = nil
-				m.get = m.create
-
-				// send watch terminated
-				m.watchchan <- watch.Event{
-					Type:     watch.Error,
-					Previous: nil,
-					Object:   nil,
-					Error:    errors.ErrorWatchTerminated{ClosedByRemote: false},
-				}
-
-				// this should not trigger an update, since the spec hasn't changed
-				update := false
-				// wait 1500 ms, since we backoff 1 second
-				a := time.After(time.Millisecond * 1500)
-				select {
-				case <-a:
-					update = false
-				case <-ctrl.ConfigChan():
-					update = true
-				}
-				Expect(update).To(BeFalse())
-
-				// Wait for the watch
-				Eventually(func() int { return m.watchcount }).Should(Equal(2))
-
-				// send an update on the new watch, with changed spec
-				knew := v3.NewKubeControllersConfiguration()
-				knew.Name = "default"
-				knew.Spec = v3.KubeControllersConfigurationSpec{
-					LogSeverityScreen: "Error",
-				}
-				m.watchchan <- watch.Event{
-					Type:     watch.Modified,
-					Previous: nil,
-					Object:   knew,
-					Error:    nil,
-				}
-
-				// this should trigger an update
-				<-ctrl.ConfigChan()
-
-				close(done)
-
-			}, 3)
-
 		})
 
 	})

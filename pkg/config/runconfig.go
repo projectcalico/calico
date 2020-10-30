@@ -207,24 +207,11 @@ MAINLOOP:
 		for e := range w.ResultChan() {
 			switch e.Type {
 			case watch.Error:
-				// Handle a WatchError.  First determine if the error type indicates that the
-				// watch has closed, and if so we'll need to resync and create a new watcher.
-
-				if e, ok := e.Error.(errors.ErrorWatchTerminated); ok {
-					log.Debug("Received watch terminated error - recreate watcher")
-					if !e.ClosedByRemote {
-						// If the watcher was not closed by remote, trigger a full resync
-						// rather than simply trying to watch from the last event revision.
-						log.Debug("Watch was not closed by remote - full resync required")
-						snapshot = nil
-						time.Sleep(datastoreBackoff)
-					}
-				} else {
-					// Some other watch error; restart from beginning
-					log.WithError(err).Error("error watching KubeControllersConfiguration")
-					snapshot = nil
-					time.Sleep(datastoreBackoff)
-				}
+				// Watch error; restart from beginning. Note that k8s watches terminate periodically but these
+				// terminate without error - in this case we'll just attempt to watch from the latest snapshot rev.
+				log.WithError(err).Error("error watching KubeControllersConfiguration")
+				snapshot = nil
+				time.Sleep(datastoreBackoff)
 				continue MAINLOOP
 			case watch.Added, watch.Modified:
 				// New snapshot
