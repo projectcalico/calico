@@ -645,13 +645,6 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		},
 	)
 
-	// Jump to chain for blocking service CIDR loops.
-	rules = append(rules,
-		Rule{
-			Action: JumpAction{Target: ChainCIDRBlock},
-		},
-	)
-
 	return &Chain{
 		Name:  ChainFilterOutput,
 		Rules: rules,
