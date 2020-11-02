@@ -10,8 +10,11 @@ agent:
     os_image: ubuntu1804
 
 global_job_config:
+  secrets:
+  - name: docker-hub
   prologue:
     commands:
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - checkout
       # Note that the 'cache restore' commands require that the "Build" block has been run. The "Build" block is what populates
       # the cache, therefore every block that requires the use of these cached items must make the "Build" block one of
