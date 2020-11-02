@@ -7,8 +7,11 @@ agent:
 execution_time_limit:
   minutes: 120
 global_job_config:
+  secrets:
+  - name: docker-hub
   prologue:
     commands:
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - checkout
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
