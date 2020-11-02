@@ -6,6 +6,13 @@ agent:
   machine:
     type: e1-standard-2
     os_image: ubuntu1804
+global_job_config:
+  secrets:
+  - name: docker-hub
+  prologue:
+    commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
 blocks:
   - name: Build
     dependencies: []
