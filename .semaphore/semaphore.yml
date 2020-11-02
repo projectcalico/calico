@@ -10,8 +10,11 @@ agent:
     os_image: ubuntu1804
 
 global_job_config:
+  secrets:
+  - name: docker-hub
   prologue:
     commands:
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - checkout
 
 blocks:
