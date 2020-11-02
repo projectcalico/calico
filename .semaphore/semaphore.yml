@@ -27,6 +27,7 @@ promotions:
 
 global_job_config:
   secrets:
+  - name: docker-hub
   # Key for pulling from private github repos.
   - name: private-repo
   - name: banzai-secrets
@@ -35,6 +36,7 @@ global_job_config:
 
   prologue:
     commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
     # Prepare aws configuration.
     - pip install --upgrade --user awscli
     # Load the github access secrets.  First fix the permissions.
