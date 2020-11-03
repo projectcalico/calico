@@ -44,19 +44,13 @@ data:
 {{- else }}
   calico_backend: "bird"
 {{- end }}
+
   # Configure the MTU to use for workload interfaces and tunnels.
-  # - If Wireguard is enabled, set to your network MTU - 60
-  # - Otherwise, if VXLAN or BPF mode is enabled, set to your network MTU - 50
-  # - Otherwise, if IPIP is enabled, set to your network MTU - 20
-  # - Otherwise, if not using any encapsulation, set to your network MTU.
-  {{- if .Values.bpf }}
-  veth_mtu: "{{ .Values.mtu }}"
-  {{- else if .Values.vxlan }}
-  veth_mtu: "1410"
-  {{- else }}
-  veth_mtu: "1440"
-  {{- end}}
+  # By default, MTU is auto-detected, and explicitly setting this field should not be required.
+  # You can override auto-detection by providing a non-zero value.
+  veth_mtu: "0"
 {{- else if eq .Values.network "flannel" }}
+
   # The interface used by canal for host <-> host communication.
   # If left blank, then the interface is chosen using the node's
   # default route.
