@@ -48,7 +48,7 @@ blocks:
   - name: Trigger pin updates
     dependencies: []
     skip:
-      when: "(branch != 'master') and (branch !~ 'release-v\d*\.\d*')"
+      when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
     task:
       secrets:
         - name: semaphore-api
