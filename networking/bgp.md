@@ -76,7 +76,7 @@ The default **node-to-node BGP mesh** must be turned off to enable other BGP top
 Run the following command to disable the BGP full-mesh:
 
 ```
-calicoctl patch bgpconfiguration default -p '{"spec": {"nodeToNodeMeshEnabled": "false"}}'
+calicoctl patch bgpconfiguration default -p '{"spec": {"nodeToNodeMeshEnabled": false}}'
 ```
 
 >**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{ site.baseurl }}/reference/resources/bgpconfig) for more information.
