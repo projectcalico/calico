@@ -90,6 +90,8 @@ Let’s get started changing this pod to the new IP pool (10.0.0.0/16).
 
 We add a new **IPPool** with the CIDR range, **10.0.0.0/16**.
 
+NOTE: CRD version of metadata hase different apiVersion: `crd.projectcalico.org/v1`
+
 <pre>
 apiVersion: projectcalico.org/v3
 kind: IPPool
