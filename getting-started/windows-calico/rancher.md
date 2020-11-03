@@ -37,8 +37,9 @@ The following steps will outline the installation of {{site.prodname}} networkin
    ```
 
 1. Update the `calicoNetwork` options, ensuring that the correct pod cidr is set. (Rancher uses `10.42.0.0/16` by default.)
+   Below are example installations for VXLAN and BGP networking using the default Rancher pod cidr:
 
-   For example, an installation for VXLAN networking using the default Rancher pod cidr:
+   **VXLAN**
 
    ```
    apiVersion: operator.tigera.io/v1
@@ -58,6 +59,25 @@ The following steps will outline the installation of {{site.prodname}} networkin
          nodeSelector: all()
    ```
 
+   **BGP**
+
+   ```
+   apiVersion: operator.tigera.io/v1
+   kind: Installation
+   metadata:
+     name: default
+   spec:
+     # Configures Calico networking.
+     calicoNetwork:
+       # Note: The ipPools section cannot be modified post-install.
+       ipPools:
+       - blockSize: 26
+         cidr: 10.42.0.0/16
+         encapsulation: None
+         natOutgoing: Enabled
+         nodeSelector: all()
+   ```
+
    > **Note**: For more information on configuration options available in this manifest, see [the installation reference]({{site.baseurl}}/reference/installation/api).
    {: .alert .alert-info}
 
@@ -73,11 +93,10 @@ The following steps will outline the installation of {{site.prodname}} networkin
 
 1. Finally, follow the {{site.prodnameWindows}} [quickstart guide for Kubernetes]({{site.baseurl}}/getting-started/windows-calico/quickstart#install-calico-for-windows)
 
-
    > **Note**: For the default Rancher values for the service cidr and DNS cluster IP, see the {% include open-new-window.html text='services config' url='https://rancher.com/docs/rke/latest/en/config-options/add-ons/network-plugins#disabling-deployment-of-a-network-plug-in' %}.
    {: .alert .alert-info}
 
-If everything went well, you now have a {{site.prodnameWindows}} on RKE cluster ready for Linux and Windows workloads!
+1. Check the status of the nodes with `kubectl get nodes`. If you see that the Windows node has the status `Ready`, then you have a {{site.prodnameWindows}} on RKE cluster ready for Linux and Windows workloads!
 
 ### Next steps
 
