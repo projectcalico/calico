@@ -111,7 +111,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				},
 			}); err != nil {
 				if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
-					return fmt.Errorf("failed to get add IPIP tunnel addr %s: %s", node.Spec.BGP.IPv4IPIPTunnelAddr, err)
+					return fmt.Errorf("failed to get add IPIP tunnel addr %s: %s", tunIp.String(), err)
 				}
 				log.Info("IPIP tunnel address already assigned in IPAM, continuing...")
 			}
