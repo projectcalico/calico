@@ -29,6 +29,13 @@ promotions:
     # it can handle updating the pins in this fashion.
     when: "(result = 'passed') and ((branch = 'master') or (branch =~ 'release-v\d*\.\d*'))"
 
+global_job_config:
+  secrets:
+  - name: docker-hub
+  prologue:
+    commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
 blocks:
 - name: Build
   dependencies: []

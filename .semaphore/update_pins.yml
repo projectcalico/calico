@@ -7,12 +7,14 @@ agent:
 
 global_job_config:
   secrets:
+    - name: docker-hub
     # Mount the github SSH secret for repositories.
     - name: private-repo
     # Mount a secret for pulling images from GCR.
     - name: tigera-dev-ci-pull-credentials
   prologue:
     commands:
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       # Correct permissions since they are too open by default:
       - chmod 0600 ~/.keys/*
       # Add the key to the ssh agent:
