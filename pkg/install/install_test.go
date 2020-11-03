@@ -222,6 +222,32 @@ PuB/TL+u2y+iQUyXxLy3
 		expectFileContents(tempDir+"/net.d/10-calico.conflist", expectedAlternateConfig)
 	})
 
+	It("should copy even if plugin is opened", func() {
+		// Install the CNI plugin.
+		err := runCniContainer(tempDir)
+		Expect(err).NotTo(HaveOccurred())
+
+		done := make(chan bool)
+		defer close(done)
+
+		// Run the portmap plugin in a loop to simulate it being used.
+		plug := tempDir + "/bin/portmap"
+		go func() {
+			for {
+				_ = exec.Command(plug).Run()
+				select {
+				case <-done:
+					return
+				default:
+				}
+			}
+		}()
+
+		// Install the CNI plugin again. It should succeed.
+		err = runCniContainer(tempDir)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	Context("copying /calico-secrets", func() {
 		var err error
 		BeforeEach(func() {

@@ -409,17 +409,27 @@ func writeCNIConfig(c config) {
 
 // copyFileAndPermissions copies file permission
 func copyFileAndPermissions(src, dst string) (err error) {
-	if err := cp.CopyFile(src, dst); err != nil {
-		return err
+	// Make a temporary file at the destination.
+	dstTmp := fmt.Sprintf("%s.tmp", dst)
+	if err := cp.CopyFile(src, dstTmp); err != nil {
+		return fmt.Errorf("failed to copy file: %s", err)
 	}
 
+	// Move the temporary file into position. Using Rename is atomic
+	// (i.e., mv) and avoids issues where the destination file is in use.
+	err = os.Rename(dstTmp, dst)
+	if err != nil {
+		return fmt.Errorf("failed to rename file: %s", err)
+	}
+
+	// chmod the dst file to match the original permissions.
 	si, err := os.Stat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat file: %s", err)
 	}
 	err = os.Chmod(dst, si.Mode())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to chmod file: %s", err)
 	}
 
 	return
