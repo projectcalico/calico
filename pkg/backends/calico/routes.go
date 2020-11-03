@@ -249,6 +249,20 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 		}
 	}
 
+	if svc.Status.LoadBalancer.Ingress != nil {
+		for _, lbIngress := range svc.Status.LoadBalancer.Ingress {
+			if len(lbIngress.IP) > 0 {
+				if !rg.isAllowedExternalIP(lbIngress.IP) {
+					svc := fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
+					log.WithFields(log.Fields{"ip": lbIngress.IP, "svc": svc}).Info("Cannot advertise LoadBalancer IP - not whitelisted")
+					continue
+				}
+				routes = append(routes, lbIngress.IP)
+			}
+		}
+
+	}
+
 	return addFullIPLength(routes)
 }
 
