@@ -1,7 +1,7 @@
 ---
 title: Install Calico for Windows 
 description: Install Calico for Windows to enable a workload-to-workload Zero Trust model that protects modern business and legacy applications.
-canonical_url: '/getting-started/windows-calico/standard'
+canonical_url: '/getting-started/windows-calico/kubernetes/standard'
 ---
 
 ### Big picture
@@ -17,7 +17,7 @@ Extend your Kubernetes deployment to Windows environments.
 **Required**
 
 - Install and configure [calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/)
-- Linux and Windows nodes [meet requirements]({{site.baseurl}}/getting-started/windows-calico/requirements)
+- Linux and Windows nodes [meet requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements)
 - If using {{site.prodname}} networking, copy the kubeconfig file (used by kubelet) to each Windows node to the file, `c:\k\config`.
 - Download {{site.prodnameWindows}} and Kubernetes binaries to each Windows nodes to prepare for install:
 

@@ -1,7 +1,7 @@
 ---
 title: Requirements 
 description: Review requirements for the standard install for Calico for Windows.
-canonical_url: '/getting-started/windows-calico/requirements'
+canonical_url: '/getting-started/windows-calico/kubernetes/requirements'
 ---
 
 ### About {{site.prodnameWindows}}
@@ -39,7 +39,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 #### Kubernetes version 
 
-- Versions 1.18, 1.17, 1.16
+- Versions 1.19, 1.18, 1.17
 
 Earlier versions may work, but we do not actively test {{site.prodnameWindows}} against them, and they may have known issues and incompatibilities.
 
@@ -78,4 +78,4 @@ PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
 
 ### Next steps
 
-[Install Calico for Windows]({{site.baseurl}}/getting-started/windows-calico/standard)
+[Install Calico for Windows]({{site.baseurl}}/getting-started/windows-calico/kubernetes/standard)
