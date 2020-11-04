@@ -1,7 +1,7 @@
 ---
 title: Install Calico for Windows 
 description: Install Calico for Windows to enable a workload-to-workload Zero Trust model that protects modern business and legacy applications.
-canonical_url: '/getting-started/windows-calico/standard'
+canonical_url: '/getting-started/windows-calico/kubernetes/standard'
 ---
 
 ### Big picture

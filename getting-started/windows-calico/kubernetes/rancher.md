@@ -1,7 +1,7 @@
 ---
 title: Install Calico for Windows on a Rancher Kubernetes Engine cluster
 description: Install Calico for Windows on a Rancher RKE cluster.
-canonical_url: '/getting-started/windows-calico/rancher'
+canonical_url: '/getting-started/windows-calico/kubernetes/rancher'
 ---
 
 ### Big picture
@@ -101,5 +101,4 @@ The following steps will outline the installation of {{site.prodname}} networkin
 ### Next steps
 
 - [Try the basic policy demo]({{site.baseurl}}/getting-started/windows-calico/demo)
-- [Secure hosts by installing Calico on hosts]({{site.baseurl}}/getting-started/bare-metal/about)
 - [Secure pods with {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)

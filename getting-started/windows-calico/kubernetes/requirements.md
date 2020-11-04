@@ -1,7 +1,7 @@
 ---
 title: Requirements 
 description: Review requirements for the standard install for Calico for Windows.
-canonical_url: '/getting-started/windows-calico/requirements'
+canonical_url: '/getting-started/windows-calico/kubernetes/requirements'
 ---
 
 ### About {{site.prodnameWindows}}
