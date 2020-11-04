@@ -114,12 +114,12 @@ In addition, it's important that `kubelet` is started after the vSwitch has been
 
 **AWS users**: If using the AWS cloud provider, you should add the following argument to the `kubelet`: 
 
---hostname-override=<aws instance private DNS name> (and set the {{site.prodname}} nodename variable to match). In addition, you should add KubernetesCluster=<cluster-name> as a tag when creating your Windows instance.
+`--hostname-override=<aws instance private DNS name>` (and set the {{site.prodname}} nodename variable to match). In addition, you should add `KubernetesCluster=<cluster-name>` as a tag when creating your Windows instance.
 
 **As a quickstart**, the {{site.prodname}} package includes a sample script at `{{site.rootDirWindows}}\kubernetes\kubelet-service.ps1` that:
 
 - Waits for {{site.prodname}} to initialise the vSwitch
-- Atarts `kubelet` with
+- Starts `kubelet` with
   - CNI enabled
   - --hostname-override set to match {{site.prodname}}'s nodename
   - --node-ip set to the IP of the default vEthernet device
