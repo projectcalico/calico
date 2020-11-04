@@ -101,6 +101,18 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		)
 	})
 
+	Describe("with iptables returning an nft error", func() {
+		BeforeEach(func() {
+			dataplane.Prologue = "# Table `nat' is incompatible, use 'nft' tool.\n"
+		})
+
+		It("should fail", func() {
+			Expect(func() {
+				table.Apply()
+			}).To(Panic())
+		})
+	})
+
 	It("should load the dataplane state on first Apply()", func() {
 		Expect(dataplane.CmdNames).To(BeEmpty())
 		table.Apply()
