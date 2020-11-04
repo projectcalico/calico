@@ -85,7 +85,7 @@ blocks:
   - name: Trigger pin updates
     dependencies: []
     skip:
-      when: "(branch != 'master') and (branch !~ 'release-v\d*\.\d*')"
+      when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
     task:
       secrets:
         - name: semaphore-api
@@ -106,4 +106,4 @@ promotions:
       # If the block has passed and the branch is for master or a release branch then run the pin updates. Note that
       # this doesn't try to restrict which release branches, as the presence of this auto promotion code means that
       # it can handle updating the pins in this fashion.
-      when: "(result = 'passed') and ((branch = 'master') or (branch =~ 'release-v\d*\.\d*'))"
+      when: "(result = 'passed') and ((branch = 'master') or (branch =~ '^release-v\d*\.\d*'))"
