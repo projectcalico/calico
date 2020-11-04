@@ -3,6 +3,9 @@ GO_BUILD_VER=v0.49
 
 SEMAPHORE_PROJECT_ID=$(SEMAPHORE_CONFD_PROJECT_ID)
 
+# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
+SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PROJECT_ID)
+
 ###############################################################################
 # Download and include Makefile.common
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
