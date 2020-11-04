@@ -17,6 +17,7 @@ package iptables
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -51,6 +52,9 @@ var (
 	chainCreateRegexp = regexp.MustCompile(`^:(\S+)`)
 	// appendRegexp matches an iptables-save output line for an append operation.
 	appendRegexp = regexp.MustCompile(`^-A (\S+)`)
+	// nftErrorRegexp matches a particular error emitted if iptables-nft is run on a system that
+	// uses nft features that iptables-nft doesn't understand.
+	nftErrorRegexp = regexp.MustCompile(`^# Table .* is incompatible, use 'nft' tool.`)
 
 	// Prometheus metrics.
 	countNumRestoreCalls = prometheus.NewCounter(prometheus.CounterOpts{
@@ -829,9 +833,6 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 	for scanner.Scan() {
 		// Read the next line of the output.
 		line := scanner.Bytes()
-
-		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
-		// for (possibly empty) chains.
 		logCxt := t.logCxt
 		if debug {
 			// Avoid stringifying the line (and hence copying it) unless we're at debug
@@ -839,6 +840,18 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 			logCxt = logCxt.WithField("line", string(line))
 			logCxt.Debug("Parsing line")
 		}
+
+		// Special-case, if iptables-nft can't handle a ruleset then it writes an error
+		// but then returns an RC of 0.  Detect this case.
+		if nftErrorRegexp.Match(line) {
+			logCxt.Error("iptables-save failed because there are incompatible nft rules in the table.  " +
+				"Remove the nft rules to continue.")
+			return nil, nil, errors.New(
+				"iptables-save failed because there are incompatible nft rules in the table")
+		}
+
+		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
+		// for (possibly empty) chains.
 		captures := chainCreateRegexp.FindSubmatch(line)
 		if captures != nil {
 			// Chain forward-reference, make sure the chain exists.
