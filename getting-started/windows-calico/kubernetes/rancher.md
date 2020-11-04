@@ -14,11 +14,20 @@ Run Linux and Windows workloads on a RKE cluster with {{site.prodname}}.
 
 ### Before you begin
 
-**You will need**
+**Supported**
+
+- RKE Kubernetes 1.19, 1.18, or 1.17
+
+**Supported networking**
+
+- BGP with no encapsulation
+- VXLAN
+
+**Required**
 
 - An RKE cluster provisioned with {% include open-new-window.html text='no network plugin' url='https://rancher.com/docs/rke/latest/en/config-options/add-ons/network-plugins#disabling-deployment-of-a-network-plug-in' %}
-but which otherwise meets the {{site.prodnameWindows}} Kubernetes [cluster requirements]({{site.baseurl}}/getting-started/windows-calico/requirements). This guide was tested with RKE v1.18.9.
-- One or more Windows nodes that meet the [requirements]({{site.baseurl}}/getting-started/windows-calico/requirements).
+but which otherwise meets the {{site.prodnameWindows}} Kubernetes [cluster requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements). This guide was tested with RKE v1.18.9.
+- One or more Windows nodes that meet the [requirements]({{site.baseurl}}/getting-started/windows-calico/kubernetes/requirements).
 
 ### How to
 
@@ -36,8 +45,8 @@ The following steps will outline the installation of {{site.prodname}} networkin
    wget {{ "/manifests/custom-resources.yaml" | absolute_url }}
    ```
 
-1. Update the `calicoNetwork` options, ensuring that the correct pod cidr is set. (Rancher uses `10.42.0.0/16` by default.)
-   Below are example installations for VXLAN and BGP networking using the default Rancher pod cidr:
+1. Update the `calicoNetwork` options, ensuring that the correct pod CIDR is set. (Rancher uses `10.42.0.0/16` by default.)
+   Below are sample installations for VXLAN and BGP networking using the default Rancher pod CIDR:
 
    **VXLAN**
 
@@ -93,7 +102,7 @@ The following steps will outline the installation of {{site.prodname}} networkin
 
 1. Finally, follow the {{site.prodnameWindows}} [quickstart guide for Kubernetes]({{site.baseurl}}/getting-started/windows-calico/quickstart#install-calico-for-windows)
 
-   > **Note**: For the default Rancher values for the service cidr and DNS cluster IP, see the {% include open-new-window.html text='services config' url='https://rancher.com/docs/rke/latest/en/config-options/add-ons/network-plugins#disabling-deployment-of-a-network-plug-in' %}.
+   > **Note**: For Rancher default values for service CIDR and DNS cluster IP, see the {% include open-new-window.html text='Rancher kube-api service options' url='https://rancher.com/docs/rke/latest/en/config-options/services/#kubernetes-api-server-options' %}.
    {: .alert .alert-info}
 
 1. Check the status of the nodes with `kubectl get nodes`. If you see that the Windows node has the status `Ready`, then you have a {{site.prodnameWindows}} on RKE cluster ready for Linux and Windows workloads!
