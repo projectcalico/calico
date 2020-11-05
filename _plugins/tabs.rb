@@ -30,7 +30,7 @@ end
 module Jekyll
     class RenderTabs < Liquid::Block
         # regexp pattern to generate key values out of user input
-        InputPattern = /(.*?):([A-Za-z0-9\- ]+)(?:,|$| )/m
+        InputPattern = /(.*?):([A-Za-z0-9\- \.]+)(?:,|$| )/m
         IdPattern = /(.*?):([A-Za-z0-9\-]+)(?:,|$| )/m
 
         def initialize(tag_name, text, tokens)
