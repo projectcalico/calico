@@ -358,6 +358,7 @@ TigeraStatusStatus
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
+<p>CNISpec contains configuration for the CNI plugin.</p>
 <table>
 <thead>
 <tr>
@@ -377,13 +378,30 @@ CNIPluginType
 </td>
 <td>
 <p>Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
-For KubernetesProvider GKE, this field defaults to GKE. For KubernetesProvider AKE, this field
-defaults to AzureVNET. For KubernetesProvider EKS, this field defaults to AmazonVPC. For all other
-KubernetesProviders this field defaults to Calico.
-For the value Calico, the CNI plugin binaries and CNI config will be installed as part of deployment,
+* For KubernetesProvider GKE, this field defaults to GKE.
+* For KubernetesProvider AKS, this field defaults to AzureVNET.
+* For KubernetesProvider EKS, this field defaults to AmazonVPC.
+* If aws-node daemonset exists in kube-system when the Installation resource is created, this field defaults to AmazonVPC.
+* For all other cases this field defaults to Calico.</p>
+<p>For the value Calico, the CNI plugin binaries and CNI config will be installed as part of deployment,
 for all other values the CNI plugin binaries and CNI config is a dependency that is expected
 to be installed separately.</p>
 <p>Default: Calico</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ipam</code><br>
+<em>
+<a href="#operator.tigera.io/v1.IPAMSpec">
+IPAMSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>IPAM specifies the pod IP address management that will be used in the Calico or
+Calico Enterprise installation.</p>
 </td>
 </tr>
 </tbody>
@@ -442,7 +460,7 @@ int32
 <td>
 <em>(Optional)</em>
 <p>MTU specifies the maximum transmission unit to use on the pod network.
-Default: 1410</p>
+If not specified, Calico will perform MTU auto-detection based on the cluster network.</p>
 </td>
 </tr>
 <tr>
@@ -602,6 +620,50 @@ options are: IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None.</p>
 <a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
 </p>
 <p>HostPortsType specifies if the HostPorts plugin enabled status.</p>
+<h3 id="operator.tigera.io/v1.IPAMPluginType">IPAMPluginType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.IPAMSpec">IPAMSpec</a>)
+</p>
+<h3 id="operator.tigera.io/v1.IPAMSpec">IPAMSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CNISpec">CNISpec</a>)
+</p>
+<p>IPAMSpec contains configuration for pod IP address management.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code><br>
+<em>
+<a href="#operator.tigera.io/v1.IPAMPluginType">
+IPAMPluginType
+</a>
+</em>
+</td>
+<td>
+<p>Specifies the IPAM plugin that will be used in the Calico or Calico Enterprise installation.
+* For CNI Plugin Calico, this field defaults to Calico.
+* For CNI Plugin GKE, this field defaults to HostLocal.
+* For CNI Plugin AzureVNET, this field defaults to AzureVNET.
+* For CNI Plugin AmazonVPC, this field defaults to AmazonVPC.</p>
+<p>The IPAM plugin is installed and configured only if the CNI plugin is set to Calico,
+for all other values of the CNI plugin the plugin binaries and CNI config is a dependency
+that is expected to be installed separately.</p>
+<p>Default: Calico</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.IPPool">IPPool
 </h3>
 <p>
@@ -911,6 +973,18 @@ ProductVariant
 <p>Variant is the most recently observed installed variant - one of Calico or TigeraSecureEnterprise</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>mtu</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>MTU is the most recently observed value for pod network MTU. This may be an explicitly
+configured value, or based on Calico&rsquo;s native auto-detetion.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.MultiInterfaceMode">MultiInterfaceMode
@@ -992,6 +1066,18 @@ string
 <em>(Optional)</em>
 <p>CanReach enables IP auto-detection based on which source address on the node is used to reach the
 specified IP or domain.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cidrs</code><br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>CIDRS enables IP auto-detection based on which addresses on the nodes are within
+one of the provided CIDRs.</p>
 </td>
 </tr>
 </tbody>
@@ -1103,6 +1189,7 @@ string
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>)
 </p>
+<p>TigeraStatusSpec defines the desired state of TigeraStatus</p>
 <h3 id="operator.tigera.io/v1.TigeraStatusStatus">TigeraStatusStatus
 </h3>
 <p>
