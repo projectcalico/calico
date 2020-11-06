@@ -21,6 +21,9 @@ This how-to guide uses the following {{site.prodname}} features:
 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
+- WireGuard in {{site.prodname}} requires node IP addresses to establish secure tunnels between nodes. {{site.prodname}} can automatically detect IP address of a node using [IP Setting]({{site.baseurl}}/reference/node/configuration#ip-setting) and [IP autodetection method]({{site.baseurl}}/reference/node/configuration#ip-autodetection-methods) in [calico/node]({{site.baseurl}}/reference/node/configuration) resource.
+    - Set `IP` (or `IP6`) environment variable to `autodetect`.
+    - Set `IP_AUTODETECTION_METHOD` (or `IP6_AUTODETECTION_METHOD`) to an appropriate value. If there are multiple interfaces on a node, set the value to detect the IP address of the primary interface.
 
 > **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. Also, encryption using WireGuard is not supported if `CALICO_NETWORKING_BACKEND=none` (e.g. managed Kubernetes platforms EKS, AKS and GKE).
 {: .alert .alert-info}
