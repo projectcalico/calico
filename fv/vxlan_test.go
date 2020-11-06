@@ -377,10 +377,11 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 
 					// MTU should be auto-detected, and updated to the host MTU minus 50 bytes overhead.
 					for _, felix := range felixes {
+						// Felix checks host MTU every 30s
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
-						}, "30s", "100ms").Should(ContainSubstring("mtu 1350"))
+						}, "60s", "100ms").Should(ContainSubstring("mtu 1350"))
 
 						// And expect the MTU file on disk to be updated.
 						Eventually(func() string {
