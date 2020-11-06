@@ -266,7 +266,9 @@ func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
 		// should always be the same as the internal revision but we copy it over just to make
 		// sure that we replace the revision correctly on the client side.
 		log.Debug("v3 resource, zeroing its internal resource version for dedupe.")
-		su.Revision = obj.GetResourceVersion()
+		version := obj.GetResourceVersion()
+		su.Revision = version
+		defer obj.SetResourceVersion(version) // Restore the input object, mainly for UT.
 		obj.SetResourceVersion("")
 	}
 
