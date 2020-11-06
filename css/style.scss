@@ -68,6 +68,12 @@ body {
   }
 }
 
+td {
+  @media (max-width: $screen-xs-max) {
+    white-space: pre-wrap !important;
+  }
+}
+
 h2,h3 {
   margin-top: 28px;
 }
