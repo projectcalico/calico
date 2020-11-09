@@ -124,7 +124,8 @@ blocks:
       when: "branch !~ '.+'"
     task:
       secrets:
-        - name: google-service-account-for-gcr
+        - name: quay-robot-calico+semaphoreci
+        - name: docker
       prologue:
         commands:
           - checkout
@@ -136,7 +137,8 @@ blocks:
           # Add the key to the ssh agent:
           - ssh-add ~/.keys/*
           # Login to docker in order to pull images.
-          - docker login --username casey@tigera.io -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       jobs:
         - name: Run CD
           commands:
