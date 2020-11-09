@@ -25,19 +25,20 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 func Replace(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl replace --filename=<FILENAME> [--recursive] [--skip-empty]
+  <BINARY_NAME> replace --filename=<FILENAME> [--recursive] [--skip-empty]
                     [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Replace a policy using the data in policy.yaml.
-  calicoctl replace -f ./policy.yaml
+  <BINARY_NAME> replace -f ./policy.yaml
 
   # Replace a policy based on the JSON passed into stdin.
-  cat policy.json | calicoctl replace -f -
+  cat policy.json | <BINARY_NAME> replace -f -
 
 Options:
   -h --help                  Show this screen.
@@ -88,6 +89,10 @@ Description:
   When replacing a resource, the complete resource spec must be provided, it is
   not sufficient to supply only the fields that are being updated.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

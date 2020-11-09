@@ -29,30 +29,36 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 var VERSION, GIT_REVISION string
 var VERSION_SUMMARY string
 
 func init() {
-	VERSION_SUMMARY = `Run 'calicoctl version' to see version information.`
+	name, _ := util.NameAndDescription()
+	VERSION_SUMMARY = strings.ReplaceAll(`Run '<BINARY_NAME> version' to see version information.`, "<BINARY_NAME>", name)
 }
 
 func Version(args []string) error {
 	doc := `Usage:
-  calicoctl version [--config=<CONFIG>] [--poll=<POLL>]
+  <BINARY_NAME> version [--config=<CONFIG>] [--poll=<POLL>]
 
 Options:
   -h --help             Show this screen.
   -c --config=<CONFIG>  Path to the file containing connection configuration in
                         YAML or JSON format.
                         [default: ` + constants.DefaultConfigPath + `]
-     --poll=<POLL>      Poll for changes to the cluster information at a frequency specified using POLL duration 
-                        (e.g. 1s, 10m, 2h etc.). A value of 0 (the default) disables polling.  
+     --poll=<POLL>      Poll for changes to the cluster information at a frequency specified using POLL duration
+                        (e.g. 1s, 10m, 2h etc.). A value of 0 (the default) disables polling.
 
 Description:
-  Display the version of calicoctl.
+  Display the version of <BINARY_NAME>.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

@@ -26,12 +26,13 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
 func Release(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl ipam release --ip=<IP> [--config=<CONFIG>]
+  <BINARY_NAME> ipam release --ip=<IP> [--config=<CONFIG>]
 
 Options:
   -h --help             Show this screen.
@@ -49,6 +50,10 @@ Description:
   using it, so only use this command to clean up addresses from endpoints that
   were not cleanly removed from Calico.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

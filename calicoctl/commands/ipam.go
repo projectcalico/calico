@@ -22,26 +22,31 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/ipam"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
 func IPAM(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl ipam <command> [<args>...]
+  <BINARY_NAME> ipam <command> [<args>...]
 
     release          Release a Calico assigned IP address.
     show             Show details of a Calico configuration,
                      assigned IP address, or of overall IP usage.
-    configure        Configure IPAM        
+    configure        Configure IPAM
 
 Options:
   -h --help      Show this screen.
 
 Description:
-  IP Address Management specific commands for calicoctl.
+  IP address management commands for Calico.
 
-  See 'calicoctl ipam <command> --help' to read about a specific subcommand.
+  See '<BINARY_NAME> ipam <command> --help' to read about a specific subcommand.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

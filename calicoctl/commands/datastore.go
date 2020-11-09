@@ -22,13 +22,14 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/datastore"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 // Datastore function is a switch to datastore related sub-commands
 func Datastore(args []string) error {
 	var err error
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl datastore <command> [<args>...]
+  <BINARY_NAME> datastore <command> [<args>...]
 
     migrate  Migrate the contents of an etcdv3 datastore to a Kubernetes datastore.
 
@@ -36,10 +37,14 @@ Options:
   -h --help      Show this screen.
 
 Description:
-  Datastore specific commands for calicoctl.
+  Datastore specific commands for <BINARY_NAME>.
 
-  See 'calicoctl datastore <command> --help' to read about a specific subcommand.
+  See '<BINARY_NAME> datastore <command> --help' to read about a specific subcommand.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

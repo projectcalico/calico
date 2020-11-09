@@ -23,12 +23,13 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func Unlock(args []string) error {
 	doc := `Usage:
-  calicoctl datastore migrate unlock [--config=<CONFIG>]
+  <BINARY_NAME> datastore migrate unlock [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -40,6 +41,9 @@ Description:
   Unlock the datastore to complete migration. This once again allows
   Calico resources to take effect in the cluster.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

@@ -22,13 +22,14 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/node"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 // Node function is a switch to node related sub-commands
 func Node(args []string) error {
 	var err error
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl node <command> [<args>...]
+  <BINARY_NAME> node <command> [<args>...]
 
     run          Run the Calico node container image.
     status       View the current status of a Calico node.
@@ -39,11 +40,15 @@ Options:
   -h --help      Show this screen.
 
 Description:
-  Node specific commands for calicoctl.  These commands must be run directly on
+  Node specific commands for <BINARY_NAME>.  These commands must be run directly on
   the compute host running the Calico node instance.
 
-  See 'calicoctl node <command> --help' to read about a specific subcommand.
+  See '<BINARY_NAME> node <command> --help' to read about a specific subcommand.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

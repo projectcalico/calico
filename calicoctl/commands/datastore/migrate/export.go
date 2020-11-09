@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
@@ -78,7 +79,7 @@ var namespacedResources map[string]struct{} = map[string]struct{}{
 
 func Export(args []string) error {
 	doc := `Usage:
-  calicoctl datastore migrate export [--config=<CONFIG>]
+  <BINARY_NAME> datastore migrate export [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -90,7 +91,7 @@ Description:
   Export the contents of the etcdv3 datastore.  Resources will be exported
   in yaml and json format. Save the results of this command to a file for
   later use with the import command.
-  
+
   The resources exported include the following:
     - IPAMBlocks
     - BlockAffinities
@@ -113,6 +114,9 @@ Description:
     - WorkloadEndpoints
     - Profiles
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

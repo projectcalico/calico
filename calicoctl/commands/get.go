@@ -25,20 +25,21 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 func Get(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl get ( (<KIND> [<NAME>...]) |
+  <BINARY_NAME> get ( (<KIND> [<NAME>...]) |
                 --filename=<FILENAME> [--recursive] [--skip-empty] )
                 [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces] [--export]
 
 Examples:
   # List all policy in default output format.
-  calicoctl get policy
+  <BINARY_NAME> get policy
 
   # List specific policies in YAML format
-  calicoctl get -o yaml policy my-policy-1 my-policy-2
+  <BINARY_NAME> get -o yaml policy my-policy-1 my-policy-2
 
 Options:
   -h --help                    Show this screen.
@@ -118,6 +119,10 @@ Description:
   for the golang template definitions) and the valid column names (required for
   the custom-columns option).
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

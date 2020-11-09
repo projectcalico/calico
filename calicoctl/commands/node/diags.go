@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 	log "github.com/sirupsen/logrus"
 	shutil "github.com/termie/go-shutil"
 )
@@ -41,7 +42,7 @@ type diagCmd struct {
 func Diags(args []string) error {
 	var err error
 	doc := `Usage:
-  calicoctl node diags [--log-dir=<LOG_DIR>]
+  <BINARY_NAME> node diags [--log-dir=<LOG_DIR>]
 
 Options:
   -h --help               Show this screen.
@@ -60,6 +61,9 @@ Description:
   This command must be run on the specific Calico node that you are gathering
   diagnostics for.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

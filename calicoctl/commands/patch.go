@@ -23,18 +23,19 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 func Patch(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl patch <KIND> <NAME> --patch=<PATCH> [--type=<TYPE>] [--config=<CONFIG>] [--namespace=<NS>]
+  <BINARY_NAME> patch <KIND> <NAME> --patch=<PATCH> [--type=<TYPE>] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Partially update a node using a strategic merge patch.
-  calicoctl patch node node-0 --patch '{"spec":{"bgp": {"routeReflectorClusterID": "CLUSTER_ID"}}}'
+  <BINARY_NAME> patch node node-0 --patch '{"spec":{"bgp": {"routeReflectorClusterID": "CLUSTER_ID"}}}'
 
   # Partially update a node using a json merge patch.
-  calicoctl patch node node-0 --patch '{"spec":{"bgp": {"routeReflectorClusterID": "CLUSTER_ID"}}}' --type json
+  <BINARY_NAME> patch node node-0 --patch '{"spec":{"bgp": {"routeReflectorClusterID": "CLUSTER_ID"}}}' --type json
 
 Options:
   -h --help                  Show this screen.
@@ -80,6 +81,10 @@ Description:
   time.  The name is required along with any and other identifiers required to
   uniquely identify a resource of the specified type.
 `
+
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

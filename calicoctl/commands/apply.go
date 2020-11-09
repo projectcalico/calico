@@ -23,19 +23,20 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 func Apply(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl apply --filename=<FILENAME> [--recursive] [--skip-empty]
+  <BINARY_NAME> apply --filename=<FILENAME> [--recursive] [--skip-empty]
                   [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Apply a policy using the data in policy.yaml.
-  calicoctl apply -f ./policy.yaml
+  <BINARY_NAME> apply -f ./policy.yaml
 
   # Apply a policy based on the JSON passed into stdin.
-  cat policy.json | calicoctl apply -f -
+  cat policy.json | <BINARY_NAME> apply -f -
 
 Options:
   -h --help                 Show this screen.
@@ -90,6 +91,10 @@ Description:
   must be provided, it is not sufficient to supply only the fields that are
   being updated.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

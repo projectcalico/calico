@@ -23,19 +23,20 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 func Create(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl create --filename=<FILENAME> [--recursive] [--skip-empty]
+  <BINARY_NAME> create --filename=<FILENAME> [--recursive] [--skip-empty]
                    [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Create a policy using the data in policy.yaml.
-  calicoctl create -f ./policy.yaml
+  <BINARY_NAME> create -f ./policy.yaml
 
   # Create a policy based on the JSON passed into stdin.
-  cat policy.json | calicoctl create -f -
+  cat policy.json | <BINARY_NAME> create -f -
 
 Options:
   -h --help                 Show this screen.
@@ -87,6 +88,10 @@ Description:
   failure creating a specific resource it is possible to work out which
   resource failed based on the number of resources successfully created.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/crds"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -47,7 +48,7 @@ import (
 
 func Import(args []string) error {
 	doc := `Usage:
-  calicoctl datastore migrate import --filename=<FILENAME> [--config=<CONFIG>]
+  <BINARY_NAME> datastore migrate import --filename=<FILENAME> [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -61,6 +62,9 @@ Description:
   Import the contents of the etcdv3 datastore from the file created by the
   export command.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

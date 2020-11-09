@@ -23,11 +23,13 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 )
 
 func main() {
-	doc := `Usage:
-  calicoctl [options] <command> [<args>...]
+	name, desc := util.NameAndDescription()
+	doc := fmt.Sprintf(`Usage:
+  <BINARY_NAME> [options] <command> [<args>...]
 
     create       Create a resource by file, directory or stdin.
     replace      Replace a resource by file, directory or stdin.
@@ -42,7 +44,7 @@ func main() {
     convert      Convert config files between different API versions.
     ipam         IP address management.
     node         Calico node management.
-    version      Display the version of calicoctl.
+    version      Display the version of this binary.
     export       Export the Calico datastore objects for migration
     import       Import the Calico datastore objects for migration
     datastore    Calico datastore management.
@@ -53,17 +55,21 @@ Options:
                           warn, info, debug) [default: panic]
 
 Description:
-  The calicoctl command line tool is used to manage Calico network and security
+  The %s is used to manage Calico network and security
   policy, to view and manage endpoint configuration, and to manage a Calico
   node instance.
 
-  See 'calicoctl <command> --help' to read about a specific subcommand.
-`
+  See '<BINARY_NAME> <command> --help' to read about a specific subcommand.
+`, desc)
+
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	arguments, err := docopt.Parse(doc, nil, true, commands.VERSION_SUMMARY, true, false)
 	if err != nil {
 		if _, ok := err.(*docopt.UserError); ok {
 			// the user gave us bad input
-			fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(os.Args[1:], " "))
+			fmt.Printf("Invalid option: '%s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(os.Args[1:], " "))
 		}
 		os.Exit(1)
 	}

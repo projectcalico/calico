@@ -33,8 +33,8 @@ class TestCalicoctlCLIFlags(TestBase):
         """
         # no -m flag
         rc = calicoctl("-m")
-        rc.assert_error(text="Invalid option: 'calicoctl -m'.")
+        rc.assert_error(text="Invalid option: '-m'.")
         # no --unknown-flag flag
         rc = calicoctl("--unknown-flag")
-        rc.assert_error(text="Invalid option: 'calicoctl --unknown-flag'.")
+        rc.assert_error(text="Invalid option: '--unknown-flag'.")
 

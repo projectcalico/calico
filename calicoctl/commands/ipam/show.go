@@ -25,6 +25,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -244,7 +245,7 @@ func showConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 // IPAM takes keyword with an IP address then calls the subcommands.
 func Show(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl ipam show [--ip=<IP> | --show-blocks | --show-borrowed | --show-configuration] [--config=<CONFIG>]
+  <BINARY_NAME> ipam show [--ip=<IP> | --show-blocks | --show-borrowed | --show-configuration] [--config=<CONFIG>]
 
 Options:
   -h --help                Show this screen.
@@ -260,6 +261,10 @@ Description:
   The ipam show command prints information about a given IP address, or about
   overall IP usage.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))

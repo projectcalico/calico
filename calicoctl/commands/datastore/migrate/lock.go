@@ -23,13 +23,14 @@ import (
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func Lock(args []string) error {
 	doc := `Usage:
-  calicoctl datastore migrate lock [--config=<CONFIG>]
+  <BINARY_NAME> datastore migrate lock [--config=<CONFIG>]
 
 Options:
   -h --help                 Show this screen.
@@ -42,6 +43,9 @@ Description:
   Calico resources from affecting the cluster but does not prevent updating
   or creating new Calico resources.
 `
+	// Replace all instances of BINARY_NAME with the name of the binary.
+	name, _ := util.NameAndDescription()
+	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
