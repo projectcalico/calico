@@ -1,4 +1,4 @@
-## Installing calicoctl as a container on a single host
+## Install calicoctl as a container on a single host
 
 To install `calicoctl` as a container on a single host, log into the
 target host and issue the following command.
@@ -12,7 +12,7 @@ docker pull {{page.registry}}{{page.imageNames["calicoctl"]}}:{{site.data.versio
 [Configure `calicoctl` to connect to your datastore](configure).
 
 
-## Installing calicoctl as a Kubernetes pod
+## Install calicoctl as a Kubernetes pod
 
 
 Use the YAML that matches your datastore type to deploy the `calicoctl` container to your nodes.

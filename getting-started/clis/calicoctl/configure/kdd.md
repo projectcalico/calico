@@ -4,6 +4,11 @@ description: Sample configuration files for kdd.
 canonical_url: '/getting-started/clis/calicoctl/configure/kdd'
 ---
 
+## Default configuration
+
+By default, calicoctl will attempt to read from the Kubernetes API using the default kubeconfig located at `$(HOME)/.kube/config`.
+
+If the default kubeconfig does not exist, or you would like to specify alternative API access information, you can do so using the following configuration options.
 
 ## Complete list of Kubernetes API connection configuration
 
@@ -56,10 +61,9 @@ And using `CALICO_` prefixed names:
 
 ```bash
 export CALICO_DATASTORE_TYPE=kubernetes
-export CALICO_KUBECONFIG=~/.kube/config 
+export CALICO_KUBECONFIG=~/.kube/config
 calicoctl get workloadendpoints
 ```
-
 
 ### Checking the configuration
 

@@ -1,3 +1,5 @@
+## Install calicoctl as a binary on a single host
+
 1. Log into the host, open a terminal prompt, and navigate to the location where
 you want to install the binary.
 
@@ -21,3 +23,7 @@ you want to install the binary.
    > to one that is or add its location to your `PATH`. This will allow you to invoke it
    > without having to prepend its location.
    {: .alert .alert-info}
+
+**Next step**:
+
+[Configure `calicoctl` to connect to your datastore](configure).
