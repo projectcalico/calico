@@ -329,11 +329,6 @@ spec:
             - name: CLUSTER_TYPE
               value: "k8s"
 {{- end }}
-{{- if and (eq .Values.network "calico") (.Values.vxlan) }}
-            # Disable AWS source-destination check on nodes.
-            - name: FELIX_AWSSRCDSTCHECK
-              value: Disable
-{{- end }}
             # The default IPv4 pool to create on startup if none exists. Pod IPs will be
             # chosen from this range. Changing this value after installation will have
             # no effect. This should fall within `--cluster-cidr`.
