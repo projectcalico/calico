@@ -17,19 +17,17 @@ You can run `calicoctl` on any host with network access to the
 For step-by-step instructions, refer to the section that
 corresponds to your desired deployment.
 
-- [As a binary on a single host](#installing-calicoctl-as-a-binary-on-a-single-host)
+- [As a binary on a single host](#install-calicoctl-as-a-binary-on-a-single-host)
 
-- [As a container on a single host](#installing-calicoctl-as-a-container-on-a-single-host)
+- [As a container on a single host](#install-calicoctl-as-a-container-on-a-single-host)
 
-- [As a Kubernetes pod](#installing-calicoctl-as-a-kubernetes-pod)
+- [As a Kubernetes pod](#install-calicoctl-as-a-kubernetes-pod)
 
+- [As a kubectl plugin](#install-calicoctl-as-a-kubectl-plugin-on-a-single-host)
 
-## Installing calicoctl as a binary on a single host
 
 {% include content/ctl-binary-install.md %}
 
-**Next step**:
-
-[Configure `calicoctl` to connect to your datastore](configure).
-
 {% include content/ctl-container-install.md %}
+
+{% include content/ctl-kubectl-plugin-install.md cli="calicoctl" codepath="/calicoctl" %}
