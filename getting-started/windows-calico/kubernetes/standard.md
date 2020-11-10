@@ -6,7 +6,7 @@ canonical_url: '/getting-started/windows-calico/kubernetes/standard'
 
 ### Big picture
 
-Install {{site.prodnameWindows}} on Kubernetes clusters.
+Install {{site.prodnameWindows}} on Kubernetes clusters. The standard installation for {{site.prodnameWindows}} requires more time and expertise to configure. If you need to get started quickly, we recommend the [Quickstart]({{site.baseurl}}/getting-started/windows-calico/quickstart)
 
 ### Value
 
@@ -81,7 +81,7 @@ A similar change may be needed for other Kubernetes services (such as `kube-dns`
 
 #### Prepare Windows nodes to join the Linux cluster
 
-On each Windows node, follow these step to prepare the Windows nodes to your the Kubernetes cluster. {% include open-new-window.html text='Microsoft guide' url='https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/adding-windows-nodes/' %}.
+On each Windows node, follow the steps below to configure `kubelet` and `kube-proxy` service.
 
 **Step 1: Configure kubelet**
 
