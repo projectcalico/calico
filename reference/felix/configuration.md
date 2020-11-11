@@ -33,6 +33,7 @@ The full list of parameters which can be set is as follows.
 
 | Configuration parameter           | Environment variable                    | Description  | Schema |
 | --------------------------------- | --------------------------------------- | -------------| ------ |
+| `AwsSrcDstCheck`                  | `FELIX_AWSSRCDSTCHECK`                  | Set the {% include open-new-window.html text='source-destination-check' url='https://docs.aws.amazon.com/vpc/latest/userguide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck' %} when using AWS EC2 instances. Check [IAM role and profile configuration]({{ site.baseurl }}/reference/resources/felixconfig#aws-iam-rolepolicy-for-source-destination-check-configuration) for setting the necessary permission for this setting to work. [Default: `DoNothing`] | `DoNothing`, `Disable`, `Enable` |
 | `DatastoreType`                   | `FELIX_DATASTORETYPE`                   | The datastore that Felix should read endpoints and policy information from. [Default: `etcdv3`] | `etcdv3`, `kubernetes`|
 | `DeviceRouteSourceAddress`        | `FELIX_DEVICEROUTESOURCEADDRESS`        | IPv4 address to use as the source hint on device routes programmed by Felix [Default: No source hint is set on programmed routes and for local traffic from host to workload the source address will be chosen by the kernel.] | `<IPv4-address>` |
 | `DeviceRouteProtocol`             | `FELIX_DEVICEROUTEPROTOCOL`             | This defines the route protocol added to programmed device routes. [Default: `RTPROT_BOOT`] | int |
