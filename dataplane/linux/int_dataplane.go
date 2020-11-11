@@ -796,7 +796,7 @@ func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 			log.WithFields(fields).Debug("Skipping interface for MTU detection")
 			continue
 		}
-		log.WithFields(fields).Info("Examining link for MTU calculation")
+		log.WithFields(fields).Debug("Examining link for MTU calculation")
 		if l.Attrs().MTU < smallest || smallest == 0 {
 			smallest = l.Attrs().MTU
 		}
