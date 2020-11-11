@@ -27,10 +27,6 @@ spec:
       hostNetwork: true
       # This must be set when hostNetwork is true or else the cluster services won't resolve
       dnsPolicy: ClusterFirstWithHostNet
-      volumes:
-        - name: var-lib-calico
-          hostPath:
-            path: /var/lib/calico
       containers:
         - name: tigera-operator
           image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
@@ -56,7 +52,19 @@ spec:
             - configMapRef:
                 name: kubernetes-services-endpoint
                 optional: true
+      volumes:
+        - name: var-lib-calico
+          hostPath:
+            path: /var/lib/calico
 {{- if eq .Values.installation.kubernetesProvider "openshift" }}
+        - name: calico-resources
+          configMap:
+            defaultMode: 0400
+            name: calico-resources
+        - name: install-resources-script
+          configMap:
+            defaultMode: 0777
+            name: install-resources-script
       initContainers:
         - name: create-initial-resources
           image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}
@@ -74,13 +82,4 @@ spec:
           volumeMounts:
             - name: calico-resources
               mountPath: /calico-resources
-      volumes:
-        - name: calico-resources
-          configMap:
-            defaultMode: 0400
-            name: calico-resources
-        - name: install-resources-script
-          configMap:
-            defaultMode: 0777
-            name: install-resources-script
 {{- end}}
