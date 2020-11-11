@@ -28,8 +28,10 @@ The maximum transmission unit (MTU) setting determines the largest packet size t
 
 In general, maximum performance is achieved by using the highest MTU value that does not cause fragmentation or drop packets on the path.  Maximum bandwidth increases and CPU consumption may drop for a given traffic rate.  The improvement is often more significant when pod to pod traffic is being encapsulated (IP in IP or VXLAN), and splitting and combining such traffic cannot be offloaded to your NICs.
 
-By default, {{site.prodname}} will auto-detect the correct MTU for your cluster based on node configuration and enabled networking modes. You can override auto-detection
+By default, {{site.prodname}} will auto-detect the correct MTU for your cluster based on node configuration and enabled networking modes. This guide explains how you can override auto-detection
 of MTU by providing an explicit value if needed.
+
+To ensure auto-detection of MTU works correctly, make sure that the correct encapsulation modes are set in your [felix configuration]({{site.baseurl}}/reference/resources/felixconfig). Disable any unused encapsulations (`vxlanEnabled`, `ipipEnabled`, and `wireguardEnabled`) in your felix configuration to ensure that auto-detection can pick the optimal MTU for your cluster.
 
 ### Before you begin...
 
