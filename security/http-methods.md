@@ -5,7 +5,7 @@ description: Create a Calico network policy for Istio-enabled apps to restrict i
 
 ### Big picture
 
-Use Calico network policy for Istio-enabled apps to restrict ingress traffic that matches HTTP methods or paths. 
+Use Calico network policy for Istio-enabled apps to restrict ingress traffic that matches HTTP methods or paths.
 
 ### Value
 
@@ -23,7 +23,7 @@ This how-to guide uses the following Calico features:
 
 #### HTTP match criteria: ingress traffic only 
 
-Calico network policy supports restricting traffic based on HTTP methods and paths only for ingress traffic. 
+Calico network policy supports restricting traffic based on HTTP methods and paths only for ingress traffic.
 
 ### Before you begin...
 

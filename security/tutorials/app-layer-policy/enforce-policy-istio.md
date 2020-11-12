@@ -6,12 +6,15 @@ canonical_url: '/security/tutorials/app-layer-policy/enforce-policy-istio'
 
 This tutorial sets up a microservices application, then demonstrates how to use {{site.prodname}} application layer policy to mitigate some common threats.
 
+> **Note**: This tutorial was verified using Istio v1.4.2. Some content may not apply to the latest Istio version.
+{: .alert .alert-info}
+
 ## Prerequisites
 
 1. Build a Kubernetes cluster.
-2. Install Calico on Kubernetes:
-  - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
-  - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/networking/) (or a non-Calico CNI) and Calico network policy are installed.
+2. Install {{site.prodname}} on Kubernetes:
+  - If {{site.prodname}} is not installed on Kubernetes, see [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/quickstart).
+  - If {{site.prodname}} is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/networking/) (or a non-Calico CNI) and {{site.prodname}} network policy are installed.
 3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/clis/calicoctl/install).
   **Note**: Ensure calicoctl is configured to connect with your datastore.
 4. [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy).
@@ -98,9 +101,9 @@ url='https://istio.io/docs/tasks/traffic-management/ingress/ingress-control/#det
 %}. Once you have the `INGRESS_HOST` and `INGRESS_PORT` variables set, you can
 set the `GATEWAY_URL` as follows.
 
-   ```bash
-   export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
-   ```
+```bash
+export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
+```
 
 Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning
 correctly.  It may take several minutes for all the services to come up and respond, during which
