@@ -261,7 +261,7 @@ func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
 		log.Debug("Value is nil, passing through as a deletion.")
 		return
 	} else if obj, ok := u.Value.(v1.Object); ok {
-		// Since v3 object carry their resource version inside their internal metadata, our
+		// Since v3 objectsgit commi carry their resource version inside their internal metadata, our
 		// later dedupe comparison will always fail unless we zero this out. The KVP revision
 		// should always be the same as the internal revision but we copy it over just to make
 		// sure that we replace the revision correctly on the client side.
