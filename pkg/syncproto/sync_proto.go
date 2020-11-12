@@ -261,13 +261,12 @@ func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
 		log.Debug("Value is nil, passing through as a deletion.")
 		return
 	} else if obj, ok := u.Value.(v1.Object); ok {
-		// Since v3 objectsgit commi carry their resource version inside their internal metadata, our
-		// later dedupe comparison will always fail unless we zero this out. The KVP revision
-		// should always be the same as the internal revision but we copy it over just to make
-		// sure that we replace the revision correctly on the client side.
+		// Since Calico v3 objects carry their resource version inside their internal metadata, our
+		// later dedupe comparison will always fail.  To counter that, we move the resource version
+		// to a field of the SerializedUpdate before we serialize.
 		log.Debug("v3 resource, zeroing its internal resource version for dedupe.")
 		version := obj.GetResourceVersion()
-		su.Revision = version
+		su.V3ResourceVersion = version
 		defer obj.SetResourceVersion(version) // Restore the input object, mainly for UT.
 		obj.SetResourceVersion("")
 	}
@@ -285,11 +284,12 @@ func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
 }
 
 type SerializedUpdate struct {
-	Key        string
-	Value      []byte
-	Revision   interface{}
-	TTL        time.Duration
-	UpdateType api.UpdateType
+	Key               string
+	Value             []byte
+	Revision          interface{}
+	V3ResourceVersion string
+	TTL               time.Duration
+	UpdateType        api.UpdateType
 }
 
 var ErrBadKey = errors.New("Unable to parse key.")
@@ -311,7 +311,7 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 		} else {
 			if obj, ok := parsedValue.(v1.Object); ok {
 				log.Debug("v3 resource, populating its internal resource version.")
-				obj.SetResourceVersion(fmt.Sprint(s.Revision))
+				obj.SetResourceVersion(fmt.Sprint(s.V3ResourceVersion))
 			}
 		}
 	}
@@ -335,10 +335,12 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 
 // WouldBeNoOp returns true if this update would be a no-op given that previous has already been sent.
 func (s SerializedUpdate) WouldBeNoOp(previous SerializedUpdate) bool {
-	// We don't care if the revision has changed so nil it out.  Note: we're using the fact that this is a
+	// We don't care if the revision(s) have changed so zero them out.  Note: we're using the fact that this is a
 	// value type so these changes won't be propagated to the caller!
 	s.Revision = nil
+	s.V3ResourceVersion = ""
 	previous.Revision = nil
+	previous.V3ResourceVersion = ""
 
 	if previous.UpdateType == api.UpdateTypeKVNew {
 		// If the old update was a create, convert it to an update before the comparison since it's OK to
@@ -346,7 +348,6 @@ func (s SerializedUpdate) WouldBeNoOp(previous SerializedUpdate) bool {
 		previous.UpdateType = api.UpdateTypeKVUpdated
 	}
 
-	// TODO Typha Add UT to make sure that the serialization is always the same (current JSON impl does make that guarantee)
 	return reflect.DeepEqual(s, previous)
 }
 
