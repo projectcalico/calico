@@ -17,6 +17,9 @@ package snapcache_test
 import (
 	"strconv"
 
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/typha/pkg/snapcache"
 
 	"context"
@@ -106,6 +109,97 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 	AfterEach(func() {
 		cancel()
+	})
+
+	Describe("after sending v3Node @ rev 10", func() {
+		var kvNodeRev10 model.KVPair
+		var crumb *snapcache.Breadcrumb
+		var updateNodeRev10 api.Update
+
+		BeforeEach(func() {
+			kvNodeRev10 = model.KVPair{
+				Key:      model.ResourceKey{Name: "node1", Kind: v3.KindNode},
+				Value:    &v3.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						ResourceVersion: "10",
+						Name: "foo",
+					},
+					Spec: v3.NodeSpec{
+						IPv4VXLANTunnelAddr: "10.0.0.1",
+					},
+				},
+				Revision: "10",
+			}
+			updateNodeRev10 = api.Update{
+				KVPair:     kvNodeRev10,
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			cache.OnUpdates([]api.Update{updateNodeRev10})
+
+			// Wait for the update to flow through...
+			Eventually(func() bool {
+				crumb = cache.CurrentBreadcrumb()
+				crumbSize := crumb.KVs.Size()
+				// Check snapshot is read-only.
+				Expect(func() {
+					crumb.KVs.Insert([]byte("abcd"), "unused")
+				}).To(Panic())
+				log.WithField("crumb", crumb).WithField("size", crumbSize).Info("Current crumb now...")
+				Consistently(func() uint { return crumb.KVs.Size() }).Should(Equal(crumbSize))
+				return crumbSize > 0
+			}).Should(BeTrue())
+			log.WithField("crumb", crumb).Info("Got initial crumb")
+
+			// Put a time limit on how long these tests wait.
+			go func() {
+				time.Sleep(10 * time.Second)
+				cancel()
+			}()
+		})
+
+		It("should coalesce idempotent updates", func() {
+			// Then send in another update with same value, and another value to make sure we generate another
+			// crumb.
+			kvNodeRev11 := model.KVPair{
+				Key:      model.ResourceKey{Name: "node1", Kind: v3.KindNode},
+				Value:    &v3.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						ResourceVersion: "11",
+						Name: "foo",
+					},
+					Spec: v3.NodeSpec{
+						IPv4VXLANTunnelAddr: "10.0.0.1",
+					},
+				},
+				Revision: "11",
+			}
+			updateNodeRev11 := api.Update{
+				KVPair:     kvNodeRev11,
+				UpdateType: api.UpdateTypeKVUpdated,
+			}
+
+			updateBiff := api.Update{
+				KVPair: model.KVPair{
+					Key:      model.GlobalConfigKey{Name: "biff"},
+					Value:    "baz",
+					Revision: "12",
+					TTL:      0,
+				},
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			cache.OnUpdates([]api.Update{updateNodeRev11, updateBiff})
+
+			// Wait for the next crumb...
+			crumb, err := crumb.Next(cxt)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Its snapshot should contain both items...
+			snapshotUpdates := crumbToSnapshotUpdates(crumb)
+			Expect(snapshotUpdates).To(ConsistOf(updateNodeRev10, updateBiff), "Snapshot cache should ignore no-op update")
+
+			// Deltas should only contain the new update.
+			Expect(deserialiseUpdates(crumb.Deltas)).To(ConsistOf(updateBiff), "Should only receive the second update as a delta")
+		})
 	})
 
 	Describe("after sending GlobalConfigKey{foo}=bar @ rev 10", func() {
