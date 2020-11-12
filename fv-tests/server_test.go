@@ -29,6 +29,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -119,7 +120,11 @@ var (
 	v3Node = api.Update{
 		KVPair: model.KVPair{
 			Key:      model.ResourceKey{Name: "node1", Kind: v3.KindNode},
-			Value:    &v3.Node{},
+			Value:    &v3.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					ResourceVersion: "1237",
+				},
+			},
 			Revision: "1237",
 		},
 		UpdateType: api.UpdateTypeKVNew,
@@ -127,7 +132,11 @@ var (
 	v3BGPPeer = api.Update{
 		KVPair: model.KVPair{
 			Key:      model.ResourceKey{Name: "peer1", Kind: v3.KindBGPPeer},
-			Value:    &v3.BGPPeer{},
+			Value:    &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{
+					ResourceVersion: "1238",
+				},
+			},
 			Revision: "1238",
 		},
 		UpdateType: api.UpdateTypeKVNew,
