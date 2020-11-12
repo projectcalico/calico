@@ -30,7 +30,7 @@ The {{site.prodname}} support for Istio service mesh has the following benefits:
 
   Kubernetes network policies and {{site.prodname}} network policies work as is; users do not need to learn another network policy model to adopt Istio.
 
-See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio) to learn how application layer policy provides second-factor authentication for the mythical Yao Bank. 
+See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio) to learn how application layer policy provides second-factor authentication for the mythical Yao Bank.
 
 ### Before you begin
 
@@ -40,6 +40,17 @@ See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tuto
 - [calicoctl is installed and configured]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
 See this [issue](https://github.com/projectcalico/calico/issues/2943){:target="_blank"} for details and workaround.
+
+**Istio support**
+
+Following Istio versions have been verified to work with application layer policies:
+- Istio v1.7.4
+- Istio v1.6.13
+- Istio v1.4.2
+
+Istio v1.5.x is **not** supported.
+
+Although we expect future minor versions to work with the corresponding manifest below (for example, v1.6.14 or v1.7.5), manifest compatibility depends entirely on the upstream changes in the respective Istio release.
 
 ### How to
 
@@ -63,17 +74,48 @@ calicoctl patch FelixConfiguration default --patch \
 #### Install Istio
 
 1. Verify [application layer policy requirements]({{site.baseurl}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
-1. Install Istio using the [Istio project documentation](https://istio.io/docs/setup/install/){:target="_blank"}. Istio can be installed in both strict mode or permissive mode. For example to install Istio in strict mode:
+1. Install Istio using {% include open-new-window.html text='installation guide in the project documentation' url='https://istio.io/v1.6/docs/setup/install/' %}.
 
 ```bash
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.4.2 sh -
-cd $(ls -d istio-*)
-./bin/istioctl manifest apply --set values.global.mtls.enabled=true --set values.global.controlPlaneSecurityEnabled=true
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.7.4 sh -
+cd $(ls -d istio-* --color=never)
 ```
 
-Strict mode is suggested when creating a new cluster. Adopting mTLS into an existing deployment is challenging because you need to make sure both client and server are provisioned with certificates at the same time. As a result, Istio provides a mode to take a deployment not using mTLS and gradually enable it without causing outages for clients. Istio permissive mode allows a service to accept both plaintext traffic and mutual TLS traffic at the same time.
+Istio can be installed in both strict mode or permissive mode. Application layer policies work with both Istio in strict or permissive mode. When dealing with mTLS traffic, {{site.prodname}} will cryptographically verify identity while making an authorization decision. When {{site.prodname}} receives plain-text instead, it will fall back on using IP addresses to verify identity.
 
-Application layer policies work with both Istio in strict or permissive mode. When dealing with mTLS traffic, {{site.prodname}} will cryptographically verify identity while making an authorization decision. When {{site.prodname}} receives plain-text instead, it will fall back on using IP addresses to verify identity.
+Strict mode is strongly suggested when creating a new cluster. For example, to install Istio in strict mode:
+
+{% tabs %}
+<label:Istio v1.7.x or v1.6.x,active:true>
+<%
+```bash
+./bin/istioctl install --set values.global.controlPlaneSecurityEnabled=true
+```
+
+next, create the following {% include open-new-window.html text='PeerAuthentication' url='https://istio.io/latest/docs/reference/config/security/peer_authentication/' %} policy.
+
+Replace `namespace` below by `rootNamespace` value, if it's customized in your environment.
+
+```bash
+kubectl create -f - <<EOF
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default-strict-mode
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+EOF
+```
+%>
+<label:Istio v1.4.x or earlier>
+<%
+```bash
+./bin/istioctl manifest apply --set values.global.mtls.enabled=true --set values.global.controlPlaneSecurityEnabled=true
+```
+%>
+{% endtabs %}
 
 #### Update Istio sidecar injector
 
@@ -82,23 +124,59 @@ The sidecar injector automatically modifies pods as they are created to work wit
 1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection){:target="_blank"} to install the sidecar injector and enable it in your chosen namespace(s).
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
 
+{% tabs %}
+<label:Istio v1.7.x,active:true>
+<%
+```bash
+curl {{ "/manifests/alp/istio-inject-configmap-1.7.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
+
+[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.7.yaml" | absolute_url }}){:target="_blank"}
+%>
+<label:Istio v1.6.x>
+<%
+```bash
+curl {{ "/manifests/alp/istio-inject-configmap-1.6.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
+```
+%>
+<label:Istio v1.4.x or earlier>
+<%
+```bash
 curl {{ "/manifests/alp/istio-inject-configmap-1.4.2.yaml" | absolute_url }} -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
-[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.3.5.yaml" | absolute_url }}){:target="_blank"}
 
 If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options).
+%>
+{% endtabs %}
 
 #### Add Calico authorization services to the mesh
 
 Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions.
 
+{% tabs %}
+<label:Istio v1.7.x,active:true>
+<%
+```bash
+kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-v1.7.yaml" | absolute_url }}
 ```
+[View sample manifest]({{ "/manifests/alp/istio-app-layer-policy-v1.7.yaml" | absolute_url }}){:target="_blank"}
+%>
+<label:Istio v1.6.x>
+<%
+```bash
+kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-v1.6.yaml" | absolute_url }}
+```
+%>
+<label:Istio v1.4.x or earlier>
+<%
+```bash
 kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy.yaml" | absolute_url }}
 ```
-
-[View sample manifest]({{ "/manifests/alp/istio-app-layer-policy.yaml" | absolute_url }}){:target="_blank"}
+%>
+{% endtabs %}
 
 #### Add namespace labels
 
