@@ -94,8 +94,8 @@ spec:
 | vxlanMTU                           | MTU to use for the VXLAN tunnel device. Zero value means auto-detect. Also controls NodePort MTU when eBPF enabled. | int | int | `0` |
 | vxlanPort                          | Port to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4789` |
 | vxlanVNI                           | Virtual network ID to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4096` |
-| allowVXLANPacketsFromWorkload      | Set to `true` to allow VXLAN encapsulated traffic from workloads. | boolean | boolean | `false` |
-| allowIPIPPacketsFromWorkload       | Set to `true` to allow IPIP encapsulated traffic from workloads. | boolean | boolean | `false` |
+| allowVXLANPacketsFromWorkloads     | Set to `true` to allow VXLAN encapsulated traffic from workloads. | boolean | boolean | `false` |
+| allowIPIPPacketsFromWorkloads      | Set to `true` to allow IPIP encapsulated traffic from workloads. | boolean | boolean | `false` |
 | wireguardEnabled                   | Enable encryption on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
 | wireguardInterfaceName             | Name of the WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wireguard.cali |
 | wireguardListeningPort             | Port used by WireGuard tunnels. Felix sets up WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51820 |
