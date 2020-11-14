@@ -182,7 +182,7 @@ $ ./wni aws create \
    index for the `vEthernet (Ethernet 2)` adapter with `Get-NetAdapter`. For
    example:
 
-   ```powershell
+   ```
    PS C:\> Get-NetAdapter
 
    Name                      InterfaceDescription                    ifIndex Status       MacAddress             LinkSpeed
@@ -194,7 +194,7 @@ $ ./wni aws create \
 
    Then, add the route using the interface index:
    ```powershell
-   PS C:\> New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex <interface_index>
+   New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex <interface_index>
    ```
 
 1. Install and start kube-proxy service. Execute following powershell script/commands.
@@ -206,11 +206,7 @@ $ ./wni aws create \
 1. Verify kube-proxy service is running.
 
    ```powershell
-   PS C:\> Get-Service -Name kube-proxy
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kube-proxy         kube-proxy service
+   Get-Service -Name kube-proxy
    ```
 
 #### Configure kubelet

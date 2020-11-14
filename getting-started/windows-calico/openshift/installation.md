@@ -37,13 +37,13 @@ To do this, label the namespace with `openshift.io/run-level: "1"`.
 
 First, create a staging directory for the installation. This directory will contain the configuration file, along with cluster state files, that OpenShift installer will create:
 
-```
+```bash
 mkdir openshift-tigera-install && cd openshift-tigera-install
 ```
 
 Now run OpenShift installer to create a default configuration file:
 
-```
+```bash
 openshift-install create install-config
 ```
 
@@ -103,7 +103,7 @@ openshift-install create cluster
 
 Once the above command is complete, you can verify {{site.prodname}} is installed by verifying the components are available with the following command.
 
-```
+```bash
 oc get tigerastatus
 ```
 
@@ -154,7 +154,7 @@ $ ./wni aws create \
 
 #### Install {{site.prodnameWindows}}
 
-1. Prepare directory for Kubernetes files on Windows node.
+1. Remote into the Windows node and prepare the directory for Kubernetes files.
 
    ```powershell
    mkdir c:\k
@@ -167,6 +167,7 @@ $ ./wni aws create \
    ```powershell
    Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
+
 1. Run the installation script, replacing the Kubernetes version with the version corresponding to your version of OpenShift. For example, `1.18.3`:
 
    ```powershell
@@ -177,7 +178,7 @@ $ ./wni aws create \
    index for the `vEthernet (Ethernet 2)` adapter with `Get-NetAdapter`. For
    example:
 
-   ```powershell
+   ```
    PS C:\> Get-NetAdapter
 
    Name                      InterfaceDescription                    ifIndex Status       MacAddress             LinkSpeed
@@ -189,7 +190,7 @@ $ ./wni aws create \
 
    Then, add the route using the interface index:
    ```powershell
-   PS C:\> New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex <interface_index>
+   New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex <interface_index>
    ```
 
 1. Install and start kube-proxy service. Execute following powershell script/commands.
@@ -201,11 +202,7 @@ $ ./wni aws create \
 1. Verify kube-proxy service is running.
 
    ```powershell
-   PS C:\> Get-Service -Name kube-proxy
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kube-proxy         kube-proxy service
+   Get-Service -Name kube-proxy
    ```
 
 #### Configure kubelet
@@ -213,7 +210,7 @@ $ ./wni aws create \
 Copy the previously downloaded file `wmcb.exe` and your worker's ignition file (worker.ign) to the Windows node.
 To download the worker.ign:
 
-```shell
+```bash
 apiserver=$(oc get po -n  openshift-kube-apiserver -l apiserver=true --no-headers -o custom-columns=":metadata.name" | head -n 1)
 oc -n openshift-kube-apiserver exec ${apiserver} -- curl -ks https://localhost:22623/config/worker > worker.ign
 ```
