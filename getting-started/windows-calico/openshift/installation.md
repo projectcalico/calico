@@ -174,25 +174,6 @@ $ ./wni aws create \
    c:\install-calico-windows.ps1 -KubeVersion <kube version> -ServiceCidr 172.30.0.0/16 -DNSServerIPs 172.30.0.10
    ```
 
-1. Re-add the route for the AWS metdata endpoint. First, determine the interface
-   index for the `vEthernet (Ethernet 2)` adapter with `Get-NetAdapter`. For
-   example:
-
-   ```
-   PS C:\> Get-NetAdapter
-
-   Name                      InterfaceDescription                    ifIndex Status       MacAddress             LinkSpeed
-   ----                      --------------------                    ------- ------       ----------             ---------
-   vEthernet (nat)           Hyper-V Virtual Ethernet Adapter             10 Up           00-15-5D-BA-0F-68        10 Gbps
-   Ethernet 2                Amazon Elastic Network Adapter                6 Up           0A-4F-1F-C4-E3-49        25 Gbps
-   vEthernet (Ethernet 2)    Hyper-V Virtual Ethernet Adapter #2          15 Up           0A-4F-1F-C4-E3-49        25 Gbps
-   ```
-
-   Then, add the route using the interface index:
-   ```powershell
-   New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex <interface_index>
-   ```
-
 1. Install and start kube-proxy service. Execute following powershell script/commands.
 
    ```powershell
