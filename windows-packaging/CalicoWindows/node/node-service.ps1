@@ -107,8 +107,8 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_
     Write-Host "Management IP detected on vSwitch: $mgmtIP."
     Start-Sleep 10
 
-    if ($platform -EQ "ec2") {
-        Set-AwsMetaDataServerRoute -mgmtIP $mgmtIP
+    if (($platform -EQ "ec2") -or ($platform -EQ "gce")) {
+        Set-MetaDataServerRoute -mgmtIP $mgmtIP
     }
 
     if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp") {

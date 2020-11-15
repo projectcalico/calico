@@ -378,26 +378,37 @@ function Get-PlatformType()
         return ("ec2")
     }
     
+    # GCE
+    $restError = $null
+    Try {
+        $gceNodeName = Invoke-RestMethod -UseBasicParsing -Headers @{"Metadata-Flavor"="Google"} "http://metadata.google.internal/computeMetadata/v1/instance/hostname"
+    } Catch {
+        $restError = $_
+    }
+    if ($restError -eq $null) {
+        return ("gce")
+    }
+
     return ("bare-metal")
 }
 
-function Set-AwsMetaDataServerRoute($mgmtIP)
+function Set-MetaDataServerRoute($mgmtIP)
 {
     $route = $null
     Try {
         $route=Get-NetRoute -DestinationPrefix 169.254.169.254/32 2>$null
     } Catch {
-        Write-Host "AWS metadata server route not found."
+        Write-Host "Metadata server route not found."
     }
     if ($route -eq $null) {
-        Write-Host "Restore AWS metadata server route."
+        Write-Host "Restore metadata server route."
     
         $routePrefix= $mgmtIP + "/32"
         Try {
             $ifIndex=Get-NetRoute -DestinationPrefix $routePrefix | Select-Object -ExpandProperty ifIndex
             New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex $ifIndex
         } Catch {
-            Write-Host "Warning! Failed to restore AWS metadata server route."
+            Write-Host "Warning! Failed to restore metadata server route."
         }
     }
 }
