@@ -72,9 +72,8 @@ calicoctl ipam configure --strictaffinity=true
 - If you are using {{site.prodname}} BGP networking, the RemoteAccess service must be installed for the Windows BGP Router.
 - Windows nodes support only a single IP pool type (so, if using a VXLAN pool, you should only use VXLAN throughout the cluster).
 - TLS v1.2 enabled. For example:
-```
-PS C:\> [Net.ServicePointManager]::SecurityProtocol = `
-                               [Net.SecurityProtocolType]::Tls12
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 ```
 
 ### Next steps
