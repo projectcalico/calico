@@ -133,7 +133,7 @@ function GetPlatformType()
         $restError = $_
     }
     if ($restError -eq $null) {
-        return ("ec2")
+        return ("gce")
     }
 
     return ("bare-metal")
