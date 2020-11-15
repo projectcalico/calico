@@ -98,9 +98,13 @@ The following steps will outline the installation of {{site.prodname}} networkin
 
 1. [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 
-1. [Configure strict affinity]({{site.baseurl}}/getting-started/windows-calico/quickstart#configure-strict-affinity-for-clusters-using-calico-networking)
+1. Configure strict affinity:
+   ```bash
+   calicoctl ipam configure --strictaffinity=true
+   ```
 
 1. Finally, follow the {{site.prodnameWindows}} [quickstart guide for Kubernetes]({{site.baseurl}}/getting-started/windows-calico/quickstart#install-calico-for-windows)
+   For VXLAN clusters, follow the instructions under the "Kubernetes VXLAN" tab. For BGP clusters, follow the instructions under the "Kubernetes BGP" tab.
 
    > **Note**: For Rancher default values for service CIDR and DNS cluster IP, see the {% include open-new-window.html text='Rancher kube-api service options' url='https://rancher.com/docs/rke/latest/en/config-options/services/#kubernetes-api-server-options' %}.
    {: .alert .alert-info}
