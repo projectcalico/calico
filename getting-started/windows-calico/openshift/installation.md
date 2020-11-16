@@ -172,7 +172,7 @@ aws ec2 get-password-data --instance-id <instance id> --priv-launch-key <aws pri
 
 #### Install {{site.prodnameWindows}}
 
-1. Remote into the Windows node, open a Powershell window, and prepare the directory for Kubernetes files.
+1. On the Windows node, open a Powershell window, and prepare the directory for Kubernetes files.
 
    ```powershell
    mkdir c:\k
