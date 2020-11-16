@@ -15,6 +15,7 @@
 package resources
 
 import (
+	"context"
 	"sort"
 	"strings"
 
@@ -131,13 +132,15 @@ func (c *customK8sNodeResourceClient) List(list model.ListInterface) ([]*model.K
 		return nil, "", err
 	}
 
+	ctx := context.Background()
+
 	// Get a list of the required nodes - which will either be all of them
 	// or a specific node.
 	var nodes []apiv1.Node
 	var rev string
 	if nodeName != "" {
 		newLogContext := logContext.WithField("NodeName", nodeName)
-		node, err := c.ClientSet.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+		node, err := c.ClientSet.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
 			err = K8sErrorToCalico(err, nodeName)
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
@@ -150,7 +153,7 @@ func (c *customK8sNodeResourceClient) List(list model.ListInterface) ([]*model.K
 		nodes = append(nodes, *node)
 		rev = node.GetResourceVersion()
 	} else {
-		nodeList, err := c.ClientSet.CoreV1().Nodes().List(metav1.ListOptions{})
+		nodeList, err := c.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			logContext.WithError(err).Info("Failed to list resources: unable to list Nodes")
 			return nil, "", K8sErrorToCalico(err, nodeName)
@@ -190,7 +193,7 @@ func (c *customK8sNodeResourceClient) getNameAndNodeFromKey(key model.Key) (stri
 	}
 
 	// Get the current node settings.
-	node, err := c.ClientSet.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	node, err := c.ClientSet.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		logContext.WithError(err).Info("Error getting Node configuration")
 		return "", nil, K8sErrorToCalico(err, key)
@@ -234,7 +237,7 @@ func (c *customK8sNodeResourceClient) applyResourceToAnnotation(node *apiv1.Node
 	node.Annotations[c.nameToAnnotationKey(resName)] = string(data)
 
 	// Update the Node resource.
-	node, err = c.ClientSet.CoreV1().Nodes().Update(node)
+	node, err = c.ClientSet.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 	if err != nil {
 		// Failed to update the Node.  Just log info and perform a retry.  The retryWrapper will
 		// log Error if this continues to fail.

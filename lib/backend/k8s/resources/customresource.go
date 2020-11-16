@@ -78,10 +78,9 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 	namespace := kvp.Key.(model.ResourceKey).Namespace
 	err = c.restClient.Post().
 		NamespaceIfScoped(namespace, c.namespaced).
-		Context(ctx).
 		Resource(c.resource).
 		Body(resIn).
-		Do().Into(resOut)
+		Do(ctx).Into(resOut)
 	if err != nil {
 		logContext.WithError(err).Debug("Error creating resource")
 		return nil, K8sErrorToCalico(err, kvp.Key)
@@ -125,12 +124,11 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource by name")
 	updateError = c.restClient.Put().
-		Context(ctx).
 		Resource(c.resource).
 		NamespaceIfScoped(namespace, c.namespaced).
 		Body(resIn).
 		Name(name).
-		Do().Into(resOut)
+		Do(ctx).Into(resOut)
 	if updateError != nil {
 		// Failed to update the resource.
 		logContext.WithError(updateError).Error("Error updating resource")
@@ -184,12 +182,11 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Send delete request by name")
 	err = c.restClient.Delete().
-		Context(ctx).
 		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
 		Name(name).
 		Body(opts).
-		Do().
+		Do(ctx).
 		Error()
 	if err != nil {
 		logContext.WithError(err).Debug("Error deleting resource")
@@ -219,11 +216,10 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 	logContext.Debug("Get custom Kubernetes resource by name")
 	resOut := reflect.New(c.k8sResourceType).Interface().(Resource)
 	err = c.restClient.Get().
-		Context(ctx).
 		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
 		Name(name).
-		Do().Into(resOut)
+		Do(ctx).Into(resOut)
 	if err != nil {
 		logContext.WithError(err).Debug("Error getting resource")
 		return nil, K8sErrorToCalico(err, key)
@@ -281,10 +277,9 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 
 	// Perform the request.
 	err := c.restClient.Get().
-		Context(ctx).
 		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
-		Do().Into(reslOut)
+		Do(ctx).Into(reslOut)
 	if err != nil {
 		// Don't return errors for "not found".  This just
 		// means there are no matching Custom K8s Resources, and we should return

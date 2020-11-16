@@ -15,6 +15,7 @@
 package resources
 
 import (
+	"context"
 	"reflect"
 
 	log "github.com/sirupsen/logrus"
@@ -96,7 +97,7 @@ func (c *customK8sResourceClient) Get(key model.Key) (*model.KVPair, error) {
 	err = c.restClient.Get().
 		Resource(c.resource).
 		Name(name).
-		Do().Into(resOut)
+		Do(context.Background()).Into(resOut)
 	if err != nil {
 		logContext.WithError(err).Info("Error getting resource")
 		return nil, K8sErrorToCalico(err, key)
@@ -142,7 +143,7 @@ func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPai
 	// Perform the request.
 	err := c.restClient.Get().
 		Resource(c.resource).
-		Do().Into(reslOut)
+		Do(context.Background()).Into(reslOut)
 	if err != nil {
 		// Don't return errors for "not found".  This just
 		// means there are no matching Custom K8s Resources, and we should return
