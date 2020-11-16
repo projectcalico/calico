@@ -29,6 +29,7 @@ eBPF mode currently has some limitations relative to the standard Linux pipeline
 - eBPF mode does not yet support host endpoints, or, their associated policy types.
 - Switching to and from eBPF mode is disruptive to existing workload connections.  Workloads that do not detect and recover from connection loss may need to be restarted.
 - Hybrid clusters (with some eBPF nodes and some standard dataplane nodes) are not supported.  (In such a cluster, NodePort traffic from eBPF nodes to non-eBPF nodes will be dropped.)
+- eBPF mode does not support floating IPs. 
 
 ### Features
 
