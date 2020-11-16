@@ -6,6 +6,11 @@ $(document).ready(function() {
   var downloadButtonClass = `${codeToolbarClass}__download-button ${codeToolbarClass}__button`;
   var codeToolbarVisibleClass = `${codeToolbarClass}--visible`;
 
+  var bashPrompt = "$";
+  var bashNewlineEscape = " \\";
+  var powershellPrompt = "PS C:\>";
+  var powershellNewlineEscape = " `";
+
   $('pre.highlight').each(function(i) {
     if (!$(this).parents().hasClass('no-select-button')) {
       $(this).addClass(codeSnippetClass);
@@ -29,7 +34,7 @@ $(document).ready(function() {
         }
       }
 
-      if (language === "bash") {
+      if (language === "bash" || language == "powershell") {
         var isEofStarted = false;
         var isMultilineCommandStarted = false;
         var codeLines = code.split('\n');
@@ -44,7 +49,16 @@ $(document).ready(function() {
             isEofStarted = !isEofStarted && trimmedCodeLine.includes("<<EOF");
           }
 
-          var codeLineEndsWithMultilineSeparator = trimmedCodeLine.endsWith(" \\");
+          var codeLineEndsWithMultilineSeparator;
+          var promptString;
+          if (language == "bash") {
+            codeLineEndsWithMultilineSeparator = trimmedCodeLine.endsWith(bashNewlineEscape);
+            promptString = bashPrompt
+          } else {
+            codeLineEndsWithMultilineSeparator = trimmedCodeLine.endsWith(powershellNewlineEscape);
+            promptString = powershellPrompt
+          }
+
           var isPartOfMultilineCommand = isMultilineCommandStarted && codeLineEndsWithMultilineSeparator;
           var isEndOfMultilineCommand = isMultilineCommandStarted && !codeLineEndsWithMultilineSeparator;
           if (!isPartOfMultilineCommand) {
@@ -53,7 +67,7 @@ $(document).ready(function() {
 
           var codeLineIsCommand = !isPartOfMultilineCommand && !isEndOfMultilineCommand && !isPartOfEof && !isEndOfEof;
           if (!!trimmedCodeLine && codeLineIsCommand) {
-            codeLinesHtml[i] = `<span class='code-snippet__command-prefix'>$ </span>${codeLinesHtml[i]}`;
+            codeLinesHtml[i] = `<span class='code-snippet__command-prefix'>${promptString} </span>${codeLinesHtml[i]}`;
           }
         }
 
@@ -105,8 +119,10 @@ $(document).ready(function() {
         const normalizedText = codeSnippet.innerText
           .split('\n')
           .map(str => {
-            if (str.startsWith('$')) {
-              return str.slice(1, str.length).trimLeft();
+            if (str.startsWith(bashPrompt)) {
+              return str.slice(bashPrompt.length , str.length).trimLeft();
+            } else if (str.startsWith(powershellPrompt)) {
+              return str.slice(powershellPrompt.length, str.length).trimLeft();
             }
 
             return str;

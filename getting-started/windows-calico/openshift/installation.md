@@ -37,13 +37,13 @@ To do this, label the namespace with `openshift.io/run-level: "1"`.
 
 First, create a staging directory for the installation. This directory will contain the configuration file, along with cluster state files, that OpenShift installer will create:
 
-```
+```bash
 mkdir openshift-tigera-install && cd openshift-tigera-install
 ```
 
 Now run OpenShift installer to create a default configuration file:
 
-```
+```bash
 openshift-install create install-config
 ```
 
@@ -103,17 +103,21 @@ openshift-install create cluster
 
 Once the above command is complete, you can verify {{site.prodname}} is installed by verifying the components are available with the following command.
 
-```
+```bash
 oc get tigerastatus
 ```
 
 > **Note**: To get more information, add `-o yaml` to the above command.
 
-Next, install calicoctl and [ensure that strict affinity is true]({{site.baseurl}}/getting-started/windows-calico/quickstart#configure-strict-affinity-for-clusters-using-calico-networking):
+Next, [install calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) and ensure strict affinity is true:
+
+```bash
+calicoctl ipam configure --strictaffinity=true
+```
 
 #### Add Windows nodes to the cluster
 
-Download the latest {% include open-new-window.html text='Windows Node Installer (WNI)' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %} binaries `wni` and `wmcb.exe` for your OpenShift version.
+Download the latest {% include open-new-window.html text='Windows Node Installer (WNI)' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %} binary `wni` that matches your OpenShift minor version.
 
 Next, determine the AMI id corresponding to Windows Server 1903 (build 18317) or greater. `wni` defaults to using Windows Server 2019 (build 10.0.17763) which does not include WinDSR support.
 One way to do this is by searching for AMI's matching the string `Windows_Server-1903-English-Core-ContainersLatest` in the Amazon EC2 console
@@ -152,9 +156,23 @@ $ ./wni aws create \
 2020/10/05 12:57:30 Internal IP: 10.0.90.193
 ```
 
+#### Get the adminstrator password
+
+The `wni` binary writes the instance details to the file `windows-node-installer.json`. An example of the file:
+
+```
+{"InstanceIDs":["i-02e13d4cc76c13c83"],"SecurityGroupIDs":["sg-0a777565d64e1d2ef"]}
+```
+
+Use the instance ID from the file and the path of the private key used to create the instance to get the Administrator user's password:
+
+```bash
+aws ec2 get-password-data --instance-id <instance id> --priv-launch-key <aws private key path>
+```
+
 #### Install {{site.prodnameWindows}}
 
-1. Prepare directory for Kubernetes files on Windows node.
+1. On the Windows node, open a Powershell window, and prepare the directory for Kubernetes files.
 
    ```powershell
    mkdir c:\k
@@ -167,30 +185,22 @@ $ ./wni aws create \
    ```powershell
    Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
-1. Run the installation script, replacing the Kubernetes version with the version corresponding to your version of OpenShift. For example, `1.18.3`:
+
+1. Run the installation script, replacing the Kubernetes version with the version corresponding to your version of OpenShift.
 
    ```powershell
    c:\install-calico-windows.ps1 -KubeVersion <kube version> -ServiceCidr 172.30.0.0/16 -DNSServerIPs 172.30.0.10
    ```
 
-1. Re-add the route for the AWS metdata endpoint. First, determine the interface
-   index for the `vEthernet (Ethernet 2)` adapter with `Get-NetAdapter`. For
-   example:
-
-   ```powershell
-   PS C:\> Get-NetAdapter
-
-   Name                      InterfaceDescription                    ifIndex Status       MacAddress             LinkSpeed
-   ----                      --------------------                    ------- ------       ----------             ---------
-   vEthernet (nat)           Hyper-V Virtual Ethernet Adapter             10 Up           00-15-5D-BA-0F-68        10 Gbps
-   Ethernet 2                Amazon Elastic Network Adapter                6 Up           0A-4F-1F-C4-E3-49        25 Gbps
-   vEthernet (Ethernet 2)    Hyper-V Virtual Ethernet Adapter #2          15 Up           0A-4F-1F-C4-E3-49        25 Gbps
+   > **Note**: Get the Kubernetes version with `oc version` and use only the major, minor, and patch version numbers. For example from a cluster that returns:
    ```
-
-   Then, add the route using the interface index:
-   ```powershell
-   PS C:\> New-NetRoute -DestinationPrefix 169.254.169.254/32 -InterfaceIndex <interface_index>
+   $ oc version
+   Client Version: 4.5.3
+   Server Version: 4.5.14
+   Kubernetes Version: v1.18.3+5302882
    ```
+   You will use `1.18.3`:
+   {: .alert .alert-info}
 
 1. Install and start kube-proxy service. Execute following powershell script/commands.
 
@@ -198,30 +208,33 @@ $ ./wni aws create \
    C:\CalicoWindows\kubernetes\install-kube-services.ps1 -service kube-proxy
    Start-Service -Name kube-proxy
    ```
+
 1. Verify kube-proxy service is running.
 
    ```powershell
-   PS C:\> Get-Service -Name kube-proxy
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kube-proxy         kube-proxy service
+   Get-Service -Name kube-proxy
    ```
 
 #### Configure kubelet
 
-Copy the previously downloaded file `wmcb.exe` and your worker's ignition file (worker.ign) to the Windows node.
-To download the worker.ign:
-
-```shell
-apiserver=$(oc get po -n  openshift-kube-apiserver -l apiserver=true --no-headers -o custom-columns=":metadata.name" | head -n 1)
-oc -n openshift-kube-apiserver exec ${apiserver} -- curl -ks https://localhost:22623/config/worker > worker.ign
-```
-
-Remote into the Windows node and configure the kubelet:
+From the Windows node, download the Windows Machine Config Bootstrapper `wmcb.exe` that matches your OpenShift minor version from {% include open-new-window.html text='Windows Machine Config Bootstrapper releases' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %}. For example, for OpenShift 4.5.x:
 
 ```powershell
-./wmcb.exe initialize-kubelet --ignition-file worker.ign --kubelet-path c:\k\kubelet.exe
+curl https://github.com/openshift/windows-machine-config-bootstrapper/releases/download/v4.5.2-alpha/wmcb.exe -o c:\wmcb.exe
+```
+
+Next, we will download the the `worker.ign` file from the API server:
+
+```powershell
+$apiServer = c:\k\kubectl --kubeconfig c:\k\config get po -n  openshift-kube-apiserver -l apiserver=true --no-headers -o custom-columns=":metadata.name" | select -first 1
+c:\k\kubectl --kubeconfig c:\k\config -n openshift-kube-apiserver exec $apiserver -- curl -ks https://localhost:22623/config/worker > c:\worker.ign
+((Get-Content c:\worker.ign) -join "`n") + "`n" | Set-Content -NoNewline c:\worker.ign
+```
+
+Next, we run wmcb to configure the kubelet:
+
+```powershell
+c:\wmcb.exe initialize-kubelet --ignition-file worker.ign --kubelet-path c:\k\kubelet.exe
 ```
 
 > **Note**: The kubelet configuration installed by Windows Machine Config
@@ -234,7 +247,7 @@ Then we configure kubelet to use Calico CNI:
 
 ```powershell
 cp c:\k\config c:\k\kubeconfig
-./wmcb.exe configure-cni --cni-dir c:\k\cni --cni-config c:\k\cni\config\10-calico.conf
+c:\wmcb.exe configure-cni --cni-dir c:\k\cni --cni-config c:\k\cni\config\10-calico.conf
 ```
 
 Then, we need to override the pod infra image used by kubelet. This is to ensure
@@ -245,7 +258,16 @@ the node. (For more details, see this {% include open-new-window.html text='upst
 docker tag kubeletwin/pause mcr.microsoft.com/k8s/core/pause:1.2.0
 ```
 
-Lastly, we need to approve the CSR's generated by the kubelet's bootstrapping process. First, view the pending CSR's:
+Finally, clean up the additional files created on the Windows node:
+
+```powershell
+rm c:\k\kubeconfig,c:\wmcb.exe,c:\worker.ign
+```
+
+Exit the remote session to the Windows node and return to a shell to a Linux
+node.
+
+We need to approve the CSR's generated by the kubelet's bootstrapping process. First, view the pending CSR's:
 
 ```bash
 oc get csr
@@ -276,11 +298,13 @@ certificatesigningrequest.certificates.k8s.io/csr-bmnfd approved
 certificatesigningrequest.certificates.k8s.io/csr-hwl89 approved
 ```
 
-Finally, clean up the additional files:
+Finally, wait a minute or so and get all nodes:
 
-```powershell
-rm c:\k\kubeconfig,c:\wmcb.exe,c:\worker.ign
 ```
+$ oc get node -owide
+```
+
+If the Windows node registered itself successfully, it should appear in the list with a Ready status, ready to run Windows pods!
 
 ### Next steps
 

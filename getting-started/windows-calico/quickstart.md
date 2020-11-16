@@ -22,7 +22,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 - Kubernetes clusters with versions 1.18, 1.17, or 1.16
 
 **Windows node requirements**
-- Versions:  
+- Versions:
   - Windows Server 1809 (build Build 17763.1432 or greater)
   - Windows Server 1903 (AKA 19H1 build 18362.1049 or greater)
   - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater), with Docker service enabled
@@ -58,12 +58,12 @@ calicoctl ipam configure --strictaffinity=true
 The following steps install a Kubernetes cluster on a single Windows node, with a Linux control node.
 
 - **Kubernetes VXLAN**
-  
+
   The geeky details of what you get by default:
   {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
 
 - **Kubernetes BGP**
-  
+
   The geeky details of what you get by default:
   {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:No,Routing:BGP,Datastore:Kubernetes' %}
 
@@ -104,22 +104,22 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    **Kubernetes datastore (default)**
 
    ```powershell
-   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
-                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> `
+                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> `
                                  -DNSServerIPs <your DNS service IP (default 10.96.0.10)>
    ```
 
    **etcd datastore**
 
    ```powershell
-   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
-                                 -Datastore etcdv3
-                                 -EtcdEndpoints <your etcd endpoint ip>
-                                 -EtcdTlsSecretName <your etcd TLS secret name in calico-system namespace> (default no etcd TLS secret is used)
-                                 -EtcdKey <path to key file> (default not using TLS)
-                                 -EtcdCert <path to cert file> (default not using TLS)
-                                 -EtcdCaCert <path to ca cert file> (default not using TLS)
-                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> `
+                                 -Datastore etcdv3 `
+                                 -EtcdEndpoints <your etcd endpoint ip> `
+                                 -EtcdTlsSecretName <your etcd TLS secret name in calico-system namespace> (default no etcd TLS secret is used) `
+                                 -EtcdKey <path to key file> (default not using TLS) `
+                                 -EtcdCert <path to cert file> (default not using TLS) `
+                                 -EtcdCaCert <path to ca cert file> (default not using TLS) `
+                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> `
                                  -DNSServerIPs <your DNS server IPs (default 10.96.0.10)>
    ```
 
@@ -130,19 +130,10 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Verify that the {{site.prodname}} services are running.
 
    ```powershell
-   PS C:\> Get-Service -Name CalicoNode
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  CalicoNode         Calico Windows Startup
-
-
-   PS C:\> Get-Service -Name CalicoFelix
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  CalicoFelix        Calico Windows Agent
+   Get-Service -Name CalicoNode
+   Get-Service -Name CalicoFelix
    ```
+
 1. Install and start kubelet/kube-proxy service. Execute following powershell script/commands.
 
    ```powershell
@@ -153,18 +144,8 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Verify kubelet/kube-proxy services are running.
 
    ```powershell
-   PS C:\> Get-Service -Name kubelet
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kubelet            kubelet service
-
-
-   PS C:\> Get-Service -Name kube-proxy
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kube-proxy         kube-proxy service
+   Get-Service -Name kubelet
+   Get-Service -Name kube-proxy
    ```
 
 %>
@@ -176,28 +157,28 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Install the RemoteAccess service using the following Powershell commands:
    
    ```powershell
-   PS C:\> Install-WindowsFeature RemoteAccess
-   PS C:\> Install-WindowsFeature RSAT-RemoteAccess-PowerShell
-   PS C:\> Install-WindowsFeature Routing
+   Install-WindowsFeature RemoteAccess
+   Install-WindowsFeature RSAT-RemoteAccess-PowerShell
+   Install-WindowsFeature Routing
    ```
    
    Then restart the computer:
    
    ```powershell
-   PS C:\> Restart-Computer -Force
+   Restart-Computer -Force
    ```
-   
+
    before running:
-   
+
    ```powershell
-   PS C:\> Install-RemoteAccess -VpnType RoutingOnly
+   Install-RemoteAccess -VpnType RoutingOnly
    ```
    Sometimes the remote access service fails to start automatically after install. To make sure it is running, execute the following command:
-   
+
    ```powershell
-   PS C:\> Start-Service RemoteAccess
+   Start-Service RemoteAccess
    ```
-  
+
 1. Prepare directory for Kubernetes files on Windows node.
 
    ```powershell
@@ -214,28 +195,28 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
    The powershell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
-   
+
    You do not need to pass a parameter if the default value of the parameter is correct for you cluster.
 
    **Kubernetes datastore (default)**
 
    ```powershell
-   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
-                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> `
+                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> `
                                  -DNSServerIPs <your DNS service IP (default 10.96.0.10)>
    ```
 
    **etcd datastore**
 
    ```powershell
-   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> \
-                                 -Datastore etcdv3
-                                 -EtcdEndpoints <your etcd endpoint ip>
-                                 -EtcdTlsSecretName <your etcd TLS secret name in calico-system namespace> (default no etcd TLS secret is used)
-                                 -EtcdKey <path to key file> (default not using TLS)
-                                 -EtcdCert <path to cert file> (default not using TLS)
-                                 -EtcdCaCert <path to ca cert file> (default not using TLS)
-                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+   c:\install-calico-windows.ps1 -KubeVersion <your Kubernetes version (e.g. 1.18.6)> `
+                                 -Datastore etcdv3 `
+                                 -EtcdEndpoints <your etcd endpoint ip> `
+                                 -EtcdTlsSecretName <your etcd TLS secret name in calico-system namespace> (default no etcd TLS secret is used) `
+                                 -EtcdKey <path to key file> (default not using TLS) `
+                                 -EtcdCert <path to cert file> (default not using TLS) `
+                                 -EtcdCaCert <path to ca cert file> (default not using TLS) `
+                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> `
                                  -DNSServerIPs <your DNS server IPs (default 10.96.0.10)>
    ```
 
@@ -246,19 +227,10 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Verify that the {{site.prodname}} services are running.
 
    ```powershell
-   PS C:\> Get-Service -Name CalicoNode
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  CalicoNode         Calico Windows Startup
-
-
-   PS C:\> Get-Service -Name CalicoFelix
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  CalicoFelix        Calico Windows Agent
+   Get-Service -Name CalicoNode
+   Get-Service -Name CalicoFelix
    ```
+
 1. Install and start kubelet/kube-proxy service. Execute following powershell script/commands.
 
    ```powershell
@@ -269,18 +241,8 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Verify kubelet/kube-proxy services are running.
 
    ```powershell
-   PS C:\> Get-Service -Name kubelet
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kubelet            kubelet service
-
-
-   PS C:\> Get-Service -Name kube-proxy
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kube-proxy         kube-proxy service
+   Get-Service -Name kubelet
+   Get-Service -Name kube-proxy
    ```
 
 %>
@@ -310,16 +272,16 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    **Kubernetes datastore (default)**
 
    ```powershell
-   c:\install-calico-windows.ps1 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+   c:\install-calico-windows.ps1 -ServiceCidr <your service cidr (default 10.96.0.0/12)> `
                                  -DNSServerIPs <your DNS service IP (default 10.96.0.10)>
    ```
 
    **etcd datastore**
 
    ```powershell
-   c:\install-calico-windows.ps1 -Datastore etcdv3
-                                 -EtcdEndpoints <your etcd endpoint ip>
-                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> \
+   c:\install-calico-windows.ps1 -Datastore etcdv3 `
+                                 -EtcdEndpoints <your etcd endpoint ip> `
+                                 -ServiceCidr <your service cidr (default 10.96.0.0/12)> `
                                  -DNSServerIPs <your DNS server IPs (default 10.96.0.10)>
    ```
 
@@ -330,37 +292,16 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Verify that the {{site.prodname}} services are running.
 
    ```powershell
-   PS C:\> Get-Service -Name CalicoNode
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  CalicoNode         Calico Windows Startup
-
-
-   PS C:\> Get-Service -Name CalicoFelix
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  CalicoFelix        Calico Windows Agent
+   Get-Service -Name CalicoNode
+   Get-Service -Name CalicoFelix
    ```
 
 1. Verify kubelet and kube-proxy services are running.
 
    ```powershell
-   PS C:\> Get-Service -Name kubelet
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kubelet            kubelet service
-
-
-   PS C:\> Get-Service -Name kube-proxy
-
-   Status   Name               DisplayName
-   ------   ----               -----------
-   Running  kube-proxy         kube-proxy service
+   Get-Service -Name kubelet
+   Get-Service -Name kube-proxy
    ```
-
 %>
 
   {% endtabs %}
