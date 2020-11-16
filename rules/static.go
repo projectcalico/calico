@@ -636,6 +636,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
 		},
 		Rule{
+			Match:  Match().NotConntrackState("DNAT"),
 			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
 		},
 		Rule{
