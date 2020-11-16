@@ -24,10 +24,12 @@ To learn more and see performance metrics from our test environment, see the blo
 
 eBPF mode currently has some limitations relative to the standard Linux pipeline mode:
 
+- eBPF mode only supports x86-64.  (The eBPF programs are not currently built for the other platforms.)
 - eBPF mode does not yet support IPv6.
 - eBPF mode does not yet support host endpoints, or, their associated policy types.
 - Switching to and from eBPF mode is disruptive to existing workload connections.  Workloads that do not detect and recover from connection loss may need to be restarted.
 - Hybrid clusters (with some eBPF nodes and some standard dataplane nodes) are not supported.  (In such a cluster, NodePort traffic from eBPF nodes to non-eBPF nodes will be dropped.)
+- eBPF mode does not support floating IPs. 
 
 ### Features
 
@@ -66,8 +68,9 @@ eBPF mode has the following pre-requisites:
   If you must use an overlay, we recommend that you use VXLAN, not IPIP.  This is because IPIP performs poorly with eBPF mode due 
   to technical limitations in the kernel.
   
-- The underlying network must be configured to allow VXLAN packets between {{site.prodname}} hosts.  In eBPF mode, 
-  VXLAN is used to forward traffic to Kubernetes NodePorts, while preserving source IP.
+- The underlying network must be configured to allow VXLAN packets between {{site.prodname}} hosts (even if you normally 
+  use IPIP or non-overlay for Calico traffic).  In eBPF mode, VXLAN is used to forward traffic to Kubernetes NodePorts, 
+  while preserving source IP.  eBPF mode honours the Felix `VXLANMTU` setting (see [Configuring MTU]({{ site.baseurl }}/networking/mtu)).
 - A stable way to address the Kubernetes API server. Since eBPF mode takes over from kube-proxy, {{site.prodname}} 
   needs a way to reach the API server directly.
 - The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
