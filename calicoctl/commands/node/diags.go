@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 	log "github.com/sirupsen/logrus"
 	shutil "github.com/termie/go-shutil"
 )

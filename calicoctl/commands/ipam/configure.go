@@ -22,9 +22,9 @@ import (
 
 	docopt "github.com/docopt/docopt-go"
 
-	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 )
 

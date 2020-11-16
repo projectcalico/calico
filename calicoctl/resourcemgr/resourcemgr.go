@@ -32,8 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 
-	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
-	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/argutils"
+	yamlsep "github.com/projectcalico/calicoctl/v3/calicoctl/util/yaml"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"

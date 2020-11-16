@@ -30,7 +30,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	gobgp "github.com/osrg/gobgp/client"
 	"github.com/osrg/gobgp/packet/bgp"
-	"github.com/projectcalico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 	"github.com/shirou/gopsutil/process"
 	log "github.com/sirupsen/logrus"
 )

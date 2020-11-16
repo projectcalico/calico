@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/calicoctl/calicoctl/commands/datastore/migrate"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/datastore/migrate"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"

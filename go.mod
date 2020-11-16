@@ -1,4 +1,4 @@
-module github.com/projectcalico/calicoctl
+module github.com/projectcalico/calicoctl/v3
 
 go 1.15
 

@@ -22,8 +22,8 @@ import (
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calicoctl/calicoctl/commands"
-	"github.com/projectcalico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/commands"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 )
 
 func main() {
