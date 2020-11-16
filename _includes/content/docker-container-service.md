@@ -12,7 +12,7 @@ This section describes how to run `{{site.nodecontainer}}` as a Docker container
 
 Use an init daemon (like systemd or upstart) to start the the {{site.nodecontainer}} image as a service using the EnvironmentFile values.
 
-Sample systemd service file: `{{site.noderunning}}.service` 
+Sample systemd service file: `{{site.noderunning}}.service`
 
 ```shell
 [Unit]
@@ -38,9 +38,10 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -e ETCD_KEY_FILE=${ETCD_KEY_FILE} \
  -e KUBECONFIG=${KUBECONFIG} \
  -v /var/log/calico:/var/log/calico \
+ -v /var/lib/calico:/var/lib/calico \
+ -v /var/run/calico:/var/run/calico \
  -v /run/docker/plugins:/run/docker/plugins \
  -v /lib/modules:/lib/modules \
- -v /var/run/calico:/var/run/calico \
  -v /etc/pki:/pki \
  {{page.registry}}{{page.imageNames["calico/node"]}}:{{site.data.versions.first.title}}
 
