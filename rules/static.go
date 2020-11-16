@@ -563,8 +563,8 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		// Divert those packets to a chain that handles them as we would if they had hit the FORWARD
 		// chain.
 		//
-		// We use a goto so that a RETURN from that chain will continue execution in the OUTPUT
-		// chain.
+		// We use a goto so that a RETURN from that chain will skip the rest of this chain
+		// and continue execution in the parent chain (OUTPUT).
 		rules = append(rules,
 			Rule{
 				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
@@ -768,6 +768,7 @@ func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*Chain 
 	chains = append(chains,
 		r.failsafeInChain("mangle"),
 		r.StaticManglePreroutingChain(ipVersion),
+		r.StaticManglePostroutingChain(ipVersion),
 	)
 
 	return chains
@@ -822,6 +823,15 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 
 	return &Chain{
 		Name:  ChainManglePrerouting,
+		Rules: rules,
+	}
+}
+
+func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Chain {
+	rules := []Rule{}
+
+	return &Chain{
+		Name:  ChainManglePostrouting,
 		Rules: rules,
 	}
 }
