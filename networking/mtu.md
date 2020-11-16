@@ -74,8 +74,7 @@ is used to set the MTUs of workloads (veths) and should be “physical network M
 **MTU for flannel networking**
 
 When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface.
-- If using flannel with WireGuard encryption, use the "{{site.prodname}} MTU with WireGuard" column in the table above for common sizes.
-- Otherwise, if using flannel with VXLAN, use the “{{site.prodname}} MTU with VXLAN” column in the table above for common sizes.
+- If using flannel with VXLAN, use the “{{site.prodname}} MTU with VXLAN” column in the table above for common sizes.
 
 #### Configure MTU
 
