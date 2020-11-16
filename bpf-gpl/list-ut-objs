@@ -60,3 +60,5 @@ for ep_type in $ep_types; do
     done
   done
 done
+
+echo "bin/test_from_hep_fib_no_log_skb0x0.o"
