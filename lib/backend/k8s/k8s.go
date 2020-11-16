@@ -217,6 +217,7 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 		variable *string
 		value    string
 	}{
+		{&configOverrides.CurrentContext, ca.K8sCurrentContext},
 		{&configOverrides.ClusterInfo.Server, ca.K8sAPIEndpoint},
 		{&configOverrides.AuthInfo.ClientCertificate, ca.K8sCertFile},
 		{&configOverrides.AuthInfo.ClientKey, ca.K8sKeyFile},

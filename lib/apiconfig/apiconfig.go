@@ -82,6 +82,8 @@ type KubeConfig struct {
 	KubeconfigInline string `json:"kubeconfigInline" ignored:"true"`
 	// K8sClientQPS overrides the QPS for the Kube client.
 	K8sClientQPS float32 `json:"k8sClientQPS"`
+	// K8sCurrentContext provides a context override for kubeconfig.
+	K8sCurrentContext string `json:"k8sCurrentContext" envconfig:"K8S_CURRENT_CONTEXT" default:""`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the
