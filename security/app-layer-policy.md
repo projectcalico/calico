@@ -46,7 +46,6 @@ See this [issue](https://github.com/projectcalico/calico/issues/2943){:target="_
 Following Istio versions have been verified to work with application layer policies:
 - Istio v1.7.4
 - Istio v1.6.13
-- Istio v1.4.2
 
 Istio v1.5.x is **not** supported.
 
@@ -85,9 +84,6 @@ Istio can be installed in both strict mode or permissive mode. Application layer
 
 Strict mode is strongly suggested when creating a new cluster. For example, to install Istio in strict mode:
 
-{% tabs %}
-<label:Istio v1.7.x or v1.6.x,active:true>
-<%
 ```bash
 ./bin/istioctl install --set values.global.controlPlaneSecurityEnabled=true
 ```
@@ -108,14 +104,6 @@ spec:
     mode: STRICT
 EOF
 ```
-%>
-<label:Istio v1.4.x or earlier>
-<%
-```bash
-./bin/istioctl manifest apply --set values.global.mtls.enabled=true --set values.global.controlPlaneSecurityEnabled=true
-```
-%>
-{% endtabs %}
 
 #### Update Istio sidecar injector
 
@@ -141,15 +129,6 @@ curl {{ "/manifests/alp/istio-inject-configmap-1.6.yaml" | absolute_url }} -o is
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 %>
-<label:Istio v1.4.x or earlier>
-<%
-```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.4.2.yaml" | absolute_url }} -o istio-inject-configmap.yaml
-kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
-```
-
-If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options).
-%>
 {% endtabs %}
 
 #### Add Calico authorization services to the mesh
@@ -168,12 +147,6 @@ kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-v1.7.yaml" | absolute
 <%
 ```bash
 kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-v1.6.yaml" | absolute_url }}
-```
-%>
-<label:Istio v1.4.x or earlier>
-<%
-```bash
-kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy.yaml" | absolute_url }}
 ```
 %>
 {% endtabs %}
