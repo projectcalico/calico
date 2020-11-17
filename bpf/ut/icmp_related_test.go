@@ -23,15 +23,24 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
 )
 
-var rulesAllowUDP = [][][]*proto.Rule{{{{
-	Action:   "Allow",
-	Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
-}}}}
+var rulesAllowUDP = polprog.Rules{
+	Tiers: []polprog.Tier{{
+		Name: "base tier",
+		Policies: []polprog.Policy{{
+			Name: "allow all udp",
+			Rules: []*proto.Rule{{
+				Action:   "Allow",
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+			}},
+		}},
+	}},
+}
 
 func TestICMPRelatedPlain(t *testing.T) {
 	RegisterTestingT(t)

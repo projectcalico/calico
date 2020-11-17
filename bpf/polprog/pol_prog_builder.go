@@ -103,7 +103,26 @@ var (
 	ipsKeyPad    int16 = 19
 )
 
-func (p *Builder) Instructions(rules [][][]*proto.Rule) (Insns, error) {
+type Rule = *proto.Rule
+
+type Policy struct {
+	Name  string
+	Rules []Rule
+}
+
+type Tier struct {
+	Name     string
+	Policies []Policy
+}
+
+type Rules struct {
+	Tiers    []Tier
+	Profiles []Profile
+}
+
+type Profile = Policy
+
+func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	p.b = NewBlock()
 	p.writeProgramHeader()
 	p.writeRules(rules)
@@ -207,27 +226,52 @@ func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset, ipOffset, portOffset 
 	p.b.StoreStack32(R1, keyOffset+ipsKeyID+4)
 }
 
-func (p *Builder) writeRules(rules [][][]*proto.Rule) {
-	for polOrProfIdx, polsOrProfs := range rules {
-		endOfTierLabel := fmt.Sprint("end_of_tier_", polOrProfIdx)
+func (p *Builder) writeRules(rules Rules) {
+	for idx, tier := range rules.Tiers {
+		endOfTierLabel := fmt.Sprint("end_of_tier_", idx)
 
-		log.Debugf("Start of policies or profiles %d", polOrProfIdx)
-		for polIdx, pol := range polsOrProfs {
-			log.Debugf("Start of policy/profile %d", polIdx)
-			for ruleIdx, rule := range pol {
-				log.Debugf("Start of rule %d", ruleIdx)
-				p.writeRule(rule, endOfTierLabel)
-				log.Debugf("End of rule %d", ruleIdx)
-			}
-			log.Debugf("End of policy/profile %d", polIdx)
+		log.Debugf("Start of policies %d", idx)
+		for polIdx, pol := range tier.Policies {
+			p.writePolicy(pol, polIdx, endOfTierLabel)
 		}
 
-		// End of polsOrProfs drop rule.
-		log.Debugf("End of policies/profiles drop")
+		log.Debugf("End of policies drop")
 		p.writeRule(&proto.Rule{Action: "deny"}, endOfTierLabel)
 
 		p.b.LabelNextInsn(endOfTierLabel)
 	}
+
+	endLabel := "end_of_profiles"
+
+	log.Debugf("Start of profiles")
+	for idx, prof := range rules.Profiles {
+		p.writeProfile(prof, idx, endLabel)
+	}
+
+	log.Debugf("End of profiles drop")
+	p.writeRule(&proto.Rule{Action: "deny"}, endLabel)
+
+	p.b.LabelNextInsn(endLabel)
+}
+
+func (p *Builder) writePolicyRules(policy Policy, idx int, endLabel string) {
+	for ruleIdx, rule := range policy.Rules {
+		log.Debugf("Start of rule %d", ruleIdx)
+		p.writeRule(rule, endLabel)
+		log.Debugf("End of rule %d", ruleIdx)
+	}
+}
+
+func (p *Builder) writePolicy(policy Policy, idx int, endLabel string) {
+	log.Debugf("Start of policy %q %d", policy.Name, idx)
+	p.writePolicyRules(policy, idx, endLabel)
+	log.Debugf("End of policy %q %d", policy.Name, idx)
+}
+
+func (p *Builder) writeProfile(profile Profile, idx int, endLabel string) {
+	log.Debugf("Start of profile %q %d", profile.Name, idx)
+	p.writePolicyRules(profile, idx, endLabel)
+	log.Debugf("End of profile %q %d", profile.Name, idx)
 }
 
 type matchLeg string
