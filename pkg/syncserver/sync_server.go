@@ -16,13 +16,13 @@ package syncserver
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -30,8 +30,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-
-	"math"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
@@ -291,9 +289,9 @@ func (s *Server) serve(cxt context.Context) {
 			}).WithError(tlsErr).Panic("Failed to load certificate and key")
 		}
 		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
-		tlsConfig.Rand = rand.Reader
-		// go 1.13 defaults to TLS13, which causes some test issues. Set it to TLS12 for now.
-		tlsConfig.MaxVersion = tls.VersionTLS12
+		// Typha API is a private binary API so we can enforce a recent TLS variant without
+		// worrying about back-compatibility with old browsers (for example).
+		tlsConfig.MinVersion = tls.VersionTLS12
 
 		// Arrange for server to verify the clients' certificates.
 		logCxt.Info("Will verify client certificates")
