@@ -516,7 +516,7 @@ func (t *Table) UpdateChain(chain *Chain) {
 
 	// Defensive: make sure we re-read the dataplane state before we make updates.  While the
 	// code was originally designed not to need this, we found that other users of
-	// iptables-restore can still clobber out updates so it's safest to re-read the state before
+	// iptables-restore can still clobber our updates so it's safest to re-read the state before
 	// each write.
 	t.InvalidateDataplaneCache("chain update")
 }
