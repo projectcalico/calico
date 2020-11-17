@@ -768,6 +768,7 @@ func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*Chain 
 
 	chains = append(chains,
 		r.failsafeInChain("mangle"),
+		r.failsafeOutChain("mangle"),
 		r.StaticManglePreroutingChain(ipVersion),
 		r.StaticManglePostroutingChain(ipVersion),
 	)
@@ -830,6 +831,22 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 
 func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Chain {
 	rules := []Rule{}
+
+	// Apply host endpoint policy.
+	rules = append(rules,
+		Rule{
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
+		},
+		Rule{
+			Match:  Match().ConntrackState("DNAT"),
+			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
+		},
+		Rule{
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
+			Action:  r.filterAllowAction,
+			Comment: []string{"Host endpoint policy accepted packet."},
+		},
+	)
 
 	return &Chain{
 		Name:  ChainManglePostrouting,

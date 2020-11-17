@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -477,7 +477,7 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-				Expect(renderer.HostEndpointToMangleChains(
+				Expect(renderer.HostEndpointToMangleIngressChains(
 					"eth0",
 					[]string{"c"},
 				)).To(Equal([]*Chain{
@@ -570,7 +570,7 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-				Expect(renderer.HostEndpointToMangleChains(
+				Expect(renderer.HostEndpointToMangleIngressChains(
 					"eth0",
 					[]string{"c"},
 				)).To(Equal([]*Chain{

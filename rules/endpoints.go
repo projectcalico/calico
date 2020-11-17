@@ -175,6 +175,31 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	return result
 }
 
+func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
+	ifaceName string,
+	egressPolicyNames []string,
+	profileIDs []string,
+) []*Chain {
+	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
+	return []*Chain{
+		// Chain for output traffic _to_ the endpoint.
+		r.endpointIptablesChain(
+			egressPolicyNames,
+			profileIDs,
+			ifaceName,
+			PolicyOutboundPfx,
+			ProfileOutboundPfx,
+			HostToEndpointPfx,
+			ChainFailsafeOut,
+			chainTypeNormal,
+			true, // Host endpoints are always admin up.
+			r.filterAllowAction,
+			alwaysAllowVXLANEncap,
+			alwaysAllowIPIPEncap,
+		),
+	}
+}
+
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
 	ingressPolicyNames []string,
@@ -215,7 +240,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	}
 }
 
-func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
+func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
 	preDNATPolicyNames []string,
 ) []*Chain {
