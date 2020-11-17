@@ -184,7 +184,7 @@ func (l *LivenessScanner) ScanEntry(ctKey Key, ctVal Value, get EntryGet) ScanVe
 			// entry does not exist now, we are not racing with the BPF code, we must have
 			// removed the entry or there is some external inconsistency. In either case, the
 			// FWD entry should be removed.
-			log.Info("Found a forward NAT conntrack entry with no reverse entry, removing...")
+			log.Debug("Found a forward NAT conntrack entry with no reverse entry, removing...")
 			return ScanVerdictDelete
 		} else if err != nil {
 			log.WithError(err).Warn("Failed to look up conntrack entry.")
