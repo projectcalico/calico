@@ -337,11 +337,18 @@ func (b allocationBlock) attributeRefCounts() map[int]int {
 func (b allocationBlock) attributeIndexesByHandle(handleID string) []int {
 	indexes := []int{}
 	for i, attr := range b.Attributes {
-		if attr.AttrPrimary != nil && *attr.AttrPrimary == handleID {
+		if attr.AttrPrimary != nil && sanitizeHandle(*attr.AttrPrimary) == handleID {
 			indexes = append(indexes, i)
 		}
 	}
 	return indexes
+}
+
+// sanitizeHandle fixes any improperly formatted handles that we might come across.
+// Malformed handles were written as part of host-local to Calico IPAM migration after
+// host-local IPAM changed its file format: https://github.com/projectcalico/cni-plugin/issues/821.
+func sanitizeHandle(handleID string) string {
+	return strings.Split(handleID, "\r")[0]
 }
 
 func (b *allocationBlock) releaseByHandle(handleID string) int {

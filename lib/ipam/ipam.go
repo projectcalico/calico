@@ -1321,6 +1321,7 @@ func (c ipamClient) IPsByHandle(ctx context.Context, handleID string) ([]net.IP,
 // ReleaseByHandle releases all IP addresses that have been assigned
 // using the provided handle.
 func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error {
+	handleID = sanitizeHandle(handleID)
 	log.Infof("Releasing all IPs with handle '%s'", handleID)
 	obj, err := c.blockReaderWriter.queryHandle(ctx, handleID, "")
 	if err != nil {
