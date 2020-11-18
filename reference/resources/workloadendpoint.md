@@ -80,7 +80,7 @@ spec:
 | orchestrator   | The orchestrator that created this endpoint.                  |                 | string                                 |
 | node           | The node where this endpoint resides.                         |                 | string                                 |
 | containerID    | The CNI CONTAINER_ID of the workload endpoint.                |                 | string                                 |
-| pod            | Kubernetes pod name for this woekload endpoint.               |                 | string                                 |
+| pod            | Kubernetes pod name for this workload endpoint.               |                 | string                                 |
 | endpoint       | Container network interface name.                             |                 | string                                 |
 | ipNetworks     | The CIDRs assigned to the interface.                          |                 | List of strings                        |
 | ipNATs         | List of 1:1 NAT mappings to apply to the endpoint.            |                 | List of [IPNATs](#ipnat)               |
