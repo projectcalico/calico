@@ -226,6 +226,7 @@ var _ = Describe("Static", func() {
 								// Outgoing host endpoint chains.
 								{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
 								{Action: JumpAction{Target: ChainCIDRBlock}},
+								{Action: SetMarkAction{Mark: 0x10}},
 							},
 						}))
 					})
@@ -1221,6 +1222,7 @@ var _ = Describe("Static", func() {
 						// Outgoing host endpoint chains.
 						{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
 						{Action: JumpAction{Target: ChainCIDRBlock}},
+						{Action: SetMarkAction{Mark: 0x10}},
 					},
 				}))
 			})
