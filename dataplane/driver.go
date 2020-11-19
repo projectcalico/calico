@@ -332,7 +332,10 @@ func StartDataplaneDriver(configParams *config.Config,
 					log.WithField("src-dst-check", check).Errorf("Failed to set source-destination-check: %v", err)
 					// set not-ready.
 					healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+					return
 				}
+				// set ready.
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 			}(configParams.AWSSrcDstCheck, healthName, healthAggregator)
 		}
 
