@@ -42,18 +42,24 @@ import (
 )
 
 type Workload struct {
-	C                *containers.Container
-	Name             string
-	InterfaceName    string
-	IP               string
-	Ports            string
-	DefaultPort      string
-	runCmd           *exec.Cmd
-	outPipe          io.ReadCloser
-	errPipe          io.ReadCloser
-	namespacePath    string
-	WorkloadEndpoint *api.WorkloadEndpoint
-	Protocol         string // "tcp" or "udp"
+	C                     *containers.Container
+	Name                  string
+	InterfaceName         string
+	IP                    string
+	Ports                 string
+	DefaultPort           string
+	runCmd                *exec.Cmd
+	outPipe               io.ReadCloser
+	errPipe               io.ReadCloser
+	namespacePath         string
+	WorkloadEndpoint      *api.WorkloadEndpoint
+	Protocol              string // "tcp" or "udp"
+	SpoofInterfaceName    string
+	SpoofName             string
+	SpoofWorkloadEndpoint *api.WorkloadEndpoint
+
+	pongLock     sync.Mutex
+	lastPongTime time.Time
 }
 
 var workloadIdx = 0
@@ -94,8 +100,11 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string) *Wo
 	workloadIdx++
 	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
 	interfaceName := conversion.NewConverter().VethNameForWorkload(profile, n)
+	spoofN := fmt.Sprintf("%s-spoof%v", name, workloadIdx)
+	spoofIfaceName := conversion.NewConverter().VethNameForWorkload(profile, spoofN)
 	if c.IP == ip {
 		interfaceName = ""
+		spoofIfaceName = ""
 	}
 	// Build unique workload name and struct.
 	workloadIdx++
@@ -115,13 +124,15 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string) *Wo
 	wep.Spec.Profiles = []string{profile}
 
 	return &Workload{
-		C:                c.Container,
-		Name:             n,
-		InterfaceName:    interfaceName,
-		IP:               ip,
-		Ports:            ports,
-		Protocol:         protocol,
-		WorkloadEndpoint: wep,
+		C:                  c.Container,
+		Name:               n,
+		SpoofName:          spoofN,
+		InterfaceName:      interfaceName,
+		SpoofInterfaceName: spoofIfaceName,
+		IP:                 ip,
+		Ports:              ports,
+		Protocol:           protocol,
+		WorkloadEndpoint:   wep,
 	}
 }
 
@@ -210,8 +221,51 @@ func (w *Workload) Start() error {
 	return nil
 }
 
+func (w *Workload) LastPongTime() time.Time {
+	w.pongLock.Lock()
+	defer w.pongLock.Unlock()
+	return w.lastPongTime
+}
+
+func (w *Workload) SinceLastPong() time.Duration {
+	return time.Since(w.LastPongTime())
+}
+
 func (w *Workload) IPNet() string {
 	return w.IP + "/32"
+}
+
+// AddSpoofInterface adds a second interface to the workload with name Workload.SpoofIfaceName and moves the
+// workload's IP to its loopback so that we can maintain a TCP connection while moving routes between the two
+// interfaces. From the host's point of view, this looks like one interface is trying to hijack the connection of
+// the other.
+func (w *Workload) AddSpoofInterface() {
+	// If the host container, add a new veth pair.
+	w.C.Exec("ip", "link", "add", "name", w.SpoofInterfaceName, "type", "veth", "peer", "name", "spoof0")
+	w.C.Exec("ip", "link", "set", w.SpoofInterfaceName, "addr", "ee:ee:ee:ee:ee:ee")
+	w.C.Exec("ip", "link", "set", "up", w.SpoofInterfaceName)
+	// Move one end of the veth into the workload netns.
+	w.C.Exec("ip", "link", "set", "spoof0", "netns", w.netns())
+	// In the workload netns, bring up the new interface and then move the IP to the loopback.
+	w.Exec("ip", "link", "set", "up", "spoof0")
+	w.Exec("ip", "addr", "del", w.IP, "dev", "eth0")
+	w.Exec("ip", "addr", "add", w.IP, "dev", "lo")
+	// Recreate the routes, which get removed when we remove the address.
+	w.Exec("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
+	w.Exec("ip", "route", "add", "default", "via", "169.254.169.254")
+	// Add static ARP entry, otherwise connections fail at the ARP stage because the host won't respond.
+	w.Exec("arp", "-i", "spoof0", "-s", "169.254.169.254", "ee:ee:ee:ee:ee:ee")
+}
+
+func (w *Workload) UseSpoofInterface(spoof bool) {
+	var iface string
+	if spoof {
+		iface = "spoof0"
+	} else {
+		iface = "eth0"
+	}
+	w.Exec("ip", "route", "replace", "169.254.169.254/32", "dev", iface)
+	w.Exec("ip", "route", "replace", "default", "via", "169.254.169.254", "dev", iface)
 }
 
 // Configure creates a workload endpoint in the datastore.
@@ -231,14 +285,54 @@ func (w *Workload) RemoveFromDatastore(client client.Interface) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
+// ConfigureInInfra creates the workload endpoint for this Workload.
 func (w *Workload) ConfigureInInfra(infra infrastructure.DatastoreInfra) {
 	wep := w.WorkloadEndpoint
 	wep.Namespace = "default"
+	wep.Spec.Workload = w.Name
+	wep.Spec.Endpoint = w.Name
+	wep.Spec.InterfaceName = w.InterfaceName
 	var err error
 	w.WorkloadEndpoint, err = infra.AddWorkload(wep)
 	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
 }
 
+// ConfigureInInfraAsSpoofInterface creates a valid workload endpoint for this Workload, using the spoof interface
+// added with AddSpoofInterface. After calling AddSpoofInterface(), UseSpoofInterface(true), and, this method,
+// connectivity should work because the workload and felix will agree on the interface that should be used.
+func (w *Workload) ConfigureInInfraAsSpoofInterface(infra infrastructure.DatastoreInfra) {
+	wep := w.WorkloadEndpoint.DeepCopy()
+	wep.Namespace = "default"
+	wep.Spec.Workload = w.SpoofName
+	wep.Spec.Endpoint = w.SpoofName
+	wep.Spec.InterfaceName = w.SpoofInterfaceName
+	var err error
+	w.SpoofWorkloadEndpoint, err = infra.AddWorkload(wep)
+	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
+}
+
+// ConfigureOtherWEPInInfraAsSpoofInterface creates a WEP for the spoof interface that does not match this Workload's
+// IP address.
+func (w *Workload) ConfigureOtherWEPInInfraAsSpoofInterface(infra infrastructure.DatastoreInfra) {
+	wep := w.WorkloadEndpoint.DeepCopy()
+	wep.Namespace = "default"
+	wep.Spec.Workload = w.SpoofName
+	wep.Spec.Endpoint = w.SpoofName
+	wep.Spec.InterfaceName = w.SpoofInterfaceName
+	wep.Spec.IPNetworks[0] = "1.2.3.4"
+	var err error
+	w.SpoofWorkloadEndpoint, err = infra.AddWorkload(wep)
+	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
+}
+
+// RemoveSpoofWEPFromInfra removes the spoof WEP created by ConfigureInInfraAsSpoofInterface or
+// ConfigureOtherWEPInInfraAsSpoofInterface.
+func (w *Workload) RemoveSpoofWEPFromInfra(infra infrastructure.DatastoreInfra) {
+	err := infra.RemoveWorkload(w.SpoofWorkloadEndpoint.Namespace, w.SpoofWorkloadEndpoint.Name)
+	Expect(err).NotTo(HaveOccurred(), "Failed to remove workload")
+}
+
+// RemoveFromInfra removes the WEP created by ConfigureInInfra.
 func (w *Workload) RemoveFromInfra(infra infrastructure.DatastoreInfra) {
 	err := infra.RemoveWorkload(w.WorkloadEndpoint.Namespace, w.WorkloadEndpoint.Name)
 	Expect(err).NotTo(HaveOccurred(), "Failed to remove workload")
@@ -273,6 +367,11 @@ func (w *Workload) Port(port uint16) *Port {
 func (w *Workload) NamespaceID() string {
 	splits := strings.Split(w.namespacePath, "/")
 	return splits[len(splits)-1]
+}
+
+func (w *Workload) Exec(args ...string) {
+	out, err := w.ExecCombinedOutput(args...)
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Exec of %v failed; output: %s", args, out))
 }
 
 func (w *Workload) ExecOutput(args ...string) (string, error) {
@@ -447,13 +546,18 @@ func (pc *PermanentConnection) stop() error {
 	return nil
 }
 
-func (w *Workload) StartPermanentConnection(ip string, port, sourcePort int) *PermanentConnection {
-	pc, err := startPermanentConnection(w, ip, port, sourcePort)
+type PermanentConnectionOpts struct {
+	SourcePort          int
+	MonitorConnectivity bool
+}
+
+func (w *Workload) StartPermanentConnection(ip string, port int, opts PermanentConnectionOpts) *PermanentConnection {
+	pc, err := w.startPermanentConnection(ip, port, opts.SourcePort, opts.MonitorConnectivity)
 	Expect(err).NotTo(HaveOccurred())
 	return pc
 }
 
-func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*PermanentConnection, error) {
+func (w *Workload) startPermanentConnection(ip string, port, sourcePort int, monitorConnectiivty bool) (*PermanentConnection, error) {
 	// Ensure that the host has the 'test-connection' binary.
 	w.C.EnsureBinary("test-connection")
 	permConnIdx++
@@ -465,8 +569,7 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 		return nil, err
 	}
 
-	runCmd := utils.Command(
-		"docker",
+	args := []string{
 		"exec",
 		w.C.Name,
 		"/test-connection",
@@ -476,11 +579,36 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 		fmt.Sprintf("--source-port=%d", sourcePort),
 		fmt.Sprintf("--protocol=%s", w.Protocol),
 		fmt.Sprintf("--loop-with-file=%s", loopFile),
+	}
+	if monitorConnectiivty {
+		args = append(args, "--log-pongs")
+	}
+	runCmd := utils.Command(
+		"docker",
+		args...,
 	)
 	logName := fmt.Sprintf("permanent connection %s", n)
-	if err := utils.LogOutput(runCmd, logName); err != nil {
+	stdout, err := runCmd.StdoutPipe()
+	if err != nil {
 		return nil, fmt.Errorf("failed to start output logging for %s", logName)
 	}
+	stdoutReader := bufio.NewReader(stdout)
+	go func() {
+		for {
+			line, err := stdoutReader.ReadString('\n')
+			if err != nil {
+				log.WithError(err).Info("End of permanent connection stdout")
+				return
+			}
+			line = strings.TrimSpace(string(line))
+			log.Infof("%s stdout: %s", logName, line)
+			if line == "PONG" {
+				w.pongLock.Lock()
+				w.lastPongTime = time.Now()
+				w.pongLock.Unlock()
+			}
+		}
+	}()
 	if err := runCmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start a permanent connection: %v", err)
 	}

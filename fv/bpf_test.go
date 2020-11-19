@@ -927,195 +927,306 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity()
 				})
 
-				It("should not be able to spoof IP", func() {
-					if testOpts.protocol != "udp" {
-						return
-					}
+				// Test doesn't use services so ignore the runs with those turned on.
+				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
+					It("should not be able to spoof TCP", func() {
+						// Make sure the workload is up and has configured its routes.
+						By("Having basic connectivity")
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
 
-					By("allowing any traffic", func() {
-						pol.Spec.Ingress = []api.Rule{
-							{
-								Action: "Allow",
-								Source: api.EntityRule{
-									Nets: []string{
-										"0.0.0.0/0",
+						// Add a second interface to the workload, this will allow us to adjust the routes
+						// inside the workload to move connections from one interface to the other.
+						By("Having basic connectivity after setting up the spoof interface")
+						w[0][0].AddSpoofInterface()
+						// Check that the route manipulation succeeded.
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						// PHASE 1: basic single-shot connectivity checks to check that the test infra
+						// is basically doing what we want.  I.e. if felix and the workload disagree on
+						// interface then new connections get dropped.
+
+						// Switch routes to use the spoofed interface, should fail.
+						By("Workload using spoof0, felix expecting eth0, should fail")
+						w[0][0].UseSpoofInterface(true)
+						cc.Expect(None, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						By("Workload using spoof0, felix expecting spoof0, should succeed")
+						w[0][0].RemoveFromInfra(infra)
+						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						By("Both back to eth0, should succeed")
+						w[0][0].RemoveSpoofWEPFromInfra(infra)
+						w[0][0].ConfigureInInfra(infra)
+						w[0][0].UseSpoofInterface(false)
+						cc.Expect(Some, w[0][0], w[1][0])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						// PHASE 2: keep a connection up and move it from one interface to the other using the pod's
+						// routes.  To the host this looks like one workload is spoofing the other.
+						By("Starting permanent connection")
+						pc := w[0][0].StartPermanentConnection(w[1][0].IP, 8055, workload.PermanentConnectionOpts{
+							MonitorConnectivity: true,
+						})
+						defer pc.Stop()
+
+						expectPongs := func() {
+							EventuallyWithOffset(1, w[0][0].SinceLastPong, "5s").Should(
+								BeNumerically("<", time.Second),
+								"Expected to see pong responses on the connection but didn't receive any")
+							log.Info("Pongs received within last 1s")
+						}
+						expectNoPongs := func() {
+							EventuallyWithOffset(1, w[0][0].SinceLastPong, "5s").Should(
+								BeNumerically(">", time.Second),
+								"Expected to see pong responses stop but continued to receive them")
+							log.Info("No pongs received for >1s")
+						}
+
+						// Simulate a second WEP for the spoof interface.
+						w[0][0].ConfigureOtherWEPInInfraAsSpoofInterface(infra)
+
+						// Should get some pongs to start with...
+						By("Should get pongs to start with")
+						expectPongs()
+
+						// Switch the route, should start dropping packets.
+						w[0][0].UseSpoofInterface(true)
+						By("Should no longer get pongs when using the spoof interface")
+						expectNoPongs()
+
+						// Switch the route back, should work.
+						w[0][0].UseSpoofInterface(false)
+						By("Should get pongs again after switching back")
+						expectPongs()
+
+						// Switch the route, should start dropping packets.
+						w[0][0].UseSpoofInterface(true)
+						By("Should no longer get pongs when using the spoof interface")
+						expectNoPongs()
+
+						// Move WEP to spoof interface
+						w[0][0].RemoveFromInfra(infra)
+						w[0][0].RemoveSpoofWEPFromInfra(infra)
+						w[0][0].ConfigureInInfraAsSpoofInterface(infra)
+						By("Should get pongs again after switching WEP to spoof iface")
+						expectPongs()
+					})
+				}
+
+				// Test doesn't use services so ignore the runs with those turned on.
+				if testOpts.protocol == "udp" && !testOpts.connTimeEnabled && !testOpts.dsr {
+					It("should not be able to spoof UDP", func() {
+						By("allowing any traffic", func() {
+							pol.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Nets: []string{
+											"0.0.0.0/0",
+										},
 									},
 								},
-							},
-						}
-						pol = updatePolicy(pol)
+							}
+							pol = updatePolicy(pol)
 
-						cc.ExpectSome(w[1][0], w[0][0])
-						cc.ExpectSome(w[1][1], w[0][0])
-						cc.CheckConnectivity()
-					})
+							cc.ExpectSome(w[1][0], w[0][0])
+							cc.ExpectSome(w[1][1], w[0][0])
+							cc.CheckConnectivity()
+						})
 
-					By("testing that packet sent by another workload is dropped", func() {
-						tcpdump := w[0][0].AttachTCPDump()
-						tcpdump.SetLogEnabled(true)
-						matcher := fmt.Sprintf("IP %s\\.30444 > %s\\.30444: UDP", w[1][0].IP, w[0][0].IP)
-						tcpdump.AddMatcher("UDP-30444", regexp.MustCompile(matcher))
-						tcpdump.Start(testOpts.protocol, "port", "30444", "or", "port", "30445")
-						defer tcpdump.Stop()
+						By("testing that packet sent by another workload is dropped", func() {
+							tcpdump := w[0][0].AttachTCPDump()
+							tcpdump.SetLogEnabled(true)
+							matcher := fmt.Sprintf("IP %s\\.30444 > %s\\.30444: UDP", w[1][0].IP, w[0][0].IP)
+							tcpdump.AddMatcher("UDP-30444", regexp.MustCompile(matcher))
+							tcpdump.Start(testOpts.protocol, "port", "30444", "or", "port", "30445")
+							defer tcpdump.Stop()
 
-						// send a packet from the correct workload to create a conntrack entry
-						_, err := w[1][0].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
-							"--port-src", "30444", "--port-dst", "30444")
-						Expect(err).NotTo(HaveOccurred())
+							// send a packet from the correct workload to create a conntrack entry
+							_, err := w[1][0].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+								"--port-src", "30444", "--port-dst", "30444")
+							Expect(err).NotTo(HaveOccurred())
 
-						// We must eventually see the packet at the target
-						Eventually(func() int { return tcpdump.MatchCount("UDP-30444") }).
-							Should(BeNumerically("==", 1), matcher)
+							// We must eventually see the packet at the target
+							Eventually(func() int { return tcpdump.MatchCount("UDP-30444") }).
+								Should(BeNumerically("==", 1), matcher)
 
-						// Send a spoofed packet from a different pod. Since we hit the
-						// conntrack we would not do the WEP only RPF check.
-						_, err = w[1][1].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
-							"--port-src", "30444", "--port-dst", "30444")
-						Expect(err).NotTo(HaveOccurred())
+							// Send a spoofed packet from a different pod. Since we hit the
+							// conntrack we would not do the WEP only RPF check.
+							_, err = w[1][1].RunCmd("/pktgen", w[1][0].IP, w[0][0].IP, "udp",
+								"--port-src", "30444", "--port-dst", "30444")
+							Expect(err).NotTo(HaveOccurred())
 
-						// Since the packet will get dropped, we would not see it at the dest.
-						// So we send another good packet from the spoofing workload, that we
-						// will see at the dest.
-						matcher2 := fmt.Sprintf("IP %s\\.30445 > %s\\.30445: UDP", w[1][1].IP, w[0][0].IP)
-						tcpdump.AddMatcher("UDP-30445", regexp.MustCompile(matcher2))
+							// Since the packet will get dropped, we would not see it at the dest.
+							// So we send another good packet from the spoofing workload, that we
+							// will see at the dest.
+							matcher2 := fmt.Sprintf("IP %s\\.30445 > %s\\.30445: UDP", w[1][1].IP, w[0][0].IP)
+							tcpdump.AddMatcher("UDP-30445", regexp.MustCompile(matcher2))
 
-						_, err = w[1][1].RunCmd("/pktgen", w[1][1].IP, w[0][0].IP, "udp",
-							"--port-src", "30445", "--port-dst", "30445")
-						Expect(err).NotTo(HaveOccurred())
+							_, err = w[1][1].RunCmd("/pktgen", w[1][1].IP, w[0][0].IP, "udp",
+								"--port-src", "30445", "--port-dst", "30445")
+							Expect(err).NotTo(HaveOccurred())
 
-						// Wait for the good packet from the bad workload
-						Eventually(func() int { return tcpdump.MatchCount("UDP-30445") }).
-							Should(BeNumerically("==", 1), matcher2)
+							// Wait for the good packet from the bad workload
+							Eventually(func() int { return tcpdump.MatchCount("UDP-30445") }).
+								Should(BeNumerically("==", 1), matcher2)
 
-						// Check that we have not seen the spoofed packet. If there was not
-						// packet reordering, which in out setup is guaranteed not to happen,
-						// we know that the spoofed packet was dropped.
-						Expect(tcpdump.MatchCount("UDP-30444")).To(BeNumerically("==", 1), matcher)
-					})
+							// Check that we have not seen the spoofed packet. If there was not
+							// packet reordering, which in our setup is guaranteed not to happen,
+							// we know that the spoofed packet was dropped.
+							Expect(tcpdump.MatchCount("UDP-30444")).To(BeNumerically("==", 1), matcher)
+						})
 
-					var eth20, eth30 *workload.Workload
+						var eth20, eth30 *workload.Workload
 
-					defer func() {
-						if eth20 != nil {
-							eth20.Stop()
-						}
-						if eth30 != nil {
-							eth30.Stop()
-						}
-					}()
+						defer func() {
+							if eth20 != nil {
+								eth20.Stop()
+							}
+							if eth30 != nil {
+								eth30.Stop()
+							}
+						}()
 
-					fakeWorkloadIP := "10.65.15.15"
-
-					By("setting up node's fake external ifaces", func() {
-						// We name the ifaces ethXY since such ifaces are
-						// treated by felix as external to the node
+						// Now, set up a topology that mimics two host NICs by creating one workload per fake NIC.
+						// We then move a route between the two NICs to pretend that there's a workload behind
+						// one or other of them.
 						//
-						// Using a test-workload creates the namespaces and the
-						// interfaces to emulate the host NICs
-
-						eth20 = &workload.Workload{
-							Name:          "eth20",
-							C:             felixes[1].Container,
-							IP:            "192.168.20.1",
-							Ports:         "57005", // 0xdead
-							Protocol:      testOpts.protocol,
-							InterfaceName: "eth20",
-						}
-						eth20.Start()
-
-						// assign address to eth20 and add route to the .20 network
-						felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
-						felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
-						_, err := eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
-						Expect(err).NotTo(HaveOccurred())
-						// Add a route to the test workload to the fake external
-						// client emulated by the test-workload
-						_, err = eth20.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.20")
-						Expect(err).NotTo(HaveOccurred())
-
-						eth30 = &workload.Workload{
-							Name:          "eth30",
-							C:             felixes[1].Container,
-							IP:            "192.168.30.1",
-							Ports:         "57005", // 0xdead
-							Protocol:      testOpts.protocol,
-							InterfaceName: "eth30",
-						}
-						eth30.Start()
-
-						// assign address to eth30 and add route to the .30 network
-						felixes[1].Exec("ip", "route", "add", "192.168.30.0/24", "dev", "eth30")
-						felixes[1].Exec("ip", "addr", "add", "10.0.0.30/32", "dev", "eth30")
-						_, err = eth30.RunCmd("ip", "route", "add", "10.0.0.30/32", "dev", "eth0")
-						Expect(err).NotTo(HaveOccurred())
-						// Add a route to the test workload to the fake external
-						// client emulated by the test-workload
-						_, err = eth30.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.30")
-						Expect(err).NotTo(HaveOccurred())
-
-						// Make sure that networking with the .20 and .30 networks works
-						cc.ResetExpectations()
-						cc.ExpectSome(w[1][1], TargetIP(eth20.IP), 0xdead)
-						cc.ExpectSome(w[1][1], TargetIP(eth30.IP), 0xdead)
-						cc.CheckConnectivity()
-					})
-
-					By("testing that external traffic updates the RPF check if routing changes", func() {
-						// set the route to the fake workload to .20 network
-						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth20")
-
-						tcpdump := w[1][1].AttachTCPDump()
-						tcpdump.SetLogEnabled(true)
-						matcher := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w[1][1].IP)
-						tcpdump.AddMatcher("UDP-30446", regexp.MustCompile(matcher))
-						tcpdump.Start()
-						defer tcpdump.Stop()
-
-						_, err := eth20.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
-							"--port-src", "30446", "--port-dst", "30446")
-						Expect(err).NotTo(HaveOccurred())
-
-						// Expect to receive the packet from the .20 as the routing is correct
-						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
-							Should(BeNumerically("==", 1), matcher)
-
-						ctBefore := dumpCTMap(felixes[1])
-
-						k := conntrack.NewKey(17, net.ParseIP(w[1][1].IP).To4(), 30446,
-							net.ParseIP(fakeWorkloadIP).To4(), 30446)
-						Expect(ctBefore).To(HaveKey(k))
-
-						// XXX Since the same code is used to do the drop of spoofed
-						// packet between pods, we do not repeat it here as it is not 100%
-						// bulletproof.
+						//      eth20 = workload used as a NIC
+						//         - eth20 ------ movable fake workload 10.65.15.15
+						//       192.168.20.1
+						//       /
+						//    10.0.0.20
+						// Felix
+						//    10.0.0.30
+						//       \
+						//       192.168.30.1
+						//         - eth30 ------ movable fake workload 10.65.15.15
+						//      eth30 = workload used as a NIC
 						//
-						// We should perhaps compare the iptables counter and see if the
-						// packet was dropped by the RPF check.
+						fakeWorkloadIP := "10.65.15.15"
 
-						// Change the routing to be from the .30
-						felixes[1].Exec("ip", "route", "del", fakeWorkloadIP+"/32", "dev", "eth20")
-						felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth30")
+						By("setting up node's fake external ifaces", func() {
+							// We name the ifaces ethXY since such ifaces are
+							// treated by felix as external to the node
+							//
+							// Using a test-workload creates the namespaces and the
+							// interfaces to emulate the host NICs
 
-						_, err = eth30.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
-							"--port-src", "30446", "--port-dst", "30446")
-						Expect(err).NotTo(HaveOccurred())
+							eth20 = &workload.Workload{
+								Name:          "eth20",
+								C:             felixes[1].Container,
+								IP:            "192.168.20.1",
+								Ports:         "57005", // 0xdead
+								Protocol:      testOpts.protocol,
+								InterfaceName: "eth20",
+							}
+							err := eth20.Start()
+							Expect(err).NotTo(HaveOccurred())
 
-						// Expect the packet from the .30 to make it through as RPF will
-						// allow it and we will update the expected interface
-						Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
-							Should(BeNumerically("==", 2), matcher)
+							// assign address to eth20 and add route to the .20 network
+							felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
+							felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
+							_, err = eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+							Expect(err).NotTo(HaveOccurred())
+							// Add a route to the test workload to the fake external
+							// client emulated by the test-workload
+							_, err = eth20.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.20")
+							Expect(err).NotTo(HaveOccurred())
 
-						ctAfter := dumpCTMap(felixes[1])
-						Expect(ctAfter).To(HaveKey(k))
+							eth30 = &workload.Workload{
+								Name:          "eth30",
+								C:             felixes[1].Container,
+								IP:            "192.168.30.1",
+								Ports:         "57005", // 0xdead
+								Protocol:      testOpts.protocol,
+								InterfaceName: "eth30",
+							}
+							err = eth30.Start()
+							Expect(err).NotTo(HaveOccurred())
 
-						// Ifindex must have changed
-						// B2A because of IPA > IPB - deterministic
-						Expect(ctBefore[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
-						Expect(ctAfter[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
-						Expect(ctBefore[k].Data().B2A.Ifindex).
-							NotTo(BeNumerically("==", ctAfter[k].Data().B2A.Ifindex))
+							// assign address to eth30 and add route to the .30 network
+							felixes[1].Exec("ip", "route", "add", "192.168.30.0/24", "dev", "eth30")
+							felixes[1].Exec("ip", "addr", "add", "10.0.0.30/32", "dev", "eth30")
+							_, err = eth30.RunCmd("ip", "route", "add", "10.0.0.30/32", "dev", "eth0")
+							Expect(err).NotTo(HaveOccurred())
+							// Add a route to the test workload to the fake external
+							// client emulated by the test-workload
+							_, err = eth30.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.30")
+							Expect(err).NotTo(HaveOccurred())
+
+							// Make sure that networking with the .20 and .30 networks works
+							cc.ResetExpectations()
+							cc.ExpectSome(w[1][1], TargetIP(eth20.IP), 0xdead)
+							cc.ExpectSome(w[1][1], TargetIP(eth30.IP), 0xdead)
+							cc.CheckConnectivity()
+						})
+
+						By("testing that external traffic updates the RPF check if routing changes", func() {
+							// set the route to the fake workload to .20 network
+							felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth20")
+
+							tcpdump := w[1][1].AttachTCPDump()
+							tcpdump.SetLogEnabled(true)
+							matcher := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w[1][1].IP)
+							tcpdump.AddMatcher("UDP-30446", regexp.MustCompile(matcher))
+							tcpdump.Start()
+							defer tcpdump.Stop()
+
+							_, err := eth20.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+								"--port-src", "30446", "--port-dst", "30446")
+							Expect(err).NotTo(HaveOccurred())
+
+							// Expect to receive the packet from the .20 as the routing is correct
+							Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
+								Should(BeNumerically("==", 1), matcher)
+
+							ctBefore := dumpCTMap(felixes[1])
+
+							k := conntrack.NewKey(17, net.ParseIP(w[1][1].IP).To4(), 30446,
+								net.ParseIP(fakeWorkloadIP).To4(), 30446)
+							Expect(ctBefore).To(HaveKey(k))
+
+							// XXX Since the same code is used to do the drop of spoofed
+							// packet between pods, we do not repeat it here as it is not 100%
+							// bulletproof.
+							//
+							// We should perhaps compare the iptables counter and see if the
+							// packet was dropped by the RPF check.
+
+							// Change the routing to be from the .30
+							felixes[1].Exec("ip", "route", "del", fakeWorkloadIP+"/32", "dev", "eth20")
+							felixes[1].Exec("ip", "route", "add", fakeWorkloadIP+"/32", "dev", "eth30")
+
+							_, err = eth30.RunCmd("/pktgen", fakeWorkloadIP, w[1][1].IP, "udp",
+								"--port-src", "30446", "--port-dst", "30446")
+							Expect(err).NotTo(HaveOccurred())
+
+							// Expect the packet from the .30 to make it through as RPF will
+							// allow it and we will update the expected interface
+							Eventually(func() int { return tcpdump.MatchCount("UDP-30446") }).
+								Should(BeNumerically("==", 2), matcher)
+
+							ctAfter := dumpCTMap(felixes[1])
+							Expect(ctAfter).To(HaveKey(k))
+
+							// Ifindex must have changed
+							// B2A because of IPA > IPB - deterministic
+							Expect(ctBefore[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
+							Expect(ctAfter[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
+							Expect(ctBefore[k].Data().B2A.Ifindex).
+								NotTo(BeNumerically("==", ctAfter[k].Data().B2A.Ifindex))
+						})
 					})
-				})
+				}
 
 				Describe("Test Load balancer service with external IP", func() {
 					if testOpts.connTimeEnabled {

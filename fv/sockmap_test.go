@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -340,7 +340,9 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		}
 		side := host.StartSideService()
 		defer side.Stop()
-		pc := host.StartPermanentConnection("1.1.1.1", 80, srcPort)
+		pc := host.StartPermanentConnection("1.1.1.1", 80, workload.PermanentConnectionOpts{
+			SourcePort: srcPort,
+		})
 		defer pc.Stop()
 		expectedKeys := getExpectedSockmapKeys(ip, srcPort)
 		Eventually(func() [][]string {

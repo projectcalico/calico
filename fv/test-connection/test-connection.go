@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net"
 	"os"
@@ -43,7 +44,7 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs]
 
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
@@ -51,6 +52,7 @@ Options:
   --protocol=<protocol>  Protocol to test tcp (default), udp (connected) udp-noconn (unconnected).
   --duration=<seconds>   Total seconds test should run. 0 means run a one off connectivity check. Non-Zero means packets loss test.[default: 0]
   --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
+  --log-pongs  Whether to log every response
   --debug Enable debug logging
   --sendlen=<bytes> How many additional bytes to send
   --recvlen=<bytes> Tell the other side to send this many additional bytes
@@ -98,8 +100,8 @@ func main() {
 		log.Debug("Debug logging enabled")
 	}
 
-	sendLenStr := arguments["--sendlen"].(string)
-	recvLenStr := arguments["--recvlen"].(string)
+	sendLenStr, _ := arguments["--sendlen"].(string)
+	recvLenStr, _ := arguments["--recvlen"].(string)
 
 	sendLen := 0
 	if sendLenStr != "" {
@@ -129,8 +131,14 @@ func main() {
 		loopFile = arg.(string)
 	}
 
-	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v max duration %d seconds",
-		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds)
+	logPongs, err := arguments.Bool("--log-pongs")
+	if err != nil {
+		log.WithError(err).Fatal("Invalid --log-pongs")
+	}
+
+	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v "+
+		"max duration %d seconds, logging pongs (%v)",
+		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds, logPongs)
 
 	if loopFile == "" {
 		// I found that configuring the timeouts on all the network calls was a bit fiddly.  Since
@@ -148,7 +156,7 @@ func main() {
 		// Test connection from wherever we are already running.
 		if err == nil {
 			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen)
+				seconds, loopFile, sendLen, recvLen, logPongs)
 		}
 	} else {
 		// Get the specified network namespace (representing a workload).
@@ -167,7 +175,7 @@ func main() {
 				return e
 			}
 			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen)
+				seconds, loopFile, sendLen, recvLen, logPongs)
 		})
 	}
 
@@ -303,7 +311,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 }
 
 func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol string,
-	seconds int, loopFile string, sendLen, recvLen int) error {
+	seconds int, loopFile string, sendLen, recvLen int, logPongs bool) error {
 
 	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
 		time.Duration(seconds)*time.Second, sendLen, recvLen)
@@ -330,7 +338,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	}
 
 	if loopFile != "" {
-		return tc.tryLoopFile(loopFile)
+		return tc.tryLoopFile(loopFile, logPongs)
 	}
 
 	if tc.config.ConnType == connectivity.ConnectionTypePing {
@@ -348,7 +356,7 @@ func (tc *testConn) GetTestMessage(sequence int) connectivity.Request {
 	return req
 }
 
-func (tc *testConn) tryLoopFile(loopFile string) error {
+func (tc *testConn) tryLoopFile(loopFile string, logPongs bool) error {
 	req := tc.GetTestMessage(0)
 	msg, err := json.Marshal(req)
 	if err != nil {
@@ -366,6 +374,9 @@ func (tc *testConn) tryLoopFile(loopFile string) error {
 		respRaw, err := tc.protocol.Receive()
 		if err != nil {
 			log.WithError(err).Fatal("Failed to receive")
+		}
+		if logPongs {
+			fmt.Println("PONG")
 		}
 
 		var resp connectivity.Response
@@ -888,6 +899,10 @@ func (d *connectedTCP) Send(msg []byte) error {
 }
 
 func (d *connectedTCP) Receive() ([]byte, error) {
+	err := d.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		return nil, err
+	}
 	return d.r.ReadSlice('\n')
 }
 
