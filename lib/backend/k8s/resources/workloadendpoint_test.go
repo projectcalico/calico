@@ -42,6 +42,8 @@ import (
 )
 
 var _ = Describe("WorkloadEndpointClient", func() {
+	ctx := context.Background()
+
 	Describe("Create", func() {
 		Context("WorkloadEndpoint has no IPs set", func() {
 			It("does not set the cni.projectcalico.org/podIP and cni.projectcalico.org/podIPs annotations", func() {
@@ -88,7 +90,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				_, err = wepClient.Create(context.Background(), kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
-				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get("simplePod", metav1.GetOptions{})
+				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(BeNil())
 			})
@@ -137,7 +139,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				_, err = wepClient.Create(context.Background(), kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
-				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get("simplePod", metav1.GetOptions{})
+				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
 					conversion.AnnotationPodIP:  "192.168.91.117/32",
@@ -191,7 +193,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				_, err = wepClient.Update(context.Background(), kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
-				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get("simplePod", metav1.GetOptions{})
+				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(BeNil())
 			})
@@ -240,7 +242,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				_, err = wepClient.Update(context.Background(), kvp)
 				Expect(err).ShouldNot(HaveOccurred())
 
-				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get("simplePod", metav1.GetOptions{})
+				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
 					conversion.AnnotationPodIP:  "192.168.91.117/32",
@@ -304,7 +306,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				By("Accepting requests with the right UID.")
 				_, err = wepClient.Delete(context.Background(), key, wep.Revision, wep.UID)
 				Expect(err).ShouldNot(HaveOccurred())
-				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get("simplePod", metav1.GetOptions{})
+				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
 					conversion.AnnotationPodIP:  "",
@@ -753,6 +755,7 @@ func testListWorkloadEndpoints(pods []runtime.Object, listOptions model.Resource
 
 func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*apiv3.WorkloadEndpoint) {
 	k8sClient := fake.NewSimpleClientset()
+	ctx := context.Background()
 
 	wepClient := resources.NewWorkloadEndpointClient(k8sClient).(*resources.WorkloadEndpointClient)
 	wepWatcher, err := wepClient.Watch(context.Background(), model.ResourceListOptions{}, "")
@@ -787,7 +790,7 @@ func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*apiv3.Worklo
 	}()
 
 	for _, pod := range pods {
-		_, err = k8sClient.CoreV1().Pods(pod.Namespace).Create(pod)
+		_, err = k8sClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 		Expect(err).ShouldNot(HaveOccurred())
 	}
 

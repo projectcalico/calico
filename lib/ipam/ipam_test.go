@@ -2320,13 +2320,13 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 		n.Labels = labels
 
 		// Create/Update the node
-		newNode, err := kc.CoreV1().Nodes().Create(&n)
+		newNode, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
-				oldNode, _ := kc.CoreV1().Nodes().Get(host, metav1.GetOptions{})
+				oldNode, _ := kc.CoreV1().Nodes().Get(context.Background(), host, metav1.GetOptions{})
 				oldNode.Labels = labels
 
-				newNode, err = kc.CoreV1().Nodes().Update(oldNode)
+				newNode, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
 				if err != nil {
 					return nil
 				}
@@ -2355,7 +2355,7 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 
 func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 	if kc != nil {
-		kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
+		kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
 	} else {
 		c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: v3.KindNode}, "")
 	}

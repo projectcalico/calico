@@ -93,7 +93,7 @@ func (c *profileClient) getServiceAccount(ctx context.Context, rk model.Resource
 		return nil, err
 	}
 
-	serviceAccount, err := c.clientSet.CoreV1().ServiceAccounts(namespace).Get(serviceAccountName, metav1.GetOptions{ResourceVersion: revision})
+	serviceAccount, err := c.clientSet.CoreV1().ServiceAccounts(namespace).Get(ctx, serviceAccountName, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, rk)
 	}
@@ -116,7 +116,7 @@ func (c *profileClient) getNamespace(ctx context.Context, rk model.ResourceKey, 
 		return nil, err
 	}
 
-	namespace, err := c.clientSet.CoreV1().Namespaces().Get(namespaceName, metav1.GetOptions{ResourceVersion: revision})
+	namespace, err := c.clientSet.CoreV1().Namespaces().Get(ctx, namespaceName, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, rk)
 	}
@@ -189,7 +189,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 	}
 
 	// Otherwise, enumerate all.
-	namespaces, err := c.clientSet.CoreV1().Namespaces().List(metav1.ListOptions{ResourceVersion: nsRev})
+	namespaces, err := c.clientSet.CoreV1().Namespaces().List(ctx, metav1.ListOptions{ResourceVersion: nsRev})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, nl)
 	}
@@ -207,7 +207,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 	// Enumerate all SA
 	var serviceaccounts *kapiv1.ServiceAccountList
 	// TBD: narrow down to only to the required namespace
-	serviceaccounts, err = c.clientSet.CoreV1().ServiceAccounts(kapiv1.NamespaceAll).List(metav1.ListOptions{ResourceVersion: saRev})
+	serviceaccounts, err = c.clientSet.CoreV1().ServiceAccounts(kapiv1.NamespaceAll).List(ctx, metav1.ListOptions{ResourceVersion: saRev})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, nl)
 	}
@@ -283,7 +283,7 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 	var nsWatch kwatch.Interface = kwatch.NewFake()
 	if watchNS {
 		log.Debugf("Watching namespace at revision %q", nsRev)
-		nsWatch, err = c.clientSet.CoreV1().Namespaces().Watch(opts)
+		nsWatch, err = c.clientSet.CoreV1().Namespaces().Watch(ctx, opts)
 		if err != nil {
 			return nil, K8sErrorToCalico(err, list)
 		}
@@ -302,7 +302,7 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 	var saWatch kwatch.Interface = kwatch.NewFake()
 	if watchSA {
 		log.Debugf("Watching serviceAccount at revision %q", saRev)
-		saWatch, err = c.clientSet.CoreV1().ServiceAccounts(ns).Watch(opts)
+		saWatch, err = c.clientSet.CoreV1().ServiceAccounts(ns).Watch(ctx, opts)
 		if err != nil {
 			nsWatch.Stop()
 			return nil, K8sErrorToCalico(err, list)

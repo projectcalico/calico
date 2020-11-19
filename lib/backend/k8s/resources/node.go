@@ -73,7 +73,7 @@ func (c *nodeClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debug("Received Update request on Node type")
 	// Get a current copy of the node to fill in fields we don't track.
-	oldNode, err := c.clientSet.CoreV1().Nodes().Get(kvp.Key.(model.ResourceKey).Name, metav1.GetOptions{})
+	oldNode, err := c.clientSet.CoreV1().Nodes().Get(ctx, kvp.Key.(model.ResourceKey).Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
@@ -83,7 +83,7 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 		return nil, err
 	}
 
-	newNode, err := c.clientSet.CoreV1().Nodes().UpdateStatus(node)
+	newNode, err := c.clientSet.CoreV1().Nodes().UpdateStatus(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
 		log.WithError(err).Info("Error updating Node resource")
 		return nil, K8sErrorToCalico(err, kvp.Key)
@@ -112,7 +112,7 @@ func (c *nodeClient) Delete(ctx context.Context, key model.Key, revision string,
 
 func (c *nodeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	log.Debug("Received Get request on Node type")
-	node, err := c.clientSet.CoreV1().Nodes().Get(key.(model.ResourceKey).Name, metav1.GetOptions{ResourceVersion: revision})
+	node, err := c.clientSet.CoreV1().Nodes().Get(ctx, key.(model.ResourceKey).Name, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
 	}
@@ -153,7 +153,7 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 	}
 
 	// Listing all nodes.
-	nodes, err := c.clientSet.CoreV1().Nodes().List(metav1.ListOptions{ResourceVersion: revision})
+	nodes, err := c.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
@@ -190,7 +190,7 @@ func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 		opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name).String()
 	}
 
-	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(opts)
+	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(ctx, opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

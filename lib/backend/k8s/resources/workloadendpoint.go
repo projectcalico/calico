@@ -96,16 +96,16 @@ func (c *WorkloadEndpointClient) patchInPodIPs(ctx context.Context, kvp *model.K
 
 	// Note: we drop the revision here because the CNI plugin can't handle a retry right now (and the kubelet
 	// ensures that only one CNI ADD for a given UID can be in progress).
-	return c.patchPodIPAnnotations(key, "", kvp.UID, ips)
+	return c.patchPodIPAnnotations(ctx, key, "", kvp.UID, ips)
 }
 
 // patchOutPodIPs sets our pod IP annotations to empty strings; this is used to signal that the IP has been removed
 // from the pod at teardown.
 func (c *WorkloadEndpointClient) patchOutPodIPs(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	return c.patchPodIPAnnotations(key, revision, uid, nil)
+	return c.patchPodIPAnnotations(ctx, key, revision, uid, nil)
 }
 
-func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, revision string, uid *types.UID, ips []string) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) patchPodIPAnnotations(ctx context.Context, key model.Key, revision string, uid *types.UID, ips []string) (*model.KVPair, error) {
 	wepID, err := c.converter.ParseWorkloadEndpointName(key.(model.ResourceKey).Name)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(key model.Key, revision s
 		return nil, err
 	}
 	log.WithField("patch", string(patch)).Debug("Calculated pod patch.")
-	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(wepID.Pod, types.StrategicMergePatchType, patch, "status")
+	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(ctx, wepID.Pod, types.StrategicMergePatchType, patch, metav1.PatchOptions{}, "status")
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
 	}
@@ -186,7 +186,7 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 		}
 	}
 
-	pod, err := c.clientSet.CoreV1().Pods(k.Namespace).Get(wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
+	pod, err := c.clientSet.CoreV1().Pods(k.Namespace).Get(ctx, wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, k)
 	}
@@ -222,7 +222,7 @@ func (c *WorkloadEndpointClient) List(ctx context.Context, list model.ListInterf
 		return c.listUsingName(ctx, l, revision)
 	}
 
-	return c.list(l, revision)
+	return c.list(ctx, l, revision)
 }
 
 // listUsingName uses the name in the listOptions to retrieve the WorkloadEndpoints. The name, at the very least, must identify
@@ -240,7 +240,7 @@ func (c *WorkloadEndpointClient) listUsingName(ctx context.Context, listOptions 
 		}
 	}
 
-	pod, err := c.clientSet.CoreV1().Pods(listOptions.Namespace).Get(wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
+	pod, err := c.clientSet.CoreV1().Pods(listOptions.Namespace).Get(ctx, wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			return &model.KVPairList{
@@ -285,8 +285,8 @@ func (c *WorkloadEndpointClient) listUsingName(ctx context.Context, listOptions 
 }
 
 // list lists all the Workload endpoints for the namespace given in listOptions.
-func (c *WorkloadEndpointClient) list(listOptions model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	podList, err := c.clientSet.CoreV1().Pods(listOptions.Namespace).List(metav1.ListOptions{ResourceVersion: revision})
+func (c *WorkloadEndpointClient) list(ctx context.Context, listOptions model.ResourceListOptions, revision string) (*model.KVPairList, error) {
+	podList, err := c.clientSet.CoreV1().Pods(listOptions.Namespace).List(ctx, metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, listOptions)
 	}
@@ -337,7 +337,7 @@ func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInter
 	}
 
 	ns := rlo.Namespace
-	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(opts)
+	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(ctx, opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
