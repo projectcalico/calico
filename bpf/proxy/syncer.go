@@ -1272,7 +1272,13 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 
 	id, ok := s.activeSvcsMap[ipPortProto{ipPort{ip.String(), int(port)}, proto}]
 	if !ok {
-		return false
+		// Double check if it is a nodeport as if we are on the node that has
+		// the backing pod for a nodeport and the nodeport was forwarded here,
+		// the frontend is different.
+		id, ok = s.activeSvcsMap[ipPortProto{ipPort{"255.255.255.255", int(port)}, proto}]
+		if !ok {
+			return false
+		}
 	}
 
 	backends := s.activeEpsMap[id]
