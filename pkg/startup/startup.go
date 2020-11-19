@@ -538,7 +538,12 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 		validateIP(node.Spec.BGP.IPv4Address)
 	} else if ipv4Env != "none" {
 		if ipv4Env != "" {
-			node.Spec.BGP.IPv4Address = parseIPEnvironment("IP", ipv4Env, 4)
+			// Attempt to get the local CIDR of ipv4Env
+			ipv4CIDROrIP, err := getLocalCIDR(ipv4Env, 4, autodetection.GetInterfaces)
+			if err != nil {
+				log.Warnf("Attempt to get the local CIDR: %s failed, %s", ipv4Env, err)
+			}
+			node.Spec.BGP.IPv4Address = parseIPEnvironment("IP", ipv4CIDROrIP, 4)
 		}
 		validateIP(node.Spec.BGP.IPv4Address)
 	}
@@ -1375,4 +1380,49 @@ func extractKubeadmCIDRs(kubeadmConfig *v1.ConfigMap) (string, string, error) {
 	}
 
 	return v4, v6, err
+}
+
+// getLocalCIDR attempts to merge CIDR information from the host with the given IP address.
+// If a CIDR is provided, then it is simply returned.
+// If an IP is provided, it attempts to find the matching interface on the host to detect the appropriate prefix length.
+// If no match is found, the IP will be returned unmodified.
+func getLocalCIDR(ip string, version int, getInterfaces func([]string, []string, int) ([]autodetection.Interface, error)) (string, error) {
+	if strings.Contains(ip, "/") {
+		// Already a CIDR
+		return ip, nil
+	}
+
+	var destCIDR net.IP
+	if version == 4 {
+		destCIDR = net.ParseIP(ip).To4()
+	} else {
+		destCIDR = net.ParseIP(ip).To16()
+	}
+
+	if destCIDR == nil {
+		return ip, fmt.Errorf("%s is invalid.", ip)
+	}
+
+	// Get a full list of interface and IPs and find the CIDR matching the
+	// found IP.
+	interfaces, err := getInterfaces(nil, nil, version)
+	if err != nil {
+		return ip, err
+	}
+
+	log.Debugf("Auto-detecting IPv%d CIDR of %s", version, ip)
+	for _, iface := range interfaces {
+		log.WithField("Name", iface.Name).Debug("Checking interface")
+		for _, cidr := range iface.Cidrs {
+			log.WithField("CIDR", cidr.String()).Debug("Found")
+			if cidr.IP.Equal(destCIDR) {
+				log.WithField("CIDR", cidr.String()).Info("Including CIDR information from host interface.")
+				return cidr.String(), nil
+			}
+		}
+	}
+
+	// Even if no CIDR is found, it doesn't think it needs to throw an exception
+	log.Warnf("Unable to find matching host interface for IP %s", ip)
+	return ip, nil
 }
