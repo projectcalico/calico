@@ -15,6 +15,8 @@
 package k8s
 
 import (
+	"context"
+
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -58,7 +60,7 @@ func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int,
 	}
 
 	epClient := clientSet.CoreV1().Endpoints(namespace)
-	ep, err := epClient.Get(serviceName, metav1.GetOptions{})
+	ep, err := epClient.Get(context.Background(), serviceName, metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Failed to get Typha endpoint from Kubernetes")
 	}

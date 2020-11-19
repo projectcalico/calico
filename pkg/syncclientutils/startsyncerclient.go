@@ -109,7 +109,7 @@ func discoverTyphaAddr(typhaConfig *TyphaConfig) (string, error) {
 		return "", err
 	}
 	svcClient := clientset.CoreV1().Services(typhaConfig.K8sNamespace)
-	svc, err := svcClient.Get(typhaConfig.K8sServiceName, v1.GetOptions{})
+	svc, err := svcClient.Get(context.Background(), typhaConfig.K8sServiceName, v1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Unable to get Typha service from Kubernetes.")
 		return "", err
