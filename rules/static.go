@@ -875,6 +875,12 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Cha
 		r.addIPIPVXLANEgressAllowRules(&rules)
 	}
 
+	// Note: the similar sequence in filterOutputChain has rules here to detect traffic to local
+	// workloads, and to return early in that case.  We don't need those rules here because
+	// ChainDispatchToHostEndpoint also checks for traffic to a local workload, and avoids
+	// applying any host endpoint policy in that case.  Search for "Skip egress WHEP" in
+	// dispatch.go, to see that.
+
 	// Apply host endpoint policy to non-forwarded traffic that has been DNAT'd.  We do this
 	// here, rather than in filter-OUTPUT, because Linux is weird: when a host-originated packet
 	// is DNAT'd (typically in nat-OUTPUT), its destination IP is changed immediately, but Linux
