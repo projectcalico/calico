@@ -176,7 +176,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Attrs:    attrs,
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
-		err := calicoClient.IPAM().AssignIP(ctx, assignArgs)
+		assignIPWithLock := func() error {
+			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+			defer unlock()
+			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
+		}
+		err := assignIPWithLock()
 		if err != nil {
 			return err
 		}
