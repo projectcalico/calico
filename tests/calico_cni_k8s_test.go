@@ -50,7 +50,7 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 	}
-	_, err := clientset.CoreV1().Namespaces().Create(ns)
+	_, err := clientset.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
 	if errors.IsAlreadyExists(err) {
 		return
 	}
@@ -58,14 +58,14 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 }
 
 func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1.Pod) *v1.Pod {
-	pod, err := clientset.CoreV1().Pods(namespace).Create(pod)
+	pod, err := clientset.CoreV1().Pods(namespace).Create(context.Background(), pod, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
 	// Immediately try to get the pod, and retry until we do. This prevents race
 	// conditions where the API Server has accepted the create, but isn't ready
 	// to find the pod on a get. These races can cause the tests to be flaky.
 	Eventually(func() error {
-		_, err := clientset.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
+		_, err := clientset.CoreV1().Pods(namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
 		return err
 	}, 2*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
 	return pod
@@ -73,7 +73,7 @@ func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1
 
 func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string) {
 	// Check if pod exists first.
-	_, err := clientset.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{})
+	_, err := clientset.CoreV1().Pods(ns).Get(context.Background(), podName, metav1.GetOptions{})
 	if kerrors.IsNotFound(err) {
 		// Pod has been deleted already. Do nothing.
 		return
@@ -81,12 +81,18 @@ func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string
 	Expect(err).NotTo(HaveOccurred())
 
 	// Delete pod immediately.
-	err = clientset.CoreV1().Pods(ns).Delete(podName, metav1.NewDeleteOptions(0))
+	fg := metav1.DeletePropagationForeground
+	zero := int64(0)
+	err = clientset.CoreV1().Pods(ns).Delete(context.Background(),
+		podName,
+		metav1.DeleteOptions{
+			PropagationPolicy:  &fg,
+			GracePeriodSeconds: &zero})
 	Expect(err).NotTo(HaveOccurred())
 
 	// Wait for pod to disappear.
 	Eventually(func() error {
-		_, err := clientset.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{})
+		_, err := clientset.CoreV1().Pods(ns).Get(context.Background(), podName, metav1.GetOptions{})
 		if kerrors.IsNotFound(err) {
 			return nil
 		}
@@ -99,7 +105,7 @@ func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string
 
 func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 	// Check if node exists first.
-	_, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	_, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if kerrors.IsNotFound(err) {
 		// Node has been deleted already. Do nothing.
 		return
@@ -107,12 +113,18 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Delete node immediately.
-	err = clientset.CoreV1().Nodes().Delete(nodeName, metav1.NewDeleteOptions(0))
+	fg := metav1.DeletePropagationForeground
+	zero := int64(0)
+	err = clientset.CoreV1().Nodes().Delete(context.Background(),
+		nodeName,
+		metav1.DeleteOptions{
+			PropagationPolicy:  &fg,
+			GracePeriodSeconds: &zero})
 	Expect(err).NotTo(HaveOccurred())
 
 	// Wait for node to disappear.
 	Eventually(func() error {
-		_, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+		_, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 		if kerrors.IsNotFound(err) {
 			return nil
 		}
@@ -861,12 +873,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					ensureNodeDeleted(clientset, hostname)
 
 					// Create a K8s Node object with PodCIDR and name equal to hostname.
-					_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+					_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 						ObjectMeta: metav1.ObjectMeta{Name: hostname},
 						Spec: v1.NodeSpec{
 							PodCIDR: "10.0.0.0/24",
 						},
-					})
+					}, metav1.CreateOptions{})
 					Expect(err).NotTo(HaveOccurred())
 					defer ensureNodeDeleted(clientset, hostname)
 
@@ -1018,14 +1030,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("successfully assigns an IP address from an IP Pool specified on a Namespace", func() {
 			// Create the Namespace.
 			testNS = fmt.Sprintf("run%d", rand.Uint32())
-			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+			_, err = clientset.CoreV1().Namespaces().Create(context.Background(), &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
 						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/24\"]",
 					},
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod.
@@ -1060,14 +1072,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("should fail to assign from an IP pool that doesn't exist", func() {
 			// Create the Namespace.
 			testNS = fmt.Sprintf("run%d", rand.Uint32())
-			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+			_, err = clientset.CoreV1().Namespaces().Create(context.Background(), &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
 						"cni.projectcalico.org/ipv4pools": "[\"100.0.0.0/16\"]",
 					},
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod.
@@ -1099,14 +1111,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("should fail to assign an IP when the provided IP Pool is full", func() {
 			// Create the Namespace.
 			testNS = fmt.Sprintf("run%d", rand.Uint32())
-			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+			_, err = clientset.CoreV1().Namespaces().Create(context.Background(), &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
 						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/24\"]",
 					},
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod.
@@ -1155,14 +1167,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("should assign an IP from the second pool when the first IP Pool is full", func() {
 			// Create the Namespace.
 			testNS = fmt.Sprintf("run%d", rand.Uint32())
-			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+			_, err = clientset.CoreV1().Namespaces().Create(context.Background(), &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
 						"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/24\", \"50.60.1.0/24\"]",
 					},
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod.
@@ -1263,14 +1275,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		It("should prefer pod annotations to namespace annotations if both are present", func() {
 			// Create the Namespace.
 			testNS = fmt.Sprintf("run%d", rand.Uint32())
-			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+			_, err = clientset.CoreV1().Namespaces().Create(context.Background(), &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testNS,
 					Annotations: map[string]string{
 						"cni.projectcalico.org/ipv4pools": "[\"50.55.0.0/16\"]",
 					},
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod passing in an IP pool.
@@ -2680,14 +2692,20 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Create a K8s service account
 			saName := "testserviceaccount"
-			_, err = clientset.CoreV1().ServiceAccounts(testutils.K8S_TEST_NS).Create(&v1.ServiceAccount{
+			_, err = clientset.CoreV1().ServiceAccounts(testutils.K8S_TEST_NS).Create(context.Background(), &v1.ServiceAccount{
 				ObjectMeta: metav1.ObjectMeta{Name: saName},
-			})
+			}, metav1.CreateOptions{})
 			if err != nil {
 				panic(err)
 			}
 			defer func() {
-				err = clientset.CoreV1().ServiceAccounts(testutils.K8S_TEST_NS).Delete(saName, metav1.NewDeleteOptions(0))
+				fg := metav1.DeletePropagationForeground
+				zero := int64(0)
+				err = clientset.CoreV1().ServiceAccounts(testutils.K8S_TEST_NS).Delete(context.Background(),
+					saName,
+					metav1.DeleteOptions{
+						PropagationPolicy:  &fg,
+						GracePeriodSeconds: &zero})
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
@@ -2998,7 +3016,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 func checkPodIPAnnotations(clientset *kubernetes.Clientset, ns, name, expectedIP, expectedIPs string) {
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-		pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Get(name, metav1.GetOptions{})
+		pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Get(context.Background(), name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(pod.Annotations["cni.projectcalico.org/podIP"]).To(Equal(expectedIP))
 		Expect(pod.Annotations["cni.projectcalico.org/podIPs"]).To(Equal(expectedIPs))
