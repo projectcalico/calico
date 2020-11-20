@@ -145,7 +145,9 @@ func Run() {
 
 		// Check if we're running on a kubeadm and/or rancher cluster. Any error other than not finding the respective
 		// config map should be serious enough that we ought to stop here and return.
-		kubeadmConfig, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(KubeadmConfigConfigMap, metav1.GetOptions{})
+		kubeadmConfig, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(ctx,
+			KubeadmConfigConfigMap,
+			metav1.GetOptions{})
 		if err != nil {
 			if kerrors.IsNotFound(err) {
 				kubeadmConfig = nil
@@ -158,7 +160,8 @@ func Run() {
 			}
 		}
 
-		rancherState, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(RancherStateConfigMap,
+		rancherState, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(ctx,
+			RancherStateConfigMap,
 			metav1.GetOptions{})
 		if err != nil {
 			if kerrors.IsNotFound(err) {
@@ -1320,7 +1323,7 @@ func setNodeNetworkUnavailableFalse(clientset kubernetes.Clientset, nodeName str
 			err = fmt.Errorf("timed out patching node, last error was: %s", err.Error())
 			return err
 		default:
-			_, err = clientset.CoreV1().Nodes().PatchStatus(nodeName, patch)
+			_, err = clientset.CoreV1().Nodes().PatchStatus(context.Background(), nodeName, patch)
 			if err != nil {
 				log.WithError(err).Warnf("Failed to set NetworkUnavailable to False; will retry")
 			} else {
