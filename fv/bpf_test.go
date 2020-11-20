@@ -972,19 +972,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// PHASE 2: keep a connection up and move it from one interface to the other using the pod's
 						// routes.  To the host this looks like one workload is spoofing the other.
 						By("Starting permanent connection")
-						pc := w[0][0].StartPermanentConnection(w[1][0].IP, 8055, workload.PermanentConnectionOpts{
+						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
 						})
 						defer pc.Stop()
 
 						expectPongs := func() {
-							EventuallyWithOffset(1, w[0][0].SinceLastPong, "5s").Should(
+							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
 								BeNumerically("<", time.Second),
 								"Expected to see pong responses on the connection but didn't receive any")
 							log.Info("Pongs received within last 1s")
 						}
 						expectNoPongs := func() {
-							EventuallyWithOffset(1, w[0][0].SinceLastPong, "5s").Should(
+							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
 								BeNumerically(">", time.Second),
 								"Expected to see pong responses stop but continued to receive them")
 							log.Info("No pongs received for >1s")
