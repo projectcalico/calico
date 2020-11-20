@@ -63,7 +63,7 @@ across the group of pods backing the service. The virtual IP is discoverable thr
 virtual IP address remain constant for the life time of the service, even though the pods backing the service may be
 created or destroyed, and the number of pods backing the service may change over time.
 
-Kubernetes Services can also define how a service accessed from outside of the cluster, for example using
+Kubernetes Services can also define how a service is accessed from outside of the cluster, for example using
 - a node port, where the service can be accessed via a specific port on every node
 - or a load balancer, whether a network load balancer provides a virtual IP address that the service can be accessed via
   from outside the cluster.
