@@ -53,7 +53,7 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 	}
-	_, err := clientset.CoreV1().Namespaces().Create(ns)
+	_, err := clientset.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
 	if errors.IsAlreadyExists(err) {
 		return
 	}
@@ -61,7 +61,7 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 }
 
 func deleteNamespace(clientset *kubernetes.Clientset, name string) {
-	err := clientset.CoreV1().Namespaces().Delete(name, &metav1.DeleteOptions{})
+	err := clientset.CoreV1().Namespaces().Delete(context.Background(), name, metav1.DeleteOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -165,7 +165,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 			// Delete node
-			_ = clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+			_ = clientset.CoreV1().Nodes().Delete(context.Background(), hostname, metav1.DeleteOptions{})
 		}
 
 		BeforeEach(func() {
@@ -190,16 +190,16 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ensureNamespace(clientset, nsName)
 
 			// Create a K8s Node object with PodCIDR and name equal to hostname.
-			_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+			_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: hostname},
 				Spec: v1.NodeSpec{
 					PodCIDR: "10.0.0.0/24",
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a K8s pod w/o any special params
-			_, err = clientset.CoreV1().Pods(nsName).Create(&v1.Pod{
+			_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(),&v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{{
@@ -208,7 +208,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					}},
 					NodeName: hostname,
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -300,7 +300,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
 				// Create a K8s pod w/o any special params
-				_, err = clientset.CoreV1().Pods(nsName).Create(&v1.Pod{
+				_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(),&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{{
@@ -313,8 +313,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						}},
 						NodeName: hostname,
 					},
-				})
-				defer clientset.CoreV1().Pods(nsName).Delete(name, &metav1.DeleteOptions{})
+				}, metav1.CreateOptions{})
+				defer clientset.CoreV1().Pods(nsName).Delete(context.Background(), name, metav1.DeleteOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 
 				containerID, result, contVeth, _, _, err := testutils.CreateContainer(netconf, name, testutils.HnsNoneNs, "", nsName)
@@ -879,7 +879,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				By("Creating a second pod with the same IP address as the first pod")
 				name2 := fmt.Sprintf("run2%d", rand.Uint32())
-				_, err = clientset.CoreV1().Pods(nsName).Create(&v1.Pod{
+				_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name2},
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{{
@@ -888,7 +888,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						}},
 						NodeName: hostname,
 					},
-				})
+				}, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				containerID, result, _, _, _, err = testutils.CreateContainer(netconfHostLocalIPAM, name2, testutils.HnsNoneNs, requestedIP, nsName)
@@ -1077,16 +1077,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			nsName = fmt.Sprintf("ns%d", rand.Uint32())
 			ensureNamespace(clientset, nsName)
 			// Create a K8s Node object with PodCIDR and name equal to hostname.
-			_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+			_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: hostname},
 				Spec: v1.NodeSpec{
 					PodCIDR: "10.0.0.0/24",
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			name = fmt.Sprintf("run%d", rand.Uint32())
 			pod, err := clientset.CoreV1().Pods(nsName).Create(
+				context.Background(),
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: name,
@@ -1098,7 +1099,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						}},
 						NodeName: hostname,
 					},
-				})
+				}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			log.Infof("Created POD object: %v", pod)
 
@@ -1143,7 +1144,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 			// Delete node
-			_ = clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+			_ = clientset.CoreV1().Nodes().Delete(context.Background(), hostname, metav1.DeleteOptions{})
 			_, err = testutils.DeleteContainerWithId(netconf, name, testutils.HnsNoneNs, containerID, nsName)
 			Expect(err).ShouldNot(HaveOccurred())
 			deleteNamespace(clientset, nsName)
@@ -1210,12 +1211,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// Create a K8s Node object with PodCIDR and name equal to hostname.
-			_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+			_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: hostname},
 				Spec: v1.NodeSpec{
 					PodCIDR: "10.0.0.0/24",
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			nsName = fmt.Sprintf("ns%d", rand.Uint32())
 			// Create namespace
@@ -1227,7 +1228,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			testutils.MustDeleteIPPool(calicoClient, "10.0.0.0/26")
 			// Delete namespace
 			deleteNamespace(clientset, nsName)
-			clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+			clientset.CoreV1().Nodes().Delete(context.Background(), hostname, metav1.DeleteOptions{})
 			// Ensure network is created
 			hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -1249,7 +1250,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					if err != nil {
 						cni_err = err
 					}
-					clientset.CoreV1().Pods(nsName).Delete(podName[i], nil)
+					clientset.CoreV1().Pods(nsName).Delete(context.Background(), podName[i], metav1.DeleteOptions{})
 					Expect(err).ShouldNot(HaveOccurred())
 				}
 				Expect(cni_err).Should(BeNil())
@@ -1257,6 +1258,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			for i := 0; i < 4; i++ {
 				name = fmt.Sprintf("run%d", rand.Uint32())
 				pod, err := clientset.CoreV1().Pods(nsName).Create(
+					context.Background(),
 					&v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
@@ -1268,7 +1270,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 							}},
 							NodeName: hostname,
 						},
-					})
+					}, metav1.CreateOptions{})
 
 				Expect(err).NotTo(HaveOccurred())
 				podName = append(podName, name)
@@ -1282,6 +1284,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 			name = fmt.Sprintf("run%d", rand.Uint32())
 			pod, err := clientset.CoreV1().Pods(nsName).Create(
+				context.Background(),
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: name,
@@ -1293,7 +1296,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						}},
 						NodeName: hostname,
 					},
-				})
+				}, metav1.CreateOptions{})
 
 			Expect(err).NotTo(HaveOccurred())
 			log.Infof("Created POD object: %v", pod)
@@ -1348,12 +1351,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// Create a K8s Node object with PodCIDR and name equal to hostname.
-			_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+			_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: hostname},
 				Spec: v1.NodeSpec{
 					PodCIDR: "10.0.0.0/24",
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			nsName = fmt.Sprintf("ns%d", rand.Uint32())
 			// Create namespace
@@ -1365,7 +1368,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			testutils.MustDeleteIPPool(calicoClient, "10.0.0.0/26")
 			// Delete namespace
 			deleteNamespace(clientset, nsName)
-			clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+			clientset.CoreV1().Nodes().Delete(context.Background(), hostname, metav1.DeleteOptions{})
 			for i := 0; i < len(nwsName); i++ {
 				// Ensure network is deleted
 				log.Debugf("Deleting Network : %v", nwsName[i])
@@ -1391,7 +1394,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					if err != nil {
 						cni_err = err
 					}
-					clientset.CoreV1().Pods(nsName).Delete(podName[i], nil)
+					clientset.CoreV1().Pods(nsName).Delete(context.Background(), podName[i], metav1.DeleteOptions{})
 					Expect(err).ShouldNot(HaveOccurred())
 				}
 				Expect(cni_err).Should(BeNil())
@@ -1400,6 +1403,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			for i := 0; i < 5; i++ {
 				name = fmt.Sprintf("run%d", rand.Uint32())
 				_, err := clientset.CoreV1().Pods(nsName).Create(
+					context.Background(),
 					&v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
@@ -1411,7 +1415,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 							}},
 							NodeName: hostname,
 						},
-					})
+					}, metav1.CreateOptions{})
 
 				Expect(err).NotTo(HaveOccurred())
 				podName = append(podName, name)
@@ -1442,7 +1446,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					if err != nil {
 						cni_err = err
 					}
-					clientset.CoreV1().Pods(nsName).Delete(podName[i], nil)
+					clientset.CoreV1().Pods(nsName).Delete(context.Background(), podName[i], metav1.DeleteOptions{})
 					Expect(err).ShouldNot(HaveOccurred())
 				}
 				Expect(cni_err).Should(BeNil())
@@ -1451,6 +1455,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			for i := 0; i < 4; i++ {
 				name = fmt.Sprintf("run%d", rand.Uint32())
 				_, err := clientset.CoreV1().Pods(nsName).Create(
+					context.Background(),
 					&v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
@@ -1462,7 +1467,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 							}},
 							NodeName: hostname,
 						},
-					})
+					}, metav1.CreateOptions{})
 
 				Expect(err).NotTo(HaveOccurred())
 				podName = append(podName, name)
@@ -1483,13 +1488,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			for i := 0; i < 3; i++ {
 				_, err := testutils.DeleteContainerWithId(netconf, podName[i], testutils.HnsNoneNs, containerid[i], nsName)
 				Expect(err).ShouldNot(HaveOccurred())
-				clientset.CoreV1().Pods(nsName).Delete(podName[i], nil)
+				clientset.CoreV1().Pods(nsName).Delete(context.Background(), podName[i], metav1.DeleteOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 			}
 			log.Debugf("containerid = %v", containerid)
 			for i := 0; i < 3; i++ {
 				name = fmt.Sprintf("run%d", rand.Uint32())
 				_, err := clientset.CoreV1().Pods(nsName).Create(
+					context.Background(),
 					&v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
@@ -1501,7 +1507,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 							}},
 							NodeName: hostname,
 						},
-					})
+					}, metav1.CreateOptions{})
 
 				Expect(err).NotTo(HaveOccurred())
 				podName[i] = name
@@ -1574,7 +1580,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(err).NotTo(HaveOccurred())
 				}
 				// Delete node
-				_ = clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+				_ = clientset.CoreV1().Nodes().Delete(context.Background(), hostname, metav1.DeleteOptions{})
 			}
 
 			BeforeEach(func() {
@@ -1599,16 +1605,16 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				ensureNamespace(clientset, nsName)
 
 				// Create a K8s Node object with PodCIDR and name equal to hostname.
-				_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+				_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 					ObjectMeta: metav1.ObjectMeta{Name: hostname},
 					Spec: v1.NodeSpec{
 						PodCIDR: "10.0.0.0/24",
 					},
-				})
+				}, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				// Create a K8s pod w/o any special params
-				_, err = clientset.CoreV1().Pods(nsName).Create(&v1.Pod{
+				_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{{
@@ -1617,7 +1623,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						}},
 						NodeName: hostname,
 					},
-				})
+				}, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1706,7 +1712,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// Delete node
-			_ = clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+			_ = clientset.CoreV1().Nodes().Delete(context.Background(), hostname, metav1.DeleteOptions{})
 		}
 
 		BeforeEach(func() {
@@ -1731,16 +1737,16 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ensureNamespace(clientset, nsName)
 
 			// Create a K8s Node object with PodCIDR and name equal to hostname.
-			_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+			_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: hostname},
 				Spec: v1.NodeSpec{
 					PodCIDR: "10.0.0.0/24",
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a K8s pod w/o any special params
-			_, err = clientset.CoreV1().Pods(nsName).Create(&v1.Pod{
+			_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{{
@@ -1749,7 +1755,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					}},
 					NodeName: hostname,
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1906,12 +1912,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// Delete node
-			_ = clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+			_ = clientset.CoreV1().Nodes().Delete(context.Background(), hostname, metav1.DeleteOptions{})
 		}
 
 		setupPodResource := func(podName string) {
 			// Create a K8s pod w/o any special params
-			_, err = clientset.CoreV1().Pods(nsName).Create(&v1.Pod{
+			_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: podName},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{{
@@ -1920,7 +1926,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					}},
 					NodeName: hostname,
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -1935,12 +1941,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ensureNamespace(clientset, nsName)
 
 			// Create a K8s Node object with PodCIDR and name equal to hostname.
-			_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+			_, err = clientset.CoreV1().Nodes().Create(context.Background(), &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: hostname},
 				Spec: v1.NodeSpec{
 					PodCIDR: "10.0.0.0/24",
 				},
-			})
+			}, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			setupPodResource(name)

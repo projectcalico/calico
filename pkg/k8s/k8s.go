@@ -855,7 +855,7 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 }
 
 func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
-	ns, err := client.CoreV1().Namespaces().Get(podNamespace, metav1.GetOptions{})
+	ns, err := client.CoreV1().Namespaces().Get(context.Background(), podNamespace, metav1.GetOptions{})
 	logrus.Debugf("namespace info %+v", ns)
 	if err != nil {
 		return nil, err
@@ -864,7 +864,7 @@ func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotation
 }
 
 func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, profiles []string, generateName string, err error) {
-	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(podName, metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(context.Background(), podName, metav1.GetOptions{})
 	logrus.Debugf("pod info %+v", pod)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
@@ -891,7 +891,7 @@ func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename strin
 		nodename = conf.Kubernetes.NodeName
 	}
 
-	node, err := client.CoreV1().Nodes().Get(nodename, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(context.Background(), nodename, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}

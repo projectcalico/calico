@@ -8,7 +8,7 @@ require (
 	github.com/buger/jsonparser v1.0.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.5
-	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
+	github.com/gogo/protobuf v1.3.1
 	github.com/howeyc/fsnotify v0.9.0
 	github.com/juju/clock v0.0.0-20190205081909-9c5c9712527c
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f
@@ -20,7 +20,7 @@ require (
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20201110235728-977c570b2f4b
+	github.com/projectcalico/libcalico-go v1.7.2-0.20201119184045-34d8399da148
 	github.com/prometheus/common v0.4.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
@@ -31,14 +31,8 @@ require (
 	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
 	google.golang.org/grpc v1.23.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
-
-	// k8s.io/api v1.16.3 is at 16d7abae0d2a
-	k8s.io/api v0.17.3
-
-	// k8s.io/apimachinery 1.16.3 is at 72ed19daf4bb
-	k8s.io/apimachinery v0.17.3
-
-	// k8s.io/client-go 1.16.3 is at 6c5935290e33
-	k8s.io/client-go v0.17.3
-	k8s.io/utils v0.0.0-20191114200735-6ca3b61696b6
+	k8s.io/api v0.18.12
+	k8s.io/apimachinery v0.18.12
+	k8s.io/client-go v0.18.12
+	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 )

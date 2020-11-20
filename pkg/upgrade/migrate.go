@@ -80,7 +80,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		log.Info("IPIP tunnel address not found, assigning...")
 
 		// Fetch k8s node.
-		k8sNode, err := k8sClient.CoreV1().Nodes().Get(nodename, metav1.GetOptions{})
+		k8sNode, err := k8sClient.CoreV1().Nodes().Get(context.Background(), nodename, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get k8s node resource: %s", err)
 		}
@@ -234,7 +234,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// Establishing a mapping of IP addresses to Pods on this node. We need this
 	// to populate Calico IPAM's allocation attributes below.
 	log.Info("mapping pod ips to pods...")
-	podList, err := k8sClient.CoreV1().Pods("").List(metav1.ListOptions{
+	podList, err := k8sClient.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodename),
 	})
 	if err != nil {
@@ -341,7 +341,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// Re-enable datastoreReady if this is the last node to update. We know this is the last
 	// node to update if the number of UpdatedNumberScheduled is MaxUnavailable less than the
 	// DesiredNumberScheduled.
-	calicoDS, err := k8sClient.AppsV1().DaemonSets("kube-system").Get("calico-node", metav1.GetOptions{})
+	calicoDS, err := k8sClient.AppsV1().DaemonSets("kube-system").Get(context.Background(), "calico-node", metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("failed to retrieve Calico daemonset to check if datastore readiness should be set to true")
 	} else if calicoDS.Status.UpdatedNumberScheduled == calicoDS.Status.DesiredNumberScheduled-calicoDS.Spec.UpdateStrategy.RollingUpdate.MaxUnavailable.IntVal {
