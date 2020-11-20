@@ -45,10 +45,6 @@ data:
   calico_backend: "bird"
 {{- end }}
 
-  # Configure the MTU to use for workload interfaces and tunnels.
-  # By default, MTU is auto-detected, and explicitly setting this field should not be required.
-  # You can override auto-detection by providing a non-zero value.
-  veth_mtu: "0"
 {{- else if eq .Values.network "flannel" }}
 
   # The interface used by canal for host <-> host communication.
@@ -60,9 +56,12 @@ data:
   # the pod network.
   masquerade: "true"
 
-  # Configure the MTU to use
-  veth_mtu: "1450"
 {{- end }}
+
+  # Configure the MTU to use for workload interfaces and tunnels.
+  # By default, MTU is auto-detected, and explicitly setting this field should not be required.
+  # You can override auto-detection by providing a non-zero value.
+  veth_mtu: "0"
 
   # The CNI network configuration to install on each node. The special
   # values in this config will be automatically populated.
