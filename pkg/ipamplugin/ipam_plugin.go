@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -259,7 +260,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
 			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
 			// on the API server by a factor of the number of concurrent requests.
-			unlock := acquireIPAMLockBestEffort()
+			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
 			defer unlock()
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 		}
@@ -302,10 +303,18 @@ type unlockFn func()
 // acquireIPAMLockBestEffort attempts to acquire the IPAM file lock, blocking if needed.  If an error occurs
 // (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the
 // lock again (or a no-op function if acquiring the lock failed).
-func acquireIPAMLockBestEffort() unlockFn {
+func acquireIPAMLockBestEffort(path string) unlockFn {
 	log.Info("About to acquire host-wide IPAM lock.")
-	ipamLock := flock.New("/var/run/calico/ipam.lock")
-	err := ipamLock.Lock()
+	if path == "" {
+		path = ipamLockPath
+	}
+	err := os.MkdirAll(filepath.Dir(path), 0777)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
+		// Fall through, still a slight chance the file is there for us to access.
+	}
+	ipamLock := flock.New(path)
+	err = ipamLock.Lock()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
 		return func() {}
@@ -363,7 +372,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
 	// we only attempt one IPAM update at a time.  This reduces the load on the API server by a factor of the
 	// number of concurrent requests with essentially no downside.
-	unlock := acquireIPAMLockBestEffort()
+	unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
 	defer unlock()
 
 	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {

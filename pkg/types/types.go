@@ -82,6 +82,7 @@ type NetConf struct {
 	MTU                  int                    `json:"mtu"`
 	Nodename             string                 `json:"nodename"`
 	NodenameFile         string                 `json:"nodename_file"`
+	IPAMLockFile         string                 `json:"ipam_lock_file"`
 	NodenameFileOptional bool                   `json:"nodename_file_optional"`
 	DatastoreType        string                 `json:"datastore_type"`
 	EtcdEndpoints        string                 `json:"etcd_endpoints"`
