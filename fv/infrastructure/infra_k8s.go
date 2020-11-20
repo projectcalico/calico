@@ -266,7 +266,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 
 	start = time.Now()
 	for {
-		_, err := kds.K8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+		_, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 		if err == nil {
 			break
 		}
@@ -382,7 +382,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	log.Info("Wait for creating default service account")
 	start = time.Now()
 	for {
-		_, err := kds.K8sClient.CoreV1().ServiceAccounts("default").Get("default", metav1.GetOptions{})
+		_, err := kds.K8sClient.CoreV1().ServiceAccounts("default").Get(context.Background(), "default", metav1.GetOptions{})
 		if err == nil {
 			break
 		}
@@ -567,7 +567,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 		nodeIn.Annotations["projectcalico.org/IPv4WireguardInterfaceAddr"] = felix.ExpectedWireguardTunnelAddr
 	}
 	log.WithField("nodeIn", nodeIn).Debug("Node defined")
-	nodeOut, err := kds.K8sClient.CoreV1().Nodes().Create(nodeIn)
+	nodeOut, err := kds.K8sClient.CoreV1().Nodes().Create(context.Background(), nodeIn, metav1.CreateOptions{})
 	log.WithField("nodeOut", nodeOut).Debug("Created node")
 	if err != nil {
 		panic(err)
@@ -576,7 +576,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 
 func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
 	// Try to get namespace. Return if it already exists.
-	_, err := kds.K8sClient.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+	_, err := kds.K8sClient.CoreV1().Namespaces().Get(context.Background(), name, metav1.GetOptions{})
 	if err == nil {
 		return
 	}
@@ -588,7 +588,7 @@ func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 	}
-	_, err = kds.K8sClient.CoreV1().Namespaces().Create(ns)
+	_, err = kds.K8sClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -599,7 +599,7 @@ func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
 	if err != nil {
 		return err
 	}
-	err = kds.K8sClient.CoreV1().Pods(ns).Delete(wepIDs.Pod, DeleteImmediately)
+	err = kds.K8sClient.CoreV1().Pods(ns).Delete(context.Background(), wepIDs.Pod, DeleteImmediately)
 	return err
 }
 
@@ -637,14 +637,14 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.Workl
 	}
 	log.WithField("podIn", podIn).Debug("Creating Pod for workload")
 	kds.ensureNamespace(wep.Namespace)
-	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(podIn)
+	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(context.Background(), podIn, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
 	}
 	log.WithField("podOut", podOut).Debug("Created pod")
 	podIn = podOut
 	podIn.Status = desiredStatus
-	podOut, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(podIn)
+	podOut, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(context.Background(), podIn, metav1.UpdateOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -697,7 +697,7 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (kds *K8sDatastoreInfra) DumpErrorData() {
-	nsList, err := kds.K8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+	nsList, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err == nil {
 		utils.AddToTestOutput("Kubernetes Namespaces\n")
 		for _, ns := range nsList.Items {
@@ -750,7 +750,7 @@ func (kds *K8sDatastoreInfra) DumpErrorData() {
 }
 
 var zeroGracePeriod int64 = 0
-var DeleteImmediately = &metav1.DeleteOptions{
+var DeleteImmediately = metav1.DeleteOptions{
 	GracePeriodSeconds: &zeroGracePeriod,
 }
 
@@ -760,14 +760,14 @@ func isSystemNamespace(ns string) bool {
 
 func cleanupAllNamespaces(clientset *kubernetes.Clientset, calicoClient client.Interface) {
 	log.Info("Cleaning up all namespaces...")
-	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	nsList, err := clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
 	for _, ns := range nsList.Items {
 		if ns.Status.Phase != v1.NamespaceTerminating && !isSystemNamespace(ns.ObjectMeta.Name) {
-			err = clientset.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, DeleteImmediately)
+			err = clientset.CoreV1().Namespaces().Delete(context.Background(), ns.ObjectMeta.Name, DeleteImmediately)
 			if err != nil {
 				panic(err)
 			}
@@ -778,13 +778,13 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, calicoClient client.I
 
 func cleanupAllNodes(clientset *kubernetes.Clientset, calicoClient client.Interface) {
 	log.Info("Cleaning up all nodes...")
-	nodeList, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodeList, err := clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 	log.WithField("count", len(nodeList.Items)).Info("Nodes present")
 	for _, node := range nodeList.Items {
-		err = clientset.CoreV1().Nodes().Delete(node.ObjectMeta.Name, DeleteImmediately)
+		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.ObjectMeta.Name, DeleteImmediately)
 		if err != nil {
 			panic(err)
 		}
@@ -794,7 +794,7 @@ func cleanupAllNodes(clientset *kubernetes.Clientset, calicoClient client.Interf
 
 func cleanupAllPods(clientset *kubernetes.Clientset, calicoClient client.Interface) {
 	log.Info("Cleaning up Pods")
-	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	nsList, err := clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -807,14 +807,14 @@ func cleanupAllPods(clientset *kubernetes.Clientset, calicoClient client.Interfa
 		nsName := ns.ObjectMeta.Name
 		go func() {
 			admission <- 1
-			podList, err := clientset.CoreV1().Pods(nsName).List(metav1.ListOptions{})
+			podList, err := clientset.CoreV1().Pods(nsName).List(context.Background(), metav1.ListOptions{})
 			if err != nil {
 				panic(err)
 			}
 			log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug(
 				"Pods present")
 			for _, pod := range podList.Items {
-				err = clientset.CoreV1().Pods(nsName).Delete(pod.ObjectMeta.Name, DeleteImmediately)
+				err = clientset.CoreV1().Pods(nsName).Delete(context.Background(), pod.ObjectMeta.Name, DeleteImmediately)
 				if err != nil {
 					panic(err)
 				}
@@ -917,29 +917,29 @@ func cleanupAllFelixConfigurations(clientset *kubernetes.Clientset, client clien
 func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Interface) {
 	log.Info("Cleaning up services")
 	coreV1 := clientset.CoreV1()
-	namespaceList, err := coreV1.Namespaces().List(metav1.ListOptions{})
+	namespaceList, err := coreV1.Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 	for _, ns := range namespaceList.Items {
 		serviceInterface := coreV1.Services(ns.Name)
-		services, err := serviceInterface.List(metav1.ListOptions{})
+		services, err := serviceInterface.List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			panic(err)
 		}
 		for _, s := range services.Items {
-			err := serviceInterface.Delete(s.Name, &metav1.DeleteOptions{})
+			err := serviceInterface.Delete(context.Background(), s.Name, metav1.DeleteOptions{})
 			if err != nil {
 				panic(err)
 			}
 		}
 		endpointsInterface := coreV1.Endpoints(ns.Name)
-		endpoints, err := endpointsInterface.List(metav1.ListOptions{})
+		endpoints, err := endpointsInterface.List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			panic(err)
 		}
 		for _, ep := range endpoints.Items {
-			err := endpointsInterface.Delete(ep.Name, &metav1.DeleteOptions{})
+			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
 			if err != nil {
 				panic(err)
 			}

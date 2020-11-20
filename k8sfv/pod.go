@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os/exec"
@@ -99,14 +100,14 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		pod_in.ObjectMeta.Labels = spec.labels
 	}
 	log.WithField("pod_in", pod_in).Debug("Pod defined")
-	pod_out, err := clientset.CoreV1().Pods(nsName).Create(pod_in)
+	pod_out, err := clientset.CoreV1().Pods(nsName).Create(context.Background(), pod_in, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
 	}
 	log.WithField("pod_out", pod_out).Debug("Created pod")
 	pod_in = pod_out
 	pod_in.Status.PodIP = ip
-	pod_out, err = clientset.CoreV1().Pods(nsName).UpdateStatus(pod_in)
+	pod_out, err = clientset.CoreV1().Pods(nsName).UpdateStatus(context.Background(), pod_in, metav1.UpdateOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -218,7 +219,7 @@ var GetNextPodAddr = ipAddrAllocator("10.28.%d.%d")
 
 func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.WithField("nsPrefix", nsPrefix).Info("Cleaning up all pods...")
-	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	nsList, err := clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	panicIfError(err)
 
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
@@ -234,14 +235,14 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 			if strings.HasPrefix(nsName, nsPrefix) {
 				log.Infof("Namespace matches prefix, getting pods: %v", nsName)
 
-				podList, err := clientset.CoreV1().Pods(nsName).List(metav1.ListOptions{})
+				podList, err := clientset.CoreV1().Pods(nsName).List(context.Background(), metav1.ListOptions{})
 				panicIfError(err)
 
 				log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug(
 					"Pods present")
 				for _, pod := range podList.Items {
 					log.Infof("Deleting pod: %v", pod.ObjectMeta.Name)
-					err = clientset.CoreV1().Pods(nsName).Delete(pod.ObjectMeta.Name, deleteImmediately)
+					err = clientset.CoreV1().Pods(nsName).Delete(context.Background(), pod.ObjectMeta.Name, deleteImmediately)
 					panicIfError(err)
 					log.Infof("Deleted pod, cleaning up its netns: %v", pod.ObjectMeta.Name)
 					removeLocalPodNetworking(&pod)
@@ -265,7 +266,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 
 var zeroGracePeriod int64 = 0
 
-var deleteImmediately = &metav1.DeleteOptions{GracePeriodSeconds: &zeroGracePeriod}
+var deleteImmediately = metav1.DeleteOptions{GracePeriodSeconds: &zeroGracePeriod}
 
 func runCommand(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
