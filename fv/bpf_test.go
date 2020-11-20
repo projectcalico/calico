@@ -1423,7 +1423,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					BeforeEach(func() {
 						testSvc = k8sService(testSvcName, clusterIP, w[0][0], 80, tgtPort, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
-						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
@@ -1710,7 +1710,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					BeforeEach(func() {
 						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
-						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
@@ -1878,11 +1878,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							svc, err := k8sClient.CoreV1().
 								Services(testSvcNamespace).
-								Get(testSvcName, metav1.GetOptions{})
+								Get(context.Background(), testSvcName, metav1.GetOptions{})
 
 							testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
 
-							_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcUpdated)
+							_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(context.Background(), testSvcUpdated, metav1.UpdateOptions{})
 							Expect(err).NotTo(HaveOccurred())
 							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 								"Service endpoints didn't get created? Is controller-manager happy?")
@@ -1954,7 +1954,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							err := k8sClient.CoreV1().
 								Services(testSvcNamespace).
-								Delete(testSvcName, &metav1.DeleteOptions{})
+								Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
 							Expect(err).NotTo(HaveOccurred())
 							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(0))
 
@@ -2004,7 +2004,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// select all pods with port 8055
 						testSvc.Spec.Selector = map[string]string{"port": "8055"}
 						testSvc.Spec.SessionAffinity = "ClientIP"
-						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
@@ -2075,7 +2075,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							testSvc.Spec.ExternalTrafficPolicy = "Local"
 						}
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
-						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
@@ -2499,7 +2499,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testSvc = k8sService(testSvcName, "10.101.0.10",
 							tgtWorkload, 80, tgtPort, int32(npPort), testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
-						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
@@ -2940,7 +2940,7 @@ func k8sServiceWithExtIP(name, clusterIP string, w *workload.Workload, port,
 func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []v1.EndpointSubset {
 	ep, _ := k8s.CoreV1().
 		Endpoints(svc.ObjectMeta.Namespace).
-		Get(svc.ObjectMeta.Name, metav1.GetOptions{})
+		Get(context.Background(), svc.ObjectMeta.Name, metav1.GetOptions{})
 	log.WithField("endpoints",
 		spew.Sprint(ep)).Infof("Got endpoints for %s", svc.ObjectMeta.Name)
 	return ep.Subsets
@@ -2955,9 +2955,9 @@ func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() [
 func k8sUpdateService(k8sClient kubernetes.Interface, nameSpace, svcName string, oldsvc, newsvc *v1.Service) {
 	svc, err := k8sClient.CoreV1().
 		Services(nameSpace).
-		Get(svcName, metav1.GetOptions{})
+		Get(context.Background(), svcName, metav1.GetOptions{})
 	newsvc.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
-	_, err = k8sClient.CoreV1().Services(nameSpace).Update(newsvc)
+	_, err = k8sClient.CoreV1().Services(nameSpace).Update(context.Background(), newsvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, oldsvc), "10s").Should(HaveLen(1),
 		"Service endpoints didn't get created? Is controller-manager happy?")
@@ -2978,7 +2978,7 @@ func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clust
 		epslen = 0
 	}
 	testSvcNamespace = testSvc.ObjectMeta.Namespace
-	_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+	_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(epslen),
 		"Service endpoints didn't get created? Is controller-manager happy?")

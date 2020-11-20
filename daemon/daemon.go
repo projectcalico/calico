@@ -1225,7 +1225,7 @@ func discoverTyphaAddr(configParams *config.Config, k8sClientSet kubernetes.Inte
 
 	// If we get here, we need to look up the Typha service endpoints using the k8s API.
 	epClient := k8sClientSet.CoreV1().Endpoints(configParams.TyphaK8sNamespace)
-	eps, err := epClient.Get(configParams.TyphaK8sServiceName, metav1.GetOptions{})
+	eps, err := epClient.Get(context.Background(), configParams.TyphaK8sServiceName, metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
 		return "", err

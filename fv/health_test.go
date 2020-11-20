@@ -120,10 +120,10 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 				},
 			}
 			var err error
-			pod, err = k8sInfra.K8sClient.CoreV1().Pods("default").Create(pod)
+			pod, err = k8sInfra.K8sClient.CoreV1().Pods("default").Create(context.Background(), pod, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			pod.Status.PodIP = "10.0.0.1"
-			_, err = k8sInfra.K8sClient.CoreV1().Pods("default").UpdateStatus(pod)
+			_, err = k8sInfra.K8sClient.CoreV1().Pods("default").UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			podsToCleanUp = append(podsToCleanUp, testPodName)
 		}
@@ -131,7 +131,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		AfterEach(func() {
 			for _, name := range podsToCleanUp {
 				// It is possible for a local pod to be deleted by GC if node is gone.
-				err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
+				err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(context.Background(), name, metav1.DeleteOptions{})
 				if err != nil && !apierrs.IsNotFound(err) {
 					Expect(err).NotTo(HaveOccurred())
 				}

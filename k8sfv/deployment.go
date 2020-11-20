@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -90,7 +91,7 @@ func (d *localPlusRemotes) ensureNodeDefined(
 			Spec: v1.NodeSpec{},
 		}
 		log.WithField("node_in", node_in).Debug("Node defined")
-		node_out, err := clientset.CoreV1().Nodes().Create(node_in)
+		node_out, err := clientset.CoreV1().Nodes().Create(context.Background(), node_in, metav1.CreateOptions{})
 		log.WithField("node_out", node_out).Debug("Created node")
 		if err != nil {
 			panic(err)
@@ -113,13 +114,13 @@ func (d *localPlusRemotes) ChooseHost(clientset *kubernetes.Clientset) (h host) 
 
 func cleanupAllNodes(clientset *kubernetes.Clientset) {
 	log.Info("Cleaning up all nodes...")
-	nodeList, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodeList, err := clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 	log.WithField("count", len(nodeList.Items)).Info("Nodes present")
 	for _, node := range nodeList.Items {
-		err = clientset.CoreV1().Nodes().Delete(node.ObjectMeta.Name, deleteImmediately)
+		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.ObjectMeta.Name, deleteImmediately)
 		if err != nil {
 			panic(err)
 		}

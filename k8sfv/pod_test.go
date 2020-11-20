@@ -15,12 +15,14 @@
 package main
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Context("with a k8s clientset", func() {
@@ -63,7 +65,7 @@ var _ = Context("with a k8s clientset", func() {
 
 			// Clear the pod's IP address.
 			podOut.Status.PodIP = ""
-			_, err := clientset.CoreV1().Pods(nsName).UpdateStatus(podOut)
+			_, err := clientset.CoreV1().Pods(nsName).UpdateStatus(context.Background(), podOut, metav1.UpdateOptions{})
 			panicIfError(err)
 
 			// Short wait, then delete the pod.

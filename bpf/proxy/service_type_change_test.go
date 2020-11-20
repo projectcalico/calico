@@ -15,12 +15,14 @@
 package proxy_test
 
 import (
+	"context"
 	"net"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/felix/bpf/conntrack"
@@ -335,7 +337,7 @@ func setSvcTypeToClusterIP(testSvc *v1.Service, k8s *fake.Clientset) {
 	testSvc.Spec.LoadBalancerSourceRanges = []string{}
 	testSvc.Spec.Type = v1.ServiceTypeClusterIP
 	testSvc.Spec.Ports[0].NodePort = 0
-	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(context.Background(), testSvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -344,7 +346,7 @@ func setSvcTypeToExternalIP(testSvc *v1.Service, extIP []string, k8s *fake.Clien
 	testSvc.Spec.LoadBalancerSourceRanges = []string{}
 	testSvc.Spec.Type = v1.ServiceTypeClusterIP
 	testSvc.Spec.Ports[0].NodePort = 0
-	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(context.Background(), testSvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -353,7 +355,7 @@ func setSvcTypeToLoadBalancer(testSvc *v1.Service, extIP, srcRange []string, k8s
 	testSvc.Spec.LoadBalancerSourceRanges = srcRange
 	testSvc.Spec.Ports[0].NodePort = 0
 	testSvc.Spec.Type = v1.ServiceTypeLoadBalancer
-	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(context.Background(), testSvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -363,6 +365,6 @@ func setSvcTypeToNodePort(testSvc *v1.Service, npPort int32, k8s *fake.Clientset
 	testSvc.Spec.Ports[0].NodePort = npPort
 	testSvc.Spec.Type = v1.ServiceTypeNodePort
 	testSvc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{}
-	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(testSvc)
+	_, err := k8s.CoreV1().Services(v1.NamespaceDefault).Update(context.Background(), testSvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
