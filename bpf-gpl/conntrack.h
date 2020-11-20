@@ -713,7 +713,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 		CALI_CT_VERB("B: whitelisted %d.\n", v->b_to_a.whitelisted);
 
-		if (tcp_header && v->a_to_b.whitelisted && v->b_to_a.whitelisted) {
+		if (v->a_to_b.whitelisted && v->b_to_a.whitelisted) {
 			result.rc = CALI_CT_ESTABLISHED_BYPASS;
 		} else {
 			result.rc = CALI_CT_ESTABLISHED;
@@ -800,21 +800,28 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	__u32 ifindex = skb_ingress_ifindex(ctx->skb);
 
 	if (src_to_dst->ifindex != ifindex) {
+		// Conntrack entry records a different ingress interface than the one the
+		// packet arrived on (or it has no record yet).
 		if (CALI_F_TO_HOST) {
+			// Packet is towards the host so this program is the first to see the packet.
 			if (src_to_dst->ifindex == CT_INVALID_IFINDEX) {
-				/* we have not recorded the path for the opposite
-				 * direction yet, do it now.
-				 */
-				src_to_dst->ifindex = ifindex;
-				CALI_DEBUG("REV src_to_dst->ifindex %d\n", src_to_dst->ifindex);
+				// Conntrack entry has no record of the ingress interface, this should
+				// be a response packet but we can't be 100% sure.
+				CALI_CT_DEBUG("First response packet? ifindex=%d\n", ifindex);
 			} else {
-				CALI_CT_DEBUG("RPF expected %d to equal %d\n",
+				// The interface has changed; either a change to routing or someone's doing
+				// something nasty.
+				CALI_CT_DEBUG("CT RPF failed ifindex %d != %d\n",
 						src_to_dst->ifindex, ifindex);
-				if (ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_BYPASS) {
-					ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
-				}
-				ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
 			}
+			if (ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_BYPASS) {
+				// Disable bypass so the kernel can do its RPF check.
+				// The next BPF program to see the packet will update the interface
+				// after the RPF has passed.
+				CALI_CT_DEBUG("Disabling bypass to allow kernel RPF.");
+				ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
+			}
+			ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
 		} else {
 			/* if the devices do not match, we got here without bypassing the
 			 * host IP stack and RPF check allowed it, so update our records.
