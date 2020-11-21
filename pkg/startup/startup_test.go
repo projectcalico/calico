@@ -939,7 +939,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 					Name: fmt.Sprintf("racenode%02d", i+1),
 				},
 			}
-			_, err = cs.CoreV1().Nodes().Create(n)
+			_, err = cs.CoreV1().Nodes().Create(ctx, n, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 		}
 
@@ -970,7 +970,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 
 		// Clean up our Nodes.
 		for _, node := range nodes.Items {
-			err = cs.CoreV1().Nodes().Delete(node.Name, &metav1.DeleteOptions{})
+			err = cs.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
 			Expect(err).ToNot(HaveOccurred())
 		}
 	})
