@@ -43,6 +43,10 @@ import (
 	"github.com/projectcalico/felix/jitter"
 )
 
+const (
+	ConntrackCleanerPeriod = 10 * time.Second
+)
+
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
 // and programs it into the dataplane
 type Proxy interface {
@@ -335,7 +339,7 @@ func (p *proxy) conntrackCleaner(stopCh <-chan struct{}) {
 	log.Debug("Conntrack cleanup thread started")
 	defer log.Debug("Conntrack cleanup thread stopped")
 
-	ticker := jitter.NewTicker(10*time.Second, 100*time.Millisecond)
+	ticker := jitter.NewTicker(ConntrackCleanerPeriod, 100*time.Millisecond)
 
 	for {
 		// N.B. syncer needs to be told about when scanning starts and ends so that it
