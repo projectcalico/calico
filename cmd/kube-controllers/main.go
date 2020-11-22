@@ -234,7 +234,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 				)
 			}
 		}(k8sCheckDone)
-		k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do().StatusCode(&healthStatus)
+		k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(ctx).StatusCode(&healthStatus)
 		k8sCheckDone <- nil
 		if healthStatus != http.StatusOK {
 			log.WithError(err).Errorf("Failed to reach apiserver")

@@ -114,7 +114,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 
 		// Wait for the apiserver to be available.
 		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			return err
 		}, 30*time.Second, 1*time.Second).Should(BeNil())
 

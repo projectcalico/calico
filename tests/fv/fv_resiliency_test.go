@@ -72,7 +72,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 
 		// Wait for the apiserver to be available and for the default namespace to exist.
 		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().Get("default", metav1.GetOptions{})
+			_, err := k8sClient.CoreV1().Namespaces().Get(context.Background(), "default", metav1.GetOptions{})
 			return err
 		}, 30*time.Second, 1*time.Second).Should(BeNil())
 
@@ -96,7 +96,8 @@ var _ = Describe("[Resilience] PolicyController", func() {
 
 		// Create the NP.
 		Eventually(func() error {
-			_, err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Create(np)
+			_, err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Create(context.Background(),
+				np, metav1.CreateOptions{})
 			return err
 		}, time.Second*5).ShouldNot(HaveOccurred())
 
@@ -120,7 +121,8 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		It("should eventually add the data to calico's etcd", func() {
 			Skip("TODO: improve FV framework to handle pod restart")
 			testutils.Stop(apiserver)
-			_, err := calicoClient.NetworkPolicies().Delete(context.Background(), policyNamespace, genPolicyName, options.DeleteOptions{})
+			_, err := calicoClient.NetworkPolicies().Delete(context.Background(),
+				policyNamespace, genPolicyName, options.DeleteOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			testutils.Start(apiserver)
 			Eventually(func() error {
@@ -134,7 +136,8 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			Skip("TODO: improve FV framework to handle pod restart")
 			// Delete the Policy.
 			testutils.Stop(calicoEtcd)
-			err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Delete(policyName, &metav1.DeleteOptions{})
+			err := k8sClient.NetworkingV1().NetworkPolicies(policyNamespace).Delete(context.Background(),
+				policyName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			time.Sleep(10 * time.Second)

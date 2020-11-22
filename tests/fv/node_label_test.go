@@ -75,7 +75,7 @@ var _ = Describe("Node labeling tests", func() {
 
 		// Wait for the apiserver to be available.
 		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			return err
 		}, 30*time.Second, 1*time.Second).Should(BeNil())
 
@@ -104,7 +104,7 @@ var _ = Describe("Node labeling tests", func() {
 				},
 			},
 		}
-		_, err := k8sClient.CoreV1().Nodes().Create(kn)
+		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create a Calico node with a reference to it.
@@ -128,10 +128,10 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Kubernetes node labels.
-		kn, err = k8sClient.CoreV1().Nodes().Get(kn.Name, metav1.GetOptions{})
+		kn, err = k8sClient.CoreV1().Nodes().Get(context.Background(), kn.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		kn.Labels["label1"] = "value2"
-		_, err = k8sClient.CoreV1().Nodes().Update(kn)
+		_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect the node label to sync.
@@ -140,10 +140,10 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Delete the label, add a different one.
-		kn, err = k8sClient.CoreV1().Nodes().Get(kn.Name, metav1.GetOptions{})
+		kn, err = k8sClient.CoreV1().Nodes().Get(context.Background(), kn.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		kn.Labels = map[string]string{"label2": "value1"}
-		_, err = k8sClient.CoreV1().Nodes().Update(kn)
+		_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect the node labels to sync.
@@ -152,7 +152,7 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Delete the Kubernetes node.
-		err = k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
+		err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() *api.Node {
 			node, _ := c.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})

@@ -18,6 +18,7 @@
 package testutils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -96,10 +97,10 @@ func NewFlannelCluster(k8sClient *kubernetes.Clientset, network string) *Flannel
 func (f *FlannelCluster) Reset() {
 	// Delete the Kubernetes node.
 	for nodeName := range f.FlannelNodes {
-		err := f.k8sClient.CoreV1().Nodes().Delete(nodeName, &metav1.DeleteOptions{})
+		err := f.k8sClient.CoreV1().Nodes().Delete(context.Background(), nodeName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() bool {
-			_, err := f.k8sClient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+			_, err := f.k8sClient.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 			return apierrs.IsNotFound(err)
 		}, time.Second*2, 500*time.Millisecond).Should(Equal(true))
 	}
@@ -117,20 +118,22 @@ func (f *FlannelCluster) AddFlannelNode(nodeName, podCidr, backend, mac, ip stri
 
 	flannelNode := newFlannelNode(podCidr, backend, mac, ip)
 
-	node, err := f.k8sClient.CoreV1().Nodes().Create(&v1.Node{
-		TypeMeta: metav1.TypeMeta{Kind: "Node", APIVersion: "v1"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        nodeName,
-			Labels:      defaultLabels,
-			Annotations: flannelNode.getFlannelAnnotations(),
+	node, err := f.k8sClient.CoreV1().Nodes().Create(context.Background(),
+		&v1.Node{
+			TypeMeta: metav1.TypeMeta{Kind: "Node", APIVersion: "v1"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        nodeName,
+				Labels:      defaultLabels,
+				Annotations: flannelNode.getFlannelAnnotations(),
+			},
+			Spec: v1.NodeSpec{
+				PodCIDR: podCidr,
+			},
 		},
-		Spec: v1.NodeSpec{
-			PodCIDR: podCidr,
-		},
-	})
+		metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	_, err = f.k8sClient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	_, err = f.k8sClient.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
 	f.Nodes[nodeName] = node
@@ -140,13 +143,15 @@ func (f *FlannelCluster) AddFlannelNode(nodeName, podCidr, backend, mac, ip stri
 }
 
 func (f *FlannelCluster) AddDefaultCalicoConfigMap() {
-	_, err := f.k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).Create(&v1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "calico-config",
+	_, err := f.k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).Create(context.Background(),
+		&v1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "calico-config",
+			},
+			Data: map[string]string{"veth_mtu": "1450"},
 		},
-		Data: map[string]string{"veth_mtu": "1450"},
-	})
+		metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -185,7 +190,7 @@ func (f *FlannelCluster) AddFlannelDaemonset(name string) {
 		},
 	}
 
-	_, err := f.k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Create(ds)
+	_, err := f.k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Create(context.Background(), ds, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -235,7 +240,7 @@ func (f *FlannelCluster) AddCalicoDaemonset(name string) {
 		},
 	}
 
-	_, err := f.k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Create(ds)
+	_, err := f.k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Create(context.Background(), ds, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -290,6 +295,6 @@ func (f *FlannelCluster) AddCanalDaemonset(name string) {
 		},
 	}
 
-	_, err := f.k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Create(ds)
+	_, err := f.k8sClient.AppsV1().DaemonSets(metav1.NamespaceSystem).Create(context.Background(), ds, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }

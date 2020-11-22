@@ -15,6 +15,7 @@
 package flannelmigration
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"time"
@@ -37,16 +38,16 @@ type daemonset string
 // Delete a daemonset and all dependents.
 func (d daemonset) DeleteForeground(k8sClientset *kubernetes.Clientset, namespace string) error {
 	policy := metav1.DeletePropagationForeground
-	options := &metav1.DeleteOptions{
+	options := metav1.DeleteOptions{
 		PropagationPolicy: &policy,
 	}
-	return k8sClientset.AppsV1().DaemonSets(namespace).Delete(string(d), options)
+	return k8sClientset.AppsV1().DaemonSets(namespace).Delete(context.Background(), string(d), options)
 }
 
 // Check if daemonset exists or not.
 // Return true if not exists.
 func (d daemonset) CheckNotExists(k8sClientset *kubernetes.Clientset, namespace string) (bool, error) {
-	_, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
+	_, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
 	if apierrs.IsNotFound(err) {
 		return true, nil
 	}
@@ -57,7 +58,7 @@ func (d daemonset) CheckNotExists(k8sClientset *kubernetes.Clientset, namespace 
 // Get value of a label for daemonset.
 // Return value if key exists.
 func (d daemonset) getLabelValue(k8sClientset *kubernetes.Clientset, namespace, key string) (bool, string, error) {
-	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
+	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
 	if err != nil {
 		return false, "", err
 	}
@@ -71,7 +72,7 @@ func (d daemonset) getLabelValue(k8sClientset *kubernetes.Clientset, namespace, 
 
 // Get spec of a container from a daemonset.
 func (d daemonset) getContainerSpec(k8sClientset *kubernetes.Clientset, namespace, containerName string) (*v1.Container, error) {
-	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
+	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +121,7 @@ func (d daemonset) GetContainerEnv(k8sClientset *kubernetes.Clientset, namespace
 // Wait for daemonset to disappear.
 func (d daemonset) WaitForDaemonsetNotFound(k8sClientset *kubernetes.Clientset, namespace string, interval, timeout time.Duration) error {
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		_, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
+		_, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
 		if apierrs.IsNotFound(err) {
 			return true, nil
 		}
@@ -134,7 +135,7 @@ func (d daemonset) WaitForDaemonsetNotFound(k8sClientset *kubernetes.Clientset, 
 
 // Remove node selectors from daemonset.
 func (d daemonset) RemoveNodeSelector(k8sClientset *kubernetes.Clientset, namespace string, selector map[string]string) error {
-	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
+	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -148,7 +149,7 @@ func (d daemonset) RemoveNodeSelector(k8sClientset *kubernetes.Clientset, namesp
 	}
 
 	if needUpdate {
-		_, err = k8sClientset.AppsV1().DaemonSets(namespace).Update(ds)
+		_, err = k8sClientset.AppsV1().DaemonSets(namespace).Update(context.Background(), ds, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
@@ -160,7 +161,7 @@ func (d daemonset) RemoveNodeSelector(k8sClientset *kubernetes.Clientset, namesp
 // Add node selectors to daemonset.
 // If node selectors has been set already, do nothing.
 func (d daemonset) AddNodeSelector(k8sClientset *kubernetes.Clientset, namespace string, selector map[string]string) error {
-	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
+	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -179,7 +180,7 @@ func (d daemonset) AddNodeSelector(k8sClientset *kubernetes.Clientset, namespace
 	}
 
 	if needUpdate {
-		_, err = k8sClientset.AppsV1().DaemonSets(namespace).Update(ds)
+		_, err = k8sClientset.AppsV1().DaemonSets(namespace).Update(context.Background(), ds, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
@@ -244,7 +245,7 @@ func (p k8spod) RunPodOnNodeTillComplete(k8sClientset *kubernetes.Clientset, nam
 	}
 
 	logs := ""
-	pod, err := k8sClientset.CoreV1().Pods(namespace).Create(podSpec)
+	pod, err := k8sClientset.CoreV1().Pods(namespace).Create(context.Background(), podSpec, metav1.CreateOptions{})
 	if err != nil {
 		return logs, err
 	}
@@ -261,7 +262,7 @@ func (p k8spod) RunPodOnNodeTillComplete(k8sClientset *kubernetes.Clientset, nam
 	}
 
 	// Delete pod if everything is fine. If not, leave pod running to get log manually.
-	err = k8sClientset.CoreV1().Pods(namespace).Delete(pod.Name, &metav1.DeleteOptions{})
+	err = k8sClientset.CoreV1().Pods(namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
 	if err != nil {
 		return logs, err
 	}
@@ -277,7 +278,7 @@ func getPodContainerLog(k8sClientSet *kubernetes.Clientset, namespace, podName, 
 		Name(podName).SubResource("log").
 		Param("container", containerName).
 		Param("previous", "false").
-		Do().
+		Do(context.Background()).
 		Raw()
 	if err != nil {
 		return "", err
@@ -288,7 +289,7 @@ func getPodContainerLog(k8sClientSet *kubernetes.Clientset, namespace, podName, 
 // waitForPodSuccessTimeout returns nil if the pod reached state success, or an error if it reached failure or ran too long.
 func waitForPodSuccessTimeout(k8sClientset *kubernetes.Clientset, podName, namespace string, interval, timeout time.Duration) error {
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		pod, err := k8sClientset.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+		pod, err := k8sClientset.CoreV1().Pods(namespace).Get(context.Background(), podName, metav1.GetOptions{})
 		if err != nil {
 			// Cannot get pod yet, retry.
 			return false, err
@@ -312,7 +313,7 @@ type k8snode string
 func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...map[string]string) error {
 	nodeName := string(n)
 	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
-		node, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+		node, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -329,7 +330,7 @@ func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...
 		}
 
 		if needUpdate {
-			_, err := k8sClientset.CoreV1().Nodes().Update(node)
+			_, err := k8sClientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 			if err == nil {
 				return true, nil
 			}
@@ -351,7 +352,7 @@ func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...
 func (n k8snode) removeNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...map[string]string) error {
 	nodeName := string(n)
 	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
-		node, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+		node, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -367,7 +368,7 @@ func (n k8snode) removeNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps 
 		}
 
 		if needUpdate {
-			_, err := k8sClientset.CoreV1().Nodes().Update(node)
+			_, err := k8sClientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 			if err == nil {
 				return true, nil
 			}
@@ -387,15 +388,15 @@ func (n k8snode) removeNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps 
 // Start deletion process for pods on a node which satisfy a filter.
 func (n k8snode) deletePodsForNode(k8sClientset *kubernetes.Clientset, filter func(pod *v1.Pod) bool) error {
 	nodeName := string(n)
-	podList, err := k8sClientset.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{
-		FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String()})
+	podList, err := k8sClientset.CoreV1().Pods(metav1.NamespaceAll).List(context.Background(),
+		metav1.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String()})
 	if err != nil {
 		return err
 	}
 
 	for _, pod := range podList.Items {
 		if filter(&pod) {
-			err = k8sClientset.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &metav1.DeleteOptions{})
+			err = k8sClientset.CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
 			if err != nil && !apierrs.IsNotFound(err) {
 				return err
 			}
@@ -426,6 +427,7 @@ func (n k8snode) waitPodReadyForNode(k8sClientset *kubernetes.Clientset, namespa
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
 		nodeName := string(n)
 		podList, err := k8sClientset.CoreV1().Pods(namespace).List(
+			context.Background(),
 			metav1.ListOptions{
 				FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String(),
 				LabelSelector: labels.SelectorFromSet(label).String(),
@@ -464,6 +466,7 @@ func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace,
 	found := false
 	for k, v := range label {
 		podList, err := k8sClientset.CoreV1().Pods(namespace).List(
+			context.Background(),
 			metav1.ListOptions{
 				FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String(),
 				LabelSelector: labels.SelectorFromSet(map[string]string{k: v}).String(),
@@ -554,7 +557,7 @@ func getNodeLabelValue(node *v1.Node, key string) (string, error) {
 
 // Update a value in ConfigMap.
 func updateConfigMapValue(k8sClientset *kubernetes.Clientset, namespace, name, key, value string) error {
-	configMap, err := k8sClientset.CoreV1().ConfigMaps(namespace).Get(name, metav1.GetOptions{})
+	configMap, err := k8sClientset.CoreV1().ConfigMaps(namespace).Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -565,7 +568,7 @@ func updateConfigMapValue(k8sClientset *kubernetes.Clientset, namespace, name, k
 	}
 	configMap.Data[key] = value
 
-	_, err = k8sClientset.CoreV1().ConfigMaps(namespace).Update(configMap)
+	_, err = k8sClientset.CoreV1().ConfigMaps(namespace).Update(context.Background(), configMap, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -582,7 +585,7 @@ func (n k8snode) waitForNodeLabelDisappear(k8sClientset *kubernetes.Clientset, k
 	log.Infof("Waiting for node %s label %s to disappear.", nodeName, key)
 
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		node, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+		node, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			// Cannot get node, something wrong, stop waiting.
 			return true, err
@@ -601,7 +604,7 @@ func (n k8snode) waitForNodeLabelDisappear(k8sClientset *kubernetes.Clientset, k
 // Return true if a node does not exist in the cluster.
 func (n k8snode) CheckNotExists(k8sClientset *kubernetes.Clientset) (bool, error) {
 	nodeName := string(n)
-	_, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	_, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if apierrs.IsNotFound(err) {
 		return true, nil
 	}

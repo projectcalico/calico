@@ -231,7 +231,7 @@ func (c *NodeController) cleanupNode(cnode string, allocations []model.Allocatio
 
 // nodeExists returns true if the given node still exists in the Kubernetes API.
 func (c *NodeController) nodeExists(knode string) bool {
-	_, err := c.k8sClientset.CoreV1().Nodes().Get(knode, v1.GetOptions{})
+	_, err := c.k8sClientset.CoreV1().Nodes().Get(context.Background(), knode, v1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false
@@ -244,7 +244,7 @@ func (c *NodeController) nodeExists(knode string) bool {
 // podExistsOnNode returns whether the given pod exists in the Kubernetes API and is on the provided Kubernetes node.
 // Note that the "node" parameter is the name of the Kubernetes node in the Kubernetes API.
 func (c *NodeController) podExistsOnNode(name, ns, node string) bool {
-	p, err := c.k8sClientset.CoreV1().Pods(ns).Get(name, v1.GetOptions{})
+	p, err := c.k8sClientset.CoreV1().Pods(ns).Get(context.Background(), name, v1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false

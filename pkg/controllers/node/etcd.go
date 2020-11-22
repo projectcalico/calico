@@ -40,7 +40,7 @@ func (c *NodeController) syncDeleteEtcd() error {
 	c.rl.Forget(RateLimitCalicoList)
 
 	time.Sleep(c.rl.When(RateLimitK8s))
-	kNodes, err := c.k8sClientset.CoreV1().Nodes().List(meta_v1.ListOptions{})
+	kNodes, err := c.k8sClientset.CoreV1().Nodes().List(context.Background(), meta_v1.ListOptions{})
 	if err != nil {
 		log.WithError(err).Error("Error listing K8s nodes")
 		return err
