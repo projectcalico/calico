@@ -361,12 +361,12 @@ func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 	}
 
 	for _, crd := range calicoCRDs {
-		_, err := cs.ApiextensionsV1().CustomResourceDefinitions().Create(crd)
+		_, err := cs.ApiextensionsV1().CustomResourceDefinitions().Create(context.Background(), crd, v1.CreateOptions{})
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
 				// If the CRD already exists attempt to update it.
 				// Need to retrieve the current CRD first.
-				currentCRD, err := cs.ApiextensionsV1().CustomResourceDefinitions().Get(crd.GetObjectMeta().GetName(), v1.GetOptions{})
+				currentCRD, err := cs.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), crd.GetObjectMeta().GetName(), v1.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("Error retrieving existing CRD to update: %s: %s", crd.GetObjectMeta().GetName(), err)
 				}
@@ -375,7 +375,7 @@ func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 				crd.GetObjectMeta().SetResourceVersion(currentCRD.GetObjectMeta().GetResourceVersion())
 
 				// Update the CRD.
-				_, err = cs.ApiextensionsV1().CustomResourceDefinitions().Update(crd)
+				_, err = cs.ApiextensionsV1().CustomResourceDefinitions().Update(context.Background(), crd, v1.UpdateOptions{})
 				if err != nil {
 					return fmt.Errorf("Error updating CRD %s: %s", crd.GetObjectMeta().GetName(), err)
 				}
