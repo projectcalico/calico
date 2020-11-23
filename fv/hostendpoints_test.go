@@ -159,6 +159,25 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
 	}
+	expectLocalPodToRemotePodViaServiceTraffic := func() {
+		for i := range felixes {
+			// Allocate a service IP.
+			serviceIP := fmt.Sprintf("10.96.10.%v", i+1)
+
+			// Add a NAT rule for the service IP.
+			felixes[i].Exec(
+				"iptables",
+				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+				"-W", "100000", // How often to probe the lock in microsecs.
+				"-t", "nat", "-A", "PREROUTING",
+				"--destination", serviceIP,
+				"-j", "DNAT", "--to-destination", w[1-i].IP,
+			)
+
+			// Expect to connect from local pod to the service IP.
+			cc.ExpectSome(w[i], connectivity.TargetIP(serviceIP), 8055)
+		}
+	}
 	expectDenyHostToHostTraffic := func() {
 		cc.ExpectNone(felixes[0], hostW[1])
 		cc.ExpectNone(felixes[1], hostW[0])
@@ -222,6 +241,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			expectHostToOwnPodTraffic()
 			expectHostToOwnPodViaServiceTraffic()
 			expectDenyHostToRemotePodViaServiceTraffic()
+			expectLocalPodToRemotePodViaServiceTraffic()
 			cc.CheckConnectivity()
 		})
 
