@@ -49,7 +49,6 @@ spec:
                 type: string
             required:
             - cidr
-            - deleted
             - node
             - state
             type: object
