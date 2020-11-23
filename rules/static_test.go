@@ -38,9 +38,60 @@ var _ = Describe("Static", func() {
 		rr = NewRenderer(conf).(*DefaultRuleRenderer)
 	})
 
+	checkManglePostrouting := func(ipVersion uint8, ipvs bool) {
+		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
+			expRules := []Rule{
+				// Accept already accepted.
+				{Match: Match().MarkSingleBitSet(0x10),
+					Action: AcceptAction{},
+				},
+			}
+			if ipvs {
+				// Accept IPVS-forwarded traffic.
+				expRules = append(expRules, Rule{
+					Match:  Match().MarkNotClear(0xff00),
+					Action: AcceptAction{},
+				})
+			}
+			if conf.IPIPEnabled {
+				expRules = append(expRules, Rule{
+					Match:   Match().ProtocolNum(4).DestIPSet("cali40all-hosts-net").SrcAddrType(AddrTypeLocal, false),
+					Action:  AcceptAction{},
+					Comment: []string{"Allow IPIP packets to other Calico hosts"},
+				})
+			}
+			if conf.VXLANEnabled {
+				expRules = append(expRules, Rule{
+					Match:   Match().ProtocolNum(17).DestPorts(0).SrcAddrType(AddrTypeLocal, false).DestIPSet("cali40all-vxlan-net"),
+					Action:  AcceptAction{},
+					Comment: []string{"Allow VXLAN packets to other whitelisted hosts"},
+				})
+			}
+			expRules = append(expRules, []Rule{
+				// Clear all Calico mark bits.
+				{Action: ClearMarkAction{Mark: 0xf0}},
+				// For DNAT'd traffic, apply host endpoint policy.
+				{
+					Match:  Match().ConntrackState("DNAT"),
+					Action: JumpAction{Target: ChainDispatchToHostEndpoint},
+				},
+				// Accept if policy allowed packet.
+				{
+					Match:   Match().MarkSingleBitSet(0x10),
+					Action:  AcceptAction{},
+					Comment: []string{"Host endpoint policy accepted packet."},
+				},
+			}...)
+			Expect(rr.StaticManglePostroutingChain(ipVersion)).To(Equal(&Chain{
+				Name:  "cali-POSTROUTING",
+				Rules: expRules,
+			}))
+		})
+	}
+
 	for _, trueOrFalse := range []bool{true, false} {
 		kubeIPVSEnabled := trueOrFalse
-		Describe("with default config", func() {
+		Describe(fmt.Sprintf("with default config and IPVS=%v", kubeIPVSEnabled), func() {
 			BeforeEach(func() {
 				conf = Config{
 					WorkloadIfacePrefixes: []string{"cali"},
@@ -209,6 +260,8 @@ var _ = Describe("Static", func() {
 							},
 						},
 					}
+
+					checkManglePostrouting(ipVersion, kubeIPVSEnabled)
 
 					It("should include the expected forward chain in the filter chains", func() {
 						Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-FORWARD")).To(Equal(&Chain{
@@ -544,6 +597,8 @@ var _ = Describe("Static", func() {
 				}
 			})
 
+			checkManglePostrouting(4, kubeIPVSEnabled)
+
 			expInputChainIPIPV4IPVS := &Chain{
 				Name: "cali-INPUT",
 				Rules: []Rule{
@@ -850,6 +905,8 @@ var _ = Describe("Static", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabled = true
 				})
+
+				checkManglePostrouting(4, kubeIPVSEnabled)
 
 				It("IPv4: Should return expected NAT postrouting chain", func() {
 					Expect(rr.StaticNATPostroutingChains(4)).To(Equal([]*Chain{
