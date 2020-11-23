@@ -144,7 +144,7 @@ func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 		n.Name = host
 
 		// Create/Update the node
-		newNode, err := kc.CoreV1().Nodes().Create(&n)
+		newNode, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
 				return nil
@@ -164,7 +164,7 @@ func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error
 	var err error = nil
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
 		// delete the node in Kubernetes.
-		deleteErr := kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
+		deleteErr := kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
 		log.WithError(deleteErr).Info("node deleted")
 	} else {
 		// Otherwise, delete it in Calico.

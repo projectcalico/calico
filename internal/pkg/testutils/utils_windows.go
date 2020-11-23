@@ -59,13 +59,13 @@ func WipeK8sPods(netconf string) {
 	}
 
 	log.WithField("clientset:", clientset).Info("DEBUG")
-	pods, err := clientset.CoreV1().Pods(K8S_TEST_NS).List(metav1.ListOptions{})
+	pods, err := clientset.CoreV1().Pods(K8S_TEST_NS).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
 	for _, pod := range pods.Items {
-		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
+		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
 
 		if err != nil {
 			if kerrors.IsNotFound(err) {
