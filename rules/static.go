@@ -604,7 +604,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	// host endpoint. It also has no endpoint mark so it must be going from a process.
 
 	if ipVersion == 4 {
-		r.addIPIPVXLANEgressAllowRules(&rules)
+		rules = r.appendIPIPVXLANEgressAllowRules(rules)
 	}
 
 	// Apply host endpoint policy.
@@ -629,13 +629,13 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) addIPIPVXLANEgressAllowRules(rules *[]Rule) {
+func (r *DefaultRuleRenderer) appendIPIPVXLANEgressAllowRules(rules []Rule) []Rule {
 
 	if r.IPIPEnabled {
 		// When IPIP is enabled, auto-allow IPIP traffic to other Calico nodes.  Without this,
 		// it's too easy to make a host policy that blocks IPIP traffic, resulting in very confusing
 		// connectivity problems.
-		*rules = append(*rules,
+		rules = append(rules,
 			Rule{
 				Match: Match().ProtocolNum(ProtoIPIP).
 					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostNets)).
@@ -650,7 +650,7 @@ func (r *DefaultRuleRenderer) addIPIPVXLANEgressAllowRules(rules *[]Rule) {
 		// When VXLAN is enabled, auto-allow VXLAN traffic to other Calico nodes.  Without this,
 		// it's too easy to make a host policy that blocks VXLAN traffic, resulting in very confusing
 		// connectivity problems.
-		*rules = append(*rules,
+		rules = append(rules,
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
@@ -665,6 +665,8 @@ func (r *DefaultRuleRenderer) addIPIPVXLANEgressAllowRules(rules *[]Rule) {
 	// TODO(rlb): For wireguard, we add the destination port to the failsafes. We may want to revisit this so that we
 	// only include nodes that support wireguard. This will tie in with whether or not we want to include external
 	// wireguard destinations.
+
+	return rules
 }
 
 func (r *DefaultRuleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
@@ -872,7 +874,7 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Cha
 	// host-based process or host-networked pod.
 
 	if ipVersion == 4 {
-		r.addIPIPVXLANEgressAllowRules(&rules)
+		rules = r.appendIPIPVXLANEgressAllowRules(rules)
 	}
 
 	// Note: the similar sequence in filterOutputChain has rules here to detect traffic to local
