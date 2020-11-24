@@ -239,13 +239,13 @@ This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't 
 This section describes how to create a new major or minor release. It assumes that the release branch has already been created
 as described in the section above.
 
-- Move current release to the archives
-
 1. Checkout the previously created release branch.
 
    ```
    git checkout release-vX.Y
    ```
+
+1. Add the previous release to `_data/archives.yaml`. Make this change in master as well.
 
 1. Add the new version to the correct release section in `_data/versions.yml`.
 
@@ -290,9 +290,7 @@ as described in the section above.
 (Note: This site contains `LATEST_RELEASE` environment variable in netlify UI, using which `netlify.toml` picks up the correct build for latest release.)
 This will cause `docs.projectcalico.org` to be updated (after a few minutes). Validate that everything looks correct.
 
-## Adding the previous release to docs.projectcalico.org/archive
-
-1. Archive site should already be accessible if the candidate release process is followed as per this guide while cutting the respective release.
+## Confirm the previous release is archived
 
 1. Ensure that the site is accessible by visiting `docs.projectcalico.org/archive/<version>/`.
 
