@@ -316,24 +316,9 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 							Expect(err).NotTo(HaveOccurred())
 						})
 
-						// Test each of these cases separately, to avoid the possibility of one case
-						// setting up conntrack state that allows a different case to pass.
-						It("allows host0 to remote host-networked workload", func() {
-							cc.ExpectSome(felixes[0], hostW[1])
-							cc.CheckConnectivity()
-						})
-						It("allows host1 to remote host-networked workload", func() {
-							cc.ExpectSome(felixes[1], hostW[0])
-							cc.CheckConnectivity()
-						})
-						It("allows host0 to remote Calico-networked workload", func() {
-							cc.ExpectSome(felixes[0], w[1])
-							cc.CheckConnectivity()
-						})
-						It("allows host1 to remote Calico-networked workload", func() {
-							cc.ExpectSome(felixes[1], w[0])
-							cc.CheckConnectivity()
-						})
+						// Please take care if adding other connectivity checks into this case, to
+						// avoid those other checks setting up conntrack state that allows the
+						// existing case to pass for a different reason.
 						It("allows host0 to remote Calico-networked workload via service IP", func() {
 							// Allocate a service IP.
 							serviceIP := "10.96.10.1"
@@ -350,24 +335,6 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 
 							// Expect to connect to the service IP.
 							cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), 8055)
-							cc.CheckConnectivity()
-						})
-						It("allows host1 to remote Calico-networked workload via service IP", func() {
-							// Allocate a service IP.
-							serviceIP := "10.96.10.2"
-
-							// Add a NAT rule for the service IP.
-							felixes[1].Exec(
-								"iptables",
-								"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-								"-W", "100000", // How often to probe the lock in microsecs.
-								"-t", "nat", "-A", "OUTPUT",
-								"--destination", serviceIP,
-								"-j", "DNAT", "--to-destination", w[0].IP,
-							)
-
-							// Expect to connect to the service IP.
-							cc.ExpectSome(felixes[1], connectivity.TargetIP(serviceIP), 8055)
 							cc.CheckConnectivity()
 						})
 					})
