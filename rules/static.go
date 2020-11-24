@@ -603,9 +603,40 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	// If we reach here, the packet is not going to a workload so it must be going to a
 	// host endpoint. It also has no endpoint mark so it must be going from a process.
 
-	if ipVersion == 4 {
-		rules = r.appendIPIPVXLANEgressAllowRules(rules)
+	if ipVersion == 4 && r.IPIPEnabled {
+		// When IPIP is enabled, auto-allow IPIP traffic to other Calico nodes.  Without this,
+		// it's too easy to make a host policy that blocks IPIP traffic, resulting in very confusing
+		// connectivity problems.
+		rules = append(rules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoIPIP).
+					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostNets)).
+					SrcAddrType(AddrTypeLocal, false),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow IPIP packets to other Calico hosts"},
+			},
+		)
 	}
+
+	if ipVersion == 4 && r.VXLANEnabled {
+		// When VXLAN is enabled, auto-allow VXLAN traffic to other Calico nodes.  Without this,
+		// it's too easy to make a host policy that blocks VXLAN traffic, resulting in very confusing
+		// connectivity problems.
+		rules = append(rules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.Config.VXLANPort)).
+					SrcAddrType(AddrTypeLocal, false).
+					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
+				Action:  r.filterAllowAction,
+				Comment: []string{"Allow VXLAN packets to other whitelisted hosts"},
+			},
+		)
+	}
+
+	// TODO(rlb): For wireguard, we add the destination port to the failsafes. We may want to revisit this so that we
+	// only include nodes that support wireguard. This will tie in with whether or not we want to include external
+	// wireguard destinations.
 
 	// Apply host endpoint policy.
 	rules = append(rules,
@@ -627,46 +658,6 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		Name:  ChainFilterOutput,
 		Rules: rules,
 	}
-}
-
-func (r *DefaultRuleRenderer) appendIPIPVXLANEgressAllowRules(rules []Rule) []Rule {
-
-	if r.IPIPEnabled {
-		// When IPIP is enabled, auto-allow IPIP traffic to other Calico nodes.  Without this,
-		// it's too easy to make a host policy that blocks IPIP traffic, resulting in very confusing
-		// connectivity problems.
-		rules = append(rules,
-			Rule{
-				Match: Match().ProtocolNum(ProtoIPIP).
-					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostNets)).
-					SrcAddrType(AddrTypeLocal, false),
-				Action:  r.filterAllowAction,
-				Comment: []string{"Allow IPIP packets to other Calico hosts"},
-			},
-		)
-	}
-
-	if r.VXLANEnabled {
-		// When VXLAN is enabled, auto-allow VXLAN traffic to other Calico nodes.  Without this,
-		// it's too easy to make a host policy that blocks VXLAN traffic, resulting in very confusing
-		// connectivity problems.
-		rules = append(rules,
-			Rule{
-				Match: Match().ProtocolNum(ProtoUDP).
-					DestPorts(uint16(r.Config.VXLANPort)).
-					SrcAddrType(AddrTypeLocal, false).
-					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
-				Action:  r.filterAllowAction,
-				Comment: []string{"Allow VXLAN packets to other whitelisted hosts"},
-			},
-		)
-	}
-
-	// TODO(rlb): For wireguard, we add the destination port to the failsafes. We may want to revisit this so that we
-	// only include nodes that support wireguard. This will tie in with whether or not we want to include external
-	// wireguard destinations.
-
-	return rules
 }
 
 func (r *DefaultRuleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
