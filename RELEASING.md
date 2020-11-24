@@ -41,7 +41,7 @@ To release Calico, you need **the following permissions**:
 
 - You must be able to access binaries.projectcalico.org.
 
-- You must have admin access to docs.projectcalico.org site on netlify. 
+- You must have admin access to docs.projectcalico.org site on netlify.
 
 You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
 
@@ -168,9 +168,9 @@ at the same time that subcomponent release branches are cut, often well before t
        version: vX.Y
    ```
 
-1. In [netlify.toml](netlify.toml) 
+1. In [netlify.toml](netlify.toml)
     1. set the `RELEASE_VERSION` environment variable to `vX.Y`.
-    1. add the below redirect at the top of redirects. 
+    1. add the below redirect at the top of redirects.
     ```
        # unforced generic redirect of /vX.Y to /
        [[redirects]]
@@ -179,8 +179,8 @@ at the same time that subcomponent release branches are cut, often well before t
          status = 301
     ```
 
-1. In [netlify/_redirects](_redirects) add a new for the new release following the other examples (Note: This page may vary with release, also just non-slash to slash redirects doesn't work. It needs to point to a page). 
-This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't fail with 404. 
+1. In [netlify/_redirects](_redirects) add a new for the new release following the other examples (Note: This page may vary with release, also just non-slash to slash redirects doesn't work. It needs to point to a page).
+This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't fail with 404.
 
 1. Create the the release notes file. This does not need to be populated now but does need to exist.
 
@@ -204,17 +204,17 @@ This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't 
 
 ### Publishing the candidate release branch
 
-1. Check out to the candidate release branch that is created as per the instructions [here](#creating-a-candidate-release-branch). 
+1. Check out to the candidate release branch that is created as per the instructions [here](#creating-a-candidate-release-branch).
 
    ```
    git checkout release-vX.Y
    ```
 
-1. On netlify create a new site using the `release-vX.Y` branch (You should at least have write access to this repo for site creation) 
+1. On netlify create a new site using the `release-vX.Y` branch (You should at least have write access to this repo for site creation)
 
 1. Rename the randomly generated site name to follow the same naming convention as other releases (Ex: `calico-vX-Y`).
 
-1. Ensure that the site is generated properly by visiting site URL (Ex. https://calico-vX-Y.netlify.app/archive/vX.Y/).  
+1. Ensure that the site is generated properly by visiting site URL (Ex. https://calico-vX-Y.netlify.app/archive/vX.Y/).
 
 1. After ensuring that the site deployment is successful, in current production branch's [netlify.toml](netlify.toml), add below proxy rules for the release candidate at the top of `redirects` rules.
 
@@ -223,15 +223,15 @@ This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't 
       from = "/archive/vX.Y/*"
       to = "https://calico-vX-Y.netlify.app/archive/vX.Y/:splat"
       status = 200
-    
+
     [[redirects]]
       from = "/vX.Y/*"
       to = "https://calico-vX-Y.netlify.app/vX.Y/:splat"
       status = 200
    ```
 
-1. Ensure that these proxy rules are cherry-picked to master branch as well so that future releases, which would be cut from master, will have references to this releases.  
-   
+1. Ensure that these proxy rules are cherry-picked to master branch as well so that future releases, which would be cut from master, will have references to this releases.
+
 1. Open a pull request to upstream production branch, get it reviewed and merged. This would make the candidate site docs available at `docs.projectcalico.org/archive/vX.Y/` (Note: the trailing slash)
 
 ### Promoting to be the latest release in the docs
@@ -239,13 +239,13 @@ This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't 
 This section describes how to create a new major or minor release. It assumes that the release branch has already been created
 as described in the section above.
 
-- Move current release to the archives
-
 1. Checkout the previously created release branch.
 
    ```
    git checkout release-vX.Y
    ```
+
+1. Add the previous release to `_data/archives.yaml`. Make this change in master as well.
 
 1. Add the new version to the correct release section in `_data/versions.yml`.
 
@@ -262,7 +262,7 @@ as described in the section above.
    ```
    git add _data/release-notes/<VERSION>-release-notes.md
    ```
-            
+
 1. Commit your changes. For example:
 
    ```
@@ -284,15 +284,13 @@ as described in the section above.
    make release-publish
    ```
 
-1. Merge the PR. 
+1. Merge the PR.
 
-1. On netlify locate `docs.projectcalico.org` site and the update `Production branch` in `Settings -> Build & deploy -> Deploy contexts` to `release-vX.Y` in  site settings and trigger the deployment. 
+1. On netlify locate `docs.projectcalico.org` site and the update `Production branch` in `Settings -> Build & deploy -> Deploy contexts` to `release-vX.Y` in  site settings and trigger the deployment.
 (Note: This site contains `LATEST_RELEASE` environment variable in netlify UI, using which `netlify.toml` picks up the correct build for latest release.)
 This will cause `docs.projectcalico.org` to be updated (after a few minutes). Validate that everything looks correct.
 
-## Adding the previous release to docs.projectcalico.org/archive
-
-1. Archive site should already be accessible if the candidate release process is followed as per this guide while cutting the respective release. 
+## Confirm the previous release is archived
 
 1. Ensure that the site is accessible by visiting `docs.projectcalico.org/archive/<version>/`.
 
