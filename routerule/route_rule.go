@@ -16,6 +16,7 @@ package routerule
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -74,6 +75,12 @@ type RouteRules struct {
 
 	// Testing shims, swapped with mock versions for UT
 	newNetlinkHandle func() (HandleIface, error)
+
+	OpReporter OpReporter
+}
+
+type OpReporter interface {
+	RecordOperation(name string)
 }
 
 func New(ipVersion int, priority int, tableIndexSet set.Set, updateFunc, removeFunc RulesMatchFunc, netlinkTimeout time.Duration) (*RouteRules, error) {
@@ -169,7 +176,7 @@ func (r *RouteRules) RemoveRule(rule *Rule) {
 }
 
 func (r *RouteRules) QueueResync() {
-	r.logCxt.Info("Queueing a resync of routing rules.")
+	r.logCxt.Debug("Queueing a resync of routing rules.")
 	r.inSync = false
 }
 
@@ -225,6 +232,10 @@ func (r *RouteRules) PrintCurrentRules() {
 func (r *RouteRules) Apply() error {
 	if r.inSync {
 		return nil
+	}
+
+	if r.OpReporter != nil {
+		r.OpReporter.RecordOperation(fmt.Sprint("resync-rules-v", r.IPVersion))
 	}
 
 	nl, err := r.getNetlinkHandle()

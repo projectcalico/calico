@@ -29,7 +29,6 @@ import (
 
 	"github.com/projectcalico/felix/bpf/state"
 	"github.com/projectcalico/felix/bpf/tc"
-
 	"github.com/projectcalico/felix/idalloc"
 
 	"k8s.io/client-go/kubernetes"
@@ -42,6 +41,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/arp"
@@ -60,7 +61,6 @@ import (
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/throttle"
 	"github.com/projectcalico/felix/wireguard"
-	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
 )
 
 const (
@@ -271,6 +271,8 @@ type InternalDataplane struct {
 	endpointsSourceV4 endpointsSource
 	ipsetsSourceV4    ipsetsSource
 	callbacks         *callbacks
+
+	logAccumulator *LogAccumulator
 }
 
 const (
@@ -323,6 +325,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ifaceAddrUpdates: make(chan *ifaceAddrsUpdate, 100),
 		config:           config,
 		applyThrottle:    throttle.New(10),
+		logAccumulator:   NewLogAccumulator(),
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
@@ -683,7 +686,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				dp.fromDataplane <- &proto.WireguardStatusUpdate{PublicKey: publicKey.String()}
 			}
 			return nil
-		})
+		},
+		dp.logAccumulator)
 	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard)
 	dp.RegisterManager(dp.wireguardManager) // IPv4-only
 
@@ -766,6 +770,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesNATTables...)
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesFilterTables...)
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesRawTables...)
+
+	for _, t := range dp.allIptablesTables {
+		t.OpReporter = dp.logAccumulator
+	}
+	for _, ips := range dp.ipSets {
+		ips.OpReporter = dp.logAccumulator
+	}
+	for _, r := range dp.routeTableSyncers() {
+		switch r := r.(type) {
+		case *routetable.RouteTable:
+			r.OpReporter = dp.logAccumulator
+		}
+	}
 
 	// Register that we will report liveness and readiness.
 	if config.HealthAggregator != nil {
@@ -1450,7 +1467,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					log.Info("Dataplane updates no longer throttled")
 					beingThrottled = false
 				}
-				log.Info("Applying dataplane updates")
+				log.Debug("Applying dataplane updates")
 				applyStart := time.Now()
 
 				// Actually apply the changes to the dataplane.
@@ -1464,13 +1481,16 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					// Dataplane is still dirty, record an error.
 					countDataplaneSyncErrors.Inc()
 				}
-				log.WithField("msecToApply", applyTime.Seconds()*1000.0).Info(
+
+				d.logAccumulator.EndOfIteration(applyTime)
+				log.WithField("msecToApply", applyTime.Seconds()*1000.0).Debug(
 					"Finished applying updates to dataplane.")
 
 				if !d.doneFirstApply {
 					log.WithField(
 						"secsSinceStart", time.Since(processStartTime).Seconds(),
 					).Info("Completed first update to dataplane.")
+					d.logAccumulator.RecordOperation("first-update")
 					d.doneFirstApply = true
 					if d.config.PostInSyncCallback != nil {
 						d.config.PostInSyncCallback()

@@ -24,13 +24,14 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
+	"github.com/projectcalico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/netlinkshim"
 	"github.com/projectcalico/felix/routerule"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/timeshim"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
@@ -153,6 +154,7 @@ type Wireguard struct {
 
 	// Callback function used to notify of public key updates for the local nodeData
 	statusCallback func(publicKey wgtypes.Key) error
+	opReporter     routerule.OpReporter
 }
 
 func New(
@@ -161,6 +163,7 @@ func New(
 	netlinkTimeout time.Duration,
 	deviceRouteProtocol int,
 	statusCallback func(publicKey wgtypes.Key) error,
+	opReporter routerule.OpReporter,
 ) *Wireguard {
 	return NewWithShims(
 		hostname,
@@ -173,6 +176,7 @@ func New(
 		timeshim.RealTime(),
 		deviceRouteProtocol,
 		statusCallback,
+		opReporter,
 	)
 }
 
@@ -188,6 +192,7 @@ func NewWithShims(
 	timeShim timeshim.Interface,
 	deviceRouteProtocol int,
 	statusCallback func(publicKey wgtypes.Key) error,
+	opReporter routerule.OpReporter,
 ) *Wireguard {
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
 	rt := routetable.NewWithShims(
@@ -199,9 +204,9 @@ func NewWithShims(
 		func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
 		&noOpConnTrack{},
 		timeShim,
-		nil, //deviceRouteSourceAddress
+		nil, // deviceRouteSourceAddress
 		deviceRouteProtocol,
-		true, //removeExternalRoutes
+		true, // removeExternalRoutes
 		config.RoutingTableIndex,
 	)
 	// Create routerule.
@@ -220,6 +225,9 @@ func NewWithShims(
 		// Wireguard is enabled, but could not create a routerule manager. This is unexpected.
 		log.WithError(err).Panic("Unexpected error creating rule manager")
 	}
+	if rr != nil {
+		rr.OpReporter = opReporter
+	}
 
 	return &Wireguard{
 		hostname:             hostname,
@@ -236,6 +244,7 @@ func NewWithShims(
 		statusCallback:       statusCallback,
 		localIPs:             set.New(),
 		localCIDRs:           set.New(),
+		opReporter:           opReporter,
 	}
 }
 
@@ -531,7 +540,10 @@ func (w *Wireguard) EndpointWireguardRemove(name string) {
 }
 
 func (w *Wireguard) QueueResync() {
-	log.Info("Queueing a resync of wireguard configuration")
+	log.Debug("Queueing a resync of wireguard configuration")
+	if w.opReporter != nil {
+		w.opReporter.RecordOperation("resync-wg")
+	}
 
 	// Flag for resync to ensure everything is still configured correctly.
 	// No need to resync the key. This will happen if the dataplane resync detects an inconsistency.

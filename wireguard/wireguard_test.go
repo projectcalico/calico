@@ -172,6 +172,7 @@ var _ = Describe("Enable wireguard", func() {
 			t,
 			FelixRouteProtocol,
 			s.status,
+			nil,
 		)
 
 		rule = netlink.NewRule()
@@ -1296,6 +1297,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 			t,
 			FelixRouteProtocol,
 			s.status,
+			nil,
 		)
 	})
 
@@ -1471,6 +1473,7 @@ var _ = Describe("Wireguard (with no table index)", func() {
 				t,
 				FelixRouteProtocol,
 				s.status,
+				nil,
 			)
 		}
 	})

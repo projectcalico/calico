@@ -38,6 +38,10 @@ const (
 	minPostWriteInterval = 50 * time.Millisecond
 )
 
+type OpReporter interface {
+	RecordOperation(name string)
+}
+
 var (
 	// List of all the top-level kernel-created chains by iptables table.
 	tableToKernelChains = map[string][]string{
@@ -275,6 +279,7 @@ type Table struct {
 	lookPath func(file string) (string, error)
 
 	onStillAlive func()
+	OpReporter   OpReporter
 }
 
 type TableOptions struct {
@@ -593,7 +598,10 @@ func (t *Table) loadDataplaneState() {
 	t.featureDetector.RefreshFeatures()
 
 	// Load the hashes from the dataplane.
-	t.logCxt.Info("Loading current iptables state and checking it is correct.")
+	t.logCxt.Debug("Loading current iptables state and checking it is correct.")
+	if t.OpReporter != nil {
+		t.OpReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.Name, t.IPVersion))
+	}
 	t.lastReadTime = t.timeNow()
 	dataplaneHashes, dataplaneRules := t.getHashesAndRulesFromDataplane()
 
@@ -931,7 +939,7 @@ func (t *Table) InvalidateDataplaneCache(reason string) {
 		logCxt.Debug("Would invalidate dataplane cache but it was already invalid.")
 		return
 	}
-	logCxt.Info("Invalidating dataplane cache")
+	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
 }
 
@@ -1259,6 +1267,9 @@ func (t *Table) applyUpdates() error {
 	} else {
 		// Get the contents of the buffer ready to send to iptables-restore.  Warning: for perf, this is directly
 		// accessing the buffer's internal array; don't touch the buffer after this point.
+		if t.OpReporter != nil {
+			t.OpReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
+		}
 		inputBytes := buf.GetBytesAndReset()
 
 		if log.GetLevel() >= log.DebugLevel {

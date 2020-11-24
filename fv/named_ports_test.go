@@ -146,7 +146,6 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	})
 
 	AfterEach(func() {
-
 		if CurrentGinkgoTestDescription().Failed {
 			log.Warn("Test failed, dumping diags...")
 			utils.Run("docker", "logs", felix.Name)
