@@ -845,10 +845,17 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Chain {
 	rules := []Rule{}
 
-	// Accept immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for
+	// Note, we use RETURN as the Allow action in this chain, rather than ACCEPT because the
+	// mangle table is typically used, if at all, for packet manipulations that might need to
+	// apply to our allowed traffic.
+
+	// Allow immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for
 	// any packets that reach the end of that chain.  The principle is that we don't want to
 	// apply normal host endpoint policy to forwarded traffic.
-	rules = append(rules, r.acceptAlreadyAccepted()...)
+	rules = append(rules, Rule{
+		Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
+		Action: ReturnAction{},
+	})
 
 	// Similarly, avoid applying normal host endpoint policy to IPVS-forwarded traffic.
 	// IPVS-forwarded traffic is identified by having a non-zero endpoint ID in the
@@ -861,7 +868,7 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Cha
 		rules = append(rules,
 			Rule{
 				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
-				Action: r.filterAllowAction,
+				Action: ReturnAction{},
 			},
 		)
 	}
@@ -895,7 +902,7 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Cha
 		},
 		Rule{
 			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
-			Action:  r.filterAllowAction,
+			Action:  ReturnAction{},
 			Comment: []string{"Host endpoint policy accepted packet."},
 		},
 	)

@@ -43,14 +43,14 @@ var _ = Describe("Static", func() {
 			expRules := []Rule{
 				// Accept already accepted.
 				{Match: Match().MarkSingleBitSet(0x10),
-					Action: AcceptAction{},
+					Action: ReturnAction{},
 				},
 			}
 			if ipvs {
 				// Accept IPVS-forwarded traffic.
 				expRules = append(expRules, Rule{
 					Match:  Match().MarkNotClear(0xff00),
-					Action: AcceptAction{},
+					Action: ReturnAction{},
 				})
 			}
 			expRules = append(expRules, []Rule{
@@ -64,7 +64,7 @@ var _ = Describe("Static", func() {
 				// Accept if policy allowed packet.
 				{
 					Match:   Match().MarkSingleBitSet(0x10),
-					Action:  AcceptAction{},
+					Action:  ReturnAction{},
 					Comment: []string{"Host endpoint policy accepted packet."},
 				},
 			}...)

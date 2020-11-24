@@ -182,7 +182,9 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
 	return []*Chain{
-		// Chain for output traffic _to_ the endpoint.
+		// Chain for output traffic _to_ the endpoint.  Note, we use RETURN here rather than
+		// ACCEPT because the mangle table is typically used, if at all, for packet
+		// manipulations that might need to apply to our allowed traffic.
 		r.endpointIptablesChain(
 			egressPolicyNames,
 			profileIDs,
@@ -193,7 +195,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			ChainFailsafeOut,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
-			r.filterAllowAction,
+			ReturnAction{},
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 		),

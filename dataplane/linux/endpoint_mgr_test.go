@@ -125,25 +125,25 @@ var toHostDispatchEmpty = []*iptables.Chain{
 }
 
 func hostChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*iptables.Chain {
-	return append(chainsForIfaces(ifaceMetadata, epMarkMapper, true, "normal", false),
-		chainsForIfaces(ifaceMetadata, epMarkMapper, true, "applyOnForward", false)...,
+	return append(chainsForIfaces(ifaceMetadata, epMarkMapper, true, "normal", false, iptables.AcceptAction{}),
+		chainsForIfaces(ifaceMetadata, epMarkMapper, true, "applyOnForward", false, iptables.AcceptAction{})...,
 	)
 }
 
 func mangleEgressChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "normal", true)
+	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "normal", true, iptables.SetMarkAction{Mark: 0x8}, iptables.ReturnAction{})
 }
 
 func rawChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "untracked", false)
+	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "untracked", false, iptables.AcceptAction{})
 }
 
 func preDNATChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "preDNAT", false)
+	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "preDNAT", false, iptables.AcceptAction{})
 }
 
 func wlChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, false, "normal", false)
+	return chainsForIfaces(ifaceMetadata, epMarkMapper, false, "normal", false, iptables.AcceptAction{})
 }
 
 func chainsForIfaces(ifaceMetadata []string,
@@ -151,6 +151,7 @@ func chainsForIfaces(ifaceMetadata []string,
 	host bool,
 	tableKind string,
 	egressOnly bool,
+	allowActions ...iptables.Action,
 ) []*iptables.Chain {
 	const (
 		ProtoUDP  = 17
@@ -250,12 +251,14 @@ func chainsForIfaces(ifaceMetadata []string,
 		outRules := []iptables.Rule{}
 
 		if tableKind != "untracked" {
-			outRules = append(outRules,
-				iptables.Rule{
-					Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
-					Action: iptables.AcceptAction{},
-				},
-			)
+			for _, allowAction := range allowActions {
+				outRules = append(outRules,
+					iptables.Rule{
+						Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: allowAction,
+					},
+				)
+			}
 			outRules = append(outRules, iptables.Rule{
 				Match:  iptables.Match().ConntrackState("INVALID"),
 				Action: iptables.DropAction{},
@@ -331,12 +334,14 @@ func chainsForIfaces(ifaceMetadata []string,
 		inRules := []iptables.Rule{}
 
 		if tableKind != "untracked" {
-			inRules = append(inRules,
-				iptables.Rule{
-					Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
-					Action: iptables.AcceptAction{},
-				},
-			)
+			for _, allowAction := range allowActions {
+				inRules = append(inRules,
+					iptables.Rule{
+						Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: allowAction,
+					},
+				)
+			}
 			inRules = append(inRules, iptables.Rule{
 				Match:  iptables.Match().ConntrackState("INVALID"),
 				Action: iptables.DropAction{},
