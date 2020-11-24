@@ -200,3 +200,14 @@ func (f *Felix) Restart() {
 func (f *Felix) AttachTCPDump(iface string) *tcpdump.TCPDump {
 	return tcpdump.Attach(f.Container.Name, "", iface)
 }
+
+func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string) {
+	f.Exec(
+		"iptables",
+		"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+		"-W", "100000", // How often to probe the lock in microsecs.
+		"-t", "nat", "-A", chain,
+		"--destination", serviceIP,
+		"-j", "DNAT", "--to-destination", targetIP,
+	)
+}

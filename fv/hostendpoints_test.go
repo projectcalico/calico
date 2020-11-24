@@ -122,14 +122,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			serviceIP := fmt.Sprintf("10.96.0.%v", i+1)
 
 			// Add a NAT rule for the service IP.
-			felixes[i].Exec(
-				"iptables",
-				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-				"-W", "100000", // How often to probe the lock in microsecs.
-				"-t", "nat", "-A", "OUTPUT",
-				"--destination", serviceIP,
-				"-j", "DNAT", "--to-destination", w[i].IP,
-			)
+			felixes[i].ProgramIptablesDNAT(serviceIP, w[i].IP, "OUTPUT")
 
 			// Expect connectivity to the service IP.
 			cc.ExpectSome(felixes[i], connectivity.TargetIP(serviceIP), 8055)
@@ -142,14 +135,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			serviceIP := fmt.Sprintf("10.96.10.%v", i+1)
 
 			// Add a NAT rule for the service IP.
-			felixes[i].Exec(
-				"iptables",
-				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-				"-W", "100000", // How often to probe the lock in microsecs.
-				"-t", "nat", "-A", "OUTPUT",
-				"--destination", serviceIP,
-				"-j", "DNAT", "--to-destination", w[1-i].IP,
-			)
+			felixes[i].ProgramIptablesDNAT(serviceIP, w[1-i].IP, "OUTPUT")
 
 			// Expect not to be able to connect to the service IP.
 			cc.ExpectNone(felixes[i], connectivity.TargetIP(serviceIP), 8055)
@@ -165,14 +151,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			serviceIP := fmt.Sprintf("10.96.10.%v", i+1)
 
 			// Add a NAT rule for the service IP.
-			felixes[i].Exec(
-				"iptables",
-				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-				"-W", "100000", // How often to probe the lock in microsecs.
-				"-t", "nat", "-A", "PREROUTING",
-				"--destination", serviceIP,
-				"-j", "DNAT", "--to-destination", w[1-i].IP,
-			)
+			felixes[i].ProgramIptablesDNAT(serviceIP, w[1-i].IP, "PREROUTING")
 
 			// Expect to connect from local pod to the service IP.
 			cc.ExpectSome(w[i], connectivity.TargetIP(serviceIP), 8055)

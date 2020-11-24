@@ -324,14 +324,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 							serviceIP := "10.96.10.1"
 
 							// Add a NAT rule for the service IP.
-							felixes[0].Exec(
-								"iptables",
-								"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-								"-W", "100000", // How often to probe the lock in microsecs.
-								"-t", "nat", "-A", "OUTPUT",
-								"--destination", serviceIP,
-								"-j", "DNAT", "--to-destination", w[1].IP,
-							)
+							felixes[0].ProgramIptablesDNAT(serviceIP, w[1].IP, "OUTPUT")
 
 							// Expect to connect to the service IP.
 							cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), 8055)
