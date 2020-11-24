@@ -175,7 +175,7 @@ func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err err
 	defer C.free(cDataOut)
 
 	var errno syscall.Errno
-	for attempts := 1; attempts > 0; attempts-- {
+	for attempts := 3; attempts > 0; attempts-- {
 		C.bpf_attr_setup_prog_run(bpfAttr, C.uint(fd), C.uint(len(dataIn)), cDataIn, C.uint(dataOutBufSize), cDataOut, C.uint(repeat))
 		_, _, errno = unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_TEST_RUN, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 		if errno == unix.EINTR {
