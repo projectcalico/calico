@@ -45,12 +45,13 @@ def test_quay_release_tag_present():
     with open('%s/_config.yml' % DOCS_PATH) as config:
         images = yaml.safe_load(config)
         for image in images['imageNames']:
-            if images['imageNames'][image] not in EXCLUDED_IMAGES:
-                print('[INFO] checking quay.io/%s:%s' % (images['imageNames'][image], RELEASE_VERSION))
+            image_name = images['imageNames'][image].replace("docker.io/", "")
+            if image_name not in EXCLUDED_IMAGES:
+                print('[INFO] checking quay.io/%s:%s' % (image_name, RELEASE_VERSION))
 
                 headers = {'content-type': 'application/json'}
                 req = requests.get("https://quay.io/api/v1/repository/%s/tag/%s/images" % (
-                    images['imageNames'][image], RELEASE_VERSION), headers=headers)
+                    image_name, RELEASE_VERSION), headers=headers)
                 assert req.status_code == 200
 
 
@@ -58,8 +59,9 @@ def test_gcr_release_tag_present():
     with open('%s/_config.yml' % DOCS_PATH) as config:
         images = yaml.safe_load(config)
         for image in images['imageNames']:
-            if images['imageNames'][image] in GCR_IMAGES:
-                gcr_name = images['imageNames'][image].replace('calico/', '')
+            image_name = images['imageNames'][image].replace("docker.io/", "")
+            if image_name in GCR_IMAGES:
+                gcr_name = image_name.replace('calico/', '')
                 print('[INFO] checking gcr.io/projectcalico-org/%s:%s' % (gcr_name, RELEASE_VERSION))
                 cmd = 'docker manifest inspect gcr.io/projectcalico-org/%s:%s | jq -r "."' % (gcr_name, RELEASE_VERSION)
 
@@ -80,9 +82,10 @@ def test_docker_release_tag_present():
     with open('%s/_config.yml' % DOCS_PATH) as config:
         images = yaml.safe_load(config)
         for image in images['imageNames']:
-            if images['imageNames'][image] not in EXCLUDED_IMAGES:
-                print('[INFO] checking %s:%s' % (images['imageNames'][image], RELEASE_VERSION))
-                cmd = 'docker manifest inspect %s:%s | jq -r "."' % (images['imageNames'][image], RELEASE_VERSION)
+            image_name = images['imageNames'][image].replace("docker.io/", "")
+            if image_name not in EXCLUDED_IMAGES:
+                print('[INFO] checking %s:%s' % (image_name, RELEASE_VERSION))
+                cmd = 'docker manifest inspect %s:%s | jq -r "."' % (image_name, RELEASE_VERSION)
 
                 req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
                 metadata = json.loads(req.stdout.read())
