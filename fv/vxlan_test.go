@@ -35,6 +35,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
@@ -57,7 +58,6 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					topologyOptions := infrastructure.DefaultTopologyOptions()
 					topologyOptions.VXLANMode = vxlanMode
 					topologyOptions.IPIPEnabled = false
-					topologyOptions.FelixLogSeverity = "debug"
 					topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 					felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
@@ -184,6 +184,106 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						cc.ExpectSome(w[0], w[1])
 						cc.ExpectSome(w[1], w[0])
 						cc.CheckConnectivity()
+					})
+
+					Context("with policy allowing port 8055", func() {
+						BeforeEach(func() {
+							tcp := numorstring.ProtocolFromString("tcp")
+							udp := numorstring.ProtocolFromString("udp")
+							p8055 := numorstring.SinglePort(8055)
+							policy := api.NewGlobalNetworkPolicy()
+							policy.Name = "allow-8055"
+							policy.Spec.Ingress = []api.Rule{
+								{
+									Protocol: &udp,
+									Destination: api.EntityRule{
+										Ports: []numorstring.Port{p8055},
+									},
+									Action: api.Allow,
+								},
+								{
+									Protocol: &tcp,
+									Destination: api.EntityRule{
+										Ports: []numorstring.Port{p8055},
+									},
+									Action: api.Allow,
+								},
+							}
+							policy.Spec.Egress = []api.Rule{
+								{
+									Protocol: &udp,
+									Destination: api.EntityRule{
+										Ports: []numorstring.Port{p8055},
+									},
+									Action: api.Allow,
+								},
+								{
+									Protocol: &tcp,
+									Destination: api.EntityRule{
+										Ports: []numorstring.Port{p8055},
+									},
+									Action: api.Allow,
+								},
+							}
+							policy.Spec.Selector = fmt.Sprintf("has(host-endpoint)")
+							_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						// Test each of these cases separately, to avoid the possibility of one case
+						// setting up conntrack state that allows a different case to pass.
+						It("allows host0 to remote host-networked workload", func() {
+							cc.ExpectSome(felixes[0], hostW[1])
+							cc.CheckConnectivity()
+						})
+						It("allows host1 to remote host-networked workload", func() {
+							cc.ExpectSome(felixes[1], hostW[0])
+							cc.CheckConnectivity()
+						})
+						It("allows host0 to remote Calico-networked workload", func() {
+							cc.ExpectSome(felixes[0], w[1])
+							cc.CheckConnectivity()
+						})
+						It("allows host1 to remote Calico-networked workload", func() {
+							cc.ExpectSome(felixes[1], w[0])
+							cc.CheckConnectivity()
+						})
+						It("allows host0 to remote Calico-networked workload via service IP", func() {
+							// Allocate a service IP.
+							serviceIP := "10.96.10.1"
+
+							// Add a NAT rule for the service IP.
+							felixes[0].Exec(
+								"iptables",
+								"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+								"-W", "100000", // How often to probe the lock in microsecs.
+								"-t", "nat", "-A", "OUTPUT",
+								"--destination", serviceIP,
+								"-j", "DNAT", "--to-destination", w[1].IP,
+							)
+
+							// Expect to connect to the service IP.
+							cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), 8055)
+							cc.CheckConnectivity()
+						})
+						It("allows host1 to remote Calico-networked workload via service IP", func() {
+							// Allocate a service IP.
+							serviceIP := "10.96.10.2"
+
+							// Add a NAT rule for the service IP.
+							felixes[1].Exec(
+								"iptables",
+								"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+								"-W", "100000", // How often to probe the lock in microsecs.
+								"-t", "nat", "-A", "OUTPUT",
+								"--destination", serviceIP,
+								"-j", "DNAT", "--to-destination", w[0].IP,
+							)
+
+							// Expect to connect to the service IP.
+							cc.ExpectSome(felixes[1], connectivity.TargetIP(serviceIP), 8055)
+							cc.CheckConnectivity()
+						})
 					})
 				})
 
