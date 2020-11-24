@@ -638,7 +638,12 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	// only include nodes that support wireguard. This will tie in with whether or not we want to include external
 	// wireguard destinations.
 
-	// Apply host endpoint policy.
+	// Apply host endpoint policy to traffic that has not been DNAT'd.  In the DNAT case we
+	// can't correctly apply policy here because the packet's OIF is still the OIF from a
+	// routing lookup based on the pre-DNAT destination IP; Linux will shortly update it based
+	// on the new destination IP, but that hasn't happened yet.  Instead, in the DNAT case, we
+	// apply host endpoint in the mangle POSTROUTING chain; see StaticManglePostroutingChain for
+	// that.
 	rules = append(rules,
 		Rule{
 			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
