@@ -53,20 +53,6 @@ var _ = Describe("Static", func() {
 					Action: AcceptAction{},
 				})
 			}
-			if conf.IPIPEnabled {
-				expRules = append(expRules, Rule{
-					Match:   Match().ProtocolNum(4).DestIPSet("cali40all-hosts-net").SrcAddrType(AddrTypeLocal, false),
-					Action:  AcceptAction{},
-					Comment: []string{"Allow IPIP packets to other Calico hosts"},
-				})
-			}
-			if conf.VXLANEnabled {
-				expRules = append(expRules, Rule{
-					Match:   Match().ProtocolNum(17).DestPorts(0).SrcAddrType(AddrTypeLocal, false).DestIPSet("cali40all-vxlan-net"),
-					Action:  AcceptAction{},
-					Comment: []string{"Allow VXLAN packets to other whitelisted hosts"},
-				})
-			}
 			expRules = append(expRules, []Rule{
 				// Clear all Calico mark bits.
 				{Action: ClearMarkAction{Mark: 0xf0}},

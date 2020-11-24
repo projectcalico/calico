@@ -873,11 +873,11 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Cha
 	// At this point we know that the packet is not forwarded, so it must be originated by a
 	// host-based process or host-networked pod.
 
-	if ipVersion == 4 {
-		rules = r.appendIPIPVXLANEgressAllowRules(rules)
-	}
+	// The similar sequence in filterOutputChain has rules here to allow IPIP and VXLAN traffic.
+	// We don't need those rules here because the encapsulated traffic won't match `--ctstate
+	// DNAT` and so we won't try applying HEP policy to it anyway.
 
-	// Note: the similar sequence in filterOutputChain has rules here to detect traffic to local
+	// The similar sequence in filterOutputChain has rules here to detect traffic to local
 	// workloads, and to return early in that case.  We don't need those rules here because
 	// ChainDispatchToHostEndpoint also checks for traffic to a local workload, and avoids
 	// applying any host endpoint policy in that case.  Search for "Skip egress WHEP" in
