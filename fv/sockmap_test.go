@@ -340,7 +340,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		}
 		side := host.StartSideService()
 		defer side.Stop()
-		pc := host.StartPermanentConnection("1.1.1.1", 80, workload.PermanentConnectionOpts{
+		pc := host.StartPersistentConnection("1.1.1.1", 80, workload.PersistentConnectionOpts{
 			SourcePort: srcPort,
 		})
 		defer pc.Stop()

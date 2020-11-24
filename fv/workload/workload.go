@@ -57,14 +57,10 @@ type Workload struct {
 	SpoofInterfaceName    string
 	SpoofName             string
 	SpoofWorkloadEndpoint *api.WorkloadEndpoint
-
-	pongLock     sync.Mutex
-	lastPongTime time.Time
 }
 
 var workloadIdx = 0
 var sideServIdx = 0
-var permConnIdx = 0
 
 func (w *Workload) Stop() {
 	if w == nil {
@@ -219,16 +215,6 @@ func (w *Workload) Start() error {
 	log.WithField("workload", w).Info("Workload now running")
 
 	return nil
-}
-
-func (w *Workload) LastPongTime() time.Time {
-	w.pongLock.Lock()
-	defer w.pongLock.Unlock()
-	return w.lastPongTime
-}
-
-func (w *Workload) SinceLastPong() time.Duration {
-	return time.Since(w.LastPongTime())
 }
 
 func (w *Workload) IPNet() string {
@@ -524,106 +510,29 @@ func startSideService(w *Workload) (*SideService, error) {
 	}, nil
 }
 
-type PermanentConnection struct {
-	W        *Workload
-	LoopFile string
-	Name     string
-	RunCmd   *exec.Cmd
-}
-
-func (pc *PermanentConnection) Stop() {
-	Expect(pc.stop()).NotTo(HaveOccurred())
-}
-
-func (pc *PermanentConnection) stop() error {
-	if err := pc.W.C.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", pc.LoopFile)); err != nil {
-		log.WithError(err).WithField("loopfile", pc.LoopFile).Warn("Failed to create a loop file to stop the permanent connection")
-		return err
-	}
-	if err := pc.RunCmd.Wait(); err != nil {
-		return err
-	}
-	return nil
-}
-
-type PermanentConnectionOpts struct {
+type PersistentConnectionOpts struct {
 	SourcePort          int
 	MonitorConnectivity bool
 }
 
-func (w *Workload) StartPermanentConnection(ip string, port int, opts PermanentConnectionOpts) *PermanentConnection {
-	pc, err := w.startPermanentConnection(ip, port, opts.SourcePort, opts.MonitorConnectivity)
+func (w *Workload) StartPersistentConnection(ip string, port int,
+	opts PersistentConnectionOpts) *connectivity.PersistentConnection {
+
+	pc := &connectivity.PersistentConnection{
+		RuntimeName:         w.C.Name,
+		Runtime:             w.C,
+		IP:                  ip,
+		Port:                port,
+		Protocol:            w.Protocol,
+		NamespacePath:       w.namespacePath,
+		SourcePort:          opts.SourcePort,
+		MonitorConnectivity: opts.MonitorConnectivity,
+	}
+
+	err := pc.Start()
 	Expect(err).NotTo(HaveOccurred())
+
 	return pc
-}
-
-func (w *Workload) startPermanentConnection(ip string, port, sourcePort int, monitorConnectiivty bool) (*PermanentConnection, error) {
-	// Ensure that the host has the 'test-connection' binary.
-	w.C.EnsureBinary("test-connection")
-	permConnIdx++
-	n := fmt.Sprintf("%s-pc%d", w.Name, permConnIdx)
-	loopFile := fmt.Sprintf("/tmp/%s-loop", n)
-
-	err := w.C.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", loopFile))
-	if err != nil {
-		return nil, err
-	}
-
-	args := []string{
-		"exec",
-		w.C.Name,
-		"/test-connection",
-		w.namespacePath,
-		ip,
-		fmt.Sprintf("%d", port),
-		fmt.Sprintf("--source-port=%d", sourcePort),
-		fmt.Sprintf("--protocol=%s", w.Protocol),
-		fmt.Sprintf("--loop-with-file=%s", loopFile),
-	}
-	if monitorConnectiivty {
-		args = append(args, "--log-pongs")
-	}
-	runCmd := utils.Command(
-		"docker",
-		args...,
-	)
-	logName := fmt.Sprintf("permanent connection %s", n)
-	stdout, err := runCmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start output logging for %s", logName)
-	}
-	stdoutReader := bufio.NewReader(stdout)
-	go func() {
-		for {
-			line, err := stdoutReader.ReadString('\n')
-			if err != nil {
-				log.WithError(err).Info("End of permanent connection stdout")
-				return
-			}
-			line = strings.TrimSpace(string(line))
-			log.Infof("%s stdout: %s", logName, line)
-			if line == "PONG" {
-				w.pongLock.Lock()
-				w.lastPongTime = time.Now()
-				w.pongLock.Unlock()
-			}
-		}
-	}()
-	if err := runCmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start a permanent connection: %v", err)
-	}
-	Eventually(func() error {
-		return w.C.ExecMayFail("stat", loopFile)
-	}, 5*time.Second, time.Second).Should(
-		HaveOccurred(),
-		"Failed to wait for test-connection to be ready, the loop file did not disappear",
-	)
-	return &PermanentConnection{
-		W:        w,
-		LoopFile: loopFile,
-		Name:     n,
-		RunCmd:   runCmd,
-	}, nil
 }
 
 func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {

@@ -15,10 +15,12 @@
 package connectivity
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -740,4 +742,140 @@ func (cc ConnConfig) GetTestMessageSequence(msg string) (int, error) {
 
 func IsMessagePartOfStream(msg string) bool {
 	return strings.HasPrefix(strings.TrimSpace(msg), ConnectionTypeStream)
+}
+
+// Runtime abstracts *containers.Container to avoid import loops
+type Runtime interface {
+	EnsureBinary(name string)
+	ExecMayFail(cmd ...string) error
+}
+
+type PersistentConnection struct {
+	sync.Mutex
+
+	RuntimeName         string
+	Runtime             Runtime
+	Name                string
+	Protocol            string
+	IP                  string
+	Port                int
+	SourcePort          int
+	MonitorConnectivity bool
+	NamespacePath       string
+
+	loopFile string
+	runCmd   *exec.Cmd
+
+	lastPongTime time.Time
+	pongCount    int
+}
+
+func (pc *PersistentConnection) Stop() {
+	Expect(pc.stop()).NotTo(HaveOccurred())
+}
+
+var permConnIdx = 0 // XXX perhaps should be atomic / locked
+
+func (pc *PersistentConnection) stop() error {
+	if err := pc.Runtime.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", pc.loopFile)); err != nil {
+		log.WithError(err).
+			WithField("loopfile", pc.loopFile).
+			Warn("Failed to create a loop file to stop the permanent connection")
+		return err
+	}
+	if err := pc.runCmd.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (pc *PersistentConnection) Start() error {
+	namespacePath := pc.NamespacePath
+	if namespacePath == "" {
+		namespacePath = "-"
+	}
+
+	// Ensure that the host has the 'test-connection' binary.
+	pc.Runtime.EnsureBinary("test-connection")
+	permConnIdx++
+	n := fmt.Sprintf("%s-pc%d", pc.RuntimeName, permConnIdx)
+	loopFile := fmt.Sprintf("/tmp/%s-loop", n)
+
+	err := pc.Runtime.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", loopFile))
+	if err != nil {
+		return err
+	}
+
+	args := []string{
+		"exec",
+		pc.RuntimeName,
+		"/test-connection",
+		namespacePath,
+		pc.IP,
+		fmt.Sprintf("%d", pc.Port),
+		fmt.Sprintf("--source-port=%d", pc.SourcePort),
+		fmt.Sprintf("--protocol=%s", pc.Protocol),
+		fmt.Sprintf("--loop-with-file=%s", loopFile),
+	}
+	if pc.MonitorConnectivity {
+		args = append(args, "--log-pongs")
+	}
+	runCmd := utils.Command(
+		"docker",
+		args...,
+	)
+	logName := fmt.Sprintf("permanent connection %s", n)
+	stdout, err := runCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to start output logging for %s", logName)
+	}
+	stdoutReader := bufio.NewReader(stdout)
+	go func() {
+		for {
+			line, err := stdoutReader.ReadString('\n')
+			if err != nil {
+				log.WithError(err).Info("End of permanent connection stdout")
+				return
+			}
+			line = strings.TrimSpace(string(line))
+			log.Infof("%s stdout: %s", logName, line)
+			if line == "PONG" {
+				pc.Lock()
+				pc.lastPongTime = time.Now()
+				pc.pongCount++
+				pc.Unlock()
+			}
+		}
+	}()
+	if err := runCmd.Start(); err != nil {
+		return fmt.Errorf("failed to start a permanent connection: %v", err)
+	}
+	Eventually(func() error {
+		return pc.Runtime.ExecMayFail("stat", loopFile)
+	}, 5*time.Second, time.Second).Should(
+		HaveOccurred(),
+		"Failed to wait for test-connection to be ready, the loop file did not disappear",
+	)
+
+	pc.loopFile = loopFile
+	pc.runCmd = runCmd
+	pc.Name = n
+
+	return nil
+}
+
+func (pc *PersistentConnection) SinceLastPong() time.Duration {
+	return time.Since(pc.LastPongTime())
+}
+
+func (pc *PersistentConnection) LastPongTime() time.Time {
+	pc.Lock()
+	defer pc.Unlock()
+	return pc.lastPongTime
+}
+
+func (pc *PersistentConnection) PongCount() int {
+	pc.Lock()
+	defer pc.Unlock()
+	return pc.pongCount
 }

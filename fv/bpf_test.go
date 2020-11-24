@@ -51,6 +51,7 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/proxy"
 	. "github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
@@ -191,6 +192,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	for _, o := range opts {
 		o(&testOpts)
 	}
+
+	testIfTCP := testOpts.protocol == "tcp"
 
 	protoExt := ""
 	if testOpts.udpUnConnected {
@@ -972,19 +975,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// PHASE 2: keep a connection up and move it from one interface to the other using the pod's
 						// routes.  To the host this looks like one workload is spoofing the other.
 						By("Starting permanent connection")
-						pc := w[0][0].StartPermanentConnection(w[1][0].IP, 8055, workload.PermanentConnectionOpts{
+						pc := w[0][0].StartPersistentConnection(w[1][0].IP, 8055, workload.PersistentConnectionOpts{
 							MonitorConnectivity: true,
 						})
 						defer pc.Stop()
 
 						expectPongs := func() {
-							EventuallyWithOffset(1, w[0][0].SinceLastPong, "5s").Should(
+							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
 								BeNumerically("<", time.Second),
 								"Expected to see pong responses on the connection but didn't receive any")
 							log.Info("Pongs received within last 1s")
 						}
 						expectNoPongs := func() {
-							EventuallyWithOffset(1, w[0][0].SinceLastPong, "5s").Should(
+							EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
 								BeNumerically(">", time.Second),
 								"Expected to see pong responses stop but continued to receive them")
 							log.Info("No pongs received for >1s")
@@ -2268,6 +2271,49 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											Should(BeNumerically(">", 0), "MACs do not match")
 									})
 								}
+							})
+
+							_ = testIfTCP && It("should survive conntrack cleanup sweep", func() {
+								By("checking the connectivity and thus syncing with service creation", func() {
+									cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
+									cc.CheckConnectivity()
+								})
+
+								By("monitoring a persistent connection", func() {
+									pc := &PersistentConnection{
+										Runtime:             externalClient,
+										RuntimeName:         externalClient.Name,
+										IP:                  felixes[1].IP,
+										Port:                int(npPort),
+										Protocol:            testOpts.protocol,
+										MonitorConnectivity: true,
+									}
+
+									err := pc.Start()
+									Expect(err).NotTo(HaveOccurred())
+									defer pc.Stop()
+
+									EventuallyWithOffset(1, pc.PongCount, "5s").Should(
+										BeNumerically(">", 0),
+										"Expected to see pong responses on the connection but didn't receive any")
+									log.Info("Pongs received within last 1s")
+
+									// We make sure that at least one iteration of the conntrack
+									// cleanup executes and we periodically monitor the connection if
+									// it is alive by checking that the number of PONGs keeps
+									// increasing.
+									start := time.Now()
+									prevCount := pc.PongCount()
+									for time.Since(start) < 2*proxy.ConntrackCleanerPeriod {
+										time.Sleep(time.Second)
+										newCount := pc.PongCount()
+										Expect(prevCount).Should(
+											BeNumerically("<", newCount),
+											"No new pongs since the last iteration. Connection broken?",
+										)
+										prevCount = newCount
+									}
+								})
 							})
 
 							if !testOpts.dsr {
