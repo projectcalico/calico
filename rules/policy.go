@@ -40,16 +40,16 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, p
 	return []*iptables.Chain{&inbound, &outbound}
 }
 
-func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile, ipVersion uint8) []*iptables.Chain {
-	inbound := iptables.Chain{
+func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain) {
+	inbound = &iptables.Chain{
 		Name:  ProfileChainName(ProfileInboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion),
 	}
-	outbound := iptables.Chain{
+	outbound = &iptables.Chain{
 		Name:  ProfileChainName(ProfileOutboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.OutboundRules, ipVersion),
 	}
-	return []*iptables.Chain{&inbound, &outbound}
+	return
 }
 
 func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule, ipVersion uint8) []iptables.Rule {

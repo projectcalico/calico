@@ -175,9 +175,10 @@ type endpointManager struct {
 	// hostEndpointsDirty is set to true when host endpoints are updated.
 	hostEndpointsDirty bool
 	// activeHostIfaceToChains maps host interface name to the chains that we've programmed.
-	activeHostIfaceToRawChains    map[string][]*iptables.Chain
-	activeHostIfaceToFiltChains   map[string][]*iptables.Chain
-	activeHostIfaceToMangleChains map[string][]*iptables.Chain
+	activeHostIfaceToRawChains           map[string][]*iptables.Chain
+	activeHostIfaceToFiltChains          map[string][]*iptables.Chain
+	activeHostIfaceToMangleIngressChains map[string][]*iptables.Chain
+	activeHostIfaceToMangleEgressChains  map[string][]*iptables.Chain
 	// Dispatch chains that we've programmed for host endpoints.
 	activeHostRawDispatchChains    map[string]*iptables.Chain
 	activeHostFilterDispatchChains map[string]*iptables.Chain
@@ -287,9 +288,10 @@ func newEndpointManagerWithShims(
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
-		activeHostIfaceToRawChains:    map[string][]*iptables.Chain{},
-		activeHostIfaceToFiltChains:   map[string][]*iptables.Chain{},
-		activeHostIfaceToMangleChains: map[string][]*iptables.Chain{},
+		activeHostIfaceToRawChains:           map[string][]*iptables.Chain{},
+		activeHostIfaceToFiltChains:          map[string][]*iptables.Chain{},
+		activeHostIfaceToMangleIngressChains: map[string][]*iptables.Chain{},
+		activeHostIfaceToMangleEgressChains:  map[string][]*iptables.Chain{},
 
 		// Caches of the current dispatch chains indexed by chain name.  We use these to
 		// calculate deltas when we need to update the chains.
@@ -882,11 +884,12 @@ func (m *endpointManager) resolveHostEndpoints() {
 	if !m.bpfEnabled {
 		// Set up programming for the host endpoints that are now to be used.
 		newHostIfaceFiltChains := map[string][]*iptables.Chain{}
+		newHostIfaceMangleEgressChains := map[string][]*iptables.Chain{}
 		for ifaceName, id := range newIfaceNameToHostEpID {
-			log.WithField("id", id).Info("Updating host endpoint chains.")
+			log.WithField("id", id).Info("Updating host endpoint normal policy chains.")
 			hostEp := m.rawHostEndpoints[id]
 
-			// Update the filter chain, for normal traffic.
+			// Update chains in the filter and mangle tables, for normal traffic.
 			var ingressPolicyNames, egressPolicyNames []string
 			var ingressForwardPolicyNames, egressForwardPolicyNames []string
 			if len(hostEp.Tiers) > 0 {
@@ -913,27 +916,38 @@ func (m *endpointManager) resolveHostEndpoints() {
 			}
 			newHostIfaceFiltChains[ifaceName] = filtChains
 			delete(m.activeHostIfaceToFiltChains, ifaceName)
+
+			mangleChains := m.ruleRenderer.HostEndpointToMangleEgressChains(
+				ifaceName,
+				egressPolicyNames,
+				hostEp.ProfileIds,
+			)
+			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleEgressChains[ifaceName]) {
+				m.mangleTable.UpdateChains(mangleChains)
+			}
+			newHostIfaceMangleEgressChains[ifaceName] = mangleChains
+			delete(m.activeHostIfaceToMangleEgressChains, ifaceName)
 		}
 
-		newHostIfaceMangleChains := map[string][]*iptables.Chain{}
+		newHostIfaceMangleIngressChains := map[string][]*iptables.Chain{}
 		for ifaceName, id := range newPreDNATIfaceNameToHostEpID {
-			log.WithField("id", id).Info("Updating host endpoint mangle chains.")
+			log.WithField("id", id).Info("Updating host endpoint mangle ingress chains.")
 			hostEp := m.rawHostEndpoints[id]
 
-			// Update the mangle table, for preDNAT policy.
+			// Update the mangle table for preDNAT policy.
 			var ingressPolicyNames []string
 			if len(hostEp.PreDnatTiers) > 0 {
 				ingressPolicyNames = hostEp.PreDnatTiers[0].IngressPolicies
 			}
-			mangleChains := m.ruleRenderer.HostEndpointToMangleChains(
+			mangleChains := m.ruleRenderer.HostEndpointToMangleIngressChains(
 				ifaceName,
 				ingressPolicyNames,
 			)
-			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleChains[ifaceName]) {
+			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleIngressChains[ifaceName]) {
 				m.mangleTable.UpdateChains(mangleChains)
 			}
-			newHostIfaceMangleChains[ifaceName] = mangleChains
-			delete(m.activeHostIfaceToMangleChains, ifaceName)
+			newHostIfaceMangleIngressChains[ifaceName] = mangleChains
+			delete(m.activeHostIfaceToMangleIngressChains, ifaceName)
 		}
 
 		newHostIfaceRawChains := map[string][]*iptables.Chain{}
@@ -965,7 +979,12 @@ func (m *endpointManager) resolveHostEndpoints() {
 				"Host interface no longer protected, deleting its normal chains.")
 			m.filterTable.RemoveChains(chains)
 		}
-		for ifaceName, chains := range m.activeHostIfaceToMangleChains {
+		for ifaceName, chains := range m.activeHostIfaceToMangleEgressChains {
+			log.WithField("ifaceName", ifaceName).Info(
+				"Host interface no longer protected, deleting its mangle egress chains.")
+			m.mangleTable.RemoveChains(chains)
+		}
+		for ifaceName, chains := range m.activeHostIfaceToMangleIngressChains {
 			log.WithField("ifaceName", ifaceName).Info(
 				"Host interface no longer protected, deleting its preDNAT chains.")
 			m.mangleTable.RemoveChains(chains)
@@ -977,7 +996,8 @@ func (m *endpointManager) resolveHostEndpoints() {
 		}
 		m.callbacks.InvokeInterfaceCallbacks(m.activeIfaceNameToHostEpID, newIfaceNameToHostEpID)
 		m.activeHostIfaceToFiltChains = newHostIfaceFiltChains
-		m.activeHostIfaceToMangleChains = newHostIfaceMangleChains
+		m.activeHostIfaceToMangleEgressChains = newHostIfaceMangleEgressChains
+		m.activeHostIfaceToMangleIngressChains = newHostIfaceMangleIngressChains
 		m.activeHostIfaceToRawChains = newHostIfaceRawChains
 	}
 
@@ -1000,6 +1020,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 		delete(newIfaceNameToHostEpID, allInterfaces)
 	}
 	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, defaultIfaceName, true)
+	newMangleEgressDispatchChains := m.ruleRenderer.ToHostDispatchChains(newIfaceNameToHostEpID, defaultIfaceName)
 	m.updateDispatchChains(m.activeHostFilterDispatchChains, newFilterDispatchChains, m.filterTable)
 	// Set flag to update endpoint mark chains.
 	m.needToCheckEndpointMarkChains = true
@@ -1013,7 +1034,8 @@ func (m *endpointManager) resolveHostEndpoints() {
 		defaultIfaceName = allInterfaces
 		delete(newPreDNATIfaceNameToHostEpID, allInterfaces)
 	}
-	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, defaultIfaceName)
+	newMangleIngressDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, defaultIfaceName)
+	newMangleDispatchChains := append(newMangleIngressDispatchChains, newMangleEgressDispatchChains...)
 	m.updateDispatchChains(m.activeHostMangleDispatchChains, newMangleDispatchChains, m.mangleTable)
 
 	// Rewrite the raw dispatch chains if they've changed.

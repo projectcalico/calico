@@ -521,6 +521,14 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		},
 	)
 
+	// Set IptablesMarkAccept bit here, to indicate to our mangle-POSTROUTING chain that this is
+	// forwarded traffic and should not be subject to normal host endpoint policy.
+	rules = append(rules,
+		Rule{
+			Action: SetMarkAction{Mark: r.IptablesMarkAccept},
+		},
+	)
+
 	return []*Chain{{
 		Name:  ChainFilterForward,
 		Rules: rules,
@@ -563,8 +571,8 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		// Divert those packets to a chain that handles them as we would if they had hit the FORWARD
 		// chain.
 		//
-		// We use a goto so that a RETURN from that chain will continue execution in the OUTPUT
-		// chain.
+		// We use a goto so that a RETURN from that chain will skip the rest of this chain
+		// and continue execution in the parent chain (OUTPUT).
 		rules = append(rules,
 			Rule{
 				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
@@ -630,12 +638,18 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	// only include nodes that support wireguard. This will tie in with whether or not we want to include external
 	// wireguard destinations.
 
-	// Apply host endpoint policy.
+	// Apply host endpoint policy to traffic that has not been DNAT'd.  In the DNAT case we
+	// can't correctly apply policy here because the packet's OIF is still the OIF from a
+	// routing lookup based on the pre-DNAT destination IP; Linux will shortly update it based
+	// on the new destination IP, but that hasn't happened yet.  Instead, in the DNAT case, we
+	// apply host endpoint in the mangle POSTROUTING chain; see StaticManglePostroutingChain for
+	// that.
 	rules = append(rules,
 		Rule{
 			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
 		},
 		Rule{
+			Match:  Match().NotConntrackState("DNAT"),
 			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
 		},
 		Rule{
@@ -767,7 +781,9 @@ func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*Chain 
 
 	chains = append(chains,
 		r.failsafeInChain("mangle"),
+		r.failsafeOutChain("mangle"),
 		r.StaticManglePreroutingChain(ipVersion),
+		r.StaticManglePostroutingChain(ipVersion),
 	)
 
 	return chains
@@ -822,6 +838,77 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 
 	return &Chain{
 		Name:  ChainManglePrerouting,
+		Rules: rules,
+	}
+}
+
+func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *Chain {
+	rules := []Rule{}
+
+	// Note, we use RETURN as the Allow action in this chain, rather than ACCEPT because the
+	// mangle table is typically used, if at all, for packet manipulations that might need to
+	// apply to our allowed traffic.
+
+	// Allow immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for
+	// any packets that reach the end of that chain.  The principle is that we don't want to
+	// apply normal host endpoint policy to forwarded traffic.
+	rules = append(rules, Rule{
+		Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
+		Action: ReturnAction{},
+	})
+
+	// Similarly, avoid applying normal host endpoint policy to IPVS-forwarded traffic.
+	// IPVS-forwarded traffic is identified by having a non-zero endpoint ID in the
+	// IptablesMarkEndpoint bits.  Note: we only need this check for when net.ipv4.vs.conntrack
+	// is enabled.  When net.ipv4.vs.conntrack is disabled (which is the default),
+	// IPVS-forwarded traffic will fail the ConntrackState("DNAT") match below, and so would
+	// avoid normal host endpoint policy anyway.  But it doesn't hurt to have this additional
+	// check even when not strictly needed.
+	if r.KubeIPVSSupportEnabled {
+		rules = append(rules,
+			Rule{
+				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
+				Action: ReturnAction{},
+			},
+		)
+	}
+
+	// At this point we know that the packet is not forwarded, so it must be originated by a
+	// host-based process or host-networked pod.
+
+	// The similar sequence in filterOutputChain has rules here to allow IPIP and VXLAN traffic.
+	// We don't need those rules here because the encapsulated traffic won't match `--ctstate
+	// DNAT` and so we won't try applying HEP policy to it anyway.
+
+	// The similar sequence in filterOutputChain has rules here to detect traffic to local
+	// workloads, and to return early in that case.  We don't need those rules here because
+	// ChainDispatchToHostEndpoint also checks for traffic to a local workload, and avoids
+	// applying any host endpoint policy in that case.  Search for "Skip egress WHEP" in
+	// dispatch.go, to see that.
+
+	// Apply host endpoint policy to non-forwarded traffic that has been DNAT'd.  We do this
+	// here, rather than in filter-OUTPUT, because Linux is weird: when a host-originated packet
+	// is DNAT'd (typically in nat-OUTPUT), its destination IP is changed immediately, but Linux
+	// does not recalculate the outgoing interface (OIF) until AFTER the filter-OUTPUT chain.
+	// The OIF has been recalculated by the time we hit THIS chain (mangle-POSTROUTING), so we
+	// can reliably apply host endpoint policy here.
+	rules = append(rules,
+		Rule{
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
+		},
+		Rule{
+			Match:  Match().ConntrackState("DNAT"),
+			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
+		},
+		Rule{
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
+			Action:  ReturnAction{},
+			Comment: []string{"Host endpoint policy accepted packet."},
+		},
+	)
+
+	return &Chain{
+		Name:  ChainManglePostrouting,
 		Rules: rules,
 	}
 }

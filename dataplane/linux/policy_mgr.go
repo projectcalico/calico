@@ -62,7 +62,7 @@ type policyManager struct {
 
 type policyRenderer interface {
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
-	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
+	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain)
 }
 
 func newPolicyManager(rawTable, mangleTable, filterTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8, callbacks *callbacks) *policyManager {
@@ -102,14 +102,16 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.callbacks.InvokeRemovePolicy(*msg.Id)
 	case *proto.ActiveProfileUpdate:
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
-		chains := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile, m.ipVersion)
-		m.filterTable.UpdateChains(chains)
+		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile, m.ipVersion)
+		m.filterTable.UpdateChains([]*iptables.Chain{inbound, outbound})
+		m.mangleTable.UpdateChains([]*iptables.Chain{outbound})
 	case *proto.ActiveProfileRemove:
 		log.WithField("id", msg.Id).Debug("Removing profile chains")
 		inName := rules.ProfileChainName(rules.ProfileInboundPfx, msg.Id)
 		outName := rules.ProfileChainName(rules.ProfileOutboundPfx, msg.Id)
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
+		m.mangleTable.RemoveChainByName(outName)
 	}
 }
 

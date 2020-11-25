@@ -115,9 +115,47 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		cc.ExpectSome(felixes[0], w[0])
 		cc.ExpectSome(felixes[1], w[1])
 	}
+	expectHostToOwnPodViaServiceTraffic := func() {
+		// host to own pod always allowed, even via a service IP
+		for i := range felixes {
+			// Allocate a service IP.
+			serviceIP := fmt.Sprintf("10.96.0.%v", i+1)
+
+			// Add a NAT rule for the service IP.
+			felixes[i].ProgramIptablesDNAT(serviceIP, w[i].IP, "OUTPUT")
+
+			// Expect connectivity to the service IP.
+			cc.ExpectSome(felixes[i], connectivity.TargetIP(serviceIP), 8055)
+		}
+	}
+	expectDenyHostToRemotePodViaServiceTraffic := func() {
+		// host to remote pod always denied, even via a service IP
+		for i := range felixes {
+			// Allocate a service IP.
+			serviceIP := fmt.Sprintf("10.96.10.%v", i+1)
+
+			// Add a NAT rule for the service IP.
+			felixes[i].ProgramIptablesDNAT(serviceIP, w[1-i].IP, "OUTPUT")
+
+			// Expect not to be able to connect to the service IP.
+			cc.ExpectNone(felixes[i], connectivity.TargetIP(serviceIP), 8055)
+		}
+	}
 	expectPodToPodTraffic := func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
+	}
+	expectLocalPodToRemotePodViaServiceTraffic := func() {
+		for i := range felixes {
+			// Allocate a service IP.
+			serviceIP := fmt.Sprintf("10.96.10.%v", i+1)
+
+			// Add a NAT rule for the service IP.
+			felixes[i].ProgramIptablesDNAT(serviceIP, w[1-i].IP, "PREROUTING")
+
+			// Expect to connect from local pod to the service IP.
+			cc.ExpectSome(w[i], connectivity.TargetIP(serviceIP), 8055)
+		}
 	}
 	expectDenyHostToHostTraffic := func() {
 		cc.ExpectNone(felixes[0], hostW[1])
@@ -180,6 +218,9 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			expectDenyHostToOtherPodTraffic()
 			expectPodToPodTraffic()
 			expectHostToOwnPodTraffic()
+			expectHostToOwnPodViaServiceTraffic()
+			expectDenyHostToRemotePodViaServiceTraffic()
+			expectLocalPodToRemotePodViaServiceTraffic()
 			cc.CheckConnectivity()
 		})
 

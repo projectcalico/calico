@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -150,6 +150,10 @@ func (m MatchCriteria) DestAddrType(addrType AddrType) MatchCriteria {
 
 func (m MatchCriteria) ConntrackState(stateNames string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m conntrack --ctstate %s", stateNames))
+}
+
+func (m MatchCriteria) NotConntrackState(stateNames string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m conntrack ! --ctstate %s", stateNames))
 }
 
 func (m MatchCriteria) Protocol(name string) MatchCriteria {

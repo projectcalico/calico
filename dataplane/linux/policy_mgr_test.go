@@ -1,4 +1,4 @@
-// Copyright (c) 2017, 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -225,8 +225,10 @@ var _ = Describe("Policy manager", func() {
 			}})
 		})
 
-		It("should not install to the mangle table", func() {
-			mangleTable.checkChains([][]*iptables.Chain{})
+		It("should install the out chain to the mangle table", func() {
+			mangleTable.checkChains([][]*iptables.Chain{{
+				{Name: "cali-pro-prof1"},
+			}})
 		})
 
 		Describe("after a policy remove", func() {
@@ -255,13 +257,14 @@ func (r *mockPolRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, polic
 		{Name: outName},
 	}
 }
-func (r *mockPolRenderer) ProfileToIptablesChains(profID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain {
-	inName := rules.ProfileChainName(rules.ProfileInboundPfx, profID)
-	outName := rules.ProfileChainName(rules.ProfileOutboundPfx, profID)
-	return []*iptables.Chain{
-		{Name: inName},
-		{Name: outName},
+func (r *mockPolRenderer) ProfileToIptablesChains(profID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain) {
+	inbound = &iptables.Chain{
+		Name: rules.ProfileChainName(rules.ProfileInboundPfx, profID),
 	}
+	outbound = &iptables.Chain{
+		Name: rules.ProfileChainName(rules.ProfileOutboundPfx, profID),
+	}
+	return
 }
 
 func newMockPolRenderer() *mockPolRenderer {
