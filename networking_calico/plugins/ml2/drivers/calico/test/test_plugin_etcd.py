@@ -508,6 +508,18 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
+
+        # Now process an update for the same port and check that it doesn't cause the etcd
+        # resource to be recreated.  This simulates an update and delete racing with each
+        # other and being handled on different Neutron servers or on different threads of
+        # the same server.  The key point is that the update shouldn't accidentally
+        # recreate an etcd resource that has just been deleted.
+        self.driver.update_port_postcommit(context)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
+        # Race over, and port1 gone.  Update our representation of the Neutron DB so that
+        # future queries will only get back the other port.
         self.osdb_ports = [lib.port2]
 
         # Do another resync - expect no changes to the etcd data.
