@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -28,17 +29,20 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
+	"github.com/gofrs/flock"
+	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/cni-plugin/pkg/types"
-	"github.com/projectcalico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/cni-plugin/pkg/types"
+	"github.com/projectcalico/cni-plugin/pkg/upgrade"
 )
 
 func Main(version string) {
@@ -172,7 +176,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Attrs:    attrs,
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
-		err := calicoClient.IPAM().AssignIP(ctx, assignArgs)
+		assignIPWithLock := func() error {
+			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+			defer unlock()
+			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
+		}
+		err := assignIPWithLock()
 		if err != nil {
 			return err
 		}
@@ -251,7 +260,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(ctx, assignArgs)
+		autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) ([]cnet.IPNet, []cnet.IPNet, error) {
+			// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
+			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
+			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
+			// on the API server by a factor of the number of concurrent requests.
+			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+			defer unlock()
+			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
+		}
+		assignedV4, assignedV6, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
 		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", assignedV4, assignedV6)
 		if err != nil {
 			return err
@@ -283,6 +301,38 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
 	return cnitypes.PrintResult(r, conf.CNIVersion)
+}
+
+type unlockFn func()
+
+// acquireIPAMLockBestEffort attempts to acquire the IPAM file lock, blocking if needed.  If an error occurs
+// (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the
+// lock again (or a no-op function if acquiring the lock failed).
+func acquireIPAMLockBestEffort(path string) unlockFn {
+	log.Info("About to acquire host-wide IPAM lock.")
+	if path == "" {
+		path = ipamLockPath
+	}
+	err := os.MkdirAll(filepath.Dir(path), 0777)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
+		// Fall through, still a slight chance the file is there for us to access.
+	}
+	ipamLock := flock.New(path)
+	err = ipamLock.Lock()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
+		return func() {}
+	}
+	log.Info("Acquired host-wide IPAM lock.")
+	return func() {
+		err := ipamLock.Unlock()
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
+		} else {
+			log.Info("Released host-wide IPAM lock.")
+		}
+	}
 }
 
 func cmdDel(args *skel.CmdArgs) error {
@@ -322,6 +372,13 @@ func cmdDel(args *skel.CmdArgs) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
+
+	// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign/delete
+	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
+	// we only attempt one IPAM update at a time.  This reduces the load on the API server by a factor of the
+	// number of concurrent requests with essentially no downside.
+	unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+	defer unlock()
 
 	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {

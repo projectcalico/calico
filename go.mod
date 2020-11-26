@@ -8,6 +8,7 @@ require (
 	github.com/buger/jsonparser v1.0.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.5
+	github.com/gofrs/flock v0.8.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/howeyc/fsnotify v0.9.0
 	github.com/juju/clock v0.0.0-20190205081909-9c5c9712527c
