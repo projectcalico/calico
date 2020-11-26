@@ -521,14 +521,6 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		},
 	)
 
-	// Set IptablesMarkAccept bit here, to indicate to our mangle-POSTROUTING chain that this is
-	// forwarded traffic and should not be subject to normal host endpoint policy.
-	rules = append(rules,
-		Rule{
-			Action: SetMarkAction{Mark: r.IptablesMarkAccept},
-		},
-	)
-
 	return []*Chain{{
 		Name:  ChainFilterForward,
 		Rules: rules,
@@ -538,11 +530,19 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 // StaticFilterForwardAppendRules returns rules which should be statically appended to the end of the filter
 // table's forward chain.
 func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []Rule {
-	return []Rule{{
-		Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
-		Action:  r.filterAllowAction,
-		Comment: []string{"Policy explicitly accepted packet."},
-	}}
+	return []Rule{
+		{
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
+			Action:  r.filterAllowAction,
+			Comment: []string{"Policy explicitly accepted packet."},
+		},
+
+		// Set IptablesMarkAccept bit here, to indicate to our mangle-POSTROUTING chain that this is
+		// forwarded traffic and should not be subject to normal host endpoint policy.
+		{
+			Action: SetMarkAction{Mark: r.IptablesMarkAccept},
+		},
+	}
 }
 
 func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*Chain {
