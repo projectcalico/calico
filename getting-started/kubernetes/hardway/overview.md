@@ -4,16 +4,13 @@ description: A tutorial for installing Calico the hard way.
 canonical_url: '/getting-started/kubernetes/hardway/index'
 ---
 
-This tutorial walks you through setting up {{site.prodname}} the hard way.
+### About this tutorial
 
- - If you are looking to get up and running quickly with {{site.prodname}}, to try things out, check out our [quickstart guide]({{site.baseurl}}/getting-started/kubernetes/quickstart).
- - If you are looking for the most direct path to a production-ready {{site.prodname}} install, check out our [install guides]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises).
+The "Hard Way" is a tutorial for learning how Kubernetes and {{site.prodname}} components fit together. The name “{{site.prodname}} the hard way” is inspired by {% include open-new-window.html text='Kubernetes the hard way' url='https://github.com/kelseyhightower/kubernetes-the-hard-way' %} by Kelsey Hightower. This tutorial is optimized for learning what happens “under the hood,” and uses manifests for installation. **The steps are not suitable for production installs**. 
 
-{{site.prodname}} the hard way is optimized for learning about how {{site.prodname}} works and what the other guides do “under the hood.”
+For the most direct path to a production-ready {{site.prodname}} install, see our [install guides]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises).
 
-The name “{{site.prodname}} the hard way” is inspired by {% include open-new-window.html text='Kubernetes the hard way' url='https://github.com/kelseyhightower/kubernetes-the-hard-way' %} by Kelsey Hightower.
-
-## Target Audience
+### Target Audience
 
 This guide is for someone
 
@@ -22,7 +19,8 @@ This guide is for someone
 
 This guide assumes proficiency with either AWS web console or CLI for provisioning and accessing nodes.
 
-## Cluster Details
+### Cluster Details
+
 {{site.prodname}} runs in many environments and supports many cluster types. To keep things reasonably prescriptive this guide focuses on Kubernetes running on AWS, but the lessons you learn apply to wherever you choose to run {{site.prodname}}. See Getting Started for a full list of cluster types (OpenShift, OpenStack, etc.).
 
 The guide will help you install a cluster with the following {{site.prodname}} options
@@ -34,7 +32,7 @@ The guide will help you install a cluster with the following {{site.prodname}} o
  - IPv4 addresses
  - Highly available Typha with mutually authenticated TLS
 
-## Labs
+### Labs
 
  1. [Standing up Kubernetes](./standing-up-kubernetes)
  1. [The Calico datastore](./the-calico-datastore)
