@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/felix/bpf/state"
 	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/idalloc"
+	"github.com/projectcalico/felix/logutils"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -272,7 +273,7 @@ type InternalDataplane struct {
 	ipsetsSourceV4    ipsetsSource
 	callbacks         *callbacks
 
-	logAccumulator *LogAccumulator
+	loopSummarizer *logutils.Summarizer
 }
 
 const (
@@ -325,7 +326,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ifaceAddrUpdates: make(chan *ifaceAddrsUpdate, 100),
 		config:           config,
 		applyThrottle:    throttle.New(10),
-		logAccumulator:   NewLogAccumulator(),
+		loopSummarizer:   logutils.NewSummarizer("dataplane reconciliation loops"),
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
@@ -344,6 +345,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		BackendMode:           backendMode,
 		LookPathOverride:      config.LookPathOverride,
 		OnStillAlive:          dp.reportHealth,
+		OpRecorder:            dp.loopSummarizer,
 	}
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
@@ -415,7 +417,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		featureDetector,
 		iptablesOptions)
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
-	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
+	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4, dp.loopSummarizer)
 	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
 	dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV4)
 	dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV4)
@@ -424,13 +426,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.RulesConfig.VXLANEnabled {
 		routeTableVXLAN := routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0)
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, 0,
+			dp.loopSummarizer)
 
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
 			routeTableVXLAN,
 			"vxlan.calico",
 			config,
+			dp.loopSummarizer,
 		)
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
@@ -651,7 +655,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	routeTableV4 := routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0)
+		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
+		dp.loopSummarizer)
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -687,7 +692,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 			return nil
 		},
-		dp.logAccumulator)
+		dp.loopSummarizer)
 	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard)
 	dp.RegisterManager(dp.wireguardManager) // IPv4-only
 
@@ -728,7 +733,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
-		ipSetsV6 := ipsets.NewIPSets(ipSetsConfigV6)
+		ipSetsV6 := ipsets.NewIPSets(ipSetsConfigV6, dp.loopSummarizer)
 		dp.ipSets = append(dp.ipSets, ipSetsV6)
 		dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV6)
 		dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV6)
@@ -737,7 +742,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		routeTableV6 := routetable.New(
 			interfaceRegexes, 6, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0)
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, 0,
+			dp.loopSummarizer)
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
@@ -770,19 +776,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesNATTables...)
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesFilterTables...)
 	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesRawTables...)
-
-	for _, t := range dp.allIptablesTables {
-		t.OpReporter = dp.logAccumulator
-	}
-	for _, ips := range dp.ipSets {
-		ips.OpReporter = dp.logAccumulator
-	}
-	for _, r := range dp.routeTableSyncers() {
-		switch r := r.(type) {
-		case *routetable.RouteTable:
-			r.OpReporter = dp.logAccumulator
-		}
-	}
 
 	// Register that we will report liveness and readiness.
 	if config.HealthAggregator != nil {
@@ -1482,7 +1475,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					countDataplaneSyncErrors.Inc()
 				}
 
-				d.logAccumulator.EndOfIteration(applyTime)
+				d.loopSummarizer.EndOfIteration(applyTime)
 				log.WithField("msecToApply", applyTime.Seconds()*1000.0).Debug(
 					"Finished applying updates to dataplane.")
 
@@ -1490,7 +1483,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					log.WithField(
 						"secsSinceStart", time.Since(processStartTime).Seconds(),
 					).Info("Completed first update to dataplane.")
-					d.logAccumulator.RecordOperation("first-update")
+					d.loopSummarizer.RecordOperation("first-update")
 					d.doneFirstApply = true
 					if d.config.PostInSyncCallback != nil {
 						d.config.PostInSyncCallback()

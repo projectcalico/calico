@@ -26,6 +26,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"github.com/projectcalico/felix/logutils"
 )
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -39,7 +41,7 @@ type IPSets struct {
 	nextTempIPSetIdx   uint
 
 	// dirtyIPSetIDs contains IDs of IP sets that need updating.
-	dirtyIPSetIDs  set.Set //<string>
+	dirtyIPSetIDs  set.Set // <string>
 	resyncRequired bool
 
 	// pendingTempIPSetDeletions contains names of temporary IP sets that need to be deleted.  We use it to
@@ -68,16 +70,13 @@ type IPSets struct {
 	// each use.
 	stderrCopy bytes.Buffer
 
-	OpReporter OpReporter
+	opReporter logutils.OpRecorder
 }
 
-type OpReporter interface {
-	RecordOperation(name string)
-}
-
-func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
+func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
+		recorder,
 		newRealCmd,
 		time.Sleep,
 	)
@@ -86,6 +85,7 @@ func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
 // NewIPSetsWithShims is an internal test constructor.
 func NewIPSetsWithShims(
 	ipVersionConfig *IPVersionConfig,
+	recorder logutils.OpRecorder,
 	cmdFactory cmdFactory,
 	sleep func(time.Duration),
 ) *IPSets {
@@ -109,6 +109,7 @@ func NewIPSetsWithShims(
 		logCxt: log.WithFields(log.Fields{
 			"family": ipVersionConfig.Family,
 		}),
+		opReporter: recorder,
 	}
 }
 
@@ -310,9 +311,8 @@ func (s *IPSets) ApplyUpdates() {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
 			s.logCxt.Debug("Resyncing ipsets with dataplane.")
-			if s.OpReporter != nil {
-				s.OpReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
-			}
+			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
+
 			numProblems, err := s.tryResync()
 			if err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
@@ -631,9 +631,7 @@ func (s *IPSets) tryUpdates() error {
 		return nil
 	}
 
-	if s.OpReporter != nil {
-		s.OpReporter.RecordOperation(fmt.Sprint("update-ipsets-", s.IPVersionConfig.Family.Version()))
-	}
+	s.opReporter.RecordOperation(fmt.Sprint("update-ipsets-", s.IPVersionConfig.Family.Version()))
 
 	// Set up an ipset restore session.
 	countNumIPSetCalls.Inc()

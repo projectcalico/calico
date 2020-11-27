@@ -31,16 +31,14 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"github.com/projectcalico/felix/logutils"
 )
 
 const (
 	MaxChainNameLength   = 28
 	minPostWriteInterval = 50 * time.Millisecond
 )
-
-type OpReporter interface {
-	RecordOperation(name string)
-}
 
 var (
 	// List of all the top-level kernel-created chains by iptables table.
@@ -279,7 +277,7 @@ type Table struct {
 	lookPath func(file string) (string, error)
 
 	onStillAlive func()
-	OpReporter   OpReporter
+	opReporter   logutils.OpRecorder
 }
 
 type TableOptions struct {
@@ -305,6 +303,8 @@ type TableOptions struct {
 	LookPathOverride func(file string) (string, error)
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
+	// OpRecorder to tell when we do resyncs etc.
+	OpRecorder logutils.OpRecorder
 }
 
 func NewTable(
@@ -599,9 +599,8 @@ func (t *Table) loadDataplaneState() {
 
 	// Load the hashes from the dataplane.
 	t.logCxt.Debug("Loading current iptables state and checking it is correct.")
-	if t.OpReporter != nil {
-		t.OpReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.Name, t.IPVersion))
-	}
+	t.opReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.Name, t.IPVersion))
+
 	t.lastReadTime = t.timeNow()
 	dataplaneHashes, dataplaneRules := t.getHashesAndRulesFromDataplane()
 
@@ -1267,9 +1266,8 @@ func (t *Table) applyUpdates() error {
 	} else {
 		// Get the contents of the buffer ready to send to iptables-restore.  Warning: for perf, this is directly
 		// accessing the buffer's internal array; don't touch the buffer after this point.
-		if t.OpReporter != nil {
-			t.OpReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
-		}
+		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
+
 		inputBytes := buf.GetBytesAndReset()
 
 		if log.GetLevel() >= log.DebugLevel {

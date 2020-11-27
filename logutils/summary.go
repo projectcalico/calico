@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package logutils
 
 import (
 	"sort"
@@ -20,27 +20,29 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type DurationStat struct {
-	Name       string
-	LogIfAbove time.Duration
+type OpRecorder interface {
+	RecordOperation(name string)
 }
 
-type LogAccumulator struct {
+type Summarizer struct {
 	lock        sync.Mutex
 	lastLogTime time.Time
 
 	currentIteration *iteration
 	iterations       []*iteration
+	loopName         string
 }
 
-func (l *LogAccumulator) Reset() {
+func (l *Summarizer) Reset() {
 	l.iterations = l.iterations[:0]
 }
+
+var _ OpRecorder = (*Summarizer)(nil)
 
 type iteration struct {
 	Operations []string
@@ -51,14 +53,15 @@ func (i *iteration) RecordOperation(name string) {
 	i.Operations = append(i.Operations, name)
 }
 
-func NewLogAccumulator() *LogAccumulator {
-	return &LogAccumulator{
+func NewSummarizer(loopName string) *Summarizer {
+	return &Summarizer{
 		currentIteration: &iteration{},
 		lastLogTime:      time.Now(),
+		loopName:         loopName,
 	}
 }
 
-func (l *LogAccumulator) RecordOperation(name string) {
+func (l *Summarizer) RecordOperation(name string) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -66,7 +69,7 @@ func (l *LogAccumulator) RecordOperation(name string) {
 }
 
 // EndOfIteration should be called at the end of the loop, it will trigger logging of noteworthy logs.
-func (l *LogAccumulator) EndOfIteration(duration time.Duration) {
+func (l *Summarizer) EndOfIteration(duration time.Duration) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -81,7 +84,7 @@ func (l *LogAccumulator) EndOfIteration(duration time.Duration) {
 	}
 }
 
-func (l *LogAccumulator) DoLog() {
+func (l *Summarizer) DoLog() {
 	numUpdates := len(l.iterations)
 	allOps := set.New()
 	var longestIteration *iteration
@@ -99,8 +102,8 @@ func (l *LogAccumulator) DoLog() {
 	avgDuration := (sumOfDurations / time.Duration(numUpdates)).Round(time.Millisecond)
 	longestOps := longestIteration.Operations
 	sort.Strings(longestOps)
-	log.Infof("Summarising %d dataplane reconciliation loops over %v: avg=%v longest=%v (%v)",
-		numUpdates, time.Since(l.lastLogTime).Round(100*time.Millisecond), avgDuration,
+	logrus.Infof("Summarising %d %s over %v: avg=%v longest=%v (%v)",
+		numUpdates, l.loopName, time.Since(l.lastLogTime).Round(100*time.Millisecond), avgDuration,
 		longestIteration.Duration.Round(time.Millisecond),
 		strings.Join(longestOps, ","))
 }
