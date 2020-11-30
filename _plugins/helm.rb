@@ -25,13 +25,13 @@ module Jekyll
       end
 
       # substitute --execute with --show-only for helm v3 compatibility.
-      extra_args.gsub!(/--execute (\S*)/) do |f|
-        # calico CRDs stay in the templates/crds directory
-        if $1.start_with? "templates/crds/calico" then f.sub('--execute', '--show-only')
-        # operator CRDs have moved to root
-        elsif $1.start_with? "templates/crds/" then f.sub('--execute templates/crds/', '--show-only ')
-        # all other requests need to use --show-only instead of --execute for helm v3
-        else f.sub('--execute', '--show-only')
+      if @chart == "tigera-operator" then
+        extra_args.gsub!(/--execute (\S*)/) do |f|
+          # operator CRDs have moved to root
+          if $1.start_with? "templates/crds/" then f.sub('--execute templates/crds/', '--show-only ')
+          # all other requests need to use --show-only instead of --execute for helm v3
+          else f.sub('--execute', '--show-only')
+          end
         end
       end
 
@@ -60,10 +60,16 @@ module Jekyll
 
       # Execute helm.
       # Set the default etcd endpoint placeholder for rendering in the docs.
-      cmd = """bin/helm3 template --include-crds _includes/charts/#{@chart} \
+      if @chart == "tigera-operator" then
+        cmd = """bin/helm3 template --include-crds _includes/charts/#{@chart} \
+          -f #{tv.path} \
+          -f #{t.path}"""
+      else
+        cmd = """bin/helm template _includes/charts/#{@chart} \
         -f #{tv.path} \
         -f #{t.path} \
         --set etcd.endpoints='http://<ETCD_IP>:<ETCD_PORT>'"""
+      end
 
       cmd += " " + @extra_args.to_s
 
