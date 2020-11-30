@@ -146,7 +146,7 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
             'version': 0,
         }]
     elif mod_revision is not None:
-        # Write operation must _replace_ an KV entry with the specified revision.
+        # Write operation must _replace_ a KV entry with the specified revision.
         base64_key = _encode(key)
         txn['compare'] = [{
             'key': base64_key,
@@ -155,7 +155,7 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
             'mod_revision': mod_revision,
         }]
     elif existing_value is not None:
-        # Write operation must _replace_ an KV entry with the specified value.
+        # Write operation must _replace_ a KV entry with the specified value.
         base64_key = _encode(key)
         base64_existing = _encode(existing_value)
         txn['compare'] = [{
