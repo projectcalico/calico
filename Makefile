@@ -496,10 +496,14 @@ $(RELEASE_DIR_BIN)/%:
 # Utilities
 ###############################################################################
 # TODO: stop using bin/helm as an entrypoint in build scripts.
-bin/helm: helm-deps
-	@echo 'make bin/helm' is deprecated. Please use 'make helm-deps' instead.
+bin/helm: bin/helm3
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget -q https://storage.googleapis.com/kubernetes-helm/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
+	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
+	mv $(TMP)/linux-amd64/helm bin/helm
 
-helm-deps: bin/helm3
+helm-deps: bin/helm3 bin/helm
 bin/helm3:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
