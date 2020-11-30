@@ -753,7 +753,8 @@ Default: 26 (IPv4), 122 (IPv6)</p>
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.Installation">Installation</a>)
+<a href="#operator.tigera.io/v1.Installation">Installation</a>, 
+<a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
 </p>
 <p>InstallationSpec defines configuration for a Calico or Calico Enterprise installation.</p>
 <table>
@@ -983,6 +984,20 @@ int32
 <td>
 <p>MTU is the most recently observed value for pod network MTU. This may be an explicitly
 configured value, or based on Calico&rsquo;s native auto-detetion.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>computed</code><br>
+<em>
+<a href="#operator.tigera.io/v1.InstallationSpec">
+InstallationSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Computed is the final installation including overlaid resources.</p>
 </td>
 </tr>
 </tbody>
