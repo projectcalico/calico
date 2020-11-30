@@ -231,6 +231,20 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                 self.recent_deletes.add(key)
 
     def etcd3gw_client_transaction(self, txn):
+        for txc in txn['compare']:
+            _log.info("etcd3 txn compare = %r", txc)
+            if txc['target'] == 'VERSION' and txc['version'] == 0:
+                key = _decode(txc['key']).decode()
+                if txc['result'] == 'EQUAL':
+                    # Transaction requires that the etcd entry does not already exist.
+                    if key in self.etcd_data:
+                        _log.error("etcd3 txn MUST_CREATE failed")
+                        return {'succeeded': False}
+                if txc['result'] == 'NOT_EQUAL':
+                    # Transaction requires that the etcd entry does already exist.
+                    if key not in self.etcd_data:
+                        _log.error("etcd3 txn MUST_UPDATE failed")
+                        return {'succeeded': False}
         if 'request_put' in txn['success'][0]:
             put_request = txn['success'][0]['request_put']
             succeeded = self.etcd3gw_client_put(
