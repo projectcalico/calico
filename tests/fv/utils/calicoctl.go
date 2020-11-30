@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
@@ -34,7 +35,12 @@ func CalicoctlMayFail(kdd bool, args ...string) (string, error) {
 	cmd := exec.Command(calicoctl, args...)
 	cmd.Env = []string{"ETCD_ENDPOINTS=http://127.0.0.1:2379"}
 	if kdd {
-		cmd.Env = []string{"K8S_API_ENDPOINT=http://localhost:8080", "DATASTORE_TYPE=kubernetes"}
+		val, ok := os.LookupEnv("KUBECONFIG")
+		if ok {
+			cmd.Env = []string{"KUBECONFIG=" + val, "DATASTORE_TYPE=kubernetes"}
+		} else {
+			cmd.Env = []string{"K8S_API_ENDPOINT=http://localhost:8080", "DATASTORE_TYPE=kubernetes"}
+		}
 	}
 	out, err := cmd.CombinedOutput()
 	log.Infof("Run: calicoctl %v", strings.Join(args, " "))

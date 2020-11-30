@@ -16,6 +16,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -28,7 +29,7 @@ import (
 
 func Patch(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> patch <KIND> <NAME> --patch=<PATCH> [--type=<TYPE>] [--config=<CONFIG>] [--namespace=<NS>]
+  <BINARY_NAME> patch <KIND> <NAME> --patch=<PATCH> [--type=<TYPE>] [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>]
 
 Examples:
   # Partially update a node using a strategic merge patch.
@@ -50,6 +51,7 @@ Options:
   -n --namespace=<NS>        Namespace of the resource.
                              Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                              Uses the default namespace if not specified.
+  --context=<context>        The name of the kubeconfig context to use.
 
 Description:
   The patch command is used to patch a specific resource by type and identifiers in place.
@@ -92,6 +94,9 @@ Description:
 	}
 	if len(parsedArgs) == 0 {
 		return nil
+	}
+	if context := parsedArgs["--context"]; context != nil {
+		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionPatch)

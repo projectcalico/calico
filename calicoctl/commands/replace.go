@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -31,7 +32,7 @@ import (
 func Replace(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> replace --filename=<FILENAME> [--recursive] [--skip-empty]
-                    [--config=<CONFIG>] [--namespace=<NS>]
+                    [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>]
 
 Examples:
   # Replace a policy using the data in policy.yaml.
@@ -55,6 +56,7 @@ Options:
   -n --namespace=<NS>        Namespace of the resource.
                              Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                              Uses the default namespace if not specified.
+  --context=<context>        The name of the kubeconfig context to use.
 
 Description:
   The replace command is used to replace a set of resources by filename or
@@ -99,6 +101,9 @@ Description:
 	}
 	if len(parsedArgs) == 0 {
 		return nil
+	}
+	if context := parsedArgs["--context"]; context != nil {
+		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionUpdate)

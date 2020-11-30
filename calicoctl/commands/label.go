@@ -16,6 +16,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
@@ -33,7 +34,7 @@ func Label(args []string) error {
   <BINARY_NAME> label (<KIND> <NAME>
   	              ( <key>=<value> [--overwrite] |
   	                <key> --remove )
-                  [--config=<CONFIG>] [--namespace=<NS>])
+                  [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>])
 
 
 
@@ -63,6 +64,7 @@ Options:
   --remove                     If true, remove the specified key in labels of the
                                resource. Reports error when specified key does not
                                exist. Can not be used with --overwrite.
+  --context=<context>          The name of the kubeconfig context to use.
 
 Description:
   The label command is used to add or update a label on a resource. Resource types
@@ -101,6 +103,9 @@ Description:
 	}
 	if len(parsedArgs) == 0 {
 		return nil
+	}
+	if context := parsedArgs["--context"]; context != nil {
+		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	log.Debugf("parse args: %+v\n", parsedArgs)

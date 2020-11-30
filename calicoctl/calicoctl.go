@@ -53,6 +53,7 @@ Options:
   -h --help               Show this screen.
   -l --log-level=<level>  Set the log level (one of panic, fatal, error,
                           warn, info, debug) [default: panic]
+  --context=<context>	  The name of the kubeconfig context to use.
 
 Description:
   The %s is used to manage Calico network and security
@@ -84,6 +85,10 @@ Description:
 			log.SetLevel(parsedLogLevel)
 			log.Infof("Log level set to %v", parsedLogLevel)
 		}
+	}
+
+	if context := arguments["--context"]; context != nil {
+		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	if arguments["<command>"] != nil {

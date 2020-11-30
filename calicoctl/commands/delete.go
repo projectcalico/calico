@@ -16,6 +16,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -30,7 +31,7 @@ func Delete(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> delete ( (<KIND> [<NAME>...]) |
                    --filename=<FILE> [--recursive] [--skip-empty] )
-                   [--skip-not-exists] [--config=<CONFIG>] [--namespace=<NS>]
+                   [--skip-not-exists] [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>]
 
 Examples:
   # Delete a policy using the type and name specified in policy.yaml.
@@ -60,6 +61,7 @@ Options:
                             Only applicable to NetworkPolicy and WorkloadEndpoint.
                             Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                             Uses the default namespace if not specified.
+  --context=<context>       The name of the kubeconfig context to use.
 
 Description:
   The delete command is used to delete a set of resources by filename or stdin,
@@ -110,6 +112,9 @@ Description:
 	}
 	if len(parsedArgs) == 0 {
 		return nil
+	}
+	if context := parsedArgs["--context"]; context != nil {
+		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionDelete)

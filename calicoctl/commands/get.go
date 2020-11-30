@@ -18,6 +18,7 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"fmt"
+	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -32,7 +33,7 @@ func Get(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> get ( (<KIND> [<NAME>...]) |
                 --filename=<FILENAME> [--recursive] [--skip-empty] )
-                [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces] [--export]
+                [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces] [--export] [--context=<context>]
 
 Examples:
   # List all policy in default output format.
@@ -62,7 +63,8 @@ Options:
   -a --all-namespaces          If present, list the requested object(s) across all namespaces.
   --export                     If present, returns the requested object(s) stripped of
                                cluster-specific information. This flag will be ignored
-			       if <NAME> is not specified.
+                               if <NAME> is not specified.
+  --context=<context>          The name of the kubeconfig context to use.
 
 Description:
   The get command is used to display a set of resources by filename or stdin,
@@ -129,6 +131,9 @@ Description:
 	}
 	if len(parsedArgs) == 0 {
 		return nil
+	}
+	if context := parsedArgs["--context"]; context != nil {
+		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	printNamespace := false
