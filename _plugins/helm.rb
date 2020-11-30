@@ -27,11 +27,12 @@ module Jekyll
       # substitute --execute with --show-only for helm v3 compatibility.
       extra_args.gsub!(/--execute (\S*)/) do |f|
         # calico CRDs stay in the templates/crds directory
-        if $1.start_with? "templates/crds/calico" then return f.gsub('--execute', '--show-only') end
+        if $1.start_with? "templates/crds/calico" then f.sub('--execute', '--show-only')
         # operator CRDs have moved to root
-        if $1.start_with? "templates/crds/" then return f.gsub('--execute templates/crds/', '--show-only ') end
+        elsif $1.start_with? "templates/crds/" then f.sub('--execute templates/crds/', '--show-only ')
         # all other requests need to use --show-only instead of --execute for helm v3
-        return f.gsub('--execute', '--show-only')
+        else f.sub('--execute', '--show-only')
+        end
       end
 
       @extra_args = extra_args
