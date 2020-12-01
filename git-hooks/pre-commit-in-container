@@ -274,7 +274,7 @@ for filename in $changed_h_files; do
 done
 
 echo "Checking C files for GPL license statements..."
-files=$(find $BPF_GPL_DIR -name "*.c" -o -name "*.h")
+files=$(find $BPF_GPL_DIR -name "*.c" -o -name "*.h" | grep -v include)
 for file in $files; do
   if ! grep -q -E "under the terms of the GNU General Public License" "${file}"; then
     echo "  File is missing GPL license: bpf-gpl/"`basename $file`

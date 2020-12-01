@@ -18,30 +18,31 @@
 # Disable implicit rules.
 .SUFFIXES:
 
-# We want to build against the up-to-date kernel headers from the linux-headers package.
-# However, if we just put them on the include path, we pull in transient dependencies
-# that can only really be built with the kernel build system.  For now, just force-include
-# exactly the files that we need and let the rest be pulled from the system's standard include
-# directories.
-LINUX_COMMON=$(wildcard /usr/src/linux-headers-*-common)
-LINUX_AMD64=$(wildcard /usr/src/linux-headers-*-amd64)
-
+# C flags for compiling BPF programs. "-target bpf" enables some workarounds
+# for BPF programs and makes inline assembly aware of the BPF registers.
 CFLAGS +=  \
-	-x c \
-	-D__KERNEL__ \
-	-D__ASM_SYSREG_H \
-	-D__LINUX_BPF_H__ \
-	-Wno-unused-value \
-	-Wno-pointer-sign \
-	-Wno-compare-distinct-pointer-types \
-	-Wunused \
 	-Wall \
 	-Werror \
 	-fno-stack-protector \
 	-O2 \
-	-emit-llvm \
-	--include=$(LINUX_COMMON)/include/uapi/linux/bpf.h \
-	--include=$(LINUX_AMD64)/include/generated/uapi/linux/version.h
+	-target bpf \
+	-emit-llvm
+
+# Build against libbpf and its recent copy of the kernel headers.
+# We link against the user API version of the headers because they contain
+# everything we need for now.
+#
+# Note: for headers that aren't in the libbpf include directory, we'll
+# fall back on the system headers, which may be old.
+CFLAGS +=  \
+	-I ./include/libbpf/src/ \
+	-I ./include/libbpf/include/uapi
+
+# Workaround for Debian placing "asm/types.h" in /usr/include/x86_64-linux-gnu
+# We also pick up a couple of other definitions from here, such as the socket
+# type constants (which are architecture dependent for historical reasons).
+TRIPLET := $(shell gcc -dumpmachine)
+CFLAGS += -I/usr/include/$(TRIPLET)
 
 CC := clang
 LD := llc
@@ -72,7 +73,7 @@ UT_CFLAGS=\
 
 # Mini-UT programs that test one or two functions.  These are each in their own files.
 ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
-	$(CC) $(CFLAGS) $(UT_CFLAGS) -c $< -o $@
+	$(CC) $(UT_CFLAGS) $(CFLAGS) -c $< -o $@
 
 # Production and UT versions of the main binaries.
 # Combining the targets into one rule causes make to fail to rebuild the .ll files.  Not sure why.

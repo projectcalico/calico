@@ -19,8 +19,8 @@
 #define __CALI_ARP_H__
 
 struct arp_key {
-	uint32_t ip;
-	uint32_t ifindex;
+	__u32 ip;
+	__u32 ifindex;
 };
 
 struct arp_value {

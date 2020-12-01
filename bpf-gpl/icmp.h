@@ -27,11 +27,11 @@
 #include "skb.h"
 
 static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip,
-					uint8_t type, uint8_t code, __be32 un)
+					__u8 type, __u8 code, __be32 un)
 {
 	struct iphdr ip_orig = *ip;
 	struct icmphdr *icmp;
-	uint32_t len;
+	__u32 len;
 	__wsum ip_csum, icmp_csum;
 	int ret;
 	
@@ -68,7 +68,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	ret = bpf_skb_adjust_room(skb, new_hdrs_len, BPF_ADJ_ROOM_MAC, 0);
 #else
-	uint32_t ip_inner_off = sizeof(struct ethhdr) + len;
+	__u32 ip_inner_off = sizeof(struct ethhdr) + len;
 	ret = bpf_skb_adjust_room(skb, new_hdrs_len, BPF_ADJ_ROOM_NET, 0);
 #endif
 	if (ret) {
@@ -109,7 +109,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 	ip->ttl = 64; /* good default */
 	ip->protocol = IPPROTO_ICMP;
 	ip->check = 0;
-	ip->tot_len = host_to_be16(len - sizeof(struct ethhdr));
+	ip->tot_len = bpf_htons(len - sizeof(struct ethhdr));
 
 #ifdef CALI_PARANOID
 	/* XXX verify that ip_orig.daddr is always the node's IP
@@ -158,10 +158,10 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 		__be16  unused;
 		__be16  mtu;
 	} frag = {
-		.mtu = host_to_be16(TUNNEL_MTU),
+		.mtu = bpf_htons(TUNNEL_MTU),
 	};
 
-	CALI_DEBUG("Sending ICMP too big mtu=%d\n", be16_to_host(frag.mtu));
+	CALI_DEBUG("Sending ICMP too big mtu=%d\n", bpf_ntohs(frag.mtu));
 	
 	/* check to make the verifier happy */
 	if (skb_too_short(skb)) {

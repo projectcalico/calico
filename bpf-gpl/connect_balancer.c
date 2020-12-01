@@ -16,7 +16,14 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <linux/bpf.h>
-#include <sys/socket.h>
+
+// socket_type.h contains the definition of SOCK_XXX constants that we need
+// but it's supposed to be imported via socket.h, which we can't import due
+// to lack of std lib support for BPF.  Bypass its check for now.
+#define _SYS_SOCKET_H
+#include <bits/socket_type.h>
+
+#include <stdbool.h>
 
 #include "bpf.h"
 #include "log.h"
@@ -31,7 +38,7 @@ int cali_noop_v4(struct bpf_sock_addr *ctx)
 	return 1;
 }
 
-static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, uint8_t proto)
+static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, __u8 proto)
 {
 	/* We do not know what the source address is yet, we only know that it
 	 * is the localhost, so we might just use 0.0.0.0. That would not
@@ -42,7 +49,7 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, uint8_t pro
 	 * XXX workloads.
 	 */
 	nat_lookup_result res = NAT_LOOKUP_ALLOW;
-	uint16_t dport_he = (uint16_t)(be32_to_host(ctx->user_port)>>16);
+	__u16 dport_he = (__u16)(bpf_ntohl(ctx->user_port)>>16);
 	struct calico_nat_dest *nat_dest;
 	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he, &res);
 	if (!nat_dest) {
@@ -50,12 +57,12 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, uint8_t pro
 		goto out;
 	}
 
-	uint32_t dport_be = host_to_ctx_port(nat_dest->port);
+	__u32 dport_be = host_to_ctx_port(nat_dest->port);
 
 	if (proto != IPPROTO_TCP) {
-		uint64_t cookie = bpf_get_socket_cookie(ctx);
+		__u64 cookie = bpf_get_socket_cookie(ctx);
 		CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
-				be32_to_host(nat_dest->addr), be16_to_host((uint16_t)dport_be), cookie);
+				bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
 		struct sendrecv4_key key = {
 			.ip	= nat_dest->addr,
 			.port	= dport_be,
@@ -96,7 +103,7 @@ int cali_ctlb_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	uint8_t ip_proto;
+	__u8 ip_proto;
 	switch (ctx->type) {
 	case SOCK_STREAM:
 		CALI_DEBUG("SOCK_STREAM -> assuming TCP\n");
@@ -121,7 +128,7 @@ __attribute__((section("calico_sendmsg_v4")))
 int cali_ctlb_sendmsg_v4(struct bpf_sock_addr *ctx)
 {
 	CALI_DEBUG("sendmsg_v4 %x:%d\n",
-			be32_to_host(ctx->user_ip4), be32_to_host(ctx->user_port)>>16);
+			bpf_ntohl(ctx->user_ip4), bpf_ntohl(ctx->user_port)>>16);
 
 	if (ctx->type != SOCK_DGRAM) {
 		CALI_INFO("unexpected sock type %d\n", ctx->type);
@@ -137,14 +144,14 @@ out:
 __attribute__((section("calico_recvmsg_v4")))
 int cali_ctlb_recvmsg_v4(struct bpf_sock_addr *ctx)
 {
-	CALI_DEBUG("recvmsg_v4 %x:%d\n", be32_to_host(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v4 %x:%d\n", bpf_ntohl(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
 		CALI_INFO("unexpected sock type %d\n", ctx->type);
 		goto out;
 	}
 
-	uint64_t cookie = bpf_get_socket_cookie(ctx);
+	__u64 cookie = bpf_get_socket_cookie(ctx);
 	CALI_DEBUG("Lookup: ip=%x port=%d(BE) cookie=%x",ctx->user_ip4, ctx->user_port, cookie);
 	struct sendrecv4_key key = {
 		.ip	= ctx->user_ip4,
@@ -156,7 +163,7 @@ int cali_ctlb_recvmsg_v4(struct bpf_sock_addr *ctx)
 
 	if (revnat == NULL) {
 		CALI_DEBUG("revnat miss for %x:%d\n",
-				be32_to_host(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
+				bpf_ntohl(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 		/* we are past policy and the packet was allowed. Either the
 		 * mapping does not exist anymore and if the app cares, it
 		 * should check the addresses. It is more likely a packet sent
@@ -168,7 +175,7 @@ int cali_ctlb_recvmsg_v4(struct bpf_sock_addr *ctx)
 	ctx->user_ip4 = revnat->ip;
 	ctx->user_port = revnat->port;
 	CALI_DEBUG("recvmsg_v4 rev nat to %x:%d\n",
-			be32_to_host(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
+			bpf_ntohl(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 
 out:
 	return 1;

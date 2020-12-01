@@ -54,7 +54,7 @@ enum cali_state_flags {
 
 CALI_MAP_V1(cali_v4_state,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
-		uint32_t, struct cali_tc_state,
+		__u32, struct cali_tc_state,
 		1, 0, MAP_PIN_GLOBAL)
 
 

@@ -16,7 +16,14 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <linux/bpf.h>
-#include <sys/socket.h>
+
+// socket_type.h contains the definition of SOCK_XXX constants that we need
+// but it's supposed to be imported via socket.h, which we can't import due
+// to lack of std lib support for BPF.  Bypass its check for now.
+#define _SYS_SOCKET_H
+#include <bits/socket_type.h>
+
+#include <stdbool.h>
 
 #include "bpf.h"
 #include "log.h"
@@ -45,7 +52,7 @@ int cali_ctlb_recvmsg_v6(struct bpf_sock_addr *ctx)
 
 	/* check if it is a IPv4 mapped as IPv6 and if so, use the v4 table */
 	if (ctx->user_ip6[0] == 0 && ctx->user_ip6[1] == 0 &&
-			ctx->user_ip6[2] == host_to_be32(0x0000ffff)) {
+			ctx->user_ip6[2] == bpf_htonl(0x0000ffff)) {
 		goto v4;
 	}
 
@@ -55,7 +62,7 @@ int cali_ctlb_recvmsg_v6(struct bpf_sock_addr *ctx)
 
 v4:
 	ipv4 = ctx->user_ip6[3];
-	CALI_DEBUG("recvmsg_v6 %x:%d\n", be32_to_host(ipv4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v6 %x:%d\n", bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
 		CALI_INFO("unexpected sock type %d\n", ctx->type);
@@ -72,7 +79,7 @@ v4:
 
 	if (revnat == NULL) {
 		CALI_DEBUG("revnat miss for %x:%d\n",
-				be32_to_host(ipv4), ctx_port_to_host(ctx->user_port));
+				bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
 		/* we are past policy and the packet was allowed. Either the
 		 * mapping does not exist anymore and if the app cares, it
 		 * should check the addresses. It is more likely a packet sent
@@ -84,7 +91,7 @@ v4:
 	ctx->user_ip6[3] = revnat->ip;
 	ctx->user_port = revnat->port;
 	CALI_DEBUG("recvmsg_v6 v4 rev nat to %x:%d\n",
-			be32_to_host(ipv4), ctx_port_to_host(ctx->user_port));
+			bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
 
 out:
 	return 1;

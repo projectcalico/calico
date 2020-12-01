@@ -26,9 +26,9 @@
 // Connection tracking.
 
 struct calico_ct_key {
-	uint32_t protocol;
+	__u32 protocol;
 	__be32 addr_a, addr_b; // NBO
-	uint16_t port_a, port_b; // HBO
+	__u16 port_a, port_b; // HBO
 };
 
 #define src_lt_dest(ip_src, ip_dst, sport, dport) \
@@ -141,8 +141,8 @@ CALI_MAP(cali_v4_ct, 2,
 
 static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k)
 {
-	CALI_VERB("CT-ALL   key A=%x:%d proto=%d\n", be32_to_host(k->addr_a), k->port_a, (int)k->protocol);
-	CALI_VERB("CT-ALL   key B=%x:%d size=%d\n", be32_to_host(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
+	CALI_VERB("CT-ALL   key A=%x:%d proto=%d\n", bpf_ntohl(k->addr_a), k->port_a, (int)k->protocol);
+	CALI_VERB("CT-ALL   key B=%x:%d size=%d\n", bpf_ntohl(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
 static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
@@ -224,15 +224,15 @@ create:
 
 	if (type == CALI_CT_TYPE_NAT_REV && ctx->tun_ip) {
 		if (ctx->flags & CALI_CT_FLAG_NP_FWD) {
-			CALI_DEBUG("CT-ALL nat tunneled to %x\n", be32_to_host(ctx->tun_ip));
+			CALI_DEBUG("CT-ALL nat tunneled to %x\n", bpf_ntohl(ctx->tun_ip));
 		} else {
 			struct cali_rt *rt = cali_rt_lookup(ctx->tun_ip);
 			if (!rt || !cali_rt_is_host(rt)) {
-				CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", be32_to_host(ctx->tun_ip));
+				CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", bpf_ntohl(ctx->tun_ip));
 				err = -1;
 				goto out;
 			}
-			CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->tun_ip));
+			CALI_DEBUG("CT-ALL nat tunneled from %x\n", bpf_ntohl(ctx->tun_ip));
 		}
 		ct_value.tun_ip = ctx->tun_ip;
 	}
@@ -426,16 +426,16 @@ static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct __sk_buff *skb, struct
 	case IPPROTO_TCP:
 		{
 			struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
-			ctx->sport = be16_to_host(tcp->source);
-			ctx->dport = be16_to_host(tcp->dest);
+			ctx->sport = bpf_ntohs(tcp->source);
+			ctx->dport = bpf_ntohs(tcp->dest);
 			ctx->tcp = tcp;
 		}
 		break;
 	case IPPROTO_UDP:
 		{
 			struct udphdr *udp = (struct udphdr *)(ip + 1);
-			ctx->sport = be16_to_host(udp->source);
-			ctx->dport = be16_to_host(udp->dest);
+			ctx->sport = bpf_ntohs(udp->source);
+			ctx->dport = bpf_ntohs(udp->dest);
 		}
 		break;
 	};
@@ -446,8 +446,8 @@ static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct __sk_buff *skb, struct
 static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport)
 {
-	CALI_DEBUG("CT-TCP delete from %x:%d\n", be32_to_host(ip_src), sport);
-	CALI_DEBUG("CT-TCP delete to   %x:%d\n", be32_to_host(ip_dst), dport);
+	CALI_DEBUG("CT-TCP delete from %x:%d\n", bpf_ntohl(ip_src), sport);
+	CALI_DEBUG("CT-TCP delete to   %x:%d\n", bpf_ntohl(ip_dst), dport);
 
 	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
 	struct calico_ct_key k = ct_make_key(srcLTDest, IPPROTO_TCP, ip_src, ip_dst, sport, dport);
@@ -463,7 +463,7 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 #define CALI_CT_VERB(fmt, ...) \
 	CALI_CT_LOG(CALI_LOG_LEVEL_VERB, fmt, ## __VA_ARGS__)
 
-#define seqno_add(seq, add) (host_to_be32((be32_to_host(seq) + add)))
+#define seqno_add(seq, add) (bpf_htonl((bpf_ntohl(seq) + add)))
 
 static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 						struct calico_ct_leg *src_to_dst,
@@ -492,8 +492,8 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 		} else {
 			CALI_CT_VERB("SYN+ACK seen but packet's ACK (%u) "
 					"doesn't match other side's SYN (%u).\n",
-					be32_to_host(tcp_header->ack_seq),
-					be32_to_host(dst_to_src->seqno));
+					bpf_ntohl(tcp_header->ack_seq),
+					bpf_ntohl(dst_to_src->seqno));
 			/* XXX Have to let this through so source can reset? */
 		}
 	} else if (tcp_header->ack && !src_to_dst->ack_seen && src_to_dst->syn_seen) {
@@ -503,8 +503,8 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 		} else {
 			CALI_CT_VERB("ACK seen but packet's ACK (%u) doesn't "
 					"match other side's SYN (%u).\n",
-					be32_to_host(tcp_header->ack_seq),
-					be32_to_host(dst_to_src->seqno));
+					bpf_ntohl(tcp_header->ack_seq),
+					bpf_ntohl(dst_to_src->seqno));
 			/* XXX Have to let this through so source can reset? */
 		}
 	} else {
@@ -528,11 +528,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	struct tcphdr *tcp_header = ctx->tcp;
 	bool related = false;
 
-	CALI_CT_DEBUG("lookup from %x:%d\n", be32_to_host(ip_src), sport);
-	CALI_CT_DEBUG("lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
+	CALI_CT_DEBUG("lookup from %x:%d\n", bpf_ntohl(ip_src), sport);
+	CALI_CT_DEBUG("lookup to   %x:%d\n", bpf_ntohl(ip_dst), dport);
 	if (tcp_header) {
-		CALI_CT_VERB("packet seq = %u\n", be32_to_host(tcp_header->seq));
-		CALI_CT_VERB("packet ack_seq = %u\n", be32_to_host(tcp_header->ack_seq));
+		CALI_CT_VERB("packet seq = %u\n", bpf_ntohl(tcp_header->seq));
+		CALI_CT_VERB("packet ack_seq = %u\n", bpf_ntohl(tcp_header->ack_seq));
 		CALI_CT_VERB("packet syn = %d\n", tcp_header->syn);
 		CALI_CT_VERB("packet ack = %d\n", tcp_header->ack);
 		CALI_CT_VERB("packet fin = %d\n", tcp_header->fin);
@@ -563,8 +563,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			goto out_lookup_fail;
 		}
 
-		CALI_CT_DEBUG("related lookup from %x:%d\n", be32_to_host(ctx->src), ctx->sport);
-		CALI_CT_DEBUG("related lookup to   %x:%d\n", be32_to_host(ctx->dst), ctx->dport);
+		CALI_CT_DEBUG("related lookup from %x:%d\n", bpf_ntohl(ctx->src), ctx->sport);
+		CALI_CT_DEBUG("related lookup to   %x:%d\n", bpf_ntohl(ctx->dst), ctx->dport);
 
 		srcLTDest = src_lt_dest(ctx->src, ctx->dst, ctx->sport, ctx->dport);
 		k = ct_make_key(srcLTDest, ctx->proto, ctx->src, ctx->dst, ctx->sport, ctx->dport);
@@ -618,7 +618,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.nat_port = v->nat_rev_key.port_a;
 		}
 		result.tun_ip = tracking_v->tun_ip;
-		CALI_CT_DEBUG("fwd tun_ip:%x\n", be32_to_host(tracking_v->tun_ip));
+		CALI_CT_DEBUG("fwd tun_ip:%x\n", bpf_ntohl(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = tracking_v->flags;
 
@@ -638,7 +638,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		 */
 		if (CALI_F_FROM_HEP && ctx->tun_ip && result.tun_ip && result.tun_ip != ctx->tun_ip) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
-					be32_to_host(result.tun_ip), be32_to_host(ctx->tun_ip));
+					bpf_ntohl(result.tun_ip), bpf_ntohl(ctx->tun_ip));
 			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
 		}
 
@@ -655,7 +655,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 
 		result.tun_ip = v->tun_ip;
-		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
+		CALI_CT_DEBUG("tun_ip:%x\n", bpf_ntohl(v->tun_ip));
 
 		if (ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
@@ -697,7 +697,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		CALI_CT_VERB("Created: %llu.\n", v->created);
 		if (tcp_header) {
 			CALI_CT_VERB("Last seen: %llu.\n", v->last_seen);
-			CALI_CT_VERB("A-to-B: seqno %u.\n", be32_to_host(v->a_to_b.seqno));
+			CALI_CT_VERB("A-to-B: seqno %u.\n", bpf_ntohl(v->a_to_b.seqno));
 			CALI_CT_VERB("A-to-B: syn_seen %d.\n", v->a_to_b.syn_seen);
 			CALI_CT_VERB("A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
 			CALI_CT_VERB("A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
@@ -705,7 +705,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 		CALI_CT_VERB("A: whitelisted %d.\n", v->a_to_b.whitelisted);
 		if (tcp_header) {
-			CALI_CT_VERB("B-to-A: seqno %u.\n", be32_to_host(v->b_to_a.seqno));
+			CALI_CT_VERB("B-to-A: seqno %u.\n", bpf_ntohl(v->b_to_a.seqno));
 			CALI_CT_VERB("B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
 			CALI_CT_VERB("B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
 			CALI_CT_VERB("B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
@@ -753,7 +753,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 
 	if (ret_from_tun) {
-		CALI_DEBUG("Packet returned from tunnel %x\n", be32_to_host(ctx->tun_ip));
+		CALI_DEBUG("Packet returned from tunnel %x\n", bpf_ntohl(ctx->tun_ip));
 	} else if (CALI_F_TO_HOST) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
