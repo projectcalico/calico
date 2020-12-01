@@ -22,6 +22,15 @@ import (
 	"github.com/projectcalico/felix/bpf"
 )
 
+type PolicyResult int32
+
+const (
+	PolicyNoMatch PolicyResult = iota
+	PolicyAllow
+	PolicyDeny
+	PolicyTailCallFailed = 10
+)
+
 // struct cali_tc_state {
 //    __be32 ip_src;4
 //    __be32 ip_dst;8
@@ -42,7 +51,7 @@ type State struct {
 	DstAddr             uint32
 	PostNATDstAddr      uint32
 	NATTunSrcAddr       uint32
-	PolicyRC            int32
+	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
 	PostNATDstPort      uint16

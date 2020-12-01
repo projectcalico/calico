@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/felix/bpf/asm"
+	"github.com/projectcalico/felix/bpf/state"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/rules"
@@ -160,13 +161,6 @@ const (
 	_ = jumpIdxPolicy
 )
 
-const (
-	PolRCNoMatch                = 0
-	PolRCAllow                  = 1
-	PolRCDeny                   = 2
-	PolRCEpilogueTailCallFailed = 10
-)
-
 // writeProgramFooter emits the program exit jump targets.
 func (p *Builder) writeProgramFooter() {
 	// Fall through here if there's no match.  Also used when we hit an error or if policy rejects packet.
@@ -177,7 +171,7 @@ func (p *Builder) writeProgramFooter() {
 	if p.b.TargetIsUsed("allow") {
 		p.b.LabelNextInsn("allow")
 		// Store the policy result in the state for the next program to see.
-		p.b.MovImm32(R1, 1)
+		p.b.MovImm32(R1, int32(state.PolicyAllow))
 		p.b.Store32(R9, R1, stateOffPolResult)
 		// Execute the tail call.
 		p.b.Mov64(R1, R6)                      // First arg is the context.
@@ -186,7 +180,7 @@ func (p *Builder) writeProgramFooter() {
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.
-		p.b.MovImm32(R1, PolRCEpilogueTailCallFailed)
+		p.b.MovImm32(R1, state.PolicyTailCallFailed)
 		p.b.Store32(R9, R1, stateOffPolResult)
 		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
 		p.b.Exit()

@@ -1143,13 +1143,13 @@ func runTest(t *testing.T, tp testPolicy) {
 	for _, tc := range tp.AllowedPackets() {
 		t.Run(fmt.Sprintf("should allow %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			runProgram(tc, testStateMap, polProgFD, RCEpilogueReached, polprog.PolRCAllow)
+			runProgram(tc, testStateMap, polProgFD, RCEpilogueReached, state.PolicyAllow)
 		})
 	}
 	for _, tc := range tp.DroppedPackets() {
 		t.Run(fmt.Sprintf("should drop %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			runProgram(tc, testStateMap, polProgFD, RCDrop, polprog.PolRCNoMatch)
+			runProgram(tc, testStateMap, polProgFD, RCDrop, state.PolicyNoMatch)
 		})
 	}
 }
@@ -1177,7 +1177,7 @@ func installEpilogueProgram(jumpMap bpf.Map) bpf.ProgFD {
 	return epiFD
 }
 
-func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC int) {
+func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC state.PolicyResult) {
 	// The policy program takes its input from the state map (rather than looking at the
 	// packet).  Set up the state map.
 	stateIn := tc.StateIn()
