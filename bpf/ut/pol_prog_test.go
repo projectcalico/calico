@@ -974,9 +974,46 @@ var polProgramTests = []polProgramTest{
 	},
 }
 
+// polProgramTestWrapper allows to keep polProgramTest intact as well as the tests that
+// use it. The wrapped object satisfies testCase interface that allows to use the same
+// algo for testing with different testcase options.
+type polProgramTestWrapper struct {
+	p polProgramTest
+}
+
+func (w polProgramTestWrapper) Policy() polprog.Rules {
+	return w.p.Policy
+}
+
+func (w polProgramTestWrapper) IPSets() map[string][]string {
+	return w.p.IPSets
+}
+
+func (w polProgramTestWrapper) AllowedPackets() []testCase {
+	ret := make([]testCase, len(w.p.AllowedPackets))
+	for i, p := range w.p.AllowedPackets {
+		ret[i] = p
+	}
+
+	return ret
+}
+
+func (w polProgramTestWrapper) DroppedPackets() []testCase {
+	ret := make([]testCase, len(w.p.DroppedPackets))
+	for i, p := range w.p.DroppedPackets {
+		ret[i] = p
+	}
+
+	return ret
+}
+
+func wrap(p polProgramTest) polProgramTestWrapper {
+	return polProgramTestWrapper{p}
+}
+
 func TestPolicyPrograms(t *testing.T) {
 	for i, p := range polProgramTests {
-		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), p.Run)
+		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), func(t *testing.T) { runTest(t, wrap(p)) })
 	}
 }
 
@@ -1009,7 +1046,7 @@ func (p packet) String() string {
 	return fmt.Sprintf("%s-%s:%d->%s:%d", protoName, p.srcAddr, p.srcPort, p.dstAddr, p.dstPort)
 }
 
-func (p packet) ToState() state.State {
+func (p packet) StateIn() state.State {
 	if uint8(p.protocol) == 1 {
 		return state.State{
 			IPProto:        uint8(p.protocol),
@@ -1028,6 +1065,19 @@ func (p packet) ToState() state.State {
 	}
 }
 
+func (p packet) MatchStateOut(stateOut state.State) {
+	// Check no other fields got clobbered.
+	expectedStateOut := p.StateIn()
+
+	// Zero parts we do not care about
+
+	expectedStateOut.PolicyRC = 0 // PolicyRC tested by the caller
+
+	stateOut.PolicyRC = 0
+
+	Expect(stateOut).To(Equal(expectedStateOut), "policy program modified unexpected parts of the state")
+}
+
 func ipUintFromString(addrStr string) uint32 {
 	if addrStr == "" {
 		return 0
@@ -1041,7 +1091,20 @@ func TestIPUintFromString(t *testing.T) {
 	Expect(ipUintFromString("10.0.0.1")).To(Equal(uint32(0x0100000a)))
 }
 
-func (p *polProgramTest) Run(t *testing.T) {
+type testPolicy interface {
+	Policy() polprog.Rules
+	IPSets() map[string][]string
+	AllowedPackets() []testCase
+	DroppedPackets() []testCase
+}
+
+type testCase interface {
+	String() string
+	StateIn() state.State
+	MatchStateOut(stateOut state.State)
+}
+
+func runTest(t *testing.T, tp testPolicy) {
 	RegisterTestingT(t)
 
 	// The prog builder refuses to allocate IDs as a precaution, give it an allocator that forces allocations.
@@ -1052,11 +1115,11 @@ func (p *polProgramTest) Run(t *testing.T) {
 	cleanIPSetMap()
 	// FIXME should clean up the maps at the end of each test but recreating the maps seems to be racy
 
-	p.setUpIPSets(realAlloc, ipsMap)
+	setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 
 	// Build the program.
 	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), jumpMap.MapFD())
-	insns, err := pg.Instructions(p.Policy)
+	insns, err := pg.Instructions(tp.Policy())
 	Expect(err).NotTo(HaveOccurred(), "failed to assemble program")
 
 	// Load the program into the kernel.  We don't pin it so it'll be removed when the
@@ -1070,31 +1133,29 @@ func (p *polProgramTest) Run(t *testing.T) {
 	}()
 
 	// Give the policy program somewhere to jump to.
-	epiFD := p.installEpilogueProgram(jumpMap)
+	epiFD := installEpilogueProgram(jumpMap)
 	defer func() {
 		err := epiFD.Close()
 		Expect(err).NotTo(HaveOccurred())
 	}()
 
 	log.Debug("Setting up state map")
-	for _, pkt := range p.AllowedPackets {
-		pkt := pkt
-		t.Run(fmt.Sprintf("should allow %v", pkt), func(t *testing.T) {
+	for _, tc := range tp.AllowedPackets() {
+		t.Run(fmt.Sprintf("should allow %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			p.runProgram(pkt.ToState(), testStateMap, polProgFD, RCEpilogueReached, polprog.PolRCAllow)
+			runProgram(tc, testStateMap, polProgFD, RCEpilogueReached, polprog.PolRCAllow)
 		})
 	}
-	for _, pkt := range p.DroppedPackets {
-		pkt := pkt
-		t.Run(fmt.Sprintf("should drop %v", pkt), func(t *testing.T) {
+	for _, tc := range tp.DroppedPackets() {
+		t.Run(fmt.Sprintf("should drop %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			p.runProgram(pkt.ToState(), testStateMap, polProgFD, RCDrop, polprog.PolRCNoMatch)
+			runProgram(tc, testStateMap, polProgFD, RCDrop, polprog.PolRCNoMatch)
 		})
 	}
 }
 
 // installEpilogueProgram installs a trivial BPF program into the jump table that returns RCEpilogueReached.
-func (p *polProgramTest) installEpilogueProgram(jumpMap bpf.Map) bpf.ProgFD {
+func installEpilogueProgram(jumpMap bpf.Map) bpf.ProgFD {
 	b := asm.NewBlock()
 
 	// Load the RC into the return register.
@@ -1116,9 +1177,10 @@ func (p *polProgramTest) installEpilogueProgram(jumpMap bpf.Map) bpf.ProgFD {
 	return epiFD
 }
 
-func (p *polProgramTest) runProgram(stateIn state.State, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC int) {
+func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC int) {
 	// The policy program takes its input from the state map (rather than looking at the
 	// packet).  Set up the state map.
+	stateIn := tc.StateIn()
 	stateMapKey := []byte{0, 0, 0, 0} // State map has a single key
 	stateBytesIn := stateIn.AsBytes()
 	log.WithField("stateBytes", stateBytesIn).Debug("State bytes in")
@@ -1138,14 +1200,11 @@ func (p *polProgramTest) runProgram(stateIn state.State, stateMap bpf.Map, progF
 	log.Debugf("State out %#v", stateOut)
 	Expect(stateOut.PolicyRC).To(BeNumerically("==", expPolRC), "policy RC was incorrect")
 	Expect(result.RC).To(BeNumerically("==", expProgRC), "program RC was incorrect")
-	// Check no other fields got clobbered.
-	expectedStateOut := stateIn
-	expectedStateOut.PolicyRC = int32(expPolRC)
-	Expect(stateOut).To(Equal(expectedStateOut), "policy program modified unexpected parts of the state")
+	tc.MatchStateOut(stateOut)
 }
 
-func (p *polProgramTest) setUpIPSets(alloc *idalloc.IDAllocator, ipsMap bpf.Map) {
-	for name, members := range p.IPSets {
+func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap bpf.Map) {
+	for name, members := range ipSets {
 		id := alloc.GetOrAlloc(name)
 		for _, m := range members {
 			entry := ipsets.ProtoIPSetMemberToBPFEntry(id, m)
