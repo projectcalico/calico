@@ -231,7 +231,6 @@ func (m *ipipManager) CompleteDeferredWork() error {
 	return nil
 }
 
-// ipsetsDataplane is a shim interface for mocking the IPSets object.
 type ipsetsDataplane interface {
 	AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string)
 	AddMembers(setID string, newMembers []string)
@@ -240,4 +239,7 @@ type ipsetsDataplane interface {
 	GetIPFamily() ipsets.IPFamily
 	GetTypeOf(setID string) (ipsets.IPSetType, error)
 	GetMembers(setID string) (set.Set, error)
+	QueueResync()
+	ApplyUpdates()
+	ApplyDeletions()
 }

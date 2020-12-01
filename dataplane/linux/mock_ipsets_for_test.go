@@ -86,3 +86,15 @@ func (s *mockIPSets) GetMembers(setID string) (set.Set, error) {
 func (s *mockIPSets) GetTypeOf(setID string) (ipsets.IPSetType, error) {
 	return s.Metadata[setID].Type, nil
 }
+
+func (s *mockIPSets) QueueResync() {
+	// Not implemented for UT.
+}
+
+func (s *mockIPSets) ApplyUpdates() {
+	// Not implemented for UT.
+}
+
+func (s *mockIPSets) ApplyDeletions() {
+	// Not implemented for UT.
+}
