@@ -107,7 +107,7 @@ func main() {
 		os.Exit(0)
 	} else if *runFelix {
 		logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
-		felix.Run("/etc/calico/felix.cfg", buildinfo.GitVersion, buildinfo.GitRevision, buildinfo.BuildDate)
+		felix.Run("/etc/calico/felix.cfg", buildinfo.GitVersion, buildinfo.BuildDate, buildinfo.GitRevision)
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
