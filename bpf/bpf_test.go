@@ -35,15 +35,8 @@ import (
 	"github.com/projectcalico/felix/versionparse"
 )
 
-const (
-	// tags of the XDP program, need to be changed if the XDP program changes
-	realTag = "f1390b11c709ebc1" // as shown by running bpftool prog show
-	mockTag = "518c0e6ebaaa1b0d" // sha-1 of the ELF object truncated to 16 characters
-)
-
 var (
 	bpfDP       BPFDataplane
-	expectedTag string
 )
 
 func cleanup(calicoDir string) error {
@@ -82,11 +75,9 @@ func setup() {
 	if forceRealLib != "" || (root && xdp && hasBPFtool) {
 		log.Info("Running with real BPF lib")
 		bpfDP, _ = NewBPFLib("../bpf-apache/bin/")
-		expectedTag = realTag
 	} else {
 		log.WithFields(log.Fields{"root": root, "xdp": xdp, "hasbpftool": hasBPFtool}).Info("Running with mock BPF lib")
 		bpfDP = NewMockBPFLib("../bpf-apache/bin/")
-		expectedTag = mockTag
 	}
 	wd, _ := os.Getwd()
 	log.Info("Current directory: ", wd)
@@ -389,13 +380,10 @@ func TestXDP(t *testing.T) {
 		t.Fatalf("cannot load xdp: %v", err)
 	}
 
-	t.Log("Getting the XDP tag of an iface with an XDP program attached should succeed and return the expected tag")
+	t.Log("Getting the XDP tag of an iface with an XDP program attached should succeed")
 	tag, err := bpfDP.GetXDPTag("test_A")
 	if err != nil {
 		t.Fatalf("cannot get xdp tag: %v", err)
-	}
-	if tag != expectedTag {
-		t.Fatalf("wrong tag %v (expected %v)", tag, expectedTag)
 	}
 
 	t.Log("Getting the XDP tag of an XDP object file should succeed and return the expected tag")
@@ -403,8 +391,8 @@ func TestXDP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot get xdp tag from object file: %v", err)
 	}
-	if fileTag != expectedTag || fileTag != tag {
-		t.Fatalf("got wrong tag: tag=%q fileTag=%q expectedTag=%q", tag, fileTag, expectedTag)
+	if fileTag != tag {
+		t.Fatalf("got wrong tag: tag=%q fileTag=%q", tag, fileTag)
 	}
 
 	t.Log("Getting the XDP tag of the default XDP object should succeed and return the expected tag")
@@ -412,8 +400,8 @@ func TestXDP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot get xdp tag from asset file: %v", err)
 	}
-	if fileTag != expectedTag || fileTag != tag {
-		t.Fatalf("got wrong tag: tag=%q fileTag=%q expectedTag=%q", tag, fileTag, expectedTag)
+	if fileTag != tag {
+		t.Fatalf("got wrong tag: tag=%q fileTag=%q", tag, fileTag)
 	}
 
 	t.Log("Getting the XDP tag of a non-existent XDP object file should fail")
