@@ -213,7 +213,6 @@ func (m *bpfIPSets) GetMembers(setID string) (set.Set, error) {
 	// GetMembers is only called from XDPState, and XDPState does not coexist with
 	// config.BPFEnabled.
 	panic("Not implemented")
-	return nil, nil
 }
 
 func (m *bpfIPSets) ApplyUpdates() {
