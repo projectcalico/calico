@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"github.com/projectcalico/felix/logutils"
 )
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -39,7 +41,7 @@ type IPSets struct {
 	nextTempIPSetIdx   uint
 
 	// dirtyIPSetIDs contains IDs of IP sets that need updating.
-	dirtyIPSetIDs  set.Set //<string>
+	dirtyIPSetIDs  set.Set // <string>
 	resyncRequired bool
 
 	// pendingTempIPSetDeletions contains names of temporary IP sets that need to be deleted.  We use it to
@@ -67,11 +69,14 @@ type IPSets struct {
 	// stderrCopy holds a copy of the the stderr emitted by ipset restore. It is reset after
 	// each use.
 	stderrCopy bytes.Buffer
+
+	opReporter logutils.OpRecorder
 }
 
-func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
+func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
+		recorder,
 		newRealCmd,
 		time.Sleep,
 	)
@@ -80,6 +85,7 @@ func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
 // NewIPSetsWithShims is an internal test constructor.
 func NewIPSetsWithShims(
 	ipVersionConfig *IPVersionConfig,
+	recorder logutils.OpRecorder,
 	cmdFactory cmdFactory,
 	sleep func(time.Duration),
 ) *IPSets {
@@ -103,6 +109,7 @@ func NewIPSetsWithShims(
 		logCxt: log.WithFields(log.Fields{
 			"family": ipVersionConfig.Family,
 		}),
+		opReporter: recorder,
 	}
 }
 
@@ -220,7 +227,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 
 // QueueResync forces a resync with the dataplane on the next ApplyUpdates() call.
 func (s *IPSets) QueueResync() {
-	s.logCxt.Info("Asked to resync with the dataplane on next update.")
+	s.logCxt.Debug("Asked to resync with the dataplane on next update.")
 	s.resyncRequired = true
 }
 
@@ -303,7 +310,9 @@ func (s *IPSets) ApplyUpdates() {
 		if s.resyncRequired {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
-			s.logCxt.Info("Resyncing ipsets with dataplane.")
+			s.logCxt.Debug("Resyncing ipsets with dataplane.")
+			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
+
 			numProblems, err := s.tryResync()
 			if err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
@@ -311,8 +320,8 @@ func (s *IPSets) ApplyUpdates() {
 				continue
 			}
 			if numProblems > 0 {
-				s.logCxt.WithField("numProblems", numProblems).Info(
-					"Found inconsistencies in dataplane")
+				s.logCxt.WithField("numProblems", numProblems).Warn(
+					"Found inconsistencies in IP sets in dataplane")
 			}
 			s.resyncRequired = false
 		}
@@ -353,7 +362,7 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		s.logCxt.WithFields(log.Fields{
 			"resyncDuration":          time.Since(resyncStart),
 			"numInconsistenciesFound": numProblems,
-		}).Info("Finished resync")
+		}).Debug("Finished IPSets resync")
 	}()
 
 	// Start an 'ipset list' child process, which will emit output of the following form:
@@ -621,6 +630,8 @@ func (s *IPSets) tryUpdates() error {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
 	}
+
+	s.opReporter.RecordOperation(fmt.Sprint("update-ipsets-", s.IPVersionConfig.Family.Version()))
 
 	// Set up an ipset restore session.
 	countNumIPSetCalls.Inc()

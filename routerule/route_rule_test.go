@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/felix/logutils"
 	. "github.com/projectcalico/felix/routerule"
 
 	. "github.com/onsi/ginkgo"
@@ -50,7 +51,7 @@ var _ = Describe("RouteRules Construct", func() {
 
 	It("should not be constructable with no table index", func() {
 		tableIndexSet := set.New()
-		_, err := NewWithShims(
+		_, err := New(
 			4,
 			100,
 			tableIndexSet,
@@ -58,6 +59,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
+			logutils.NewSummarizer("test loop"),
 		)
 		Expect(err).To(HaveOccurred())
 	})
@@ -66,7 +68,7 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet := set.New()
 		tableIndexSet.Add(0)
 		tableIndexSet.Add(10)
-		_, err := NewWithShims(
+		_, err := New(
 			4,
 			100,
 			tableIndexSet,
@@ -74,12 +76,13 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
+			logutils.NewSummarizer("test loop"),
 		)
 		Expect(err).To(HaveOccurred())
 
 		tableIndexSet.Discard(0)
 		tableIndexSet.Add(252)
-		_, err = NewWithShims(
+		_, err = New(
 			4,
 			100,
 			tableIndexSet,
@@ -87,6 +90,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
+			logutils.NewSummarizer("test loop"),
 		)
 		Expect(err).To(HaveOccurred())
 	})
@@ -96,7 +100,7 @@ var _ = Describe("RouteRules Construct", func() {
 		tableIndexSet.Add(1)
 		tableIndexSet.Add(10)
 		tableIndexSet.Add(250)
-		_, err := NewWithShims(
+		_, err := New(
 			4,
 			100,
 			tableIndexSet,
@@ -104,6 +108,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
+			logutils.NewSummarizer("test loop"),
 		)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -126,7 +131,7 @@ var _ = Describe("RouteRules", func() {
 		tableIndexSet.Add(250)
 
 		var err error
-		rrs, err = NewWithShims(
+		rrs, err = New(
 			4,
 			100,
 			tableIndexSet,
@@ -134,6 +139,7 @@ var _ = Describe("RouteRules", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
+			logutils.NewSummarizer("test loop"),
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(rrs).ToNot(BeNil())

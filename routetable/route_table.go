@@ -16,6 +16,7 @@ package routetable
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"reflect"
 	"regexp"
@@ -27,13 +28,15 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/netlinkshim"
 	"github.com/projectcalico/felix/timeshim"
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
@@ -184,6 +187,8 @@ type RouteTable struct {
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
 	conntrack         conntrackIface
 	time              timeshim.Interface
+
+	opReporter logutils.OpRecorder
 }
 
 func New(
@@ -195,6 +200,7 @@ func New(
 	deviceRouteProtocol int,
 	removeExternalRoutes bool,
 	tableIndex int,
+	opReporter logutils.OpRecorder,
 ) *RouteTable {
 	return NewWithShims(
 		interfaceRegexes,
@@ -209,6 +215,7 @@ func New(
 		deviceRouteProtocol,
 		removeExternalRoutes,
 		tableIndex,
+		opReporter,
 	)
 }
 
@@ -226,6 +233,7 @@ func NewWithShims(
 	deviceRouteProtocol int,
 	removeExternalRoutes bool,
 	tableIndex int,
+	opReporter logutils.OpRecorder,
 ) *RouteTable {
 	var regexpParts []string
 	includeNoOIF := false
@@ -274,6 +282,7 @@ func NewWithShims(
 		deviceRouteProtocol:            deviceRouteProtocol,
 		removeExternalRoutes:           removeExternalRoutes,
 		tableIndex:                     tableIndex,
+		opReporter:                     opReporter,
 	}
 }
 
@@ -395,7 +404,7 @@ func (r *RouteTable) SetL2Routes(ifaceName string, targets []L2Target) {
 }
 
 func (r *RouteTable) QueueResync() {
-	r.logCxt.Info("Queueing a resync of routing table.")
+	r.logCxt.Debug("Queueing a resync of routing table.")
 	r.reSync = true
 }
 
@@ -441,6 +450,8 @@ func (r *RouteTable) closeNetlink() {
 
 func (r *RouteTable) Apply() error {
 	if r.reSync {
+		r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
+
 		listStartTime := time.Now()
 
 		nl, err := r.getNetlink()

@@ -31,6 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"github.com/projectcalico/felix/logutils"
 )
 
 const (
@@ -275,6 +277,7 @@ type Table struct {
 	lookPath func(file string) (string, error)
 
 	onStillAlive func()
+	opReporter   logutils.OpRecorder
 }
 
 type TableOptions struct {
@@ -300,6 +303,8 @@ type TableOptions struct {
 	LookPathOverride func(file string) (string, error)
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
+	// OpRecorder to tell when we do resyncs etc.
+	OpRecorder logutils.OpRecorder
 }
 
 func NewTable(
@@ -424,6 +429,7 @@ func NewTable(
 		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
+		opReporter:            options.OpRecorder,
 	}
 	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 
@@ -593,7 +599,9 @@ func (t *Table) loadDataplaneState() {
 	t.featureDetector.RefreshFeatures()
 
 	// Load the hashes from the dataplane.
-	t.logCxt.Info("Loading current iptables state and checking it is correct.")
+	t.logCxt.Debug("Loading current iptables state and checking it is correct.")
+	t.opReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.Name, t.IPVersion))
+
 	t.lastReadTime = t.timeNow()
 	dataplaneHashes, dataplaneRules := t.getHashesAndRulesFromDataplane()
 
@@ -931,7 +939,7 @@ func (t *Table) InvalidateDataplaneCache(reason string) {
 		logCxt.Debug("Would invalidate dataplane cache but it was already invalid.")
 		return
 	}
-	logCxt.Info("Invalidating dataplane cache")
+	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
 }
 
@@ -1259,6 +1267,8 @@ func (t *Table) applyUpdates() error {
 	} else {
 		// Get the contents of the buffer ready to send to iptables-restore.  Warning: for perf, this is directly
 		// accessing the buffer's internal array; don't touch the buffer after this point.
+		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
+
 		inputBytes := buf.GetBytesAndReset()
 
 		if log.GetLevel() >= log.DebugLevel {

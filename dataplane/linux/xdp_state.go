@@ -169,7 +169,7 @@ func (x *xdpState) ResyncIfNeeded(ipsSourceV4 ipsetsSource) error {
 		if i > 0 {
 			log.Info("Retrying after an XDP update failure...")
 		}
-		log.Info("Resyncing XDP state with dataplane.")
+		log.Debug("Resyncing XDP state with dataplane.")
 		err = x.tryResync(newConvertingIPSetsSource(ipsSourceV4))
 		if err == nil {
 			success = true
@@ -558,7 +558,7 @@ func (s *xdpIPState) getIPSetMembers(setID string, ipsSource ipsetsSource) (set.
 func (s *xdpIPState) tryResync(common *xdpStateCommon, ipsSource ipsetsSource) error {
 	resyncStart := time.Now()
 	defer func() {
-		s.logCxt.WithField("resyncDuration", time.Since(resyncStart)).Info("Finished XDP resync.")
+		s.logCxt.WithField("resyncDuration", time.Since(resyncStart)).Debug("Finished XDP resync.")
 	}()
 	s.ipsetIDsToMembers.Clear()
 	resyncState, err := s.newXDPResyncState(common.bpfLib, ipsSource, common.programTag, common.xdpModes)

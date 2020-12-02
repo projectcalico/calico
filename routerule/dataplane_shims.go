@@ -15,7 +15,6 @@
 package routerule
 
 import (
-	"syscall"
 	"time"
 
 	"github.com/vishvananda/netlink"
@@ -27,8 +26,4 @@ type HandleIface interface {
 	RuleAdd(rule *netlink.Rule) error
 	RuleDel(rule *netlink.Rule) error
 	Delete()
-}
-
-func newNetlinkHandle() (HandleIface, error) {
-	return netlink.NewHandle(syscall.NETLINK_ROUTE)
 }

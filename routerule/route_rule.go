@@ -16,6 +16,7 @@ package routerule
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -23,6 +24,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/felix/logutils"
 )
 
 const (
@@ -74,22 +77,11 @@ type RouteRules struct {
 
 	// Testing shims, swapped with mock versions for UT
 	newNetlinkHandle func() (HandleIface, error)
+
+	opRecorder logutils.OpRecorder
 }
 
-func New(ipVersion int, priority int, tableIndexSet set.Set, updateFunc, removeFunc RulesMatchFunc, netlinkTimeout time.Duration) (*RouteRules, error) {
-	return NewWithShims(
-		ipVersion,
-		priority,
-		tableIndexSet,
-		updateFunc,
-		removeFunc,
-		netlinkTimeout,
-		newNetlinkHandle,
-	)
-}
-
-// NewWithShims is a test constructor, which allows netlink to be replaced by shims.
-func NewWithShims(
+func New(
 	ipVersion int,
 	priority int,
 	tableIndexSet set.Set,
@@ -97,6 +89,7 @@ func NewWithShims(
 	removeFunc RulesMatchFunc,
 	netlinkTimeout time.Duration,
 	newNetlinkHandle func() (HandleIface, error),
+	opRecorder logutils.OpRecorder,
 ) (*RouteRules, error) {
 	if tableIndexSet.Len() == 0 {
 		return nil, TableIndexFailed
@@ -129,6 +122,7 @@ func NewWithShims(
 		netlinkFamily:    ipVersionToNetlinkFamily(ipVersion),
 		newNetlinkHandle: newNetlinkHandle,
 		netlinkTimeout:   netlinkTimeout,
+		opRecorder:       opRecorder,
 	}, nil
 }
 
@@ -169,7 +163,7 @@ func (r *RouteRules) RemoveRule(rule *Rule) {
 }
 
 func (r *RouteRules) QueueResync() {
-	r.logCxt.Info("Queueing a resync of routing rules.")
+	r.logCxt.Debug("Queueing a resync of routing rules.")
 	r.inSync = false
 }
 
@@ -225,6 +219,10 @@ func (r *RouteRules) PrintCurrentRules() {
 func (r *RouteRules) Apply() error {
 	if r.inSync {
 		return nil
+	}
+
+	if r.opRecorder != nil {
+		r.opRecorder.RecordOperation(fmt.Sprint("resync-rules-v", r.IPVersion))
 	}
 
 	nl, err := r.getNetlinkHandle()

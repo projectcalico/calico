@@ -15,6 +15,7 @@
 package wireguard_test
 
 import (
+	"github.com/projectcalico/felix/logutils"
 	. "github.com/projectcalico/felix/wireguard"
 
 	"errors"
@@ -172,6 +173,7 @@ var _ = Describe("Enable wireguard", func() {
 			t,
 			FelixRouteProtocol,
 			s.status,
+			logutils.NewSummarizer("test loop"),
 		)
 
 		rule = netlink.NewRule()
@@ -1296,6 +1298,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 			t,
 			FelixRouteProtocol,
 			s.status,
+			logutils.NewSummarizer("test loop"),
 		)
 	})
 
@@ -1471,6 +1474,7 @@ var _ = Describe("Wireguard (with no table index)", func() {
 				t,
 				FelixRouteProtocol,
 				s.status,
+				logutils.NewSummarizer("test loop"),
 			)
 		}
 	})

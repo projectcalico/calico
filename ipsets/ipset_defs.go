@@ -206,6 +206,15 @@ func (f IPFamily) IsValid() bool {
 	}
 	return false
 }
+func (f IPFamily) Version() int {
+	switch f {
+	case IPFamilyV4:
+		return 4
+	case IPFamilyV6:
+		return 6
+	}
+	return 0
+}
 
 // IPSetMetadata contains the metadata for a particular IP set, such as its name, type and size.
 type IPSetMetadata struct {

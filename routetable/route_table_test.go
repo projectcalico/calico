@@ -15,6 +15,7 @@
 package routetable_test
 
 import (
+	"github.com/projectcalico/felix/logutils"
 	. "github.com/projectcalico/felix/routetable"
 
 	"fmt"
@@ -69,6 +70,7 @@ var _ = Describe("RouteTable v6", func() {
 			FelixRouteProtocol,
 			true,
 			0,
+			logutils.NewSummarizer("test"),
 		)
 	})
 
@@ -122,6 +124,7 @@ var _ = Describe("RouteTable", func() {
 			FelixRouteProtocol,
 			true,
 			0,
+			logutils.NewSummarizer("test"),
 		)
 	})
 
@@ -263,6 +266,7 @@ var _ = Describe("RouteTable", func() {
 					FelixRouteProtocol,
 					true,
 					0,
+					logutils.NewSummarizer("test"),
 				)
 			})
 			It("Should delete routes without a source address", func() {
@@ -380,6 +384,7 @@ var _ = Describe("RouteTable", func() {
 					deviceRouteProtocol,
 					true,
 					0,
+					logutils.NewSummarizer("test"),
 				)
 			})
 			It("Should delete routes without a protocol", func() {
@@ -993,6 +998,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			FelixRouteProtocol,
 			true,
 			0,
+			logutils.NewSummarizer("test"),
 		)
 	})
 
@@ -1091,6 +1097,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			FelixRouteProtocol,
 			true,
 			100,
+			logutils.NewSummarizer("test"),
 		)
 	})
 
@@ -1297,6 +1304,7 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 				FelixRouteProtocol,
 				true,
 				100,
+				logutils.NewSummarizer("test"),
 			)
 		}).To(Panic())
 	})

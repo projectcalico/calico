@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/felix/ip"
 	. "github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -220,6 +221,7 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane = newMockDataplane()
 		ipsets = NewIPSetsWithShims(
 			v4VersionConf,
+			logutils.NewSummarizer("test loop"),
 			dataplane.newCmd,
 			dataplane.sleep,
 		)

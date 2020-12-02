@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/rules"
 
 	"github.com/sirupsen/logrus"
@@ -87,6 +88,7 @@ func newVXLANManager(
 	rt routeTable,
 	deviceName string,
 	dpConfig Config,
+	opRecorder logutils.OpRecorder,
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle()
 
@@ -99,7 +101,8 @@ func newVXLANManager(
 		func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol int, removeExternalRoutes bool) routeTable {
 			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
-				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0)
+				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0,
+				opRecorder)
 		},
 	)
 }
