@@ -111,7 +111,7 @@ func (b *PinnedMap) GetName() string {
 
 func (b *PinnedMap) MapFD() MapFD {
 	if !b.fdLoaded {
-		logrus.Panic("MapFD() called without first calling EnsureExists()")
+		logrus.WithField("map", *b).Panic("MapFD() called without first calling EnsureExists()")
 	}
 	return b.fd
 }

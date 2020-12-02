@@ -541,6 +541,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
 		ipSetsMap := bpfipsets.Map(bpfMapContext)
+		err := ipSetsMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create ipsets BPF map.")
+		}
 		ipSetsV4 := bpfipsets.NewBPFIPSets(
 			ipSetsConfigV4,
 			ipSetIDAllocator,
@@ -554,7 +558,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
 		stateMap := state.Map(bpfMapContext)
-		err := stateMap.EnsureExists()
+		err = stateMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create state BPF map.")
 		}
