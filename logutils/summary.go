@@ -21,8 +21,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type OpRecorder interface {
@@ -73,11 +71,10 @@ func (l *Summarizer) EndOfIteration(duration time.Duration) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	lastIteration := l.currentIteration
-	lastIteration.Duration = duration
-	l.iterations = append(l.iterations, lastIteration)
+	l.currentIteration.Duration = duration
+	l.iterations = append(l.iterations, l.currentIteration)
 	l.currentIteration = &iteration{}
-	if time.Since(l.lastLogTime) > time.Minute {
+	if time.Since(l.lastLogTime) > time.Minute || logrus.GetLevel() >= logrus.DebugLevel {
 		l.DoLog()
 		l.Reset()
 		l.lastLogTime = time.Now()
@@ -86,11 +83,9 @@ func (l *Summarizer) EndOfIteration(duration time.Duration) {
 
 func (l *Summarizer) DoLog() {
 	numUpdates := len(l.iterations)
-	allOps := set.New()
 	var longestIteration *iteration
 	var sumOfDurations time.Duration
 	for _, it := range l.iterations {
-		allOps.AddAll(it.Operations)
 		sumOfDurations += it.Duration
 		if longestIteration == nil || it.Duration > longestIteration.Duration {
 			longestIteration = it

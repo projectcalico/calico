@@ -1476,8 +1476,6 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 
 				d.loopSummarizer.EndOfIteration(applyTime)
-				log.WithField("msecToApply", applyTime.Seconds()*1000.0).Debug(
-					"Finished applying updates to dataplane.")
 
 				if !d.doneFirstApply {
 					log.WithField(

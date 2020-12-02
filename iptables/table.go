@@ -429,6 +429,7 @@ func NewTable(
 		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
+		opReporter:            options.OpRecorder,
 	}
 	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 
