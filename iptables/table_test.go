@@ -99,7 +99,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				NowOverride:           dataplane.now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      lookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("lest loop"),
+				OpRecorder:            logutils.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -186,7 +186,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					InsertMode:            "unknown",
 					BackendMode:           dataplaneMode,
 					LookPathOverride:      lookPathAll,
-					OpRecorder:            logutils.NewSummarizer("lest loop"),
+					OpRecorder:            logutils.NewSummarizer("test loop"),
 				},
 			)
 		}).To(Panic())
@@ -961,7 +961,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 			NowOverride:           dataplane.now,
 			BackendMode:           dataplaneMode,
 			LookPathOverride:      lookPathNoLegacy,
-			OpRecorder:            logutils.NewSummarizer("lest loop"),
+			OpRecorder:            logutils.NewSummarizer("test loop"),
 		}
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
@@ -1186,7 +1186,7 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 				InsertMode:               insertMode,
 				BackendMode:              dataplaneMode,
 				LookPathOverride:         lookPathNoLegacy,
-				OpRecorder:               logutils.NewSummarizer("lest loop"),
+				OpRecorder:               logutils.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -1608,7 +1608,7 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 				NowOverride:           dataplane.now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      lookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("lest loop"),
+				OpRecorder:            logutils.NewSummarizer("test loop"),
 			},
 		)
 		table.InsertOrAppendRules("FORWARD", []Rule{
