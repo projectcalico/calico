@@ -27,7 +27,12 @@ CFLAGS +=  \
 	-Werror \
 	-fno-stack-protector \
 	-O2 \
+	-target bpf \
 	-emit-llvm
+
+# Workaround for Ubuntu placing "asm/types.h" in /usr/include/x86_64-linux-gnu
+TRIPLET := $(shell gcc -dumpmachine)
+CFLAGS += -I/usr/include/$(TRIPLET)
 
 CC := clang
 LD := llc
@@ -50,7 +55,7 @@ bin:
 
 %.d: %.c
 	@set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) $< > $@.$$$$; \
+		$(CC) -MM $(CFLAGS) $< > $@.$$$$; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 

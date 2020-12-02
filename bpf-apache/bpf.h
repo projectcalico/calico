@@ -16,9 +16,17 @@
 #define __CALI_BPF_H__
 
 #include <linux/bpf.h>
-#include <bpf/libbpf.h>    // for bpftool dyn loader struct 'bpf_map_def'
 #include <stddef.h>
 #include <linux/ip.h>
+
+/* Kernel/libbpf bpf_helpers.h also contain this struct 'bpf_map_def' */
+struct bpf_map_def {
+        unsigned int type;
+        unsigned int key_size;
+        unsigned int value_size;
+        unsigned int max_entries;
+        unsigned int map_flags;
+};
 
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
