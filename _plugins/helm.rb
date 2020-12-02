@@ -24,6 +24,28 @@ module Jekyll
         extra_args.slice! "tigera-operator"
       end
 
+      # helm doesn't natively have an --execute-dir flag but it sure would be useful if it did.
+      # here we replace instances of "--execute-dir $dir" with individual calls to "--execute $file" by
+      # iterating over files in that directory.
+      extra_args.gsub!(/--execute-dir (\S*)/) do |_|
+        e = []
+        Dir.foreach "_includes/charts/#{@chart}/#{$1}" do |file|
+            fpath = File.join($1, file)
+            next if File.directory?("_includes/charts/#{@chart}/#{fpath}")
+
+            # for helm v3, when templating crd files, you must specify them relative
+            # to the crd directory. so trim the 'crds' from the name.
+            # we don't need to worry about the helm v2 case because crds are stored in templates/
+            # and can't be --executed from the crds/ directory.
+            if fpath.start_with? "crds" then
+              fpath = Pathname.new(fpath).relative_path_from(Pathname.new("crds"))
+            end
+
+            e << "--execute #{fpath}"
+        end
+        e.join(" ")
+      end
+
       # substitute --execute with --show-only for helm v3 compatibility.
       if @chart == "tigera-operator" then
         extra_args.gsub!(/--execute (\S*)/) do |f|
