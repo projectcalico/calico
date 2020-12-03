@@ -56,6 +56,7 @@ Options:
   -n --namespace=<NS>       Namespace of the resource.
                             Only applicable to NetworkPolicy and WorkloadEndpoint.
                             Uses the default namespace if not specified.
+  --context=<context>       The name of the kubeconfig context to use.
 
 Description:
   The delete command is used to delete a set of resources by filename or stdin,
