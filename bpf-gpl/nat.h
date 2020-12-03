@@ -129,6 +129,30 @@ CALI_MAP_V1(cali_v4_nat_aff,
 		struct calico_nat_v4_affinity_key, struct calico_nat_v4_affinity_val,
 		510000, 0, MAP_PIN_GLOBAL)
 
+static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
+						__be32 ip_from, __be32 ip_to,
+						__u16 port_from, __u16 port_to,
+						__u64 flags)
+{
+	int ret = 0;
+
+	if (ip_from != ip_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) IP from %x to %x\n", off,
+				bpf_ntohl(ip_from), bpf_ntohl(ip_to));
+		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, flags | BPF_F_PSEUDO_HDR | 4);
+		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
+	}
+	if (port_from != port_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) port from %d to %d\n",
+				off, bpf_ntohs(port_from), bpf_ntohs(port_to));
+		int rc = bpf_l4_csum_replace(skb, off, port_from, port_to, flags | 2);
+		CALI_DEBUG("bpf_l4_csum_replace(port): %d\n", rc);
+		ret |= rc;
+	}
+
+	return ret;
+}
+
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src,
 								     __be32 ip_dst,
 								     __u8 ip_proto,

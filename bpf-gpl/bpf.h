@@ -53,6 +53,10 @@ struct bpf_map_def_extended {
 #define CALI_TC_DSR		(1<<4)
 #define CALI_TC_WIREGUARD	(1<<5)
 
+#ifndef CALI_DROP_WORKLOAD_TO_HOST
+#define CALI_DROP_WORKLOAD_TO_HOST false
+#endif
+
 #ifndef CALI_COMPILE_FLAGS
 #define CALI_COMPILE_FLAGS 0
 #endif

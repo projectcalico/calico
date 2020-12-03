@@ -15,29 +15,25 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#ifndef __CALI_REASONS_H__
-#define __CALI_REASONS_H__
-
-enum calico_reason {
-	CALI_REASON_UNKNOWN = 0x00,
-	CALI_REASON_SHORT = 0x01,
-	CALI_REASON_NOT_IP = 0xea,
-	CALI_REASON_V6_WORKLOAD = 0x06,
-	CALI_REASON_FAILSAFE = 0xfa,
-	CALI_REASON_DNT = 0xd0,
-	CALI_REASON_PREDNAT = 0xd1,
-	CALI_REASON_POL = 0xbe,
-	CALI_REASON_CT = 0xc0,
-	CALI_REASON_BYPASS = 0xbb,
-	CALI_REASON_CT_NAT = 0xc1,
-	CALI_REASON_CSUM_FAIL= 0xcf,
-	CALI_REASON_ENCAP_FAIL = 0xef,
-	CALI_REASON_DECAP_FAIL = 0xdf,
-	CALI_REASON_ICMP_DF = 0x1c,
-	CALI_REASON_IP_OPTIONS = 0xeb,
-	CALI_REASON_IP_MALFORMED = 0xec,
-	CALI_REASON_UNAUTH_SOURCE = 0xed,
-	CALI_REASON_RT_UNKNOWN = 0xdead,
+struct cali_tc_ctx {
+  struct cali_tc_state *state;
+  struct ethhdr *eth;
+  struct iphdr *ip_header;
+  union {
+    void *nh;
+    struct tcphdr *tcp_header;
+    struct udphdr *udp_header;
+    struct icmphdr *icmp_header;
+  };
+  struct arp_key arpk;
+  struct fwd fwd;
 };
 
-#endif /* __CALI_REASONS_H__ */
+static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb);
+
+static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
+							 struct iphdr *ip_header,
+							 struct cali_tc_state *state,
+							 struct calico_nat_dest *nat_dest);
+
+int parse_packet(struct __sk_buff *skb, struct cali_tc_ctx *ctx) ;
