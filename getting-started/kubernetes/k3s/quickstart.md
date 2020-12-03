@@ -14,6 +14,9 @@ development.
 
 Use this quickstart to quickly and easily try {{side.prodname}} features. To deploy a cluster suitable for production, refer to [Multi-node install]({{ site.baseurl }}/getting-started/kubernetes/k3s/multi-node-install).
 
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
+
 ### Before you begin
 
 - Make sure you have a linux host that meets the following requirements
