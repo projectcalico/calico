@@ -65,12 +65,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
         
 	/* make room for the new IP + ICMP header */
 	int new_hdrs_len = sizeof(struct iphdr) + sizeof(struct icmphdr);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	ret = bpf_skb_adjust_room(skb, new_hdrs_len, BPF_ADJ_ROOM_MAC, 0);
-#else
-	__u32 ip_inner_off = sizeof(struct ethhdr) + len;
-	ret = bpf_skb_adjust_room(skb, new_hdrs_len, BPF_ADJ_ROOM_NET, 0);
-#endif
 	if (ret) {
 		CALI_DEBUG("ICMP v4 reply: failed to make room\n");
 		return -1;
@@ -86,19 +81,6 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 
 	/* N.B. getting the ip pointer here again makes verifier happy */
 	ip = skb_iphdr(skb);
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0)
-	struct iphdr *ip_inner;
-
-	if (skb_shorter(skb, ip_inner_off + sizeof(struct iphdr))) {
-		CALI_DEBUG("ICMP v4 reply: too short to move ip header\n");
-		return -1;
-	}
-
-	/* copy the ip orig header into the icmp data */
-	ip_inner = skb_ptr(skb, ip_inner_off);
-	*ip_inner = ip_orig;
-#endif
 
 	/* we do not touch ethhdr, we rely on linux to rewrite it after routing
 	 * XXX we might want to swap MACs and bounce it back from the same device

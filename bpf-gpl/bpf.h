@@ -18,13 +18,6 @@
 #ifndef __CALI_BPF_H__
 #define __CALI_BPF_H__
 
-// After switching to a build based on libbpf we're now using a mix
-// of headers: newer versions of bpf.h from libbpf and some other
-// older headers from the system so it's not meaninful to pull in
-// the system version.h.
-#define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
-#define LINUX_VERSION_CODE KERNEL_VERSION(5,2,0)
-
 #include <linux/types.h>
 #include <linux/bpf.h>
 #include <bpf_helpers.h>   /* For bpf_xxx helper functions. */

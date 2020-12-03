@@ -33,7 +33,18 @@ CFLAGS +=  \
 # everything we need for now.
 #
 # Note: for headers that aren't in the libbpf include directory, we'll
-# fall back on the system headers, which may be old.
+# fall back on the system-installed headers. At time of writing, the versions
+# of those in the go-build container are from a v4.19 kernel, which is
+# older than we'd like (BPF mode went GA with v5.2 as the target). It's
+# not ideal to mix headers in this way but the structure of the headers
+# hasn't changed enough since v4.19 to cause problems yet (and, when
+# go-build eventually gets revved to the next version of Debian, the
+# situation should get better, not worse).
+#
+# The "proper" fix for this is to rebase go-build onto a more recent
+# distribution with the right kernel headers and recent libbpf package.
+# That's tricky because go-build is based on the upstream images
+# from the go team, and they don't provide anything newer.
 CFLAGS +=  \
 	-I ./include/libbpf/src/ \
 	-I ./include/libbpf/include/uapi
