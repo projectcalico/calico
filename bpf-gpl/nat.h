@@ -19,9 +19,7 @@
 #define __CALI_NAT_H__
 
 #include <stddef.h>
-#include <stdbool.h>
-#include <linux/in.h>
-#include <linux/ip.h>
+
 #include <linux/if_ether.h>
 #include <linux/udp.h>
 
@@ -52,9 +50,9 @@ typedef enum calico_nat_lookup_result {
 } nat_lookup_result;
 
 struct calico_nat_v4 {
-        uint32_t addr; // NBO
-        uint16_t port; // HBO
-        uint8_t protocol;
+        __u32 addr; // NBO
+        __u16 port; // HBO
+        __u8 protocol;
 };
 
 /* Map: NAT level one.  Dest IP, port and src IP -> ID and num backends.
@@ -63,11 +61,11 @@ struct calico_nat_v4 {
  */
 struct __attribute__((__packed__)) calico_nat_v4_key {
 	__u32 prefixlen;
-	uint32_t addr; // NBO
-	uint16_t port; // HBO
-	uint8_t protocol;
-	uint32_t saddr;
-	uint8_t pad;
+	__u32 addr; // NBO
+	__u16 port; // HBO
+	__u8 protocol;
+	__u32 saddr;
+	__u8 pad;
 };
 
 /* Prefix len = (dst_addr + port + protocol + src_addr) in bits. */
@@ -86,10 +84,10 @@ union calico_nat_v4_lpm_key {
 };
 
 struct calico_nat_v4_value {
-	uint32_t id;
-	uint32_t count;
-	uint32_t local;
-	uint32_t affinity_timeo;
+	__u32 id;
+	__u32 count;
+	__u32 local;
+	__u32 affinity_timeo;
 };
 
 CALI_MAP(cali_v4_nat_fe, 2,
@@ -100,14 +98,14 @@ CALI_MAP(cali_v4_nat_fe, 2,
 // Map: NAT level two.  ID and ordinal -> new dest and port.
 
 struct calico_nat_secondary_v4_key {
-	uint32_t id;
-	uint32_t ordinal;
+	__u32 id;
+	__u32 ordinal;
 };
 
 struct calico_nat_dest {
-	uint32_t addr;
-	uint16_t port;
-	uint8_t pad[2];
+	__u32 addr;
+	__u16 port;
+	__u8 pad[2];
 };
 
 CALI_MAP_V1(cali_v4_nat_be,
@@ -117,13 +115,13 @@ CALI_MAP_V1(cali_v4_nat_be,
 
 struct calico_nat_v4_affinity_key {
 	struct calico_nat_v4 nat_key;
-	uint32_t client_ip;
-	uint32_t padding;
+	__u32 client_ip;
+	__u32 padding;
 };
 
 struct calico_nat_v4_affinity_val {
 	struct calico_nat_dest nat_dest;
-	uint64_t ts;
+	__u64 ts;
 };
 
 CALI_MAP_V1(cali_v4_nat_aff,
@@ -149,7 +147,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 	struct calico_nat_secondary_v4_key nat_lv2_key;
 	struct calico_nat_dest *nat_lv2_val;
 	struct calico_nat_v4_affinity_key affkey = {};
-	uint64_t now = 0;
+	__u64 now = 0;
 
 	if (!CALI_F_TO_HOST) {
 		// Skip NAT lookup for traffic leaving the host namespace.
@@ -158,7 +156,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 
 	nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
 	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
-		(int)be32_to_host(nat_key.addr), (int)dport,
+		(int)bpf_ntohl(nat_key.addr), (int)dport,
 		(int)(nat_key.protocol));
 
 	if (!nat_lv1_val) {
@@ -216,7 +214,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 		*res = NAT_FE_LOOKUP_DROP;
 		return NULL;
 	}
-	uint32_t count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
+	__u32 count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
 
@@ -246,11 +244,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 	affval = cali_v4_nat_aff_lookup_elem(&affkey);
 	if (affval && now - affval->ts <= nat_lv1_val->affinity_timeo * 1000000000ULL) {
 		CALI_DEBUG("NAT: using affinity backend %x:%d\n",
-				be32_to_host(affval->nat_dest.addr), affval->nat_dest.port);
+				bpf_ntohl(affval->nat_dest.addr), affval->nat_dest.port);
 
 		return &affval->nat_dest;
 	}
-	CALI_DEBUG("NAT: affinity invalid, new lookup for %x\n", be32_to_host(ip_dst));
+	CALI_DEBUG("NAT: affinity invalid, new lookup for %x\n", bpf_ntohl(ip_dst));
 	/* To be k8s conformant, fall through to pick a random backend. */
 
 skip_affinity:
@@ -266,7 +264,7 @@ skip_affinity:
 		return NULL;
 	}
 
-	CALI_DEBUG("NAT: backend selected %x:%d\n", be32_to_host(nat_lv2_val->addr), nat_lv2_val->port);
+	CALI_DEBUG("NAT: backend selected %x:%d\n", bpf_ntohl(nat_lv2_val->addr), nat_lv2_val->port);
 
 	if (nat_lv1_val->affinity_timeo != 0) {
 		int err;
@@ -275,7 +273,7 @@ skip_affinity:
 			.nat_dest = *nat_lv2_val,
 		};
 
-		CALI_DEBUG("NAT: updating affinity for client %x\n", be32_to_host(ip_src));
+		CALI_DEBUG("NAT: updating affinity for client %x\n", bpf_ntohl(ip_src));
 		if ((err = cali_v4_nat_aff_update_elem(&affkey, &val, BPF_ANY))) {
 			CALI_INFO("NAT: failed to update affinity table: %d\n", err);
 			/* we do carry on, we have a good nat_lv2_val */
@@ -299,7 +297,7 @@ struct vxlanhdr {
 static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src, __be32 ip_dst)
 {
 	int ret;
-	uint32_t new_hdrsz;
+	__u32 new_hdrsz;
 	struct ethhdr *eth, *eth_inner;
 	struct iphdr *ip, *ip_inner;
 	struct udphdr *udp;
@@ -309,16 +307,11 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	new_hdrsz = sizeof(struct ethhdr) + sizeof(struct iphdr) +
 			sizeof(struct udphdr) + sizeof(struct vxlanhdr);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	ret = bpf_skb_adjust_room(skb, new_hdrsz, BPF_ADJ_ROOM_MAC,
 						  BPF_F_ADJ_ROOM_ENCAP_L4_UDP |
 						  BPF_F_ADJ_ROOM_ENCAP_L3_IPV4 |
 						  BPF_F_ADJ_ROOM_ENCAP_L2(sizeof(struct ethhdr)));
 
-#else
-	/* XXX if IP options are used, we loose them */
-	ret = bpf_skb_adjust_room(skb, new_hdrsz, BPF_ADJ_ROOM_NET, 0);
-#endif
 	if (ret) {
 		goto out;
 	}
@@ -341,32 +334,28 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	/* Copy the original IP header. Since it is already DNATed, the dest IP is
 	 * already set. All we need to do is to change the source IP
 	 */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	*ip = *ip_inner;
-#else
-	*ip_inner = *ip;
-#endif
 
 	/* decrement TTL for the inner IP header. TTL must be > 1 to get here */
 	ip_dec_ttl(ip_inner);
 
 	ip->saddr = ip_src;
 	ip->daddr = ip_dst;
-	ip->tot_len = host_to_be16(be16_to_host(ip->tot_len) + new_hdrsz);
+	ip->tot_len = bpf_htons(bpf_ntohs(ip->tot_len) + new_hdrsz);
 	ip->ihl = 5; /* in case there were options in ip_inner */
 	ip->check = 0;
 	ip->protocol = IPPROTO_UDP;
 
-	udp->source = udp->dest = host_to_be16(CALI_VXLAN_PORT);
-	udp->len = host_to_be16(be16_to_host(ip->tot_len) - sizeof(struct iphdr));
+	udp->source = udp->dest = bpf_htons(CALI_VXLAN_PORT);
+	udp->len = bpf_htons(bpf_ntohs(ip->tot_len) - sizeof(struct iphdr));
 
-	*((uint8_t*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
-	vxlan->vni = host_to_be32(CALI_VXLAN_VNI) >> 8; /* it is actually 24-bit, last 8 reserved */
+	*((__u8*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
+	vxlan->vni = bpf_htonl(CALI_VXLAN_VNI) >> 8; /* it is actually 24-bit, last 8 reserved */
 
 	/* keep eth_inner MACs zeroed, it is useless after decap */
 	eth_inner->h_proto = eth->h_proto;
 
-	CALI_DEBUG("vxlan encap %x : %x\n", be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+	CALI_DEBUG("vxlan encap %x : %x\n", bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
 
 	/* change the checksums last to avoid pointer access revalidation */
 
@@ -380,34 +369,13 @@ out:
 
 static CALI_BPF_INLINE int vxlan_v4_decap(struct __sk_buff *skb)
 {
-	uint32_t extra_hdrsz;
+	__u32 extra_hdrsz;
 	int ret = -1;
 
 	extra_hdrsz = sizeof(struct ethhdr) + sizeof(struct iphdr) +
 		sizeof(struct udphdr) + sizeof(struct vxlanhdr);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	ret = bpf_skb_adjust_room(skb, -extra_hdrsz, BPF_ADJ_ROOM_MAC, 0);
-#else
-	if (skb_shorter(skb, sizeof(struct ethhdr) + extra_hdrsz +
-			    sizeof(struct ethhdr) + sizeof(struct iphdr))) {
-		CALI_DEBUG_NO_FLAG("VXLAN decap: too short\n");
-		goto out;
-	}
-
-	struct iphdr *ip, *ip_inner;
-
-	ip = skb_ptr(skb, sizeof(struct ethhdr));
-	ip_inner = skb_ptr(skb, sizeof(struct ethhdr) +extra_hdrsz);
-
-	/* restore the header */
-	*ip = *ip_inner;
-
-	ret =  bpf_skb_adjust_room(skb, -extra_hdrsz, BPF_ADJ_ROOM_NET, 0);
-
-out:
-
-#endif
 
 	return ret;
 }
@@ -417,7 +385,7 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 	struct udphdr *udp = (struct udphdr *)(ip +1);
 
 	return ip->protocol == IPPROTO_UDP &&
-		udp->dest == host_to_be16(CALI_VXLAN_PORT) &&
+		udp->dest == bpf_htons(CALI_VXLAN_PORT) &&
 		udp->check == 0;
 }
 
@@ -432,7 +400,7 @@ static CALI_BPF_INLINE __u32 vxlan_vni(struct __sk_buff *skb, struct udphdr *udp
 
 	vxlan = skb_ptr_after(skb, udp);
 
-	return be32_to_host(vxlan->vni << 8); /* 24-bit field, last 8 reserved */
+	return bpf_ntohl(vxlan->vni << 8); /* 24-bit field, last 8 reserved */
 }
 
 static CALI_BPF_INLINE bool vxlan_vni_is_valid(struct __sk_buff *skb, struct udphdr *udp)
@@ -441,7 +409,7 @@ static CALI_BPF_INLINE bool vxlan_vni_is_valid(struct __sk_buff *skb, struct udp
 
 	vxlan = skb_ptr_after(skb, udp);
 
-	return *((uint8_t*)&vxlan->flags) & (1 << 3);
+	return *((__u8*)&vxlan->flags) & (1 << 3);
 }
 
 #define vxlan_udp_csum_ok(udp) ((udp)->check == 0)

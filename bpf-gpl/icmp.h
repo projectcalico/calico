@@ -27,11 +27,11 @@
 #include "skb.h"
 
 static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip,
-					uint8_t type, uint8_t code, __be32 un)
+					__u8 type, __u8 code, __be32 un)
 {
 	struct iphdr ip_orig = *ip;
 	struct icmphdr *icmp;
-	uint32_t len;
+	__u32 len;
 	__wsum ip_csum, icmp_csum;
 	int ret;
 	
@@ -65,12 +65,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
         
 	/* make room for the new IP + ICMP header */
 	int new_hdrs_len = sizeof(struct iphdr) + sizeof(struct icmphdr);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	ret = bpf_skb_adjust_room(skb, new_hdrs_len, BPF_ADJ_ROOM_MAC, 0);
-#else
-	uint32_t ip_inner_off = sizeof(struct ethhdr) + len;
-	ret = bpf_skb_adjust_room(skb, new_hdrs_len, BPF_ADJ_ROOM_NET, 0);
-#endif
 	if (ret) {
 		CALI_DEBUG("ICMP v4 reply: failed to make room\n");
 		return -1;
@@ -87,19 +82,6 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 	/* N.B. getting the ip pointer here again makes verifier happy */
 	ip = skb_iphdr(skb);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0)
-	struct iphdr *ip_inner;
-
-	if (skb_shorter(skb, ip_inner_off + sizeof(struct iphdr))) {
-		CALI_DEBUG("ICMP v4 reply: too short to move ip header\n");
-		return -1;
-	}
-
-	/* copy the ip orig header into the icmp data */
-	ip_inner = skb_ptr(skb, ip_inner_off);
-	*ip_inner = ip_orig;
-#endif
-
 	/* we do not touch ethhdr, we rely on linux to rewrite it after routing
 	 * XXX we might want to swap MACs and bounce it back from the same device
 	 */
@@ -109,7 +91,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 	ip->ttl = 64; /* good default */
 	ip->protocol = IPPROTO_ICMP;
 	ip->check = 0;
-	ip->tot_len = host_to_be16(len - sizeof(struct ethhdr));
+	ip->tot_len = bpf_htons(len - sizeof(struct ethhdr));
 
 #ifdef CALI_PARANOID
 	/* XXX verify that ip_orig.daddr is always the node's IP
@@ -158,10 +140,10 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 		__be16  unused;
 		__be16  mtu;
 	} frag = {
-		.mtu = host_to_be16(TUNNEL_MTU),
+		.mtu = bpf_htons(TUNNEL_MTU),
 	};
 
-	CALI_DEBUG("Sending ICMP too big mtu=%d\n", be16_to_host(frag.mtu));
+	CALI_DEBUG("Sending ICMP too big mtu=%d\n", bpf_ntohs(frag.mtu));
 	
 	/* check to make the verifier happy */
 	if (skb_too_short(skb)) {

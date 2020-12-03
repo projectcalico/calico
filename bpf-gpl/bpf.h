@@ -18,78 +18,17 @@
 #ifndef __CALI_BPF_H__
 #define __CALI_BPF_H__
 
-#ifndef KERNEL_VERSION
-#include <linux/version.h>
-#endif
-
-// Due to some late-found issues with pre-5.2.0, requiring v5.2.0+ for now.
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0)
-#error Attempt to build against too-old kernel headers.
-#endif
-
+#include <linux/types.h>
 #include <linux/bpf.h>
-#include <bpf/libbpf.h>    // for bpftool dyn loader struct 'bpf_map_def'
+#include <bpf_helpers.h>   /* For bpf_xxx helper functions. */
+#include <bpf_endian.h>    /* For bpf_ntohX etc. */
 #include <stddef.h>
 #include <linux/ip.h>
 
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define be64_to_host(value) __builtin_bswap64(value)
-#define host_to_be64(value) __builtin_bswap64(value)
-#define be32_to_host(value) __builtin_bswap32(value)
-#define host_to_be32(value) __builtin_bswap32(value)
-#define be16_to_host(value) __builtin_bswap16(value)
-#define host_to_be16(value) __builtin_bswap16(value)
-#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define be64_to_host(value) (value)
-#define host_to_be64(value) (value)
-#define be32_to_host(value) (value)
-#define host_to_be32(value) (value)
-#define be16_to_host(value) (value)
-#define host_to_be16(value) (value)
-#else
-#error "COMPILER ERROR: cannot determine target endianness."
-#endif
-
-
-/*
- * BPF helper function stubs
- */
-
-#define MAKEFUNC(ret_type,fname,...) \
-	static ret_type (*bpf_ ## fname)(__VA_ARGS__) = (void*) BPF_FUNC_ ## fname;
-
 #define BPF_REDIR_EGRESS 0
 #define BPF_REDIR_INGRESS 1
-MAKEFUNC(int, msg_redirect_hash,
-	struct sk_msg_md*, struct bpf_map_def*, void*, __u64)
-MAKEFUNC(int, sock_hash_update,
-	struct bpf_sock_ops*, struct bpf_map_def*, void*, __u64)
-MAKEFUNC(void*, map_lookup_elem, void*, const void*)
-MAKEFUNC(int, map_delete_elem, void*, const void*)
-MAKEFUNC(__u64, ktime_get_ns, void)
-MAKEFUNC(int, map_update_elem, void* map, const void *key, const void *value, __u64 flags)
-MAKEFUNC(int, skb_load_bytes, void *ctx, int off, void *to, int len)
-MAKEFUNC(__u32, get_prandom_u32)
-MAKEFUNC(void, trace_printk, const char *fmt, int fmt_size, ...)
-MAKEFUNC(int, redirect, int ifindex, __u32 flags)
-MAKEFUNC(int, redirect_map, void *map, __u32 key, __u64 flags)
-MAKEFUNC(void, tail_call, void *ctx, void *map, uint32_t index)
-MAKEFUNC(void, skb_store_bytes, void *ctx, __u32 offset, const void *from, __u32 len, __u64 flags)
-MAKEFUNC(int, l4_csum_replace, void *ctx, __u32 offset, __u64 from, __u64 to, __u64 flags)
-MAKEFUNC(int, l3_csum_replace, void *ctx, __u32 offset, __u64 from, __u64 to, __u64 flags)
-MAKEFUNC(int, fib_lookup, void *ctx, struct bpf_fib_lookup *params, int plen, __u32 flags)
-MAKEFUNC(int, skb_change_head, void *ctx, __u32 len, __u64 flags)
-MAKEFUNC(int, skb_change_tail, void *ctx, __u32 len, __u64 flags)
-MAKEFUNC(int, skb_adjust_room, void *ctx, __s32 len, __u32 mode, __u64 flags)
-MAKEFUNC(int, skb_pull_data, void *ctx, __u32 len)
-MAKEFUNC(int, csum_diff, __be32 *from, __u32 from_size, __be32 *to, __u32 to_size, __wsum seed)
-MAKEFUNC(uint64_t, get_socket_cookie, void *ctx)
-
-CALI_BPF_INLINE __u32 port_to_host(__u32 port) {
-	return be32_to_host(port) >> 16;
-}
 
 /* Extended map definition for compatibility with iproute2 loader. */
 struct bpf_map_def_extended {
@@ -176,8 +115,8 @@ enum calico_skb_mark {
 	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_BYPASS  | 0x00800000,
 };
 
-#define ip_is_dnf(ip) ((ip)->frag_off & host_to_be16(0x4000))
-#define ip_frag_no(ip) ((ip)->frag_off & host_to_be16(0x1fff))
+#define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
+#define ip_frag_no(ip) ((ip)->frag_off & bpf_htons(0x1fff))
 
 static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 {
@@ -185,8 +124,8 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 	/* since we change only a single byte, as per RFC-1141 we an adjust it
 	 * inline without helpers.
 	 */
-	uint32_t sum = ip->check;
-	sum += host_to_be16(0x0100);
+	__u32 sum = ip->check;
+	sum += bpf_htons(0x0100);
 	ip->check = (__be16) (sum + (sum >> 16));
 }
 
