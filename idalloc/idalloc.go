@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,17 @@ func New() *IDAllocator {
 		strToUint64: map[string]uint64{},
 		uint64ToStr: map[uint64]string{},
 	}
+}
+
+func (a *IDAllocator) ReserveWellKnownID(id string, n uint64) {
+	if _, exists := a.uint64ToStr[n]; exists {
+		log.Panicf("ID %v already in use for well-known reservation '%v'", n, id)
+	}
+	if _, exists := a.strToUint64[id]; exists {
+		log.Panicf("Already have well-known reservation '%v'", id)
+	}
+	a.uint64ToStr[n] = id
+	a.strToUint64[id] = n
 }
 
 func (a *IDAllocator) TrialHash(id string, n uint64) uint64 {

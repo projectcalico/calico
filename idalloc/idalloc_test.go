@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,11 @@ const (
 func TestIPSetAllocator(t *testing.T) {
 	RegisterTestingT(t)
 	ipSetAlloc := idalloc.New()
+
+	const wellKnownID uint64 = 1
+	ipSetAlloc.ReserveWellKnownID("well-known-purpose", wellKnownID)
+	Expect(func() { ipSetAlloc.ReserveWellKnownID("other-purpose", wellKnownID) }).To(Panic())
+	Expect(func() { ipSetAlloc.ReserveWellKnownID("well-known-purpose", wellKnownID+1) }).To(Panic())
 
 	Expect(ipSetAlloc.GetOrAlloc("foobar")).To(Equal(ipSetAlloc.GetOrAlloc("foobar")),
 		"Same input should give same output")
