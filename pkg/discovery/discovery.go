@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -37,6 +38,7 @@ type options struct {
 	k8sServiceName     string
 	k8sNamespace       string
 	k8sServicePortName string
+	InCluster          bool
 }
 
 type Option func(opts *options)
@@ -50,6 +52,14 @@ func WithAddrOverride(addr string) Option {
 func WithKubeClient(client kubernetes.Interface) Option {
 	return func(opts *options) {
 		opts.k8sClient = client
+	}
+}
+
+// WithInClusterKubeClient enables auto-connection to Kubernetes using the in-cluster client config.
+// this is disabled by default to avoid creating an extra Kubernetes client that is then discarded.
+func WithInClusterKubeClient() Option {
+	return func(opts *options) {
+		opts.InCluster = true
 	}
 }
 
@@ -92,7 +102,20 @@ func DiscoverTyphaAddr(opts ...Option) (string, error) {
 		return "", nil
 	}
 
-	if options.k8sClient == nil {
+	// If we get here, we need to look up the Typha service using the k8s API.
+	if options.k8sClient == nil && options.InCluster {
+		// Client didn't provide a kube client but we're allowed to create one.
+		k8sConf, err := rest.InClusterConfig()
+		if err != nil {
+			logrus.WithError(err).Error("Unable to create in-cluster Kubernetes config.")
+			return "", err
+		}
+		options.k8sClient, err = kubernetes.NewForConfig(k8sConf)
+		if err != nil {
+			logrus.WithError(err).Error("Unable to create Kubernetes client set.")
+			return "", err
+		}
+	} else if options.k8sClient == nil {
 		return "", errors.New("failed to look up Typha, no Kubernetes client available")
 	}
 

@@ -16,17 +16,12 @@ package syncclientutils
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net"
-
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+
+	"github.com/projectcalico/typha/pkg/discovery"
 	"github.com/projectcalico/typha/pkg/syncclient"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
@@ -38,11 +33,17 @@ import (
 //
 // The typha address may be directly configured in the typha config, or will otherwise be looked by finding the
 // associated Kubernetes service.
-func MustStartSyncerClientIfTyphaConfigured(typhaConfig *TyphaConfig, syncerType syncproto.SyncerType,
+func MustStartSyncerClientIfTyphaConfigured(
+	typhaConfig *TyphaConfig,
+	syncerType syncproto.SyncerType,
 	myVersion, myHostname, myInfo string,
 	cbs api.SyncerCallbacks,
 ) bool {
-	typhaAddr, err := discoverTyphaAddr(typhaConfig)
+	typhaAddr, err := discovery.DiscoverTyphaAddr(
+		discovery.WithAddrOverride(typhaConfig.Addr),
+		discovery.WithInClusterKubeClient(), /* defer creation of a client until its needed. */
+		discovery.WithKubeService(typhaConfig.K8sNamespace, typhaConfig.K8sServiceName),
+	)
 	if err != nil {
 		log.WithError(err).Fatal("Typha discovery enabled but discovery failed.")
 	}
@@ -77,56 +78,4 @@ func MustStartSyncerClientIfTyphaConfigured(typhaConfig *TyphaConfig, syncerType
 	}()
 
 	return true
-}
-
-var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port.")
-
-// discoverTyphaAddr attempts to discover the typha kubernetes service.
-// -  If an address is explicitly specified, return that
-// -  If a kubernetes service name is specified then use that to look up the service
-// -  Otherwise, assume typha is not configured and return an empty addr string.
-func discoverTyphaAddr(typhaConfig *TyphaConfig) (string, error) {
-	if typhaConfig.Addr != "" {
-		// Explicit address; trumps other sources of config.
-		return typhaConfig.Addr, nil
-	}
-
-	if typhaConfig.K8sServiceName == "" {
-		// No explicit address, and no service name, not using Typha.
-		return "", nil
-	}
-
-	// If we get here, we need to look up the Typha service using the k8s API.
-	// TODO Typha: support Typha lookup without using rest.InClusterConfig().
-	k8sconf, err := rest.InClusterConfig()
-	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes config.")
-		return "", err
-	}
-	clientset, err := kubernetes.NewForConfig(k8sconf)
-	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes client set.")
-		return "", err
-	}
-	svcClient := clientset.CoreV1().Services(typhaConfig.K8sNamespace)
-	svc, err := svcClient.Get(context.Background(), typhaConfig.K8sServiceName, v1.GetOptions{})
-	if err != nil {
-		log.WithError(err).Error("Unable to get Typha service from Kubernetes.")
-		return "", err
-	}
-	host := svc.Spec.ClusterIP
-	log.WithField("clusterIP", host).Info("Found Typha ClusterIP.")
-	if host == "" {
-		log.WithError(err).Error("Typha service had no ClusterIP.")
-		return "", ErrServiceNotReady
-	}
-	for _, p := range svc.Spec.Ports {
-		if p.Name == "calico-typha" {
-			log.WithField("port", p).Info("Found Typha service port.")
-			typhaAddr := net.JoinHostPort(host, fmt.Sprintf("%v", p.Port))
-			return typhaAddr, nil
-		}
-	}
-	log.Error("Didn't find Typha service port.")
-	return "", ErrServiceNotReady
 }
