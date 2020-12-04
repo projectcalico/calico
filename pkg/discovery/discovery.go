@@ -38,7 +38,7 @@ type options struct {
 	k8sServiceName     string
 	k8sNamespace       string
 	k8sServicePortName string
-	InCluster          bool
+	inCluster          bool
 }
 
 type Option func(opts *options)
@@ -59,7 +59,7 @@ func WithKubeClient(client kubernetes.Interface) Option {
 // this is disabled by default to avoid creating an extra Kubernetes client that is then discarded.
 func WithInClusterKubeClient() Option {
 	return func(opts *options) {
-		opts.InCluster = true
+		opts.inCluster = true
 	}
 }
 
@@ -103,7 +103,7 @@ func DiscoverTyphaAddr(opts ...Option) (string, error) {
 	}
 
 	// If we get here, we need to look up the Typha service using the k8s API.
-	if options.k8sClient == nil && options.InCluster {
+	if options.k8sClient == nil && options.inCluster {
 		// Client didn't provide a kube client but we're allowed to create one.
 		k8sConf, err := rest.InClusterConfig()
 		if err != nil {
