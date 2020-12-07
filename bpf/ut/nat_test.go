@@ -386,6 +386,10 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 	fromHostCT := saveCTMap(ctMap)
+
+	encapedPktArrivesAtNode2 := make([]byte, len(encapedPkt))
+	copy(encapedPktArrivesAtNode2, encapedPkt)
+
 	resetCTMap(ctMap)
 
 	var recvPkt []byte
@@ -697,6 +701,115 @@ func TestNATNodePort(t *testing.T) {
 	 * TEST that unknown VNI is passed through
 	 */
 	testUnrelatedVXLAN(t, node2ip, vni)
+
+	// TEST host-networked backend
+	{
+		resetCTMap(ctMap)
+
+		var recvPkt []byte
+
+		hostIP = node2ip
+		skbMark = 0
+
+		// we must know that the encaped packet src ip is from a known host
+		err = rtMap.Update(
+			routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
+			routes.NewValue(routes.FlagsRemoteHost).AsBytes(),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		err = rtMap.Update(
+			routes.NewKey(ip.CIDRFromIPNet(&node2CIDR).(ip.V4CIDR)).AsBytes(),
+			routes.NewValue(routes.FlagsLocalHost).AsBytes(),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		dumpRTMap(rtMap)
+
+		// now we are at the node with local workload
+		err = natMap.Update(
+			nat.NewNATKey(net.IPv4(255, 255, 255, 255), uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+			nat.NewNATValue(0 /* count */, 1 /* local */, 1, 0).AsBytes(),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// make it point to the local host - host networked backend
+		err = natBEMap.Update(
+			nat.NewNATBackendKey(0, 0).AsBytes(),
+			nat.NewNATBackendValue(node2ip, natPort).AsBytes(),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Arriving at node 2
+		bpfIfaceName = "NP-2"
+
+		runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(encapedPktArrivesAtNode2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+			fmt.Printf("pktR = %+v\n", pktR)
+
+			ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+			ipv4R := ipv4L.(*layers.IPv4)
+			Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.SrcIP.String()))
+			Expect(ipv4R.DstIP.String()).To(Equal(node2ip.String()))
+
+			udpL := pktR.Layer(layers.LayerTypeUDP)
+			Expect(udpL).NotTo(BeNil())
+			udpR := udpL.(*layers.UDP)
+			Expect(udpR.SrcPort).To(Equal(layers.UDPPort(udp.SrcPort)))
+			Expect(udpR.DstPort).To(Equal(layers.UDPPort(natPort)))
+
+			ct, err := conntrack.LoadMapMem(ctMap)
+			Expect(err).NotTo(HaveOccurred())
+
+			ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
+				ipv4.DstIP, uint16(udp.DstPort), ipv4.SrcIP, uint16(udp.SrcPort))
+
+			Expect(ct).Should(HaveKey(ctKey))
+			ctr := ct[ctKey]
+			Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
+
+			ctKey = ctr.ReverseNATKey()
+			Expect(ct).Should(HaveKey(ctKey))
+			ctr = ct[ctKey]
+			Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
+
+			// Whitlisted source side
+			Expect(ctr.Data().A2B.Whitelisted).To(BeTrue())
+			// Dest not whitelisted yet
+			Expect(ctr.Data().B2A.Whitelisted).NotTo(BeTrue())
+
+			recvPkt = res.dataOut
+		})
+
+		dumpCTMap(ctMap)
+
+		skbMark = 0
+
+		// Response leaving workload at node 2
+		runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			respPkt := udpResposeRaw(recvPkt)
+
+			// No need to check MACs, no FIB, no forwarding, nopatching
+
+			res, err := bpfrun(respPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+			fmt.Printf("pktR = %+v\n", pktR)
+
+			ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+			Expect(ipv4L).NotTo(BeNil())
+			ipv4R := ipv4L.(*layers.IPv4)
+			Expect(ipv4R.SrcIP.String()).To(Equal(node2ip.String()))
+			Expect(ipv4R.DstIP.String()).To(Equal(node1ip.String()))
+
+			checkVxlan(pktR)
+		})
+	}
 }
 
 func TestNATNodePortNoFWD(t *testing.T) {
