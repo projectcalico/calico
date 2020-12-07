@@ -59,6 +59,7 @@ Options:
   --export                     If present, returns the requested object(s) stripped of
                                cluster-specific information. This flag will be ignored
                                if <NAME> is not specified.
+  --context=<context>          The name of the kubeconfig context to use.
 
 Description:
   The get command is used to display a set of resources by filename or stdin,

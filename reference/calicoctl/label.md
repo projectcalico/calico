@@ -54,6 +54,7 @@ Options:
   --remove                     If true, remove the specified key in labels of the
                                resource. Reports error when specified key does not
                                exist. Can not be used with --overwrite.
+  --context=<context>          The name of the kubeconfig context to use.
 
 Description:
   The label command is used to add or update a label on a resource. Resource types

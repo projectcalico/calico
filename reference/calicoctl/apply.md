@@ -49,6 +49,7 @@ Options:
                             Only applicable to NetworkPolicy and WorkloadEndpoint.
                             Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                             Uses the default namespace if not specified.
+  --context=<context>       The name of the kubeconfig context to use.
 
 Description:
   The apply command is used to create or replace a set of resources by filename
