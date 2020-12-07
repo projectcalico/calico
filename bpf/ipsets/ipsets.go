@@ -162,7 +162,9 @@ func (m *bpfIPSets) AddMembers(setID string, newMembers []string) {
 	}).Info("IP delta update (adding)")
 	for _, member := range newMembers {
 		entry := ProtoIPSetMemberToBPFEntry(ipSet.ID, member)
-		ipSet.AddMember(entry)
+		if entry != nil {
+			ipSet.AddMember(*entry)
+		}
 	}
 	m.markIPSetDirty(ipSet)
 }
@@ -186,7 +188,9 @@ func (m *bpfIPSets) RemoveMembers(setID string, removedMembers []string) {
 	}).Info("IP delta update (removing)")
 	for _, member := range removedMembers {
 		entry := ProtoIPSetMemberToBPFEntry(ipSet.ID, member)
-		ipSet.RemoveMember(entry)
+		if entry != nil {
+			ipSet.RemoveMember(*entry)
+		}
 	}
 	m.markIPSetDirty(ipSet)
 }
@@ -392,7 +396,9 @@ func (m *bpfIPSet) RemoveAll() {
 func (m *bpfIPSet) AddMembers(members []string) {
 	for _, member := range members {
 		entry := ProtoIPSetMemberToBPFEntry(m.ID, member)
-		m.AddMember(entry)
+		if entry != nil {
+			m.AddMember(*entry)
+		}
 	}
 }
 

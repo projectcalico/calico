@@ -72,7 +72,7 @@ func (e IPSetEntry) Port() uint16 {
 	return binary.LittleEndian.Uint16(e[16:18])
 }
 
-func MakeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) IPSetEntry {
+func MakeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) *IPSetEntry {
 	var entry IPSetEntry
 	// TODO Detect endianness
 	if proto == 0 {
@@ -86,12 +86,12 @@ func MakeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) I
 	binary.BigEndian.PutUint32(entry[12:16], cidr.Addr().(ip.V4Addr).AsUint32())
 	binary.LittleEndian.PutUint16(entry[16:18], port)
 	entry[18] = proto
-	return entry
+	return &entry
 }
 
 var DummyValue = []byte{1, 0, 0, 0}
 
-func ProtoIPSetMemberToBPFEntry(id uint64, member string) IPSetEntry {
+func ProtoIPSetMemberToBPFEntry(id uint64, member string) *IPSetEntry {
 	var cidrStr string
 	var port uint16
 	var protocol uint8
@@ -116,7 +116,10 @@ func ProtoIPSetMemberToBPFEntry(id uint64, member string) IPSetEntry {
 	} else {
 		cidrStr = member
 	}
-	cidr := ip.MustParseCIDROrIP(cidrStr).(ip.V4CIDR)
+	cidr, v4 := ip.MustParseCIDROrIP(cidrStr).(ip.V4CIDR)
+	if !v4 {
+		return nil
+	}
 	entry := MakeBPFIPSetEntry(id, cidr, port, protocol)
 	return entry
 }
