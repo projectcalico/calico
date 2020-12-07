@@ -32,7 +32,6 @@ func RunPolicyController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigf
 	}
 	return containers.Run("calico-kube-controllers",
 		containers.RunOpts{AutoRemove: true},
-		"--privileged",
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),

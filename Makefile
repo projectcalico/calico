@@ -214,7 +214,7 @@ check-copyright:
 ###############################################################################
 ## Run the unit tests in a container.
 ut: $(LOCAL_BUILD_DEP)
-	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'WHAT=$(WHAT) SKIP=$(SKIP) GINKGO_ARGS="$(GINKGO_ARGS)" ./run-uts'
+	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'WHAT=$(WHAT) SKIP=$(SKIP) GINKGO_ARGS=$(GINKGO_ARGS) ./run-uts'
 
 .PHONY: fv
 ## Build and run the FV tests.
