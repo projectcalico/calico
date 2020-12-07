@@ -17,6 +17,8 @@ package status
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -24,7 +26,7 @@ import (
 )
 
 const (
-	DefaultStatusFile = "status.json"
+	DefaultStatusFile = "/status/status.json"
 )
 
 type ConditionStatus struct {
@@ -124,6 +126,13 @@ func (s *Status) writeStatus() error {
 		return err
 	}
 
+	// Make sure the directory exists.
+	if err := os.MkdirAll(filepath.Dir(s.statusFile), os.ModePerm); err != nil {
+		logrus.Errorf("Failed to prepare directory: %s", err)
+		return err
+	}
+
+	// Write the file.
 	err = ioutil.WriteFile(s.statusFile, b, 0644)
 	if err != nil {
 		logrus.Errorf("Failed to write readiness file: %s", err)

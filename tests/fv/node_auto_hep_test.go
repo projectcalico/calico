@@ -70,6 +70,9 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		_, err = kconfigFile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
 
+		// Make the kubeconfig readable by the container.
+		Expect(kconfigFile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+
 		k8sClient, err = testutils.GetK8sClient(kconfigFile.Name())
 		Expect(err).NotTo(HaveOccurred())
 

@@ -67,6 +67,9 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
 
+		// Make the kubeconfig readable by the container.
+		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+
 		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 

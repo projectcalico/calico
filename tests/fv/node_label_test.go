@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -66,6 +66,9 @@ var _ = Describe("Node labeling tests", func() {
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
+
+		// Make the kubeconfig readable by the container.
+		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
 
 		// Run the controller.
 		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
