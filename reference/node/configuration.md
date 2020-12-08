@@ -62,7 +62,7 @@ below.
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
-| DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
+| DATASTORE_TYPE | Type of datastore. [Default: `kubernetes`] | kubernetes, etcdv3 |
 
 #### Configuring Kubernetes Datastore Access
 
