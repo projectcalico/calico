@@ -37,7 +37,7 @@ ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/ipt
 # Install build dependencies and security updates.
 RUN dnf install -y 'dnf-command(config-manager)' && \
     # Enable PowerTools repo for '-devel' packages
-    dnf config-manager --set-enabled PowerTools && \
+    dnf config-manager --set-enabled powertools && \
     # Install required packages for building rpms. yum-utils is not required but it gives us yum-builddep to easily install build deps.
     yum install -y rpm-build yum-utils make && \
     # Need these to build runit.
