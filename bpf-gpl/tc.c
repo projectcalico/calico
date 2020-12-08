@@ -1234,7 +1234,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			goto deny;
 		}
 
-		if (dnat_return_should_encap() && state->ct_result.tun_ip) {
+		/* In addition to dnat_return_should_encap() we also need to encap on the
+		 * host endpoint for egress traffic, when we hit an SNAT rule. This is the
+		 * case when the target was host namespace. If the target was a pod, the
+		 * already encaped traffic would not reach this point and would not be
+		 * able to match as SNAT.
+		 */
+		if ((dnat_return_should_encap() || (CALI_F_TO_HEP && !CALI_F_DSR)) &&
+									state->ct_result.tun_ip) {
 			state->ip_dst = state->ct_result.tun_ip;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
 			goto nat_encap;
