@@ -580,8 +580,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20201119184045-34d8399da148 h1:4k
 github.com/projectcalico/libcalico-go v1.7.2-0.20201119184045-34d8399da148/go.mod h1:U2yTqRuix2IWQkW0hPazR1sCVwxkNxsxW8X8Qv9BBfo=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799 h1:9jp4YoHqZvEKDW3Z9464x/whSRCWEinIo4/JifaKR+g=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
-github.com/projectcalico/pod2daemon v0.0.0-20201110235807-ac6493bc3a0a h1:TvPdW7xgl0scu2kQySOc7F6tmYsXwMsSOhhHuqGk8aY=
-github.com/projectcalico/pod2daemon v0.0.0-20201110235807-ac6493bc3a0a/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
+github.com/projectcalico/pod2daemon v0.0.0-20201209191447-44c7b48b4b61 h1:Kv+j6u4K1O8W52gU2GO6oqa7+m7h/IdTNv5kKDUBzzg=
+github.com/projectcalico/pod2daemon v0.0.0-20201209191447-44c7b48b4b61/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
 github.com/projectcalico/typha v0.7.3-0.20201209190802-8a9cfc42bb8b h1:f8hp4GznTp1eu3/Gdoja+IWBNmjkkn4k46vUVmT6dGQ=
 github.com/projectcalico/typha v0.7.3-0.20201209190802-8a9cfc42bb8b/go.mod h1:MkuAkDDeuYTK4/fPXc53eaW8N/NRNU4Yzrc65ZXsOf8=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
