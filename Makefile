@@ -226,7 +226,7 @@ ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=${GIT_VERSION} EXCLUDEARCH="$(EXCLUDEARCH)"
 
 fv: k8sfv-test
 
@@ -242,7 +242,6 @@ st:
 # Release
 ###############################################################################
 PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
-GIT_VERSION?=$(shell git describe --tags --dirty)
 
 ## Tags and builds a release from start to finish.
 release: release-prereqs
