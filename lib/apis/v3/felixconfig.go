@@ -148,9 +148,9 @@ type FelixConfigurationSpec struct {
 	ChainInsertMode string `json:"chainInsertMode,omitempty"`
 	// DefaultEndpointToHostAction controls what happens to traffic that goes from a workload endpoint to the host
 	// itself (after the traffic hits the endpoint egress policy). By default Calico blocks traffic from workload
-	// endpoints to the host itself with an iptables “DROP” action. If you want to allow some or all traffic from
+	// endpoints to the host itself with an iptables "DROP" action. If you want to allow some or all traffic from
 	// endpoint to host, set this parameter to RETURN or ACCEPT. Use RETURN if you have your own rules in the iptables
-	// “INPUT” chain; Calico will insert its rules at the top of that chain, then “RETURN” packets to the “INPUT” chain
+	// "INPUT" chain; Calico will insert its rules at the top of that chain, then "RETURN" packets to the "INPUT" chain
 	// once it has completed processing workload endpoint egress policy. Use ACCEPT to unconditionally accept packets
 	// from workloads after processing workload endpoint egress policy. [Default: Drop]
 	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty" validate:"omitempty,dropAcceptReturn"`
@@ -225,13 +225,13 @@ type FelixConfigurationSpec struct {
 	// FailsafeInboundHostPorts is a comma-delimited list of UDP/TCP ports that Felix will allow incoming traffic to host endpoints
 	// on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. Each
 	// port should be specified as tcp:<port-number> or udp:<port-number>. For back-compatibility, if the protocol is not specified, it
-	// defaults to “tcp”. To disable all inbound host ports, use the value none. The default value allows ssh access and DHCP.
+	// defaults to "tcp". To disable all inbound host ports, use the value none. The default value allows ssh access and DHCP.
 	// [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667]
 	FailsafeInboundHostPorts *[]ProtoPort `json:"failsafeInboundHostPorts,omitempty"`
 	// FailsafeOutboundHostPorts is a comma-delimited list of UDP/TCP ports that Felix will allow outgoing traffic from host endpoints to
 	// irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. Each port
 	// should be specified as tcp:<port-number> or udp:<port-number>. For back-compatibility, if the protocol is not specified, it defaults
-	// to “tcp”. To disable all outbound host ports, use the value none. The default value opens etcd's standard ports to ensure that Felix
+	// to "tcp". To disable all outbound host ports, use the value none. The default value opens etcd's standard ports to ensure that Felix
 	// does not get cut off from etcd as well as allowing DHCP and DNS.
 	// [Default: tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667, udp:53, udp:67]
 	FailsafeOutboundHostPorts *[]ProtoPort `json:"failsafeOutboundHostPorts,omitempty"`
