@@ -1268,7 +1268,13 @@ func (s *Syncer) cleanupSticky() error {
 
 // ConntrackFrontendHasBackend returns true if the given front-backend pair exists
 func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
-	backendIP net.IP, backendPort uint16, proto uint8) bool {
+	backendIP net.IP, backendPort uint16, proto uint8) (ret bool) {
+
+	if log.GetLevel() >= log.DebugLevel {
+		defer func() {
+			log.WithField("ret", ret).Debug("ConntrackFrontendHasBackend")
+		}()
+	}
 
 	id, ok := s.activeSvcsMap[ipPortProto{ipPort{ip.String(), int(port)}, proto}]
 	if !ok {
@@ -1294,6 +1300,7 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 // ConntrackScanStart excludes Apply from running and builds the active maps from
 // ConntrackFrontendHasBackend
 func (s *Syncer) ConntrackScanStart() {
+	log.Debug("ConntrackScanStart")
 	s.mapsLck.Lock()
 
 	s.activeSvcsMap = make(map[ipPortProto]uint32)
@@ -1319,6 +1326,7 @@ func (s *Syncer) ConntrackScanEnd() {
 	s.activeSvcsMap = nil
 	s.activeEpsMap = nil
 	s.mapsLck.Unlock()
+	log.Debug("ConntrackScanEnd")
 }
 
 func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {

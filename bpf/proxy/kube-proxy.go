@@ -23,18 +23,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/routes"
 )
 
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like
 // configuration, restarting etc.
 type KubeProxy struct {
-	proxy Proxy
+	proxy  Proxy
+	syncer DPSyncer
 
 	hostIPUpdates chan []net.IP
 	stopOnce      sync.Once
-	lock          sync.Mutex
+	lock          sync.RWMutex
 	exiting       chan struct{}
 	wg            sync.WaitGroup
 
@@ -47,8 +47,7 @@ type KubeProxy struct {
 	rt          *RTCache
 	opts        []Option
 
-	conntrackTimeouts conntrack.Timeouts
-	dsrEnabled        bool
+	dsrEnabled bool
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
@@ -76,13 +75,6 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	}
 
 	go func() {
-		// Before we start, scan for all finished / timed out connections to
-		// free up the conntrack table asap as it may take time to sync up the
-		// proxy and kick off the first full cleaner scan.
-		lc := conntrack.NewLivenessScanner(kp.conntrackTimeouts, kp.dsrEnabled)
-		connScan := conntrack.NewScanner(kp.ctMap, lc.ScanEntry)
-		connScan.Scan()
-
 		err := kp.start()
 		if err != nil {
 			log.WithError(err).Panic("kube-proxy failed to start")
@@ -119,13 +111,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
-	lc := conntrack.NewLivenessScanner(kp.conntrackTimeouts, kp.dsrEnabled)
-	connScan := conntrack.NewScanner(kp.ctMap,
-		lc.ScanEntry,
-		conntrack.NewStaleNATScanner(syncer.ConntrackFrontendHasBackend),
-	)
-
-	proxy, err := New(kp.k8s, syncer, connScan, kp.hostname, kp.opts...)
+	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
 	if err != nil {
 		return errors.WithMessage(err, "new proxy")
 	}
@@ -133,6 +119,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	log.Infof("kube-proxy started, hostname=%q hostIPs=%+v", kp.hostname, hostIPs)
 
 	kp.proxy = proxy
+	kp.syncer = syncer
 
 	return nil
 }
@@ -222,4 +209,35 @@ func (kp *KubeProxy) OnRouteUpdate(k routes.Key, v routes.Value) {
 func (kp *KubeProxy) OnRouteDelete(k routes.Key) {
 	_ = kp.rt.Delete(k)
 	log.WithField("key", k).Debug("kube-proxy: OnRouteDelete")
+}
+
+// ConntrackScanStart to satisfy conntrack.NATChecker - forwards to syncer.
+func (kp *KubeProxy) ConntrackScanStart() {
+	kp.lock.RLock()
+	if kp.syncer != nil {
+		kp.syncer.ConntrackScanStart()
+	}
+}
+
+// ConntrackScanEnd to satisfy conntrack.NATChecker - forwards to syncer.
+func (kp *KubeProxy) ConntrackScanEnd() {
+	if kp.syncer != nil {
+		kp.syncer.ConntrackScanEnd()
+	}
+	kp.lock.RUnlock()
+}
+
+// ConntrackFrontendHasBackend to satisfy conntrack.NATChecker - forwards to syncer.
+func (kp *KubeProxy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP,
+	backendPort uint16, proto uint8) bool {
+
+	// Thanks to holding the lock since ConntrackScanStart, this condition holds for the
+	// whole iteration. So if we started without syncer, we willalso finish without it.
+	// And if we had a syncer, we will have the same until the end.
+	if kp.syncer != nil {
+		return kp.syncer.ConntrackFrontendHasBackend(ip, port, backendIP, backendPort, proto)
+	}
+
+	// We cannot say yet, so do not break anything
+	return true
 }

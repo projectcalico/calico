@@ -81,7 +81,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
 		lc = conntrack.NewLivenessScanner(timeouts, false, conntrack.WithTimeShim(mockTime))
-		scanner = conntrack.NewScanner(ctMap, lc.ScanEntry)
+		scanner = conntrack.NewScanner(ctMap, lc)
 	})
 
 	DescribeTable(
@@ -145,6 +145,19 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 	)
 })
 
+type dummyNATChecker struct {
+	check func(fIP net.IP, fPort uint16, bIP net.IP, bPort uint16, proto uint8) bool
+}
+
+func (d dummyNATChecker) ConntrackFrontendHasBackend(fIP net.IP, fPort uint16, bIP net.IP,
+	bPort uint16, proto uint8) bool {
+
+	return d.check(fIP, fPort, bIP, bPort, proto)
+}
+
+func (dummyNATChecker) ConntrackScanStart() {}
+func (dummyNATChecker) ConntrackScanEnd()   {}
+
 var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 
 	clientIP := net.IPv4(1, 1, 1, 1)
@@ -158,8 +171,8 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 
 	DescribeTable("forward entries",
 		func(k conntrack.Key, v conntrack.Value, verdict conntrack.ScanVerdict) {
-			staleNATScanner := conntrack.NewStaleNATScanner(
-				func(fIP net.IP, fPort uint16, bIP net.IP, bPort uint16, proto uint8) bool {
+			staleNATScanner := conntrack.NewStaleNATScanner(dummyNATChecker{
+				check: func(fIP net.IP, fPort uint16, bIP net.IP, bPort uint16, proto uint8) bool {
 					Expect(proto).To(Equal(uint8(123)))
 					Expect(fIP.Equal(svcIP)).To(BeTrue())
 					Expect(fPort).To(Equal(svcPort))
@@ -167,9 +180,10 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 					Expect(bPort).To(Equal(backendPort))
 					return false
 				},
+			},
 			)
 
-			Expect(verdict).To(Equal(staleNATScanner(k, v, nil)))
+			Expect(verdict).To(Equal(staleNATScanner.Check(k, v, nil)))
 		},
 		Entry("keyA - revA",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),

@@ -140,7 +140,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("creating a CT scanner", func() {
-			connScan = conntrack.NewScanner(ct, conntrack.NewStaleNATScanner(s.ConntrackFrontendHasBackend))
+			connScan = conntrack.NewScanner(ct, conntrack.NewStaleNATScanner(s))
 		})
 
 		By("creating conntrack entries for test-service", makestep(func() {
@@ -178,9 +178,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("checking that a CT entry pair is cleaned up by connScan", makestep(func() {
 
-			s.ConntrackScanStart()
 			connScan.Scan()
-			s.ConntrackScanEnd()
 
 			cnt := 0
 
@@ -217,9 +215,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("checking that another CT entry pair is cleaned up by connScan", makestep(func() {
 
-			s.ConntrackScanStart()
 			connScan.Scan()
-			s.ConntrackScanEnd()
 
 			cnt := 0
 
@@ -871,14 +867,12 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("recreating a CT scanner for the actual syncer", func() {
-			connScan = conntrack.NewScanner(ct, conntrack.NewStaleNATScanner(s.ConntrackFrontendHasBackend))
+			connScan = conntrack.NewScanner(ct, conntrack.NewStaleNATScanner(s))
 		})
 
 		By("checking that CT table emptied by connScan", makestep(func() {
 
-			s.ConntrackScanStart()
 			connScan.Scan()
-			s.ConntrackScanEnd()
 
 			cnt := 0
 
