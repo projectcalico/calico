@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/arp"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
 	"github.com/projectcalico/felix/bpf/nat"
@@ -544,6 +545,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create state BPF map.")
 		}
+
+		arpMap := arp.Map(bpfMapContext)
+		err = arpMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create ARP BPF map.")
+		}
+
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		dp.RegisterManager(newBPFEndpointManager(
 			config.BPFLogLevel,
