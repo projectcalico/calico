@@ -99,6 +99,8 @@ var (
 	globalSelectorEntRule = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
 	globalSelectorOnly    = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
+	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
+
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
 		Mask: net.CIDRMask(16, 32),
@@ -163,6 +165,8 @@ func init() {
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("keyValueList", validateKeyValueList)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
+
+	registerFieldValidator("sourceAddress", RegexValidator("SourceAddress", SourceAddressRegex))
 	registerFieldValidator("regexp", validateRegexp)
 	registerFieldValidator("routeSource", validateRouteSource)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
@@ -330,6 +334,14 @@ func validateVXLANMode(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate VXLAN Mode: %s", s)
 	return vxlanModeRegex.MatchString(s)
+}
+
+func RegexValidator(desc string, rx *regexp.Regexp) func(fl validator.FieldLevel) bool {
+	return func(fl validator.FieldLevel) bool {
+		s := fl.Field().String()
+		log.Debugf("Validate %s: %s", desc, s)
+		return rx.MatchString(s)
+	}
 }
 
 func validateMAC(fl validator.FieldLevel) bool {

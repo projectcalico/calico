@@ -1393,6 +1393,17 @@ func init() {
 			PeerIP: "[]:8552",
 		}, false),
 
+		// BGPPeer SourceAddress
+		Entry("BGPPeer with valid SourceAddress UseNodeIP", api.BGPPeerSpec{
+			SourceAddress: api.SourceAddressUseNodeIP,
+		}, true),
+		Entry("BGPPeer with valid SourceAddress None", api.BGPPeerSpec{
+			SourceAddress: api.SourceAddressNone,
+		}, true),
+		Entry("BGPPeer with invalid SourceAddress", api.BGPPeerSpec{
+			SourceAddress: api.SourceAddress("rubbish"),
+		}, false),
+
 		// (API) NodeSpec
 		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: netv4_1}}, true),
 		Entry("should accept node with IPv6 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: netv6_1}}, true),
