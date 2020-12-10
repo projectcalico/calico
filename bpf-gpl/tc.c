@@ -1330,7 +1330,7 @@ nat_encap:
 		arpv = cali_v4_arp_lookup_elem(&arpk);
 		if (!arpv) {
 			CALI_DEBUG("ARP lookup failed for %x dev %d at HEP\n",
-					bpf_ntohl(state->ip_dst), arpk.ifindex);
+					be32_to_host(state->ip_dst), arpk.ifindex);
 			/* Don't drop it yet, we might get lucky and the MAC is correct */
 		} else {
 			if (skb_shorter(skb, sizeof(struct ethhdr))) {
