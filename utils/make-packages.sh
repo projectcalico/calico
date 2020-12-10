@@ -125,9 +125,6 @@ EOF
 	    fi
 
 	    elversions=7
-	    if [ ${PKG_NAME} = felix ]; then
-		elversions="7 6"
-	    fi
 	    for elversion in ${elversions}; do
 		# Skip the rpm build if we are missing the matching build image.
 		imageid=$(docker images -q calico-build/centos${elversion}:latest)
