@@ -1305,6 +1305,38 @@ icmp_send_reply:
 	goto deny;
 
 nat_encap:
+	/* We are about to encap return trafic that originated on the local host
+	 * namespace - a host networked pod. Routing was based on the dst IP,
+	 * which was the original client's IP at that time, not the node's that
+	 * forwarded it. We need to fix it now.
+	 */
+	if (CALI_F_TO_HEP) {
+		struct arp_value *arpv;
+		struct arp_key arpk = {
+			.ip = state->ip_dst,
+			.ifindex = skb->ifindex,
+		};
+
+		arpv = cali_v4_arp_lookup_elem(&arpk);
+		if (!arpv) {
+			CALI_DEBUG("ARP lookup failed for %x dev %d at HEP\n",
+					bpf_ntohl(state->ip_dst), arpk.ifindex);
+			/* Don't drop it yet, we might get lucky and the MAC is correct */
+		} else {
+			if (skb_shorter(skb, sizeof(struct ethhdr))) {
+				reason = CALI_REASON_SHORT;
+				goto deny;
+			}
+			struct ethhdr *eth_hdr = (void *)(long)skb->data;
+			__builtin_memcpy(&eth_hdr->h_dest, arpv->mac_dst, ETH_ALEN);
+			if (state->ct_result.ifindex_fwd == skb->ifindex) {
+				/* No need to change src MAC, if we are at the right device */
+			} else {
+				/* FIXME we need to redirect to the right device */
+			}
+		}
+	}
+
 	if (vxlan_v4_encap(skb, state->ip_src, state->ip_dst)) {
 		reason = CALI_REASON_ENCAP_FAIL;
 		goto  deny;

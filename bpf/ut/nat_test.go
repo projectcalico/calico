@@ -481,8 +481,8 @@ func TestNATNodePort(t *testing.T) {
 	arpKey := arp.NewKey(node1ip, 1 /* ifindex is always 1 in UT */)
 	Expect(arpMapN2).To(HaveKey(arpKey))
 	macDst := encapedPkt[0:6]
-	macScr := encapedPkt[6:12]
-	Expect(arpMapN2[arpKey]).To(Equal(arp.NewValue(macDst, macScr)))
+	macSrc := encapedPkt[6:12]
+	Expect(arpMapN2[arpKey]).To(Equal(arp.NewValue(macDst, macSrc)))
 
 	// try a spoofed tunnel packet, should be dropped and have no effect
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -535,7 +535,7 @@ func TestNATNodePort(t *testing.T) {
 	// Response leaving workload at node 2
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		respPkt := udpResposeRaw(recvPkt)
-		// Change the MAC addressesso that we can observe that the right
+		// Change the MAC addresses so that we can observe that the right
 		// addresses were patched in.
 		copy(respPkt[:6], []byte{1, 2, 3, 4, 5, 6})
 		copy(respPkt[6:12], []byte{6, 5, 4, 3, 2, 1})
@@ -551,7 +551,7 @@ func TestNATNodePort(t *testing.T) {
 		ethR := ethL.(*layers.Ethernet)
 		Expect(ethR).To(layersMatchFields(&layers.Ethernet{
 			SrcMAC:       macDst,
-			DstMAC:       macScr,
+			DstMAC:       macSrc,
 			EthernetType: layers.EthernetTypeIPv4,
 		}))
 
@@ -792,7 +792,11 @@ func TestNATNodePort(t *testing.T) {
 		runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 			respPkt := udpResposeRaw(recvPkt)
 
-			// No need to check MACs, no FIB, no forwarding, nopatching
+			// Change the MAC addresses so that we can observe that the right
+			// addresses were patched in.
+			macUntouched := []byte{6, 5, 4, 3, 2, 1}
+			copy(respPkt[:6], []byte{1, 2, 3, 4, 5, 6})
+			copy(respPkt[6:12], macUntouched)
 
 			res, err := bpfrun(respPkt)
 			Expect(err).NotTo(HaveOccurred())
@@ -800,6 +804,15 @@ func TestNATNodePort(t *testing.T) {
 
 			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 			fmt.Printf("pktR = %+v\n", pktR)
+
+			ethL := pktR.Layer(layers.LayerTypeEthernet)
+			Expect(ethL).NotTo(BeNil())
+			ethR := ethL.(*layers.Ethernet)
+			Expect(ethR).To(layersMatchFields(&layers.Ethernet{
+				SrcMAC:       macUntouched, // Source is set by net stack and should not be touched.
+				DstMAC:       macSrc,
+				EthernetType: layers.EthernetTypeIPv4,
+			}))
 
 			ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 			Expect(ipv4L).NotTo(BeNil())
