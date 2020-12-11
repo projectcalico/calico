@@ -17,6 +17,7 @@
 
 struct cali_tc_ctx {
   struct cali_tc_state *state;
+
   struct ethhdr *eth;
   struct iphdr *ip_header;
   union {
@@ -25,6 +26,7 @@ struct cali_tc_ctx {
     struct udphdr *udp_header;
     struct icmphdr *icmp_header;
   };
+
   struct arp_key arpk;
   struct fwd fwd;
 };

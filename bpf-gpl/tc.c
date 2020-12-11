@@ -50,6 +50,13 @@
  */
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 {
+#ifdef CALI_SET_SKB_MARK
+	/* workaround for test since bpftool run cannot set it in context, won't
+	 * be necessary if fixed in kernel
+	 */
+	skb->mark = CALI_SET_SKB_MARK;
+#endif
+
 	struct cali_tc_ctx ctx = {};
 
 	ctx.fwd.res = TC_ACT_UNSPEC;
@@ -75,12 +82,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 	ctx.state->tun_ip = 0;
 
-#ifdef CALI_SET_SKB_MARK
-	/* workaround for test since bpftool run cannot set it in context, wont
-	 * be necessary if fixed in kernel
-	 */
-	skb->mark = CALI_SET_SKB_MARK;
-#endif
 
 	if (!CALI_F_TO_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
@@ -174,10 +175,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* N.B. we need to create the arp key here otherwise the number of
 	 * states the verifier needs to inspect explodes.
 	 */
-	struct arp_key arpk = {
-		.ip = ctx.ip_header->saddr,
-		.ifindex = skb->ifindex,
-	};
+	ctx.arpk.ip = ctx.ip_header->saddr;
+	ctx.arpk.ifindex = skb->ifindex;
 
 	if (dnat_should_decap() && is_vxlan_tunnel(ctx.ip_header)) {
 		ctx.udp_header = (void*)(ctx.ip_header+1);
@@ -193,8 +192,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			 * dst:src but the value is src:dst so it flips it automatically
 			 * when we use it on xmit.
 			 */
-			cali_v4_arp_update_elem(&arpk, ctx.eth, 0);
-			CALI_DEBUG("ARP update for ifindex %d ip %x\n", arpk.ifindex, bpf_ntohl(arpk.ip));
+			cali_v4_arp_update_elem(&ctx.arpk, ctx.eth, 0);
+			CALI_DEBUG("ARP update for ifindex %d ip %x\n", ctx.arpk.ifindex, bpf_ntohl(ctx.arpk.ip));
 
 			ctx.state->tun_ip = ctx.ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
