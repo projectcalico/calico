@@ -384,6 +384,7 @@ type bgpPeer struct {
 	ASNum       numorstring.ASNumber `json:"as_num,string"`
 	RRClusterID string               `json:"rr_cluster_id"`
 	Password    *string              `json:"password"`
+	SourceAddr  string               `json:"source_addr"`
 	Port        uint16               `json:"port"`
 	KeepNextHop bool                 `json:"keep_next_hop"`
 }
@@ -510,6 +511,7 @@ func (c *client) updatePeersV1() {
 				peers = append(peers, &bgpPeer{
 					PeerIP:      *ip,
 					ASNum:       v3res.Spec.ASNumber,
+					SourceAddr:  string(v3res.Spec.SourceAddress),
 					Port:        port,
 					KeepNextHop: v3res.Spec.KeepOriginalNextHop,
 				})
@@ -1481,5 +1483,13 @@ func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv
 
 	for _, peer := range peers {
 		peer.Password = password
+		peer.SourceAddr = withDefault(string(v3res.Spec.SourceAddress), string(apiv3.SourceAddressUseNodeIP))
 	}
+}
+
+func withDefault(val, dflt string) string {
+	if val != "" {
+		return val
+	}
+	return dflt
 }
