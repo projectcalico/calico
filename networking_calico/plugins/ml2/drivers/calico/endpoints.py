@@ -25,6 +25,7 @@ from networking_calico.compat import cfg
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
 from networking_calico import datamodel_v3
+from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico.policy import \
     SG_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import \
@@ -107,7 +108,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                                 annotations=annotations,
                                 mod_revision=0)
 
-    def update_in_etcd(self, name, write_data, mod_revision=None):
+    def update_in_etcd(self, name, write_data, mod_revision=etcdv3.MUST_UPDATE):
         spec, labels, annotations = write_data
         return datamodel_v3.put(self.resource_kind,
                                 self.namespace,
@@ -141,7 +142,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 endpoint_labels(port, self.namespace),
                 endpoint_annotations(port))
 
-    def write_endpoint(self, port, context):
+    def write_endpoint(self, port, context, must_update=False):
         # Reread the current port. This protects against concurrent writes
         # breaking our state.
         port = self.db.get_port(context, port['id'])
@@ -157,17 +158,19 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # problem there is that we potentially have to repeatedly respin and
         # regain the transaction. Let's not do that for now, and performance
         # test to see if it's a problem later.
+        mod_revision = etcdv3.MUST_UPDATE if must_update else None
         datamodel_v3.put("WorkloadEndpoint",
                          self.namespace,
                          endpoint_name(port),
                          endpoint_spec(port),
                          labels=endpoint_labels(port, self.namespace),
-                         annotations=endpoint_annotations(port))
+                         annotations=endpoint_annotations(port),
+                         mod_revision=mod_revision)
 
     def delete_endpoint(self, port):
-        datamodel_v3.delete("WorkloadEndpoint",
-                            self.namespace,
-                            endpoint_name(port))
+        return datamodel_v3.delete("WorkloadEndpoint",
+                                   self.namespace,
+                                   endpoint_name(port))
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
