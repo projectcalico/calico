@@ -88,7 +88,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		goto allow;
 	}
 
-	struct iphdr *ip_header;
 	if (CALI_F_TO_HEP || CALI_F_TO_WEP) {
 		switch (skb->mark) {
 		case CALI_SKB_MARK_BYPASS_FWD:
@@ -106,8 +105,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				goto deny;
 			}
 
-			ip_header = skb_iphdr(skb);
-			__be32 ip_src = ip_header->saddr;
+			ctx.ip_header = skb_iphdr(skb);
+			__be32 ip_src = ctx.ip_header->saddr;
 
 			if (ip_src == HOST_IP) {
 				CALI_DEBUG("src ip fixup not needed %x\n", bpf_ntohl(ip_src));
@@ -117,7 +116,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 
 			/* XXX do a proper CT lookup to find this */
-			ip_header->saddr = HOST_IP;
+			ctx.ip_header->saddr = HOST_IP;
 			int l3_csum_off = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
 
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
@@ -166,38 +165,38 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	ip_header = skb_iphdr(skb);
+	ctx.ip_header = skb_iphdr(skb);
 	/* N.B. we need to grab the eth header here, instead of in the vxlan
 	 * decap branch, to make verifier happy.
 	 */
-	struct ethhdr *eth = (void *)(long)skb->data;
+	ctx.eth = (void *)(long)skb->data;
 
 	/* N.B. we need to create the arp key here otherwise the number of
 	 * states the verifier needs to inspect explodes.
 	 */
 	struct arp_key arpk = {
-		.ip = ip_header->saddr,
+		.ip = ctx.ip_header->saddr,
 		.ifindex = skb->ifindex,
 	};
 
-	if (dnat_should_decap() && is_vxlan_tunnel(ip_header)) {
-		struct udphdr *udp_header = (void*)(ip_header+1);
+	if (dnat_should_decap() && is_vxlan_tunnel(ctx.ip_header)) {
+		ctx.udp_header = (void*)(ctx.ip_header+1);
 		/* decap on host ep only if directly for the node */
-		CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ip_header->daddr, HOST_IP);
-		if (rt_addr_is_local_host(ip_header->daddr) &&
-				vxlan_udp_csum_ok(udp_header) &&
-				vxlan_size_ok(skb, udp_header) &&
-				vxlan_vni_is_valid(skb, udp_header) &&
-				vxlan_vni(skb, udp_header) == CALI_VXLAN_VNI) {
+		CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ctx.ip_header->daddr, HOST_IP);
+		if (rt_addr_is_local_host(ctx.ip_header->daddr) &&
+				vxlan_udp_csum_ok(ctx.udp_header) &&
+				vxlan_size_ok(skb, ctx.udp_header) &&
+				vxlan_vni_is_valid(skb, ctx.udp_header) &&
+				vxlan_vni(skb, ctx.udp_header) == CALI_VXLAN_VNI) {
 
 			/* We update the map straight with the packet data, eth header is
 			 * dst:src but the value is src:dst so it flips it automatically
 			 * when we use it on xmit.
 			 */
-			cali_v4_arp_update_elem(&arpk, eth, 0);
+			cali_v4_arp_update_elem(&arpk, ctx.eth, 0);
 			CALI_DEBUG("ARP update for ifindex %d ip %x\n", arpk.ifindex, bpf_ntohl(arpk.ip));
 
-			ctx.state->tun_ip = ip_header->saddr;
+			ctx.state->tun_ip = ctx.ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
 				ctx.fwd.reason = CALI_REASON_DECAP_FAIL;
@@ -209,22 +208,22 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				CALI_DEBUG("Too short after VXLAN decap\n");
 				goto deny;
 			}
-			ip_header = skb_iphdr(skb);
+			ctx.ip_header = skb_iphdr(skb);
 
 			CALI_DEBUG("vxlan decap origin %x\n", bpf_ntohl(ctx.state->tun_ip));
 		}
 	}
 
 	// Drop malformed IP packets
-	if (ip_header->ihl < 5) {
+	if (ctx.ip_header->ihl < 5) {
 		ctx.fwd.reason = CALI_REASON_IP_MALFORMED;
 		CALI_DEBUG("Drop malformed IP packets\n");
 		goto deny;
-	} else if (ip_header->ihl > 5) {
+	} else if (ctx.ip_header->ihl > 5) {
 		/* Drop packets with IP options from/to WEP.
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
-		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ip_header->daddr))) {
+		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ctx.ip_header->daddr))) {
 			ctx.fwd.reason = CALI_REASON_IP_OPTIONS;
 			CALI_DEBUG("Drop packets with IP options\n");
 			goto deny;
@@ -232,33 +231,31 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		CALI_DEBUG("Allow packets with IP options and dst IP = hostIP\n");
 		goto allow;
 	}
-	// Setting all of these up-front to keep the verifier happy.
-	struct tcphdr *tcp_header = (void*)(ip_header+1);
-	struct udphdr *udp_header = (void*)(ip_header+1);
-	struct icmphdr *icmp_header = (void*)(ip_header+1);
 
-	tc_state_fill_from_iphdr(ctx.state, ip_header);
+	ctx.nh = (void*)(ctx.ip_header+1);
+
+	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
 
 	switch (ctx.state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
+		if (!skb_has_data_after(skb, ctx.ip_header, sizeof(struct tcphdr))) {
 			CALI_DEBUG("Too short for TCP: DROP\n");
 			goto deny;
 		}
-		ctx.state->sport = bpf_ntohs(tcp_header->source);
-		ctx.state->dport = bpf_ntohs(tcp_header->dest);
+		ctx.state->sport = bpf_ntohs(ctx.tcp_header->source);
+		ctx.state->dport = bpf_ntohs(ctx.tcp_header->dest);
 		CALI_DEBUG("TCP; ports: s=%d d=%d\n", ctx.state->sport, ctx.state->dport);
 		break;
 	case IPPROTO_UDP:
-		ctx.state->sport = bpf_ntohs(udp_header->source);
-		ctx.state->dport = bpf_ntohs(udp_header->dest);
+		ctx.state->sport = bpf_ntohs(ctx.udp_header->source);
+		ctx.state->dport = bpf_ntohs(ctx.udp_header->dest);
 		CALI_DEBUG("UDP; ports: s=%d d=%d\n", ctx.state->sport, ctx.state->dport);
 		break;
 	case IPPROTO_ICMP:
-		icmp_header = (void*)(ip_header+1);
+		ctx.icmp_header = (void*)(ctx.ip_header+1);
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
-				icmp_header->type, icmp_header->code);
+				ctx.icmp_header->type, ctx.icmp_header->code);
 		break;
 	case 4:
 		// IPIP
@@ -299,12 +296,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	};
 
 	if (ctx.state->ip_proto == IPPROTO_TCP) {
-		if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
+		if (!skb_has_data_after(skb, ctx.ip_header, sizeof(struct tcphdr))) {
 			CALI_DEBUG("Too short for TCP: DROP\n");
 			goto deny;
 		}
-		tcp_header = (void*)(ip_header+1);
-		ct_lookup_ctx.tcp = tcp_header;
+		ctx.tcp_header = (void*)(ctx.ip_header+1);
+		ct_lookup_ctx.tcp = ctx.tcp_header;
 	}
 
 	/* Do conntrack lookup before anything else */
@@ -419,8 +416,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 * for policy.
 	 */
 	if (ctx.state->ip_proto == IPPROTO_ICMP) {
-		ctx.state->icmp_type = icmp_header->type;
-		ctx.state->icmp_code = icmp_header->code;
+		ctx.state->icmp_type = ctx.icmp_header->type;
+		ctx.state->icmp_code = ctx.icmp_header->code;
 	}
 
 
@@ -453,7 +450,7 @@ icmp_send_reply:
 	goto deny;
 
 skip_policy:
-	ctx.fwd = calico_tc_skb_accepted(skb, ip_header, ctx.state, nat_dest);
+	ctx.fwd = calico_tc_skb_accepted(skb, ctx.ip_header, ctx.state, nat_dest);
 
 allow:
 finalize:
