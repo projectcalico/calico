@@ -46,6 +46,7 @@ class TestFVEtcdutils(unittest.TestCase):
 
     def tearDown(self):
         self.stop_etcd_server()
+        etcdv3._client = None
         super(TestFVEtcdutils, self).tearDown()
 
     def start_etcd_server(self):
@@ -72,6 +73,35 @@ class TestFVEtcdutils(unittest.TestCase):
         if self.etcd_server_running:
             os.system("docker kill etcd")
         self.etcd_server_running = False
+
+    def test_must_update(self):
+        # Start a real local etcd server.
+        self.start_etcd_server()
+
+        # Set up minimal config, so EtcdWatcher will use that etcd.
+        calico_config.register_options(cfg.CONF)
+
+        # Ensure etcd server is ready.
+        self.wait_etcd_ready()
+
+        # Try a put with MUST_UPDATE; should fail as does not yet exist.
+        succeeded = etcdv3.put("/testkey", "testvalue", mod_revision=etcdv3.MUST_UPDATE)
+        self.assertFalse(succeeded)
+
+        # Try a put with mod_revision 0, i.e. must create.
+        succeeded = etcdv3.put("/testkey", "testvalue", mod_revision=0)
+        self.assertTrue(succeeded)
+
+        # Try again with MUST_UPDATE; should now succeed.
+        succeeded = etcdv3.put("/testkey", "testvalue2", mod_revision=etcdv3.MUST_UPDATE)
+        self.assertTrue(succeeded)
+
+        # Try again with mod_revision 0; should now fail.
+        succeeded = etcdv3.put("/testkey", "testvalue2", mod_revision=0)
+        self.assertFalse(succeeded)
+
+        # Kill the etcd server.
+        self.stop_etcd_server()
 
     def test_restart_resilience_2s(self):
         self._test_restart_resilience(2)

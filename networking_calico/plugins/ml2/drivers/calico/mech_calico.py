@@ -781,12 +781,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # - a change to an unbound port (which we don't care about, because
             #   we do nothing with unbound ports).
             if port_bound(port) and not port_bound(original):
-                self._port_bound_update(context, port)
+                LOG.info("Port becoming bound: create.")
+                self.endpoint_syncer.write_endpoint(port,
+                                                    context._plugin_context)
             elif port_bound(original) and not port_bound(port):
-                self._port_unbound_update(context, original)
+                LOG.info("Port becoming unbound: destroy.")
+                self.endpoint_syncer.delete_endpoint(original)
             elif original['binding:host_id'] != port['binding:host_id']:
-                LOG.info("Icehouse migration")
-                self._icehouse_migration_step(context, port, original)
+                LOG.info("Migration")
+                self._migration_step(context, port, original)
             elif port_bound(original) and port_bound(port):
                 LOG.info("Port update")
                 self._update_port(plugin_context, port)
@@ -871,20 +874,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             with context.session.begin(subtransactions=True) as txn:
                 yield txn
 
-    def _port_unbound_update(self, context, port):
-        """_port_unbound_update
+    def _migration_step(self, context, port, original):
+        """_migration_step
 
-        This is called when a port is unbound during a port update. This
-        destroys the port in etcd.
-        """
-        LOG.info("Port becoming unbound: destroy.")
-        self.endpoint_syncer.delete_endpoint(port)
-
-    def _port_bound_update(self, context, port):
-        """_port_bound_update
-
-        This is called when a port is bound during a port update. This creates
-        the port in etcd.
+        This is called when migrating (on Icehouse and later releases). Here,
+        we basically just perform an unbinding and a binding at exactly the
+        same time, but we hold a DB lock the entire time.
 
         This method expects to be called from within a database transaction,
         and does not create one itself.
@@ -892,25 +887,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # TODO(nj): Can we avoid re-writing policy here? Put another way, can
         # security groups change during migration steps, or does a separate
         # port update event occur?
-        LOG.info("Port becoming bound: create.")
-        self.endpoint_syncer.write_endpoint(port, context._plugin_context)
-
-    def _icehouse_migration_step(self, context, port, original):
-        """_icehouse_migration_step
-
-        This is called when migrating on Icehouse. Here, we basically just
-        perform an unbinding and a binding at exactly the same time, but we
-        hold a DB lock the entire time.
-
-        This method expects to be called from within a database transaction,
-        and does not create one itself.
-        """
-        # TODO(nj): Can we avoid re-writing policy here? Put another way, can
-        # security groups change during migration steps, or does a separate
-        # port update event occur?
-        LOG.info("Migration as implemented in Icehouse")
-        self._port_unbound_update(context, original)
-        self._port_bound_update(context, port)
+        LOG.info("Migration as implemented in Icehouse and later")
+        if self.endpoint_syncer.delete_endpoint(original):
+            # Note, only write the new endpoint if the old one existed and so
+            # was successfully deleted.
+            self.endpoint_syncer.write_endpoint(port,
+                                                context._plugin_context)
+        else:
+            LOG.info("Pre-migration etcd resource already gone")
 
     def _update_port(self, plugin_context, port):
         """_update_port
@@ -931,7 +915,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port_disabled = port['binding:vif_type'] == 'unbound'
         if not port_disabled:
             LOG.info("Port enabled, attempting to update.")
-            self.endpoint_syncer.write_endpoint(port, plugin_context)
+            self.endpoint_syncer.write_endpoint(port,
+                                                plugin_context,
+                                                must_update=True)
         else:
             # Port unbound, attempt to delete.
             LOG.info("Port disabled, attempting delete if needed.")

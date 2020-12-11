@@ -54,12 +54,12 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
         # Insinuate a mock etcd3gw client.
         etcdv3._client = self.clientv3 = mock.Mock()
-        self.clientv3.put.side_effect = self.check_etcd_write
-        self.clientv3.transaction.side_effect = self.etcd3_transaction
-        self.clientv3.delete.side_effect = self.etcd3_delete
-        self.clientv3.get.side_effect = self.etcd3_get
-        self.clientv3.get_prefix.side_effect = self.etcd3_get_prefix
-        self.clientv3.delete_prefix.side_effect = self.etcd3_delete_prefix
+        self.clientv3.put.side_effect = self.etcd3gw_client_put
+        self.clientv3.transaction.side_effect = self.etcd3gw_client_transaction
+        self.clientv3.delete.side_effect = self.etcd3gw_client_delete
+        self.clientv3.get.side_effect = self.etcd3gw_client_get
+        self.clientv3.get_prefix.side_effect = self.etcd3gw_client_get_prefix
+        self.clientv3.delete_prefix.side_effect = self.etcd3gw_client_delete_prefix
         self.clientv3.status.return_value = {
             'header': {'revision': '10', 'cluster_id': '1234abcd'},
         }
@@ -85,8 +85,8 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                 _log.info("etcd reset")
                 self.assert_etcd_writes_deletes = False
 
-    def check_etcd_write(self, key, value, **kwargs):
-        """check_etcd_write
+    def etcd3gw_client_put(self, key, value, **kwargs):
+        """etcd3gw_client_put
 
         Print each etcd write as it occurs, and save into the accumulated etcd
         database.
@@ -159,7 +159,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
             self.assertEqual(expected, self.recent_deletes)
         self.recent_deletes = set()
 
-    def etcd3_get(
+    def etcd3gw_client_get(
         self,
         key,
         metadata=False,
@@ -202,7 +202,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         else:
             return []
 
-    def etcd3_get_prefix(self, prefix):
+    def etcd3gw_client_get_prefix(self, prefix):
         self.maybe_reset_etcd()
         results = []
         for key, value in self.etcd_data.items():
@@ -215,14 +215,14 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         _log.info("etcd3 get_prefix: %s; results: %s", prefix, results)
         return results
 
-    def etcd3_delete(self, key, **kwargs):
+    def etcd3gw_client_delete(self, key, **kwargs):
         try:
             self.check_etcd_delete(key, **kwargs)
             return True
         except lib.EtcdKeyNotFound:
             return False
 
-    def etcd3_delete_prefix(self, prefix):
+    def etcd3gw_client_delete_prefix(self, prefix):
         _log.info("etcd3 delete prefix: %s", prefix)
         for key, value in list(self.etcd_data.items()):
             if key.startswith(prefix):
@@ -230,15 +230,29 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                 _log.info("etcd3 deleted %s", key)
                 self.recent_deletes.add(key)
 
-    def etcd3_transaction(self, txn):
+    def etcd3gw_client_transaction(self, txn):
+        for txc in txn['compare']:
+            _log.info("etcd3 txn compare = %r", txc)
+            if txc['target'] == 'VERSION' and txc['version'] == 0:
+                key = _decode(txc['key']).decode()
+                if txc['result'] == 'EQUAL':
+                    # Transaction requires that the etcd entry does not already exist.
+                    if key in self.etcd_data:
+                        _log.error("etcd3 txn MUST_CREATE failed")
+                        return {'succeeded': False}
+                if txc['result'] == 'NOT_EQUAL':
+                    # Transaction requires that the etcd entry does already exist.
+                    if key not in self.etcd_data:
+                        _log.error("etcd3 txn MUST_UPDATE failed")
+                        return {'succeeded': False}
         if 'request_put' in txn['success'][0]:
             put_request = txn['success'][0]['request_put']
-            succeeded = self.check_etcd_write(
+            succeeded = self.etcd3gw_client_put(
                 _decode(put_request['key']).decode(),
                 _decode(put_request['value']).decode())
         elif 'request_delete_range' in txn['success'][0]:
             del_request = txn['success'][0]['request_delete_range']
-            succeeded = self.etcd3_delete(_decode(del_request['key']).decode())
+            succeeded = self.etcd3gw_client_delete(_decode(del_request['key']).decode())
         return {'succeeded': succeeded}
 
     def etcd_read(self, key, wait=False, waitIndex=None, recursive=False,
@@ -508,6 +522,18 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
+
+        # Now process an update for the same port and check that it doesn't cause the etcd
+        # resource to be recreated.  This simulates an update and delete racing with each
+        # other and being handled on different Neutron servers or on different threads of
+        # the same server.  The key point is that the update shouldn't accidentally
+        # recreate an etcd resource that has just been deleted.
+        self.driver.update_port_postcommit(context)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
+        # Race over, and port1 gone.  Update our representation of the Neutron DB so that
+        # future queries will only get back the other port.
         self.osdb_ports = [lib.port2]
 
         # Do another resync - expect no changes to the etcd data.
