@@ -108,7 +108,7 @@ func (l *LivenessScanner) Check(ctKey Key, ctVal Value, get EntryGet) ScanVerdic
 			log.WithError(err).Warn("Failed to look up conntrack entry.")
 			return ScanVerdictOK
 		}
-		if reason, expired := l.EntryExpired(now, ctKey.Proto(), revEntry); expired {
+		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), revEntry); expired {
 			if debug {
 				log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
 			}
@@ -118,14 +118,14 @@ func (l *LivenessScanner) Check(ctKey Key, ctVal Value, get EntryGet) ScanVerdic
 			// it once we come across it again.
 		}
 	case TypeNATReverse:
-		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
+		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 			if debug {
 				log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
 			}
 			return ScanVerdictDelete
 		}
 	case TypeNormal:
-		if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
+		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 			if debug {
 				log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
 			}
@@ -138,9 +138,11 @@ func (l *LivenessScanner) Check(ctKey Key, ctVal Value, get EntryGet) ScanVerdic
 	return ScanVerdictOK
 }
 
-func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Value) (reason string, expired bool) {
+// EntryExpired checks whether a given conntrack table entry for a given
+// protocol and time, is expired.
+func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry Value) (reason string, expired bool) {
 	sinceCreation := time.Duration(nowNanos - entry.Created())
-	if sinceCreation < l.timeouts.CreationGracePeriod {
+	if sinceCreation < t.CreationGracePeriod {
 		log.Debug("Conntrack entry in creation grace period. Ignoring.")
 		return
 	}
@@ -150,31 +152,31 @@ func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Value)
 		dsr := entry.IsForwardDSR()
 		data := entry.Data()
 		rstSeen := data.RSTSeen()
-		if rstSeen && age > l.timeouts.TCPResetSeen {
+		if rstSeen && age > t.TCPResetSeen {
 			return "RST seen", true
 		}
 		finsSeen := (dsr && data.FINsSeenDSR()) || data.FINsSeen()
-		if finsSeen && age > l.timeouts.TCPFinsSeen {
+		if finsSeen && age > t.TCPFinsSeen {
 			// Both legs have been finished, tear down.
 			return "FINs seen", true
 		}
 		if data.Established() || dsr {
-			if age > l.timeouts.TCPEstablished {
+			if age > t.TCPEstablished {
 				return "no traffic on established flow for too long", true
 			}
 		} else {
-			if age > l.timeouts.TCPPreEstablished {
+			if age > t.TCPPreEstablished {
 				return "no traffic on pre-established flow for too long", true
 			}
 		}
 		return "", false
 	case ProtoICMP:
-		if age > l.timeouts.ICMPLastSeen {
+		if age > t.ICMPLastSeen {
 			return "no traffic on ICMP flow for too long", true
 		}
 	default:
 		// FIXME separate timeouts for non-UDP IP traffic?
-		if age > l.timeouts.UDPLastSeen {
+		if age > t.UDPLastSeen {
 			return "no traffic on UDP flow for too long", true
 		}
 	}

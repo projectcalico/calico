@@ -88,7 +88,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		"expiry tests",
 		func(key conntrack.Key, entry conntrack.Value, expExpired bool) {
 			By("calculating expiry of normal entry")
-			reason, expired := lc.EntryExpired(int64(now), key.Proto(), entry)
+			reason, expired := timeouts.EntryExpired(int64(now), key.Proto(), entry)
 			Expect(expired).To(Equal(expExpired), fmt.Sprintf("EntryExpired returned unexpected value with reason: %s", reason))
 			if expired {
 				Expect(reason).ToNot(BeEmpty())
@@ -99,7 +99,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			copy(eReversed[:], entry[:])
 			copy(eReversed[24:32], entry[32:40])
 			copy(eReversed[32:40], entry[24:32])
-			reason, expired = lc.EntryExpired(int64(now), key.Proto(), entry)
+			reason, expired = timeouts.EntryExpired(int64(now), key.Proto(), entry)
 			Expect(expired).To(Equal(expExpired), fmt.Sprintf("EntryExpired returned unexpected value (for reversed legs) with reason: %s", reason))
 			if expired {
 				Expect(reason).ToNot(BeEmpty())
