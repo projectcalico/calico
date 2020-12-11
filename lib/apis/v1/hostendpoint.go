@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
-// HostEndpoint contains information about a “bare-metal” interfaces attached to the host that is
-// running Calico’s agent, Felix. By default, Calico doesn’t apply any policy to such interfaces.
+// HostEndpoint contains information about a "bare-metal" interfaces attached to the host that is
+// running Calico's agent, Felix. By default, Calico doesn't apply any policy to such interfaces.
 type HostEndpoint struct {
 	unversioned.TypeMetadata
 	Metadata HostEndpointMetadata `json:"metadata,omitempty"`
@@ -50,14 +50,14 @@ type HostEndpointMetadata struct {
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
 
 	// The labels applied to the host endpoint.  It is expected that many endpoints share
-	// the same labels. For example, they could be used to label all “production” workloads
-	// with “deployment=prod” so that security policy can be applied to production workloads.
+	// the same labels. For example, they could be used to label all "production" workloads
+	// with "deployment=prod" so that security policy can be applied to production workloads.
 	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 }
 
 // HostEndpointSpec contains the specification for a HostEndpoint resource.
 type HostEndpointSpec struct {
-	// The name of the linux interface to apply policy to; for example “eth0”.
+	// The name of the linux interface to apply policy to; for example "eth0".
 	// If "InterfaceName" is not present then at least one expected IP must be specified.
 	InterfaceName string `json:"interfaceName,omitempty" validate:"omitempty,interface"`
 

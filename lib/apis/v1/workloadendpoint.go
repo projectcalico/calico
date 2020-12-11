@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,8 +69,8 @@ type WorkloadEndpointMetadata struct {
 	ActiveInstanceID string `json:"activeInstanceID,omitempty" validate:"omitempty,name"`
 
 	// The labels applied to the workload endpoint.  It is expected that many endpoints share
-	// the same labels. For example, they could be used to label all “production” workloads
-	// with “deployment=prod” so that security policy can be applied to production workloads.
+	// the same labels. For example, they could be used to label all "production" workloads
+	// with "deployment=prod" so that security policy can be applied to production workloads.
 	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 }
 

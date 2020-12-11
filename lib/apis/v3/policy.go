@@ -30,7 +30,7 @@ const (
 // and security Profiles reference rules - separated out as a list of rules for both
 // ingress and egress packet matching.
 //
-// Each positive match criteria has a negated version, prefixed with ”Not”. All the match
+// Each positive match criteria has a negated version, prefixed with "Not". All the match
 // criteria within a rule must be satisfied for a packet to match. A single rule can contain
 // the positive and negative version of a match and both must be satisfied for the rule to match.
 type Rule struct {
@@ -120,10 +120,10 @@ type EntityRule struct {
 	// different. One negates the set of matched endpoints, the other negates the whole match:
 	//
 	//	Selector = "!has(my_label)" matches packets that are from other Calico-controlled
-	// 	endpoints that do not have the label “my_label”.
+	// 	endpoints that do not have the label "my_label".
 	//
 	// 	NotSelector = "has(my_label)" matches packets that are not from Calico-controlled
-	// 	endpoints that do have the label “my_label”.
+	// 	endpoints that do have the label "my_label".
 	//
 	// The effect is that the latter will accept packets from non-Calico sources whereas the
 	// former is limited to packets from Calico-controlled endpoints.

@@ -28,8 +28,8 @@ const (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// HostEndpoint contains information about a HostEndpoint resource that represents a “bare-metal”
-// interface attached to the host that is running Calico's agent, Felix. By default, Calico doesn’t
+// HostEndpoint contains information about a HostEndpoint resource that represents a "bare-metal"
+// interface attached to the host that is running Calico's agent, Felix. By default, Calico doesn't
 // apply any policy to such interfaces.
 type HostEndpoint struct {
 	metav1.TypeMeta `json:",inline"`
@@ -52,7 +52,7 @@ type HostEndpointSpec struct {
 	// the host through the specific interface named by InterfaceName, or - when InterfaceName
 	// is empty - through the specific interface that has one of the IPs in ExpectedIPs.
 	// Therefore, when InterfaceName is empty, at least one expected IP must be specified.  Only
-	// external interfaces (such as “eth0”) are supported here; it isn't possible for a
+	// external interfaces (such as "eth0") are supported here; it isn't possible for a
 	// HostEndpoint to protect traffic through a specific local workload interface.
 	//
 	// Note: Only some kinds of policy are implemented for "*" HostEndpoints; initially just
