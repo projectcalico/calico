@@ -21,6 +21,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1151,6 +1152,7 @@ func getCommunitiesArray(communitiesSet set.Set) []string {
 		communityValue = append(communityValue, item.(string))
 		return nil
 	})
+	sort.Strings(communityValue)
 	return communityValue
 }
 
