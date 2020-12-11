@@ -1,4 +1,5 @@
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
+GIT_HASH=$(shell git rev-parse --short=9 HEAD)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 IMAGES_FILE=
 JEKYLL_VERSION=pages
@@ -46,6 +47,44 @@ FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.typha.version')
 
 ##############################################################################
+
+
+
+CONTAINERIZED_VALUES?=docker run --rm \
+	  -v $$PWD:/calico \
+	  -w /calico \
+	  ruby:2.5
+
+# Build values.yaml for all charts
+.PHONY: values.yaml
+_includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
+	$(CONTAINERIZED_VALUES) ruby ./hack/gen_values_yml.rb --registry $(REGISTRY) --chart $* > $@
+
+# The following chunk of conditionals sets the Version of the helm chart. 
+# Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
+ifdef CHART_RELEASE
+# the presence of CHART_RELEASE indicates we're trying to cut an official chart release.
+chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
+appVersion:=$(CALICO_VER)
+else
+# otherwise, it's a nightly build.
+ifeq ($(RELEASE_STREAM), master)
+# For master, helm requires semantic versioning, so use v0.0
+chartVersion:=v0.0
+appVersion:=$(CALICO_VER)-$(GIT_HASH)
+else
+chartVersion:=$(RELEASE_STREAM)
+appVersion:=$(CALICO_VER)-$(GIT_HASH)
+endif
+endif
+
+charts: chart/tigera-operator
+chart/%: _includes/charts/%/values.yaml bin/helm3
+	mkdir -p bin
+	bin/helm3 package ./_includes/charts/$(@F) \
+	--destination ./bin/ \
+	--version $(chartVersion) \
+	--app-version $(appVersion)
 
 serve: bin/helm
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
@@ -222,7 +261,7 @@ helm-tests: vendor bin/helm values.yaml
 		--net=host \
 		-v $$(pwd):/go/src/$(PACKAGE_NAME):rw \
 		-v $$(pwd)/.go-pkg-cache:/go/pkg:rw \
-		-v $$(pwd)/bin/helm:/usr/local/bin/helm \
+		-v $$(pwd)/bin/helm3:/usr/local/bin/helm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)
@@ -456,13 +495,21 @@ $(RELEASE_DIR_BIN)/%:
 ###############################################################################
 # Utilities
 ###############################################################################
-HELM_RELEASE=helm-v2.16.3-linux-amd64.tar.gz
-bin/helm:
+# TODO: stop using bin/helm as an entrypoint in build scripts.
+bin/helm: bin/helm3
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget -q https://storage.googleapis.com/kubernetes-helm/$(HELM_RELEASE) -O $(TMP)/$(HELM_RELEASE)
-	tar -zxvf $(TMP)/$(HELM_RELEASE) -C $(TMP)
+	wget -q https://storage.googleapis.com/kubernetes-helm/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
+	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
+
+helm-deps: bin/helm3 bin/helm
+bin/helm3:
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget -q https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
+	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
+	mv $(TMP)/linux-amd64/helm bin/helm3
 
 .PHONY: values.yaml
 values.yaml: _includes/charts/calico/values.yaml _includes/charts/tigera-operator/values.yaml
