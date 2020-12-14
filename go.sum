@@ -582,8 +582,8 @@ github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799 h1:9jp4YoHqZv
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20201209191447-44c7b48b4b61 h1:Kv+j6u4K1O8W52gU2GO6oqa7+m7h/IdTNv5kKDUBzzg=
 github.com/projectcalico/pod2daemon v0.0.0-20201209191447-44c7b48b4b61/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
-github.com/projectcalico/typha v0.7.3-0.20201211220624-6e37e085ee29 h1:wHEe2BGipCB1LISjoai8XL5+MWdxHU+Hl29m/RWP8j4=
-github.com/projectcalico/typha v0.7.3-0.20201211220624-6e37e085ee29/go.mod h1:MnJiNP+qYQ5UHz1ci7waUifosZBfD5EbPl9tV203VZ4=
+github.com/projectcalico/typha v0.7.3-0.20201214203155-10ad4724683a h1:S+/D6HUVLrs+VeY/2WXMng9GLny+1tGvu47zw56mo7w=
+github.com/projectcalico/typha v0.7.3-0.20201214203155-10ad4724683a/go.mod h1:MnJiNP+qYQ5UHz1ci7waUifosZBfD5EbPl9tV203VZ4=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
 github.com/prometheus/client_golang v1.0.0 h1:vrDKnkGzuGvhNAL56c7DBz29ZL+KxnoR0x7enabFceM=
