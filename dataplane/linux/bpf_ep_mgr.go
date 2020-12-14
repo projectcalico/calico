@@ -761,7 +761,7 @@ func (m *bpfEndpointManager) ifaceIsUp(ifaceName string) (up bool) {
 	return
 }
 
-func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules [][][]*proto.Rule) error {
+func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error {
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.ipSetMap.MapFD(), m.stateMap.MapFD(), jumpMapFD)
 	insns, err := pg.Instructions(rules)
 	if err != nil {
@@ -910,39 +910,60 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(endpointType tc.EndpointType
 	return ap
 }
 
-func (m *bpfEndpointManager) extractRules(tier *proto.TierInfo, profileNames []string, direction PolDirection) [][][]*proto.Rule {
-	var allRules [][][]*proto.Rule
+func (m *bpfEndpointManager) extractRules(tier *proto.TierInfo, profileNames []string, direction PolDirection) polprog.Rules {
+	var r polprog.Rules
 	if tier != nil {
-		var pols [][]*proto.Rule
-
 		directionalPols := tier.IngressPolicies
 		if direction == PolDirnEgress {
 			directionalPols = tier.EgressPolicies
 		}
 
 		if len(directionalPols) > 0 {
-			for _, polName := range directionalPols {
+
+			polTier := polprog.Tier{
+				Name:     tier.Name,
+				Policies: make([]polprog.Policy, len(directionalPols)),
+			}
+
+			for i, polName := range directionalPols {
 				pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
 				if direction == PolDirnIngress {
-					pols = append(pols, pol.InboundRules)
+					polTier.Policies[i] = polprog.Policy{
+						Name:  polName,
+						Rules: pol.InboundRules,
+					}
 				} else {
-					pols = append(pols, pol.OutboundRules)
+					polTier.Policies[i] = polprog.Policy{
+						Name:  polName,
+						Rules: pol.OutboundRules,
+					}
 				}
 			}
-			allRules = append(allRules, pols)
+
+			r.Tiers = []polprog.Tier{polTier}
 		}
 	}
-	var profs [][]*proto.Rule
-	for _, profName := range profileNames {
-		prof := m.profiles[proto.ProfileID{Name: profName}]
-		if direction == PolDirnIngress {
-			profs = append(profs, prof.InboundRules)
-		} else {
-			profs = append(profs, prof.OutboundRules)
+
+	if count := len(profileNames); count > 0 {
+		r.Profiles = make([]polprog.Profile, count)
+
+		for i, profName := range profileNames {
+			prof := m.profiles[proto.ProfileID{Name: profName}]
+			if direction == PolDirnIngress {
+				r.Profiles[i] = polprog.Profile{
+					Name:  profName,
+					Rules: prof.InboundRules,
+				}
+			} else {
+				r.Profiles[i] = polprog.Profile{
+					Name:  profName,
+					Rules: prof.OutboundRules,
+				}
+			}
 		}
 	}
-	allRules = append(allRules, profs)
-	return allRules
+
+	return r
 }
 
 func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {

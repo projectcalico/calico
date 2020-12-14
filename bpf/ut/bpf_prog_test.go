@@ -67,10 +67,18 @@ const (
 )
 
 var (
-	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
-	node1ip           = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2          = net.IPv4(10, 10, 2, 1).To4()
-	node2ip           = net.IPv4(10, 10, 0, 2).To4()
+	rulesDefaultAllow = polprog.Rules{
+		Tiers: []polprog.Tier{{
+			Name: "base tier",
+			Policies: []polprog.Policy{{
+				Name:  "allow all",
+				Rules: []*proto.Rule{{Action: "Allow"}},
+			}},
+		}},
+	}
+	node1ip  = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2 = net.IPv4(10, 10, 2, 1).To4()
+	node2ip  = net.IPv4(10, 10, 0, 2).To4()
 
 	node1CIDR = net.IPNet{
 		IP:   node1ip,
@@ -114,7 +122,7 @@ var retvalToStr = map[int]string{
 }
 
 func TestCompileTemplateRun(t *testing.T) {
-	runBpfTest(t, "calico_to_workload_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", polprog.Rules{}, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketUDPDefault()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -140,7 +148,7 @@ type testLogger interface {
 	Logf(format string, args ...interface{})
 }
 
-func setupAndRun(logger testLogger, loglevel string, section string, rules [][][]*proto.Rule, runFn func(progName string)) {
+func setupAndRun(logger testLogger, loglevel string, section string, rules polprog.Rules, runFn func(progName string)) {
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(tempDir)
@@ -214,7 +222,7 @@ func setupAndRun(logger testLogger, loglevel string, section string, rules [][][
 }
 
 // runBpfTest runs a specific section of the entire bpf program in isolation
-func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn func(bpfProgRunFn)) {
+func runBpfTest(t *testing.T, section string, rules polprog.Rules, testFn func(bpfProgRunFn)) {
 	RegisterTestingT(t)
 	setupAndRun(t, "debug", section, rules, func(progName string) {
 		t.Run(section, func(_ *testing.T) {
