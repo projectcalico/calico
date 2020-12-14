@@ -18,21 +18,9 @@
 #ifndef __CALI_FIB_H__
 #define __CALI_FIB_H__
 
-#ifndef CALI_FIB_LOOKUP_ENABLED
-#define CALI_FIB_LOOKUP_ENABLED true
-#endif
+#include "types.h"
 
-struct fwd {
-	int res;
-	__u32 mark;
-	enum calico_reason reason;
-#if FIB_ENABLED
-	__u32 fib_flags;
-	bool fib;
-#endif
-};
-
-#if FIB_ENABLED
+#if CALI_FIB_ENABLED
 #define fwd_fib(fwd)			((fwd)->fib)
 #define fwd_fib_set(fwd, v)		((fwd)->fib = v)
 #define fwd_fib_set_flags(fwd, flags)	((fwd)->fib_flags = flags)
@@ -42,12 +30,12 @@ struct fwd {
 #define fwd_fib_set_flags(fwd, flags)
 #endif
 
-static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
-					   struct cali_tc_state *state,
-					   struct fwd *fwd)
+static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
-	int rc = fwd->res;
-	enum calico_reason reason = fwd->reason;
+	struct __sk_buff *skb = ctx->skb;
+	int rc = ctx->fwd.res;
+	enum calico_reason reason = ctx->fwd.reason;
+	struct cali_tc_state *state = ctx->state;
 
 	if (rc == TC_ACT_SHOT) {
 		goto deny;
@@ -117,9 +105,9 @@ skip_redir_ifindex:
 		/* fall through to FIB if enabled or the IP stack, don't give up yet. */
 	}
 
-#if FIB_ENABLED
+#if CALI_FIB_ENABLED
 	// Try a short-circuit FIB lookup.
-	if (fwd_fib(fwd)) {
+	if (fwd_fib(&ctx->fwd)) {
 		/* XXX we might include the tot_len in the fwd, set it once when
 		 * we get the ip_header the first time and only adjust the value
 		 * when we modify the packet - to avoid geting the header here
@@ -157,7 +145,7 @@ skip_redir_ifindex:
 		CALI_DEBUG("FIB ipv4_dst=%x\n", bpf_ntohl(fib_params.ipv4_dst));
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
-		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), fwd->fib_flags);
+		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), ctx->fwd.fib_flags);
 		if (rc == 0) {
 			CALI_DEBUG("FIB lookup succeeded\n");
 
@@ -198,7 +186,7 @@ skip_redir_ifindex:
 	}
 
 cancel_fib:
-#endif /* FIB_ENABLED */
+#endif /* CALI_FIB_ENABLED */
 
 skip_fib:
 
@@ -211,24 +199,24 @@ skip_fib:
 		 * XXX those devices where we expect them before we even decap.
 		 */
 		if (CALI_F_FROM_HEP && state->tun_ip != 0) {
-			fwd->mark = CALI_SKB_MARK_SKIP_RPF;
+			ctx->fwd.mark = CALI_SKB_MARK_SKIP_RPF;
 		}
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
 		 */
-		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", fwd->mark);
+		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", ctx->fwd.mark);
 		/* FIXME: this ignores the mask that we should be using.
 		 * However, if we mask off the bits, then clang spots that it
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,
 		 * which trips up the validator.
 		 */
-		skb->mark = fwd->mark | CALI_SKB_MARK_SEEN; /* make sure that each pkt has SEEN mark */
+		skb->mark = ctx->fwd.mark | CALI_SKB_MARK_SEEN; /* make sure that each pkt has SEEN mark */
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
 		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns\n",
-				rc, prog_end_time-state->prog_start_time);
+				reason, prog_end_time-state->prog_start_time);
 	}
 
 	return rc;

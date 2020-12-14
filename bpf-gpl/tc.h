@@ -15,21 +15,10 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-struct cali_tc_ctx {
-  struct cali_tc_state *state;
+#ifndef __CALI_BPF_TC_H__
+#define __CALI_BPF_TC_H__
 
-  struct ethhdr *eth;
-  struct iphdr *ip_header;
-  union {
-    void *nh;
-    struct tcphdr *tcp_header;
-    struct udphdr *udp_header;
-    struct icmphdr *icmp_header;
-  };
-
-  struct arp_key arpk;
-  struct fwd fwd;
-};
+#include "types.h"
 
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb);
 
@@ -38,4 +27,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 							 struct cali_tc_state *state,
 							 struct calico_nat_dest *nat_dest);
 
-int parse_packet(struct __sk_buff *skb, struct cali_tc_ctx *ctx) ;
+int parse_packet(struct __sk_buff *skb, struct cali_tc_ctx *ctx);
+
+#endif /* __CALI_BPF_TC_H__ */
