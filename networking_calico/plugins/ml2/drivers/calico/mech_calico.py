@@ -773,6 +773,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             # Now, fork execution based on the type of update we're performing.
             # There are a few:
+            # - a pre live-migration notice (binding profile has a migrating_to
+            #   key with the future nova-compute host as the value), which we
+            #   do nothing with right now.
             # - a port becoming bound (binding vif_type from unbound to bound);
             # - a port becoming unbound (binding vif_type from bound to
             #   unbound);
@@ -780,7 +783,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # - an update (port bound at all times);
             # - a change to an unbound port (which we don't care about, because
             #   we do nothing with unbound ports).
-            if port_bound(port) and not port_bound(original):
+            if port.get('binding:profile', {}).get('migrating_to') is not None:
+                LOG.debug("Pre-live-migration notification message: no action")
+            elif port_bound(port) and not port_bound(original):
                 LOG.info("Port becoming bound: create.")
                 self.endpoint_syncer.write_endpoint(port,
                                                     context._plugin_context)
