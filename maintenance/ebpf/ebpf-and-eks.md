@@ -40,8 +40,6 @@ EKS is Amazon's managed Kubernetes offering.
 
 ### How to
 
-- [Create an EKS cluster with a recent enough kernel](#create-an-eks-cluster-with-a-recent-enough-kernel)
-
 #### Create an EKS cluster with a recent enough kernel
 
 By default, EKS uses Ubuntu 18.04 as its base image for EKS, which does not meet the kernel version requirement for 
@@ -51,8 +49,6 @@ eBPF mode.  Below, we give a couple of options for how to get the cluster runnin
 {% tabs tab-group:grp1 %}
 <label:Bottlerocket,active:true>
 <%
-
-#### Option 1: Bottlerocket
 
 The easiest way to start an EKS cluster that meets eBPF mode's requirements is to use Amazon's 
 [Bottlerocket](https://aws.amazon.com/bottlerocket/) OS, instead of the default.  Bottlerocket is a 
@@ -116,9 +112,6 @@ container-optimised OS with an emphasis on security; it has a recent enough kern
 %>
 <label:Custom AMI>
 <%
-
-
-#### Option 2: Create a custom AMI
 
 If you are familiar with the AMI creation process, it is also possible to create a custom AMI based on Ubuntu 20.04, 
 which is suitable:
@@ -219,7 +212,7 @@ which is suitable:
     namespace: kube-system
   data:
     KUBERNETES_SERVICE_HOST: "<API server host>"
-    KUBERNETES_SERVICE_PORT: "<API server port>"
+    KUBERNETES_SERVICE_PORT: 443
   EOF
   ```
 
@@ -267,7 +260,7 @@ which is suitable:
   2020-08-26 12:26:29.025 [INFO][7] daemon.go 182: Kubernetes server override env vars. KUBERNETES_SERVICE_HOST="172.16.101.157" KUBERNETES_SERVICE_PORT="6443"
   ```
 
-#### Configure kube-proxy
+#### Disable kube-proxy
 
 In eBPF mode {{site.prodname}} replaces `kube-proxy` so it wastes resources to run both.  To disable `kube-proxy` reversibly, we recommend adding a node selector to `kube-proxy`'s `DaemonSet` that matches no nodes, for example:
 
