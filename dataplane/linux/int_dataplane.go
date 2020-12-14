@@ -616,9 +616,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create conntrack BPF map.")
 		}
 
+		conntrackScanner := conntrack.NewScanner(ctMap,
+			conntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
+
+		// Before we start, scan for all finished / timed out connections to
+		// free up the conntrack table asap as it may take time to sync up the
+		// proxy and kick off the first full cleaner scan.
+		conntrackScanner.Scan()
+
 		bpfproxyOpts := []bpfproxy.Option{
 			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
-			bpfproxy.WithConntrackTimeouts(config.BPFConntrackTimeouts),
 		}
 
 		if config.KubeProxyEndpointSlicesEnabled {
@@ -645,6 +652,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 			bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 			bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
+			conntrackScanner.AddUnlocked(conntrack.NewStaleNATScanner(kp))
+			conntrackScanner.Start()
 		} else {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}

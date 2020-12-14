@@ -51,7 +51,6 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
-	"github.com/projectcalico/felix/bpf/proxy"
 	. "github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
@@ -2304,7 +2303,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									// increasing.
 									start := time.Now()
 									prevCount := pc.PongCount()
-									for time.Since(start) < 2*proxy.ConntrackCleanerPeriod {
+									for time.Since(start) < 2*conntrack.ScanPeriod {
 										time.Sleep(time.Second)
 										newCount := pc.PongCount()
 										Expect(prevCount).Should(

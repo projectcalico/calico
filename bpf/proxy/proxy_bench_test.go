@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/mock"
 	"github.com/projectcalico/felix/bpf/proxy"
 )
@@ -56,11 +55,9 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 			syncC:    make(chan struct{}, 1),
 		}
 
-		connScan := conntrack.NewScanner(&mock.DummyMap{})
-
 		b.StartTimer()
 
-		proxy, err := proxy.New(k8s, &benchS, connScan, "somename", proxy.WithImmediateSync())
+		proxy, err := proxy.New(k8s, &benchS, "somename", proxy.WithImmediateSync())
 		Expect(err).ShouldNot(HaveOccurred())
 		// Wait for the initial sync to complete
 		<-benchS.syncC

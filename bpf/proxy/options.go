@@ -18,8 +18,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/felix/bpf/conntrack"
 )
 
 // Option defines Proxy options
@@ -67,14 +65,6 @@ func WithEndpointsSlices() Option {
 	return makeOption(func(p *proxy) error {
 		p.endpointSlicesEnabled = true
 		log.Infof("proxy.WithEndpointsSlices()")
-		return nil
-	})
-}
-
-// WithConntrackTimeouts overrides the default timeouts for connection entries
-func WithConntrackTimeouts(timeouts conntrack.Timeouts) Option {
-	return makeKubeProxyOption(func(kp *KubeProxy) error {
-		kp.conntrackTimeouts = timeouts
 		return nil
 	})
 }

@@ -38,13 +38,6 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/config"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 	"k8s.io/kubernetes/pkg/util/async"
-
-	"github.com/projectcalico/felix/bpf/conntrack"
-	"github.com/projectcalico/felix/jitter"
-)
-
-const (
-	ConntrackCleanerPeriod = 10 * time.Second
 )
 
 // Proxy watches for updates of Services and Endpoints, maintains their mapping
@@ -102,9 +95,6 @@ type proxy struct {
 	svcHealthServer healthcheck.ServiceHealthServer
 	healthzServer   healthcheck.ProxierHealthUpdater
 
-	connScan          *conntrack.Scanner
-	connScanStartOnce sync.Once
-
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
 	stopOnce sync.Once
@@ -115,8 +105,7 @@ type stoppableRunner interface {
 }
 
 // New returns a new Proxy for the given k8s interface
-func New(k8s kubernetes.Interface, dp DPSyncer, connScan *conntrack.Scanner,
-	hostname string, opts ...Option) (Proxy, error) {
+func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option) (Proxy, error) {
 
 	if k8s == nil {
 		return nil, errors.Errorf("no k8s client")
@@ -129,7 +118,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, connScan *conntrack.Scanner,
 	p := &proxy{
 		k8s:      k8s,
 		dpSyncer: dp,
-		connScan: connScan,
 		hostname: hostname,
 		svcMap:   make(k8sp.ServiceMap),
 		epsMap:   make(k8sp.EndpointsMap),
@@ -259,14 +247,6 @@ func (p *proxy) invokeDPSyncer() {
 		log.WithError(err).Errorf("applying changes failed")
 		// TODO log the error or panic as the best might be to restart
 		// completely to wipe out the loaded bpf maps
-	} else {
-		// After the first successful Apply() start the conntract cleaner. It
-		// will make the first sweep immediately, based on the fresh state.
-		p.connScanStartOnce.Do(func() {
-			if p.connScan != nil {
-				p.startRoutine(func() { p.conntrackCleaner(p.stopCh) })
-			}
-		})
 	}
 
 	if p.healthzServer != nil {
@@ -333,29 +313,6 @@ func (p *proxy) OnEndpointSliceDelete(eps *discovery.EndpointSlice) {
 func (p *proxy) OnEndpointSlicesSynced() {
 	p.setEpsSynced()
 	p.forceSyncDP()
-}
-
-func (p *proxy) conntrackCleaner(stopCh <-chan struct{}) {
-	log.Debug("Conntrack cleanup thread started")
-	defer log.Debug("Conntrack cleanup thread stopped")
-
-	ticker := jitter.NewTicker(ConntrackCleanerPeriod, 100*time.Millisecond)
-
-	for {
-		// N.B. syncer needs to be told about when scanning starts and ends so that it
-		// can get its internal structs ready, take/release any locks and do cleanup.
-		p.dpSyncer.ConntrackScanStart()
-		p.connScan.Scan()
-		p.dpSyncer.ConntrackScanEnd()
-
-		select {
-		case <-ticker.C:
-			log.Debug("Conntrack cleanup timer popped")
-		case <-stopCh:
-			log.Debug("Conntrack cleanup got stop signal")
-			return
-		}
-	}
 }
 
 type initState struct {
