@@ -17,6 +17,7 @@ metadata:
 spec:
   peerIP: 10.192.0.3
   asNumber: 64567
+  sourceAddress: None
 
 ---
 
@@ -78,4 +79,3 @@ spec:
   cidr: 192.168.0.0/16
   ipipMode: Always
   natOutgoing: true
-
