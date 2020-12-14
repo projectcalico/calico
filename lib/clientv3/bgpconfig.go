@@ -130,6 +130,13 @@ func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv3.BGPConfiguration
 			})
 		}
 
+		if res.Spec.ServiceLoadBalancerIPs != nil && len(res.Spec.ServiceLoadBalancerIPs) > 0 {
+			errFields = append(errFields, cerrors.ErroredField{
+				Name:   "BGPConfiguration.Spec.ServiceLoadBalancerIPs",
+				Reason: "Cannot set ServiceLoadBalancerIPs on a non default BGP Configuration.",
+			})
+		}
+
 		if res.Spec.ServiceExternalIPs != nil && len(res.Spec.ServiceExternalIPs) > 0 {
 			errFields = append(errFields, cerrors.ErroredField{
 				Name:   "BGPConfiguration.Spec.ServiceExternalIPs",

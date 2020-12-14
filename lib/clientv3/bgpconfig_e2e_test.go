@@ -48,19 +48,16 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 	ipCidr2 := "172.217.3.0/24"
 	clusterCIDR := "10.155.0.0/16"
 	specDefault1 := apiv3.BGPConfigurationSpec{
-		LogSeverityScreen:     "Info",
-		NodeToNodeMeshEnabled: &ptrTrue,
-		ASNumber:              &nodeASNumber1,
+		LogSeverityScreen:      "Info",
+		NodeToNodeMeshEnabled:  &ptrTrue,
+		ASNumber:               &nodeASNumber1,
+		ServiceLoadBalancerIPs: []apiv3.ServiceLoadBalancerIPBlock{{CIDR: ipCidr1}},
 		ServiceExternalIPs: []apiv3.ServiceExternalIPBlock{
-			apiv3.ServiceExternalIPBlock{
-				CIDR: ipCidr1,
-			},
-			apiv3.ServiceExternalIPBlock{
-				CIDR: ipCidr2,
-			},
+			{CIDR: ipCidr1},
+			{CIDR: ipCidr2},
 		},
 		ServiceClusterIPs: []apiv3.ServiceClusterIPBlock{
-			apiv3.ServiceClusterIPBlock{CIDR: clusterCIDR},
+			{CIDR: clusterCIDR},
 		},
 	}
 	specDefault2 := apiv3.BGPConfigurationSpec{
@@ -68,9 +65,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 		NodeToNodeMeshEnabled: &ptrFalse,
 		ASNumber:              &nodeASNumber2,
 		ServiceExternalIPs: []apiv3.ServiceExternalIPBlock{
-			apiv3.ServiceExternalIPBlock{
-				CIDR: ipCidr1,
-			},
+			{CIDR: ipCidr1},
 		},
 	}
 	specInfo := apiv3.BGPConfigurationSpec{
