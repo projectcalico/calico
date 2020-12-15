@@ -318,6 +318,9 @@ To revert to standard Linux networking:
    ```
 
 1. If you disabled `kube-proxy`, re-enable it (for example, by removing the node selector added above).
+   ```
+   kubectl patch ds -n kube-system kube-proxy --type merge -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": null}}}}}'
+   ```
 
 1. Monitor existing workloads to make sure they re-establish any connections disrupted by the switch.
 
