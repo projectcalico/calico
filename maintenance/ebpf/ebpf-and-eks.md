@@ -212,7 +212,7 @@ which is suitable:
     namespace: kube-system
   data:
     KUBERNETES_SERVICE_HOST: "<API server host>"
-    KUBERNETES_SERVICE_PORT: 443
+    KUBERNETES_SERVICE_PORT: "443"
   EOF
   ```
 
@@ -220,12 +220,13 @@ which is suitable:
 
   ```
   kubectl delete pod -n kube-system -l k8s-app=calico-node
-  kubectl delete pod -n kube-system -l k8s-app=calico-kube-controllers
   ```
 
-  And, if using Typha (if you're not sure if you're running Typha, run this anyway, it will fail if Typha isn't running):
+  And, if using Typha and/or calico-kube-controllers (if you're not sure if you're running these, run the commands
+  anyway, they will fail with "No resources found" if the pods aren't present):
   ```
   kubectl delete pod -n kube-system -l k8s-app=calico-typha
+  kubectl delete pod -n kube-system -l k8s-app=calico-kube-controllers
   ```
 
 * Confirm that pods restart and then reach the `Running` state with the following command:
@@ -270,14 +271,6 @@ kubectl patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nod
 
 Then, should you want to start `kube-proxy` again, you can simply remove the node selector.
 
-If you choose not to disable `kube-proxy` (for example, because it is managed by your Kubernetes distribution), then you *must* change Felix configuration parameter `BPFKubeProxyIptablesCleanupEnabled` to `false`.  This can be done with `calicoctl` as follows:
-
-```
-calicoctl patch felixconfiguration default --patch='{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
-```
-
-If both `kube-proxy` and `BPFKubeProxyIptablesCleanupEnabled` is enabled then `kube-proxy` will write its iptables rules and Felix will try to clean them up resulting in iptables flapping between the two.
-
 #### Enable eBPF mode
 
 To enable eBPF mode, change Felix configuration parameter  `BPFEnabled` to `true`.  This can be done with `calicoctl`, as follows:
@@ -294,7 +287,7 @@ since its connection to the API server can be disrupted:
 kubectl delete pod -n kube-system -l k8s-app=kube-dns
 ```
 
-#### Reversing the process
+#### Disable eBPF mode
 
 To revert to standard Linux networking:
 
@@ -305,6 +298,9 @@ To revert to standard Linux networking:
    ```
 
 1. If you disabled `kube-proxy`, re-enable it (for example, by removing the node selector added above).
+   ```
+   kubectl patch ds -n kube-system kube-proxy --type merge -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": null}}}}}'
+   ```
 
 1. Monitor existing workloads to make sure they re-establish any connections disrupted by the switch.
 
