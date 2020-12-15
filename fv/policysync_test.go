@@ -56,6 +56,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		etcd              *containers.Container
 		felix             *infrastructure.Felix
 		calicoClient      client.Interface
+		infra             infrastructure.DatastoreInfra
 		w                 [3]*workload.Workload
 		tempDir           string
 		hostMgmtCredsPath string
@@ -76,7 +77,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		// options.ExtraEnvVars["FELIX_DebugDisableLogDropping"] = "true"
 		// options.FelixLogSeverity = "debug"
 		options.ExtraVolumes[tempDir] = "/var/run/calico"
-		felix, etcd, calicoClient = infrastructure.StartSingleNodeEtcdTopology(options)
+		felix, etcd, calicoClient, infra = infrastructure.StartSingleNodeEtcdTopology(options)
 		infrastructure.CreateDefaultProfile(calicoClient, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
@@ -102,6 +103,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	AfterEach(func() {

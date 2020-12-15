@@ -78,6 +78,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		etcd   *containers.Container
 		felix  *infrastructure.Felix
 		client client.Interface
+		infra  infrastructure.DatastoreInfra
 		w      [4]*workload.Workload
 		cc     *connectivity.Checker
 	)
@@ -94,7 +95,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 		// Create some workloads, using that profile.
 		for ii := range w {
@@ -203,6 +204,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	type ingressEgress int
@@ -709,6 +711,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		etcd              *containers.Container
 		felix             *infrastructure.Felix
 		client            client.Interface
+		infra             infrastructure.DatastoreInfra
 		nginx             *workload.Workload
 		nginxClient       *workload.Workload
 		defaultDenyPolicy *api.NetworkPolicy
@@ -717,7 +720,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		// Create a namespace profile and write to the datastore.
 		infrastructure.CreateDefaultProfile(client, "kns.test", map[string]string{"name": "test"}, "")
 		// Create nginx workload.
@@ -806,6 +809,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	It("HTTP port policy should open up nginx port", func() {
@@ -1015,6 +1019,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		etcd                        *containers.Container
 		felix                       *infrastructure.Felix
 		client                      client.Interface
+		infra                       infrastructure.DatastoreInfra
 		targetTCPWorkload           *workload.Workload
 		targetUDPWorkload           *workload.Workload
 		clientWorkload              *workload.Workload
@@ -1024,7 +1029,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		infrastructure.CreateDefaultProfile(client, "open", map[string]string{"default": ""}, "")
 
 		createTarget := func(ip, protocol string) *workload.Workload {
@@ -1123,6 +1128,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	It("shouldn't confuse TCP and UDP ports", func() {

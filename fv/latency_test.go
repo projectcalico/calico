@@ -58,6 +58,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		etcd   *containers.Container
 		felix  *infrastructure.Felix
 		client client.Interface
+		infra  infrastructure.DatastoreInfra
 
 		resultsFile *os.File
 	)
@@ -67,7 +68,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		topologyOptions.EnableIPv6 = true
 		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "off" // For best perf.
 
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		_ = felix.GetFelixPID()
 
 		// Install the hping tool, which we use for latency measurments.
@@ -93,6 +94,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	describeLatencyTests := func(c latencyConfig) {

@@ -36,13 +36,14 @@ var _ = Describe("Rule Metadata tests", func() {
 	var (
 		felix  *infrastructure.Felix
 		client client.Interface
+		infra  infrastructure.DatastoreInfra
 		etcd   *containers.Container
 		wl0    *workload.Workload
 		wl1    *workload.Workload
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 
 		wl0 = workload.Run(felix, "test0", "default", "10.65.0.1", "80", "tcp")
 		wl0.Configure(client)
@@ -56,6 +57,7 @@ var _ = Describe("Rule Metadata tests", func() {
 		wl1.Stop()
 		felix.Stop()
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	Context("With a GlobalNetworkPolicy with rule metadata", func() {

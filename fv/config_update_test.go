@@ -47,12 +47,13 @@ var _ = Context("Config update tests, after starting felix", func() {
 		felix         *infrastructure.Felix
 		felixPID      int
 		client        client.Interface
+		infra         infrastructure.DatastoreInfra
 		w             [3]*workload.Workload
 		cfgChangeTime time.Time
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		felixPID = felix.GetSinglePID("calico-felix")
 	})
 
@@ -72,6 +73,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	shouldStayUp := func() {

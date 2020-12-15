@@ -47,12 +47,13 @@ var _ = Context("etcd connection interruption", func() {
 		etcd    *containers.Container
 		felixes []*infrastructure.Felix
 		client  client.Interface
+		infra   infrastructure.DatastoreInfra
 		w       [2]*workload.Workload
 		cc      *connectivity.Checker
 	)
 
 	BeforeEach(func() {
-		felixes, etcd, client = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
+		felixes, etcd, client, infra = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "")
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
@@ -100,6 +101,7 @@ var _ = Context("etcd connection interruption", func() {
 			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	It("shouldn't use excessive CPU when etcd is stopped", func() {
