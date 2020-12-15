@@ -215,7 +215,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			cc                 *Checker
 			externalClient     *containers.Container
 			deadWorkload       *workload.Workload
-			bpfLog             *containers.Container
 			options            infrastructure.TopologyOptions
 			numericProto       uint8
 			felixPanicExpected bool
@@ -232,8 +231,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 		BeforeEach(func() {
 			felixPanicExpected = false
-			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
-				"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 			infra = getInfra()
 
 			cc = &Checker{
@@ -312,7 +309,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			infra.Stop()
 			externalClient.Stop()
-			bpfLog.Stop()
 			log.Info("AfterEach done")
 		})
 

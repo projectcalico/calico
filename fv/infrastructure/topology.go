@@ -74,8 +74,8 @@ func DefaultTopologyOptions() TopologyOptions {
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *containers.Container, calicoClient client.Interface) {
-	felixes, etcd, calicoClient := StartNNodeEtcdTopology(1, options)
+func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *containers.Container, calicoClient client.Interface, infra DatastoreInfra) {
+	felixes, etcd, calicoClient, infra := StartNNodeEtcdTopology(1, options)
 	felix = felixes[0]
 	return
 }
@@ -88,12 +88,13 @@ func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *c
 // - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
 //   index in the returned array.  When creating workloads, use IPs from the relevant block.
 // - Configures the Tunnel IP for each host as 10.65.x.1.
-func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd *containers.Container, client client.Interface) {
+func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd *containers.Container, client client.Interface, infra DatastoreInfra) {
 	log.Infof("Starting a %d-node etcd topology.", n)
 
 	eds, err := GetEtcdDatastoreInfra()
 	Expect(err).ToNot(HaveOccurred())
 	etcd = eds.etcdContainer
+	infra = eds
 
 	felixes, client = StartNNodeTopology(n, opts, eds)
 

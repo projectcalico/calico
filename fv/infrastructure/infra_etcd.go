@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -32,6 +33,7 @@ import (
 
 type EtcdDatastoreInfra struct {
 	etcdContainer *containers.Container
+	bpfLog        *containers.Container
 
 	Endpoint    string
 	BadEndpoint string
@@ -50,6 +52,12 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 	eds.etcdContainer = RunEtcd()
 	if eds.etcdContainer == nil {
 		return nil, errors.New("failed to create etcd container")
+	}
+
+	// In BPF mode, start BPF logging.
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		eds.bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
+			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 	}
 
 	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)
@@ -176,5 +184,6 @@ func (eds *EtcdDatastoreInfra) DumpErrorData() {
 }
 
 func (eds *EtcdDatastoreInfra) Stop() {
+	eds.bpfLog.Stop()
 	eds.etcdContainer.Stop()
 }

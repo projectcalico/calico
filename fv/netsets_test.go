@@ -102,11 +102,12 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		felix    *infrastructure.Felix
 		felixPID int
 		client   client.Interface
+		infra    infrastructure.DatastoreInfra
 	)
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = felix.GetFelixPID()
 	})
 
@@ -120,6 +121,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	describeConnTests := func(c netsetsConfig) {

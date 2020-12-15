@@ -39,13 +39,14 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		etcd   *containers.Container
 		felix  *infrastructure.Felix
 		client client.Interface
+		infra  infrastructure.DatastoreInfra
 		w      [3]*workload.Workload
 		cc     *connectivity.Checker
 	)
 
 	BeforeEach(func() {
 		opts := infrastructure.DefaultTopologyOptions()
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(opts)
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(opts)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
@@ -74,6 +75,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	It("full connectivity to and from workload 0", func() {
@@ -225,6 +227,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		etcd   *containers.Container
 		felix  *infrastructure.Felix
 		client client.Interface
+		infra  infrastructure.DatastoreInfra
 		w      [3]*workload.Workload
 		cc     *connectivity.Checker
 	)
@@ -233,7 +236,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		options := infrastructure.DefaultTopologyOptions()
 		options.WithTypha = true
 		options.WithFelixTyphaTLS = true
-		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(options)
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(options)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
@@ -262,6 +265,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
+		infra.Stop()
 	})
 
 	It("full connectivity to and from workload 0", func() {
