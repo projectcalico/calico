@@ -19,6 +19,7 @@
 #define __CALI_FIB_H__
 
 #include "types.h"
+#include "skb.h"
 
 #if CALI_FIB_ENABLED
 #define fwd_fib(fwd)			((fwd)->fib)
@@ -48,13 +49,17 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		}
 
 		/* Revalidate the access to the packet */
-		if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
-			reason = CALI_REASON_SHORT;
+		skb_refresh_ptrs(ctx);
+		if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
+		skb_refresh_iphdr(ctx);
+		ctx->nh = (void*)(ctx->ip_header+1);
 
 		/* Swap the MACs as we are turning it back */
-		struct ethhdr *eth_hdr = (void *)(long)skb->data;
+		struct ethhdr *eth_hdr = ctx->data_start;
 		unsigned char mac[ETH_ALEN];
 		__builtin_memcpy(mac, &eth_hdr->h_dest, ETH_ALEN);
 		__builtin_memcpy(&eth_hdr->h_dest, &eth_hdr->h_source, ETH_ALEN);
@@ -85,12 +90,17 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		}
 
 		/* Revalidate the access to the packet */
-		if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
-			reason = CALI_REASON_SHORT;
+		skb_refresh_ptrs(ctx);
+		if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
+		skb_refresh_iphdr(ctx);
+		ctx->nh = (void*)(ctx->ip_header+1);
+
 		/* Patch in the MAC addresses that should be set on the next hop. */
-		struct ethhdr *eth_hdr = (void *)(long)skb->data;
+		struct ethhdr *eth_hdr = ctx->data_start;
 		__builtin_memcpy(&eth_hdr->h_dest, arpv->mac_dst, ETH_ALEN);
 		__builtin_memcpy(&eth_hdr->h_source, arpv->mac_src, ETH_ALEN);
 
@@ -113,13 +123,18 @@ skip_redir_ifindex:
 		 * when we modify the packet - to avoid geting the header here
 		 * again - it is simpler though.
 		 */
-		if (skb_too_short(skb)) {
-			reason = CALI_REASON_SHORT;
+
+		/* Revalidate the access to the packet */
+		skb_refresh_ptrs(ctx);
+		if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
+		skb_refresh_iphdr(ctx);
+		ctx->nh = (void*)(ctx->ip_header+1);
 
-		struct iphdr *ip_header = skb_iphdr(skb);
+		struct iphdr *ip_header = ctx->ip_header;
 		struct bpf_fib_lookup fib_params = {
 			.family = 2, /* AF_INET */
 			.tot_len = bpf_ntohs(ip_header->tot_len),
@@ -161,11 +176,11 @@ skip_redir_ifindex:
 
 			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
 			// revalidate.
-			if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
+			if (skb_start_ptr(skb) + sizeof(struct ethhdr) > skb_end_ptr(skb)) {
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
-			struct ethhdr *eth_hdr = (void *)(long)skb->data;
+			struct ethhdr *eth_hdr = skb_start_ptr(skb);
 			__builtin_memcpy(&eth_hdr->h_source, fib_params.smac, sizeof(eth_hdr->h_source));
 			__builtin_memcpy(&eth_hdr->h_dest, fib_params.dmac, sizeof(eth_hdr->h_dest));
 

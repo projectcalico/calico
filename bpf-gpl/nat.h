@@ -228,8 +228,9 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false, res);
 }
 
-static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src, __be32 ip_dst)
+static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_src, __be32 ip_dst)
 {
+	struct __sk_buff *skb = ctx->skb;
 	int ret;
 	__u32 new_hdrsz;
 	struct ethhdr *eth, *eth_inner;
@@ -252,13 +253,22 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 
 	ret = -1;
 
-	if (skb_shorter(skb, sizeof(struct ethhdr) + new_hdrsz +
-			    sizeof(struct ethhdr) + sizeof(struct iphdr))) {
-		CALI_DEBUG("VXLAN encap: too short after room adjust\n");
+	skb_refresh_ptrs(ctx);
+	if (skb_validate_ptrs(ctx, new_hdrsz)) { // FIXME SMC check new_hdrsz
+		ctx->fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
 		goto out;
 	}
+	skb_refresh_iphdr(ctx);
+	ctx->nh = (void*)(ctx->ip_header+1);
 
-	eth = (void *)(long)skb->data;
+//	if (skb_shorter(skb, sizeof(struct ethhdr) + new_hdrsz +
+//			    sizeof(struct ethhdr) + sizeof(struct iphdr))) {
+//		CALI_DEBUG("VXLAN encap: too short after room adjust\n");
+//		goto out;
+//	}
+
+	eth = ctx->data_start;
 	ip = (void*)(eth + 1);
 	udp = (void*)(ip + 1);
 	vxlan = (void *)(udp +1);
@@ -294,7 +304,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	/* change the checksums last to avoid pointer access revalidation */
 
 	csum = bpf_csum_diff(0, 0, (void *)ip, sizeof(*ip), 0);
-	ret = bpf_l3_csum_replace(skb, ((long) ip) - ((long) skb->data) +
+	ret = bpf_l3_csum_replace(skb, ((long) ip) - ((long) skb_start_ptr(skb)) +
 				  offsetof(struct iphdr, check), 0, csum, 0);
 
 out:
@@ -323,32 +333,32 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 		udp->check == 0;
 }
 
-static CALI_BPF_INLINE bool vxlan_size_ok(struct __sk_buff *skb, struct udphdr *udp)
+static CALI_BPF_INLINE bool vxlan_size_ok(struct cali_tc_ctx *ctx)
 {
-	return skb_has_data_after(skb, udp, sizeof(struct vxlanhdr));
+	return !skb_validate_ptrs(ctx, UDP_SIZE + sizeof(struct vxlanhdr));
 }
 
-static CALI_BPF_INLINE __u32 vxlan_vni(struct __sk_buff *skb, struct udphdr *udp)
+static CALI_BPF_INLINE __u32 vxlan_vni(struct cali_tc_ctx *ctx)
 {
 	struct vxlanhdr *vxlan;
 
-	vxlan = skb_ptr_after(skb, udp);
+	vxlan = skb_ptr_after(skb, ctx->udp_header);
 
 	return bpf_ntohl(vxlan->vni << 8); /* 24-bit field, last 8 reserved */
 }
 
-static CALI_BPF_INLINE bool vxlan_vni_is_valid(struct __sk_buff *skb, struct udphdr *udp)
+static CALI_BPF_INLINE bool vxlan_vni_is_valid(struct cali_tc_ctx *ctx)
 {
 	struct vxlanhdr *vxlan;
 
-	vxlan = skb_ptr_after(skb, udp);
+	vxlan = skb_ptr_after(ctx->skb, ctx->udp_header);
 
 	return *((__u8*)&vxlan->flags) & (1 << 3);
 }
 
 #define vxlan_udp_csum_ok(udp) ((udp)->check == 0)
 
-static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
+static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct cali_tc_ctx *ctx)
 {
 	__u32 mtu = TUNNEL_MTU;
 
@@ -357,11 +367,56 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
 	 * being fragmented at this router.  The size includes the IP header and
 	 * IP data, and does not include any lower-level headers.
 	 */
-	if (skb->len > sizeof(struct ethhdr) + mtu) {
-		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, mtu);
+	if (ctx->skb->len > sizeof(struct ethhdr) + mtu) {
+		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", ctx->skb->len, mtu);
 		return true;
 	}
 	return false;
+}
+
+static CALI_BPF_INLINE bool vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
+	/* decap on host ep only if directly for the node */
+	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ctx->ip_header->daddr, HOST_IP);
+	if (rt_addr_is_local_host(ctx->ip_header->daddr) &&
+			vxlan_udp_csum_ok(ctx->udp_header) &&
+			vxlan_size_ok(ctx) &&
+			vxlan_vni_is_valid(ctx) &&
+			vxlan_vni(ctx) == CALI_VXLAN_VNI) {
+
+		ctx->arpk.ip = ctx->ip_header->saddr;
+		ctx->arpk.ifindex = ctx->skb->ifindex;
+
+		/* We update the map straight with the packet data, eth header is
+		 * dst:src but the value is src:dst so it flips it automatically
+		 * when we use it on xmit.
+		 */
+		cali_v4_arp_update_elem(&ctx->arpk, ctx->eth, 0);
+		CALI_DEBUG("ARP update for ifindex %d ip %x\n", ctx->arpk.ifindex, bpf_ntohl(ctx->arpk.ip));
+
+		ctx->state->tun_ip = ctx->ip_header->saddr;
+		CALI_DEBUG("vxlan decap\n");
+		if (vxlan_v4_decap(ctx->skb)) {
+			ctx->fwd.reason = CALI_REASON_DECAP_FAIL;
+			goto deny;
+		}
+
+		/* Revalidate the packet after the decap. */
+		skb_refresh_ptrs(ctx);
+		if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}
+		skb_refresh_iphdr(ctx);
+		ctx->nh = (void*)(ctx->ip_header+1);
+
+		CALI_DEBUG("vxlan decap origin %x\n", bpf_ntohl(ctx->state->tun_ip));
+	}
+	return false;
+
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	return true;
 }
 
 #endif /* __CALI_NAT_H__ */

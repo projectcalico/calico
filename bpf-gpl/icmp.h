@@ -26,17 +26,31 @@
 #include "log.h"
 #include "skb.h"
 
-static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip,
+static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 					__u8 type, __u8 code, __be32 un)
 {
-	struct iphdr ip_orig = *ip;
+	struct __sk_buff *skb = ctx->skb;
 	struct icmphdr *icmp;
 	__u32 len;
 	__wsum ip_csum, icmp_csum;
 	int ret;
-	
+
+	/* ICMP is on the slow path so we may as well revalidate here to keep calling code
+	 * simple. */
+	skb_refresh_ptrs(ctx);
+	/* we need to fix up the right src host IP */
+	if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+		ctx->fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
+		return -1;
+	}
+	skb_refresh_iphdr(ctx);
+	ctx->nh = ctx->ip_header + 1;
+
+	struct iphdr *ip = ctx->ip_header;
+	struct iphdr ip_orig = *ip;
 	CALI_DEBUG("ip->ihl: %d\n", ip->ihl);
-	if (ip->ihl > 5) {
+	if (ctx->ip_header->ihl > 5) {
 		CALI_DEBUG("ICMP v4 reply: IP options\n");
 		return -1;
 	}
@@ -71,16 +85,19 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 		return -1;
 	}
 
-	/* ICMP reply carries the IP header + at least 8 bytes of data. */
 	len += new_hdrs_len;
 
-	if (skb_shorter(skb, len)) {
+	/* ICMP reply carries the IP header + at least 8 bytes of data. */
+	skb_refresh_ptrs(ctx);
+	/* we need to fix up the right src host IP */
+	if (skb_validate_ptrs(ctx, ICMP_SIZE + 8)) {
+		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
 	}
-
-	/* N.B. getting the ip pointer here again makes verifier happy */
-	ip = skb_iphdr(skb);
+	skb_refresh_iphdr(ctx);
+	ctx->nh = ctx->ip_header + 1;
+	ip = ctx->ip_header;
 
 	/* we do not touch ethhdr, we rely on linux to rewrite it after routing
 	 * XXX we might want to swap MACs and bounce it back from the same device
@@ -107,7 +124,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 	ip->saddr = HOST_IP;
 	ip->daddr = ip_orig.saddr;
 
-	icmp = skb_ptr_after(skb, ip);
+	icmp = ctx->icmp_header;
 	icmp->type = type;
 	icmp->code = code;
 	*((__be32 *)&icmp->un) = un;
@@ -117,7 +134,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 	icmp_csum = bpf_csum_diff(0, 0, (void *)icmp, len -  sizeof(*ip) - skb_iphdr_offset(skb), 0);
 
 	ret = bpf_l3_csum_replace(skb,
-			skb_offset(skb, ip) + offsetof(struct iphdr, check), 0, ip_csum, 0);
+			skb_iphdr_offset(ctx->skb) + offsetof(struct iphdr, check), 0, ip_csum, 0);
 	if (ret) {
 		CALI_DEBUG("ICMP v4 reply: set ip csum failed\n");
 		return -1;
@@ -134,7 +151,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb, struct iphdr *ip
 	return 0;
 }
 
-static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
+static CALI_BPF_INLINE int icmp_v4_too_big(struct cali_tc_ctx *ctx)
 {
 	struct {
 		__be16  unused;
@@ -144,26 +161,17 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 	};
 
 	CALI_DEBUG("Sending ICMP too big mtu=%d\n", bpf_ntohs(frag.mtu));
-	
-	/* check to make the verifier happy */
-	if (skb_too_short(skb)) {
-		CALI_DEBUG("ICMP v4 too big: too short before making room\n");
-		return -1;
-	}
-	struct iphdr *ip = skb_iphdr(skb); 
-	return icmp_v4_reply(skb, ip, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);
+	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);
 }
 
-static CALI_BPF_INLINE int icmp_v4_ttl_exceeded(struct __sk_buff *skb)
+static CALI_BPF_INLINE int icmp_v4_ttl_exceeded(struct cali_tc_ctx *ctx)
 {
-	struct iphdr *ip = skb_iphdr(skb); 
-	return icmp_v4_reply(skb, ip, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
+	return icmp_v4_reply(ctx, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
 }
 
-static CALI_BPF_INLINE int icmp_v4_port_unreachable(struct __sk_buff *skb)
+static CALI_BPF_INLINE int icmp_v4_port_unreachable(struct cali_tc_ctx *ctx)
 {
-	struct iphdr *ip = skb_iphdr(skb);
-	return icmp_v4_reply(skb, ip, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
+	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 }
 
 static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
@@ -180,28 +188,23 @@ static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
 	return false;
 }
 
-static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct __sk_buff *skb, struct icmphdr **icmp)
+static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct cali_tc_ctx *ctx, struct icmphdr **icmp)
 {
-	struct iphdr *ip;
-	long ip_off;
-	int minsz;
-
-	ip_off = skb_iphdr_offset(skb);
-	minsz = ip_off + sizeof(struct iphdr) + sizeof(struct icmphdr) + sizeof(struct iphdr) + 8;
-
-	if (skb_shorter(skb, minsz)) {
-		CALI_DEBUG("ICMP: %d shorter than %d\n", skb_len_dir_access(skb), minsz);
-		return false;
+	skb_refresh_ptrs(ctx);
+	if (skb_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+		ctx->fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
+		return -1;
 	}
+	skb_refresh_iphdr(ctx);
+	ctx->nh = ctx->ip_header + 1;
 
-	ip = skb_iphdr(skb);
-
-	if (ip->ihl != 5) {
+	if (ctx->ip_header->ihl != 5) {
 		CALI_INFO("ICMP: ip options unsupported\n");
 		return false;
 	}
 
-	*icmp = (struct icmphdr *)(ip + 1);
+	*icmp = ctx->icmp_header;
 
 	return true;
 }

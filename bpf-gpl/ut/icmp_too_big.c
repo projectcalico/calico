@@ -21,10 +21,9 @@
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
-	/* emulate the size check that the caller would have done */
-	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE))
-		return -1;
-
-	return icmp_v4_too_big(skb);
+	struct cali_tc_ctx ctx = {
+		.skb = skb,
+	};
+	return icmp_v4_too_big(&ctx);
 }
 

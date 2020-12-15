@@ -22,9 +22,7 @@
 
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb);
 
-static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
-							 struct iphdr *ip_header,
-							 struct cali_tc_state *state,
+static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx,
 							 struct calico_nat_dest *nat_dest);
 
 int parse_packet(struct __sk_buff *skb, struct cali_tc_ctx *ctx);
