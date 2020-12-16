@@ -11,6 +11,7 @@ blocks:
         - name: 'Unit tests (tox)'
           commands:
             - checkout
+            - sudo apt-get update
             - sudo apt-get install -y tox
             - tox
         - name: 'FV (DevStack + Tempest)'
@@ -19,6 +20,7 @@ blocks:
             - git checkout -b devstack-test
             - mkdir -p ~/calico
             - ln -s `pwd` ~/calico/networking-calico
+            - sudo apt-get update
             - sudo apt-get install -y tox python-all-dev python3-all-dev
             - export LIBVIRT_TYPE=qemu
             - TEMPEST=true TEMPEST_BRANCH=23.0.0 DEVSTACK_BRANCH=stable/rocky ./devstack/bootstrap.sh

@@ -35,6 +35,10 @@ LOG = log.getLogger(__name__)
 # we leave plenty of headroom.
 CHUNK_SIZE_LIMIT = 200
 
+# Indicates that a put operation must update an existing resource and not create
+# a new resource.
+MUST_UPDATE = "MUST_UPDATE"
+
 
 class ForceClosingWatcher(watch.Watcher):
     def stop(self):
@@ -123,6 +127,7 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
               key, value, mod_revision)
     txn = {}
     if mod_revision == 0:
+        # Write operation must _create_ the KV entry.
         base64_key = _encode(key)
         txn['compare'] = [{
             'key': base64_key,
@@ -130,7 +135,17 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
             'target': 'VERSION',
             'version': 0,
         }]
+    elif mod_revision == MUST_UPDATE:
+        # Write operation must update and _not_ create the KV entry.
+        base64_key = _encode(key)
+        txn['compare'] = [{
+            'key': base64_key,
+            'result': 'NOT_EQUAL',
+            'target': 'VERSION',
+            'version': 0,
+        }]
     elif mod_revision is not None:
+        # Write operation must _replace_ a KV entry with the specified revision.
         base64_key = _encode(key)
         txn['compare'] = [{
             'key': base64_key,
@@ -139,6 +154,7 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
             'mod_revision': mod_revision,
         }]
     elif existing_value is not None:
+        # Write operation must _replace_ a KV entry with the specified value.
         base64_key = _encode(key)
         base64_existing = _encode(existing_value)
         txn['compare'] = [{

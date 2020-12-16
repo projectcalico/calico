@@ -64,8 +64,12 @@ def put(resource_kind, namespace, name, spec, annotations={}, labels=None,
       unchanged, and existing annotations with the same keys are overwritten by
       these new values.
 
-    - mod_revision (string): If specified, indicates that the write should only
-      proceed if replacing an existing value with that mod_revision.
+    - mod_revision: If 0 (a number), indicates that the write should only
+      proceed if it _creates_ the resource.  Else, if etcdv3.MUST_UPDATE,
+      indicates that the write should only proceed if it _does not create_ the
+      resource.  Else, if not None, must be a number encoded as a string,
+      e.g. "12345", and indicates that the write should only proceed if
+      replacing an existing value with that mod_revision.
 
     Returns True if the write happened successfully; False if not.
     """

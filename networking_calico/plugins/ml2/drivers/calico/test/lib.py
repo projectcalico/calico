@@ -32,7 +32,6 @@ import sys
 
 _log = logging.getLogger(__name__)
 
-sys.modules['etcd'] = m_etcd = mock.MagicMock()
 sys.modules['neutron'] = m_neutron = mock.MagicMock()
 sys.modules['neutron.agent'] = m_neutron.agent
 sys.modules['neutron.agent.rpc'] = m_neutron.agent.rpc
@@ -114,36 +113,8 @@ floating_ports = [{'fixed_port_id': 'DEADBEEF-1234-5678',
                    'floating_ip_address': '192.168.0.1'}]
 
 
-class EtcdException(Exception):
+class EtcdKeyNotFound(Exception):
     pass
-
-
-class EtcdKeyNotFound(EtcdException):
-    pass
-
-
-class EtcdClusterIdChanged(EtcdException):
-    pass
-
-
-class EtcdEventIndexCleared(EtcdException):
-    pass
-
-
-class EtcdValueError(EtcdException):
-    pass
-
-
-class EtcdDirNotEmpty(EtcdValueError):
-    pass
-
-
-m_etcd.EtcdException = EtcdException
-m_etcd.EtcdKeyNotFound = EtcdKeyNotFound
-m_etcd.EtcdClusterIdChanged = EtcdClusterIdChanged
-m_etcd.EtcdEventIndexCleared = EtcdEventIndexCleared
-m_etcd.EtcdValueError = EtcdValueError
-m_etcd.EtcdDirNotEmpty = EtcdDirNotEmpty
 
 
 class DBError(Exception):
