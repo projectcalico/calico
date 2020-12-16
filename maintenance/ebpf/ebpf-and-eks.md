@@ -64,7 +64,7 @@ container-optimised OS with an emphasis on security; it has a recent enough kern
   metadata:
     name: my-calico-cluster
     region: us-west-2
-    version: '1.17'
+    version: '1.18'
   nodeGroups:
     - name: ng-my-calico-cluster
       instanceType: t3.medium
@@ -123,15 +123,30 @@ which is suitable:
 * [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html){:target="_blank"} 
   and make a note of the AMI ID
 
-* Using `eksctl`: start your cluster as normal, but when creating the nodegroup, add the `--node-ami` and
+* Using `eksctl`: start your cluster as normal:
+  ```
+  eksctl create cluster \
+   --name my-calico-cluster \
+   --version 1.18 \
+   --with-oidc \
+   --without-nodegroup
+  ```
+
+* Creating the nodegroup, add the `--node-ami` and
   `--node-ami-family` settings.
 
   * `--node-ami` should be set to the AMI ID of the image built above.
-  * `--node-ami-family` should be set to `Ubuntu1804` (in spite of the upgrade).
+  * `--node-ami-family` should be set to `Ubuntu1804` (despite the upgrade).
 
   For example:
   ```
-  eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100 --node-ami-family Ubuntu1804 --node-ami <AMI ID>
+  eksctl create nodegroup \
+    --cluster my-calico-cluster \
+    --node-type t3.medium \
+    --node-ami auto \
+    --max-pods-per-node 100 \
+    --node-ami-family Ubuntu1804 \
+    --node-ami <AMI ID>
   ```
  
 * To use {{site.prodname}} with the AWS VPC CNI: 
