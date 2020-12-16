@@ -176,15 +176,8 @@ which is suitable:
     ```bash
     kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
     ```
-    
-  * Restart any pods that were created before {{site.prodname}} was installed.  Typically, this is only `kube-dns`:
-  
-    ```
-    kubectl delete pod -n kube-system -l k8s-app=kube-dns
-    ```
 
-* Create a nodegroup, using the AMI ID you made a note of above.
-
+* Create a nodegroup, using the AMI ID you noted above.
   * `--node-ami` should be set to the AMI ID of the image built above.
   * `--node-ami-family` should be set to `Ubuntu1804` (despite the upgrade).
 
