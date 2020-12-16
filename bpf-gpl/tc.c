@@ -309,12 +309,24 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 		}
 	}
+
+	// FIXME Not sure why this is needed
+	skb_refresh_ptrs(&ctx);
+	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+		ctx.fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+	skb_refresh_iphdr(&ctx);
+	ctx.nh = (void*)(ctx.ip_header+1);
+	ctx.eth = ctx.data_start;
+
 	/* icmp_type and icmp_code share storage with the ports; now we've used
 	 * the ports set to 0 to do the conntrack lookup, we can set the ICMP fields
 	 * for policy.
 	 */
 	if (ctx.state->ip_proto == IPPROTO_ICMP) {
-		ctx.state->icmp_type = ctx.icmp_header->type;
+		ctx.state->icmp_type = ctx.icmp_header->type; // Blows up here
 		ctx.state->icmp_code = ctx.icmp_header->code;
 	}
 
@@ -531,9 +543,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	struct tcphdr *tcp_header = (void*)(ctx->ip_header+1);
-	struct udphdr *udp_header = (void*)(ctx->ip_header+1);
-
 	__u8 ihl = ctx->ip_header->ihl * 4;
 
 	int res = 0;
@@ -593,6 +602,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
+			skb_refresh_iphdr(ctx);
 			ctx->nh = (void*)(ctx->ip_header+1);
 			ct_nat_ctx.tcp = ctx->tcp_header;
 		}
@@ -635,7 +645,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n",
 				bpf_ntohl(state->post_nat_ip_dst), state->post_nat_dport);
-
 
 		encap_needed = dnat_should_encap();
 
@@ -707,10 +716,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
-			tcp_header->dest = bpf_htons(state->post_nat_dport);
+			ctx->tcp_header->dest = bpf_htons(state->post_nat_dport);
 			break;
 		case IPPROTO_UDP:
-			udp_header->dest = bpf_htons(state->post_nat_dport);
+			ctx->udp_header->dest = bpf_htons(state->post_nat_dport);
 			break;
 		}
 
@@ -790,10 +799,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
-			tcp_header->source = bpf_htons(state->ct_result.nat_port);
+			ctx->tcp_header->source = bpf_htons(state->ct_result.nat_port);
 			break;
 		case IPPROTO_UDP:
-			udp_header->source = bpf_htons(state->ct_result.nat_port);
+			ctx->udp_header->source = bpf_htons(state->ct_result.nat_port);
 			break;
 		}
 

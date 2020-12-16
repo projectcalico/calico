@@ -41,7 +41,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	/* we need to fix up the right src host IP */
 	if (skb_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
+		CALI_DEBUG("ICMP v4 reply: too short\n");
 		return -1;
 	}
 	skb_refresh_iphdr(ctx);
@@ -90,7 +90,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
 	skb_refresh_ptrs(ctx);
 	/* we need to fix up the right src host IP */
-	if (skb_validate_ptrs(ctx, ICMP_SIZE + 8)) {
+	if (skb_validate_ptrs(ctx, len - skb_iphdr_offset(skb))) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
@@ -129,7 +129,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	icmp->code = code;
 	*((__be32 *)&icmp->un) = un;
 	icmp->checksum = 0;
-
+CALI_DEBUG("H5\n");
 	ip_csum = bpf_csum_diff(0, 0, (void *)ip, sizeof(*ip), 0);
 	icmp_csum = bpf_csum_diff(0, 0, (void *)icmp, len -  sizeof(*ip) - skb_iphdr_offset(skb), 0);
 
@@ -193,8 +193,8 @@ static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct cali_tc_ctx *ctx, struct icm
 	skb_refresh_ptrs(ctx);
 	if (skb_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
-		return -1;
+		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
+		return false;
 	}
 	skb_refresh_iphdr(ctx);
 	ctx->nh = ctx->ip_header + 1;

@@ -55,7 +55,6 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	}
 	skb_refresh_iphdr(ctx);
 	ctx->nh = (void*)(ctx->ip_header+1);
-
 	ctx->eth = ctx->data_start;
 
 	// Drop malformed IP packets
