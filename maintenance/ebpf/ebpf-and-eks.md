@@ -132,23 +132,6 @@ which is suitable:
    --without-nodegroup
   ```
 
-* Creating the nodegroup, add the `--node-ami` and
-  `--node-ami-family` settings.
-
-  * `--node-ami` should be set to the AMI ID of the image built above.
-  * `--node-ami-family` should be set to `Ubuntu1804` (despite the upgrade).
-
-  For example:
-  ```
-  eksctl create nodegroup \
-    --cluster my-calico-cluster \
-    --node-type t3.medium \
-    --node-ami auto \
-    --max-pods-per-node 100 \
-    --node-ami-family Ubuntu1804 \
-    --node-ami <AMI ID>
-  ```
- 
 * To use {{site.prodname}} with the AWS VPC CNI: 
 
   * install {{site.prodname}} using the following manifest from the AWS VPC CNI project:
@@ -199,6 +182,22 @@ which is suitable:
     ```
     kubectl delete pod -n kube-system -l k8s-app=kube-dns
     ```
+
+* Create a nodegroup, using the AMI ID you made a note of above.
+
+  * `--node-ami` should be set to the AMI ID of the image built above.
+  * `--node-ami-family` should be set to `Ubuntu1804` (despite the upgrade).
+
+  For example:
+  ```
+  eksctl create nodegroup \
+    --cluster my-calico-cluster \
+    --node-type t3.medium \
+    --node-ami auto \
+    --max-pods-per-node 100 \
+    --node-ami-family Ubuntu1804 \
+    --node-ami <AMI ID>
+  ```
 
 %>
 {% endtabs %}
