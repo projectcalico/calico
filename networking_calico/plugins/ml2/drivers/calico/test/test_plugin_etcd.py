@@ -233,7 +233,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         for txc in txn['compare']:
             _log.info("etcd3 txn compare = %r", txc)
             if txc['target'] == 'VERSION' and txc['version'] == 0:
-                key = _decode(txc['key']).decode()
+                key = _decode(txc['key'])
                 if txc['result'] == 'EQUAL':
                     # Transaction requires that the etcd entry does not already exist.
                     if key in self.etcd_data:
@@ -250,7 +250,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                                               _decode(put_request['value']))
         elif 'request_delete_range' in txn['success'][0]:
             del_request = txn['success'][0]['request_delete_range']
-            succeeded = self.etcd3_delete(_decode(del_request['key']))
+            succeeded = self.etcd3gw_client_delete(_decode(del_request['key']))
         return {'succeeded': succeeded}
 
     def etcd_read(self, key, wait=False, waitIndex=None, recursive=False,
