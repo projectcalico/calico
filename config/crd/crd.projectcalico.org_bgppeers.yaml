@@ -37,7 +37,6 @@ spec:
                 format: int32
                 type: integer
               keepOriginalNextHop:
-                default: false
                 description: Option to keep the original nexthop field when routes
                   are sent to a BGP Peer. Setting "true" configures the selected BGP
                   Peers node to use the "next hop keep;" instead of "next hop self;"(default)
