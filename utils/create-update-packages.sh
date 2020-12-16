@@ -168,9 +168,6 @@ function do_bld_images {
     docker build -f ubuntu-xenial-build.Dockerfile.${ARCH} -t calico-build/xenial .
     docker build -f ubuntu-bionic-build.Dockerfile.${ARCH} -t calico-build/bionic .
     docker build --build-arg=UID=`id -u` --build-arg=GID=`id -g` -f centos7-build.Dockerfile.${ARCH} -t calico-build/centos7 .
-    if [ $ARCH != ppc64le ]; then
-	docker build --build-arg=UID=`id -u` --build-arg=GID=`id -g` -f centos6-build.Dockerfile.${ARCH} -t calico-build/centos6 .
-    fi
     popd
     if [ $ARCH = ppc64le ]; then
 	# Some commands that would typically be run at container build
