@@ -181,16 +181,16 @@ which is suitable:
   * `--node-ami` should be set to the AMI ID of the image built above.
   * `--node-ami-family` should be set to `Ubuntu1804` (despite the upgrade).
 
-  For example:
-  ```
-  eksctl create nodegroup \
-    --cluster my-calico-cluster \
-    --node-type t3.medium \
-    --node-ami auto \
-    --max-pods-per-node 100 \
-    --node-ami-family Ubuntu1804 \
-    --node-ami <AMI ID>
-  ```
+  * For example:
+    ```
+    eksctl create nodegroup \
+      --cluster my-calico-cluster \
+      --node-type t3.medium \
+      --node-ami auto \
+      --max-pods-per-node 100 \
+      --node-ami-family Ubuntu1804 \
+      --node-ami <AMI ID>
+    ```
 
 %>
 {% endtabs %}
