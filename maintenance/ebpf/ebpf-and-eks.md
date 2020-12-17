@@ -83,7 +83,7 @@ container-optimised OS with an emphasis on security; it has a version of the ker
 
 * Install {{site.prodname}} using the following manifest from the AWS VPC CNI project:
   ```bash
-  kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/master/config/master/calico.yaml
+  kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/ae02a103b091f38b0aafd0ff6dd0e8f611cf9e67/config/master/calico.yaml
   ```
   
   > **Note**: Due to Bottlerocket's read-only file system, it is not possible to install {{site.prodname}} in 
@@ -136,7 +136,7 @@ which is suitable:
 
   * install {{site.prodname}} using the following manifest from the AWS VPC CNI project:
     ```bash
-    kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/master/config/master/calico.yaml
+    kubectl apply -f https://raw.githubusercontent.com/aws/amazon-vpc-cni-k8s/ae02a103b091f38b0aafd0ff6dd0e8f611cf9e67/config/master/calico.yaml
     ```
   
     > **Note**: It's important to use this manifest because the version linked from the
