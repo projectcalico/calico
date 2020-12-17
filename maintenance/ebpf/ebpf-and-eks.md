@@ -40,7 +40,7 @@ EKS is Amazon's managed Kubernetes offering.
 
 ### How to
 
-#### Create an EKS cluster with a recent enough kernel
+#### Create an eBPF compatible EKS cluster
 
 By default, EKS uses Ubuntu 18.04 as its base image for EKS, which does not meet the kernel version requirement for 
 eBPF mode.  Below, we give a couple of options for how to get the cluster running with a suitable kernel:
@@ -52,7 +52,7 @@ eBPF mode.  Below, we give a couple of options for how to get the cluster runnin
 
 The easiest way to start an EKS cluster that meets eBPF mode's requirements is to use Amazon's 
 [Bottlerocket](https://aws.amazon.com/bottlerocket/) OS, instead of the default.  Bottlerocket is a 
-container-optimised OS with an emphasis on security; it has a recent enough kernel to use eBPF mode.
+container-optimised OS with an emphasis on security; it has a version of the kernel which is compatible with eBPF mode.
 
 * To create a 2-node test cluster with a Bottlerocket node group, run the command below.  It is important to use the config-file
   approach to creating a cluster in order to set the additional IAM permissions for Bottlerocket.
@@ -236,13 +236,13 @@ which is suitable:
   kubectl delete pod -n kube-system -l k8s-app=calico-kube-controllers
   ```
 
-* Confirm that pods restart and then reach the `Running` state with the following command:
+* Confirm that pods restart and reach the `Running` state with the following command:
 
   ```
   watch "kubectl get pods -n kube-system | grep calico"
   ```
 
-  You can verify that the change was picked up by checking the logs of one of the  {{ site.nodecontainer }} pods.
+  You can verify that the change was picked up by checking the logs of one of the {{ site.nodecontainer }} pods.
 
   ```
   kubectl get po -n kube-system -l k8s-app=calico-node
@@ -270,7 +270,7 @@ which is suitable:
 
 #### Disable kube-proxy
 
-In eBPF mode {{site.prodname}} replaces `kube-proxy` so it wastes resources to run both.  To disable `kube-proxy` reversibly, we recommend adding a node selector to `kube-proxy`'s `DaemonSet` that matches no nodes, for example:
+In eBPF mode, {{site.prodname}} replaces `kube-proxy` so it wastes resources to run both.  To disable `kube-proxy` reversibly, we recommend adding a node selector to `kube-proxy`'s `DaemonSet` that matches no nodes, for example:
 
 ```
 kubectl patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": "true"}}}}}'
@@ -280,7 +280,7 @@ Then, should you want to start `kube-proxy` again, you can simply remove the nod
 
 #### Enable eBPF mode
 
-To enable eBPF mode, change Felix configuration parameter  `BPFEnabled` to `true`.  This can be done with `calicoctl`, as follows:
+To enable eBPF mode, change the Felix configuration parameter `BPFEnabled` to `true`.  This can be done with `calicoctl`, as follows:
 
 ```
 calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
@@ -309,7 +309,7 @@ To revert to standard Linux networking:
    kubectl patch ds -n kube-system kube-proxy --type merge -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": null}}}}}'
    ```
 
-1. Monitor existing workloads to make sure they re-establish any connections disrupted by the switch.
+1. Monitor existing workloads to make sure they reestablish connections.
 
 ### Send us feedback
 
