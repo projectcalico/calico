@@ -55,8 +55,6 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
-		skb_refresh_iphdr(ctx);
-		ctx->nh = (void*)(ctx->ip_header+1);
 
 		/* Swap the MACs as we are turning it back */
 		struct ethhdr *eth_hdr = ctx->data_start;
@@ -131,13 +129,10 @@ skip_redir_ifindex:
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
-		skb_refresh_iphdr(ctx);
-		ctx->nh = (void*)(ctx->ip_header+1);
 
-		struct iphdr *ip_header = ctx->ip_header;
 		struct bpf_fib_lookup fib_params = {
 			.family = 2, /* AF_INET */
-			.tot_len = bpf_ntohs(ip_header->tot_len),
+			.tot_len = bpf_ntohs(ctx->ip_header->tot_len),
 			.ifindex = skb->ingress_ifindex,
 			.l4_protocol = state->ip_proto,
 			.sport = bpf_htons(state->sport),
@@ -169,18 +164,13 @@ skip_redir_ifindex:
 			 * IP stack handle it. It was approved by policy, so it
 			 * is safe.
 			 */
-			if ip_ttl_exceeded(ip_header) {
+			if ip_ttl_exceeded(ctx->ip_header) {
 				rc = TC_ACT_UNSPEC;
 				goto cancel_fib;
 			}
 
-			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
-			// revalidate.
-			if (skb_start_ptr(skb) + sizeof(struct ethhdr) > skb_end_ptr(skb)) {
-				reason = CALI_REASON_SHORT;
-				goto deny;
-			}
-			struct ethhdr *eth_hdr = skb_start_ptr(skb);
+			// Update the MACs.
+			struct ethhdr *eth_hdr = ctx->data_start;
 			__builtin_memcpy(&eth_hdr->h_source, fib_params.smac, sizeof(eth_hdr->h_source));
 			__builtin_memcpy(&eth_hdr->h_dest, fib_params.dmac, sizeof(eth_hdr->h_dest));
 
@@ -189,7 +179,7 @@ skip_redir_ifindex:
 			rc = bpf_redirect(fib_params.ifindex, 0);
 			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 			if (rc == TC_ACT_REDIRECT) {
-				ip_dec_ttl(ip_header);
+				ip_dec_ttl(ctx->ip_header);
 			}
 		} else if (rc < 0) {
 			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);

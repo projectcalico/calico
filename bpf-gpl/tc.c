@@ -107,7 +107,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
-			skb_refresh_iphdr(&ctx);
 
 			__be32 ip_src = ctx.ip_header->saddr;
 			if (ip_src == HOST_IP) {
@@ -138,11 +137,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
-			is_vxlan_tunnel(ctx.ip_header) /* Is this one of our VXLAN packets? */ ) {
+			is_vxlan_tunnel(ctx.ip_header) /* Is this a VXLAN packet? */ ) {
 		/* Decap it; vxlan_attempt_decap will revalidate the packet if needed. */
 		if (vxlan_attempt_decap(&ctx)) {
-			// Either a problem or a packet that we automatically let through.
-			goto finalize;
+			// Problem.
+			goto deny;
 		}
 	}
 
@@ -317,8 +316,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	skb_refresh_iphdr(&ctx);
-	ctx.nh = (void*)(ctx.ip_header+1);
 	ctx.eth = ctx.data_start;
 
 	/* icmp_type and icmp_code share storage with the ports; now we've used
@@ -602,8 +599,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
-			skb_refresh_iphdr(ctx);
-			ctx->nh = (void*)(ctx->ip_header+1);
 			ct_nat_ctx.tcp = ctx->tcp_header;
 		}
 
@@ -696,7 +691,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				encap_needed = false;
 			}
 		}
-
 		if (encap_needed) {
 			if (!(state->ip_proto == IPPROTO_TCP && skb_is_gso(skb)) &&
 					ip_is_dnf(ctx->ip_header) && vxlan_v4_encap_too_big(ctx)) {

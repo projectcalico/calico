@@ -44,12 +44,9 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 		CALI_DEBUG("ICMP v4 reply: too short\n");
 		return -1;
 	}
-	skb_refresh_iphdr(ctx);
-	ctx->nh = ctx->ip_header + 1;
 
-	struct iphdr *ip = ctx->ip_header;
-	struct iphdr ip_orig = *ip;
-	CALI_DEBUG("ip->ihl: %d\n", ip->ihl);
+	struct iphdr ip_orig = *ctx->ip_header;
+	CALI_DEBUG("ip->ihl: %d\n", ctx->ip_header->ihl);
 	if (ctx->ip_header->ihl > 5) {
 		CALI_DEBUG("ICMP v4 reply: IP options\n");
 		return -1;
@@ -59,7 +56,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	 * part-way through the UDP/TCP header.
 	 */
 	len = sizeof(struct ethhdr) + sizeof(struct iphdr) + 64;
-	switch (ip->protocol) {
+	switch (ctx->ip_header->protocol) {
 	case IPPROTO_TCP:
 		len += sizeof(struct tcphdr);
 		break;
@@ -97,18 +94,17 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	}
 	skb_refresh_iphdr(ctx);
 	ctx->nh = ctx->ip_header + 1;
-	ip = ctx->ip_header;
 
 	/* we do not touch ethhdr, we rely on linux to rewrite it after routing
 	 * XXX we might want to swap MACs and bounce it back from the same device
 	 */
-	ip->version = 4;
-	ip->ihl = 5;
-	ip->tos = 0;
-	ip->ttl = 64; /* good default */
-	ip->protocol = IPPROTO_ICMP;
-	ip->check = 0;
-	ip->tot_len = bpf_htons(len - sizeof(struct ethhdr));
+	ctx->ip_header->version = 4;
+	ctx->ip_header->ihl = 5;
+	ctx->ip_header->tos = 0;
+	ctx->ip_header->ttl = 64; /* good default */
+	ctx->ip_header->protocol = IPPROTO_ICMP;
+	ctx->ip_header->check = 0;
+	ctx->ip_header->tot_len = bpf_htons(len - sizeof(struct ethhdr));
 
 #ifdef CALI_PARANOID
 	/* XXX verify that ip_orig.daddr is always the node's IP
@@ -121,17 +117,17 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 #endif
 
 	/* use the host IP of the program that handles the packet */
-	ip->saddr = HOST_IP;
-	ip->daddr = ip_orig.saddr;
+	ctx->ip_header->saddr = HOST_IP;
+	ctx->ip_header->daddr = ip_orig.saddr;
 
 	icmp = ctx->icmp_header;
 	icmp->type = type;
 	icmp->code = code;
 	*((__be32 *)&icmp->un) = un;
 	icmp->checksum = 0;
-CALI_DEBUG("H5\n");
-	ip_csum = bpf_csum_diff(0, 0, (void *)ip, sizeof(*ip), 0);
-	icmp_csum = bpf_csum_diff(0, 0, (void *)icmp, len -  sizeof(*ip) - skb_iphdr_offset(skb), 0);
+
+	ip_csum = bpf_csum_diff(0, 0, (void *)ctx->ip_header, sizeof(*ctx->ip_header), 0);
+	icmp_csum = bpf_csum_diff(0, 0, (void *)icmp, len -  sizeof(*ctx->ip_header) - skb_iphdr_offset(skb), 0);
 
 	ret = bpf_l3_csum_replace(skb,
 			skb_iphdr_offset(ctx->skb) + offsetof(struct iphdr, check), 0, ip_csum, 0);
@@ -196,8 +192,6 @@ static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct cali_tc_ctx *ctx, struct icm
 		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
 		return false;
 	}
-	skb_refresh_iphdr(ctx);
-	ctx->nh = ctx->ip_header + 1;
 
 	if (ctx->ip_header->ihl != 5) {
 		CALI_INFO("ICMP: ip options unsupported\n");

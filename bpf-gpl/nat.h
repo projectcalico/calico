@@ -36,9 +36,9 @@
 #define CALI_VXLAN_VNI 0xca11c0
 #endif
 
-#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
-#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL)
-#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
+#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
+#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
+#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
 
 /* Number of bytes we add to a packet when we do encap. */
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
@@ -254,22 +254,15 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	ret = -1;
 
 	skb_refresh_ptrs(ctx);
-	if (skb_validate_ptrs(ctx, new_hdrsz)) { // FIXME SMC check new_hdrsz
+	if (skb_validate_ptrs(ctx, new_hdrsz)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
+		CALI_DEBUG("Too short VXLAN encap\n");
 		goto out;
 	}
-	skb_refresh_iphdr(ctx);
-	ctx->nh = (void*)(ctx->ip_header+1);
 
-//	if (skb_shorter(skb, sizeof(struct ethhdr) + new_hdrsz +
-//			    sizeof(struct ethhdr) + sizeof(struct iphdr))) {
-//		CALI_DEBUG("VXLAN encap: too short after room adjust\n");
-//		goto out;
-//	}
-
+	// Note: assuming L2 packet here so this code can't be used on an L3 device.
 	eth = ctx->data_start;
-	ip = (void*)(eth + 1);
+	ip = ctx->ip_header;
 	udp = (void*)(ip + 1);
 	vxlan = (void *)(udp +1);
 	eth_inner = (void *)(vxlan+1);
@@ -377,41 +370,49 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE bool vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	/* decap on host ep only if directly for the node */
 	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ctx->ip_header->daddr, HOST_IP);
-	if (rt_addr_is_local_host(ctx->ip_header->daddr) &&
-			vxlan_udp_csum_ok(ctx->udp_header) &&
-			vxlan_size_ok(ctx) &&
-			vxlan_vni_is_valid(ctx) &&
-			vxlan_vni(ctx) == CALI_VXLAN_VNI) {
 
-		ctx->arpk.ip = ctx->ip_header->saddr;
-		ctx->arpk.ifindex = ctx->skb->ifindex;
-
-		/* We update the map straight with the packet data, eth header is
-		 * dst:src but the value is src:dst so it flips it automatically
-		 * when we use it on xmit.
-		 */
-		cali_v4_arp_update_elem(&ctx->arpk, ctx->eth, 0);
-		CALI_DEBUG("ARP update for ifindex %d ip %x\n", ctx->arpk.ifindex, bpf_ntohl(ctx->arpk.ip));
-
-		ctx->state->tun_ip = ctx->ip_header->saddr;
-		CALI_DEBUG("vxlan decap\n");
-		if (vxlan_v4_decap(ctx->skb)) {
-			ctx->fwd.reason = CALI_REASON_DECAP_FAIL;
-			goto deny;
-		}
-
-		/* Revalidate the packet after the decap. */
-		skb_refresh_ptrs(ctx);
-		if (skb_validate_ptrs(ctx, UDP_SIZE)) {
-			ctx->fwd.reason = CALI_REASON_SHORT;
-			CALI_DEBUG("Too short\n");
-			goto deny;
-		}
-		skb_refresh_iphdr(ctx);
-		ctx->nh = (void*)(ctx->ip_header+1);
-
-		CALI_DEBUG("vxlan decap origin %x\n", bpf_ntohl(ctx->state->tun_ip));
+	if (!rt_addr_is_local_host(ctx->ip_header->daddr)) {
+		return false;
 	}
+	if (!vxlan_udp_csum_ok(ctx->udp_header)) {
+		return false;
+	}
+	if (!vxlan_size_ok(ctx)) {
+		return true; /* Drop; UDP header says its VXLAN but we failed to pull the VXLAN header.*/
+	}
+	if (!vxlan_vni_is_valid(ctx) ) {
+		return false;
+	}
+	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
+		return false;
+	}
+
+	ctx->arpk.ip = ctx->ip_header->saddr;
+	ctx->arpk.ifindex = ctx->skb->ifindex;
+
+	/* We update the map straight with the packet data, eth header is
+	 * dst:src but the value is src:dst so it flips it automatically
+	 * when we use it on xmit.
+	 */
+	cali_v4_arp_update_elem(&ctx->arpk, ctx->eth, 0);
+	CALI_DEBUG("ARP update for ifindex %d ip %x\n", ctx->arpk.ifindex, bpf_ntohl(ctx->arpk.ip));
+
+	ctx->state->tun_ip = ctx->ip_header->saddr;
+	CALI_DEBUG("vxlan decap\n");
+	if (vxlan_v4_decap(ctx->skb)) {
+		ctx->fwd.reason = CALI_REASON_DECAP_FAIL;
+		goto deny;
+	}
+
+	/* Revalidate the packet after the decap. */
+	skb_refresh_ptrs(ctx);
+	if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+		ctx->fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+
+	CALI_DEBUG("vxlan decap origin %x\n", bpf_ntohl(ctx->state->tun_ip));
 	return false;
 
 deny:

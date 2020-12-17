@@ -58,6 +58,33 @@ static CALI_BPF_INLINE void skb_refresh_ptrs(struct cali_tc_ctx *ctx) {
 	ctx->data_end = skb_end_ptr(ctx->skb);
 }
 
+static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
+{
+	if (CALI_F_IPIP_ENCAPPED) {
+		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
+		return sizeof(struct ethhdr) + sizeof(struct iphdr);
+	} else if (CALI_F_L3) {
+		// Egress on an IPIP tunnel, or Wireguard both directions:
+		// skb is [inner IP|payload]
+		return 0;
+	} else {
+		// Normal L2 interface: skb is [ether|IP|payload]
+		return sizeof(struct ethhdr);
+	}
+}
+
+
+static CALI_BPF_INLINE void skb_refresh_iphdr(struct cali_tc_ctx *ctx)
+{
+	long offset = skb_iphdr_offset(ctx->skb);
+	struct iphdr *ip =  ctx->data_start + offset;
+	CALI_DEBUG("IP id=%d s=%x d=%x\n",
+			bpf_ntohs(ip->id), bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
+	ctx->eth = (void*)(ctx->data_start);
+	ctx->ip_header = ip;
+	ctx->nh = (void*)(ctx->ip_header+1);
+}
+
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
 #define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
 
@@ -91,8 +118,12 @@ static CALI_BPF_INLINE bool skb_validate_ptrs(struct cali_tc_ctx *ctx, long nh_l
 		}
 		CALI_DEBUG("Pulled data\n");
 		skb_refresh_ptrs(ctx);
-		return ctx->data_start + (min_size + nh_len) > ctx->data_end;
+		if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
+			return true;
+		}
 	}
+	// Success, refresh the IP header and next header.
+	skb_refresh_iphdr(ctx);
 	return false;
 }
 
@@ -107,31 +138,6 @@ static CALI_BPF_INLINE bool skb_validate_ptrs(struct cali_tc_ctx *ctx, long nh_l
 
 #define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
 #define skb_seen(skb) ((skb)->mark & CALI_SKB_MARK_SEEN)
-
-static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
-{
-	if (CALI_F_IPIP_ENCAPPED) {
-		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
-		return sizeof(struct ethhdr) + sizeof(struct iphdr);
-	} else if (CALI_F_L3) {
-		// Egress on an IPIP tunnel, or Wireguard both directions:
-		// skb is [inner IP|payload]
-		return 0;
-	} else {
-		// Normal L2 interface: skb is [ether|IP|payload]
-		return sizeof(struct ethhdr);
-	}
-}
-
-
-static CALI_BPF_INLINE void skb_refresh_iphdr(struct cali_tc_ctx *ctx)
-{
-	long offset = skb_iphdr_offset(ctx->skb);
-	struct iphdr *ip =  ctx->data_start + offset;
-	CALI_DEBUG("IP id=%d s=%x d=%x\n",
-			bpf_ntohs(ip->id), bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
-	ctx->ip_header = ip;
-}
 
 static CALI_BPF_INLINE long skb_l4hdr_offset(struct __sk_buff *skb, __u8 ihl)
 {
