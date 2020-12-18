@@ -716,7 +716,7 @@ func ConfigureLogging(conf types.NetConf) {
 		logrus.SetLevel(logrus.ErrorLevel)
 	} else {
 		// Default level
-		logrus.SetLevel(logrus.WarnLevel)
+		logrus.SetLevel(logrus.InfoLevel)
 	}
 
 	writers := []io.Writer{os.Stderr}
