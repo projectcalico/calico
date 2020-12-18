@@ -115,6 +115,9 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			}
 			err = fmt.Errorf(msg)
 		}
+		if err != nil {
+			logrus.WithError(err).Error("Final result of CNI ADD was an error.")
+		}
 	}()
 
 	// Unmarshal the network config, and perform validation
@@ -505,6 +508,9 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 				msg = fmt.Sprintf("%s: error=%s", msg, err)
 			}
 			err = fmt.Errorf(msg)
+		}
+		if err != nil {
+			logrus.WithError(err).Error("Final result of CNI DEL was an error.")
 		}
 	}()
 
