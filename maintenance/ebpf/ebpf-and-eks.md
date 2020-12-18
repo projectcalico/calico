@@ -294,9 +294,9 @@ since its connection to the API server can be disrupted:
 kubectl delete pod -n kube-system -l k8s-app=kube-dns
 ```
 
-#### Disable eBPF mode
+#### How to disable eBPF mode
 
-To revert to standard Linux networking:
+Follow these steps if you want to switch from Calico's eBPF dataplane back to standard Linux networking:
 
 1. Disable Calico eBPF mode:
 
@@ -313,4 +313,4 @@ To revert to standard Linux networking:
 
 ### Send us feedback
 
-The eBPF dataplane is still fairly new, and we want to hear about your experience.  Please don’t hesitate to connect with us via the {% include open-new-window.html text='Calico Users Slack' url='http://slack.projectcalico.org/' %} group.
+We would love to hear about your experience with the eBPF dataplane.  Please don’t hesitate to connect with us via the {% include open-new-window.html text='Calico Users Slack' url='http://slack.projectcalico.org/' %} group.
