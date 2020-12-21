@@ -226,7 +226,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			ctx.state->flags |= CALI_ST_SKIP_FIB;
 		}
 		CALI_DEBUG("CT Hit\n");
-		//goto skip_policy;
+		goto skip_policy;
 	}
 
 	/* Unlike from WEP where we can do RPF by comparing to calico routing
@@ -359,6 +359,8 @@ icmp_send_reply:
 	goto deny;
 
 skip_policy:
+	/* FIXME: only need to revalidate here on the conntrack related code path because the skb_validate_ptrs
+	 * call that it uses can fail to pull data, leaving the packet invalid. */
 	skb_refresh_ptrs(&ctx);
 	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
