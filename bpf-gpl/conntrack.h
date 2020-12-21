@@ -392,18 +392,6 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 	}
 }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Winvalid-noreturn"
-static CALI_BPF_INLINE _Noreturn void bpf_exit(int rc) {
-	asm volatile ( \
-		"exit" \
-		: "=r0" (rc) /*out*/ \
-		: "0" (rc) /*in*/ \
-		: /*clobber*/ \
-	);
-}
-#pragma clang diagnostic pop
-
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_tc_ctx *tc_ctx)
 {
 	struct ct_ctx ct_lookup_ctx = {
