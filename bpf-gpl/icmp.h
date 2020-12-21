@@ -55,7 +55,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	 * payload but the SKB implementation gets upset if we try to trim
 	 * part-way through the UDP/TCP header.
 	 */
-	len = sizeof(struct ethhdr) + sizeof(struct iphdr) + 64;
+	len = skb_iphdr_offset(skb) + sizeof(struct iphdr) + 64;
 	switch (ctx->ip_header->protocol) {
 	case IPPROTO_TCP:
 		len += sizeof(struct tcphdr);
@@ -68,6 +68,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 		break;
 	}
 
+	CALI_DEBUG("Trimming to %d\n", len);
 	int err = bpf_skb_change_tail(skb, len,  0);
 	if (err) {
 		CALI_DEBUG("ICMP v4 reply: early bpf_skb_change_tail (len=%d) failed (err=%d)\n", len, err);
@@ -76,6 +77,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
         
 	/* make room for the new IP + ICMP header */
 	int new_hdrs_len = sizeof(struct iphdr) + sizeof(struct icmphdr);
+	CALI_DEBUG("Inserting %d\n", new_hdrs_len);
 	ret = bpf_skb_adjust_room(skb, new_hdrs_len, BPF_ADJ_ROOM_MAC, 0);
 	if (ret) {
 		CALI_DEBUG("ICMP v4 reply: failed to make room\n");
@@ -83,11 +85,12 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	}
 
 	len += new_hdrs_len;
+	CALI_DEBUG("Len after insert %d\n", len);
 
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
 	skb_refresh_ptrs(ctx);
 	/* we need to fix up the right src host IP */
-	if (skb_validate_ptrs(ctx, len - skb_iphdr_offset(skb))) {
+	if (skb_validate_ptrs(ctx, len - skb_iphdr_offset(skb) - IP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
@@ -189,12 +192,15 @@ static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct cali_tc_ctx *ctx, struct icm
 	skb_refresh_ptrs(ctx);
 	if (skb_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
+		ctx->fwd.res = TC_ACT_SHOT;
 		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
 		return false;
 	}
 
 	if (ctx->ip_header->ihl != 5) {
 		CALI_INFO("ICMP: ip options unsupported\n");
+		ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
+		ctx->fwd.res = TC_ACT_SHOT;
 		return false;
 	}
 

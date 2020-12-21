@@ -109,8 +109,8 @@ static CALI_BPF_INLINE bool skb_validate_ptrs(struct cali_tc_ctx *ctx, long nh_l
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
 		// minimum we've been asked for.
-		if (bpf_skb_pull_data(ctx->skb, min_size + TCP_SIZE)) {
-			CALI_DEBUG("Pull failed (TCP len)\n");
+		if (nh_len > TCP_SIZE || bpf_skb_pull_data(ctx->skb, min_size + TCP_SIZE)) {
+			CALI_DEBUG("Pulling %d bytes.\n", min_size + nh_len);
 			if (bpf_skb_pull_data(ctx->skb, min_size + nh_len)) {
 				CALI_DEBUG("Pull failed (min len)\n");
 				return true;

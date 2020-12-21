@@ -225,7 +225,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		if (ctx.state->ct_result.flags & CALI_CT_FLAG_SKIP_FIB) {
 			ctx.state->flags |= CALI_ST_SKIP_FIB;
 		}
-		goto skip_policy;
+		CALI_DEBUG("CT Hit\n");
+		//goto skip_policy;
 	}
 
 	/* Unlike from WEP where we can do RPF by comparing to calico routing
@@ -342,6 +343,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		 * the epilogue program.
 		 */
 		ctx.state->pol_rc = CALI_POL_ALLOW;
+		CALI_DEBUG("HEP; no policy\n");
 		goto skip_policy;
 	}
 
@@ -357,6 +359,15 @@ icmp_send_reply:
 	goto deny;
 
 skip_policy:
+	skb_refresh_ptrs(&ctx);
+	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+		ctx.fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+	skb_refresh_iphdr(&ctx);
+	ctx.nh = ctx.ip_header + 1;
+
 	ctx.fwd = calico_tc_skb_accepted(&ctx, ctx.nat_dest);
 
 allow:

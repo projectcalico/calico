@@ -277,30 +277,29 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx, int nat)
  */
 static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct cali_tc_ctx *ctx2, struct ct_ctx *ctx)
 {
-	struct iphdr *ip;
-	struct icmphdr *icmp;
+	/* ICMP packet is an error, its payload should contain the full IP header and
+	 * at least the first 8 bytes of the next header. */
 
-	if (!icmp_skb_get_hdr(ctx2, &icmp)) {
-		CALI_DEBUG("CT-ICMP: failed to get inner IP\n");
+	skb_refresh_ptrs(ctx2);
+	if (skb_validate_ptrs(ctx2, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+		ctx2->fwd.reason = CALI_REASON_SHORT;
+		ctx2->fwd.res = TC_ACT_SHOT;
+		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
 		return false;
 	}
 
-	if (!icmp_type_is_err(icmp->type)) {
-		CALI_DEBUG("CT-ICMP: type %d not an error\n", icmp->type);
-		return false;
-	}
+	struct iphdr *ip_inner;
+	ip_inner = (struct iphdr *)(ctx2->icmp_header + 1); /* skip to inner ip */
+	CALI_DEBUG("CT-ICMP: proto %d\n", ip_inner->protocol);
 
-	ip = (struct iphdr *)(icmp + 1); /* skip to inner ip */
-	CALI_DEBUG("CT-ICMP: proto %d\n", ip->protocol);
+	ctx->proto = ip_inner->protocol;
+	ctx->src = ip_inner->saddr;
+	ctx->dst = ip_inner->daddr;
 
-	ctx->proto = ip->protocol;
-	ctx->src = ip->saddr;
-	ctx->dst = ip->daddr;
-
-	switch (ip->protocol) {
+	switch (ip_inner->protocol) {
 	case IPPROTO_TCP:
 		{
-			struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
+			struct tcphdr *tcp = (struct tcphdr *)(ip_inner + 1);
 			ctx->sport = bpf_ntohs(tcp->source);
 			ctx->dport = bpf_ntohs(tcp->dest);
 			ctx->tcp = tcp;
@@ -308,7 +307,7 @@ static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct cali_tc_ctx *ctx2, str
 		break;
 	case IPPROTO_UDP:
 		{
-			struct udphdr *udp = (struct udphdr *)(ip + 1);
+			struct udphdr *udp = (struct udphdr *)(ip_inner + 1);
 			ctx->sport = bpf_ntohs(udp->source);
 			ctx->dport = bpf_ntohs(udp->dest);
 		}
@@ -393,6 +392,13 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 	}
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-noreturn"
+static CALI_BPF_INLINE _Noreturn void bpf_exit() {
+	asm volatile("exit\n");
+}
+#pragma clang diagnostic pop
+
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_tc_ctx *tc_ctx)
 {
 	struct ct_ctx ct_lookup_ctx = {
@@ -444,9 +450,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("Miss.\n");
 			goto out_lookup_fail;
 		}
-		if (!skb_is_icmp_err_unpack(tc_ctx, ctx)) {
-			CALI_CT_DEBUG("unrelated icmp\n");
+		if (!icmp_type_is_err(tc_ctx->icmp_header->type)) {
+			CALI_DEBUG("CT-ICMP: type %d not an error\n", tc_ctx->icmp_header->type);
+			bpf_exit();
 			goto out_lookup_fail;
+		}
+
+		if (!skb_is_icmp_err_unpack(tc_ctx, ctx)) {
+			CALI_CT_DEBUG("Failed to parse ICMP error.\n");
+			goto out_invalid;
 		}
 
 		CALI_CT_DEBUG("related lookup from %x:%d\n", bpf_ntohl(ctx->src), ctx->sport);
@@ -738,6 +750,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 out_lookup_fail:
 	result.rc = CALI_CT_NEW;
 	CALI_CT_DEBUG("result: NEW.\n");
+	return result;
+out_invalid:
+	result.rc = CALI_CT_INVALID;
+	CALI_CT_DEBUG("result: INVALID.\n");
 	return result;
 }
 
