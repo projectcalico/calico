@@ -526,6 +526,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 			l3_csum_off += sizeof(*ctx->ip_header) + sizeof(*icmp);
 			ctx->ip_header = (struct iphdr *)(icmp + 1); /* skip to inner ip */
+			ctx->nh = (void*)(ctx->ip_header+1);
 
 			/* flip the direction, we need to reverse the original packet */
 			switch (ct_rc) {
