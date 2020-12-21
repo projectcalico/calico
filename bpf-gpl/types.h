@@ -72,12 +72,14 @@ struct cali_tc_ctx {
   struct __sk_buff *skb;
 
   /* Our single copies of the data start/end pointers loaded from the skb. */
-  void *data_start;
+  union {
+  	void *data_start;
+  	struct ethhdr *eth; /* If there is an ethhdr it's at the start. */
+  };
   void *data_end;
 
   struct cali_tc_state *state;
 
-  struct ethhdr *eth;
   struct iphdr *ip_header;
   union {
     void *nh;

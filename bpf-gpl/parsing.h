@@ -47,13 +47,11 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		}
 	}
 
-	skb_refresh_ptrs(ctx);
-	if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	ctx->eth = ctx->data_start;
 
 	// Drop malformed IP packets
 	if (ctx->ip_header->ihl < 5) {

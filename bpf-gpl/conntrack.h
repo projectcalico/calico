@@ -280,8 +280,7 @@ static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct cali_tc_ctx *ctx2, str
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
 
-	skb_refresh_ptrs(ctx2);
-	if (skb_validate_ptrs(ctx2, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+	if (skb_refresh_validate_ptrs(ctx2, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 		ctx2->fwd.reason = CALI_REASON_SHORT;
 		ctx2->fwd.res = TC_ACT_SHOT;
 		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");

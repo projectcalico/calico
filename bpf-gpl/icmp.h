@@ -37,9 +37,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 
 	/* ICMP is on the slow path so we may as well revalidate here to keep calling code
 	 * simple. */
-	skb_refresh_ptrs(ctx);
-	/* we need to fix up the right src host IP */
-	if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short\n");
 		return -1;
@@ -88,15 +86,11 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	CALI_DEBUG("Len after insert %d\n", len);
 
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
-	skb_refresh_ptrs(ctx);
-	/* we need to fix up the right src host IP */
-	if (skb_validate_ptrs(ctx, len - skb_iphdr_offset(skb) - IP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, len - skb_iphdr_offset(skb) - IP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
 	}
-	skb_refresh_iphdr(ctx);
-	ctx->nh = ctx->ip_header + 1;
 
 	/* we do not touch ethhdr, we rely on linux to rewrite it after routing
 	 * XXX we might want to swap MACs and bounce it back from the same device
@@ -189,8 +183,7 @@ static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
 
 static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct cali_tc_ctx *ctx, struct icmphdr **icmp)
 {
-	skb_refresh_ptrs(ctx);
-	if (skb_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+	if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		ctx->fwd.res = TC_ACT_SHOT;
 		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");

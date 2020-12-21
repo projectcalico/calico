@@ -25,13 +25,11 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		.skb = skb,
 	};
 
-	skb_refresh_ptrs(&ctx);
-	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		return -1;
 	}
-	skb_refresh_iphdr(&ctx);
 
 	ip_dec_ttl(ctx.ip_header);
 

@@ -253,8 +253,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 
 	ret = -1;
 
-	skb_refresh_ptrs(ctx);
-	if (skb_validate_ptrs(ctx, new_hdrsz)) {
+	if (skb_refresh_validate_ptrs(ctx, new_hdrsz)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short VXLAN encap\n");
 		goto out;
@@ -328,7 +327,7 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 
 static CALI_BPF_INLINE bool vxlan_size_ok(struct cali_tc_ctx *ctx)
 {
-	return !skb_validate_ptrs(ctx, UDP_SIZE + sizeof(struct vxlanhdr));
+	return !skb_refresh_validate_ptrs(ctx, UDP_SIZE + sizeof(struct vxlanhdr));
 }
 
 static CALI_BPF_INLINE __u32 vxlan_vni(struct cali_tc_ctx *ctx)
@@ -405,8 +404,7 @@ static CALI_BPF_INLINE bool vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 
 	/* Revalidate the packet after the decap. */
-	skb_refresh_ptrs(ctx);
-	if (skb_validate_ptrs(ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;

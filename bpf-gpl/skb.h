@@ -28,9 +28,11 @@
 #include "types.h"
 #include "log.h"
 
-//#define skb_start_ptr(skb) ((void *)(long)(skb)->data)
-//#define skb_end_ptr(skb) ((void *)(long)(skb)->data_end)
-
+/* skb_start_ptr is equivalent to (void*)((__u64)skb->data); the read is done
+ * in a way that is acceptable to the verifier and it is done as a volatile read
+ * ensuring that a fresh value is returned and the compiler cannot
+ * reorder/recalculate the value later.
+ */
 static CALI_BPF_INLINE void *skb_start_ptr(struct __sk_buff *skb) {
 	void *ptr;
 	asm volatile (\
@@ -42,6 +44,11 @@ static CALI_BPF_INLINE void *skb_start_ptr(struct __sk_buff *skb) {
 	return ptr;
 }
 
+/* skb_start_ptr is equivalent to (void*)((__u64)skb->data_end); the read is done
+ * in a way that is acceptable to the verifier and it is done as a volatile read
+ * ensuring that a fresh value is returned and the compiler cannot
+ * reorder/recalculate the value later.
+ */
 static CALI_BPF_INLINE void *skb_end_ptr(struct __sk_buff *skb) {
  	void *ptr;
  	asm volatile (\
@@ -53,11 +60,18 @@ static CALI_BPF_INLINE void *skb_end_ptr(struct __sk_buff *skb) {
 	return ptr;
 }
 
-static CALI_BPF_INLINE void skb_refresh_ptrs(struct cali_tc_ctx *ctx) {
+/* skb_refresh_start_end refreshes the data_start and data_end pointers in the context.
+ * Fresh values are loaded using skb_start/end_ptr.
+ */
+static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
 	ctx->data_start = skb_start_ptr(ctx->skb);
 	ctx->data_end = skb_end_ptr(ctx->skb);
 }
 
+/* skb_iphdr_offset returns the expected offset of hte IP header for this type of program.
+ * For example, in programs attached to L3 tunnel devices, the IP header is at location 0.
+ * Whereas, in L2 programs, it's past the ethernet header.
+ */
 static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
 {
 	if (CALI_F_IPIP_ENCAPPED) {
@@ -73,14 +87,14 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
 	}
 }
 
-
-static CALI_BPF_INLINE void skb_refresh_iphdr(struct cali_tc_ctx *ctx)
+/* skb_refresh_hdr_ptrs refreshes the ip_header/nh fields in the context.
+ */
+static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx)
 {
 	long offset = skb_iphdr_offset(ctx->skb);
 	struct iphdr *ip =  ctx->data_start + offset;
 	CALI_DEBUG("IP id=%d s=%x d=%x\n",
 			bpf_ntohs(ip->id), bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
-	ctx->eth = (void*)(ctx->data_start);
 	ctx->ip_header = ip;
 	ctx->nh = (void*)(ctx->ip_header+1);
 }
@@ -94,18 +108,19 @@ static CALI_BPF_INLINE void skb_refresh_iphdr(struct cali_tc_ctx *ctx)
 #define TCP_SIZE (sizeof(struct tcphdr))
 #define ICMP_SIZE (sizeof(struct icmphdr))
 
-static CALI_BPF_INLINE bool skb_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
-	int min_size;
-	if (CALI_F_IPIP_ENCAPPED) {
-		// This program sees [ eth | IP | IP | next header ]
-		min_size = ETH_SIZE + IP_SIZE * 2;
-	} else if (CALI_F_L3) {
-		// This program sees [ IP | next header ]
-		min_size = IP_SIZE;
-	} else {
-		// This program sees [ eth | IP | next header ]
-		min_size = ETH_SIZE + IP_SIZE;
-	}
+/* skb_refresh_validate_ptrs refreshes the packet pointers in the context and validates access
+ * to the IP header + nh_len (next header length) bytes.  If the skb is non-linear; attempts to
+ * pull in that many bytes if needed.  If the pull fails, the packet pointers can be left invalid.
+ *
+ * After a successful validation, returns 0 and the following pointers are valid:
+ * - ctx->data_start/end
+ * - ctx->eth (if this BPF program has access to the L2 header)
+ * - ctx->ip_header
+ * - ctx->nh/tcp_header/udp_header/icp_header.
+ */
+static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
+	int min_size = skb_iphdr_offset(ctx->skb) + IP_SIZE;
+	skb_refresh_start_end(ctx);
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
 		// minimum we've been asked for.
@@ -113,28 +128,19 @@ static CALI_BPF_INLINE bool skb_validate_ptrs(struct cali_tc_ctx *ctx, long nh_l
 			CALI_DEBUG("Pulling %d bytes.\n", min_size + nh_len);
 			if (bpf_skb_pull_data(ctx->skb, min_size + nh_len)) {
 				CALI_DEBUG("Pull failed (min len)\n");
-				return true;
+				return -1;
 			}
 		}
 		CALI_DEBUG("Pulled data\n");
-		skb_refresh_ptrs(ctx);
+		skb_refresh_start_end(ctx);
 		if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
-			return true;
+			return -2;
 		}
 	}
 	// Success, refresh the IP header and next header.
-	skb_refresh_iphdr(ctx);
-	return false;
+	skb_refresh_hdr_ptrs(ctx);
+	return 0;
 }
-
-//#define skb_shorter(skb, len) (skb_start_ptr(skb) + (len) > skb_end_ptr(skb))
-//#define skb_offset(skb, ptr) ((void*)(ptr) - skb_start_ptr(skb))
-//#define skb_has_data_after(skb, ptr, size) (!skb_shorter(skb, skb_offset(skb, ptr) + \
-//					     sizeof(*ptr) + (size)))
-//#define skb_tail_len(skb, ptr) (skb_end_ptr(skb) - (void*)ptr)
-//#define skb_ptr(skb, off) (skb_start_ptr(skb) + (off))
-//
-//#define skb_len_dir_access(skb) skb_tail_len(skb, skb_start_ptr(skb))
 
 #define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
 #define skb_seen(skb) ((skb)->mark & CALI_SKB_MARK_SEEN)

@@ -100,9 +100,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			CALI_DEBUG("Packet approved for forward - src ip fixup\n");
 			ctx.fwd.reason = CALI_REASON_BYPASS;
 
-			skb_refresh_ptrs(&ctx);
 			/* we need to fix up the right src host IP */
-			if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+			if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 				ctx.fwd.reason = CALI_REASON_SHORT;
 				CALI_DEBUG("Too short\n");
 				goto deny;
@@ -151,14 +150,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	switch (ctx.state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (skb_validate_ptrs(&ctx, TCP_SIZE)) {
+		if (skb_refresh_validate_ptrs(&ctx, TCP_SIZE)) {
 			ctx.fwd.reason = CALI_REASON_SHORT;
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
-		skb_refresh_iphdr(&ctx);
-		ctx.nh = (void*)(ctx.ip_header+1);
-
 		ctx.state->sport = bpf_ntohs(ctx.tcp_header->source);
 		ctx.state->dport = bpf_ntohs(ctx.tcp_header->dest);
 		CALI_DEBUG("TCP; ports: s=%d d=%d\n", ctx.state->sport, ctx.state->dport);
@@ -311,13 +307,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	// FIXME Not sure why this is needed
-	skb_refresh_ptrs(&ctx);
-	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	ctx.eth = ctx.data_start;
 
 	/* icmp_type and icmp_code share storage with the ports; now we've used
 	 * the ports set to 0 to do the conntrack lookup, we can set the ICMP fields
@@ -359,16 +353,13 @@ icmp_send_reply:
 	goto deny;
 
 skip_policy:
-	/* FIXME: only need to revalidate here on the conntrack related code path because the skb_validate_ptrs
+	/* FIXME: only need to revalidate here on the conntrack related code path because the skb_refresh_validate_ptrs
 	 * call that it uses can fail to pull data, leaving the packet invalid. */
-	skb_refresh_ptrs(&ctx);
-	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	skb_refresh_iphdr(&ctx);
-	ctx.nh = ctx.ip_header + 1;
 
 	ctx.fwd = calico_tc_skb_accepted(&ctx, ctx.nat_dest);
 
@@ -399,14 +390,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 	
-	skb_refresh_ptrs(&ctx);
-	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	skb_refresh_iphdr(&ctx);
-	ctx.nh = ctx.ip_header + 1;
 
 	struct calico_nat_dest *nat_dest = NULL;
 	struct calico_nat_dest nat_dest_2 = {
@@ -609,7 +597,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
-			if (skb_validate_ptrs(ctx, TCP_SIZE)) {
+			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
@@ -925,13 +913,11 @@ nat_encap:
 					bpf_ntohl(state->ip_dst), arpk.ifindex);
 			/* Don't drop it yet, we might get lucky and the MAC is correct */
 		} else {
-			skb_refresh_ptrs(ctx);
-			if (skb_validate_ptrs(ctx, 0)) {
+			if (skb_refresh_validate_ptrs(ctx, 0)) {
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
-			struct ethhdr *eth_hdr = ctx->data_start;
-			__builtin_memcpy(&eth_hdr->h_dest, arpv->mac_dst, ETH_ALEN);
+			__builtin_memcpy(&ctx->eth->h_dest, arpv->mac_dst, ETH_ALEN);
 			if (state->ct_result.ifindex_fwd == skb->ifindex) {
 				/* No need to change src MAC, if we are at the right device */
 			} else {
@@ -1022,14 +1008,11 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		fwd_fib_set_flags(&fwd, fib_flags);
 	}
 
-	skb_refresh_ptrs(&ctx);
-	if (skb_validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
-	skb_refresh_iphdr(&ctx);
-	ctx.nh = (void*)(ctx.ip_header+1);
 
 	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
 	ctx.state->sport = ctx.state->dport = 0;
