@@ -964,10 +964,6 @@ __attribute__((section("1/2")))
 int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 {
 	__u32 fib_flags = 0;
-	int rc = TC_ACT_UNSPEC;
-	enum calico_reason reason = CALI_REASON_UNKNOWN;
-	__u32 seen_mark;
-	struct fwd fwd;
 
 	CALI_DEBUG("Entering calico_tc_skb_send_icmp_replies\n");
 
@@ -992,23 +988,20 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 		if (CALI_F_FROM_WEP) {
 			/* we know it came from workload, just send it back the same way */
-			rc = CALI_RES_REDIR_BACK;
+			ctx.fwd.res = CALI_RES_REDIR_BACK;
 		}
 	}
 
 	if (icmp_v4_reply(&ctx, ctx.state->icmp_type, ctx.state->icmp_code, ctx.state->tun_ip)) {
-		fwd.res = TC_ACT_SHOT;
-		fwd.reason = reason;
+		ctx.fwd.res = TC_ACT_SHOT;
 	} else {
-		seen_mark = CALI_SKB_MARK_BYPASS_FWD;
-		fwd.res = rc;
-		fwd.mark = seen_mark;
+		ctx.fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
 
-		fwd_fib_set(&fwd, false);
-		fwd_fib_set_flags(&fwd, fib_flags);
+		fwd_fib_set(&ctx.fwd, false);
+		fwd_fib_set_flags(&ctx.fwd, fib_flags);
 	}
 
-	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+	if (skb_refresh_validate_ptrs(&ctx, ICMP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
