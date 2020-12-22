@@ -368,7 +368,9 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct cali_tc_ctx *ctx)
 
 static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	/* decap on host ep only if directly for the node */
-	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ctx->ip_header->daddr, HOST_IP);
+	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n",
+		bpf_ntohl(ctx->ip_header->daddr),
+		bpf_ntohl(HOST_IP));
 
 	if (!rt_addr_is_local_host(ctx->ip_header->daddr)) {
 		return 0;
