@@ -91,6 +91,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	fwd_fib_set(&ctx.fwd, CALI_F_TO_HOST);
 
 	if (CALI_F_TO_HEP || CALI_F_TO_WEP) {
+		/* We're leaving the host namespace, check for other bypass mark bits.
+		 * These are a bit more complex to handle so we do it after creating the
+		 * context/state. */
 		switch (skb->mark) {
 		case CALI_SKB_MARK_BYPASS_FWD:
 			CALI_DEBUG("Packet approved for forward.\n");
@@ -129,12 +132,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		}
 	}
 
-	// Parse the packet.
+	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
+	 * is large enough for UDP. */
 	if (parse_packet_ip(&ctx)) {
 		// Either a problem or a packet that we automatically let through.
 		goto finalize;
 	}
 
+	/* Now we've got as afar as the UDP header, check if this is one of our VXLAN packets, which we
+	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
 			is_vxlan_tunnel(ctx.ip_header) /* Is this a VXLAN packet? */ ) {
 		/* Decap it; vxlan_attempt_decap will revalidate the packet if needed. */
@@ -147,6 +153,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* Copy fields that are needed by downstream programs from the packet to the state. */
 	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
 
+	/* Parse out the source/dest ports (or type/code for ICMP). */
 	switch (ctx.state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
@@ -193,13 +200,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			goto allow;
 		}
 		// FIXME non-port based conntrack.
+		CALI_DEBUG("Unknown protocol from workload.");
 		goto deny;
 	}
 
 	/* Do conntrack lookup before anything else */
 	ctx.state->ct_result = calico_ct_v4_lookup(&ctx);
 
-	/* check if someone is trying to spoof a tunnel packet */
+	/* Check if someone is trying to spoof a tunnel packet */
 	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx.state->ct_result.rc)) {
 		CALI_DEBUG("dropping tunnel pkt with changed source node\n");
 		goto deny;
@@ -216,7 +224,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		fwd_fib_set(&ctx.fwd, false);
 	}
 
-	/* skip policy if we get conntrack hit */
+	/* Skip policy if we get conntrack hit */
 	if (ct_result_rc(ctx.state->ct_result.rc) != CALI_CT_NEW) {
 		if (ctx.state->ct_result.flags & CALI_CT_FLAG_SKIP_FIB) {
 			ctx.state->flags |= CALI_ST_SKIP_FIB;
@@ -318,7 +326,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 * for policy.
 	 */
 	if (ctx.state->ip_proto == IPPROTO_ICMP) {
-		ctx.state->icmp_type = ctx.icmp_header->type; // Blows up here
+		ctx.state->icmp_type = ctx.icmp_header->type;
 		ctx.state->icmp_code = ctx.icmp_header->code;
 	}
 

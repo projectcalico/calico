@@ -366,24 +366,25 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct cali_tc_ctx *ctx)
 	return false;
 }
 
-static CALI_BPF_INLINE bool vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
+static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	/* decap on host ep only if directly for the node */
 	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ctx->ip_header->daddr, HOST_IP);
 
 	if (!rt_addr_is_local_host(ctx->ip_header->daddr)) {
-		return false;
+		return 0;
 	}
 	if (!vxlan_udp_csum_ok(ctx->udp_header)) {
-		return false;
+		return 0;
 	}
 	if (!vxlan_size_ok(ctx)) {
-		return true; /* Drop; UDP header says its VXLAN but we failed to pull the VXLAN header.*/
+		/* UDP header said VLXAN but packet wasn't long enough. */
+		goto deny;
 	}
 	if (!vxlan_vni_is_valid(ctx) ) {
-		return false;
+		return 0;
 	}
 	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
-		return false;
+		return 0; /* Not _our_ VXLAN packet. */
 	}
 
 	ctx->arpk.ip = ctx->ip_header->saddr;
@@ -411,11 +412,11 @@ static CALI_BPF_INLINE bool vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 
 	CALI_DEBUG("vxlan decap origin %x\n", bpf_ntohl(ctx->state->tun_ip));
-	return false;
+	return 0;
 
 deny:
 	ctx->fwd.res = TC_ACT_SHOT;
-	return true;
+	return -1;
 }
 
 #endif /* __CALI_NAT_H__ */
