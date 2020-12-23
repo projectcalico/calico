@@ -8,13 +8,13 @@ Standards-Version: 3.9.4
 Package: calico-compute
 Architecture: all
 Depends:
- bird,
  calico-felix (>= 1.4),
  networking-calico (= ${binary:Version}),
  neutron-dhcp-agent,
  ${misc:Depends},
  ${python3:Depends},
  ${shlibs:Depends}
+Suggests: bird
 Description: Project Calico networking for OpenStack/Neutron.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. It uses IP routing to provide connectivity
