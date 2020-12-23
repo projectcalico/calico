@@ -275,7 +275,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx, int nat)
  * cxt->skb or ctx->tun_ip. It returns true if the original packet is an icmp error and all
  * checks went well.
  */
-static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct cali_tc_ctx *ctx2, struct ct_ctx *ctx)
+static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx2, struct ct_ctx *ctx)
 {
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
@@ -447,7 +447,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			goto out_lookup_fail;
 		}
 
-		if (!skb_is_icmp_err_unpack(tc_ctx, ctx)) {
+		if (!skb_icmp_err_unpack(tc_ctx, ctx)) {
 			CALI_CT_DEBUG("Failed to parse ICMP error.\n");
 			goto out_invalid;
 		}
