@@ -430,7 +430,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 	bool fib = false;
-	struct ct_ctx ct_nat_ctx = {};
+	struct ct_ctx ct_ctx_nat = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	__u32 seen_mark;
@@ -598,18 +598,18 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto deny;
 		}
 
-		ct_nat_ctx.skb = skb;
-		ct_nat_ctx.proto = state->ip_proto;
-		ct_nat_ctx.src = state->ip_src;
-		ct_nat_ctx.sport = state->sport;
-		ct_nat_ctx.dst = state->post_nat_ip_dst;
-		ct_nat_ctx.dport = state->post_nat_dport;
-		ct_nat_ctx.tun_ip = state->tun_ip;
+		ct_ctx_nat.skb = skb;
+		ct_ctx_nat.proto = state->ip_proto;
+		ct_ctx_nat.src = state->ip_src;
+		ct_ctx_nat.sport = state->sport;
+		ct_ctx_nat.dst = state->post_nat_ip_dst;
+		ct_ctx_nat.dport = state->post_nat_dport;
+		ct_ctx_nat.tun_ip = state->tun_ip;
 		if (state->flags & CALI_ST_NAT_OUTGOING) {
-			ct_nat_ctx.flags |= CALI_CT_FLAG_NAT_OUT;
+			ct_ctx_nat.flags |= CALI_CT_FLAG_NAT_OUT;
 		}
 		if (CALI_F_FROM_WEP && state->flags & CALI_ST_SKIP_FIB) {
-			ct_nat_ctx.flags |= CALI_CT_FLAG_SKIP_FIB;
+			ct_ctx_nat.flags |= CALI_CT_FLAG_SKIP_FIB;
 		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
@@ -617,17 +617,17 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
-			ct_nat_ctx.tcp = ctx->tcp_header;
+			ct_ctx_nat.tcp = ctx->tcp_header;
 		}
 
 		// If we get here, we've passed policy.
 
 		if (nat_dest == NULL) {
-			if (conntrack_create(&ct_nat_ctx, CT_CREATE_NORMAL)) {
+			if (conntrack_create(&ct_ctx_nat, CT_CREATE_NORMAL)) {
 				CALI_DEBUG("Creating normal conntrack failed\n");
 
-				if ((CALI_F_FROM_HEP && rt_addr_is_local_host(ct_nat_ctx.dst)) ||
-						(CALI_F_TO_HEP && rt_addr_is_local_host(ct_nat_ctx.src))) {
+				if ((CALI_F_FROM_HEP && rt_addr_is_local_host(ct_ctx_nat.dst)) ||
+						(CALI_F_TO_HEP && rt_addr_is_local_host(ct_ctx_nat.src))) {
 					CALI_DEBUG("Allowing local host traffic without CT\n");
 					goto allow;
 				}
@@ -637,8 +637,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			goto allow;
 		}
 
-		ct_nat_ctx.orig_dst = state->ip_dst;
-		ct_nat_ctx.orig_dport = state->dport;
+		ct_ctx_nat.orig_dst = state->ip_dst;
+		ct_ctx_nat.orig_dport = state->dport;
 		/* fall through as DNAT is now established */
 
 	case CALI_CT_ESTABLISHED_DNAT:
@@ -685,19 +685,19 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				if (encap_needed) {
 					if (CALI_F_FROM_HEP && state->tun_ip == 0) {
 						if (CALI_F_DSR) {
-							ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+							ct_ctx_nat.flags |= CALI_CT_FLAG_DSR_FWD;
 						}
-						ct_nat_ctx.flags |= CALI_CT_FLAG_NP_FWD;
+						ct_ctx_nat.flags |= CALI_CT_FLAG_NP_FWD;
 					}
 
 					nat_type = CT_CREATE_NAT_FWD;
-					ct_nat_ctx.tun_ip = rt->next_hop;
+					ct_ctx_nat.tun_ip = rt->next_hop;
 					state->ip_dst = rt->next_hop;
 				}
 			}
 
 
-			if (conntrack_create(&ct_nat_ctx, nat_type)) {
+			if (conntrack_create(&ct_ctx_nat, nat_type)) {
 				CALI_DEBUG("Creating NAT conntrack failed\n");
 				goto deny;
 			}
