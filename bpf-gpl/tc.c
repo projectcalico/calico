@@ -488,7 +488,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 	if (ct_related) {
 		if (ctx->ip_header->protocol == IPPROTO_ICMP) {
-			struct icmphdr *icmp;
 			bool outer_ip_snat;
 
 			/* if we do SNAT ... */
@@ -515,16 +514,25 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 						bpf_ntohl(state->ct_result.nat_ip));
 			}
 
-			if (!icmp_skb_get_hdr(ctx, &icmp)) {
-				CALI_DEBUG("Ooops, we already passed one such a check!!!\n");
+			/* Related ICMP traffic must be an error response so it should include inner IP
+			 * and 8 bytes as payload. */
+			if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+				CALI_DEBUG("Failed to revalidate packet size\n");
 				goto deny;
 			}
 
-			l3_csum_off += sizeof(*ctx->ip_header) + sizeof(*icmp);
-			ctx->ip_header = (struct iphdr *)(icmp + 1); /* skip to inner ip */
+			/* Skip past the ICMP header and check the inner IP header. */
+			l3_csum_off += sizeof(*ctx->ip_header) + sizeof(struct icmphdr);
+			ctx->ip_header = (struct iphdr *)(ctx->icmp_header + 1); /* skip to inner ip */
+			if (ctx->ip_header->ihl != 5) {
+				CALI_INFO("ICMP inner IP header has options; unsupported\n");
+				ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
+				ctx->fwd.res = TC_ACT_SHOT;
+				goto deny;
+			}
 			ctx->nh = (void*)(ctx->ip_header+1);
 
-			/* flip the direction, we need to reverse the original packet */
+			/* Flip the direction, we need to reverse the original packet. */
 			switch (ct_rc) {
 			case CALI_CT_ESTABLISHED_SNAT:
 				/* handle the DSR case, see CALI_CT_ESTABLISHED_SNAT where nat is done */

@@ -181,25 +181,4 @@ static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
 	return false;
 }
 
-static CALI_BPF_INLINE bool icmp_skb_get_hdr(struct cali_tc_ctx *ctx, struct icmphdr **icmp)
-{
-	if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
-		ctx->fwd.res = TC_ACT_SHOT;
-		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
-		return false;
-	}
-
-	if (ctx->ip_header->ihl != 5) {
-		CALI_INFO("ICMP: ip options unsupported\n");
-		ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
-		ctx->fwd.res = TC_ACT_SHOT;
-		return false;
-	}
-
-	*icmp = ctx->icmp_header;
-
-	return true;
-}
-
 #endif /* __CALI_ICMP_H__ */

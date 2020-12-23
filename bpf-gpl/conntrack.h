@@ -275,40 +275,40 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx, int nat)
  * cxt->skb or ctx->tun_ip. It returns true if the original packet is an icmp error and all
  * checks went well.
  */
-static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx2, struct ct_ctx *ctx)
+static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct ct_ctx *ct_ctx)
 {
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
 
-	if (skb_refresh_validate_ptrs(ctx2, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
-		ctx2->fwd.reason = CALI_REASON_SHORT;
-		ctx2->fwd.res = TC_ACT_SHOT;
+	if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+		ctx->fwd.reason = CALI_REASON_SHORT;
+		ctx->fwd.res = TC_ACT_SHOT;
 		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
 		return false;
 	}
 
 	struct iphdr *ip_inner;
-	ip_inner = (struct iphdr *)(ctx2->icmp_header + 1); /* skip to inner ip */
+	ip_inner = (struct iphdr *)(ctx->icmp_header + 1); /* skip to inner ip */
 	CALI_DEBUG("CT-ICMP: proto %d\n", ip_inner->protocol);
 
-	ctx->proto = ip_inner->protocol;
-	ctx->src = ip_inner->saddr;
-	ctx->dst = ip_inner->daddr;
+	ct_ctx->proto = ip_inner->protocol;
+	ct_ctx->src = ip_inner->saddr;
+	ct_ctx->dst = ip_inner->daddr;
 
 	switch (ip_inner->protocol) {
 	case IPPROTO_TCP:
 		{
 			struct tcphdr *tcp = (struct tcphdr *)(ip_inner + 1);
-			ctx->sport = bpf_ntohs(tcp->source);
-			ctx->dport = bpf_ntohs(tcp->dest);
-			ctx->tcp = tcp;
+			ct_ctx->sport = bpf_ntohs(tcp->source);
+			ct_ctx->dport = bpf_ntohs(tcp->dest);
+			ct_ctx->tcp = tcp;
 		}
 		break;
 	case IPPROTO_UDP:
 		{
 			struct udphdr *udp = (struct udphdr *)(ip_inner + 1);
-			ctx->sport = bpf_ntohs(udp->source);
-			ctx->dport = bpf_ntohs(udp->dest);
+			ct_ctx->sport = bpf_ntohs(udp->source);
+			ct_ctx->dport = bpf_ntohs(udp->dest);
 		}
 		break;
 	};
