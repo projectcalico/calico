@@ -33,7 +33,6 @@
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
-	struct __sk_buff *skb = ctx->skb;
 	int rc = ctx->fwd.res;
 	enum calico_reason reason = ctx->fwd.reason;
 	struct cali_tc_state *state = ctx->state;
@@ -62,13 +61,13 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		__builtin_memcpy(&eth_hdr->h_dest, &eth_hdr->h_source, ETH_ALEN);
 		__builtin_memcpy(&eth_hdr->h_source, mac, ETH_ALEN);
 
-		rc = bpf_redirect(skb->ifindex, redir_flags);
+		rc = bpf_redirect(ctx->skb->ifindex, redir_flags);
 		if (rc == TC_ACT_REDIRECT) {
-			CALI_DEBUG("Redirect to the same interface (%d) succeeded.\n", skb->ifindex);
+			CALI_DEBUG("Redirect to the same interface (%d) succeeded.\n", ctx->skb->ifindex);
 			goto skip_fib;
 		}
 
-		CALI_DEBUG("Redirect to the same interface (%d) failed.\n", skb->ifindex);
+		CALI_DEBUG("Redirect to the same interface (%d) failed.\n", ctx->skb->ifindex);
 		goto deny;
 	} else if (rc == CALI_RES_REDIR_IFINDEX) {
 		struct arp_value *arpv;
@@ -128,7 +127,7 @@ skip_redir_ifindex:
 		struct bpf_fib_lookup fib_params = {
 			.family = 2, /* AF_INET */
 			.tot_len = bpf_ntohs(ctx->ip_header->tot_len),
-			.ifindex = skb->ingress_ifindex,
+			.ifindex = ctx->skb->ingress_ifindex,
 			.l4_protocol = state->ip_proto,
 			.sport = bpf_htons(state->sport),
 			.dport = bpf_htons(state->dport),
@@ -150,7 +149,7 @@ skip_redir_ifindex:
 		CALI_DEBUG("FIB ipv4_dst=%x\n", bpf_ntohl(fib_params.ipv4_dst));
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
-		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), ctx->fwd.fib_flags);
+		rc = bpf_fib_lookup(ctx->skb, &fib_params, sizeof(fib_params), ctx->fwd.fib_flags);
 		if (rc == 0) {
 			CALI_DEBUG("FIB lookup succeeded\n");
 
@@ -210,7 +209,7 @@ skip_fib:
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,
 		 * which trips up the validator.
 		 */
-		skb->mark = ctx->fwd.mark | CALI_SKB_MARK_SEEN; /* make sure that each pkt has SEEN mark */
+		ctx->skb->mark = ctx->fwd.mark | CALI_SKB_MARK_SEEN; /* make sure that each pkt has SEEN mark */
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
