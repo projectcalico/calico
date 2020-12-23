@@ -19,9 +19,7 @@
 #define __CALI_PARSING_H__
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
-	struct __sk_buff *skb = ctx->skb;
-
-	switch (bpf_htons(skb->protocol)) {
+	switch (bpf_htons(ctx->skb->protocol)) {
 	case ETH_P_IP:
 		break;
 	case ETH_P_ARP:
@@ -38,11 +36,11 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		}
 	default:
 		if (CALI_F_WEP) {
-			CALI_DEBUG("Unknown ethertype (%x), drop\n", bpf_ntohs(skb->protocol));
+			CALI_DEBUG("Unknown ethertype (%x), drop\n", bpf_ntohs(ctx->skb->protocol));
 			goto deny;
 		} else {
 			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n",
-								bpf_ntohs(skb->protocol));
+								bpf_ntohs(ctx->skb->protocol));
 			goto allow_no_fib;
 		}
 	}

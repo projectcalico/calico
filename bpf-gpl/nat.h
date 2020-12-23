@@ -230,19 +230,13 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 
 static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_src, __be32 ip_dst)
 {
-	struct __sk_buff *skb = ctx->skb;
 	int ret;
-	__u32 new_hdrsz;
-	struct ethhdr *eth, *eth_inner;
-	struct iphdr *ip, *ip_inner;
-	struct udphdr *udp;
-	struct vxlanhdr *vxlan;
 	__wsum csum;
 
-	new_hdrsz = sizeof(struct ethhdr) + sizeof(struct iphdr) +
+	__u32 new_hdrsz = sizeof(struct ethhdr) + sizeof(struct iphdr) +
 			sizeof(struct udphdr) + sizeof(struct vxlanhdr);
 
-	ret = bpf_skb_adjust_room(skb, new_hdrsz, BPF_ADJ_ROOM_MAC,
+	ret = bpf_skb_adjust_room(ctx->skb, new_hdrsz, BPF_ADJ_ROOM_MAC,
 						  BPF_F_ADJ_ROOM_ENCAP_L4_UDP |
 						  BPF_F_ADJ_ROOM_ENCAP_L3_IPV4 |
 						  BPF_F_ADJ_ROOM_ENCAP_L2(sizeof(struct ethhdr)));
@@ -260,43 +254,40 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	}
 
 	// Note: assuming L2 packet here so this code can't be used on an L3 device.
-	eth = ctx->data_start;
-	ip = ctx->ip_header;
-	udp = (void*)(ip + 1);
-	vxlan = (void *)(udp +1);
-	eth_inner = (void *)(vxlan+1);
-	ip_inner = (void*)(eth_inner+1);
+	struct vxlanhdr *vxlan = (void *)(ctx->udp_header +1);
+	struct ethhdr *eth_inner = (void *)(vxlan+1);
+	struct iphdr *ip_inner = (void*)(eth_inner+1);
 
 	/* Copy the original IP header. Since it is already DNATed, the dest IP is
 	 * already set. All we need to do is to change the source IP
 	 */
-	*ip = *ip_inner;
+	*ctx->ip_header = *ip_inner;
 
 	/* decrement TTL for the inner IP header. TTL must be > 1 to get here */
 	ip_dec_ttl(ip_inner);
 
-	ip->saddr = ip_src;
-	ip->daddr = ip_dst;
-	ip->tot_len = bpf_htons(bpf_ntohs(ip->tot_len) + new_hdrsz);
-	ip->ihl = 5; /* in case there were options in ip_inner */
-	ip->check = 0;
-	ip->protocol = IPPROTO_UDP;
+	ctx->ip_header->saddr = ip_src;
+	ctx->ip_header->daddr = ip_dst;
+	ctx->ip_header->tot_len = bpf_htons(bpf_ntohs(ctx->ip_header->tot_len) + new_hdrsz);
+	ctx->ip_header->ihl = 5; /* in case there were options in ip_inner */
+	ctx->ip_header->check = 0;
+	ctx->ip_header->protocol = IPPROTO_UDP;
 
-	udp->source = udp->dest = bpf_htons(CALI_VXLAN_PORT);
-	udp->len = bpf_htons(bpf_ntohs(ip->tot_len) - sizeof(struct iphdr));
+	ctx->udp_header->source = ctx->udp_header->dest = bpf_htons(CALI_VXLAN_PORT);
+	ctx->udp_header->len = bpf_htons(bpf_ntohs(ctx->ip_header->tot_len) - sizeof(struct iphdr));
 
 	*((__u8*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
 	vxlan->vni = bpf_htonl(CALI_VXLAN_VNI) >> 8; /* it is actually 24-bit, last 8 reserved */
 
 	/* keep eth_inner MACs zeroed, it is useless after decap */
-	eth_inner->h_proto = eth->h_proto;
+	eth_inner->h_proto = ctx->eth->h_proto;
 
-	CALI_DEBUG("vxlan encap %x : %x\n", bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
+	CALI_DEBUG("vxlan encap %x : %x\n", bpf_ntohl(ctx->ip_header->saddr), bpf_ntohl(ctx->ip_header->daddr));
 
 	/* change the checksums last to avoid pointer access revalidation */
 
-	csum = bpf_csum_diff(0, 0, (void *)ip, sizeof(*ip), 0);
-	ret = bpf_l3_csum_replace(skb, ((long) ip) - ((long) skb_start_ptr(skb)) +
+	csum = bpf_csum_diff(0, 0, (void *)ctx->ip_header, sizeof(struct iphdr), 0);
+	ret = bpf_l3_csum_replace(ctx->skb, ((long) ctx->ip_header) - ((long) skb_start_ptr(ctx->skb)) +
 				  offsetof(struct iphdr, check), 0, csum, 0);
 
 out:
