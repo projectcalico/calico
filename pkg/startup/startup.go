@@ -395,11 +395,11 @@ func determineNodeName() string {
 	// -  os.Hostname (lowercase).
 	// We use the names.Hostname which lowercases and trims the name.
 	if nodeName = strings.TrimSpace(os.Getenv("NODENAME")); nodeName != "" {
-		log.Infof("Using NODENAME environment for node name")
+		log.Infof("Using NODENAME environment for node name %s", nodeName)
 	} else if nodeName = nodenameFromFile(); nodeName != "" {
-		log.Info("Using stored node name from " + nodenameFileName())
+		log.Infof("Using stored node name %s from %s", nodeName, nodenameFileName())
 	} else if nodeName = strings.ToLower(strings.TrimSpace(os.Getenv("HOSTNAME"))); nodeName != "" {
-		log.Infof("Using HOSTNAME environment (lowercase) for node name")
+		log.Infof("Using HOSTNAME environment (lowercase) for node name %s", nodeName)
 	} else if nodeName, err = names.Hostname(); err != nil {
 		log.WithError(err).Error("Unable to determine hostname")
 		terminate()
