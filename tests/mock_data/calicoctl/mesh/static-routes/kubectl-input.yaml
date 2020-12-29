@@ -12,6 +12,16 @@ spec:
   - port: 80
     protocol: TCP
     targetPort: 80
+status:
+ # TODO: kubectl doesn't support writing status, so these IPs
+ # never make it to the apiserver. Need changes to our test rig
+ # to support this.
+ loadBalancer:
+   ingress:
+   # Within the range in BGP config.
+   - ip: 80.15.0.1/32
+   # Not within the range in BGP config.
+   - ip: 90.15.0.1/32
 
 ---
 

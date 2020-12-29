@@ -953,6 +953,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
+		c.getServiceLoadBalancerIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getNodeToNodeMeshKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getLogSeverityKVPair(v3res, model.GlobalBGPConfigKey{})
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
@@ -1089,7 +1090,7 @@ func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key interface{
 }
 
 func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key interface{}, svcAdvertisement *bool) {
-	scvExternalIPKey := getBGPConfigKey("svc_external_ips", key)
+	svcExternalIPKey := getBGPConfigKey("svc_external_ips", key)
 
 	if v3res != nil && v3res.Spec.ServiceExternalIPs != nil && len(v3res.Spec.ServiceExternalIPs) != 0 {
 		// We wrap each Service external IP in a ServiceExternalIPBlock struct to
@@ -1098,9 +1099,24 @@ func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key 
 		for i, ipBlock := range v3res.Spec.ServiceExternalIPs {
 			ipCidrs[i] = ipBlock.CIDR
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(scvExternalIPKey, strings.Join(ipCidrs, ",")))
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcExternalIPKey, strings.Join(ipCidrs, ",")))
 	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(scvExternalIPKey))
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcExternalIPKey))
+	}
+	*svcAdvertisement = true
+}
+
+func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, key interface{}, svcAdvertisement *bool) {
+	svcLoadBalancerIPKey := getBGPConfigKey("svc_loadbalancer_ips", key)
+
+	if v3res != nil && v3res.Spec.ServiceLoadBalancerIPs != nil && len(v3res.Spec.ServiceLoadBalancerIPs) != 0 {
+		ipCidrs := make([]string, len(v3res.Spec.ServiceLoadBalancerIPs))
+		for i, ipBlock := range v3res.Spec.ServiceLoadBalancerIPs {
+			ipCidrs[i] = ipBlock.CIDR
+		}
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcLoadBalancerIPKey, strings.Join(ipCidrs, ",")))
+	} else {
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcLoadBalancerIPKey))
 	}
 	*svcAdvertisement = true
 }
