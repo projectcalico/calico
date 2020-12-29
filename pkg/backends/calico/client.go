@@ -179,6 +179,17 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// racing with syncer-derived updates.
 	c.onExternalIPsUpdate(externalCIDRs)
 
+	// Get LoadBalancer CIDRs.
+	lbCIDRs := []string{}
+	if cfg != nil && cfg.Spec.ServiceLoadBalancerIPs != nil {
+		for _, c := range cfg.Spec.ServiceLoadBalancerIPs {
+			lbCIDRs = append(lbCIDRs, c.CIDR)
+		}
+	}
+	// Note: do this initial update before starting the syncer, so there's no chance of this
+	// racing with syncer-derived updates.
+	c.onLoadBalancerIPsUpdate(lbCIDRs)
+
 	// Start the main syncer loop.  If the node-to-node mesh is enabled then we need to
 	// monitor all nodes.  If this setting changes (which we will monitor in the OnUpdates
 	// callback) then we terminate confd - the calico/node init process will restart the
@@ -287,11 +298,13 @@ type client struct {
 	// This node's log level key.
 	nodeLogKey string
 
-	// Current values of <bgpconfig>.spec.serviceExternalIPs and
-	// <bgpconfig>.spec.serviceClusterIPs.
-	externalIPs    []string
-	externalIPNets []*net.IPNet // same as externalIPs but parsed
-	clusterCIDRs   []string
+	// Current values of <bgpconfig>.spec.serviceExternalIPs,
+	// <bgpconfig>.spec.serviceLoadBalancerIPs, and <bgpconfig>.spec.serviceClusterIPs.
+	externalIPs        []string
+	externalIPNets     []*net.IPNet // same as externalIPs but parsed
+	clusterCIDRs       []string
+	loadBalancerIPs    []string
+	loadBalancerIPNets []*net.IPNet // same as externalIPs but parsed
 
 	// Subcomponent for accessing and watching secrets (that hold BGP passwords).
 	secretWatcher *secretWatcher
@@ -913,6 +926,13 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 		}
 		c.onClusterIPsUpdate(clusterIPs)
 
+		// Same for loadbalancer CIDRs.
+		var loadBalancerIPs []string
+		if len(c.cache["/calico/bgp/v1/global/svc_loadbalancer_ips"]) > 0 {
+			loadBalancerIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_loadbalancer_ips"], ",")
+		}
+		c.onLoadBalancerIPsUpdate(loadBalancerIPs)
+
 		if c.rg != nil {
 			// Trigger the route generator to recheck and advertise or withdraw
 			// node-specific routes.
@@ -1175,6 +1195,16 @@ func (c *client) onClusterIPsUpdate(clusterCIDRs []string) {
 	}
 }
 
+func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
+	if err := c.updateGlobalRoutes(c.loadBalancerIPs, lbIPs); err == nil {
+		c.loadBalancerIPs = lbIPs
+		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
+		log.Infof("Updated with new Loadbalancer IP CIDRs: %s", lbIPs)
+	} else {
+		log.WithError(err).Error("Failed to update external IP routes")
+	}
+}
+
 func (c *client) AdvertiseClusterIPs() bool {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
@@ -1185,6 +1215,12 @@ func (c *client) GetExternalIPs() []*net.IPNet {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 	return c.externalIPNets
+}
+
+func (c *client) GetLoadBalancerIPs() []*net.IPNet {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.loadBalancerIPNets
 }
 
 // "Global" here means the routes for cluster IP and external IP CIDRs that are advertised from
