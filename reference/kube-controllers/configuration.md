@@ -113,7 +113,7 @@ access to the Kubernetes API to monitor `NetworkPolicy` events.
 
 The policy controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
 
-This controller is only valid when using etcd as the {{site.prodname}} datastore.
+This controller is only valid when using kubernetes as the {{site.prodname}} datastore.
 
 ### Workload endpoint controller
 
@@ -123,7 +123,7 @@ access to the Kubernetes API to monitor `Pod` events.
 
 The workload endpoint controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
 
-This controller is only valid when using etcd as the {{site.prodname}} datastore.
+This controller is only valid when using kubernetes as the {{site.prodname}} datastore.
 
 ### Namespace controller
 
@@ -132,7 +132,7 @@ access to the Kubernetes API to monitor `Namespace` events.
 
 The namespace controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
 
-This controller is only valid when using etcd as the {{site.prodname}} datastore.
+This controller is only valid when using kubernetes as the {{site.prodname}} datastore.
 
 ### Service account controller
 
@@ -141,7 +141,7 @@ The controller must have read access to the Kubernetes API to monitor `ServiceAc
 
 The service account controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
 
-This controller is only valid when using etcd as the {{site.prodname}} datastore.
+This controller is only valid when using kubernetes as the {{site.prodname}} datastore.
 
 [in-cluster-config]: https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
 [kubeconfig]: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
