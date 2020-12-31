@@ -60,7 +60,7 @@ Options:
   -n --namespace=<NS>          Namespace of the resource.
                                Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                                Uses the default namespace if not specified.
-  -a --all-namespaces          If present, list the requested object(s) across all namespaces.
+  -A --all-namespaces          If present, list the requested object(s) across all namespaces.
   --export                     If present, returns the requested object(s) stripped of
                                cluster-specific information. This flag will be ignored
                                if <NAME> is not specified.
@@ -124,6 +124,13 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	name, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
+	// -a option Backward compatibility
+	for k, v := range args {
+		if v == "-a" {
+			args[k] = "-A"
+		}
+	}
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
