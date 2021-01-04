@@ -9,15 +9,15 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/cni-plugin v1.11.1-0.20201218191527-61de8217d216
 	github.com/projectcalico/felix v0.0.0-20201216201523-c8a6c0b2a407
-	github.com/projectcalico/libcalico-go v1.7.2-0.20201216184858-ce76ca74b9cc
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210104203251-9bf530a83eda
 	github.com/projectcalico/typha v0.7.3-0.20201216192140-dfc88e8d219e
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
-	k8s.io/api v0.18.12
-	k8s.io/apimachinery v0.18.12
-	k8s.io/client-go v0.18.12
+	k8s.io/api v0.19.6
+	k8s.io/apimachinery v0.19.6
+	k8s.io/client-go v0.19.6
 )
 
 replace (
