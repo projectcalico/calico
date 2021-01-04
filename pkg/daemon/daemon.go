@@ -156,7 +156,8 @@ func (t *TyphaDaemon) ParseCommandLineArgs(argv []string) {
 	version := "Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n"
-	arguments, err := docopt.Parse(usage, argv, true, version, false)
+	p := &docopt.Parser{OptionsFirst: false, SkipHelpFlags: false}
+	arguments, err := p.ParseArgs(usage, argv, version)
 	if err != nil {
 		println(usage)
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
