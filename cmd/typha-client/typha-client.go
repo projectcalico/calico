@@ -45,7 +45,7 @@ Options:
   --server=<ADDR>              Set the server to connect to [default: localhost:5473].
   --type=<TYPE>                Use a particular syncer type.
   --key-file=<FILE>            TLS: private key file.  Used to authenticate to the server.
-  --cert-file=<FILE>           TLS: certificate file.  Used to authenticate to the server.  
+  --cert-file=<FILE>           TLS: certificate file.  Used to authenticate to the server.
                                Must be signed by the CA that the server accepts.
   --ca-file=<FILE>             TLS: CA certificate file.  Used to authenticate the server's certificate.
   --server-cn=<NAME>           TLS: expected server common name.  Used to authenticate the server's certificate.
@@ -86,7 +86,8 @@ func main() {
 	version := "Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n"
-	arguments, err := docopt.Parse(usage, nil, true, version, false)
+	p := &docopt.Parser{OptionsFirst: false, SkipHelpFlags: false}
+	arguments, err := p.ParseArgs(usage, nil, version)
 	if err != nil {
 		println(usage)
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
