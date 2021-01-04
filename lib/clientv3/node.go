@@ -213,6 +213,23 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		return nil, err
 	}
 
+	// Delete any host endpoints for this node.
+	heps, err := r.client.HostEndpoints().List(ctx, options.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for _, hep := range heps.Items {
+		if hep.Spec.Node != name {
+			continue
+		}
+		_, err = r.client.HostEndpoints().Delete(ctx, hep.Name, options.DeleteOptions{})
+		switch err.(type) {
+		case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
+		default:
+			return nil, err
+		}
+	}
+
 	// Delete the node.
 	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindNode, noNamespace, name)
 	if out != nil {

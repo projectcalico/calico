@@ -348,6 +348,24 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			_, err = c.BGPConfigurations().Create(ctx, &bgpConf, options.SetOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Create a HEP on this node and a HEP on another node.
+			hep1 := apiv3.NewHostEndpoint()
+			hep1.Name = "host-endpoint-1"
+			hep1.Spec = apiv3.HostEndpointSpec{
+				Node:          name1,
+				InterfaceName: "eth0",
+			}
+			_, err = c.HostEndpoints().Create(ctx, hep1, options.SetOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+			hep2 := apiv3.NewHostEndpoint()
+			hep2.Name = "host-endpoint-2"
+			hep2.Spec = apiv3.HostEndpointSpec{
+				Node:          "another-node",
+				InterfaceName: "eth0",
+			}
+			_, err = c.HostEndpoints().Create(ctx, hep2, options.SetOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+
 			// Delete the node.
 			_, err = c.Nodes().Delete(ctx, name1, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -388,14 +406,27 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			// Check that the bgppeer was deleted
 			peer, err := c.BGPPeers().Get(ctx, "bgppeer1", options.GetOptions{})
 			Expect(peer).Should(BeNil())
+			Expect(err).To(HaveOccurred())
 
 			// Check that the felix config was deleted
 			fconfig, err := c.FelixConfigurations().Get(ctx, nodeConfigName, options.GetOptions{})
 			Expect(fconfig).Should(BeNil())
+			Expect(err).To(HaveOccurred())
 
 			// Check that the bgp config was deleted
 			bconfig, err := c.BGPConfigurations().Get(ctx, nodeConfigName, options.GetOptions{})
 			Expect(bconfig).Should(BeNil())
+			Expect(err).To(HaveOccurred())
+
+			// Check that the HEP was deleted.
+			hep, err := c.HostEndpoints().Get(ctx, hep1.Name, options.GetOptions{})
+			Expect(hep).Should(BeNil())
+			Expect(err).To(HaveOccurred())
+
+			// Check the HEP on the other node was not deleted.
+			hep, err = c.HostEndpoints().Get(ctx, hep2.Name, options.GetOptions{})
+			Expect(hep).ShouldNot(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 	})
