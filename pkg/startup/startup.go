@@ -100,6 +100,7 @@ func Run() {
 
 	// Determine the name for this node.
 	nodeName := determineNodeName()
+	log.Infof("Starting node %s with version %s", nodeName, VERSION)
 
 	// Create the Calico API cli.
 	cfg, cli := calicoclient.CreateClient()
