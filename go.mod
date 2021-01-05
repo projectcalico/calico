@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
-	github.com/docopt/docopt-go v0.0.0-20160216232012-784ddc588536
+	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/eapache/channels v1.1.0 // indirect
 	github.com/eapache/queue v0.0.0-20180227141424-093482f3f8ce // indirect
 	github.com/ghodss/yaml v1.0.0
@@ -18,7 +18,7 @@ require (
 	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/projectcalico/libcalico-go v1.7.2-0.20201216184858-ce76ca74b9cc
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210104203251-9bf530a83eda
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -27,5 +27,5 @@ require (
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	k8s.io/apiextensions-apiserver v0.18.12
-	k8s.io/apimachinery v0.18.12
+	k8s.io/apimachinery v0.19.6
 )

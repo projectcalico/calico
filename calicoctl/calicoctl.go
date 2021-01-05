@@ -66,7 +66,12 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
-	arguments, err := docopt.Parse(doc, nil, true, commands.VERSION_SUMMARY, true, false)
+	var parser = &docopt.Parser{
+		HelpHandler:   docopt.PrintHelpOnly,
+		OptionsFirst:  true,
+		SkipHelpFlags: false,
+	}
+	arguments, err := parser.ParseArgs(doc, nil, commands.VERSION_SUMMARY)
 	if err != nil {
 		if _, ok := err.(*docopt.UserError); ok {
 			// the user gave us bad input

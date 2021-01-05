@@ -155,7 +155,7 @@ Description:
 	binaryName, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", binaryName)
 
-	arguments, err := docopt.Parse(doc, args, true, "", false, false)
+	arguments, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
 		log.Info(err)
 		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
