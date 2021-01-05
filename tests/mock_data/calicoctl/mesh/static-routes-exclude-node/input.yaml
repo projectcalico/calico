@@ -1,0 +1,55 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  serviceClusterIPs:
+  - cidr: 10.101.0.0/16
+  - cidr: fd00:96::/112
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    # Don't ever advertise services from kube-master.
+    node.kubernetes.io/exclude-from-external-load-balancers: "true"
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: fdf5:10::2/112
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: fdf5:10::3/112
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: fdf5:10::4/112
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-1
+spec:
+  cidr: 192.168.0.0/16
+  ipipMode: Always
+  natOutgoing: true

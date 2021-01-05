@@ -351,6 +351,19 @@ func (c *client) onStatusUpdated(status api.SyncStatus) {
 	}
 }
 
+// ExcludeServiceAdvertisement returns true if this node should be excluded from
+// service advertisement based on node labels, and false if it is OK to advertise
+// services from this node.
+func (c *client) ExcludeServiceAdvertisement() bool {
+	excludeLabel := "node.kubernetes.io/exclude-from-external-load-balancers"
+
+	labels, ok := c.nodeLabels[template.NodeName]
+	if ok && labels[excludeLabel] == "true" {
+		return true
+	}
+	return false
+}
+
 // OnInSync handles multiplexing in-sync messages from multiple data sources
 // into a single representation of readiness.
 func (c *client) OnSyncChange(source string, ready bool) {
@@ -855,6 +868,14 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 					c.nodeLabels[v3key.Name] = v3res.Labels
 					needUpdatePeersV1 = true
 					needUpdatePeersReasons = append(needUpdatePeersReasons, v3key.Name+" updated")
+
+					if v3key.Name == template.NodeName && c.rg != nil {
+						// If it was our own labels that changed, and service advertisement is enabled,
+						// then we need to resync service advertisements as well, since a change in labels
+						// may trigger whether this node is a valid service advertisement target.
+						needServiceAdvertisementUpdates = true
+					}
+
 				}
 			}
 		}
@@ -1258,11 +1279,22 @@ func (c *client) updateGlobalRoutes(current, new []string) error {
 		}
 	}
 
-	// Withdraw the old CIDRs and add the new.
-	c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, new)
-	c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, new)
-	c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, withdraws)
-	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, withdraws)
+	if !c.ExcludeServiceAdvertisement() {
+		// Withdraw the old CIDRs and add the new.
+		log.Info("Advertise global service ranges from this node")
+		c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, new)
+		c.addRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, new)
+		c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, withdraws)
+		c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, withdraws)
+	} else {
+		// If this node is excluded from service advertisement, we should not advertise any
+		// routes. However, we should still program reject rules for the CIDR range so we do not
+		// program any learned routes into the data plane.
+		log.Info("Do not advertise global service ranges from this node")
+		c.deleteRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, current)
+		c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, current)
+		c.addRoutesLockHeld(rejectKeyPrefix, rejectKeyPrefixV6, new)
+	}
 
 	return nil
 }
