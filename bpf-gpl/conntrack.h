@@ -403,6 +403,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		.tun_ip = tc_ctx->state->tun_ip,
 	};
 	struct ct_ctx *ct_ctx = &ct_lookup_ctx;
+	if (tc_ctx->state->ip_proto == IPPROTO_TCP) {
+		if (skb_refresh_validate_ptrs(tc_ctx, TCP_SIZE)) {
+			tc_ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			bpf_exit(TC_ACT_SHOT);
+		}
+		ct_lookup_ctx.tcp = tc_ctx->tcp_header;
+	}
 
 	__u8 proto_orig = ct_ctx->proto;
 	__be32 ip_src = ct_ctx->src;
