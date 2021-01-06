@@ -22,7 +22,7 @@ require (
 
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210104220942-2e9e67b5dabc
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210105191325-2b7f384e6775
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
