@@ -230,8 +230,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 					}
 
 					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
-						logger.Fatal("Error asserting stdinData type")
-						os.Exit(0)
+						return nil, errors.New("data on stdin was of unexpected type")
 					}
 					stdinData["ipam"].(map[string]interface{})["ipv4_pools"] = v4PoolSlice
 					logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
@@ -243,8 +242,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 					}
 
 					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
-						logger.Fatal("Error asserting stdinData type")
-						os.Exit(0)
+						return nil, errors.New("data on stdin was of unexpected type")
 					}
 					stdinData["ipam"].(map[string]interface{})["ipv6_pools"] = v6PoolSlice
 					logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
