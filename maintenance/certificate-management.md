@@ -25,14 +25,15 @@ kind: Installation
 metadata:
   name: default
 spec:
-  ...
+...
   certificateManagement:
     rootCA: <Your CA Cert in Pem format>
-    signerName: example.com/rene
-    signatureAlgorithm: SHA384WithRSA # optional
-    keyAlgorithm: RSAWithSize2048 # optional
-    ...
+    signerName: <your-domain>/<signer-name>
+    signatureAlgorithm: SHA512WithRSA # Optional
+    keyAlgorithm: RSAWithSize4096 # Optional
+...
 ```
+
 Done! If you have an automatic signer and approver, there is nothing left to do. The following steps explain in more detail what just happened.
 
 1. (Optional) Monitor your pods as they come up:
@@ -77,13 +78,16 @@ calico   True        False         False      2m40s
 
 **Necessary steps**
 
-This feature uses api version `certificates.k8s.io/v1` for [certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/). 
+This feature uses api version `certificates.k8s.io/v1beta1` for [certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/). 
 To automate signing and approval process,
 you want to run a server that performs the following actions:
-- Watch `CertificateSigningRequests` resources with status `Pending` and `spec.signerName=<your-signer-name>`
-- For each `Pending` CSR perform (security) checks (see next heading)
-- Issue a certificate and update `.spec.status.certificate`
-- Approve the CSR update `.spec.status.conditions`
+1. Watch `CertificateSigningRequests` resources with status `Pending` and `spec.signerName=<your-signer-name>`
+1. For each `Pending` CSR perform (security) checks (see next heading)
+1. Issue a certificate and update `.spec.status.certificate`
+1. Approve the CSR and update `.spec.status.conditions`
+
+> **Note**: The signerName field was introduced in [Kubernetes v1.18](https://github.com/kubernetes/kubernetes/pull/86476). If you use an older version, you should skip the signerName check in step 1.
+{: .alert .alert-info}
 
 **Security checks**
 
@@ -96,8 +100,8 @@ When a CSR is created, the kube-apiserver adds immutable fields to the spec to h
 **Implement your signer and approver using golang**
 - Use [client-go](https://github.com/kubernetes/client-go) to create a clientset
 - To watch CSRs, use `clientset.CertificatesV1beta1().CertificateSigningRequests().Watch(..)`
-- To Issue the certificate use `clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(...)`
-- To Approve the CSR use `clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(...)`
+- To issue the certificate use `clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(...)`
+- To approve the CSR use `clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(...)`
 
 #### Further reading
 - Read [kubernetes certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/) for more information on CSRs.
