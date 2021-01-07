@@ -352,6 +352,8 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 			return fmt.Errorf("failed to re-enable cluster: %s", err)
 		}
 		log.Info("successfully set Calico datastore readiness to true!")
+	} else {
+		log.Info("not setting datastore readiness, rolling update is still going")
 	}
 
 	// Delete the host-local IPAM data directory.
