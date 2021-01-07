@@ -42,7 +42,7 @@ EKS is Amazon's managed Kubernetes offering.
 
 #### Create an eBPF compatible EKS cluster
 
-By default, EKS uses Ubuntu 18.04 as its base image for EKS, which does not meet the kernel version requirement for 
+By default, EKS uses Amazon Linux 2 as its base image for EKS, which does not meet the kernel version requirement for 
 eBPF mode.  Below, we give a couple of options for how to get the cluster running with a suitable kernel:
 
 
@@ -116,12 +116,14 @@ container-optimised OS with an emphasis on security; it has a version of the ker
 If you are familiar with the AMI creation process, it is also possible to create a custom AMI based on Ubuntu 20.04, 
 which is suitable:
 
-* Create an instance from the default EKS Ubuntu image.
+* Create an EKS cluster with a nodeGroup that uses `amiFamily=Ubuntu1804`
 
-* Log into the instance with `ssh` and upgrade it to Ubuntu 20.04.
+* Log into a worker instance with `ssh` and upgrade it to Ubuntu 20.04.
 
 * [Save the instance off as a custom AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html){:target="_blank"} 
   and make a note of the AMI ID
+
+* Delete the EKS cluster.
 
 * Using `eksctl`: start your cluster as normal:
   ```
