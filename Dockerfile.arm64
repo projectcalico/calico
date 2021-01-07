@@ -19,8 +19,8 @@ FROM ${BIRD_IMAGE} as bird
 
 FROM calico/bpftool:v5.0-arm64 as bpftool
 
-FROM arm64v8/alpine:3.8 as base
-MAINTAINER Tom Denham <tom@projectcalico.org>
+FROM arm64v8/alpine:3.12 as base
+MAINTAINER Casey Davenport <casey@tigera.io>
 
 ARG ARCH=arm64
 
