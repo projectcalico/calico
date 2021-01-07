@@ -21,32 +21,6 @@
 #include "conntrack.h"
 #include "policy.h"
 
-// struct cali_tc_state holds state that is passed between the BPF programs.
-// WARNING: must be kept in sync with the definitions in bpf/polprog/pol_prog_builder.go.
-struct cali_tc_state {
-	__be32 ip_src;
-	__be32 ip_dst;
-	__be32 post_nat_ip_dst;
-	__be32 tun_ip;
-	__s32 pol_rc;
-	__u16 sport;
-	union
-	{
-		__u16 dport;
-		struct
-		{
-			__u8 icmp_type;
-			__u8 icmp_code;
-		};
-	};
-	__u16 post_nat_dport;
-	__u8 ip_proto;
-	__u8 flags;
-	struct calico_ct_result ct_result;
-	struct calico_nat_dest nat_dest;
-	__u64 prog_start_time;
-};
-
 enum cali_state_flags {
 	CALI_ST_NAT_OUTGOING	= (1 << 0),
 	CALI_ST_SKIP_FIB	= (1 << 1),
@@ -57,6 +31,11 @@ CALI_MAP_V1(cali_v4_state,
 		__u32, struct cali_tc_state,
 		1, 0, MAP_PIN_GLOBAL)
 
+static CALI_BPF_INLINE struct cali_tc_state *state_get(void)
+{
+	__u32 key = 0;
+	return cali_v4_state_lookup_elem(&key);
+}
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,

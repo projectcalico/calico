@@ -53,6 +53,10 @@ struct bpf_map_def_extended {
 #define CALI_TC_DSR		(1<<4)
 #define CALI_TC_WIREGUARD	(1<<5)
 
+#ifndef CALI_DROP_WORKLOAD_TO_HOST
+#define CALI_DROP_WORKLOAD_TO_HOST false
+#endif
+
 #ifndef CALI_COMPILE_FLAGS
 #define CALI_COMPILE_FLAGS 0
 #endif
@@ -85,7 +89,11 @@ struct bpf_map_def_extended {
 							  * state->ct_result->ifindex_fwd
 							  */
 
-#define FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+#ifndef CALI_FIB_LOOKUP_ENABLED
+#define CALI_FIB_LOOKUP_ENABLED true
+#endif
+
+#define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
@@ -114,6 +122,24 @@ enum calico_skb_mark {
 	CALI_SKB_MARK_SKIP_RPF               = CALI_SKB_MARK_BYPASS  | 0x00400000,
 	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_BYPASS  | 0x00800000,
 };
+
+/* bpf_exit inserts a BPF exit instruction with the given return value. In a fully-inlined
+ * BPF program this allows us to terminate early.  However(!) the exit instruction is also used
+ * for function return so we need to be careful if we ever start using non-inlined
+ * functions in anger. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-noreturn"
+static CALI_BPF_INLINE _Noreturn void bpf_exit(int rc) {
+	// Need volatile here because we don't use rc after this assembler fragment.
+	// The BPF assembler rejects an input-only operand so we make r0 an in/out operand.
+	asm volatile ( \
+		"exit" \
+		: "=r0" (rc) /*out*/ \
+		: "0" (rc) /*in*/ \
+		: /*clobber*/ \
+	);
+}
+#pragma clang diagnostic pop
 
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_frag_no(ip) ((ip)->frag_off & bpf_htons(0x1fff))
