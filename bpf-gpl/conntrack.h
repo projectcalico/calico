@@ -271,9 +271,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ct_ctx, int na
 	return err;
 }
 
-/* skb_is_icmp_err_unpack fills in ctx, but only what needs to be changed. For instance, keeps the
- * cxt->skb or ctx->tun_ip. It returns true if the original packet is an icmp error and all
- * checks went well.
+/* skb_icmp_err_unpack tries to unpack the inner IP and TCP/UDP header from an ICMP error message.
+ * It updates the ct_ctx with the protocol/src/dst/ports of the inner packet.  If the unpack fails
+ * (due to packet too short, for example), it returns false and sets the RC in the cali_tc_ctx to
+ * TC_ACT_SHOT.
  */
 static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct ct_ctx *ct_ctx)
 {
@@ -393,6 +394,10 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_tc_ctx *tc_ctx)
 {
+	// TODO: refactor the conntrack code to simply use the tc_ctx instead of its own.  This
+	// code is a direct translation of the pre-tc_ctx code so it has some duplication (but it
+	// needs a bit more analysis to sort out because the ct_ctx gets modified in place in
+	// ways that might not make sense to expose through the tc_ctx.
 	struct ct_ctx ct_lookup_ctx = {
 		.skb = tc_ctx->skb,
 		.proto	= tc_ctx->state->ip_proto,

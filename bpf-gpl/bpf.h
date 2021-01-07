@@ -125,7 +125,8 @@ enum calico_skb_mark {
 
 /* bpf_exit inserts a BPF exit instruction with the given return value. In a fully-inlined
  * BPF program this allows us to terminate early.  However(!) the exit instruction is also used
- * for function return so we need to be careful if we ever start using functions in anger. */
+ * for function return so we need to be careful if we ever start using non-inlined
+ * functions in anger. */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winvalid-noreturn"
 static CALI_BPF_INLINE _Noreturn void bpf_exit(int rc) {

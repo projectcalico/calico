@@ -22,7 +22,6 @@
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
 	struct cali_tc_ctx ctx = {
-		.state = state_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,

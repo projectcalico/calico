@@ -36,15 +36,16 @@
 static CALI_BPF_INLINE void *skb_start_ptr(struct __sk_buff *skb) {
 	void *ptr;
 	asm volatile (\
-		"%0 = *(u32 *)(%1 + 76)" \
-		: "=r" (ptr) /*out*/ \
-		: "r" (skb) /*in*/ \
+		"%[ptr] = *(u32 *)(%[skb] + %[offset])" \
+		: [ptr] "=r" (ptr) /*out*/ \
+		: [skb] "r" (skb),
+		  [offset] "i" (offsetof(struct __sk_buff, data)) /*in*/ \
 		: /*clobber*/ \
 	);
 	return ptr;
 }
 
-/* skb_start_ptr is equivalent to (void*)((__u64)skb->data_end); the read is done
+/* skb_end_ptr is equivalent to (void*)((__u64)skb->data_end); the read is done
  * in a way that is acceptable to the verifier and it is done as a volatile read
  * ensuring that a fresh value is returned and the compiler cannot
  * reorder/recalculate the value later.
@@ -52,10 +53,11 @@ static CALI_BPF_INLINE void *skb_start_ptr(struct __sk_buff *skb) {
 static CALI_BPF_INLINE void *skb_end_ptr(struct __sk_buff *skb) {
  	void *ptr;
  	asm volatile (\
-	 	"%0 = *(u32 *)(%1 + 80)" \
-	 	: "=r" (ptr) /*out*/ \
-	 	: "r" (skb) /*in*/ \
-	 	: /*clobber*/ \
+		"%[ptr] = *(u32 *)(%[skb] + %[offset])" \
+		: [ptr] "=r" (ptr) /*out*/ \
+		: [skb] "r" (skb),
+		  [offset] "i" (offsetof(struct __sk_buff, data_end)) /*in*/ \
+		: /*clobber*/ \
 	 );
 	return ptr;
 }
@@ -68,7 +70,7 @@ static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
 	ctx->data_end = skb_end_ptr(ctx->skb);
 }
 
-/* skb_iphdr_offset returns the expected offset of hte IP header for this type of program.
+/* skb_iphdr_offset returns the expected offset of the IP header for this type of program.
  * For example, in programs attached to L3 tunnel devices, the IP header is at location 0.
  * Whereas, in L2 programs, it's past the ethernet header.
  */

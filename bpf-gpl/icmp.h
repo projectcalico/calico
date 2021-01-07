@@ -32,8 +32,8 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	int ret;
 
 	/* ICMP is on the slow path so we may as well revalidate here to keep calling code
-	 * simple. */
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+	 * simple.  We only need to look at the IP header before we resize the packet. */
+	if (skb_refresh_validate_ptrs(ctx, 0)) {
 		ctx->fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("ICMP v4 reply: too short\n");
 		return -1;

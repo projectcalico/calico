@@ -139,7 +139,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		goto finalize;
 	}
 
-	/* Now we've got as afar as the UDP header, check if this is one of our VXLAN packets, which we
+	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
 			is_vxlan_tunnel(ctx.ip_header) /* Is this a VXLAN packet? */ ) {
@@ -314,7 +314,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		}
 	}
 
-	// FIXME Not sure why this is needed
+	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
+	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
+	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
@@ -521,7 +523,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				goto deny;
 			}
 
-			/* Skip past the ICMP header and check the inner IP header. */
+			/* Skip past the ICMP header and check the inner IP header.
+			 * WARNING: this modifies the ip_header pointer in the main context; need to
+			 * be careful in later code to avoid overwriting that. */
 			l3_csum_off += sizeof(*ctx->ip_header) + sizeof(struct icmphdr);
 			ctx->ip_header = (struct iphdr *)(ctx->icmp_header + 1); /* skip to inner ip */
 			if (ctx->ip_header->ihl != 5) {
