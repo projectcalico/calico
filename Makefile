@@ -302,7 +302,7 @@ release-publish: release-prereqs
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
 	ghr -u projectcalico -r calico \
-		-b 'Release notes can be found at https://docs.projectcalico.org/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
+		-b 'Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(RELEASE_DIR).tgz
 
