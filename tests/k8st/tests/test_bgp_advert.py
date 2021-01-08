@@ -15,6 +15,7 @@ import logging
 import subprocess
 import json
 import sys
+import time
 
 from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
@@ -174,6 +175,15 @@ EOF
     def get_svc_cluster_ip(self, svc, ns):
         return kubectl("get svc %s -n %s -o json | jq -r .spec.clusterIP" %
                        (svc, ns)).strip()
+
+    def get_svc_loadbalancer_ip(self, svc, ns):
+        for i in range(10):
+            lb_ip = kubectl("get svc %s -n %s -o json | jq -r .status.loadBalancer.ingress[0].ip" %
+                       (svc, ns)).strip()
+            if lb_ip != "null":
+                return lb_ip
+            time.sleep(1)
+        raise Exception("No LoadBalancer IP found for service: %s/%s" % (ns, svc))
 
     def assert_ecmp_routes(self, dst, via):
         matchStr = dst + " proto bird "
@@ -532,6 +542,122 @@ EOF
 
             # Assert that external IP is no longer an advertised route.
             retry_until_success(lambda: self.assertNotIn(local_svc_externalips_route, self.get_routes()))
+
+    def test_loadbalancer_ip_advertisement(self):
+        """
+        Runs the tests for service LoadBalancer IP advertisement
+        """
+        with DiagsCollector():
+
+            # Whitelist IP ranges for the LB IPs we'll test with
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceLoadBalancerIPs:
+  - cidr: 80.15.0.0/24
+EOF
+""")
+
+            # Create a dummy service first to occupy the first LB IP. This is
+            # a hack to make sure the chosen IP we use in the tests below
+            # isn't the same as the zero address in the range.
+            self.create_service("dummy-service", "dummy-service", self.ns, 80, svc_type="LoadBalancer")
+
+            # Create both a Local and a Cluster type NodePort service with a single replica.
+            local_svc = "nginx-local"
+            cluster_svc = "nginx-cluster"
+            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster", svc_type="LoadBalancer")
+            self.deploy("nginx:1.7.9", local_svc, self.ns, 80, svc_type="LoadBalancer")
+            self.wait_until_exists(local_svc, "svc", self.ns)
+            self.wait_until_exists(cluster_svc, "svc", self.ns)
+
+            # Get the allocated LB IPs.
+            local_lb_ip = self.get_svc_loadbalancer_ip(local_svc, self.ns)
+            cluster_lb_ip = self.get_svc_loadbalancer_ip(cluster_svc, self.ns)
+
+            # Wait for the deployments to roll out.
+            self.wait_for_deployment(local_svc, self.ns)
+            self.wait_for_deployment(cluster_svc, self.ns)
+
+            # Get host IPs for the nginx pods.
+            local_svc_host_ip = self.get_svc_host_ip(local_svc, self.ns)
+            cluster_svc_host_ip = self.get_svc_host_ip(cluster_svc, self.ns)
+
+            # Verify that LB IP for local service is advertised but not the cluster service.
+            local_svc_lb_route = "%s via %s" % (local_lb_ip, local_svc_host_ip)
+            cluster_svc_lb_route = "%s via %s" % (cluster_lb_ip, cluster_svc_host_ip)
+            retry_until_success(lambda: self.assertIn(local_svc_lb_route, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(cluster_svc_lb_route, self.get_routes()))
+
+            # The full range should be advertised from each node.
+            lb_cidr = "80.15.0.0/24"
+            retry_until_success(lambda: self.assert_ecmp_routes(lb_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]]))
+
+            # Scale the local_svc to 4 replicas.
+            self.scale_deployment(local_svc, self.ns, 4)
+            self.wait_for_deployment(local_svc, self.ns)
+
+            # Verify that we have ECMP routes for the LB IP of the local service from nodes running it.
+            retry_until_success(lambda: self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+
+            # Apply a modified BGP config that no longer enables advertisement
+            # for LoadBalancer IPs.
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec: {}
+EOF
+""")
+            # Assert routes are withdrawn.
+            retry_until_success(lambda: self.assertNotIn(local_lb_ip, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(lb_cidr, self.get_routes()))
+
+            # Apply a modified BGP config that has a mismatched CIDR specified.
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceLoadBalancerIPs:
+  - cidr: 90.15.0.0/24
+EOF
+""")
+            # Assert routes are still withdrawn.
+            retry_until_success(lambda: self.assertNotIn(local_lb_ip, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(lb_cidr, self.get_routes()))
+
+            # Reapply the correct configuration, we should see routes come back.
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceLoadBalancerIPs:
+  - cidr: 80.15.0.0/24
+EOF
+""")
+            # Verify that we have ECMP routes for the LB IP of the local service from nodes running it.
+            retry_until_success(lambda: self.assert_ecmp_routes(local_lb_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            retry_until_success(lambda: self.assertIn(lb_cidr, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(cluster_svc_lb_route, self.get_routes()))
+
+            # Services should be reachable from the external node.
+            retry_until_success(curl, function_args=[local_lb_ip])
+            retry_until_success(curl, function_args=[cluster_lb_ip])
+
+            # Delete both services, assert only CIDR route is advertised.
+            self.delete_and_confirm(local_svc, "svc", self.ns)
+            self.delete_and_confirm(cluster_svc, "svc", self.ns)
+
+            # Assert that LB IP is no longer an advertised route.
+            retry_until_success(lambda: self.assertNotIn(local_lb_ip, self.get_routes()))
 
     def test_many_services(self):
         """

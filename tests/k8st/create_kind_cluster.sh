@@ -138,6 +138,11 @@ time ${kubectl} wait pod -l k8s-app=kube-dns --for=condition=Ready -n kube-syste
 echo "Calico is running."
 echo
 
+echo "Install MetalLB controller for allocating LoadBalancer IPs"
+${kubectl} create ns metallb-system
+${kubectl} apply -f $TEST_DIR/infra/metallb.yaml
+${kubectl} apply -f $TEST_DIR/infra/metallb-config.yaml
+
 # Create and monitor a test webserver service for dual stack.
 echo "Create test-webserver deployment..."
 ${kubectl} apply -f tests/k8st/infra/test-webserver.yaml
