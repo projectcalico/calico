@@ -319,6 +319,129 @@ EOF
             # Assert that clusterIP is no longer an advertised route.
             retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
 
+    def test_node_exclusion(self):
+        """
+        Tests the node exclusion label.
+        - Create services, assert advertised from all nodes.
+        - Label one node so that it is excluded, assert that routes are withdrawn from that node.
+        - Delete / recreate service, assert it is still advertised from the correct nodes.
+        - Remove the exclusion label, assert that the node re-advertises the svc.
+        """
+        with DiagsCollector():
+
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceClusterIPs:
+  - cidr: 10.96.0.0/12
+  serviceExternalIPs:
+  - cidr: 175.200.0.0/16
+EOF
+""")
+
+            # Assert that a route to the service IP range is present.
+            cluster_cidr = "10.96.0.0/12"
+            retry_until_success(lambda: self.assertIn(cluster_cidr, self.get_routes()))
+
+            # Create both a Local and a Cluster type NodePort service with a single replica.
+            local_svc = "nginx-local"
+            cluster_svc = "nginx-cluster"
+            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+            self.wait_until_exists(local_svc, "svc", self.ns)
+            self.wait_until_exists(cluster_svc, "svc", self.ns)
+
+            # Get clusterIPs.
+            local_svc_ip = self.get_svc_cluster_ip(local_svc, self.ns)
+            cluster_svc_ip = self.get_svc_cluster_ip(cluster_svc, self.ns)
+
+            # Wait for the deployments to roll out.
+            self.wait_for_deployment(local_svc, self.ns)
+            self.wait_for_deployment(cluster_svc, self.ns)
+
+            # Assert that both nginx service can be curled from the external node.
+            retry_until_success(curl, function_args=[local_svc_ip])
+            retry_until_success(curl, function_args=[cluster_svc_ip])
+
+            # Assert that local clusterIP is an advertised route and cluster clusterIP is not.
+            retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
+
+            # Connectivity should always succeed.
+            for i in range(attempts):
+              retry_until_success(curl, function_args=[local_svc_ip])
+              retry_until_success(curl, function_args=[cluster_svc_ip])
+
+            # Scale local service to 4 replicas
+            self.scale_deployment(local_svc, self.ns, 4)
+            self.wait_for_deployment(local_svc, self.ns)
+            self.wait_for_deployment(cluster_svc, self.ns)
+
+            # Assert routes are correct and services are accessible.
+            # Local service should only be advertised from nodes that can run pods.
+            # The cluster CIDR should be advertised from all nodes.
+            self.assert_ecmp_routes(local_svc_ip, [self.ips[1], self.ips[2], self.ips[3]])
+            self.assert_ecmp_routes(cluster_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
+            for i in range(attempts):
+              retry_until_success(curl, function_args=[local_svc_ip])
+
+            # Label one node in order to exclude it from service advertisement.
+            # After this, we should expect that all routes from that node are
+            # withdrawn.
+            kubectl("label node %s node.kubernetes.io/exclude-from-external-load-balancers=true" % self.nodes[1])
+
+            # Assert routes are correct and services are accessible.
+            # It should no longer have a route via self.nodes[1]
+            self.assert_ecmp_routes(local_svc_ip, [self.ips[2], self.ips[3]])
+            self.assert_ecmp_routes(cluster_cidr, [self.ips[0], self.ips[2], self.ips[3]])
+
+            # Should work the same for external IP cidr.
+            external_ip_cidr = "175.200.0.0/16"
+            self.assert_ecmp_routes(external_ip_cidr, [self.ips[0], self.ips[2], self.ips[3]])
+
+            # Should still be reachable through other nodes.
+            for i in range(attempts):
+              retry_until_success(curl, function_args=[local_svc_ip])
+              retry_until_success(curl, function_args=[cluster_svc_ip])
+
+            # Delete the local service, confirm that it is no longer advertised.
+            self.delete_and_confirm(local_svc, "svc", self.ns)
+            retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
+
+            # Re-create the local service. Assert it is advertised from the correct nodes,
+            # but not from the excluded node.
+            self.create_service(local_svc, local_svc, self.ns, 80)
+            self.wait_until_exists(local_svc, "svc", self.ns)
+            local_svc_ip = self.get_svc_cluster_ip(local_svc, self.ns)
+            self.assert_ecmp_routes(local_svc_ip, [self.ips[2], self.ips[3]])
+            for i in range(attempts):
+              retry_until_success(curl, function_args=[local_svc_ip])
+
+            # Add an external IP to the local svc and assert it follows the same
+            # advertisement rules.
+            local_svc_external_ip = "175.200.1.1"
+            self.add_svc_external_ips(local_svc, self.ns, [local_svc_external_ip])
+            self.assert_ecmp_routes(local_svc_external_ip, [self.ips[2], self.ips[3]])
+
+            # Enable the excluded node. Assert that the node starts
+            # advertising service routes again.
+            kubectl("label node %s node.kubernetes.io/exclude-from-external-load-balancers=false --overwrite" % self.nodes[1])
+            self.assert_ecmp_routes(local_svc_ip, [self.ips[1], self.ips[2], self.ips[3]])
+            self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]])
+            self.assert_ecmp_routes(cluster_cidr, [self.ips[0], self.ips[1], self.ips[2], self.ips[3]])
+            for i in range(attempts):
+              retry_until_success(curl, function_args=[local_svc_ip])
+
+            # Delete both services.
+            self.delete_and_confirm(local_svc, "svc", self.ns)
+            self.delete_and_confirm(cluster_svc, "svc", self.ns)
+
+            # Assert that clusterIP is no longer an advertised route.
+            retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
+
     def test_external_ip_advertisement(self):
         """
         Runs the tests for service external IP advertisement
