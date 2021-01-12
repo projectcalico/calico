@@ -52,3 +52,14 @@ spec:
   cidr: 10.1.0.0/24
   deleted: ""
   state: ""
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-10-2-0-1-32
+  namespace: ""
+spec:
+  node: kube-master
+  cidr: 10.2.0.1/32
+  deleted: ""
+  state: ""

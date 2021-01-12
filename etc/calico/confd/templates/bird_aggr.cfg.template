@@ -9,7 +9,9 @@ protocol static {
 {{- range ls $block_key}}
 {{- $parts := split . "-"}}
 {{- $cidr := join $parts "/"}}
+{{- if not (hasSuffix $cidr "/32")}}
    route {{$cidr}} blackhole;
+{{- end}}
 {{- end}}
 {{- end}}
 {{- if ls $static_key}}
