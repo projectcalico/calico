@@ -75,7 +75,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ct_ctx,
 	}
 
 	CALI_DEBUG("CT-ALL packet mark is: 0x%x\n", ct_ctx->skb->mark);
-	if ((ct_ctx->skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
+	if (skb_seen(ct_ctx->skb)) {
 		/* Packet already marked as being from another workload, which will
 		 * have created a conntrack entry.  Look that one up instead of
 		 * creating one.

@@ -267,8 +267,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->post_nat_dport = ctx.state->dport;
 	}
 
-	if (CALI_F_TO_WEP &&
-			skb->mark != CALI_SKB_MARK_SEEN &&
+	if (CALI_F_TO_WEP && !skb_seen(skb) &&
 			cali_rt_flags_local_host(cali_rt_lookup_flags(ctx.state->ip_src))) {
 		/* Host to workload traffic always allowed.  We discount traffic that was
 		 * seen by another program since it must have come in via another interface.
