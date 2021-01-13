@@ -29,6 +29,11 @@ if [ "$SET_CORE_PATTERN" == "true" ]; then
   echo '/tmp/core_%h_%e.%p' > /proc/sys/kernel/core_pattern
 fi
 
+# When Felix is run in a non-root netns (for FV testing) the conntrack subsystem doesn't
+# start tracking packets until it is used in some way.  This means that Felix's datastore
+# connection ends up being untracked, causing it to be dropped in BPF mode.
+iptables -A FORWARD -m conntrack --ctstate ESTABLISHED -m comment --comment "cali:workaround"
+
 while true; do
   if [ "$DELAY_FELIX_START" == "true" ]; then
     while [ ! -e /start-trigger ]; do

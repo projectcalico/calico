@@ -205,17 +205,8 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	// Conntrack created - the table is full again
-	err = ctMap.Update(firstCTKey[:], firstCTVal[:])
-	Expect(err).To(Equal(unix.E2BIG))
-
-	// Delete the newly created key to allow the rest of the tests pass - they
-	// expect full table and no match
-	key := conntrack.NewKey(6, ipv4.SrcIP, uint16(tcpAck.SrcPort), ipv4.DstIP, uint16(tcpAck.DstPort))
-	err = ctMap.Delete(key[:])
-	Expect(err).NotTo(HaveOccurred())
-
-	// Refill the table
+	// No conntrack created for non-SYN packet (should fall through to iptables).  We test by
+	// trying to create an entry, which should succeed.
 	err = ctMap.Update(firstCTKey[:], firstCTVal[:])
 	Expect(err).NotTo(HaveOccurred())
 

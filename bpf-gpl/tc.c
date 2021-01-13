@@ -58,6 +58,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 */
 	skb->mark = CALI_SET_SKB_MARK;
 #endif
+	CALI_DEBUG("New packet; mark=%x\n", skb->mark);
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
@@ -94,7 +95,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		/* We're leaving the host namespace, check for other bypass mark bits.
 		 * These are a bit more complex to handle so we do it after creating the
 		 * context/state. */
-		switch (skb->mark) {
+		switch (skb->mark & CALI_SKB_MARK_BYPASS_MASK) {
 		case CALI_SKB_MARK_BYPASS_FWD:
 			CALI_DEBUG("Packet approved for forward.\n");
 			ctx.fwd.reason = CALI_REASON_BYPASS;
@@ -178,7 +179,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	case 4:
 		// IPIP
 		if (CALI_F_HEP) {
-			// TODO IPIP whitelist.
+			// TODO-HEPs IPIP whitelist.
 			CALI_DEBUG("IPIP: allow\n");
 			fwd_fib_set(&ctx.fwd, false);
 			goto allow;
@@ -196,7 +197,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	default:
 		if (CALI_F_HEP) {
-			// FIXME: allow unknown protocols through on host endpoints.
+			// TODO-HEPs allow unknown protocols through on host endpoints.
 			goto allow;
 		}
 		// FIXME non-port based conntrack.
@@ -222,6 +223,29 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 */
 	if (ct_result_rpf_failed(ctx.state->ct_result.rc)) {
 		fwd_fib_set(&ctx.fwd, false);
+	}
+
+	if (ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
+		if (CALI_F_TO_HOST) {
+			/* Mid-flow miss: let iptables handle it in case it's an existing flow
+			 * in the Linux conntrack table. We can't apply policy or DNAT because
+			 * it's too late in the flow.  iptables will drop if the flow is not
+			 * known.
+			 */
+			CALI_DEBUG("CT mid-flow miss; fall through to iptables.\n");
+			ctx.fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
+			fwd_fib_set(&ctx.fwd, false);
+			goto finalize;
+		} else {
+			if (CALI_F_HEP) {
+				// TODO-HEP for data interfaces, this should allow, for active HEPs it should drop or apply policy.
+				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, allow.\n");
+				goto allow;
+			} else {
+				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, drop.\n");
+				goto deny;
+			}
+		}
 	}
 
 	/* Skip policy if we get conntrack hit */
@@ -398,7 +422,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	
+
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
@@ -427,7 +451,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	CALI_DEBUG("Entering calico_tc_skb_accepted\n");
 	struct __sk_buff *skb = ctx->skb;
 	struct cali_tc_state *state = ctx->state;
-	
+
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 	bool fib = false;
@@ -1000,7 +1024,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	
+
 	CALI_DEBUG("ICMP type %d and code %d\n",ctx.state->icmp_type, ctx.state->icmp_code);
 
 	if (ctx.state->icmp_code == ICMP_FRAG_NEEDED) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,12 +21,17 @@ const (
 	MarkSeenMask                     = MarkCalicoMask | MarkSeen
 	MarkSeenBypass                   = MarkSeen | 0x02000000
 	MarkSeenBypassMask               = MarkSeenMask | MarkSeenBypass
+	MarkSeenFallThrough              = MarkSeen | 0x04000000
+	MarkSeenFallThroughMask          = MarkSeenMask | MarkSeenFallThrough
 	MarkSeenBypassForward            = MarkSeenBypass | 0x00300000
 	MarkSeenBypassForwardSourceFixup = MarkSeenBypass | 0x00500000
 	MarkSeenBypassSkipRPF            = MarkSeenBypass | 0x00400000
 	MarkSeenBypassSkipRPFMask        = MarkSeenBypassMask | 0x00f00000
 	MarkSeenNATOutgoing              = MarkSeenBypass | 0x00800000
 	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | MarkSeenNATOutgoing
+
+	MarkLinuxConntrackEstablished     = MarkCalico | 0x08000000
+	MarkLinuxConntrackEstablishedMask = MarkCalico | 0x08000000
 
 	MarksMask = 0xfff00000
 )

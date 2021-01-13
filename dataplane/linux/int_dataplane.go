@@ -1064,8 +1064,6 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 }
 
 func (d *InternalDataplane) setUpIptablesBPF() {
-	// TODO Make make bits configurable.
-
 	for _, t := range d.iptablesFilterTables {
 		fwdRules := []iptables.Rule{
 			{
@@ -1077,7 +1075,38 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			},
 		}
 
-		var inputRules []iptables.Rule
+		var inputRules, outputRules []iptables.Rule
+
+		// Handle packets for flows that pre-date the BPF programs.  The BPF program doesn't have any conntrack
+		// state for these so it allows them to fall through to iptables with a mark set.
+		inputRules = append(inputRules,
+			iptables.Rule{
+				Match: iptables.Match().
+					MarkMatchesWithMask(tc.MarkSeenFallThrough, tc.MarkSeenFallThroughMask).
+					ConntrackState("ESTABLISHED,RELATED"),
+				Comment: []string{"Accept packets from flows that pre-date BPF."},
+				Action:  iptables.AcceptAction{},
+			},
+			iptables.Rule{
+				Match:   iptables.Match().MarkMatchesWithMask(tc.MarkSeenFallThrough, tc.MarkSeenFallThroughMask),
+				Comment: []string{"Drop packets from unknown flows."},
+				Action:  iptables.DropAction{},
+			},
+		)
+
+		// Mark traffic leaving the host that already has an established linux conntrack entry.
+		outputRules = append(outputRules,
+			iptables.Rule{
+				Match: iptables.Match().
+					ConntrackState("ESTABLISHED,RELATED"),
+				Comment: []string{"Mark pre-established host flows."},
+				Action: iptables.SetMaskedMarkAction{
+					Mark: tc.MarkLinuxConntrackEstablished,
+					Mask: tc.MarkLinuxConntrackEstablishedMask,
+				},
+			},
+		)
+
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
 				// Drop packets that have come from a workload but have not been through our BPF program.
@@ -1096,6 +1125,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					Action: iptables.AcceptAction{},
 				})
 			}
+
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
 				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
@@ -1113,6 +1143,18 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				})
 			}
 		} else {
+			// Let the BPF programs know if Linux conntrack knows about the flow.
+			fwdRules = append(fwdRules,
+				iptables.Rule{
+					Match: iptables.Match().
+						ConntrackState("ESTABLISHED,RELATED"),
+					Comment: []string{"Mark pre-established flows."},
+					Action: iptables.SetMaskedMarkAction{
+						Mark: tc.MarkLinuxConntrackEstablished,
+						Mask: tc.MarkLinuxConntrackEstablishedMask,
+					},
+				},
+			)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF
 			// program attached (yet).  To catch that case, we send the packet through a dispatch chain.  We only
 			// add interfaces to the dispatch chain if the BPF program is in place.
@@ -1144,6 +1186,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 		t.InsertOrAppendRules("INPUT", inputRules)
 		t.InsertOrAppendRules("FORWARD", fwdRules)
+		t.InsertOrAppendRules("OUTPUT", outputRules)
 	}
 
 	for _, t := range d.iptablesNATTables {

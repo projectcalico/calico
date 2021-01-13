@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -111,16 +111,47 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 }
 
 enum calico_skb_mark {
-	// TODO allocate marks from the mark pool.
+	/* Bits that we set in all _our_ mark patterns. */
 	CALI_MARK_CALICO                     = 0xc0000000,
 	CALI_MARK_CALICO_MASK                = 0xf0000000,
+	/* The "SEEN" bit is set by any BPF program that allows a packet through.  It allows
+	 * a second BPF program that handles the same packet to determine that another program
+	 * handled it first. */
 	CALI_SKB_MARK_SEEN                   = CALI_MARK_CALICO      | 0x01000000,
 	CALI_SKB_MARK_SEEN_MASK              = CALI_MARK_CALICO_MASK | CALI_SKB_MARK_SEEN,
+	/* The "BYPASS" bit is an even stronger indication than "SEEN". It is set by BPF programs
+	 * that have determined that the packet is approved and any downstream programs do not need
+	 * to further validate the packet. */
 	CALI_SKB_MARK_BYPASS                 = CALI_SKB_MARK_SEEN    | 0x02000000,
+	/* "BYPASS_FWD" is a special case of "BYPASS" used when a packet returns from one of our
+	 * VXLAN tunnels.  It tells the downstream program to forward the packet. */
 	CALI_SKB_MARK_BYPASS_FWD             = CALI_SKB_MARK_BYPASS  | 0x00300000,
+	/* "BYPASS_FWD_SRC_FIXUP" is a special case of "BYPASS" used when a from-workload program
+	 * is returning a packet to our VXLAN tunnel.  The from-workload program does the encapsulation
+	 * but, due to RPF, it cannot set the source IP of the outer IP header.  The mark bit
+	 * tells the downstream HEP program to fix up the source IP to be the host IP as it leaves the
+	 * host namespace. */
 	CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP   = CALI_SKB_MARK_BYPASS  | 0x00500000,
+	CALI_SKB_MARK_BYPASS_MASK            = CALI_SKB_MARK_SEEN_MASK | 0x02700000,
+	/* The FALLTHROUGH bit is used by programs that are towards the host namespace to indicate
+	 * that the packet is not known in BPF conntrack. We have iptables rules to drop or allow
+	 * such packets based on their Linux conntrack state. This allows for us to handle flows that
+	 * were live before BPF was enabled. */
+	CALI_SKB_MARK_FALLTHROUGH            = CALI_SKB_MARK_SEEN    | 0x04000000,
+	/* The SKIP_RPF bit is used by programs that are towards the host namespace to disable our
+	 * RPF check for htat packet.  Typically used for a packet that we originate (such as an ICMP
+	 * response). */
 	CALI_SKB_MARK_SKIP_RPF               = CALI_SKB_MARK_BYPASS  | 0x00400000,
+	/* The NAT_OUT bit is used by programs that are towards the host namespace to tell iptables to
+	 * do SNAT for this flow.  Subsequent packets will also be allowed to fall through to the host
+	 * netns. */
 	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_BYPASS  | 0x00800000,
+
+	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
+	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
+	 * flows at start of day. */
+	CALI_SKB_MARK_CT_ESTABLISHED         = CALI_MARK_CALICO      | 0x08000000,
+	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = CALI_MARK_CALICO      | 0x08000000,
 };
 
 /* bpf_exit inserts a BPF exit instruction with the given return value. In a fully-inlined

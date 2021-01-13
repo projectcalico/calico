@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,7 +102,12 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		envVars["FELIX_BPFENABLED"] = "true"
+		if !options.TestManagesBPF {
+			log.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
+			envVars["FELIX_BPFENABLED"] = "true"
+		} else {
+			log.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
+		}
 
 		// Disable map repinning by default since BPF map names are global and we don't want our simulated instances to
 		// share maps.
