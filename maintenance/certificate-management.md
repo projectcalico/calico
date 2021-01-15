@@ -16,8 +16,8 @@ certificate issuance, {{site.prodname}} provides a simple configuration option t
 ### Before you begin
 
 **Supported algorithms**
-- Private Key Pair: RSA (size: 2048|4096|8192), ECDSA (curve: 256|384|521)
-- Certificate Signature: RSA (sha: 256|384|512), ECDSA (sha: 256|384|512)
+- Private Key Pair: RSA (size: 2048,4096,8192), ECDSA (curve: 256,384,521)
+- Certificate Signature: RSA (sha: 256,384,512), ECDSA (sha: 256,384,512)
 
 ### How to
 - [Enable certificate management](#enable-certificate-management)
