@@ -11,7 +11,7 @@ Enable custom workflows for issuing and signing certificates used to secure comm
 
 Some deployments have security requirements that strictly minimize or eliminate the access to private keys and/or 
 requirements to control the trusted certificates throughout clusters. Using the Kubernetes Certificates API that automates 
-certificate issuance, {{site.prodname}} provides a simple custom resource that you add to your installation.
+certificate issuance, {{site.prodname}} provides a simple configuration option that you add to your installation.
 
 ### Before you begin
 
