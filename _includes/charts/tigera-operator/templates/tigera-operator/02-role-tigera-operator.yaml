@@ -227,4 +227,11 @@ rules:
       - watch
       - create
       - update
+# Add the permissions to monitor the status of certificatesigningrequests when certificate management is enabled.
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - list
 {{- end }}
