@@ -26,8 +26,11 @@ Use this quickstart to quickly and easily try {{site.prodname}} features with Mi
 1. Initialize the node using the following command.
    
    ```
-   snap install microk8s --classic --channel=edge/ha-preview
+   snap install microk8s --classic
    ```
+
+   > You can check out other versions of Kubernetes MicroK8s implementation published in snap using `snap info microk8s` command.
+   {: .alert .alert-info }
 
 1. Enable dns services.
  
