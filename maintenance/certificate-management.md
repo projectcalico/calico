@@ -16,8 +16,8 @@ certificate issuance, {{site.prodname}} provides a simple configuration option t
 ### Before you begin
 
 **Supported algorithms**
-- Private Key Pair: RSA (size: 2048,4096,8192), ECDSA (curve: 256,384,521)
-- Certificate Signature: RSA (sha: 256,384,512), ECDSA (sha: 256,384,512)
+- Private Key Pair: RSA (size: 2048, 4096, 8192), ECDSA (curve: 256, 384, 521)
+- Certificate Signature: RSA (sha: 256, 384, 512), ECDSA (sha: 256, 384, 512)
 
 ### How to
 - [Enable certificate management](#enable-certificate-management)
@@ -73,7 +73,7 @@ calico-system:typha-688c9957f5-h9c5w:2b0d82          0s    system:serviceaccount
 calico-system:typha-688c9957f5-h9c5w:2b0d82          0s    system:serviceaccount:calico-system:calico-typha   Approved,Issued
 ```
 A CSR will be `Pending` until it has been `Issued` and `Approved`. The name of a CSR is based on the namespace, the pod
-name and the first 6 characters of the pod's UID. The pod will be `Pending` until the CSR has been `Approved`
+name and the first 6 characters of the pod's UID. The pod will be `Pending` until the CSR has been `Approved`.
 
 1. Monitor the status of this feature using the `TigeraStatus`:
 ```
@@ -88,9 +88,9 @@ calico   True        False         False      2m40s
 
 This feature uses api version `certificates.k8s.io/v1beta1` for [certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/). 
 To automate the signing and approval process, run a server that performs the following actions:
-1. Watch `CertificateSigningRequests` resources with status `Pending` and `spec.signerName=<your-signer-name>`
+1. Watch `CertificateSigningRequests` resources with status `Pending` and `spec.signerName=<your-signer-name>`.
 
-   > **Note**: The signerName field was introduced in [Kubernetes v1.18](https://github.com/kubernetes/kubernetes/pull/86476). If you use an older version, you should skip the signerName check in step 1.
+   > **Note**: You can skip this step if you are using a version before Kubernetes v1.18; (the signerName field was not available).
    {: .alert .alert-info}
 
 1. For each `Pending` CSR perform (security) checks (see next heading)
@@ -114,5 +114,5 @@ Verify that the user and/or group match with the requested certificate subject (
 - To approve the CSR use `clientset.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(...)`
 
 #### Above and beyond
-- Read [kubernetes certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/) for more information on CSRs.
-- Use [client-go](https://github.com/kubernetes/client-go) to implement a controller to sign and approve a CSR.
+- Read [kubernetes certificate signing requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/) for more information on CSRs
+- Use [client-go](https://github.com/kubernetes/client-go) to implement a controller to sign and approve a CSR
