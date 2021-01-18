@@ -40,3 +40,5 @@ section:
     path: /maintenance/troubleshoot/component-logs
   - title: eBPF Dataplane
     path: /maintenance/troubleshoot/troubleshoot-ebpf
+- title: Certificate Management
+  path: /maintenance/certificate-management
