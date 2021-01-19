@@ -44,6 +44,7 @@ const (
 	AttributePod           = model.IPAMBlockAttributePod
 	AttributeNamespace     = model.IPAMBlockAttributeNamespace
 	AttributeNode          = model.IPAMBlockAttributeNode
+	AttributeTimestamp     = model.IPAMBlockAttributeTimestamp
 	AttributeType          = model.IPAMBlockAttributeType
 	AttributeTypeIPIP      = model.IPAMBlockAttributeTypeIPIP
 	AttributeTypeVXLAN     = model.IPAMBlockAttributeTypeVXLAN
