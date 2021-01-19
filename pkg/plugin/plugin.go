@@ -594,6 +594,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// Log and proceed with the clean up if WEP doesn't exist.
 			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Info("Endpoint object does not exist, no need to clean up.")
+			err = nil
 		} else {
 			return
 		}
