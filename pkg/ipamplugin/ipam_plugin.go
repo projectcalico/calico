@@ -155,7 +155,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// We attach important attributes to the allocation.
-	attrs := map[string]string{ipam.AttributeNode: nodename}
+	attrs := map[string]string{
+		ipam.AttributeNode:      nodename,
+		ipam.AttributeTimestamp: time.Now().UTC().String(),
+	}
 	if epIDs.Pod != "" {
 		attrs[ipam.AttributePod] = epIDs.Pod
 		attrs[ipam.AttributeNamespace] = epIDs.Namespace
