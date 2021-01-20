@@ -162,7 +162,7 @@ The following steps will configure {{site.prodname}} to advertise Service `statu
    Patch the BGPConfiguration using the following command, adding your own service load balancer IP CIDRs:
 
    ```bash
-   calicoctl patch BGPConfig default --patch '{"spec": {"serviceLoadBalancer": [{"cidr": "x.x.x.x/16"}]}}'
+   calicoctl patch BGPConfig default --patch '{"spec": {"serviceLoadBalancerIPs": [{"cidr": "x.x.x.x/16"}]}}'
    ```
 
    **Create default BGPConfiguration**
