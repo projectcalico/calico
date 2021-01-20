@@ -96,7 +96,7 @@ wget -q --timeout=5 nginx -O -
 It will return:
 
 ```
-wget: bad address 'google.com'
+wget: bad address 'nginx'
 ```
 
 {: .no-select-button}
