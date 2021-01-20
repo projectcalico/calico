@@ -181,6 +181,51 @@ spec:
                         type: string
                     type: object
                 type: object
+              certificateManagement:
+                description: CertificateManagement configures pods to submit a CertificateSigningRequest
+                  to the certificates.k8s.io/v1beta1 API in order to obtain TLS certificates.
+                  This feature requires that you bring your own CSR signing and approval
+                  process, otherwise pods will be stuck during initialization.
+                properties:
+                  caCert:
+                    description: Certificate of the authority that signs the CertificateSigningRequests
+                      in PEM format.
+                    format: byte
+                    type: string
+                  keyAlgorithm:
+                    description: 'Specify the algorithm used by pods to generate a
+                      key pair that is associated with the X.509 certificate request.
+                      Default: RSAWithSize2048'
+                    enum:
+                    - ""
+                    - RSAWithSize2048
+                    - RSAWithSize4096
+                    - RSAWithSize8192
+                    - ECDSAWithCurve256
+                    - ECDSAWithCurve384
+                    - ECDSAWithCurve521
+                    type: string
+                  signatureAlgorithm:
+                    description: 'Specify the algorithm used for the signature of
+                      the X.509 certificate request. Default: SHA256WithRSA'
+                    enum:
+                    - ""
+                    - SHA256WithRSA
+                    - SHA384WithRSA
+                    - SHA512WithRSA
+                    - ECDSAWithSHA256
+                    - ECDSAWithSHA384
+                    - ECDSAWithSHA512
+                    type: string
+                  signerName:
+                    description: 'When a CSR is issued to the certificates.k8s.io
+                      API, the signerName is added to the request in order to accommodate
+                      for clusters with multiple signers. Must be formatted as: "<my-domain>/<my-signername>".'
+                    type: string
+                required:
+                - caCert
+                - signerName
+                type: object
               cni:
                 description: CNI specifies the CNI that will be used by this installation.
                 properties:
@@ -544,6 +589,53 @@ spec:
                               on interfaces that do not match the given regex.
                             type: string
                         type: object
+                    type: object
+                  certificateManagement:
+                    description: CertificateManagement configures pods to submit a
+                      CertificateSigningRequest to the certificates.k8s.io/v1beta1
+                      API in order to obtain TLS certificates. This feature requires
+                      that you bring your own CSR signing and approval process, otherwise
+                      pods will be stuck during initialization.
+                    properties:
+                      caCert:
+                        description: Certificate of the authority that signs the CertificateSigningRequests
+                          in PEM format.
+                        format: byte
+                        type: string
+                      keyAlgorithm:
+                        description: 'Specify the algorithm used by pods to generate
+                          a key pair that is associated with the X.509 certificate
+                          request. Default: RSAWithSize2048'
+                        enum:
+                        - ""
+                        - RSAWithSize2048
+                        - RSAWithSize4096
+                        - RSAWithSize8192
+                        - ECDSAWithCurve256
+                        - ECDSAWithCurve384
+                        - ECDSAWithCurve521
+                        type: string
+                      signatureAlgorithm:
+                        description: 'Specify the algorithm used for the signature
+                          of the X.509 certificate request. Default: SHA256WithRSA'
+                        enum:
+                        - ""
+                        - SHA256WithRSA
+                        - SHA384WithRSA
+                        - SHA512WithRSA
+                        - ECDSAWithSHA256
+                        - ECDSAWithSHA384
+                        - ECDSAWithSHA512
+                        type: string
+                      signerName:
+                        description: 'When a CSR is issued to the certificates.k8s.io
+                          API, the signerName is added to the request in order to
+                          accommodate for clusters with multiple signers. Must be
+                          formatted as: "<my-domain>/<my-signername>".'
+                        type: string
+                    required:
+                    - caCert
+                    - signerName
                     type: object
                   cni:
                     description: CNI specifies the CNI that will be used by this installation.
