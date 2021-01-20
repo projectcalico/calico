@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,13 +142,19 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 	sendrecvMap := SendRecvMsgMap(&bpf.MapContext{
 		RepinningEnabled: repin,
 	})
-
 	err = sendrecvMap.EnsureExists()
 	if err != nil {
 		return errors.WithMessage(err, "failed to create sendrecv BPF Map")
 	}
+	allNATsMap := AllNATsMsgMap(&bpf.MapContext{
+		RepinningEnabled: repin,
+	})
+	err = allNATsMap.EnsureExists()
+	if err != nil {
+		return errors.WithMessage(err, "failed to create all-NATs BPF Map")
+	}
 
-	maps := []bpf.Map{frontendMap, backendMap, rtMap, sendrecvMap}
+	maps := []bpf.Map{frontendMap, backendMap, rtMap, sendrecvMap, allNATsMap}
 
 	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, maps...)
 	if err != nil {

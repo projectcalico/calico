@@ -332,9 +332,13 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 		return err
 	}
 
-	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_0"))
-	if err != nil {
-		return errors.Wrap(err, "failed to update jump map (epilogue program)")
+	polProgPath := path.Join(bpfFsDir, "1_0")
+	_, err = os.Stat(polProgPath)
+	if err == nil {
+		_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0", "value", "pinned", polProgPath)
+		if err != nil {
+			return errors.Wrap(err, "failed to update jump map (policy program)")
+		}
 	}
 	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "1", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_1"))
 	if err != nil {
@@ -342,7 +346,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	}
 	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "2", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_2"))
 	if err != nil {
-		return errors.Wrap(err, "failed to update jump map (epilogue program)")
+		return errors.Wrap(err, "failed to update jump map (icmp program)")
 	}
 
 	return nil

@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #ifndef __CALI_POL_PROG_H__
 #define __CALI_POL_PROG_H__
 
+#ifndef CALI_NO_DEFAULT_POLICY_PROG
 #ifdef CALI_DEBUG_ALLOW_ALL
 
 /* If we want to just compile the code without defining any policies and to
@@ -89,5 +90,7 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 deny:
 	return TC_ACT_SHOT;
 }
+
+#endif /* CALI_DEBUG_NO_PROG */
 
 #endif /*  __CALI_POL_PROG_H__ */

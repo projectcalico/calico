@@ -42,6 +42,7 @@
 #include "reasons.h"
 #include "icmp.h"
 #include "arp.h"
+#include "sendrecv.h"
 #include "fib.h"
 #include "tc.h"
 #include "policy_program.h"
@@ -178,11 +179,19 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	case 4:
 		// IPIP
-		if (CALI_F_HEP) {
-			// TODO-HEPs IPIP whitelist.
-			CALI_DEBUG("IPIP: allow\n");
-			fwd_fib_set(&ctx.fwd, false);
-			goto allow;
+		if (CALI_F_FROM_HEP) {
+			enum cali_rt_flags rf = cali_rt_lookup_flags(ctx.state->ip_src);
+			if (cali_rt_flags_remote_host(rf)) {
+				CALI_DEBUG("IPIP packet from known Calico host, allow.");
+				goto allow;
+			} else {
+				CALI_DEBUG("IPIP packet from unknown source, drop.");
+				goto deny;
+			}
+		}
+		if (CALI_F_FROM_WEP) {
+			CALI_DEBUG("IPIP traffic from workload: drop");
+			goto deny;
 		}
 	default:
 		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)ctx.state->ip_proto);
@@ -365,20 +374,53 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->nat_dest.port = 0;
 	}
 
-	if (CALI_F_HEP) {
-		/* We don't support host-endpoint policy yet, skip straight to
-		 * the epilogue program.
-		 */
-		ctx.state->pol_rc = CALI_POL_ALLOW;
-		CALI_DEBUG("HEP; no policy\n");
-		goto skip_policy;
+	// For the case where the packet was sent from a socket on this host, get the
+	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
+	// This allows us to give the policy program the pre-DNAT destination as well as
+	// the post-DNAT destination in all cases.
+	__u64 cookie = bpf_get_socket_cookie(ctx.skb);
+	if (cookie) {
+		CALI_DEBUG("Socket cookie: %x\n", cookie);
+		struct ct_nats_key ct_nkey = {
+			.cookie	= cookie,
+			.proto = ctx.state->ip_proto,
+			.ip	= ctx.state->ip_dst,
+			.port	= host_to_ctx_port(ctx.state->dport),
+		};
+		struct sendrecv4_val *revnat = cali_v4_ct_nats_lookup_elem(&ct_nkey);
+		if (revnat) {
+			CALI_DEBUG("Got cali_v4_ct_nats entry; flow was NATted by CTLB.\n");
+			ctx.state->pre_nat_ip_dst = revnat->ip;
+			ctx.state->pre_nat_dport = ctx_port_to_host(revnat->port);
+			goto skip_pre_dnat_default;
+		}
+	}
+	// If we didn't find a CTLB NAT entry then use the packet's own IP/port for the
+	// pre-DNAT values.
+	ctx.state->pre_nat_ip_dst = ctx.state->ip_dst;
+	ctx.state->pre_nat_dport = ctx.state->dport;
+
+skip_pre_dnat_default:
+	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
+		CALI_DEBUG("Post-NAT dest IP is local host.\n");
+		ctx.state->flags |= CALI_ST_DEST_IS_HOST;
+	}
+	if (rt_addr_is_local_host(ctx.state->ip_src)) {
+		CALI_DEBUG("Source IP is local host.\n");
+		ctx.state->flags |= CALI_ST_SRC_IS_HOST;
 	}
 
-	CALI_DEBUG("About to jump to policy program; lack of further "
-			"logs means policy dropped the packet...\n");
-	bpf_tail_call(skb, &cali_jump, POL_PROG_INDEX);
-	CALI_DEBUG("Tail call to policy program failed: DROP\n");
-	return TC_ACT_SHOT;
+	CALI_DEBUG("About to jump to policy program.\n");
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_POLICY);
+	if (CALI_F_HEP) {
+		CALI_DEBUG("HEP with no policy, allow.\n");
+		ctx.state->pol_rc = CALI_POL_ALLOW;
+		goto skip_policy;
+	} else {
+		/* should not reach here */
+		CALI_DEBUG("WEP with no policy, deny.\n");
+		goto deny;
+	}
 
 icmp_send_reply:
 	bpf_tail_call(skb, &cali_jump, ICMP_PROG_INDEX);
@@ -607,13 +649,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	case CALI_CT_NEW:
 		switch (state->pol_rc) {
 		case CALI_POL_NO_MATCH:
-			CALI_DEBUG("Implicitly denied by normal policy: DROP\n");
+			CALI_DEBUG("Implicitly denied by policy: DROP\n");
 			goto deny;
 		case CALI_POL_DENY:
-			CALI_DEBUG("Denied by normal policy: DROP\n");
+			CALI_DEBUG("Denied by policy: DROP\n");
 			goto deny;
 		case CALI_POL_ALLOW:
-			CALI_DEBUG("Allowed by normal policy: ACCEPT\n");
+			CALI_DEBUG("Allowed by policy: ACCEPT\n");
 		}
 
 		if (CALI_F_FROM_WEP &&

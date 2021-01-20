@@ -46,11 +46,27 @@ struct bpf_map_def_extended {
 };
 
 /* These constants must be kept in sync with the calculate-flags script. */
+
+// CALI_TC_HOST_EP is set for all host interfaces including tunnels.
 #define CALI_TC_HOST_EP		(1<<0)
+// CALI_TC_INGRESS is set when compiling a program in the "ingress" direction as defined by
+// policy.  For host endpoints, ingress has its natural meaning (towards the host namespace)
+// and it agrees with TC's definition of ingress. For workload endpoint programs, ingress is
+// relative to the workload so the ingress program is applied at egress from the host namespace
+// and vice-versa.
 #define CALI_TC_INGRESS		(1<<1)
+// CALI_TC_TUNNEL is set when compiling the program for the IPIP tunnel. It is *not* set
+// when compiling the wireguard or tunnel program (or VXLAN).  IPIP is a special case because
+// it is a layer 3 device, so we don't see an ethernet header on packets arriving from the IPIP
+// device.
 #define CALI_TC_TUNNEL		(1<<2)
+// CALI_CGROUP is set when compiling the cgroup connect-time load balancer programs.
 #define CALI_CGROUP		(1<<3)
+// CALI_TC_DSR is set when compiling programs for DSR mode.  In DSR mode, traffic to node
+// ports is encapped on the "request" leg but the response is returned directly from the
+// node with the backing workload.
 #define CALI_TC_DSR		(1<<4)
+// CALI_TC_WIREGUARD is set for the programs attached to the wireguard interface.
 #define CALI_TC_WIREGUARD	(1<<5)
 
 #ifndef CALI_DROP_WORKLOAD_TO_HOST

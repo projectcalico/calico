@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,11 +49,13 @@ const (
 type State struct {
 	SrcAddr             uint32
 	DstAddr             uint32
+	PreNATDstAddr       uint32
 	PostNATDstAddr      uint32
 	NATTunSrcAddr       uint32
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16
+	PreNATDstPort       uint16
 	PostNATDstPort      uint16
 	IPProto             uint8
 	Pad                 uint8
@@ -65,7 +67,7 @@ type State struct {
 	ProgStartTime       uint64
 }
 
-const expectedSize = 64
+const expectedSize = 72
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})
@@ -93,6 +95,7 @@ func Map(mc *bpf.MapContext) bpf.Map {
 		ValueSize:  expectedSize,
 		MaxEntries: 1,
 		Name:       "cali_v4_state",
+		Version:    2,
 	})
 }
 
