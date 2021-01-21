@@ -34,8 +34,6 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
-
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/tc"
@@ -44,6 +42,7 @@ import (
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/ratelimited"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const jumpMapCleanupInterval = 10 * time.Second
@@ -116,8 +115,9 @@ type bpfEndpointManager struct {
 	vxlanMTU           int
 	dsrEnabled         bool
 
-	ipSetMap            bpf.Map
-	stateMap            bpf.Map
+	ipSetMap bpf.Map
+	stateMap bpf.Map
+
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable *iptables.Table
 

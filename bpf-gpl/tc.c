@@ -47,6 +47,7 @@
 #include "tc.h"
 #include "policy_program.h"
 #include "parsing.h"
+#include "failsafe.h"
 
 /* calico_tc is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -403,10 +404,20 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 skip_pre_dnat_default:
 	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
+		if (CALI_F_FROM_HEP && is_failsafe_in(ctx.state->ip_proto, ctx.state->post_nat_dport)) {
+			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+			ctx.state->pol_rc = CALI_POL_ALLOW;
+			goto skip_policy;
+		}
 		ctx.state->flags |= CALI_ST_DEST_IS_HOST;
 	}
 	if (rt_addr_is_local_host(ctx.state->ip_src)) {
 		CALI_DEBUG("Source IP is local host.\n");
+		if (CALI_F_TO_HEP && is_failsafe_out(ctx.state->ip_proto, ctx.state->post_nat_dport)) {
+			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+			ctx.state->pol_rc = CALI_POL_ALLOW;
+			goto skip_policy;
+		}
 		ctx.state->flags |= CALI_ST_SRC_IS_HOST;
 	}
 

@@ -25,43 +25,39 @@ import (
 	"sync"
 	"time"
 
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-
-	"github.com/projectcalico/felix/bpf/state"
-	"github.com/projectcalico/felix/bpf/tc"
-	"github.com/projectcalico/felix/idalloc"
-	"github.com/projectcalico/felix/logutils"
-
-	"k8s.io/client-go/kubernetes"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-
-	"github.com/projectcalico/libcalico-go/lib/health"
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/libcalico-go/lib/set"
-
-	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/arp"
 	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/failsafes"
 	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
 	"github.com/projectcalico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/bpf/tc"
+	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/jitter"
 	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/throttle"
 	"github.com/projectcalico/felix/wireguard"
+	"github.com/projectcalico/libcalico-go/lib/health"
+	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
@@ -568,6 +564,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create ARP BPF map.")
 		}
+
+		// The failsafe manager sets up the failsafe port map.  It's important that it is registered before the
+		// endpoint managers so that the map is brought up to date before they run for the first time.
+		failsafesMap := failsafes.Map(bpfMapContext)
+		err = arpMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create failsafe port BPF map.")
+		}
+		failsafeMgr := failsafes.NewManager(
+			failsafesMap,
+			config.RulesConfig.FailsafeInboundHostPorts,
+			config.RulesConfig.FailsafeOutboundHostPorts,
+			dp.loopSummarizer,
+		)
+		dp.RegisterManager(failsafeMgr)
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		dp.RegisterManager(newBPFEndpointManager(

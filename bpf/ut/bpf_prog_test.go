@@ -28,16 +28,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/projectcalico/felix/ip"
-
-	"github.com/projectcalico/felix/bpf/ipsets"
-	"github.com/projectcalico/felix/bpf/jump"
-	"github.com/projectcalico/felix/bpf/polprog"
-	"github.com/projectcalico/felix/bpf/state"
-	"github.com/projectcalico/felix/logutils"
-
-	"github.com/projectcalico/felix/idalloc"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
@@ -50,8 +40,16 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/arp"
 	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/failsafes"
+	"github.com/projectcalico/felix/bpf/ipsets"
+	"github.com/projectcalico/felix/bpf/jump"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/idalloc"
+	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/proto"
 )
 
@@ -187,6 +185,7 @@ func setupAndRun(logger testLogger, loglevel string, section string, rules polpr
 	}
 
 	obj += ".o"
+	log.Infof("Patching binary %s", obj)
 
 	bin, err := bpf.BinaryFromFile(obj)
 	Expect(err).NotTo(HaveOccurred())
@@ -253,7 +252,7 @@ func bpftool(args ...string) ([]byte, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if e, ok := err.(*exec.ExitError); ok {
-			log.WithField("stderr", string(e.Stderr)).Errorf("bpftool %s failed", args[2])
+			log.WithField("stderr", string(e.Stderr)).Panicf("bpftool %s failed", args[2])
 			// to make the output reflect the new lines, logrus ignores it
 			fmt.Print(fmt.Sprint(string(e.Stderr)))
 		}
@@ -265,8 +264,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap bpf.Map
-	allMaps                                                                                      []bpf.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap, fsafeMap bpf.Map
+	allMaps, progMaps                                                                                      []bpf.Map
 )
 
 func initMapsOnce() {
@@ -283,14 +282,28 @@ func initMapsOnce() {
 		jumpMap = jump.MapForTest(mc)
 		affinityMap = nat.AffinityMap(mc)
 		arpMap = arp.Map(mc)
+		fsafeMap = failsafes.Map(mc)
 
-		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap}
+		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap, fsafeMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
 				log.WithError(err).Panic("Failed to initialise maps")
 			}
 		}
+
+		progMaps = []bpf.Map{
+			natMap,
+			natBEMap,
+			ctMap,
+			rtMap,
+			jumpMap,
+			stateMap,
+			affinityMap,
+			arpMap,
+			fsafeMap,
+		}
+
 	})
 }
 
@@ -427,6 +440,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
+	log.Infof("Patching binary %s", objFname)
 	bin, err := bpf.BinaryFromFile(objFname)
 	Expect(err).NotTo(HaveOccurred())
 	err = bin.PatchIPv4(hostIP)

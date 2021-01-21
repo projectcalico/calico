@@ -29,8 +29,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/onsi/ginkgo"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -42,6 +40,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -445,8 +444,6 @@ func (kds *K8sDatastoreInfra) EnsureReady() {
 }
 
 func (kds *K8sDatastoreInfra) Stop() {
-	kds.bpfLog.Stop()
-
 	// We don't tear down and recreate the Kubernetes infra between tests because it's
 	// too expensive.  We don't even, immediately, clean up any resources that may
 	// have been left behind by the test that has just finished.  Instead, mark all
@@ -456,6 +453,8 @@ func (kds *K8sDatastoreInfra) Stop() {
 	log.Info("K8sDatastoreInfra told to stop, deferring cleanup...")
 	kds.needsCleanup = true
 	kds.runningTest = ""
+
+	kds.bpfLog.Stop()
 }
 
 type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Interface)

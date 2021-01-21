@@ -306,9 +306,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 				f.Stop()
 			}
-			infra.Stop()
 			externalClient.Stop()
 			log.Info("AfterEach done")
+		})
+
+		AfterEach(func() {
+			infra.Stop()
 		})
 
 		createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
