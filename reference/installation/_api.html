@@ -249,6 +249,22 @@ field.</p>
 <p>ComponentResources can be used to customize the resource requirements for each component.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>certificateManagement</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CertificateManagement">
+CertificateManagement
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -541,6 +557,75 @@ Default: Disabled</p>
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.CertificateManagement">CertificateManagement
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>caCert</code><br>
+<em>
+[]byte
+</em>
+</td>
+<td>
+<p>Certificate of the authority that signs the CertificateSigningRequests in PEM format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>signerName</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>When a CSR is issued to the certificates.k8s.io API, the signerName is added to the request in order to accommodate for clusters
+with multiple signers.
+Must be formatted as: <code>&lt;my-domain&gt;/&lt;tmy-signername&gt;</code>.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keyAlgorithm</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Specify the algorithm used by pods to generate a key pair that is associated with the X.509 certificate request.
+Default: RSAWithSize2048</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>signatureAlgorithm</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Specify the algorithm used for the signature of the X.509 certificate request.
+Default: SHA256WithRSA</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.ComponentName">ComponentName
 (<code>string</code> alias)</h3>
 <p>
@@ -753,7 +838,7 @@ Default: 26 (IPv4), 122 (IPv6)</p>
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.Installation">Installation</a>, 
+<a href="#operator.tigera.io/v1.Installation">Installation</a>,
 <a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
 </p>
 <p>InstallationSpec defines configuration for a Calico or Calico Enterprise installation.</p>
@@ -944,6 +1029,22 @@ field.</p>
 <p>ComponentResources can be used to customize the resource requirements for each component.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>certificateManagement</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CertificateManagement">
+CertificateManagement
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.InstallationStatus">InstallationStatus
@@ -1101,7 +1202,7 @@ one of the provided CIDRs.</p>
 (<code>string</code> alias)</h3>
 <p>
 (<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>, 
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>,
 <a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
 </p>
 <p>ProductVariant represents the variant of the product. Valid options are: Calico, TigeraSecureEnterprise.</p>
