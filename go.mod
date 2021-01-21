@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/docopt/docopt-go v0.0.0-20160216232012-784ddc588536
-	github.com/envoyproxy/data-plane-api v0.0.0-20190513203724-4a93c6d2d917
+	github.com/envoyproxy/data-plane-api v0.0.0-20210121155913-ffd420ef8a9a
 	github.com/gogo/googleapis v1.2.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
