@@ -2766,18 +2766,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Wait for BPF to be active.
-				numTCProgramsOnEth0 := func() int {
-					total := 0
-					for i, f := range felixes {
-						for _, dir := range []string{"ingress", "egress"} {
-							out, err := f.ExecOutput("tc", "filter", "show", "dev", "eth0", dir)
-							Expect(err).NotTo(HaveOccurred())
-							count := strings.Count(out, "direct-action")
-							log.Debugf("Output from tc filter show for felix %d, dir=%s: %q (count=%d)", i, dir, out, count)
-							total += count
-						}
+				numTCProgramsOnEth0 := func() (total int) {
+					for _, f := range felixes {
+						total += f.NumTCBPFProgs("eth0")
 					}
-					return total
+					return
 				}
 				Eventually(numTCProgramsOnEth0, "10s").Should(Equal(len(felixes) * 2))
 			}
