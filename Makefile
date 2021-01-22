@@ -191,7 +191,7 @@ define update_pin
 	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
 
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-		if [[ ! -z "$(new_ver)" ]]; then \
+		if [ ! -z "$(new_ver)" ]; then \
 			go get $(1)@$(new_ver); \
 			go mod download; \
 		fi'
