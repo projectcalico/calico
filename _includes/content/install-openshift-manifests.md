@@ -2,6 +2,7 @@ Download the {{site.prodname}} manifests for OpenShift and add them to the gener
 
 ```bash
 curl {{ "/manifests/ocp/crds/01-crd-installation.yaml" | absolute_url }} -o manifests/01-crd-installation.yaml
+curl {{ "/manifests/ocp/crds/01-crd-imageset.yaml" | absolute_url }} -o manifests/01-crd-imageset.yaml
 curl {{ "/manifests/ocp/crds/01-crd-tigerastatus.yaml" | absolute_url }} -o manifests/01-crd-tigerastatus.yaml
 {%- for data in site.static_files %}
 {%- if data.path contains '/manifests/ocp/crds/calico' %}
