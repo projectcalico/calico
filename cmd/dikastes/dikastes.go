@@ -53,7 +53,7 @@ Options:
 var VERSION string
 
 func main() {
-	arguments, err := docopt.Parse(usage, nil, true, VERSION, false)
+	arguments, err := docopt.ParseArgs(usage, nil, VERSION)
 	if err != nil {
 		println(usage)
 		return
