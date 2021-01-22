@@ -711,3 +711,75 @@ func (c *Container) BPFRoutes() string {
 	sort.Strings(filteredLines)
 	return strings.Join(filteredLines, "\n")
 }
+
+// BPFNATDump returns parsed out NAT maps keyed by "<ip> port <port> proto <proto>". Each
+// value is list of "<ip>:<port>".
+func (c *Container) BPFNATDump() map[string][]string {
+	out, err := c.ExecOutput("calico-bpf", "nat", "dump")
+	if err != nil {
+		log.WithError(err).Error("Failed to run calico-bpf")
+	}
+
+	feMatch := regexp.MustCompile("(.* port \\d+ proto \\d+) id (\\d+) count.*")
+
+	lines := strings.Split(out, "\n")
+	front := ""
+	id := ""
+	back := []string(nil)
+	nat := make(map[string][]string)
+
+	var beMatch *regexp.Regexp
+
+	for _, l := range lines {
+		if front != "" {
+			if be := beMatch.FindStringSubmatch(l); be != nil {
+				back = append(back, be[1])
+			} else {
+				nat[front] = back
+				back = []string(nil)
+				front = ""
+			}
+		}
+
+		if front == "" {
+			if fe := feMatch.FindStringSubmatch(l); fe == nil {
+				continue
+			} else {
+				front = fe[1]
+				id = fe[2]
+				beMatch = regexp.MustCompile("\\s+" + id + ":\\d+\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+)")
+			}
+		}
+
+	}
+
+	if front != "" {
+		nat[front] = back
+	}
+
+	return nat
+}
+
+// BPFNATHasBackendForService returns true is the given service has the given backend programed in NAT tables
+func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
+	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
+	back := fmt.Sprintf("%s:%d", ip, port)
+
+	nat := c.BPFNATDump()
+	if natBack, ok := nat[front]; ok {
+		found := false
+		for _, b := range natBack {
+			if b == back {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	} else {
+		return false
+	}
+
+	return true
+}

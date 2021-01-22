@@ -17,6 +17,8 @@
 package fv_test
 
 import (
+	"os"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -65,8 +67,9 @@ func MetricsPortReachable(felix *infrastructure.Felix) bool {
 //   - When pre-DNAT policy is then configured, to allow ingress to the metrics port, it should be
 //     reachable again.
 //
-var _ = infrastructure.DatastoreDescribe("host-port tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ host-port tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
+		bpfEnabled           = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 		infra                infrastructure.DatastoreInfra
 		felix                *infrastructure.Felix
 		client               client.Interface
@@ -76,10 +79,16 @@ var _ = infrastructure.DatastoreDescribe("host-port tests", []apiconfig.Datastor
 	BeforeEach(func() {
 		infra = getInfra()
 
-		felix, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
+		options := infrastructure.DefaultTopologyOptions()
+		options.NeedNodeIP = bpfEnabled
+		felix, client = infrastructure.StartSingleNodeTopology(options, infra)
 
 		metricsPortReachable = func() bool {
 			return MetricsPortReachable(felix)
+		}
+
+		if bpfEnabled {
+			Eventually(felix.NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
 		}
 	})
 

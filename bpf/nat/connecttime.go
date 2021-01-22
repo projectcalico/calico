@@ -37,6 +37,11 @@ type cgroupProgs struct {
 }
 
 func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
+	if os.Getenv("FELIX_DebugSkipCTLBCleanup") == "true" {
+		log.Info("FV special case: skipping CTLB cleanup")
+		return nil
+	}
+
 	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
 		return errors.Wrap(err, "failed to set-up cgroupv2")

@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -36,15 +37,16 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		client  client.Interface
-		w       [2]*workload.Workload
-		hostW   [2]*workload.Workload
-		cc      *connectivity.Checker
+		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+		infra      infrastructure.DatastoreInfra
+		felixes    []*infrastructure.Felix
+		client     client.Interface
+		w          [2]*workload.Workload
+		hostW      [2]*workload.Workload
+		cc         *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -160,9 +162,13 @@ var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes",
 
 					// Wait for felix to see and program that host endpoint.
 					hostEndpointProgrammed := func() bool {
-						out, err := f.ExecOutput("iptables-save", "-t", "filter")
-						Expect(err).NotTo(HaveOccurred())
-						return (strings.Count(out, "cali-thfw-eth0") > 0)
+						if bpfEnabled {
+							return f.NumTCBPFProgsEth0() == 2
+						} else {
+							out, err := f.ExecOutput("iptables-save", "-t", "filter")
+							Expect(err).NotTo(HaveOccurred())
+							return (strings.Count(out, "cali-thfw-eth0") > 0)
+						}
 					}
 					Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
 						"Expected HostEndpoint iptables rules to appear")
@@ -194,10 +200,14 @@ var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes",
 
 					// Wait for felix to see and program that host endpoint.
 					hostEndpointProgrammed := func() bool {
-						out, err := f.ExecOutput("iptables-save", "-t", "filter")
-						Expect(err).NotTo(HaveOccurred())
-						expectedName := rules.EndpointChainName("cali-thfw-", "any-interface-at-all")
-						return (strings.Count(out, expectedName) > 0)
+						if bpfEnabled {
+							return f.NumTCBPFProgsEth0() == 2
+						} else {
+							out, err := f.ExecOutput("iptables-save", "-t", "filter")
+							Expect(err).NotTo(HaveOccurred())
+							expectedName := rules.EndpointChainName("cali-thfw-", "any-interface-at-all")
+							return (strings.Count(out, expectedName) > 0)
+						}
 					}
 					Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
 						"Expected HostEndpoint iptables rules to appear")

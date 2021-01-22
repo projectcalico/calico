@@ -58,7 +58,7 @@ type State struct {
 	PreNATDstPort       uint16
 	PostNATDstPort      uint16
 	IPProto             uint8
-	Pad                 uint8
+	Flags               uint8
 	ConntrackResultType uint32
 	ConntrackData       uint64
 	ConntrackDataTun    uint32

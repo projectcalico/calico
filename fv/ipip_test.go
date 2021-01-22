@@ -44,7 +44,7 @@ import (
 	"github.com/projectcalico/felix/fv/workload"
 )
 
-var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
 		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
@@ -86,6 +86,12 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			w[ii].ConfigureInInfra(infra)
 
 			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
+		}
+
+		if bpfEnabled {
+			for _, f := range felixes {
+				Eventually(f.NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
+			}
 		}
 
 		cc = &connectivity.Checker{}

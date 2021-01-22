@@ -185,6 +185,14 @@ type Config struct {
 	MTUIfacePattern *regexp.Regexp
 }
 
+type UpdateBatchResolver interface {
+	// Opportunity for a manager component to resolve state that depends jointly on the updates
+	// that it has seen since the preceding CompleteDeferredWork call.  Processing here can
+	// include passing resolved state to other managers.  It should not include any actual
+	// dataplane updates yet.  (Those should be actioned in CompleteDeferredWork.)
+	ResolveUpdateBatch() error
+}
+
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
 // and ipsets.  It communicates with the datastore-facing part of Felix via the
 // Send/RecvMessage methods, which operate on the protobuf-defined API objects.
@@ -526,12 +534,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
 		interfaceRegexes[i] = "^" + r + ".*"
 	}
+	bpfMapContext := &bpf.MapContext{
+		RepinningEnabled: config.BPFMapRepin,
+	}
+
+	var (
+		bpfEndpointManager *bpfEndpointManager
+	)
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
-		bpfMapContext := &bpf.MapContext{
-			RepinningEnabled: config.BPFMapRepin,
-		}
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
@@ -581,11 +593,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(failsafeMgr)
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
-		dp.RegisterManager(newBPFEndpointManager(
+		bpfEndpointManager = newBPFEndpointManager(
 			config.BPFLogLevel,
 			config.Hostname,
 			fibLookupEnabled,
-			config.RulesConfig.EndpointToHostAction == "DROP",
+			config.RulesConfig.EndpointToHostAction,
 			config.BPFDataIfacePattern,
 			workloadIfaceRegex,
 			ipSetIDAllocator,
@@ -596,7 +608,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ruleRenderer,
 			filterTableV4,
 			dp.reportHealth,
-		))
+		)
+		dp.RegisterManager(bpfEndpointManager)
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)
@@ -700,6 +713,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		config.BPFEnabled,
+		bpfEndpointManager,
 		callbacks)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -796,6 +810,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			config.BPFEnabled,
+			nil,
 			callbacks))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -1628,7 +1643,23 @@ func (d *InternalDataplane) apply() {
 	// Unset the needs-sync flag, we'll set it again if something fails.
 	d.dataplaneNeedsSync = false
 
-	// First, give the managers a chance to update IP sets and iptables.
+	// First, give the managers a chance to resolve any state based on the preceding batch of
+	// updates.  In some cases, e.g. EndpointManager, this can result in an update to another
+	// manager (BPFEndpointManager.OnHEPUpdate) that must happen before either of those managers
+	// begins its dataplane programming updates.
+	for _, mgr := range d.allManagers {
+		if handler, ok := mgr.(UpdateBatchResolver); ok {
+			err := handler.ResolveUpdateBatch()
+			if err != nil {
+				log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
+					"couldn't resolve update batch for manager, will try again later")
+				d.dataplaneNeedsSync = true
+			}
+			d.reportHealth()
+		}
+	}
+
+	// Now allow managers to complete the dataplane programming updates that they need.
 	for _, mgr := range d.allManagers {
 		err := mgr.CompleteDeferredWork()
 		if err != nil {
