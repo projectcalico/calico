@@ -34,7 +34,7 @@ metadata:
   name: default
 spec:
   certificateManagement:
-       rootCA: <Your CA Cert in Pem format>
+       caCert: <Your CA Cert in Pem format>
        signerName: <your-domain>/<signer-name>
        signatureAlgorithm: SHA512WithRSA
        keyAlgorithm: RSAWithSize4096
