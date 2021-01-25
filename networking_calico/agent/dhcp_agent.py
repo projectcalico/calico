@@ -188,6 +188,9 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # network ID.
         self._last_dnsmasq_ports = {}
 
+        # Cache of current local endpoint IDs.
+        self.local_endpoint_ids = set()
+
     def start(self):
         eventlet.spawn(self.v1_subnet_watcher.start)
         eventlet.spawn(self.subnet_watcher.start)
@@ -328,8 +331,16 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Missing data for one of port's subnets")
             return
 
+        # Report this at INFO level if it is a new port.  Note, we
+        # come through this code periodically for existing ports also,
+        # because of how we watch the etcd DB for changes.
+        if endpoint_id not in self.local_endpoint_ids:
+            LOG.info("New port: %s", port)
+            self.local_endpoint_ids.add(endpoint_id)
+        else:
+            LOG.debug("Refresh already known port: %s", port)
+
         # Add this port into the NetModel.
-        LOG.info("New port: %s", port)
         self.agent.cache.put_port(dhcp.DictModel(port))
 
         # Schedule updating Dnsmasq.
@@ -470,6 +481,11 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             # form.  Ignore it.
             LOG.warning("Unexpected form for endpoint name: %s", name)
             return
+
+        # Remove endpoint ID from our cache.  Note, it might not be
+        # there because we haven't checked whether the endpoint just
+        # deleted is a local one; hence 'discard' instead of 'remove'.
+        self.local_endpoint_ids.discard(endpoint_id)
 
         # Find the corresponding port in the DHCP agent's cache.
         port = self.agent.cache.get_port_by_id(endpoint_id)

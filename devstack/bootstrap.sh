@@ -124,6 +124,8 @@ if [ -n "$DEVSTACK_BRANCH" ]; then
     git checkout ${DEVSTACK_BRANCH}
 fi
 
+export PIP_GET_PIP_URL=https://bootstrap.pypa.io/2.7/get-pip.py
+
 # Prepare DevStack config.
 cat > local.conf <<EOF
 [[local|localrc]]
@@ -133,6 +135,7 @@ DATABASE_PASSWORD=d0060b07d3f3631ece78
 RABBIT_PASSWORD=6366743536a8216bde26
 SERVICE_PASSWORD=91eb72bcafb4ddf246ab
 SERVICE_TOKEN=c5680feca5e2c9c8f820
+PIP_GET_PIP_URL=https://bootstrap.pypa.io/2.7/get-pip.py
 
 enable_plugin networking-calico $ncdir $ncref
 disable_service horizon
