@@ -83,7 +83,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	args := infra.GetDockerArgs()
 	args = append(args, "--privileged")
 
-	// Add in the environment variables.
+	// Collect the environment variables for starting this particular container.  Note: we
+	// are called concurrently with other instances of RunFelix so it's important to only
+	// read from options.*.
 	envVars := map[string]string{
 		// Enable core dumps.
 		"GOTRACEBACK": "crash",
@@ -99,8 +101,14 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}
+	// Collect the volumes for this container.
+	volumes := map[string]string{
+		"/lib/modules": "/lib/modules",
+		"/tmp":         "/tmp",
+	}
 
 	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
+
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		if !options.TestManagesBPF {
 			log.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
@@ -119,7 +127,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	}
 
 	if options.DelayFelixStart {
-		args = append(args, "-e", "DELAY_FELIX_START=true")
+		envVars["DELAY_FELIX_START"] = "true"
 	}
 
 	for k, v := range options.ExtraEnvVars {
@@ -131,10 +139,6 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	}
 
 	// Add in the volumes.
-	volumes := map[string]string{
-		"/lib/modules": "/lib/modules",
-		"/tmp":         "/tmp",
-	}
 	for k, v := range options.ExtraVolumes {
 		volumes[k] = v
 	}
