@@ -768,7 +768,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				// Disable bypass so the kernel can do its RPF check.
 				// The next BPF program to see the packet will update the interface
 				// after the RPF has passed.
-				CALI_CT_DEBUG("Disabling bypass to allow kernel RPF.");
+				CALI_CT_DEBUG("Disabling bypass to allow kernel RPF.\n");
 				ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
 			}
 			ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);

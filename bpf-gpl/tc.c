@@ -184,12 +184,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			if (CALI_F_TO_HEP) {
 				if (rt_addr_is_remote_host(ctx.state->ip_dst) &&
 						rt_addr_is_local_host(ctx.state->ip_src)) {
-					CALI_DEBUG("VXLAN packet to known Calico host, allow.");
+					CALI_DEBUG("VXLAN packet to known Calico host, allow.\n");
 					goto allow;
 				} else {
 					/* Unlike IPIP, the user can be using VXLAN on a different VNI so we don't
 					 * simply drop it. */
-					CALI_DEBUG("VXLAN packet to unknown dest, fall through to policy.");
+					CALI_DEBUG("VXLAN packet to unknown dest, fall through to policy.\n");
 				}
 			}
 		}
@@ -202,31 +202,31 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		// IPIP
 		if (CALI_F_TUNNEL | CALI_F_WIREGUARD) {
 			// IPIP should never be sent down the tunnel.
-			CALI_DEBUG("IPIP traffic to/from tunnel: drop");
+			CALI_DEBUG("IPIP traffic to/from tunnel: drop\n");
 			ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 			goto deny;
 		}
 		if (CALI_F_FROM_HEP) {
 			if (rt_addr_is_remote_host(ctx.state->ip_src)) {
-				CALI_DEBUG("IPIP packet from known Calico host, allow.");
+				CALI_DEBUG("IPIP packet from known Calico host, allow.\n");
 				goto allow;
 			} else {
-				CALI_DEBUG("IPIP packet from unknown source, drop.");
+				CALI_DEBUG("IPIP packet from unknown source, drop.\n");
 				ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 				goto deny;
 			}
 		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD) {
 			if (rt_addr_is_remote_host(ctx.state->ip_dst)) {
-				CALI_DEBUG("IPIP packet to known Calico host, allow.");
+				CALI_DEBUG("IPIP packet to known Calico host, allow.\n");
 				goto allow;
 			} else {
-				CALI_DEBUG("IPIP packet to unknown dest, drop.");
+				CALI_DEBUG("IPIP packet to unknown dest, drop.\n");
 				ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 				goto deny;
 			}
 		}
 		if (CALI_F_FROM_WEP) {
-			CALI_DEBUG("IPIP traffic from workload: drop");
+			CALI_DEBUG("IPIP traffic from workload: drop\n");
 			ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 			goto deny;
 		}
@@ -247,7 +247,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			goto allow;
 		}
 		// FIXME non-port based conntrack.
-		CALI_DEBUG("Unknown protocol from workload.");
+		CALI_DEBUG("Unknown protocol from workload.\n");
 		goto deny;
 	}
 
