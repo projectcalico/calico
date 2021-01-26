@@ -26,8 +26,8 @@ to users. Since this document assumes that you have configured your etcd cluster
 to use certificates, you must pass a proper CA and cert/key pair to the
 commands used in the below guides.
 
-- [etcd v2 guide](https://coreos.com/etcd/docs/latest/v2/authentication.html){:target="_blank"}
-- [etcd v3 guide](https://coreos.com/etcd/docs/latest/op-guide/authentication.html){:target="_blank"}
+- [etcd v2 guide](https://etcd.io/docs/v2/authentication/){:target="_blank"}
+- [etcd v3 guide](https://etcd.io/docs/latest/op-guide/security/){:target="_blank"}
 
 ## Suggestions for your roles and users
 
