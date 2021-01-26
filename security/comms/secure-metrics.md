@@ -22,7 +22,7 @@ to {{site.prodname}}'s Prometheus metrics. Choosing an approach depends on your 
 - [Using a deny-list approach](#using-a-deny-list-approach)
 
   This approach allows all traffic to your hosts by default, but lets you limit access to specific ports using
-  {{site.prodname}} policy. This approach allows you to restrict access to access to specific ports, while leaving other
+  {{site.prodname}} policy. This approach allows you to restrict access to specific ports, while leaving other
   host traffic unaffected.
 
 - [Using an allow-list approach](#using-an-allow-list-approach)
