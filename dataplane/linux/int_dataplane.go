@@ -557,6 +557,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsConfigV4,
 			ipSetIDAllocator,
 			ipSetsMap,
+			dp.loopSummarizer,
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks))
