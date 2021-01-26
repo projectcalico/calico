@@ -217,6 +217,7 @@ outter:
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
+	bin.PatchVXLANPort(testVxlanPort)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -504,6 +505,7 @@ outter:
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
+	bin.PatchVXLANPort(testVxlanPort)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())

@@ -216,9 +216,11 @@ static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
 
 CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* be 0x54534f48 = ASCII(HOST) */
 CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(TMTU) */
+CALI_CONFIGURABLE_DEFINE(vxlan_port, 0x52505856) /* be 0x52505856 = ASCII(VXPR) */
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
+#define VXLAN_PORT 	CALI_CONFIGURABLE(vxlan_port)
 
 #define MAP_PIN_GLOBAL	2
 

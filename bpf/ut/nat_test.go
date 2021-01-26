@@ -1127,7 +1127,18 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 
 	// Response arriving at node 1 through 10.10.0.x
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		// Initially, blocked by the VXLAN source policing.
 		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+
+		// Add the route for the remote node.  Should now be allowed...
+		err = rtMap.Update(
+			routes.NewKey(ip.FromNetIP(node2ip).AsCIDR().(ip.V4CIDR)).AsBytes(),
+			routes.NewValueWithNextHop(routes.FlagsRemoteHost, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		res, err = bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 

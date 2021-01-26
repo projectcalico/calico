@@ -117,6 +117,7 @@ type bpfEndpointManager struct {
 	ipSetIDAlloc       *idalloc.IDAllocator
 	epToHostAction     string
 	vxlanMTU           int
+	vxlanPort          uint16
 	dsrEnabled         bool
 
 	ipSetMap bpf.Map
@@ -150,6 +151,7 @@ func newBPFEndpointManager(
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	vxlanMTU int,
+	vxlanPort uint16,
 	dsrEnabled bool,
 	ipSetMap bpf.Map,
 	stateMap bpf.Map,
@@ -178,6 +180,7 @@ func newBPFEndpointManager(
 		ipSetIDAlloc:        ipSetIDAlloc,
 		epToHostAction:      epToHostAction,
 		vxlanMTU:            vxlanMTU,
+		vxlanPort:           vxlanPort,
 		dsrEnabled:          dsrEnabled,
 		ipSetMap:            ipSetMap,
 		stateMap:            stateMap,
@@ -1007,6 +1010,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.FIB = m.fibLookupEnabled
 	ap.DSR = m.dsrEnabled
 	ap.LogLevel = m.bpfLogLevel
+	ap.VXLANPort = m.vxlanPort
 
 	return ap
 }

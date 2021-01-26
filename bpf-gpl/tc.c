@@ -147,9 +147,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
 			is_vxlan_tunnel(ctx.ip_header) /* Is this a VXLAN packet? */ ) {
 		/* Decap it; vxlan_attempt_decap will revalidate the packet if needed. */
-		if (vxlan_attempt_decap(&ctx)) {
-			// Problem.
+		switch (vxlan_attempt_decap(&ctx)) {
+		case -1:
+			/* Problem decoding the packet. */
 			goto deny;
+		case -2:
+			/* Non-BPF VXLAN packet from another Calico node. */
+			CALI_DEBUG("VXLAN packet from known Calico host, allow.");
+			goto allow;
 		}
 	}
 
@@ -173,6 +178,21 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->sport = bpf_ntohs(ctx.udp_header->source);
 		ctx.state->dport = bpf_ntohs(ctx.udp_header->dest);
 		CALI_DEBUG("UDP; ports: s=%d d=%d\n", ctx.state->sport, ctx.state->dport);
+		if (ctx.state->dport == VXLAN_PORT) {
+			/* CALI_F_FROM_HEP case is handled in vxlan_attempt_decap above since it already decoded
+			 * the header. */
+			if (CALI_F_TO_HEP) {
+				if (rt_addr_is_remote_host(ctx.state->ip_dst) &&
+						rt_addr_is_local_host(ctx.state->ip_src)) {
+					CALI_DEBUG("VXLAN packet to known Calico host, allow.");
+					goto allow;
+				} else {
+					/* Unlike IPIP, the user can be using VXLAN on a different VNI so we don't
+					 * simply drop it. */
+					CALI_DEBUG("VXLAN packet to unknown dest, fall through to policy.");
+				}
+			}
+		}
 		break;
 	case IPPROTO_ICMP:
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
@@ -180,9 +200,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	case 4:
 		// IPIP
+		if (CALI_F_TUNNEL | CALI_F_WIREGUARD) {
+			// IPIP should never be sent down the tunnel.
+			CALI_DEBUG("IPIP traffic to/from tunnel: drop");
+			ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+			goto deny;
+		}
 		if (CALI_F_FROM_HEP) {
-			enum cali_rt_flags rf = cali_rt_lookup_flags(ctx.state->ip_src);
-			if (cali_rt_flags_remote_host(rf)) {
+			if (rt_addr_is_remote_host(ctx.state->ip_src)) {
 				CALI_DEBUG("IPIP packet from known Calico host, allow.");
 				goto allow;
 			} else {
@@ -190,9 +215,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
 				goto deny;
 			}
-		} else if (CALI_F_TO_HEP) {
-			enum cali_rt_flags rf = cali_rt_lookup_flags(ctx.state->ip_dst);
-			if (cali_rt_flags_remote_host(rf)) {
+		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD) {
+			if (rt_addr_is_remote_host(ctx.state->ip_dst)) {
 				CALI_DEBUG("IPIP packet to known Calico host, allow.");
 				goto allow;
 			} else {
@@ -1039,7 +1063,7 @@ nat_encap:
 		goto  deny;
 	}
 
-	state->sport = state->dport = CALI_VXLAN_PORT;
+	state->sport = state->dport = VXLAN_PORT;
 	state->ip_proto = IPPROTO_UDP;
 
 	CALI_DEBUG("vxlan return %d ifindex_fwd %d\n",

@@ -50,8 +50,6 @@ fi
 
 if [[ "${filename}" =~ test_.* ]]; then
   args+=("-D__BPFTOOL_LOADER__")
-  args+=("-DCALI_VXLAN_PORT=5665")
-  args+=("-DCALI_NAT_TUNNEL_MTU=700")
 fi
 
 flags=0

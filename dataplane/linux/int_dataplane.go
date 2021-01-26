@@ -120,6 +120,7 @@ type Config struct {
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
 	VXLANMTU             int
+	VXLANPort            int
 
 	MaxIPSetSize int
 
@@ -603,6 +604,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			workloadIfaceRegex,
 			ipSetIDAllocator,
 			config.VXLANMTU,
+			uint16(config.VXLANPort),
 			config.BPFNodePortDSREnabled,
 			ipSetsMap,
 			stateMap,

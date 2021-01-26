@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -27,10 +27,6 @@
 #include "skb.h"
 #include "routes.h"
 #include "nat_types.h"
-
-#ifndef CALI_VXLAN_PORT
-#define CALI_VXLAN_PORT 4789 /* IANA VXLAN port */
-#endif
 
 #ifndef CALI_VXLAN_VNI
 #define CALI_VXLAN_VNI 0xca11c0
@@ -273,7 +269,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	ctx->ip_header->check = 0;
 	ctx->ip_header->protocol = IPPROTO_UDP;
 
-	ctx->udp_header->source = ctx->udp_header->dest = bpf_htons(CALI_VXLAN_PORT);
+	ctx->udp_header->source = ctx->udp_header->dest = bpf_htons(VXLAN_PORT);
 	ctx->udp_header->len = bpf_htons(bpf_ntohs(ctx->ip_header->tot_len) - sizeof(struct iphdr));
 
 	*((__u8*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
@@ -312,8 +308,7 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 	struct udphdr *udp = (struct udphdr *)(ip +1);
 
 	return ip->protocol == IPPROTO_UDP &&
-		udp->dest == bpf_htons(CALI_VXLAN_PORT) &&
-		udp->check == 0;
+		udp->dest == bpf_htons(VXLAN_PORT);
 }
 
 static CALI_BPF_INLINE bool vxlan_size_ok(struct cali_tc_ctx *ctx)
@@ -357,6 +352,13 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct cali_tc_ctx *ctx)
 	return false;
 }
 
+/* vxlan_attempt_decap tries to decode the packet as VXLAN and, if it is a BPF-to-BPF
+ * program VXLAN packet, does the decap. Returns:
+ *
+ * 0:  on success (either a packet that doesn't need decap or decap was successful).
+ * -1: if the packet was invalid (e.g. too short)
+ * -2: if the packet is VXLAN from a Calico host, to this node, but it is not the right VNI.
+ */
 static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	/* decap on host ep only if directly for the node */
 	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n",
@@ -364,20 +366,33 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 		bpf_ntohl(HOST_IP));
 
 	if (!rt_addr_is_local_host(ctx->ip_header->daddr)) {
-		return 0;
-	}
-	if (!vxlan_udp_csum_ok(ctx->udp_header)) {
-		return 0;
+		goto fall_through;
 	}
 	if (!vxlan_size_ok(ctx)) {
-		/* UDP header said VLXAN but packet wasn't long enough. */
+		/* UDP header said VXLAN but packet wasn't long enough. */
 		goto deny;
 	}
 	if (!vxlan_vni_is_valid(ctx) ) {
-		return 0;
+		goto fall_through;
 	}
 	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
-		return 0; /* Not _our_ VXLAN packet. */
+		if (rt_addr_is_remote_host(ctx->ip_header->saddr)) {
+			/* Not BPF-generated VXLAN packet but it was from a Calico host to this node. */
+			goto auto_allow;
+		}
+		/* Not our VNI, not from Calico host. Fall through to policy. */
+		goto fall_through;
+	}
+	if (!rt_addr_is_remote_host(ctx->ip_header->saddr)) {
+		CALI_DEBUG("VXLAN with our VNI from unexpected source.\n");
+		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+		goto deny;
+	}
+	if (!vxlan_udp_csum_ok(ctx->udp_header)) {
+		/* Our VNI but checksum is incorrect (we always use check=0). */
+		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.\n");
+		ctx->fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+		goto deny;
 	}
 
 	ctx->arpk.ip = ctx->ip_header->saddr;
@@ -405,7 +420,12 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 
 	CALI_DEBUG("vxlan decap origin %x\n", bpf_ntohl(ctx->state->tun_ip));
+
+fall_through:
 	return 0;
+
+auto_allow:
+	return -2;
 
 deny:
 	ctx->fwd.res = TC_ACT_SHOT;
