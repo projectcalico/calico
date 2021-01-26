@@ -55,7 +55,7 @@ section:
     - title: Overview
       path: /reference/calicoctl/datastore/overview
     - title: Migrate
-      path: /reference/calicoctl/datastore/migrate
+      path: /reference/calicoctl/datastore/migrate/
       section:
       - title: Overview
         path: /reference/calicoctl/datastore/migrate/overview
