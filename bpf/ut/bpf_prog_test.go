@@ -927,3 +927,37 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
 	}
 }
+
+func TestJumpMap(t *testing.T) {
+	RegisterTestingT(t)
+
+	jumpMapFD := jumpMap.MapFD()
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD)
+	rules := polprog.Rules{}
+	insns, err := pg.Instructions(rules)
+	Expect(err).NotTo(HaveOccurred())
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	Expect(err).NotTo(HaveOccurred())
+
+	k := make([]byte, 4)
+	v := make([]byte, 4)
+	binary.LittleEndian.PutUint32(v, uint32(progFD))
+
+	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntry(jumpMapFD, k, 4)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntry(jumpMapFD, k, 4)
+	Expect(err).To(HaveOccurred())
+}
