@@ -165,6 +165,12 @@ Description:
 			"--output": "yaml",
 			"get":      true,
 		}
+
+		// Add options for pulling resources from all namespaces for namespaced resources.
+		if r == "networksets" || r == "networkpolicies" {
+			mockArgs["--all-namespaces"] = true
+		}
+
 		results := common.ExecuteConfigCommand(mockArgs, common.ActionGetOrList)
 		if len(results.ResErrs) > 0 {
 			var errStr string
