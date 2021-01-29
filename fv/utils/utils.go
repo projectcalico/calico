@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -61,19 +62,27 @@ var Ctx = context.Background()
 var NoOptions = options.SetOptions{}
 
 func Run(command string, args ...string) {
-	_ = run(true, command, args...)
+	_ = run(nil, true, command, args...)
+}
+
+func RunWithInput(input []byte, command string, args ...string) {
+	_ = run(input, true, command, args...)
 }
 
 func RunMayFail(command string, args ...string) error {
-	return run(false, command, args...)
+	return run(nil, false, command, args...)
 }
 
 var currentTestOutput = []string{}
 
 var LastRunOutput string
 
-func run(checkNoError bool, command string, args ...string) error {
-	outputBytes, err := Command(command, args...).CombinedOutput()
+func run(input []byte, checkNoError bool, command string, args ...string) error {
+	cmd := Command(command, args...)
+	if input != nil {
+		cmd.Stdin = bytes.NewReader(input)
+	}
+	outputBytes, err := cmd.CombinedOutput()
 	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
 	currentTestOutput = append(currentTestOutput, string(outputBytes))
 	LastRunOutput = string(outputBytes)
