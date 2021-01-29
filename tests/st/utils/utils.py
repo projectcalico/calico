@@ -496,3 +496,13 @@ def name(data):
     Returns: The resource name.
     """
     return data['metadata']['name']
+
+def namespace(data):
+    """
+    Returns the namespace of the resource in the supplied data
+    Args:
+       data: A dictionary containing the resource.
+
+    Returns: The resource name.
+    """
+    return data['metadata']['namespace']

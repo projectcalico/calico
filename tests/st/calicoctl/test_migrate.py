@@ -19,7 +19,7 @@ from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
-    API_VERSION, name, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
+    API_VERSION, name, namespace, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
     SET_DEFAULT, NOT_SUPPORTED, KUBERNETES_NP, NOT_LOCKED, \
     NOT_KUBERNETES, NO_IPAM, writeyaml
 from tests.st.utils.data import *
@@ -116,10 +116,23 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_data(networkpolicy_name1_rev1)
         rc.assert_no_error()
 
+        # Create namespaced Network policy
+        rc = calicoctl("create", data=networkpolicy_name3_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("get networkpolicy %s -n %s -o yaml" % (name(networkpolicy_name3_rev1), namespace(networkpolicy_name3_rev1)))
+        rc.assert_data(networkpolicy_name3_rev1)
+        rc.assert_no_error()
+
         # Create NetworkSets
         rc = calicoctl("create", data=networkset_name1_rev1)
         rc.assert_no_error()
         rc = calicoctl("get networkset %s -o yaml" % name(networkset_name1_rev1))
+        rc.assert_no_error()
+
+        # Create namespaced NetworkSet
+        rc = calicoctl("create", data=networkset_name2_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("get networkset %s -n %s -o yaml" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)))
         rc.assert_no_error()
 
         # Create a Node, this should also trigger auto-creation of a cluster info
@@ -173,7 +186,11 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("delete networkpolicy %s" % name(networkpolicy_name1_rev1))
         rc.assert_no_error()
+        rc = calicoctl("delete networkpolicy %s -n %s" % (name(networkpolicy_name3_rev1), namespace(networkpolicy_name3_rev1)))
+        rc.assert_no_error()
         rc = calicoctl("delete networkset %s" % name(networkset_name1_rev1))
+        rc.assert_no_error()
+        rc = calicoctl("delete networkset %s -n %s" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)))
         rc.assert_no_error()
         rc = calicoctl("delete node %s" % name(node_name4_rev1))
         rc.assert_no_error()
@@ -215,7 +232,11 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_data(hostendpoint_name1_rev1)
         rc = calicoctl("get networkpolicy %s -o yaml" % name(networkpolicy_name1_rev1), kdd=True)
         rc.assert_data(networkpolicy_name1_rev1)
+        rc = calicoctl("get networkpolicy %s -n %s -o yaml" % (name(networkpolicy_name3_rev1), namespace(networkpolicy_name3_rev1)), kdd=True)
+        rc.assert_data(networkpolicy_name3_rev1)
         rc = calicoctl("get networkset %s -o yaml" % name(networkset_name1_rev1), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("get networkset %s -n %s -o yaml" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("get node %s -o yaml" % name(node_name4_rev1), kdd=True)
         rc.assert_no_error()
@@ -249,5 +270,9 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("delete networkpolicy %s" % name(networkpolicy_name1_rev1), kdd=True)
         rc.assert_no_error()
+        rc = calicoctl("delete networkpolicy %s -n %s" % (name(networkpolicy_name3_rev1), namespace(networkpolicy_name3_rev1)), kdd=True)
+        rc.assert_no_error()
         rc = calicoctl("delete networkset %s" % name(networkset_name1_rev1), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("delete networkset %s -n %s" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)), kdd=True)
         rc.assert_no_error()
