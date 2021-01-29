@@ -218,7 +218,7 @@ function EnableWinDsrForEKS()
     $OSInfo = (Get-ComputerInfo  | select WindowsVersion, OsBuildNumber)
     $PlatformSupportDSR = (($OSInfo.WindowsVersion -as [int]) -GE 1903 -And ($OSInfo.OsBuildNumber -as [int]) -GE 18317)
 
-    if -Not $PlatformSupportDSR {
+    if (-Not $PlatformSupportDSR) {
         Write-Host "WinDsr is not supported ($OSInfo)"
         return
     }
