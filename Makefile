@@ -311,6 +311,14 @@ run-kubernetes-master: stop-kubernetes-master
 		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
 		--server=http://127.0.0.1:8080 \
 		apply -f /manifests/tests/st/manifests/mock-node.yaml
+
+	# Create a namespace in the API for the tests to use.
+	docker run \
+	    --net=host \
+	    --rm \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
+		--server=http://127.0.0.1:8080 \
+		create namespace test
 	
 ## Stop the local kubernetes master
 stop-kubernetes-master:
