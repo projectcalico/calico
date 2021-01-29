@@ -213,6 +213,28 @@ function GetCalicoKubeConfig()
     (Get-Content $RootDir\calico-kube-config.template).replace('<ca>', $ca).replace('<server>', $server.Trim()).replace('<token>', $token) | Set-Content $RootDir\calico-kube-config -Force
 }
 
+function EnableWinDsrForEKS()
+{
+    $OSInfo = (Get-ComputerInfo  | select WindowsVersion, OsBuildNumber)
+    $PlatformSupportDSR = (($OSInfo.WindowsVersion -as [int]) -GE 1903 -And ($OSInfo.OsBuildNumber -as [int]) -GE 18317)
+
+    if (-Not $PlatformSupportDSR) {
+        Write-Host "WinDsr is not supported ($OSInfo)"
+        return
+    }
+
+    # Update and restart kube-proxy if WinDSR is not enabled by default.
+    $Path = Get-WmiObject -Query 'select * from win32_service where name="kube-proxy"' | Select -ExpandProperty pathname
+    if ($Path -like "*--enable-dsr=true*") {
+        Write-Host "WinDsr is enabled by default."
+    } else {
+        $UpdatedPath = $Path + " --enable-dsr=true --feature-gates=WinDSR=true"
+        Get-WmiObject win32_service -filter 'Name="kube-proxy"' | Invoke-WmiMethod -Name Change -ArgumentList @($null,$null,$null,$null,$null,$UpdatedPath)
+        Restart-Service -name "kube-proxy"
+        Write-Host "WinDsr has been enabled for kube-proxy."
+    }
+}
+
 function SetupEtcdTlsFiles()
 {
     param(
@@ -334,6 +356,8 @@ if ($platform -EQ "aks") {
     GetCalicoKubeConfig -CalicoNamespace $calicoNs -SecretName 'calico-windows'
 }
 if ($platform -EQ "eks") {
+    EnableWinDsrForEKS
+
     $awsNodeName = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/local-hostname -ErrorAction Ignore
     Write-Host "Setup Calico for Windows for EKS, node name $awsNodeName ..."
     $Backend = "none"
