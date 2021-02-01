@@ -53,7 +53,11 @@ struct calico_ct_leg {
 
 	__u32 opener:1;
 
-	__u32 ifindex; /* where the packet entered the system from */
+	__u32 ifindex; /* For a CT leg where packets ingress through an interface towards
+			* the host, this is the ingress interface index.  For a CT leg
+			* where packets originate _from_ the host, it's CT_INVALID_IFINDEX
+			* (0).
+			*/
 };
 
 #define CT_INVALID_IFINDEX	0
@@ -170,6 +174,11 @@ struct calico_ct_result {
 	__u32 nat_port;
 	__be32 tun_ip;
 	__u32 ifindex_fwd; /* if set, the ifindex where the packet should be forwarded */
+	__u32 ifindex_created; /* For a CT state that was created by a packet ingressing
+				* through an interface towards the host, this is the
+				* ingress interface index.  For a CT state created by a
+				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
+				*/
 };
 
 #endif /* __CALI_CONNTRAC_TYPESK_H__ */

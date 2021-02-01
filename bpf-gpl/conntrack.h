@@ -168,12 +168,14 @@ create:
 
 	dump_ct_key(k);
 
-	__u32 ifindex = skb_ingress_ifindex(ct_ctx->skb);
-
 	src_to_dst->seqno = seq;
 	src_to_dst->syn_seen = syn;
 	src_to_dst->opener = 1;
-	src_to_dst->ifindex = ifindex;
+	if (CALI_F_TO_HOST) {
+		src_to_dst->ifindex = skb_ingress_ifindex(ct_ctx->skb);
+	} else {
+		src_to_dst->ifindex = CT_INVALID_IFINDEX;
+	}
 	CALI_DEBUG("NEW src_to_dst->ifindex %d\n", src_to_dst->ifindex);
 	dst_to_src->ifindex = CT_INVALID_IFINDEX;
 
@@ -438,6 +440,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 	struct calico_ct_result result = {
 		.rc = CALI_CT_NEW, /* it is zero, but make it explicit in the code */
+		.ifindex_created = CT_INVALID_IFINDEX,
 	};
 
 	if (tcp_header && tcp_header->syn && !tcp_header->ack) {
@@ -537,6 +540,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	v->last_seen = now;
 
 	result.flags = v->flags;
+
+	// Return the if_index where the CT state was created.
+	if (v->a_to_b.opener) {
+		result.ifindex_created = v->a_to_b.ifindex;
+	} else if (v->b_to_a.opener) {
+		result.ifindex_created = v->b_to_a.ifindex;
+	}
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
 
@@ -772,7 +782,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
 			}
 			ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
-		} else {
+		} else if (src_to_dst->ifindex != CT_INVALID_IFINDEX) {
 			/* if the devices do not match, we got here without bypassing the
 			 * host IP stack and RPF check allowed it, so update our records.
 			 */
