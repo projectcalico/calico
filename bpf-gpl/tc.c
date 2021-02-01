@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 */
 	skb->mark = CALI_SET_SKB_MARK;
 #endif
-	CALI_DEBUG("New packet; mark=%x\n", skb->mark);
+	CALI_DEBUG("New packet at ifindex=%d; mark=%x\n", skb->ifindex, skb->mark);
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
@@ -253,6 +253,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Do conntrack lookup before anything else */
 	ctx.state->ct_result = calico_ct_v4_lookup(&ctx);
+	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx.state->ct_result.flags);
 
 	/* Check if someone is trying to spoof a tunnel packet */
 	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx.state->ct_result.rc)) {
