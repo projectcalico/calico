@@ -689,3 +689,12 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
 	}
 }
+
+func (w *Workload) InterfaceIndex() int {
+	out, err := w.C.ExecOutput("ip", "link", "show", "dev", w.InterfaceName)
+	Expect(err).NotTo(HaveOccurred())
+	ifIndex, err := strconv.Atoi(strings.SplitN(out, ":", 2)[0])
+	Expect(err).NotTo(HaveOccurred())
+	log.Infof("%v is ifindex %v", w.InterfaceName, ifIndex)
+	return ifIndex
+}
