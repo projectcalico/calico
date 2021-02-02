@@ -39,10 +39,18 @@ type kubeControllersConfiguration struct {
 	client client
 }
 
+func (r kubeControllersConfiguration) fillDefaults(res *apiv3.KubeControllersConfiguration) {
+	if res.Spec.PrometheusMetricsPort == nil {
+		var defaultPort = 9094
+		res.Spec.PrometheusMetricsPort = &defaultPort
+	}
+}
+
 // Create takes the representation of a KubeControllersConfiguration and creates it.
 // Returns the stored representation of the KubeControllersConfiguration, and an error
 // if there is any.
 func (r kubeControllersConfiguration) Create(ctx context.Context, res *apiv3.KubeControllersConfiguration, opts options.SetOptions) (*apiv3.KubeControllersConfiguration, error) {
+	r.fillDefaults(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -61,6 +69,7 @@ func (r kubeControllersConfiguration) Create(ctx context.Context, res *apiv3.Kub
 // Returns the stored representation of the KubeControllersConfiguration, and an error
 // if there is any.
 func (r kubeControllersConfiguration) Update(ctx context.Context, res *apiv3.KubeControllersConfiguration, opts options.SetOptions) (*apiv3.KubeControllersConfiguration, error) {
+	r.fillDefaults(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}

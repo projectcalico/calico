@@ -1733,6 +1733,11 @@ func (in *KubeControllersConfigurationSpec) DeepCopyInto(out *KubeControllersCon
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.PrometheusMetricsPort != nil {
+		in, out := &in.PrometheusMetricsPort, &out.PrometheusMetricsPort
+		*out = new(int)
+		**out = **in
+	}
 	in.Controllers.DeepCopyInto(&out.Controllers)
 	return
 }

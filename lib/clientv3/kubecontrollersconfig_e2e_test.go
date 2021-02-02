@@ -37,8 +37,10 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 
 	ctx := context.Background()
 	name := "default"
+	port := 9094
 	spec1 := apiv3.KubeControllersConfigurationSpec{
-		HealthChecks: apiv3.Enabled,
+		HealthChecks:          apiv3.Enabled,
+		PrometheusMetricsPort: &port,
 		Controllers: apiv3.ControllersConfig{
 			Node: &apiv3.NodeControllerConfig{
 				ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},
@@ -52,7 +54,8 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 		},
 	}
 	spec2 := apiv3.KubeControllersConfigurationSpec{
-		HealthChecks: apiv3.Disabled,
+		HealthChecks:          apiv3.Disabled,
+		PrometheusMetricsPort: &port,
 		Controllers: apiv3.ControllersConfig{
 			Node: &apiv3.NodeControllerConfig{
 				ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},

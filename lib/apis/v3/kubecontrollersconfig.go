@@ -48,6 +48,9 @@ type KubeControllersConfigurationSpec struct {
 	// EtcdV3CompactionPeriod is the period between etcdv3 compaction requests. Set to 0 to disable. [Default: 10m]
 	EtcdV3CompactionPeriod *metav1.Duration `json:"etcdV3CompactionPeriod,omitempty" validate:"omitempty"`
 
+	// PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]
+	PrometheusMetricsPort *int `json:"prometheusMetricsPort,omitempty"`
+
 	// Controllers enables and configures individual Kubernetes controllers
 	Controllers ControllersConfig `json:"controllers"`
 }
