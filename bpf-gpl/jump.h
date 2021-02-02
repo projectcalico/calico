@@ -52,8 +52,8 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_state *state
 
 /* Add new values to the end as these are program indices */
 enum cali_jump_index {
-	POL_PROG_INDEX,
-	EPILOGUE_PROG_INDEX,
-	ICMP_PROG_INDEX,
+	PROG_INDEX_POLICY,
+	PROG_INDEX_EPILOGUE,
+	PROG_INDEX_ICMP,
 };
 #endif /* __CALI_BPF_JUMP_H__ */

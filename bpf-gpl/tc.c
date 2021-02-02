@@ -423,7 +423,7 @@ skip_pre_dnat_default:
 	}
 
 icmp_send_reply:
-	bpf_tail_call(skb, &cali_jump, ICMP_PROG_INDEX);
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ICMP);
 	/* should not reach here */
 	goto deny;
 
@@ -976,7 +976,7 @@ icmp_too_big:
 	goto icmp_send_reply;
 
 icmp_send_reply:
-	bpf_tail_call(skb, &cali_jump, ICMP_PROG_INDEX);
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ICMP);
 	goto deny;
 
 nat_encap:
