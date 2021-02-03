@@ -252,14 +252,14 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 				`"IpInIpTunnelAddr":"` + regexp.QuoteMeta(felix.ExpectedIPIPTunnelAddr) + `"`))
 		} else if opts.NeedNodeIP {
 			w = felix.WatchStdoutFor(regexp.MustCompile(
-				`Host config update for this host`))
+				`Host config update for this host|Host IP changed`))
 		}
 		infra.AddNode(felix, i, bool(n > 1 || opts.NeedNodeIP))
 		if w != nil {
 			// Wait for any Felix restart...
 			log.Info("Wait for Felix to restart")
 			Eventually(w, "10s").Should(BeClosed(),
-				"Timed out waiting for Felix to restart")
+				fmt.Sprintf("Timed out waiting for %s to restart", felix.Name))
 		}
 
 		if opts.AutoHEPsEnabled {

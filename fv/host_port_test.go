@@ -33,7 +33,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-func MetricsPortReachable(felix *infrastructure.Felix) bool {
+func MetricsPortReachable(felix *infrastructure.Felix, bpf bool) bool {
+	if bpf {
+		felix.Exec("calico-bpf", "conntrack", "clean")
+	}
+
 	// Delete existing conntrack state for the metrics port.
 	felix.Exec("conntrack", "-L")
 	felix.Exec("conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
@@ -84,7 +88,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ host-port tests", []apiconf
 		felix, client = infrastructure.StartSingleNodeTopology(options, infra)
 
 		metricsPortReachable = func() bool {
-			return MetricsPortReachable(felix)
+			return MetricsPortReachable(felix, bpfEnabled)
 		}
 
 		if bpfEnabled {
