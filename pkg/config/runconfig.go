@@ -74,6 +74,7 @@ type RunConfig struct {
 	Controllers            ControllersConfig
 	EtcdV3CompactionPeriod time.Duration
 	HealthEnabled          bool
+	PrometheusPort         int
 }
 
 type ControllersConfig struct {
@@ -303,6 +304,11 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	mergeCompactionPeriod(envVars, &status, &rCfg, apiCfg)
 
 	mergeHealthEnabled(envVars, &status, &rCfg, apiCfg)
+
+	// Merge prometheus information.
+	if apiCfg.PrometheusMetricsPort != nil {
+		rCfg.PrometheusPort = *apiCfg.PrometheusMetricsPort
+	}
 
 	// Don't bother looking at this unless the node controller is enabled.
 	if rc.Node != nil {

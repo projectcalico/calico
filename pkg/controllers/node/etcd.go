@@ -22,8 +22,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
 
+	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -76,9 +76,7 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) {
 	// On failure, we retry a certain number of times.
 	for n := 1; n < 5; n++ {
 		// Get the Calico node representation.
-		nc.nodemapLock.Lock()
-		name, ok := nc.nodemapper[node.Name]
-		nc.nodemapLock.Unlock()
+		name, ok := nc.getCalicoNode(node.Name)
 		if !ok {
 			// We havent learned this Calico node yet.
 			log.Debugf("Skipping update for node with no Calico equivalent")

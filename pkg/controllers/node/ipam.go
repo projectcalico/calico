@@ -22,40 +22,83 @@ import (
 	"strings"
 	"time"
 
-	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	ipsGauge      *prometheus.GaugeVec
+	blocksGauge   *prometheus.GaugeVec
+	borrowedGauge *prometheus.GaugeVec
+)
+
+func registerPrometheusMetrics() {
+	// Total IP allocations.
+	ipsGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_allocations_per_node",
+		Help: "Number of IPs allocated",
+	}, []string{"node"})
+	prometheus.MustRegister(ipsGauge)
+
+	// Borrowed IPs.
+	borrowedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_allocations_borrowed_per_node",
+		Help: "Number of allocated IPs that are from non-affine blocks.",
+	}, []string{"node"})
+	prometheus.MustRegister(borrowedGauge)
+
+	// Blocks per-node.
+	blocksGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_blocks_per_node",
+		Help: "Number of blocks in IPAM",
+	}, []string{"node"})
+	prometheus.MustRegister(blocksGauge)
+}
+
 // syncIPAMCleanup cleans up any IPAM resources which should no longer exist based on nodes in the cluster.
 // It returns an error if it is determined that there are resources which should be cleaned up, but is unable to do so.
 // It does not return an error if it is successful, or if there is no action to take.
 func (c *NodeController) syncIPAMCleanup() error {
-	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := c.calicoClient.(accessor).Backend()
 	log.Info("Synchronizing IPAM data")
-
-	// Query all IPAM blocks in the cluster, ratelimiting calls.
-	time.Sleep(c.rl.When(RateLimitCalicoList))
-	blocks, err := bc.List(c.ctx, model.BlockListOptions{}, "")
+	data, err := c.gatherIPAMData()
 	if err != nil {
 		return err
 	}
+	err = c.cleanup(data)
+	if err != nil {
+		return err
+	}
+	log.Info("Node and IPAM data is in sync")
+	return nil
+}
+
+func (c *NodeController) gatherIPAMData() (map[string][]model.AllocationAttribute, error) {
+	log.Debug("gathering latest IPAM state")
+
+	// Query all IPAM blocks in the cluster, ratelimiting calls.
+	time.Sleep(c.rl.When(RateLimitCalicoList))
+	blocks, err := c.listBlocks()
+	if err != nil {
+		return nil, err
+	}
 	c.rl.Forget(RateLimitCalicoList)
+
+	// Keep track of various counts so that we can report them as metrics.
+	allocationsByNode := map[string]int{}
+	blocksByNode := map[string]int{}
+	borrowedIPsByNode := map[string]int{}
 
 	// Build a list of all the nodes in the cluster based on IPAM allocations across all
 	// blocks, plus affinities. Entries are Calico node names.
 	calicoNodes := map[string][]model.AllocationAttribute{}
-	for _, kvp := range blocks.KVPairs {
+	for _, kvp := range blocks {
 		b := kvp.Value.(*model.AllocationBlock)
 
 		// Include affinity if it exists. We want to track nodes even
@@ -65,6 +108,12 @@ func (c *NodeController) syncIPAMCleanup() error {
 			if _, ok := calicoNodes[n]; !ok {
 				calicoNodes[n] = []model.AllocationAttribute{}
 			}
+
+			// Increment number of blocks on this node.
+			blocksByNode[n]++
+		} else {
+			// Count blocks with no affinity as a pseudo-node.
+			blocksByNode["no_affinity"]++
 		}
 
 		// To reduce log spam.
@@ -82,6 +131,13 @@ func (c *NodeController) syncIPAMCleanup() error {
 			if val, ok := attr.AttrSecondary[ipam.AttributeNode]; ok {
 				if _, ok := calicoNodes[val]; !ok {
 					calicoNodes[val] = []model.AllocationAttribute{}
+				}
+
+				// Update metrics maps with this allocation.
+				allocationsByNode[val]++
+				if b.Affinity == nil || val != strings.TrimPrefix(*b.Affinity, "host:") {
+					// If the allocations node doesn't match the block's, then this is borrowed.
+					borrowedIPsByNode[val]++
 				}
 
 				// If there is no handle, then skip this IP. We need the handle
@@ -106,6 +162,23 @@ func (c *NodeController) syncIPAMCleanup() error {
 	}
 	log.Debugf("Calico nodes found in IPAM: %v", calicoNodes)
 
+	// Update prometheus metrics.
+	ipsGauge.Reset()
+	for node, num := range allocationsByNode {
+		ipsGauge.WithLabelValues(node).Set(float64(num))
+	}
+	blocksGauge.Reset()
+	for node, num := range blocksByNode {
+		blocksGauge.WithLabelValues(node).Set(float64(num))
+	}
+	borrowedGauge.Reset()
+	for node, num := range borrowedIPsByNode {
+		borrowedGauge.WithLabelValues(node).Set(float64(num))
+	}
+	return calicoNodes, nil
+}
+
+func (c *NodeController) cleanup(calicoNodes map[string][]model.AllocationAttribute) error {
 	// For storing any errors encountered below.
 	var storedErr error
 
@@ -188,7 +261,6 @@ func (c *NodeController) syncIPAMCleanup() error {
 	if storedErr != nil {
 		return storedErr
 	}
-	log.Info("Node and IPAM data is in sync")
 	return nil
 }
 
@@ -264,8 +336,8 @@ func (c *NodeController) podExistsOnNode(name, ns, node string) bool {
 // kubernetesNodeForCalico returns the name of the Kubernetes node that corresponds to this Calico node.
 // This function returns an empty string if no action should be taken for this node.
 func (c *NodeController) kubernetesNodeForCalico(cnode string) (string, error) {
-	c.nodemapLock.Lock()
-	defer c.nodemapLock.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	for kn, cn := range c.nodemapper {
 		if cn == cnode {

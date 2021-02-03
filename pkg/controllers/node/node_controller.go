@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
@@ -52,6 +53,7 @@ var (
 // NodeController implements the Controller interface.  It is responsible for monitoring
 // kubernetes nodes and responding to delete events by removing them from the Calico datastore.
 type NodeController struct {
+	sync.Mutex
 	ctx          context.Context
 	informer     cache.Controller
 	indexer      cache.Indexer
@@ -59,8 +61,9 @@ type NodeController struct {
 	k8sClientset *kubernetes.Clientset
 	rl           workqueue.RateLimiter
 	schedule     chan interface{}
+	blockUpdate  chan interface{}
 	nodemapper   map[string]string
-	nodemapLock  sync.Mutex
+	allBlocks    map[string]model.KVPair
 	syncer       bapi.Syncer
 	config       config.NodeControllerConfig
 	nodeCache    map[string]*api.Node
@@ -75,6 +78,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 		k8sClientset: k8sClientset,
 		rl:           workqueue.DefaultControllerRateLimiter(),
 		nodemapper:   map[string]string{},
+		allBlocks:    map[string]model.KVPair{},
 		config:       cfg,
 		nodeCache:    make(map[string]*api.Node),
 	}
@@ -83,6 +87,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 	// 1 so that we coalesce multiple kicks while a sync is happening down to
 	// just one additional sync.
 	nc.schedule = make(chan interface{}, 1)
+	nc.blockUpdate = make(chan interface{}, 1)
 
 	// Create a Node watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "nodes", "", fields.Everything())
@@ -137,6 +142,9 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 
 	log.Info("Starting Node controller")
 
+	// Register metrics.
+	registerPrometheusMetrics()
+
 	// Wait till k8s cache is synced
 	go c.informer.Run(stopCh)
 	log.Debug("Waiting to sync with Kubernetes API (Nodes)")
@@ -145,7 +153,7 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 	}
 	log.Debug("Finished syncing with Kubernetes API (Nodes)")
 
-	// Start Calico cache.
+	// Start worker thread.
 	go c.acceptScheduleRequests(stopCh)
 
 	log.Info("Node controller is now running")
@@ -171,6 +179,12 @@ func (c *NodeController) acceptScheduleRequests(stopCh <-chan struct{}) {
 				// syncDelete() does its own rate limiting, so it's fine to
 				// reschedule immediately.
 				kick(c.schedule)
+			}
+		case <-c.blockUpdate:
+			// Gather IPAM data for metrics.
+			_, err := c.gatherIPAMData()
+			if err != nil {
+				log.WithError(err).Warn("error gathering IPAM data")
 			}
 		case <-stopCh:
 			return

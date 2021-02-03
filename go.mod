@@ -5,12 +5,13 @@ go 1.14
 require (
 	github.com/apparentlymart/go-cidr v1.0.1
 	github.com/joho/godotenv v1.3.0
-	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
-	github.com/onsi/ginkgo v1.14.1
-	github.com/onsi/gomega v1.10.1
-	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20210107120159-03b9658679b0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210104203251-9bf530a83eda
+	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/onsi/ginkgo v1.14.2
+	github.com/onsi/gomega v1.10.4
+	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/projectcalico/felix v0.0.0-20210120135204-092e3b76f40c
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210202191915-3b8b7344dec1
+	github.com/prometheus/client_golang v1.7.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
