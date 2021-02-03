@@ -392,7 +392,7 @@ RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
 RELEASE_WINDOWS_ZIP=$(OUTPUT_DIR)/calico-windows-$(NODE_VER).zip
-RELEASE_HELM_CHART=bin/tigera-operator-$(CALICO_VER).tgz
+RELEASE_HELM_CHART=bin/tigera-operator-$(CALICO_VER)-$(CHART_RELEASE).tgz
 
 # Determine where the manifests live. For older versions we used
 # a different location, but we still need to package them up for patch
