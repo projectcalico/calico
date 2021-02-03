@@ -345,7 +345,7 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
-	cp $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
+	cp $(RELEASE_HELM_CHART) $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -377,7 +377,7 @@ endif
 		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
 
 # release-prereqs checks that the environment is configured properly to create a release.
-release-prereqs:
+release-prereqs: charts
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
 		exit 1; fi
@@ -392,6 +392,7 @@ RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
 RELEASE_WINDOWS_ZIP=$(OUTPUT_DIR)/calico-windows-$(NODE_VER).zip
+RELEASE_HELM_CHART=bin/tigera-operator-$(CALICO_VER).tgz
 
 # Determine where the manifests live. For older versions we used
 # a different location, but we still need to package them up for patch
