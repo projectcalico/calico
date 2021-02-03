@@ -1,0 +1,12 @@
+kind: Node
+apiVersion: v1
+metadata:
+  name: "node8"
+spec:
+  podCIDR: "10.10.20.0/24"
+status:
+  addresses:
+  - type: NodeInternalIP
+    address: "127.0.0.1/32"
+  - type: NodeExternalIP
+    address: "8.7.6.5/32"
