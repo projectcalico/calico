@@ -65,6 +65,15 @@ export CALICO_KUBECONFIG=~/.kube/config
 calicoctl get workloadendpoints
 ```
 
+With multiple `kubeconfig` files:
+
+```bash
+export DATASTORE_TYPE=kubernetes
+export KUBECONFIG=~/.kube/main:~/.kube/auxy
+calicoctl get --context main workloadendpoints
+calicoctl get --context auxy workloadendpoints
+```
+
 ### Checking the configuration
 
 Here is a simple command to check that the installation and configuration is
