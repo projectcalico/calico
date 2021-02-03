@@ -17,6 +17,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sync"
 
@@ -210,6 +211,35 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	return kubeClient, nil
 }
 
+// deduplicate removes any duplicated values and returns a new slice, keeping the order unchanged
+// 	based on deduplicate([]string) []string found in k8s.io/client-go/tools/clientcmd/loader.go#634
+// 	Copyright 2014 The Kubernetes Authors.
+func deduplicate(s []string) []string {
+	encountered := map[string]struct{}{}
+	ret := make([]string, 0)
+	for i := range s {
+		if _, ok := encountered[s[i]]; ok {
+			continue
+		}
+		encountered[s[i]] = struct{}{}
+		ret = append(ret, s[i])
+	}
+	return ret
+}
+
+// fill out loading rules based on filename(s) encountered in specified kubeconfig
+func fillLoadingRulesFromKubeConfigSpec(loadingRules *clientcmd.ClientConfigLoadingRules, kubeConfig string) {
+	fileList := filepath.SplitList(kubeConfig)
+
+	if len(fileList) > 1 {
+		loadingRules.Precedence = deduplicate(fileList)
+		loadingRules.WarnIfAllMissing = true
+		return
+	}
+
+	loadingRules.ExplicitPath = kubeConfig
+}
+
 func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config, *kubernetes.Clientset, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
 	configOverrides := &clientcmd.ConfigOverrides{}
@@ -229,7 +259,7 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 	// was provided.
 	loadingRules := clientcmd.ClientConfigLoadingRules{}
 	if ca.Kubeconfig != "" {
-		loadingRules.ExplicitPath = ca.Kubeconfig
+		fillLoadingRulesFromKubeConfigSpec(&loadingRules, ca.Kubeconfig)
 	}
 
 	// Using the override map above, populate any non-empty values.
