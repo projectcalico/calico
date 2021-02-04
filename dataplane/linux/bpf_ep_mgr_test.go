@@ -97,7 +97,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&ifaceUpdate{Name: name, State: state, Index: index})
-			bpfEpMgr.CompleteDeferredWork()
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
 		}
 	}
 
@@ -110,7 +111,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 			log.Infof("2 hostIfaceToEp = %v", hostIfaceToEp)
 			bpfEpMgr.OnHEPUpdate(hostIfaceToEp)
-			bpfEpMgr.CompleteDeferredWork()
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
 		}
 	}
 

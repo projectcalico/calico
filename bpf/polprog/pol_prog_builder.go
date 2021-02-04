@@ -166,8 +166,8 @@ type TierEndAction string
 
 const (
 	TierEndUndef TierEndAction = ""
-	TierEndDeny                = "deny"
-	TierEndPass                = "pass"
+	TierEndDeny  TierEndAction = "deny"
+	TierEndPass  TierEndAction = "pass"
 )
 
 func (p *Builder) Instructions(rules Rules) (Insns, error) {
@@ -488,7 +488,7 @@ func (p *Builder) writeRule(r Rule, actionLabel string, destLeg matchLeg) {
 	}
 	if len(rule.DstIpSetIds) > 0 {
 		log.WithField("ipSetIDs", rule.DstIpSetIds).Debugf("DstIpSetIds match")
-		p.writeIPSetMatch(false, destLeg, rule.DstIpSetIds)
+		p.writeIPSetOrMatch(destLeg, rule.DstIpSetIds)
 	}
 	if len(rule.NotDstIpSetIds) > 0 {
 		log.WithField("ipSetIDs", rule.NotDstIpSetIds).Debugf("NotDstIpSetIds match")
