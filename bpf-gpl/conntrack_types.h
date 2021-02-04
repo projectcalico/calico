@@ -36,10 +36,10 @@ enum cali_ct_type {
 					 */
 };
 
-#define CALI_CT_FLAG_NAT_OUT	(1 << 0)
-#define CALI_CT_FLAG_DSR_FWD	(1 << 1) /* marks entry into the tunnel on the fwd node when dsr */
-#define CALI_CT_FLAG_NP_FWD	(1 << 2) /* marks entry into the tunnel on the fwd node */
-#define CALI_CT_FLAG_SKIP_FIB	(1 << 3) /* marks traffic that should pass through host IP stack */
+#define CALI_CT_FLAG_NAT_OUT	0x01
+#define CALI_CT_FLAG_DSR_FWD	0x02 /* marks entry into the tunnel on the fwd node when dsr */
+#define CALI_CT_FLAG_NP_FWD	0x04 /* marks entry into the tunnel on the fwd node */
+#define CALI_CT_FLAG_SKIP_FIB	0x08 /* marks traffic that should pass through host IP stack */
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -53,7 +53,11 @@ struct calico_ct_leg {
 
 	__u32 opener:1;
 
-	__u32 ifindex; /* where the packet entered the system from */
+	__u32 ifindex; /* For a CT leg where packets ingress through an interface towards
+			* the host, this is the ingress interface index.  For a CT leg
+			* where packets originate _from_ the host, it's CT_INVALID_IFINDEX
+			* (0).
+			*/
 };
 
 #define CT_INVALID_IFINDEX	0
@@ -170,6 +174,11 @@ struct calico_ct_result {
 	__u32 nat_port;
 	__be32 tun_ip;
 	__u32 ifindex_fwd; /* if set, the ifindex where the packet should be forwarded */
+	__u32 ifindex_created; /* For a CT state that was created by a packet ingressing
+				* through an interface towards the host, this is the
+				* ingress interface index.  For a CT state created by a
+				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
+				*/
 };
 
 #endif /* __CALI_CONNTRAC_TYPESK_H__ */

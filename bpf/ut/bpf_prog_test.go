@@ -454,7 +454,7 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 type bpfProgRunFn func(data []byte) (bpfRunResult, error)
 
 // runBpfUnitTest runs a small unit in isolation. It requires a small .c file
-// that wrapsthe unit and compiles into a calico_unittest section.
+// that wraps the unit and compiles into a calico_unittest section.
 func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
 

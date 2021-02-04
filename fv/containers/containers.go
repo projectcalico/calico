@@ -610,6 +610,13 @@ func (c *Container) Exec(cmd ...string) {
 	utils.Run("docker", arg...)
 }
 
+func (c *Container) ExecWithInput(input []byte, cmd ...string) {
+	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
+	arg := []string{"exec", "-i", c.Name}
+	arg = append(arg, cmd...)
+	utils.RunWithInput(input, "docker", arg...)
+}
+
 func (c *Container) ExecMayFail(cmd ...string) error {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)

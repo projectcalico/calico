@@ -55,7 +55,7 @@ func TestLoadAllowAllProgram(t *testing.T) {
 	Expect(rc.RC).To(BeNumerically("==", -1))
 }
 
-func TestLoadProgramWithMapAcccess(t *testing.T) {
+func TestLoadProgramWithMapAccess(t *testing.T) {
 	RegisterTestingT(t)
 
 	ipsMap := ipsets.Map(&bpf.MapContext{})

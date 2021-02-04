@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -355,6 +355,10 @@ func (w *Workload) NamespaceID() string {
 	return splits[len(splits)-1]
 }
 
+func (w *Workload) NamespacePath() string {
+	return w.namespacePath
+}
+
 func (w *Workload) Exec(args ...string) {
 	out, err := w.ExecCombinedOutput(args...)
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Exec of %v failed; output: %s", args, out))
@@ -684,4 +688,13 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 		Port:       fmt.Sprint(p.Port),
 		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
 	}
+}
+
+func (w *Workload) InterfaceIndex() int {
+	out, err := w.C.ExecOutput("ip", "link", "show", "dev", w.InterfaceName)
+	Expect(err).NotTo(HaveOccurred())
+	ifIndex, err := strconv.Atoi(strings.SplitN(out, ":", 2)[0])
+	Expect(err).NotTo(HaveOccurred())
+	log.Infof("%v is ifindex %v", w.InterfaceName, ifIndex)
+	return ifIndex
 }

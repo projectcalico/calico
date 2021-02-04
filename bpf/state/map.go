@@ -59,15 +59,16 @@ type State struct {
 	PostNATDstPort      uint16
 	IPProto             uint8
 	Flags               uint8
-	ConntrackResultType uint32
-	ConntrackData       uint64
-	ConntrackDataTun    uint32
-	Pad2                uint32
+	ConntrackRCFlags    uint32
+	ConntrackNATIPPort  uint64
+	ConntrackTunIP      uint32
+	ConntrackIfIndexFwd uint32
+	ConntrackIfIndexCtd uint32
 	NATData             uint64
 	ProgStartTime       uint64
 }
 
-const expectedSize = 72
+const expectedSize = 80
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})
@@ -95,7 +96,7 @@ func Map(mc *bpf.MapContext) bpf.Map {
 		ValueSize:  expectedSize,
 		MaxEntries: 1,
 		Name:       "cali_v4_state",
-		Version:    2,
+		Version:    3,
 	})
 }
 
