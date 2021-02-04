@@ -43,7 +43,28 @@ spec:
       ports:
         - 6379
 ```
-To allow ingress traffic from endpoints in other namespaces, use a **namespaceSelector** in the policy rule. A namespaceSelector matches one or more namespaces based on the labels that are applied on the namespace. In the following example, ingress traffic is also allowed from endpoints with **color: blue** in namespaces with **shape: circle**.
+
+To allow ingress traffic from endpoints in another namespace, select the `projectcalico.org/namespace` label in the policy rule.  In the following example, ingress traffic is also allowed from endpoints with **color: blue** in the **staging** namespace.
+
+```yaml
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-tcp-6379
+  namespace: production
+spec:
+  selector: color == 'red'
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: color == 'blue' && projectcalico.org/namespace == 'staging'
+    destination:
+      ports:
+      - 6379
+```
+
+To allow ingress traffic from endpoints in a namespace with a particular label, use a **namespaceSelector** in the policy rule. A namespaceSelector matches one or more namespaces based on the labels that are applied on the namespace. In the following example, ingress traffic is also allowed from endpoints with **color: blue** in namespaces with **shape: circle**.
 
 ```yaml
 apiVersion: projectcalico.org/v3
