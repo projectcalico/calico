@@ -43,7 +43,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -v /run/docker/plugins:/run/docker/plugins \
  -v /lib/modules:/lib/modules \
  -v /etc/pki:/pki \
- {{page.registry}}{{page.imageNames["calico/node"]}}:{{site.data.versions.first.title}}
+ {{page.registry}}{{page.imageNames["calico/node"]}}:{{site.data.versions.first.title}} /bin/calico-node -felix
 
 ExecStop=-/usr/bin/docker stop {{site.noderunning}}
 
