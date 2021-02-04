@@ -23,6 +23,7 @@ FILENAME="_includes/release-notes/%s-release-notes.md" % VERSION
 # note generation.
 REPOS = [
         "calico",
+        "calicoctl",
         "node",
         "felix",
         "typha",
