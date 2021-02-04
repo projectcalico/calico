@@ -278,6 +278,38 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
+		// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
+		if num4 == 1 && len(assignedV4) != num4 {
+			if num6 == 1 && len(assignedV6) != 0 {
+				logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(assignedV6))
+				// Free the assigned IPv6 addresses when v4 address assignment fails.
+				v6IPs := []cnet.IP{}
+				for _, v6 := range assignedV6 {
+					v6IPs = append(v6IPs, *cnet.ParseIP(v6.IP.String()))
+				}
+				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs)
+				if err != nil {
+					log.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
+				}
+			}
+		}
+
+		// Check if IPv6 address assignment fails but IPv4 address assignment succeeds. Release IPs for the successful IPv4 address assignment.
+		if num6 == 1 && len(assignedV6) != num6 {
+			if num4 == 1 && len(assignedV4) != 0 {
+				logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(assignedV4))
+				// Free the assigned IPv4 addresses when v4 address assignment fails.
+				v4IPs := []cnet.IP{}
+				for _, v4 := range assignedV4 {
+					v4IPs = append(v4IPs, *cnet.ParseIP(v4.IP.String()))
+				}
+				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs)
+				if err != nil {
+					log.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
+				}
+			}
+		}
+
 		if num4 == 1 {
 			if len(assignedV4) != num4 {
 				return fmt.Errorf("failed to request %d IPv4 addresses. IPAM allocated only %d", num4, len(assignedV4))
@@ -299,6 +331,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				Address: ipV6Network,
 			})
 		}
+
 		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
 	}
 

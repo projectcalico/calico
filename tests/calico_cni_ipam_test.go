@@ -158,6 +158,80 @@ var _ = Describe("Calico IPAM Tests", func() {
 		)
 	})
 
+	Describe("Run IPAM plugin - No partial assignments in dual stack", func() {
+		Context("With no IPv4 pool", func() {
+			It("Should not assign an IPv6 address in a dual stack configuration", func() {
+				// Delete IPv6 pool.
+				testutils.MustDeleteIPPool(calicoClient, "fd80:24e2:f998:72d6::/64")
+
+				// Assign an IP to fill up the pool
+				netconf := fmt.Sprintf(`
+            {
+              "cniVersion": "%s",
+              "name": "net1",
+              "type": "calico",
+              "etcd_endpoints": "http://%s:2379",
+              "kubernetes": {
+                 "k8s_api_root": "http://127.0.0.1:8080"
+              },
+              "datastore_type": "%s",
+              "log_level": "debug",
+              "ipam": {
+                "type": "%s",
+                "assign_ipv4": "true",
+                "assign_ipv6": "true"
+              }
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+				_, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
+
+				// Attempt to assign both an IPv4 and IPv6 address
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
+				Expect(result.IPs).To(HaveLen(0))
+
+				// Clean up
+				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cid, cniVersion)
+				Expect(exitCode).Should(Equal(0))
+				testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
+			})
+		})
+
+		Context("With no IPv6 pool", func() {
+			It("Should not assign an IPv4 address in a dual stack configuration", func() {
+				// Delete IPv4 pool.
+				testutils.MustDeleteIPPool(calicoClient, defaultIPv4Pool)
+
+				// Assign an IP to fill up the pool
+				netconf := fmt.Sprintf(`
+            {
+              "cniVersion": "%s",
+              "name": "net1",
+              "type": "calico",
+              "etcd_endpoints": "http://%s:2379",
+              "kubernetes": {
+                 "k8s_api_root": "http://127.0.0.1:8080"
+              },
+              "datastore_type": "%s",
+              "log_level": "debug",
+              "ipam": {
+                "type": "%s",
+                "assign_ipv4": "true",
+                "assign_ipv6": "true"
+              }
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+				_, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
+
+				// Attempt to assign both an IPv4 and IPv6 address
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
+				Expect(result.IPs).To(HaveLen(0))
+
+				// Clean up
+				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cid, cniVersion)
+				Expect(exitCode).Should(Equal(0))
+				testutils.MustCreateNewIPPool(calicoClient, defaultIPv4Pool, false, false, true)
+			})
+		})
+	})
+
 	Describe("Run IPAM plugin - Verify IP Pools", func() {
 		Context("Pass valid pools", func() {
 			It("Uses the ipv4 pool", func() {
