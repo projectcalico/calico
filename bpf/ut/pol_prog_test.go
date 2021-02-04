@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,12 +90,19 @@ func TestLoadProgramWithMapAcccess(t *testing.T) {
 }
 
 func makeRulesSingleTier(protoRules []*proto.Rule) polprog.Rules {
+
+	polRules := make([]polprog.Rule, len(protoRules))
+
+	for i, r := range protoRules {
+		polRules[i].Rule = r
+	}
+
 	return polprog.Rules{
 		Tiers: []polprog.Tier{{
 			Name: "base tier",
 			Policies: []polprog.Policy{{
 				Name:  "test policy",
-				Rules: protoRules,
+				Rules: polRules,
 			}},
 		}},
 	}
@@ -117,7 +124,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 			Name: "base tier",
 			Policies: []polprog.Policy{{
 				Name: "test policy",
-				Rules: []*proto.Rule{{
+				Rules: []polprog.Rule{{Rule: &proto.Rule{
 					Action:                  "Allow",
 					IpVersion:               4,
 					Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},
@@ -140,7 +147,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 					NotDstIpSetIds:          []string{allocID("s:abcdef123456789l")},
 					NotSrcNamedPortIpSetIds: []string{allocID("n:0bcdef1234567890")},
 					NotDstNamedPortIpSetIds: []string{allocID("n:0bcdef1234567890")},
-				}},
+				}}},
 			}},
 		}}})
 
@@ -223,24 +230,54 @@ var polProgramTests = []polProgramTest{
 			icmpPkt("10.0.0.1", "10.0.0.2")},
 	},
 	{
-		PolicyName: "unreachable tier",
+		PolicyName: "empty tier has no impact",
 		Policy: polprog.Rules{
 			Tiers: []polprog.Tier{
 				{
-					Name: "empty tier",
+					Name:      "empty tier",
+					EndAction: polprog.TierEndPass, // this would be set by the caller
 				},
 				{
-					Name: "unreachable",
+					Name: "allow",
 					Policies: []polprog.Policy{{
 						Name: "allow all",
-						Rules: []*proto.Rule{{
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
 							Action: "Allow",
-						}},
+						}}},
 					}},
 				},
 			},
 		},
-		DroppedPackets: []packet{
+		AllowedPackets: []packet{
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
+			icmpPkt("10.0.0.1", "10.0.0.2")},
+	},
+	{
+		PolicyName: "unreachable tier",
+		Policy: polprog.Rules{
+			Tiers: []polprog.Tier{
+				{
+					Name: "allow all",
+					Policies: []polprog.Policy{{
+						Name: "allow all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Allow",
+						}}},
+					}},
+				},
+				{
+					Name: "unreachable",
+					Policies: []polprog.Policy{{
+						Name: "deny all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Deny",
+						}}},
+					}},
+				},
+			},
+		},
+		AllowedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -253,7 +290,7 @@ var polProgramTests = []polProgramTest{
 					Name: "pass",
 					Policies: []polprog.Policy{{
 						Name:  "pass rule",
-						Rules: []*proto.Rule{{Action: "Pass"}},
+						Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Pass"}}},
 					}},
 				},
 			},
@@ -271,9 +308,9 @@ var polProgramTests = []polProgramTest{
 					Name: "pass",
 					Policies: []polprog.Policy{{
 						Name: "pass through",
-						Rules: []*proto.Rule{
-							{Action: "Pass"},
-							{Action: "Deny"},
+						Rules: []polprog.Rule{
+							{Rule: &proto.Rule{Action: "Pass"}},
+							{Rule: &proto.Rule{Action: "Deny"}},
 						},
 					}},
 				},
@@ -281,9 +318,9 @@ var polProgramTests = []polProgramTest{
 					Name: "allow",
 					Policies: []polprog.Policy{{
 						Name: "allow all",
-						Rules: []*proto.Rule{
-							{Action: "Allow"},
-						},
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Allow",
+						}}},
 					}},
 				},
 			},
@@ -301,9 +338,9 @@ var polProgramTests = []polProgramTest{
 					Name: "pass",
 					Policies: []polprog.Policy{{
 						Name: "pass through",
-						Rules: []*proto.Rule{
-							{Action: "Pass"},
-							{Action: "Allow"},
+						Rules: []polprog.Rule{
+							{Rule: &proto.Rule{Action: "Pass"}},
+							{Rule: &proto.Rule{Action: "Allow"}},
 						},
 					}},
 				},
@@ -311,9 +348,9 @@ var polProgramTests = []polProgramTest{
 					Name: "allow",
 					Policies: []polprog.Policy{{
 						Name: "deny all",
-						Rules: []*proto.Rule{
-							{Action: "Deny"},
-						},
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Deny",
+						}}},
 					}},
 				},
 			},
@@ -972,6 +1009,39 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
 	},
+
+	// Test cases with host policy.
+	{
+		PolicyName: "pre-DNAT",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostPreDnatTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies: []polprog.Policy{{
+					Name: "p1",
+					Rules: []polprog.Rule{{
+						Rule: &proto.Rule{
+							Action: "Allow",
+							DstNet: []string{"10.96.0.10/32"},
+						}}, {
+						Rule: &proto.Rule{
+							Action: "Deny",
+						}},
+					}},
+				}},
+			},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+		},
+	},
 }
 
 // polProgramTestWrapper allows to keep polProgramTest intact as well as the tests that
@@ -1031,6 +1101,32 @@ type packet struct {
 	srcPort  int
 	dstAddr  string
 	dstPort  int
+
+	preNATDstAddr string
+	preNATDstPort int
+	fromHostFlag  bool
+	toHostFlag    bool
+}
+
+func (p packet) preNAT(dst string) packet {
+	var err error
+	parts := strings.Split(dst, ":")
+	p.preNATDstAddr = parts[0]
+	p.preNATDstPort, err = strconv.Atoi(parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+func (p packet) fromHost() packet {
+	p.fromHostFlag = true
+	return p
+}
+
+func (p packet) toHost() packet {
+	p.toHostFlag = true
+	return p
 }
 
 func (p packet) String() string {
@@ -1043,10 +1139,36 @@ func (p packet) String() string {
 	case 1:
 		protoName = "icmp"
 	}
-	return fmt.Sprintf("%s-%s:%d->%s:%d", protoName, p.srcAddr, p.srcPort, p.dstAddr, p.dstPort)
+	preNAT := ""
+	if p.preNATDstAddr != "" {
+		preNAT = fmt.Sprintf("%s:%d->", p.preNATDstAddr, p.preNATDstPort)
+	}
+	fromHost := ""
+	if p.fromHostFlag {
+		fromHost = "(H)"
+	}
+	toHost := ""
+	if p.toHostFlag {
+		toHost = "(H)"
+	}
+	return fmt.Sprintf("%s-%s%s:%d->%s%s%s:%d", protoName, p.srcAddr, fromHost, p.srcPort, preNAT, p.dstAddr, toHost, p.dstPort)
 }
 
 func (p packet) StateIn() state.State {
+	preNATDstAddr := p.dstAddr
+	preNATDstPort := p.dstPort
+	if p.preNATDstAddr != "" {
+		preNATDstAddr = p.preNATDstAddr
+		preNATDstPort = p.preNATDstPort
+	}
+	flags := uint8(0)
+	if p.fromHostFlag {
+		flags |= polprog.FlagSrcIsHost
+	}
+	if p.toHostFlag {
+		flags |= polprog.FlagDestIsHost
+	}
+
 	if uint8(p.protocol) == 1 {
 		return state.State{
 			IPProto:        uint8(p.protocol),
@@ -1054,6 +1176,9 @@ func (p packet) StateIn() state.State {
 			PostNATDstAddr: ipUintFromString(p.dstAddr),
 			SrcPort:        uint16(p.srcPort),
 			DstPort:        uint16(p.dstPort),
+			PreNATDstAddr:  ipUintFromString(preNATDstAddr),
+			PreNATDstPort:  uint16(preNATDstPort),
+			Flags:          flags,
 		}
 	}
 	return state.State{
@@ -1062,6 +1187,9 @@ func (p packet) StateIn() state.State {
 		PostNATDstAddr: ipUintFromString(p.dstAddr),
 		SrcPort:        uint16(p.srcPort),
 		PostNATDstPort: uint16(p.dstPort),
+		PreNATDstAddr:  ipUintFromString(preNATDstAddr),
+		PreNATDstPort:  uint16(preNATDstPort),
+		Flags:          flags,
 	}
 }
 

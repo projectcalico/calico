@@ -104,7 +104,8 @@ var _ = BeforeEach(func() {
 
 var _ = AfterEach(func() {
 	if CurrentGinkgoTestDescription().Failed {
-		os.Stdout.WriteString("\n===== begin output from failed test =====\n")
+		os.Stdout.WriteString(fmt.Sprintf("\n===== begin output from failed test %s =====\n",
+			CurrentGinkgoTestDescription().FullTestText))
 		for _, output := range currentTestOutput {
 			os.Stdout.WriteString(output)
 		}

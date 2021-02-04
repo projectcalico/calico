@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@
 package fv_test
 
 import (
+	"fmt"
+	"os"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/connectivity"
-	"github.com/projectcalico/felix/fv/utils"
-
-	"fmt"
-
 	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -33,12 +33,12 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("named host endpoints",
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ named host endpoints",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		describeHostEndpointTests(getInfra, false)
 	})
 
-var _ = infrastructure.DatastoreDescribe("all-interfaces host endpoints",
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ all-interfaces host endpoints",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		describeHostEndpointTests(getInfra, true)
 	})
@@ -47,12 +47,13 @@ var _ = infrastructure.DatastoreDescribe("all-interfaces host endpoints",
 // If allInterfaces, then interfaceName: "*". Otherwise, interfaceName: "eth0".
 func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfaces bool) {
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		client  client.Interface
-		w       [2]*workload.Workload
-		hostW   [2]*workload.Workload
-		cc      *connectivity.Checker
+		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+		infra      infrastructure.DatastoreInfra
+		felixes    []*infrastructure.Felix
+		client     client.Interface
+		w          [2]*workload.Workload
+		hostW      [2]*workload.Workload
+		cc         *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -177,7 +178,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		cc.ExpectSome(felixes[1], typhaIP2, 5473)
 	}
 
-	Context("with no policies and no profiles on the host endpoints", func() {
+	Context("_BPF-SAFE_ with no policies and no profiles on the host endpoints", func() {
 		BeforeEach(func() {
 
 			// Install a default profile that allows all pod ingress and egress, in the absence of any policy.
@@ -200,7 +201,16 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 				}
 				_, err := client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
+
+				if bpfEnabled {
+					Eventually(f.NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
+				}
 			}
+
+			// Wait for HEPs to become active.
+			expectDenyHostToHostTraffic()
+			cc.CheckConnectivity()
+			cc.ResetExpectations()
 		})
 
 		It("should allow connectivity from nodes to the Kubernetes API server", func() {
@@ -213,14 +223,28 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			cc.CheckConnectivity()
 		})
 
+		It("should allow pod-to-pod traffic", func() {
+			// Wait for HEPs to become active.
+			expectDenyHostToHostTraffic()
+			cc.CheckConnectivity()
+			cc.ResetExpectations()
+			// Check the workload traffic still gets through.
+			cc.Expect(connectivity.Some, w[0], w[1])
+			cc.CheckConnectivity()
+		})
+
 		It("should block all traffic except pod-to-pod and host-to-own-pod traffic", func() {
 			expectDenyHostToHostTraffic()
 			expectDenyHostToOtherPodTraffic()
 			expectPodToPodTraffic()
 			expectHostToOwnPodTraffic()
-			expectHostToOwnPodViaServiceTraffic()
-			expectDenyHostToRemotePodViaServiceTraffic()
-			expectLocalPodToRemotePodViaServiceTraffic()
+			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+				// These tests use iptables to implement a simulated service, which doesn't work in BPF mode.
+				// TODO-HEP: implement proper services for BPF mode
+				expectHostToOwnPodViaServiceTraffic()
+				expectDenyHostToRemotePodViaServiceTraffic()
+				expectLocalPodToRemotePodViaServiceTraffic()
+			}
 			cc.CheckConnectivity()
 		})
 

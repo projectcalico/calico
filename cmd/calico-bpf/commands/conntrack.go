@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	mc := &bpf.MapContext{}
 	ctMap := conntrack.Map(mc)
 	if err := ctMap.Open(); err != nil {
-		log.WithError(err).Error("Failed to access ConntrackMap")
+		log.WithError(err).Fatal("Failed to access ConntrackMap")
 	}
 	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		var ctKey conntrack.Key

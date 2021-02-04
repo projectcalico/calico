@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ type TopologyOptions struct {
 	ExtraVolumes              map[string]string
 	WithTypha                 bool
 	WithFelixTyphaTLS         bool
+	TestManagesBPF            bool
 	TyphaLogSeverity          string
 	IPIPEnabled               bool
 	IPIPRoutesEnabled         bool
@@ -55,6 +56,7 @@ type TopologyOptions struct {
 	FelixStopGraceful         bool
 	ExternalIPs               bool
 	UseIPPools                bool
+	NeedNodeIP                bool
 }
 
 func DefaultTopologyOptions() TopologyOptions {
@@ -194,12 +196,25 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	for i := 0; i < n; i++ {
 		// Then start Felix and create a node for it.
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = fmt.Sprintf("%d-", i)
+		// Arrange for only the first Felix to enable the BPF connect-time load balancer, as
+		// we get unpredictable behaviour if more than one Felix enables it on the same
+		// host.
+		optsFirstFelix := opts
+		opts.ExtraEnvVars = map[string]string{}
+		for k, v := range optsFirstFelix.ExtraEnvVars {
+			opts.ExtraEnvVars[k] = v
+		}
+		opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
+		opts.ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			defer ginkgo.GinkgoRecover()
-			felix := RunFelix(infra, i, opts)
-			felixes[i] = felix
+			if i == 0 {
+				felixes[i] = RunFelix(infra, i, optsFirstFelix)
+			} else {
+				felixes[i] = RunFelix(infra, i, opts)
+			}
 		}(i)
 	}
 	wg.Wait()
@@ -235,13 +250,16 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			// before we return.
 			w = felix.WatchStdoutFor(regexp.MustCompile(
 				`"IpInIpTunnelAddr":"` + regexp.QuoteMeta(felix.ExpectedIPIPTunnelAddr) + `"`))
+		} else if opts.NeedNodeIP {
+			w = felix.WatchStdoutFor(regexp.MustCompile(
+				`Host config update for this host|Host IP changed`))
 		}
-		infra.AddNode(felix, i, bool(n > 1))
+		infra.AddNode(felix, i, bool(n > 1 || opts.NeedNodeIP))
 		if w != nil {
 			// Wait for any Felix restart...
 			log.Info("Wait for Felix to restart")
 			Eventually(w, "10s").Should(BeClosed(),
-				"Timed out waiting for Felix to restart with IpInIpTunnelAddress")
+				fmt.Sprintf("Timed out waiting for %s to restart", felix.Name))
 		}
 
 		if opts.AutoHEPsEnabled {

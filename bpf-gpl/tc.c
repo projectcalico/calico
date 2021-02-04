@@ -42,10 +42,12 @@
 #include "reasons.h"
 #include "icmp.h"
 #include "arp.h"
+#include "sendrecv.h"
 #include "fib.h"
 #include "tc.h"
 #include "policy_program.h"
 #include "parsing.h"
+#include "failsafe.h"
 
 /* calico_tc is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -58,6 +60,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 */
 	skb->mark = CALI_SET_SKB_MARK;
 #endif
+	CALI_DEBUG("New packet; mark=%x\n", skb->mark);
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
@@ -94,7 +97,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		/* We're leaving the host namespace, check for other bypass mark bits.
 		 * These are a bit more complex to handle so we do it after creating the
 		 * context/state. */
-		switch (skb->mark) {
+		switch (skb->mark & CALI_SKB_MARK_BYPASS_MASK) {
 		case CALI_SKB_MARK_BYPASS_FWD:
 			CALI_DEBUG("Packet approved for forward.\n");
 			ctx.fwd.reason = CALI_REASON_BYPASS;
@@ -144,9 +147,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
 			is_vxlan_tunnel(ctx.ip_header) /* Is this a VXLAN packet? */ ) {
 		/* Decap it; vxlan_attempt_decap will revalidate the packet if needed. */
-		if (vxlan_attempt_decap(&ctx)) {
-			// Problem.
+		switch (vxlan_attempt_decap(&ctx)) {
+		case -1:
+			/* Problem decoding the packet. */
 			goto deny;
+		case -2:
+			/* Non-BPF VXLAN packet from another Calico node. */
+			CALI_DEBUG("VXLAN packet from known Calico host, allow.");
+			goto allow;
 		}
 	}
 
@@ -170,6 +178,21 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->sport = bpf_ntohs(ctx.udp_header->source);
 		ctx.state->dport = bpf_ntohs(ctx.udp_header->dest);
 		CALI_DEBUG("UDP; ports: s=%d d=%d\n", ctx.state->sport, ctx.state->dport);
+		if (ctx.state->dport == VXLAN_PORT) {
+			/* CALI_F_FROM_HEP case is handled in vxlan_attempt_decap above since it already decoded
+			 * the header. */
+			if (CALI_F_TO_HEP) {
+				if (rt_addr_is_remote_host(ctx.state->ip_dst) &&
+						rt_addr_is_local_host(ctx.state->ip_src)) {
+					CALI_DEBUG("VXLAN packet to known Calico host, allow.\n");
+					goto allow;
+				} else {
+					/* Unlike IPIP, the user can be using VXLAN on a different VNI so we don't
+					 * simply drop it. */
+					CALI_DEBUG("VXLAN packet to unknown dest, fall through to policy.\n");
+				}
+			}
+		}
 		break;
 	case IPPROTO_ICMP:
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
@@ -177,11 +200,35 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	case 4:
 		// IPIP
-		if (CALI_F_HEP) {
-			// TODO IPIP whitelist.
-			CALI_DEBUG("IPIP: allow\n");
-			fwd_fib_set(&ctx.fwd, false);
-			goto allow;
+		if (CALI_F_TUNNEL | CALI_F_WIREGUARD) {
+			// IPIP should never be sent down the tunnel.
+			CALI_DEBUG("IPIP traffic to/from tunnel: drop\n");
+			ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+			goto deny;
+		}
+		if (CALI_F_FROM_HEP) {
+			if (rt_addr_is_remote_host(ctx.state->ip_src)) {
+				CALI_DEBUG("IPIP packet from known Calico host, allow.\n");
+				goto allow;
+			} else {
+				CALI_DEBUG("IPIP packet from unknown source, drop.\n");
+				ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+				goto deny;
+			}
+		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD) {
+			if (rt_addr_is_remote_host(ctx.state->ip_dst)) {
+				CALI_DEBUG("IPIP packet to known Calico host, allow.\n");
+				goto allow;
+			} else {
+				CALI_DEBUG("IPIP packet to unknown dest, drop.\n");
+				ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+				goto deny;
+			}
+		}
+		if (CALI_F_FROM_WEP) {
+			CALI_DEBUG("IPIP traffic from workload: drop\n");
+			ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
+			goto deny;
 		}
 	default:
 		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)ctx.state->ip_proto);
@@ -196,11 +243,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	default:
 		if (CALI_F_HEP) {
-			// FIXME: allow unknown protocols through on host endpoints.
+			// TODO-HEPs allow unknown protocols through on host endpoints.
 			goto allow;
 		}
 		// FIXME non-port based conntrack.
-		CALI_DEBUG("Unknown protocol from workload.");
+		CALI_DEBUG("Unknown protocol from workload.\n");
 		goto deny;
 	}
 
@@ -222,6 +269,29 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 */
 	if (ct_result_rpf_failed(ctx.state->ct_result.rc)) {
 		fwd_fib_set(&ctx.fwd, false);
+	}
+
+	if (ct_result_rc(ctx.state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
+		if (CALI_F_TO_HOST) {
+			/* Mid-flow miss: let iptables handle it in case it's an existing flow
+			 * in the Linux conntrack table. We can't apply policy or DNAT because
+			 * it's too late in the flow.  iptables will drop if the flow is not
+			 * known.
+			 */
+			CALI_DEBUG("CT mid-flow miss; fall through to iptables.\n");
+			ctx.fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
+			fwd_fib_set(&ctx.fwd, false);
+			goto finalize;
+		} else {
+			if (CALI_F_HEP) {
+				// TODO-HEP for data interfaces, this should allow, for active HEPs it should drop or apply policy.
+				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, allow.\n");
+				goto allow;
+			} else {
+				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, drop.\n");
+				goto deny;
+			}
+		}
 	}
 
 	/* Skip policy if we get conntrack hit */
@@ -341,23 +411,66 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->nat_dest.port = 0;
 	}
 
-	if (CALI_F_HEP) {
-		/* We don't support host-endpoint policy yet, skip straight to
-		 * the epilogue program.
-		 */
-		ctx.state->pol_rc = CALI_POL_ALLOW;
-		CALI_DEBUG("HEP; no policy\n");
-		goto skip_policy;
+	// For the case where the packet was sent from a socket on this host, get the
+	// sending socket's cookie, so we can reverse a DNAT that the CTLB may have done.
+	// This allows us to give the policy program the pre-DNAT destination as well as
+	// the post-DNAT destination in all cases.
+	__u64 cookie = bpf_get_socket_cookie(ctx.skb);
+	if (cookie) {
+		CALI_DEBUG("Socket cookie: %x\n", cookie);
+		struct ct_nats_key ct_nkey = {
+			.cookie	= cookie,
+			.proto = ctx.state->ip_proto,
+			.ip	= ctx.state->ip_dst,
+			.port	= host_to_ctx_port(ctx.state->dport),
+		};
+		struct sendrecv4_val *revnat = cali_v4_ct_nats_lookup_elem(&ct_nkey);
+		if (revnat) {
+			CALI_DEBUG("Got cali_v4_ct_nats entry; flow was NATted by CTLB.\n");
+			ctx.state->pre_nat_ip_dst = revnat->ip;
+			ctx.state->pre_nat_dport = ctx_port_to_host(revnat->port);
+			goto skip_pre_dnat_default;
+		}
+	}
+	// If we didn't find a CTLB NAT entry then use the packet's own IP/port for the
+	// pre-DNAT values.
+	ctx.state->pre_nat_ip_dst = ctx.state->ip_dst;
+	ctx.state->pre_nat_dport = ctx.state->dport;
+
+skip_pre_dnat_default:
+	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
+		CALI_DEBUG("Post-NAT dest IP is local host.\n");
+		if (CALI_F_FROM_HEP && is_failsafe_in(ctx.state->ip_proto, ctx.state->post_nat_dport)) {
+			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+			ctx.state->pol_rc = CALI_POL_ALLOW;
+			goto skip_policy;
+		}
+		ctx.state->flags |= CALI_ST_DEST_IS_HOST;
+	}
+	if (rt_addr_is_local_host(ctx.state->ip_src)) {
+		CALI_DEBUG("Source IP is local host.\n");
+		if (CALI_F_TO_HEP && is_failsafe_out(ctx.state->ip_proto, ctx.state->post_nat_dport)) {
+			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx.state->post_nat_dport);
+			ctx.state->pol_rc = CALI_POL_ALLOW;
+			goto skip_policy;
+		}
+		ctx.state->flags |= CALI_ST_SRC_IS_HOST;
 	}
 
-	CALI_DEBUG("About to jump to policy program; lack of further "
-			"logs means policy dropped the packet...\n");
-	bpf_tail_call(skb, &cali_jump, POL_PROG_INDEX);
-	CALI_DEBUG("Tail call to policy program failed: DROP\n");
-	return TC_ACT_SHOT;
+	CALI_DEBUG("About to jump to policy program.\n");
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_POLICY);
+	if (CALI_F_HEP) {
+		CALI_DEBUG("HEP with no policy, allow.\n");
+		ctx.state->pol_rc = CALI_POL_ALLOW;
+		goto skip_policy;
+	} else {
+		/* should not reach here */
+		CALI_DEBUG("WEP with no policy, deny.\n");
+		goto deny;
+	}
 
 icmp_send_reply:
-	bpf_tail_call(skb, &cali_jump, ICMP_PROG_INDEX);
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ICMP);
 	/* should not reach here */
 	goto deny;
 
@@ -398,7 +511,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	
+
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		ctx.fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
@@ -427,7 +540,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	CALI_DEBUG("Entering calico_tc_skb_accepted\n");
 	struct __sk_buff *skb = ctx->skb;
 	struct cali_tc_state *state = ctx->state;
-	
+
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 	bool fib = false;
@@ -583,13 +696,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	case CALI_CT_NEW:
 		switch (state->pol_rc) {
 		case CALI_POL_NO_MATCH:
-			CALI_DEBUG("Implicitly denied by normal policy: DROP\n");
+			CALI_DEBUG("Implicitly denied by policy: DROP\n");
 			goto deny;
 		case CALI_POL_DENY:
-			CALI_DEBUG("Denied by normal policy: DROP\n");
+			CALI_DEBUG("Denied by policy: DROP\n");
 			goto deny;
 		case CALI_POL_ALLOW:
-			CALI_DEBUG("Allowed by normal policy: ACCEPT\n");
+			CALI_DEBUG("Allowed by policy: ACCEPT\n");
 		}
 
 		if (CALI_F_FROM_WEP &&
@@ -910,7 +1023,7 @@ icmp_too_big:
 	goto icmp_send_reply;
 
 icmp_send_reply:
-	bpf_tail_call(skb, &cali_jump, ICMP_PROG_INDEX);
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ICMP);
 	goto deny;
 
 nat_encap:
@@ -950,7 +1063,7 @@ nat_encap:
 		goto  deny;
 	}
 
-	state->sport = state->dport = CALI_VXLAN_PORT;
+	state->sport = state->dport = VXLAN_PORT;
 	state->ip_proto = IPPROTO_UDP;
 
 	CALI_DEBUG("vxlan return %d ifindex_fwd %d\n",
@@ -1000,7 +1113,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		CALI_DEBUG("State map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	
+
 	CALI_DEBUG("ICMP type %d and code %d\n",ctx.state->icmp_type, ctx.state->icmp_code);
 
 	if (ctx.state->icmp_code == ICMP_FRAG_NEEDED) {

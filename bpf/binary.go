@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Binary is an in memory representation of a BPF binary
@@ -111,9 +112,20 @@ func (b *Binary) PatchLogPrefix(prefix string) {
 	b.replaceAllLoadImm32([]byte("COLO"), pfx[4:8])
 }
 
-// PatchTunnelMTU replaces a place holder with the actual mtu
+// PatchTunnelMTU replaces a placeholder with the actual mtu
 func (b *Binary) PatchTunnelMTU(mtu uint16) {
-	bytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bytes, uint32(mtu))
-	b.replaceAllLoadImm32([]byte("TMTU"), bytes)
+	b.patchU32Placeholder("TMTU", uint32(mtu))
+}
+
+// PatchVXLANPort replaces the VXPR placeholder with the actual port.
+func (b *Binary) PatchVXLANPort(port uint16) {
+	logrus.WithField("port", port).Debug("Patching VXLAN port")
+	b.patchU32Placeholder("VXPR", uint32(port))
+}
+
+// patchU32Placeholder replaces a placeholder with the given value.
+func (b *Binary) patchU32Placeholder(from string, to uint32) {
+	toBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(toBytes, to)
+	b.replaceAllLoadImm32([]byte(from), toBytes)
 }

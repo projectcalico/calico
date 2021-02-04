@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -451,20 +451,49 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 	struct calico_ct_value *v = cali_v4_ct_lookup_elem(&k);
 	if (!v) {
+		if (CALI_F_FROM_HOST && proto_orig == IPPROTO_TCP) {
+			// Mid-flow TCP packet with no conntrack entry leaving the host namespace.
+			CALI_DEBUG("BPF CT Miss for mid-flow TCP\n");
+			if ((tc_ctx->skb->mark & CALI_SKB_MARK_CT_ESTABLISHED_MASK) == CALI_SKB_MARK_CT_ESTABLISHED) {
+				// Linux Conntrack has marked the packet as part of an established flow.
+				// TODO-HEP Create a tracking entry for uplifted flow so that we handle the reverse traffic more efficiently.
+				 CALI_DEBUG("BPF CT Miss but have Linux CT entry: established\n");
+				 result.rc = CALI_CT_ESTABLISHED;
+				 return result;
+			}
+			CALI_DEBUG("BPF CT Miss but Linux CT entry not signalled\n");
+			result.rc = CALI_CT_MID_FLOW_MISS;
+			return result;
+		}
+		if (CALI_F_TO_HOST && proto_orig == IPPROTO_TCP) {
+			// Miss for a mid-flow TCP packet towards the host.  This may be part of a
+			// connection that predates the BPF program so we need to let it fall through
+			// to iptables.
+			CALI_DEBUG("BPF CT Miss for mid-flow TCP\n");
+			result.rc = CALI_CT_MID_FLOW_MISS;
+			return result;
+		}
 		if (ct_ctx->proto != IPPROTO_ICMP) {
+			// Not ICMP so can't be a "related" packet.
 			CALI_CT_DEBUG("Miss.\n");
 			goto out_lookup_fail;
 		}
+
 		if (!icmp_type_is_err(tc_ctx->icmp_header->type)) {
+			// ICMP but not an error response packet.
 			CALI_DEBUG("CT-ICMP: type %d not an error\n", tc_ctx->icmp_header->type);
 			goto out_lookup_fail;
 		}
 
+		// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
+		// details of the inner packet.
 		if (!skb_icmp_err_unpack(tc_ctx, ct_ctx)) {
-			CALI_CT_DEBUG("Failed to parse ICMP error.\n");
+			CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
 			goto out_invalid;
 		}
 
+		// skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
+		// look for a conntrack entry for the inner packet...
 		CALI_CT_DEBUG("related lookup from %x:%d\n", bpf_ntohl(ct_ctx->src), ct_ctx->sport);
 		CALI_CT_DEBUG("related lookup to   %x:%d\n", bpf_ntohl(ct_ctx->dst), ct_ctx->dport);
 
@@ -472,6 +501,25 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		k = ct_make_key(srcLTDest, ct_ctx->proto, ct_ctx->src, ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
 		v = cali_v4_ct_lookup_elem(&k);
 		if (!v) {
+			if (CALI_F_FROM_HOST &&
+				proto_orig == IPPROTO_TCP &&
+				(tc_ctx->skb->mark & CALI_SKB_MARK_CT_ESTABLISHED_MASK) == CALI_SKB_MARK_CT_ESTABLISHED) {
+				// Linux Conntrack has marked the packet as part of a known flow.
+				// TODO-HEP Create a tracking entry for uplifted flow so that we handle the reverse traffic more efficiently.
+				CALI_DEBUG("BPF CT related miss but have Linux CT entry: established\n");
+				result.rc = CALI_CT_ESTABLISHED;
+				return result;
+			}
+
+			if (CALI_F_TO_HOST && ct_ctx->proto) {
+				// Miss for a related packet towards the host.  This may be part of a
+				// connection that predates the BPF program so we need to let it fall through
+				// to iptables.
+				CALI_DEBUG("BPF CT related miss for mid-flow TCP\n");
+				result.rc = CALI_CT_MID_FLOW_MISS;
+				return result;
+			}
+
 			CALI_CT_DEBUG("Miss on ICMP related\n");
 			goto out_lookup_fail;
 		}
@@ -720,7 +768,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				// Disable bypass so the kernel can do its RPF check.
 				// The next BPF program to see the packet will update the interface
 				// after the RPF has passed.
-				CALI_CT_DEBUG("Disabling bypass to allow kernel RPF.");
+				CALI_CT_DEBUG("Disabling bypass to allow kernel RPF.\n");
 				ct_result_set_rc(result.rc, CALI_CT_ESTABLISHED);
 			}
 			ct_result_set_flag(result.rc, CALI_CT_RPF_FAILED);
