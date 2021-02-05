@@ -344,7 +344,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	calicoDS, err := k8sClient.AppsV1().DaemonSets("kube-system").Get(context.Background(), "calico-node", metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("failed to retrieve Calico daemonset to check if datastore readiness should be set to true")
-	} else if calicoDS.Status.UpdatedNumberScheduled == calicoDS.Status.DesiredNumberScheduled-calicoDS.Spec.UpdateStrategy.RollingUpdate.MaxUnavailable.IntVal {
+	} else if calicoDS.Status.UpdatedNumberScheduled >= calicoDS.Status.DesiredNumberScheduled-calicoDS.Spec.UpdateStrategy.RollingUpdate.MaxUnavailable.IntVal {
 		log.Info("setting Calico datastore readiness to true...")
 		t := true
 		clusterInfo.Spec.DatastoreReady = &t
