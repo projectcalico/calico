@@ -37,7 +37,7 @@ In this tutorial we assume that you have completed all other introductory tutori
 
 This tutorial will go through the necessary steps to implement basic monitoring of {{site.prodname}} with Prometheus.
 1. Configure {{site.prodname}} to enable the metrics reporting.
-2. Create the namespace and service account that Promethues will need.
+2. Create the namespace and service account that Prometheus will need.
 3. Deploy and configure Prometheus.
 4. View the metrics in the Prometheus dashboard and create a simple graph.
 
@@ -62,7 +62,7 @@ Successfully patched 1 'FelixConfiguration' resource
 
 ##### **Creating a service to expose Felix metrics**
 
-Promethues uses Kubernetes services to dynamically discover endpoints. Here you will create a service named `felix-metrics-svc` which Prometheus will use to discover all the Felix metrics endpoints.
+Prometheus uses Kubernetes services to dynamically discover endpoints. Here you will create a service named `felix-metrics-svc` which Prometheus will use to discover all the Felix metrics endpoints.
 
 > **Note**: Felix by default uses port 9091 TCP to publish its metrics.
    {: .alert .alert-info}
@@ -138,7 +138,7 @@ Setting this value to zero will disable metrics in the kube-controllers pod.
 
 ##### **Creating a service to expose kube-controllers metrics**
 
-Promethues uses Kubernetes services to dynamically discover endpoints. Here you will create a service named `kube-controllers-metrics-svc` which Prometheus will use to discover all metrics endpoint.
+Prometheus uses Kubernetes services to dynamically discover endpoints. Here you will create a service named `kube-controllers-metrics-svc` which Prometheus will use to discover all metrics endpoint.
 
 ``` bash
 kubectl apply -f - <<EOF
