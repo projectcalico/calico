@@ -34,6 +34,9 @@ type Timeouts struct {
 
 	UDPLastSeen time.Duration
 
+	// GenericIPLastSeen is the timeout for IP protocols that we don't know.
+	GenericIPLastSeen time.Duration
+
 	ICMPLastSeen time.Duration
 }
 
@@ -45,6 +48,7 @@ func DefaultTimeouts() Timeouts {
 		TCPFinsSeen:         30 * time.Second,
 		TCPResetSeen:        40 * time.Second,
 		UDPLastSeen:         60 * time.Second,
+		GenericIPLastSeen:   600 * time.Second,
 		ICMPLastSeen:        5 * time.Second,
 	}
 }
@@ -174,10 +178,13 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry Value) (reaso
 		if age > t.ICMPLastSeen {
 			return "no traffic on ICMP flow for too long", true
 		}
-	default:
-		// FIXME separate timeouts for non-UDP IP traffic?
+	case ProtoUDP:
 		if age > t.UDPLastSeen {
 			return "no traffic on UDP flow for too long", true
+		}
+	default:
+		if age > t.GenericIPLastSeen {
+			return "no traffic on generic IP flow for too long", true
 		}
 	}
 	return "", false

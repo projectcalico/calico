@@ -236,21 +236,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	ctx.state->pol_rc = CALI_POL_NO_MATCH;
 
-	switch (ctx.state->ip_proto) {
-	case IPPROTO_TCP:
-	case IPPROTO_UDP:
-	case IPPROTO_ICMP:
-		break;
-	default:
-		if (CALI_F_HEP) {
-			// TODO-HEPs allow unknown protocols through on host endpoints.
-			goto allow;
-		}
-		// FIXME non-port based conntrack.
-		CALI_DEBUG("Unknown protocol from workload.\n");
-		goto deny;
-	}
-
 	/* Do conntrack lookup before anything else */
 	ctx.state->ct_result = calico_ct_v4_lookup(&ctx);
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx.state->ct_result.flags);
