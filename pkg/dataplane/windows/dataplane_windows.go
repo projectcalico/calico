@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -693,11 +693,6 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		}
 		// conjure a MAC based on the IP for Overlay
 		macAddr = fmt.Sprintf("%v-%02x-%02x-%02x-%02x", vxlanMACPrefix, epIPBytes[0], epIPBytes[1], epIPBytes[2], epIPBytes[3])
-
-		pols = append(pols, []json.RawMessage{
-			[]byte(fmt.Sprintf(`{"Type":"PA","PA":"%s"}`, hnsNetwork.ManagementIP)),
-		}...)
-
 	}
 
 	attempts := 3
