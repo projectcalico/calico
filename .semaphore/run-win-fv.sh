@@ -26,7 +26,7 @@ SSH_CMD=$(echo ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -
 
 ${SSH_CMD} ls -ltr /home/ubuntu
 ${SSH_CMD} ls -ltr /home/ubuntu/winfv
-${SSH_CMD} touch /home/ubuntu/file-ready
+${SSH_CMD} touch /home/ubuntu/winfv/file-ready
 ${SSH_CMD} time /home/ubuntu/winfv/wait-report.sh
 ${SSH_CMD} ls -ltr /home/ubuntu/report
 popd
