@@ -50,7 +50,7 @@ func Check(args []string, version string) error {
 
 Options:
   -h --help                Show this screen.
-  -o --output=<FILE>       Path to output report file. Default: ipam-check-report.json
+  -o --output=<FILE>       Path to output report file.
   -c --config=<CONFIG>     Path to the file containing connection configuration in
                            YAML or JSON format.
                            [default: ` + constants.DefaultConfigPath + `]
