@@ -1219,6 +1219,10 @@ func (m *bpfEndpointManager) removeProfileToEPMappings(profileIds []string, id i
 }
 
 func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint) {
+	if m == nil {
+		return
+	}
+
 	log.Debugf("HEP update from generic endpoint manager: %v", hostIfaceToEpMap)
 
 	// Pre-process the map for the host-* endpoint: if there is a host-* endpoint, any host
