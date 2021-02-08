@@ -152,6 +152,9 @@ the address is saved in the
 [node resource configuration]({{ site.baseurl }}/reference/resources/node)
 for this host, overriding any previously configured value.
 
+calico/node will attempt to detect subnet information from the host, and augment the provided address
+if possible.
+
 #### IP setting special case values
 
 There are several special case values that can be set in the IP(6) environment variables, they are:
