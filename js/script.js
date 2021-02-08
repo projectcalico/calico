@@ -37,6 +37,4 @@ $(document).ready(function(){
       return false;
     }
   });
-
-  $('table').wrap($('<div />', { class: 'table-responsive' }));
 });
