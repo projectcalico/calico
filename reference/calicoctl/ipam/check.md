@@ -1,7 +1,7 @@
 ---
 title: calicoctl ipam check
 description: Command to check IPAM status
-canonical_url: '/reference/calicoctl/ipam/release'
+canonical_url: '/reference/calicoctl/ipam/check'
 ---
 
 This section describes the `calicoctl ipam check` command.
