@@ -338,23 +338,20 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		log.Info("successfully released lock on host-local backend!")
 	}
 
-	// Re-enable datastoreReady if this is the last node to update. We know this is the last
-	// node to update if the number of UpdatedNumberScheduled is MaxUnavailable less than the
-	// DesiredNumberScheduled.
-	calicoDS, err := k8sClient.AppsV1().DaemonSets("kube-system").Get(context.Background(), "calico-node", metav1.GetOptions{})
-	if err != nil {
-		log.WithError(err).Error("failed to retrieve Calico daemonset to check if datastore readiness should be set to true")
-	} else if calicoDS.Status.UpdatedNumberScheduled == calicoDS.Status.DesiredNumberScheduled-calicoDS.Spec.UpdateStrategy.RollingUpdate.MaxUnavailable.IntVal {
-		log.Info("setting Calico datastore readiness to true...")
-		t := true
-		clusterInfo.Spec.DatastoreReady = &t
-		if _, err = c.ClusterInformation().Update(ctxt, clusterInfo, options.SetOptions{}); err != nil {
-			return fmt.Errorf("failed to re-enable cluster: %s", err)
-		}
-		log.Info("successfully set Calico datastore readiness to true!")
-	} else {
-		log.Info("not setting datastore readiness, rolling update is still going")
+	// Always re-enable datastoreReady. This leaves a very small chance that an address may be assigned by calico-ipam
+	// that is already in use by host-local. Any pods stuck in this situation will be fixed once they are restarted.
+	// TODO: Re-enable datastoreReady if all of the nodes have been picked up for the rolling update.
+	// This logic has not been used because of the potential length of time it would bring normal operation
+	// of the cluster down for by locking the datastore until the update has been applied to all nodes.
+	// calicoDS, err := k8sClient.AppsV1().DaemonSets("kube-system").Get(context.Background(), "calico-node", metav1.GetOptions{})
+	// if calicoDS.Status.UpdatedNumberScheduled == calicoDS.Status.DesiredNumberScheduled {
+	log.Info("setting Calico datastore readiness to true...")
+	t := true
+	clusterInfo.Spec.DatastoreReady = &t
+	if _, err = c.ClusterInformation().Update(ctxt, clusterInfo, options.SetOptions{}); err != nil {
+		return fmt.Errorf("failed to re-enable cluster: %s", err)
 	}
+	log.Info("successfully set Calico datastore readiness to true!")
 
 	// Delete the host-local IPAM data directory.
 	log.Info("removing host-local IPAM data directory")
