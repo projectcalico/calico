@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/onsi/gomega"
+
 	. "github.com/projectcalico/calicoctl/v3/tests/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 )

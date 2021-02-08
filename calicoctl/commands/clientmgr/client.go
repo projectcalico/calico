@@ -35,7 +35,10 @@ func NewClient(cf string) (client.Interface, error) {
 		return nil, err
 	}
 	log.Infof("Loaded client config: %#v", cfg.Spec)
+	return NewClientFromConfig(cfg)
+}
 
+func NewClientFromConfig(cfg *apiconfig.CalicoAPIConfig) (client.Interface, error) {
 	c, err := client.New(*cfg)
 	if err != nil {
 		return nil, err

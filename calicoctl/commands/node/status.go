@@ -30,9 +30,10 @@ import (
 	"github.com/olekukonko/tablewriter"
 	gobgp "github.com/osrg/gobgp/client"
 	"github.com/osrg/gobgp/packet/bgp"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 	"github.com/shirou/gopsutil/process"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 )
 
 // Status prints status of the node and returns error (if any)

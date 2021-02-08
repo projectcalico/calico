@@ -26,9 +26,10 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 	log "github.com/sirupsen/logrus"
 	shutil "github.com/termie/go-shutil"
+
+	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 )
 
 // diagCmd is a struct to hold a command, cmd info and filename to run diagnostic on

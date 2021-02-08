@@ -30,6 +30,7 @@ func IPAM(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> ipam <command> [<args>...]
 
+    check            Check the integrity of the IPAM datastructures.
     release          Release a Calico assigned IP address.
     show             Show details of a Calico configuration,
                      assigned IP address, or of overall IP usage.
@@ -64,8 +65,10 @@ Description:
 	args = append([]string{"ipam", command}, arguments["<args>"].([]string)...)
 
 	switch command {
+	case "check":
+		return ipam.Check(args, VERSION)
 	case "release":
-		return ipam.Release(args)
+		return ipam.Release(args, VERSION)
 	case "show":
 		return ipam.Show(args)
 	case "configure":

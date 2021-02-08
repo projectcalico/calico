@@ -28,4 +28,5 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	k8s.io/apiextensions-apiserver v0.18.12
 	k8s.io/apimachinery v0.19.6
+	k8s.io/client-go v0.19.6
 )
