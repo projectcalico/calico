@@ -54,7 +54,7 @@ Options:
   -n --namespace=<NS>          Namespace of the resource.
                                Only applicable to NetworkPolicy and WorkloadEndpoint.
                                Uses the default namespace if not specified.
-  -a --all-namespaces          If present, list the requested object(s) across
+  -A --all-namespaces          If present, list the requested object(s) across
                                all namespaces.
   --export                     If present, returns the requested object(s) stripped of
                                cluster-specific information. This flag will be ignored
@@ -128,7 +128,7 @@ Description:
 -n --namespace=<NS>          Namespace of the resource.
                              Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                              Uses the default namespace if not specified.
--a --all-namespaces          If present, list the requested object(s) across
+-A --all-namespaces          If present, list the requested object(s) across
                              all namespaces.
 --export                     If present, returns the requested object(s) stripped of
                              cluster-specific information. This flag will be ignored
