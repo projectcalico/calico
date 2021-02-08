@@ -96,7 +96,7 @@ var (
 // -  Creating default IP Pools for quick-start use
 func Run() {
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
-	configureLogging()
+	ConfigureLogging()
 
 	// Determine the name for this node.
 	nodeName := determineNodeName()
@@ -365,7 +365,7 @@ func clearNodeIPs(ctx context.Context, client client.Interface, node *api.Node, 
 	}
 }
 
-func configureLogging() {
+func ConfigureLogging() {
 	// Default to info level logging
 	logLevel := log.InfoLevel
 

@@ -113,6 +113,7 @@ func main() {
 		startup.Run()
 	} else if *monitorAddrs {
 		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
+		startup.ConfigureLogging()
 		startup.MonitorIPAddressSubnets()
 	} else if *runConfd {
 		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
