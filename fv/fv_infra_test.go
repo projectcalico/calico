@@ -39,7 +39,7 @@ import (
 var _ = describeConnCheckTests("tcp")
 var _ = describeConnCheckTests("sctp")
 var _ = describeConnCheckTests("udp")
-var _ = describeConnCheckTests("253")
+var _ = describeConnCheckTests("ip4:253")
 var _ = describeConnCheckTests("udp-recvmsg")
 var _ = describeConnCheckTests("udp-noconn")
 
@@ -89,9 +89,9 @@ func describeConnCheckTests(protocol string) bool {
 
 			It("should have host-to-host on right port only", func() {
 				cc.ExpectSome(felixes[0], hostW[1])
-				if protocol != "253" {
+				if !strings.HasPrefix(protocol, "ip") {
 					cc.ExpectNone(felixes[0], hostW[1], 8066)
-				}
+				} 
 				cc.CheckConnectivity()
 			})
 

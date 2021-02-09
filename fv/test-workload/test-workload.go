@@ -43,7 +43,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--udp | --sctp | --253] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
+  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -60,9 +60,7 @@ func main() {
 	interfaceName := arguments["<interface-name>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
 	portsStr := arguments["<ports>"].(string)
-	udp := arguments["--udp"].(bool)
-	proto253 := arguments["--253"].(bool)
-	useSctp := arguments["--sctp"].(bool)
+	protocol := arguments["--protocol"].(string)
 	nsPath := ""
 	if arg, ok := arguments["--namespace-path"]; ok && arg != nil {
 		nsPath = arg.(string)
@@ -399,23 +397,21 @@ func main() {
 			} else {
 				myAddr = ipAddress
 			}
-			if !proto253 {
+			if !strings.HasPrefix(protocol, "ip") {
 				myAddr += ":" + port
 			}
 			logCxt := log.WithFields(log.Fields{
-				"udp":    udp,
-				"253":    proto253,
-				"sctp":   useSctp,
-				"myAddr": myAddr,
+				"protocol": protocol,
+				"myAddr":   myAddr,
 			})
-			if proto253 {
+			if strings.HasPrefix(protocol, "ip") {
 				logCxt.Info("About to listen for raw IP packets")
-				p, err := net.ListenPacket("ip4:253", myAddr)
+				p, err := net.ListenPacket(protocol, myAddr)
 				panicIfError(err)
 				logCxt.Info("Listening for raw IP packets")
 
 				go loopRespondingToPackets(logCxt, p)
-			} else if udp {
+			} else if protocol == "udp" {
 				// Since UDP is connectionless, we can't use Listen() as we do for TCP.  Instead,
 				// we use ListenPacket so that we can directly send/receive individual packets.
 				logCxt.Info("About to listen for UDP packets")
@@ -424,7 +420,7 @@ func main() {
 				logCxt.Info("Listening for UDP connections")
 
 				go loopRespondingToPackets(logCxt, p)
-			} else if useSctp {
+			} else if protocol == "sctp" {
 				portInt, err := strconv.Atoi(port)
 				panicIfError(err)
 				netIP, err := net.ResolveIPAddr("ip", ipAddress)

@@ -97,8 +97,8 @@ func main() {
 	protocol := arguments["--protocol"].(string)
 	port := ""
 	sourcePort := ""
-	// Our raw IP protocol "253" doesn't have ports
-	if protocol != "253" {
+	// No such thing as a port for raw IP.
+	if !strings.HasPrefix(protocol, "ip") {
 		port = arguments["<port>"].(string)
 		sourcePort = arguments["--source-port"].(string)
 	}
@@ -262,7 +262,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 		remoteAddr = remoteIpAddr
 	}
 
-	if protocol != "253" {
+	if !strings.HasPrefix(protocol, "ip") {
 		// All the protocols apart from our raw IP protocol have ports.
 		localAddr += ":" + sourcePort
 		remoteAddr += ":" + remotePort
@@ -272,39 +272,41 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 
 	var driver protocolDriver
 
-	switch protocol {
-	case "udp":
-		driver = &connectedUDP{
-			localAddr:  localAddr,
-			remoteAddr: remoteAddr,
-		}
-	case "udp-recvmsg":
-		driver = &connectedUDP{
-			localAddr:   localAddr,
-			remoteAddr:  remoteAddr,
-			useReadFrom: true,
-		}
-	case "udp-noconn":
-		driver = &unconnectedUDP{
-			localAddr:  localAddr,
-			remoteAddr: remoteAddr,
-		}
-	case "sctp":
-		driver = &connectedSCTP{
-			sourcePort:   sourcePort,
-			remoteIpAddr: remoteIpAddr,
-			remotePort:   remotePort,
-		}
-	case "253":
+	if strings.HasPrefix(protocol, "ip") {
 		driver = &rawIP{
 			localAddr:  localAddr,
 			remoteAddr: remoteAddr,
-			protocol:   253,
+			protocol:   protocol,
 		}
-	default:
-		driver = &connectedTCP{
-			localAddr:  localAddr,
-			remoteAddr: remoteAddr,
+	} else {
+		switch protocol {
+		case "udp":
+			driver = &connectedUDP{
+				localAddr:  localAddr,
+				remoteAddr: remoteAddr,
+			}
+		case "udp-recvmsg":
+			driver = &connectedUDP{
+				localAddr:   localAddr,
+				remoteAddr:  remoteAddr,
+				useReadFrom: true,
+			}
+		case "udp-noconn":
+			driver = &unconnectedUDP{
+				localAddr:  localAddr,
+				remoteAddr: remoteAddr,
+			}
+		case "sctp":
+			driver = &connectedSCTP{
+				sourcePort:   sourcePort,
+				remoteIpAddr: remoteIpAddr,
+				remotePort:   remotePort,
+			}
+		default:
+			driver = &connectedTCP{
+				localAddr:  localAddr,
+				remoteAddr: remoteAddr,
+			}
 		}
 	}
 
@@ -844,7 +846,7 @@ type connectedSCTP struct {
 type rawIP struct {
 	localAddr          string
 	remoteAddr         string
-	protocol           uint8
+	protocol           string
 	remoteAddrResolved net.Addr
 
 	conn net.PacketConn
@@ -860,15 +862,13 @@ func (d *rawIP) Close() error {
 func (d *rawIP) Connect() error {
 	log.Info("'Connecting' raw IP, proto=", d.protocol)
 
-	network := fmt.Sprintf("ip4:%d", d.protocol)
-
 	var err error
-	d.remoteAddrResolved, err = net.ResolveIPAddr(network, d.remoteAddr)
+	d.remoteAddrResolved, err = net.ResolveIPAddr(d.protocol, d.remoteAddr)
 	if err != nil {
 		return err
 	}
 
-	d.conn, err = net.ListenPacket(network, d.localAddr)
+	d.conn, err = net.ListenPacket(d.protocol, d.localAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
