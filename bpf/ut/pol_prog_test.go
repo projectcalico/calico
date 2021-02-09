@@ -927,10 +927,10 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "11.0.0.2", "10.0.0.2"), // Wrong proto, no ports
-			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"), // Wrong port
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Wrong proto
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Src/dest confusion
-			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),   // Wrong dest
+			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),  // Wrong port
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Wrong proto
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Src/dest confusion
+			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),    // Wrong dest
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80", "123.0.0.1/32,udp:1024"},
@@ -947,10 +947,10 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "11.0.0.2", "10.0.0.2"), // Wrong proto, no ports
-			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"), // Wrong port
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Wrong proto
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Src/dest confusion
-			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),   // Wrong dest
+			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),  // Wrong port
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Wrong proto
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Src/dest confusion
+			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),    // Wrong dest
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80"},
@@ -975,10 +975,10 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:82")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "11.0.0.2", "10.0.0.2"), // Wrong proto, no ports
-			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"), // Wrong port
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Wrong proto
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Src/dest confusion
-			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),   // Wrong dest
+			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),  // Wrong port
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Wrong proto
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Src/dest confusion
+			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),    // Wrong dest
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80"},
@@ -996,10 +996,10 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.2"), // Wrong proto, no ports
-			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"), // Wrong port
-			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Wrong proto
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Src/dest confusion
-			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),   // Wrong src
+			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"),  // Wrong port
+			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Wrong proto
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Src/dest confusion
+			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),    // Wrong src
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80", "123.0.0.1/32,udp:1024"},
@@ -1016,10 +1016,10 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
 			packetNoPorts(253, "10.0.0.2", "10.0.0.2"), // Wrong proto, no ports
-			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"), // Wrong port
-			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Wrong proto
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Src/dest confusion
-			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),   // Wrong src
+			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"),  // Wrong port
+			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Wrong proto
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Src/dest confusion
+			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),    // Wrong src
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80"},
@@ -1081,7 +1081,7 @@ var polProgramTests = []polProgramTest{
 	{
 		PolicyName: "Protocol match",
 		Policy: makeRulesSingleTier([]*proto.Rule{{
-			Action: "Allow",
+			Action:   "Allow",
 			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 253}},
 		}}),
 		AllowedPackets: []packet{

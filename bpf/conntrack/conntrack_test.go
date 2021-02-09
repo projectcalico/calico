@@ -34,11 +34,11 @@ import (
 var now = mocktime.StartKTime
 
 var (
-	ip1     = net.ParseIP("10.0.0.1")
-	ip2     = net.ParseIP("10.0.0.2")
-	tcpKey  = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
-	udpKey  = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
-	icmpKey = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
+	ip1        = net.ParseIP("10.0.0.1")
+	ip2        = net.ParseIP("10.0.0.2")
+	tcpKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
+	udpKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
+	icmpKey    = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
 	genericKey = conntrack.NewKey(253, ip1, 0, ip2, 0)
 
 	timeouts = conntrack.DefaultTimeouts()
@@ -46,7 +46,7 @@ var (
 	genericJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
 	genericAlmostTimedOut = makeValue(now-(20*time.Minute), now-(599*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
 	genericTimedOut       = makeValue(now-(20*time.Minute), now-(601*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
-	
+
 	udpJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
 	udpAlmostTimedOut = makeValue(now-(2*time.Minute), now-(59*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
 	udpTimedOut       = makeValue(now-(2*time.Minute), now-(61*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
@@ -143,7 +143,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		Entry("UDP just created", udpKey, udpJustCreated, false),
 		Entry("UDP almost timed out", udpKey, udpAlmostTimedOut, false),
 		Entry("UDP timed out", udpKey, udpTimedOut, true),
-		
+
 		Entry("Generic just created", genericKey, genericJustCreated, false),
 		Entry("Generic almost timed out", genericKey, genericAlmostTimedOut, false),
 		Entry("Generic timed out", genericKey, genericTimedOut, true),

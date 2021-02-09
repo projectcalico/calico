@@ -150,8 +150,8 @@ type Rules struct {
 	SuppressNormalHostPolicy bool
 
 	// Workload policy.
-	Tiers            []Tier
-	Profiles         []Profile
+	Tiers    []Tier
+	Profiles []Profile
 
 	// Host endpoint policy.
 	HostPreDnatTiers []Tier
