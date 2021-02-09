@@ -91,7 +91,7 @@ func describeConnCheckTests(protocol string) bool {
 				cc.ExpectSome(felixes[0], hostW[1])
 				if !strings.HasPrefix(protocol, "ip") {
 					cc.ExpectNone(felixes[0], hostW[1], 8066)
-				} 
+				}
 				cc.CheckConnectivity()
 			})
 
