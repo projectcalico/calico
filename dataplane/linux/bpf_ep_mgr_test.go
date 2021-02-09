@@ -205,13 +205,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	JustBeforeEach(genPolicy("mytier", "mypolicy"))
-
 	hostEp := proto.HostEndpoint{
 		Name: "uthost-eth0",
 		PreDnatTiers: []*proto.TierInfo{
 			&proto.TierInfo{
-				Name:            "mytier",
+				Name:            "default",
 				IngressPolicies: []string{"mypolicy"},
 			},
 		},
@@ -221,7 +219,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Name: "uthost-eth0",
 		Tiers: []*proto.TierInfo{
 			&proto.TierInfo{
-				Name:            "mytier",
+				Name:            "default",
 				IngressPolicies: []string{"mypolicy"},
 				EgressPolicies:  []string{"mypolicy"},
 			},
@@ -234,6 +232,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Context("with workload and host-* endpoints", func() {
 		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
 			genWLUpdate("cali12345")()
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
@@ -308,7 +307,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Context("with eth0 up", func() {
-		JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))
+		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+		})
 
 		Context("with eth0 host endpoint", func() {
 			JustBeforeEach(genHEPUpdate("eth0", hostEp))
@@ -351,7 +353,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Context("with eth0 host endpoint", func() {
-		JustBeforeEach(genHEPUpdate("eth0", hostEp))
+		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
+			genHEPUpdate("eth0", hostEp)()
+		})
 
 		Context("with eth0 up", func() {
 			JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))
@@ -367,7 +372,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Context("with host-* endpoint", func() {
-		JustBeforeEach(genHEPUpdate(allInterfaces, hostEp))
+		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
+			genHEPUpdate(allInterfaces, hostEp)()
+		})
 
 		Context("with eth0 up", func() {
 			JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))

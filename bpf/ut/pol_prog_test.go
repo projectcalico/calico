@@ -1039,19 +1039,8 @@ var hostPolProgramTests = []polProgramTest{
 			HostPreDnatTiers: []polprog.Tier{{
 				Name:      "default",
 				EndAction: "pass",
-				Policies: []polprog.Policy{{
-					Name: "p1",
-					Rules: []polprog.Rule{{
-						Rule: &proto.Rule{
-							Action: "Allow",
-							DstNet: []string{"10.96.0.10/32"},
-						}}, {
-						Rule: &proto.Rule{
-							Action: "Deny",
-						}},
-					}},
-				}},
-			},
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
 		},
 		AllowedPackets: []packet{
 			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53"),
@@ -1070,19 +1059,8 @@ var hostPolProgramTests = []polProgramTest{
 			HostForwardTiers: []polprog.Tier{{
 				Name:      "default",
 				EndAction: "pass",
-				Policies: []polprog.Policy{{
-					Name: "p1",
-					Rules: []polprog.Rule{{
-						Rule: &proto.Rule{
-							Action: "Allow",
-							DstNet: []string{"10.96.0.10/32"},
-						}}, {
-						Rule: &proto.Rule{
-							Action: "Deny",
-						}},
-					}},
-				}},
-			},
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
 		},
 		AllowedPackets: []packet{
 			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
@@ -1101,19 +1079,8 @@ var hostPolProgramTests = []polProgramTest{
 			HostNormalTiers: []polprog.Tier{{
 				Name:      "default",
 				EndAction: "pass",
-				Policies: []polprog.Policy{{
-					Name: "p1",
-					Rules: []polprog.Rule{{
-						Rule: &proto.Rule{
-							Action: "Allow",
-							DstNet: []string{"10.96.0.10/32"},
-						}}, {
-						Rule: &proto.Rule{
-							Action: "Deny",
-						}},
-					}},
-				}},
-			},
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
 		},
 		AllowedPackets: []packet{
 			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
@@ -1246,14 +1213,14 @@ var hostPolProgramTests = []polProgramTest{
 			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
 		},
 		DroppedPackets: []packet{
-			// Passed by pre-DNAT.  Denied by workload.
-			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
 			// Allowed by pre-DNAT.  Denied by workload.
 			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
 			udpPkt("123.0.0.1:1024", "10.96.0.11:53").toHost(),
 			udpPkt("123.0.0.1:1024", "10.96.0.11:53").fromHost(),
 			// Allowed pre-DNAT.  Post-NAT IP denied by workload.
 			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+			// Passed by pre-DNAT.  Post-NAT IP denied by workload.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
 		},
 	},
 	{
