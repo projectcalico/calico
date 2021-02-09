@@ -1076,7 +1076,6 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
 	},
-
 	// Generic protocol tests.
 	{
 		PolicyName: "Protocol match",
@@ -1093,8 +1092,29 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(254, "11.0.0.2", "10.0.0.2"),
 		},
 	},
+}
 
-	// Test cases with host policy.
+var hostPolProgramTests = []polProgramTest{
+	{
+		PolicyName: "no policy",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").toHost(),
+		},
+	},
 	{
 		PolicyName: "pre-DNAT",
 		Policy: polprog.Rules{
@@ -1102,19 +1122,8 @@ var polProgramTests = []polProgramTest{
 			HostPreDnatTiers: []polprog.Tier{{
 				Name:      "default",
 				EndAction: "pass",
-				Policies: []polprog.Policy{{
-					Name: "p1",
-					Rules: []polprog.Rule{{
-						Rule: &proto.Rule{
-							Action: "Allow",
-							DstNet: []string{"10.96.0.10/32"},
-						}}, {
-						Rule: &proto.Rule{
-							Action: "Deny",
-						}},
-					}},
-				}},
-			},
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
 		},
 		AllowedPackets: []packet{
 			packetNoPorts(253, "11.0.0.2", "10.96.0.10"),
@@ -1128,6 +1137,236 @@ var polProgramTests = []polProgramTest{
 			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
 		},
 	},
+	{
+		PolicyName: "apply-on-forward",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "normal host policy",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "AoF + normal",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p2", "10.96.5.0/24"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").fromHost(),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+		},
+	},
+	{
+		PolicyName: "AoF + suppressed normal",
+		Policy: polprog.Rules{
+			ForHostInterface: false,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p2", "10.96.5.0/24"),
+			}},
+			SuppressNormalHostPolicy: true,
+			// Workload policy.
+			Tiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			// Allowed by workload and AoF host policy.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			// Allowed by workload policy, normal host policy suppressed.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+		},
+		DroppedPackets: []packet{
+			// Denied by workload policy.
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").fromHost(),
+		},
+	},
+	{
+		PolicyName: "pre-DNAT policy + normal profiles",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostPreDnatTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDest("p1", "10.96.0.10/32"),
+			}},
+			HostProfiles: allowDest("p2", "10.96.5.0/24"),
+		},
+		AllowedPackets: []packet{
+			// Allowed by pre-DNAT policy.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			// Passed by pre-DNAT policy.  No AoF policy.
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53"),
+			// Passed by pre-DNAT policy.  Allowed by normal profile.
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").fromHost(),
+			// Allowed by pre-DNAT policy.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+		},
+		DroppedPackets: []packet{
+			// Passed by pre-DNAT policy.  Denied by normal profile.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "pre-DNAT + workload",
+		Policy: polprog.Rules{
+			ForHostInterface: false,
+			HostPreDnatTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDest("p1", "10.96.0.10/31"),
+			}},
+			// Workload policy.
+			Tiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "deny",
+				Policies:  allowDest("p1", "10.96.0.10/32"),
+			}},
+			SuppressNormalHostPolicy: true,
+		},
+		AllowedPackets: []packet{
+			// Allowed by pre-DNAT and workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			// Passed by pre-DNAT.  Allowed by workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+		},
+		DroppedPackets: []packet{
+			// Allowed by pre-DNAT.  Denied by workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").fromHost(),
+			// Allowed pre-DNAT.  Post-NAT IP denied by workload.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+			// Passed by pre-DNAT.  Post-NAT IP denied by workload.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "AoF + workload",
+		Policy: polprog.Rules{
+			ForHostInterface: false,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.11/32"),
+			}},
+			// Workload policy.
+			Tiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "deny",
+				Policies:  allowDest("p1", "10.96.0.10/31"),
+			}},
+			SuppressNormalHostPolicy: true,
+		},
+		AllowedPackets: []packet{
+			// Allowed by AoF and workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			// Allowed by workload; normal host policy suppressed.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+		},
+		DroppedPackets: []packet{
+			// Denied by AoF.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			// Allowed by AoF.  Denied by workload.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+		},
+	},
+}
+
+func allowDestElseDeny(name, dst string) []polprog.Policy {
+	return []polprog.Policy{{
+		Name: name,
+		Rules: []polprog.Rule{{
+			Rule: &proto.Rule{
+				Action: "Allow",
+				DstNet: []string{dst},
+			}}, {
+			Rule: &proto.Rule{
+				Action: "Deny",
+			}},
+		}},
+	}
+}
+
+func allowDest(name, dst string) []polprog.Policy {
+	return []polprog.Policy{{
+		Name: name,
+		Rules: []polprog.Rule{{
+			Rule: &proto.Rule{
+				Action: "Allow",
+				DstNet: []string{dst},
+			}},
+		}},
+	}
 }
 
 // polProgramTestWrapper allows to keep polProgramTest intact as well as the tests that
@@ -1169,6 +1408,12 @@ func wrap(p polProgramTest) polProgramTestWrapper {
 
 func TestPolicyPrograms(t *testing.T) {
 	for i, p := range polProgramTests {
+		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), func(t *testing.T) { runTest(t, wrap(p)) })
+	}
+}
+
+func TestHostPolicyPrograms(t *testing.T) {
+	for i, p := range hostPolProgramTests {
 		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), func(t *testing.T) { runTest(t, wrap(p)) })
 	}
 }
