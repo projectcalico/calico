@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,8 +32,9 @@ import (
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"github.com/projectcalico/felix/fv/utils"
 
 	uuid "github.com/satori/go.uuid"
 )
@@ -165,7 +166,7 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 
 			res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, opts...)
 
-			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res != nil)
+			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res.HasConnectivity())
 
 			if res != nil {
 				if c.CheckSNAT {
@@ -187,7 +188,6 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 		}(i, exp)
 	}
 	wg.Wait()
-	log.Debug("Connectivity", responses)
 	return responses, pretty
 }
 
@@ -459,9 +459,10 @@ type ExpPacketLoss struct {
 
 func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 	if e.Expected {
-		if response == nil {
+		if !response.HasConnectivity() {
 			return false
 		}
+
 		if checkSNAT {
 			match := false
 			for _, src := range e.ExpSrcIPs {
@@ -493,8 +494,9 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 			if e.ExpectedPacketLoss.MaxPercent >= 0 && lossPercent > e.ExpectedPacketLoss.MaxPercent {
 				return false
 			}
+		} else if response.LastResponse.ErrorStr != "" {
+			return false
 		}
-
 	} else {
 		if response != nil {
 			if e.ErrorStr != "" {
@@ -541,6 +543,16 @@ func (r Result) PrintToStdout() {
 		log.WithError(err).Panic("Failed to marshall result to stdout")
 	}
 	fmt.Printf("RESULT=%s\n", string(encoded))
+}
+
+func (r *Result) HasConnectivity() bool {
+	if r == nil {
+		return false
+	}
+	if r.Stats.ResponsesReceived == 0 {
+		return false
+	}
+	return true
 }
 
 type Stats struct {

@@ -53,11 +53,11 @@ Options:
   --protocol=<protocol>    Protocol to test tcp (default), udp (connected) udp-noconn (unconnected).
   --duration=<seconds>     Total seconds test should run. 0 means run a one off connectivity check. Non-Zero means packets loss test.[default: 0]
   --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
-  --log-pongs       	   Whether to log every response
-  --debug           	   Enable debug logging
-  --sendlen=<bytes> 	   How many additional bytes to send
-  --recvlen=<bytes> 	   Tell the other side to send this many additional bytes
-  --stdin             	   Read and send data from stdin
+  --log-pongs              Whether to log every response
+  --debug                  Enable debug logging
+  --sendlen=<bytes>        How many additional bytes to send
+  --recvlen=<bytes>        Tell the other side to send this many additional bytes
+  --stdin                  Read and send data from stdin
 
 If connection is successful, test-connection exits successfully.
 
@@ -94,8 +94,14 @@ func main() {
 	log.WithField("args", arguments).Info("Parsed arguments")
 	namespacePath := arguments["<namespace-path>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
-	port := arguments["<port>"].(string)
-	sourcePort := arguments["--source-port"].(string)
+	protocol := arguments["--protocol"].(string)
+	port := ""
+	sourcePort := ""
+	// Our raw IP protocol "253" doesn't have ports
+	if protocol != "253" {
+		port = arguments["<port>"].(string)
+		sourcePort = arguments["--source-port"].(string)
+	}
 	sourceIpAddress := arguments["--source-ip"].(string)
 	if debug, err := arguments.Bool("--debug"); err == nil && debug {
 		log.SetLevel(log.DebugLevel)
@@ -121,7 +127,6 @@ func main() {
 		sourceIpAddress = defaultIPv6SourceIP
 	}
 
-	protocol := arguments["--protocol"].(string)
 	duration := arguments["--duration"].(string)
 	seconds, err := strconv.Atoi(duration)
 	if err != nil {
@@ -250,11 +255,17 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 	var localAddr string
 	var remoteAddr string
 	if strings.Contains(remoteIpAddr, ":") {
-		localAddr = "[" + sourceIpAddr + "]:" + sourcePort
-		remoteAddr = "[" + remoteIpAddr + "]:" + remotePort
+		localAddr = "[" + sourceIpAddr + "]"
+		remoteAddr = "[" + remoteIpAddr + "]"
 	} else {
-		localAddr = sourceIpAddr + ":" + sourcePort
-		remoteAddr = remoteIpAddr + ":" + remotePort
+		localAddr = sourceIpAddr
+		remoteAddr = remoteIpAddr
+	}
+
+	if protocol != "253" {
+		// All the protocols apart from our raw IP protocol have ports.
+		localAddr += ":" + sourcePort
+		remoteAddr += ":" + remotePort
 	}
 
 	log.Infof("Connecting from %v to %v over %s", localAddr, remoteAddr, protocol)
@@ -283,6 +294,12 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 			sourcePort:   sourcePort,
 			remoteIpAddr: remoteIpAddr,
 			remotePort:   remotePort,
+		}
+	case "253":
+		driver = &rawIP{
+			localAddr:  localAddr,
+			remoteAddr: remoteAddr,
+			protocol:   253,
 		}
 	default:
 		driver = &connectedTCP{
@@ -820,6 +837,67 @@ type connectedSCTP struct {
 	conn net.Conn
 	r    *bufio.Reader
 	w    *bufio.Writer
+}
+
+// rawIP implements a raw IP connection on the given protocol number.  I.e. is sends the message as the body of the
+// IP packet with no additional header.
+type rawIP struct {
+	localAddr          string
+	remoteAddr         string
+	protocol           uint8
+	remoteAddrResolved net.Addr
+
+	conn net.PacketConn
+}
+
+func (d *rawIP) Close() error {
+	if d.conn == nil {
+		return nil
+	}
+	return d.conn.Close()
+}
+
+func (d *rawIP) Connect() error {
+	log.Info("'Connecting' raw IP, proto=", d.protocol)
+
+	network := fmt.Sprintf("ip4:%d", d.protocol)
+
+	var err error
+	d.remoteAddrResolved, err = net.ResolveIPAddr(network, d.remoteAddr)
+	if err != nil {
+		return err
+	}
+
+	d.conn, err = net.ListenPacket(network, d.localAddr)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+
+	return nil
+}
+
+func (d *rawIP) Send(msg []byte) error {
+	_, err := d.conn.WriteTo(msg, d.remoteAddrResolved)
+	if err != nil {
+		return err
+	}
+	log.WithField("message", string(msg)).Infof("Sent message over raw IP to %v", d.remoteAddr)
+	return nil
+}
+
+func (d *rawIP) Receive() ([]byte, error) {
+	bufIn := make([]byte, 8<<10)
+	n, from, err := d.conn.ReadFrom(bufIn)
+	if err != nil {
+		log.WithError(err).Error("Failed to read from")
+	} else {
+		log.Infof("Received %d bytes from %s", n, from)
+	}
+	return bufIn[:n], err
+}
+
+func (d *rawIP) MTU() (int, error) {
+	return 0, nil
 }
 
 func (d *connectedSCTP) Connect() error {
