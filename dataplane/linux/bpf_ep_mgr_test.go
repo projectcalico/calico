@@ -18,6 +18,7 @@ package intdataplane
 
 import (
 	"regexp"
+	"sync"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,6 +37,7 @@ import (
 )
 
 type mockDataplane struct {
+	mutex  sync.Mutex
 	lastFD uint32
 	fds    map[string]uint32
 	state  map[uint32]polprog.Rules
@@ -50,6 +52,8 @@ func newMockDataplane() *mockDataplane {
 }
 
 func (m *mockDataplane) ensureProgramAttached(ap *tc.AttachPoint, polDirection PolDirection) (bpf.MapFD, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	suffixes := []string{"-I", "-E"}
 	key := ap.Iface + suffixes[int(polDirection)]
 	if fd, exists := m.fds[key]; exists {
@@ -65,17 +69,41 @@ func (m *mockDataplane) ensureQdisc(iface string) error {
 }
 
 func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.state[uint32(jumpMapFD)] = rules
 	return nil
 }
 
 func (m *mockDataplane) removePolicyProgram(jumpMapFD bpf.MapFD) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	delete(m.state, uint32(jumpMapFD))
 	return nil
 }
 
 func (m *mockDataplane) setAcceptLocal(iface string, val bool) error {
 	return nil
+}
+
+func (m *mockDataplane) getRules(key string) *polprog.Rules {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	fd := m.fds[key]
+	if fd != 0 {
+		rules, exist := m.state[fd]
+		if exist {
+			return &rules
+		}
+	}
+	return nil
+}
+
+func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *polprog.Rules {
+	return func() *polprog.Rules {
+		*vari = m.getRules(key)
+		return *vari
+	}
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
@@ -240,41 +268,31 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("does not have host-* policy on the workload interface", func() {
-			Eventually(func() map[string]uint32 {
-				return dp.fds
-			}).Should(HaveLen(4))
+			var eth0I, eth0E, caliI, caliE *polprog.Rules
 
 			// Check eth0 ingress.
-			eth0I := dp.fds["eth0-I"]
-			Expect(eth0I).NotTo(BeZero())
-			Expect(dp.state).To(HaveKey(eth0I))
-			Expect(dp.state[eth0I].ForHostInterface).To(BeTrue())
-			Expect(dp.state[eth0I].HostNormalTiers).To(HaveLen(1))
-			Expect(dp.state[eth0I].HostNormalTiers[0].Policies).To(HaveLen(1))
-			Expect(dp.state[eth0I].SuppressNormalHostPolicy).To(BeFalse())
+			Eventually(dp.setAndReturn(&eth0I, "eth0-I")).ShouldNot(BeNil())
+			Expect(eth0I.ForHostInterface).To(BeTrue())
+			Expect(eth0I.HostNormalTiers).To(HaveLen(1))
+			Expect(eth0I.HostNormalTiers[0].Policies).To(HaveLen(1))
+			Expect(eth0I.SuppressNormalHostPolicy).To(BeFalse())
 
 			// Check eth0 egress.
-			eth0E := dp.fds["eth0-E"]
-			Expect(eth0E).NotTo(BeZero())
-			Expect(dp.state).To(HaveKey(eth0E))
-			Expect(dp.state[eth0E].ForHostInterface).To(BeTrue())
-			Expect(dp.state[eth0E].HostNormalTiers).To(HaveLen(1))
-			Expect(dp.state[eth0E].HostNormalTiers[0].Policies).To(HaveLen(1))
-			Expect(dp.state[eth0E].SuppressNormalHostPolicy).To(BeFalse())
+			Eventually(dp.setAndReturn(&eth0E, "eth0-E")).ShouldNot(BeNil())
+			Expect(eth0E.ForHostInterface).To(BeTrue())
+			Expect(eth0E.HostNormalTiers).To(HaveLen(1))
+			Expect(eth0E.HostNormalTiers[0].Policies).To(HaveLen(1))
+			Expect(eth0E.SuppressNormalHostPolicy).To(BeFalse())
 
 			// Check workload ingress.
-			caliI := dp.fds["cali12345-I"]
-			Expect(caliI).NotTo(BeZero())
-			Expect(dp.state).To(HaveKey(caliI))
-			Expect(dp.state[caliI].ForHostInterface).To(BeFalse())
-			Expect(dp.state[caliI].SuppressNormalHostPolicy).To(BeTrue())
+			Eventually(dp.setAndReturn(&caliI, "cali12345-I")).ShouldNot(BeNil())
+			Expect(caliI.ForHostInterface).To(BeFalse())
+			Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
 
 			// Check workload egress.
-			caliE := dp.fds["cali12345-E"]
-			Expect(caliE).NotTo(BeZero())
-			Expect(dp.state).To(HaveKey(caliE))
-			Expect(dp.state[caliE].ForHostInterface).To(BeFalse())
-			Expect(dp.state[caliE].SuppressNormalHostPolicy).To(BeTrue())
+			Eventually(dp.setAndReturn(&caliE, "cali12345-E")).ShouldNot(BeNil())
+			Expect(caliE.ForHostInterface).To(BeFalse())
+			Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 		})
 
 		Context("with DefaultEndpointToHostAction RETURN", func() {
@@ -283,25 +301,19 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 
 			It("has host-* policy on workload egress but not ingress", func() {
-				Eventually(func() map[string]uint32 {
-					return dp.fds
-				}).Should(HaveLen(4))
+				var caliI, caliE *polprog.Rules
 
 				// Check workload ingress.
-				caliI := dp.fds["cali12345-I"]
-				Expect(caliI).NotTo(BeZero())
-				Expect(dp.state).To(HaveKey(caliI))
-				Expect(dp.state[caliI].ForHostInterface).To(BeFalse())
-				Expect(dp.state[caliI].SuppressNormalHostPolicy).To(BeTrue())
+				Eventually(dp.setAndReturn(&caliI, "cali12345-I")).ShouldNot(BeNil())
+				Expect(caliI.ForHostInterface).To(BeFalse())
+				Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
 
 				// Check workload egress.
-				caliE := dp.fds["cali12345-E"]
-				Expect(caliE).NotTo(BeZero())
-				Expect(dp.state).To(HaveKey(caliE))
-				Expect(dp.state[caliE].ForHostInterface).To(BeFalse())
-				Expect(dp.state[caliE].HostNormalTiers).To(HaveLen(1))
-				Expect(dp.state[caliE].HostNormalTiers[0].Policies).To(HaveLen(1))
-				Expect(dp.state[caliE].SuppressNormalHostPolicy).To(BeFalse())
+				Eventually(dp.setAndReturn(&caliE, "cali12345-E")).ShouldNot(BeNil())
+				Expect(caliE.ForHostInterface).To(BeFalse())
+				Expect(caliE.HostNormalTiers).To(HaveLen(1))
+				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
+				Expect(caliE.SuppressNormalHostPolicy).To(BeFalse())
 			})
 		})
 	})
@@ -322,20 +334,18 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					Name: "mypolicy",
 				}]).To(HaveKey("eth0"))
 
+				var eth0I, eth0E *polprog.Rules
+
 				// Check ingress rules.
-				eth0I := dp.fds["eth0-I"]
-				Expect(eth0I).NotTo(BeZero())
-				Expect(dp.state).To(HaveKey(eth0I))
-				Expect(dp.state[eth0I].ForHostInterface).To(BeTrue())
-				Expect(dp.state[eth0I].HostPreDnatTiers).To(HaveLen(1))
-				Expect(dp.state[eth0I].HostPreDnatTiers[0].Policies).To(HaveLen(1))
+				Eventually(dp.setAndReturn(&eth0I, "eth0-I")).ShouldNot(BeNil())
+				Expect(eth0I.ForHostInterface).To(BeTrue())
+				Expect(eth0I.HostPreDnatTiers).To(HaveLen(1))
+				Expect(eth0I.HostPreDnatTiers[0].Policies).To(HaveLen(1))
 
 				// Check egress rules.
-				eth0E := dp.fds["eth0-E"]
-				Expect(eth0E).NotTo(BeZero())
-				Expect(dp.state).To(HaveKey(eth0E))
-				Expect(dp.state[eth0E].ForHostInterface).To(BeTrue())
-				Expect(dp.state[eth0E].HostPreDnatTiers).To(BeNil())
+				Eventually(dp.setAndReturn(&eth0E, "eth0-E")).ShouldNot(BeNil())
+				Expect(eth0E.ForHostInterface).To(BeTrue())
+				Expect(eth0E.HostPreDnatTiers).To(BeNil())
 			})
 		})
 
