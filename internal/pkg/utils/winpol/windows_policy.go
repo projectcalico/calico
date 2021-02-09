@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,21 +90,6 @@ func CalculateEndpointPolicies(
 
 		outputPols = append(outputPols, json.RawMessage(encoded))
 	}
-
-	// Add an entry to force encap to the management IP.  We think this is required for node ports.  The encap is
-	// local to the host so there's no real vxlan going on here.
-	dict := map[string]interface{}{
-		"Type":              "ROUTE",
-		"DestinationPrefix": mgmtIP.String() + "/32",
-		"NeedEncap":         true,
-	}
-	encoded, err := json.Marshal(dict)
-	if err != nil {
-		logger.WithError(err).Error("Failed to add outbound NAT exclusion.")
-		return nil, err
-	}
-
-	outputPols = append(outputPols, json.RawMessage(encoded))
 
 	return outputPols, nil
 }

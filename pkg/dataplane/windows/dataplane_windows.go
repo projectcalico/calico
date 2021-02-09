@@ -693,6 +693,11 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		}
 		// conjure a MAC based on the IP for Overlay
 		macAddr = fmt.Sprintf("%v-%02x-%02x-%02x-%02x", vxlanMACPrefix, epIPBytes[0], epIPBytes[1], epIPBytes[2], epIPBytes[3])
+
+		pols = append(pols, []json.RawMessage{
+			[]byte(fmt.Sprintf(`{"Type":"PA","PA":"%s"}`, hnsNetwork.ManagementIP)),
+		}...)
+
 	}
 
 	attempts := 3
