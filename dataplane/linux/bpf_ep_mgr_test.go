@@ -18,6 +18,7 @@ package intdataplane
 
 import (
 	"regexp"
+	"sync"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -25,7 +26,9 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
+	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
@@ -33,44 +36,131 @@ import (
 	"github.com/projectcalico/felix/rules"
 )
 
+type mockDataplane struct {
+	mutex  sync.Mutex
+	lastFD uint32
+	fds    map[string]uint32
+	state  map[uint32]polprog.Rules
+}
+
+func newMockDataplane() *mockDataplane {
+	return &mockDataplane{
+		lastFD: 5,
+		fds:    map[string]uint32{},
+		state:  map[uint32]polprog.Rules{},
+	}
+}
+
+func (m *mockDataplane) ensureProgramAttached(ap *tc.AttachPoint, polDirection PolDirection) (bpf.MapFD, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	suffixes := []string{"-I", "-E"}
+	key := ap.Iface + suffixes[int(polDirection)]
+	if fd, exists := m.fds[key]; exists {
+		return bpf.MapFD(fd), nil
+	}
+	m.lastFD += 1
+	m.fds[key] = m.lastFD
+	return bpf.MapFD(m.lastFD), nil
+}
+
+func (m *mockDataplane) ensureQdisc(iface string) error {
+	return nil
+}
+
+func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.state[uint32(jumpMapFD)] = rules
+	return nil
+}
+
+func (m *mockDataplane) removePolicyProgram(jumpMapFD bpf.MapFD) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	delete(m.state, uint32(jumpMapFD))
+	return nil
+}
+
+func (m *mockDataplane) setAcceptLocal(iface string, val bool) error {
+	return nil
+}
+
+func (m *mockDataplane) getRules(key string) *polprog.Rules {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	fd := m.fds[key]
+	if fd != 0 {
+		rules, exist := m.state[fd]
+		if exist {
+			return &rules
+		}
+	}
+	return nil
+}
+
+func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *polprog.Rules {
+	return func() *polprog.Rules {
+		*vari = m.getRules(key)
+		return *vari
+	}
+}
+
 var _ = Describe("BPF Endpoint Manager", func() {
 
 	var (
-		bpfEpMgr *bpfEndpointManager
+		bpfEpMgr             *bpfEndpointManager
+		dp                   *mockDataplane
+		fibLookupEnabled     bool
+		endpointToHostAction string
+		dataIfacePattern     string
+		workloadIfaceRegex   string
+		ipSetIDAllocator     *idalloc.IDAllocator
+		vxlanMTU             int
+		nodePortDSR          bool
+		bpfMapContext        *bpf.MapContext
+		ipSetsMap            bpf.Map
+		stateMap             bpf.Map
+		rrConfigNormal       rules.Config
+		ruleRenderer         rules.RuleRenderer
+		filterTableV4        iptablesTable
 	)
 
-	fibLookupEnabled := true
-	endpointToHostAction := "DROP"
-	dataIfacePattern := "^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|wireguard.cali$)"
-	workloadIfaceRegex := "cali"
-	ipSetIDAllocator := idalloc.New()
-	vxlanMTU := 0
-	nodePortDSR := true
-	bpfMapContext := &bpf.MapContext{
-		RepinningEnabled: true,
-	}
-	ipSetsMap := bpfipsets.Map(bpfMapContext)
-	stateMap := state.Map(bpfMapContext)
-	rrConfigNormal := rules.Config{
-		IPIPEnabled:                 true,
-		IPIPTunnelAddress:           nil,
-		IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:          0x8,
-		IptablesMarkPass:            0x10,
-		IptablesMarkScratch0:        0x20,
-		IptablesMarkScratch1:        0x40,
-		IptablesMarkEndpoint:        0xff00,
-		IptablesMarkNonCaliEndpoint: 0x0100,
-		KubeIPVSSupportEnabled:      true,
-		WorkloadIfacePrefixes:       []string{"cali", "tap"},
-		VXLANPort:                   4789,
-		VXLANVNI:                    4096,
-	}
-	ruleRenderer := rules.NewRenderer(rrConfigNormal)
-	filterTableV4 := newMockTable("filter")
-
 	BeforeEach(func() {
+		fibLookupEnabled = true
+		endpointToHostAction = "DROP"
+		dataIfacePattern = "^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|wireguard.cali$)"
+		workloadIfaceRegex = "cali"
+		ipSetIDAllocator = idalloc.New()
+		vxlanMTU = 0
+		nodePortDSR = true
+		bpfMapContext = &bpf.MapContext{
+			RepinningEnabled: true,
+		}
+		ipSetsMap = bpfipsets.Map(bpfMapContext)
+		stateMap = state.Map(bpfMapContext)
+		rrConfigNormal = rules.Config{
+			IPIPEnabled:                 true,
+			IPIPTunnelAddress:           nil,
+			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			IptablesMarkAccept:          0x8,
+			IptablesMarkPass:            0x10,
+			IptablesMarkScratch0:        0x20,
+			IptablesMarkScratch1:        0x40,
+			IptablesMarkEndpoint:        0xff00,
+			IptablesMarkNonCaliEndpoint: 0x0100,
+			KubeIPVSSupportEnabled:      true,
+			WorkloadIfacePrefixes:       []string{"cali", "tap"},
+			VXLANPort:                   4789,
+			VXLANVNI:                    4096,
+		}
+		ruleRenderer = rules.NewRenderer(rrConfigNormal)
+		filterTableV4 = newMockTable("filter")
+	})
+
+	JustBeforeEach(func() {
+		dp = newMockDataplane()
 		bpfEpMgr = newBPFEndpointManager(
 			"info", // config.BPFLogLevel,
 			"uthost",
@@ -88,6 +178,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			filterTableV4,
 			nil,
 		)
+		bpfEpMgr.dp = dp
 	})
 
 	It("exists", func() {
@@ -116,12 +207,49 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
+	genPolicy := func(tier, policy string) func() {
+		return func() {
+			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
+				Id:     &proto.PolicyID{Tier: tier, Name: policy},
+				Policy: &proto.Policy{},
+			})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
+	genWLUpdate := func(name string) func() {
+		return func() {
+			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     name,
+					EndpointId:     name,
+				},
+				Endpoint: &proto.WorkloadEndpoint{Name: name},
+			})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
 	hostEp := proto.HostEndpoint{
 		Name: "uthost-eth0",
 		PreDnatTiers: []*proto.TierInfo{
 			&proto.TierInfo{
-				Name:            "mytier",
+				Name:            "default",
 				IngressPolicies: []string{"mypolicy"},
+			},
+		},
+	}
+
+	hostEpNorm := proto.HostEndpoint{
+		Name: "uthost-eth0",
+		Tiers: []*proto.TierInfo{
+			&proto.TierInfo{
+				Name:            "default",
+				IngressPolicies: []string{"mypolicy"},
+				EgressPolicies:  []string{"mypolicy"},
 			},
 		},
 	}
@@ -130,11 +258,74 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).NotTo(Equal(hostEp))
 	})
 
+	Context("with workload and host-* endpoints", func() {
+		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+			genWLUpdate("cali12345")()
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genHEPUpdate(allInterfaces, hostEpNorm)()
+		})
+
+		It("does not have host-* policy on the workload interface", func() {
+			var eth0I, eth0E, caliI, caliE *polprog.Rules
+
+			// Check eth0 ingress.
+			Eventually(dp.setAndReturn(&eth0I, "eth0-I")).ShouldNot(BeNil())
+			Expect(eth0I.ForHostInterface).To(BeTrue())
+			Expect(eth0I.HostNormalTiers).To(HaveLen(1))
+			Expect(eth0I.HostNormalTiers[0].Policies).To(HaveLen(1))
+			Expect(eth0I.SuppressNormalHostPolicy).To(BeFalse())
+
+			// Check eth0 egress.
+			Eventually(dp.setAndReturn(&eth0E, "eth0-E")).ShouldNot(BeNil())
+			Expect(eth0E.ForHostInterface).To(BeTrue())
+			Expect(eth0E.HostNormalTiers).To(HaveLen(1))
+			Expect(eth0E.HostNormalTiers[0].Policies).To(HaveLen(1))
+			Expect(eth0E.SuppressNormalHostPolicy).To(BeFalse())
+
+			// Check workload ingress.
+			Eventually(dp.setAndReturn(&caliI, "cali12345-I")).ShouldNot(BeNil())
+			Expect(caliI.ForHostInterface).To(BeFalse())
+			Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
+
+			// Check workload egress.
+			Eventually(dp.setAndReturn(&caliE, "cali12345-E")).ShouldNot(BeNil())
+			Expect(caliE.ForHostInterface).To(BeFalse())
+			Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
+		})
+
+		Context("with DefaultEndpointToHostAction RETURN", func() {
+			BeforeEach(func() {
+				endpointToHostAction = "RETURN"
+			})
+
+			It("has host-* policy on workload egress but not ingress", func() {
+				var caliI, caliE *polprog.Rules
+
+				// Check workload ingress.
+				Eventually(dp.setAndReturn(&caliI, "cali12345-I")).ShouldNot(BeNil())
+				Expect(caliI.ForHostInterface).To(BeFalse())
+				Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
+
+				// Check workload egress.
+				Eventually(dp.setAndReturn(&caliE, "cali12345-E")).ShouldNot(BeNil())
+				Expect(caliE.ForHostInterface).To(BeFalse())
+				Expect(caliE.HostNormalTiers).To(HaveLen(1))
+				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
+				Expect(caliE.SuppressNormalHostPolicy).To(BeFalse())
+			})
+		})
+	})
+
 	Context("with eth0 up", func() {
-		BeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))
+		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+		})
 
 		Context("with eth0 host endpoint", func() {
-			BeforeEach(genHEPUpdate("eth0", hostEp))
+			JustBeforeEach(genHEPUpdate("eth0", hostEp))
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
@@ -142,11 +333,24 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					Tier: "default",
 					Name: "mypolicy",
 				}]).To(HaveKey("eth0"))
+
+				var eth0I, eth0E *polprog.Rules
+
+				// Check ingress rules.
+				Eventually(dp.setAndReturn(&eth0I, "eth0-I")).ShouldNot(BeNil())
+				Expect(eth0I.ForHostInterface).To(BeTrue())
+				Expect(eth0I.HostPreDnatTiers).To(HaveLen(1))
+				Expect(eth0I.HostPreDnatTiers[0].Policies).To(HaveLen(1))
+
+				// Check egress rules.
+				Eventually(dp.setAndReturn(&eth0E, "eth0-E")).ShouldNot(BeNil())
+				Expect(eth0E.ForHostInterface).To(BeTrue())
+				Expect(eth0E.HostPreDnatTiers).To(BeNil())
 			})
 		})
 
 		Context("with host-* endpoint", func() {
-			BeforeEach(genHEPUpdate(allInterfaces, hostEp))
+			JustBeforeEach(genHEPUpdate(allInterfaces, hostEp))
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
@@ -159,10 +363,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Context("with eth0 host endpoint", func() {
-		BeforeEach(genHEPUpdate("eth0", hostEp))
+		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
+			genHEPUpdate("eth0", hostEp)()
+		})
 
 		Context("with eth0 up", func() {
-			BeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))
+			JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
@@ -175,10 +382,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Context("with host-* endpoint", func() {
-		BeforeEach(genHEPUpdate(allInterfaces, hostEp))
+		JustBeforeEach(func() {
+			genPolicy("default", "mypolicy")()
+			genHEPUpdate(allInterfaces, hostEp)()
+		})
 
 		Context("with eth0 up", func() {
-			BeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))
+			JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateUp, 10))
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
@@ -189,7 +399,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			})
 
 			Context("with eth0 down", func() {
-				BeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateDown, 10))
+				JustBeforeEach(genIfaceUpdate("eth0", ifacemonitor.StateDown, 10))
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
