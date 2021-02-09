@@ -123,6 +123,13 @@ section:
     path: /getting-started/kubernetes/requirements
   - title: Enable kubectl to manage Calico APIs (tech-preview)
     path: /getting-started/kubernetes/apiserver-preview
+  - title: VPP dataplane
+    path: /getting-started/kubernetes/vpp/
+    section:
+    - title: Get started with VPP networking
+      path: /getting-started/kubernetes/vpp/getting-started
+    - title: Enable IPsec encryption between nodes
+      path: /getting-started/kubernetes/vpp/ipsec
 - title: OpenStack
   path: /getting-started/openstack/
   section:
