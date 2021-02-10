@@ -708,7 +708,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		}
 		encoded, err := json.Marshal(dict)
 		if err != nil {
-			return nil, fmt.Error("failed to add route encap policy")
+			return nil, fmt.Errorf("failed to add route encap policy")
 		}
 
 		pols = append(pols, json.RawMessage(encoded))
