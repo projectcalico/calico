@@ -698,6 +698,20 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 			[]byte(fmt.Sprintf(`{"Type":"PA","PA":"%s"}`, hnsNetwork.ManagementIP)),
 		}...)
 
+	} else {
+		// Add an entry to force encap to the management IP.  We think this is required for node ports. The encap is
+		// local to the host so there's no real vxlan going on here.
+		dict := map[string]interface{}{
+			"Type":              "ROUTE",
+			"DestinationPrefix": mgmtIP.String() + "/32",
+			"NeedEncap":         true,
+		}
+		encoded, err := json.Marshal(dict)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add route encap policy")
+		}
+
+		pols = append(pols, json.RawMessage(encoded))
 	}
 
 	attempts := 3
