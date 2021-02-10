@@ -63,8 +63,8 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 
 # The following chunk of conditionals sets the Version of the helm chart. 
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
-ifdef CHART_RELEASE
-# the presence of CHART_RELEASE indicates we're trying to cut an official chart release.
+ifdef RELEASE
+# The presence of RELEASE indicates we're trying to cut an official chart release.
 chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
 appVersion:=$(CALICO_VER)
 else
@@ -306,6 +306,7 @@ update_canonical_urls:
 
 ## Tags and builds a release from start to finish.
 release: release-prereqs
+	RELEASE:=true
 	$(MAKE) release-tag
 	$(MAKE) release-build
 	$(MAKE) release-verify
