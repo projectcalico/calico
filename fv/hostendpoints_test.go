@@ -360,7 +360,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 
 			// One-way check because conntrack for unknown protocols is symmetric so, once the
 			// felix[0] -> felix[1] packet goes through, we expect felix[1] -> felix[0] to work too
-			// (and the connetivity checker always does a request-response to check that).
+			// (and the connectivity checker always does a request-response to check that).
 			cc253.Expect(connectivity.Some, felixes[0], rawIPHostW253[1])
 			cc253.CheckConnectivity()
 
