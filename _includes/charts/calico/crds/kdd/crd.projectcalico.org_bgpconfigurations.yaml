@@ -117,6 +117,18 @@ spec:
                       type: string
                   type: object
                 type: array
+              serviceLoadBalancerIPs:
+                description: ServiceLoadBalancerIPs are the CIDR blocks for Kubernetes
+                  Service LoadBalancer IPs. Kubernetes Service status.LoadBalancer.Ingress
+                  IPs will only be advertised if they are within one of these blocks.
+                items:
+                  description: ServiceLoadBalancerIPBlock represents a single allowed
+                    LoadBalancer IP CIDR block.
+                  properties:
+                    cidr:
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true
