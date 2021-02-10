@@ -19,7 +19,7 @@ Install {{site.prodnameWindows}} on your Kubernetes cluster in approximately 5 m
 Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodnameWindows}} implementation.)
 
 **Kubernetes cluster requirements**
-- Kubernetes clusters with versions 1.19, 1.18, or 1.17
+- Kubernetes clusters with versions 1.20, 1.19, or 1.18
 
 **Windows node requirements**
 - Versions:
