@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"Type": "SomethingElse"}`),
-		json.RawMessage(`{"DestinationPrefix":"10.11.128.13/32","NeedEncap":true,"Type":"ROUTE"}`),
 	}), "OutBoundNAT should have been filtered out")
 
 	t.Log("With NAT enabled, OutBoundNAT should be augmented")
@@ -60,7 +59,6 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
 		json.RawMessage(`{"Type": "SomethingElse"}`),
-		json.RawMessage(`{"DestinationPrefix":"10.11.128.13/32","NeedEncap":true,"Type":"ROUTE"}`),
 	}))
 
 	t.Log("With NAT enabled, and no OutBoundNAT stanza, OutBoundNAT should be added")
@@ -72,7 +70,6 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"Type": "SomethingElse"}`),
 		json.RawMessage(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
-		json.RawMessage(`{"DestinationPrefix":"10.11.128.13/32","NeedEncap":true,"Type":"ROUTE"}`),
 	}))
 
 	t.Log("With NAT disabled, and no OutBoundNAT stanza, OutBoundNAT should not be added")
@@ -80,7 +77,6 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"Type": "SomethingElse"}`),
-		json.RawMessage(`{"DestinationPrefix":"10.11.128.13/32","NeedEncap":true,"Type":"ROUTE"}`),
 	}))
 }
 
