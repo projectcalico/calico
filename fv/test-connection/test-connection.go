@@ -353,14 +353,42 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	if remotePort == "6443" {
 		// Testing for connectivity to the Kubernetes API server.  If we reach here, we're
 		// good.  Skip sending and receiving any data, as that would need TLS.
-		connectivity.Result{}.PrintToStdout()
+		connectivity.Result{
+			LastResponse: connectivity.Response{
+				Timestamp:  time.Now(),
+				SourceAddr: sourceIPAddr,
+				ServerAddr: remoteIPAddr,
+				Request:    connectivity.Request{
+					Payload:      "Dummy request: TCP handshake only for API server connection testing",
+				},
+			},
+			Stats: connectivity.Stats{
+				RequestsSent:      1,
+				ResponsesReceived: 1,
+			},
+			ClientMTU: connectivity.MTUPair{},
+		}.PrintToStdout()
 		return nil
 	}
 
 	if remotePort == "5473" {
 		// Testing for connectivity to Typha. If we reach here, we're good.
 		// Skip sending and receiving any data.
-		connectivity.Result{}.PrintToStdout()
+		connectivity.Result{
+			LastResponse: connectivity.Response{
+				Timestamp:  time.Now(),
+				SourceAddr: sourceIPAddr,
+				ServerAddr: remoteIPAddr,
+				Request:    connectivity.Request{
+					Payload:      "Dummy request: TCP handshake only for Typha connection testing",
+				},
+			},
+			Stats: connectivity.Stats{
+				RequestsSent:      1,
+				ResponsesReceived: 1,
+			},
+			ClientMTU: connectivity.MTUPair{},
+		}.PrintToStdout()
 		return nil
 	}
 
