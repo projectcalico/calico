@@ -38,6 +38,9 @@ Example workflow for checking consistency and releasing leaked addresses.
 calicoctl datastore migrate lock
 ```
 
+> **Note:** Once the data store is locked, new pods will not be able to be launched until the data store is unlocked.
+{: .alert .alert-info}
+
 **Generate a report using the check command**
 
 ```bash
