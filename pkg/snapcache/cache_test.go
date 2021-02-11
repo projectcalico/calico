@@ -17,8 +17,9 @@ package snapcache_test
 import (
 	"strconv"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	"github.com/projectcalico/typha/pkg/snapcache"
 
@@ -118,11 +119,11 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 		BeforeEach(func() {
 			kvNodeRev10 = model.KVPair{
-				Key:      model.ResourceKey{Name: "node1", Kind: v3.KindNode},
-				Value:    &v3.Node{
+				Key: model.ResourceKey{Name: "node1", Kind: v3.KindNode},
+				Value: &v3.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						ResourceVersion: "10",
-						Name: "foo",
+						Name:            "foo",
 					},
 					Spec: v3.NodeSpec{
 						IPv4VXLANTunnelAddr: "10.0.0.1",
@@ -161,11 +162,11 @@ var _ = Describe("Snapshot cache FV tests", func() {
 			// Then send in another update with same value, and another value to make sure we generate another
 			// crumb.
 			kvNodeRev11 := model.KVPair{
-				Key:      model.ResourceKey{Name: "node1", Kind: v3.KindNode},
-				Value:    &v3.Node{
+				Key: model.ResourceKey{Name: "node1", Kind: v3.KindNode},
+				Value: &v3.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						ResourceVersion: "11",
-						Name: "foo",
+						Name:            "foo",
 					},
 					Spec: v3.NodeSpec{
 						IPv4VXLANTunnelAddr: "10.0.0.1",
