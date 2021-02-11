@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 
 	"github.com/projectcalico/node/buildinfo"
+	"github.com/projectcalico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/node/pkg/allocateip"
 	"github.com/projectcalico/node/pkg/cni"
 	"github.com/projectcalico/node/pkg/health"
@@ -40,6 +41,7 @@ var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 // Build the set of supported flags.
 var version = flagSet.Bool("v", false, "Display version")
 var runFelix = flagSet.Bool("felix", false, "Run Felix")
+var runBPF = flagSet.Bool("bpf", false, "Run BPF debug tool")
 var runStartup = flagSet.Bool("startup", false, "Initialize a new node")
 var monitorAddrs = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
 var runAllocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
@@ -108,6 +110,10 @@ func main() {
 	} else if *runFelix {
 		logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
 		felix.Run("/etc/calico/felix.cfg", buildinfo.GitVersion, buildinfo.BuildDate, buildinfo.GitRevision)
+	} else if *runBPF {
+		// Command-line tools should log to stderr to avoid confusion with the output.
+		logrus.SetOutput(os.Stderr)
+		bpf.RunBPFCmd()
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
