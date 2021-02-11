@@ -51,6 +51,9 @@ func newMockDataplane() *mockDataplane {
 	}
 }
 
+func (m *mockDataplane) ensureStarted() {
+}
+
 func (m *mockDataplane) ensureProgramAttached(ap *tc.AttachPoint, polDirection PolDirection) (bpf.MapFD, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
