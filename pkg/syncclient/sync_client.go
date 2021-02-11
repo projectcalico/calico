@@ -209,8 +209,9 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 			return err
 		}
 		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
-		// go 1.13 defaults to TLS13, which causes some test issues. Set it to TLS12 for now.
-		tlsConfig.MaxVersion = tls.VersionTLS12
+		// Typha API is a private binary API so we can enforce a recent TLS variant without
+		// worrying about back-compatibility with old browsers (for example).
+		tlsConfig.MinVersion = tls.VersionTLS12
 
 		// Set InsecureSkipVerify true, because when it's false crypto/tls insists on
 		// verifying the server's hostname or IP address against tlsConfig.ServerName, and
