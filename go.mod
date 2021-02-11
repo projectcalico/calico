@@ -7,10 +7,10 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/cni-plugin v1.11.1-0.20210211175335-97d94339d68e
-	github.com/projectcalico/felix v0.0.0-20210211175451-d332ac4e6279
+	github.com/projectcalico/cni-plugin v1.11.1-0.20210211183554-89803a271695
+	github.com/projectcalico/felix v0.0.0-20210211181644-1685e9dd6792
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210211175534-3d85c5968bd0
-	github.com/projectcalico/typha v0.7.3-0.20210203151635-7a9c31ca914e
+	github.com/projectcalico/typha v0.7.3-0.20210211181547-bfae6a984afa
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
@@ -22,7 +22,7 @@ require (
 
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210211175415-7d0dab3e529a
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210211181641-d7aba0d68ed2
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
