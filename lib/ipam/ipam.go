@@ -816,17 +816,39 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 	log.Infof("Releasing IP addresses: %v", ips)
 	unallocated := []net.IP{}
 
+	// Get IP pools up front so we don't need to query for each IP address.
+	v4Pools, err := c.pools.GetEnabledPools(4)
+	if err != nil {
+		return nil, err
+	}
+	v6Pools, err := c.pools.GetEnabledPools(6)
+	if err != nil {
+		return nil, err
+	}
+
 	// Group IP addresses by block to minimize the number of writes
 	// to the datastore required to release the given addresses.
 	ipsByBlock := map[string][]net.IP{}
 	for _, ip := range ips {
 		var cidrStr string
 
-		pool, err := c.blockReaderWriter.getPoolForIP(ip, nil)
-		if err != nil {
-			log.WithError(err).Warnf("Failed to get pool for IP")
-			return nil, err
+		// Find the IP pools for this address in the enabled pools if possible.
+		var pool *v3.IPPool
+		switch ip.Version() {
+		case 4:
+			pool, err = c.blockReaderWriter.getPoolForIP(ip, v4Pools)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to get pool for IP")
+				return nil, err
+			}
+		case 6:
+			pool, err = c.blockReaderWriter.getPoolForIP(ip, v6Pools)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to get pool for IP")
+				return nil, err
+			}
 		}
+
 		if pool == nil {
 			if cidr, err := c.blockReaderWriter.getBlockForIP(ctx, ip); err != nil {
 				return nil, err
@@ -854,17 +876,39 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 		ipsByBlock[cidrStr] = append(ipsByBlock[cidrStr], ip)
 	}
 
-	// Release IPs for each block.
+	// Release IPs for each block. These don't typically compete for resources, so we can do them in parallel
+	// in order to move quickly.
+	type retVal struct {
+		Error       error
+		Unallocated []net.IP
+	}
+	resultChan := make(chan retVal, len(ipsByBlock))
+	log.Infof("Starting %d routines to release IP addresses", len(ipsByBlock))
 	for cidrStr, ips := range ipsByBlock {
 		_, cidr, _ := net.ParseCIDR(cidrStr)
-		unalloc, err := c.releaseIPsFromBlock(ctx, ips, *cidr)
-		if err != nil {
-			log.Errorf("Error releasing IPs: %v", err)
-			return nil, err
-		}
-		unallocated = append(unallocated, unalloc...)
+		go func(cidr net.IPNet, ips []net.IP) {
+			r := retVal{}
+			unalloc, err := c.releaseIPsFromBlock(ctx, ips, cidr)
+			if err != nil {
+				log.Errorf("Error releasing IPs: %v", err)
+				r.Error = err
+			}
+			r.Unallocated = unalloc
+			resultChan <- r
+		}(*cidr, ips)
 	}
-	return unallocated, nil
+
+	// Read the response from each goroutine.
+	err = nil
+	for i := 0; i < len(ipsByBlock); i++ {
+		r := <-resultChan
+		log.Debugf("Received response #%d from release goroutine", i)
+		if r.Error != nil && err == nil {
+			err = r.Error
+		}
+		unallocated = append(unallocated, r.Unallocated...)
+	}
+	return unallocated, err
 }
 
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
