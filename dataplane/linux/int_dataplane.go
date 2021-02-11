@@ -565,8 +565,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext)
 		dp.RegisterManager(bpfRTMgr)
 
-		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
-		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
+		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
+		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
+		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		stateMap := state.Map(bpfMapContext)
 		err = stateMap.EnsureExists()
 		if err != nil {
