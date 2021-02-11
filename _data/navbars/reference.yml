@@ -138,7 +138,12 @@ section:
 - title: Calico CNI plugins
   path: /reference/cni-plugin/configuration
 - title: Calico Kubernetes controllers
-  path: /reference/kube-controllers/configuration
+  path: /reference/kube-controllers/
+  section:
+  - title: Configuration
+    path: /reference/kube-controllers/configuration
+  - title: Prometheus statistics
+    path: /reference/kube-controllers/prometheus
 - title: Configuration on public clouds
   path: /reference/public-cloud/
   section:
