@@ -30,6 +30,8 @@ section:
     section:
     - title: Overview
       path: /reference/calicoctl/ipam/overview
+    - title: check
+      path: /reference/calicoctl/ipam/check
     - title: release
       path: /reference/calicoctl/ipam/release
     - title: show
