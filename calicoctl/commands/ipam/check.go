@@ -49,11 +49,13 @@ func Check(args []string, version string) error {
   <BINARY_NAME> ipam check [--config=<CONFIG>] [--show-all-ips] [--show-problem-ips] [-o <FILE>]
 
 Options:
-  -h --help                Show this screen.
-  -o --output=<FILE>       Path to output report file.
-  -c --config=<CONFIG>     Path to the file containing connection configuration in
-                           YAML or JSON format.
-                           [default: ` + constants.DefaultConfigPath + `]
+  -h --help                 Show this screen.
+  -o --output=<FILE>        Path to output report file.
+     --show-all-ips         Print all IPs that are checked.
+     --show-problem-ips     Print all IPs that are leaked or not allocated properly.
+  -c --config=<CONFIG>      Path to the file containing connection configuration in
+                            YAML or JSON format.
+                            [default: ` + constants.DefaultConfigPath + `]
 
 Description:
   The ipam check command checks the integrity of the IPAM datastructures against Kubernetes.
