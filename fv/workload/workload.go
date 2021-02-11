@@ -146,10 +146,8 @@ func (w *Workload) Start() error {
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
 	var protoArg string
-	if w.Protocol == "udp" {
-		protoArg = "--udp"
-	} else if w.Protocol == "sctp" {
-		protoArg = "--sctp"
+	if w.Protocol != "" {
+		protoArg = "--protocol=" + w.Protocol
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ import (
 var _ = describeConnCheckTests("tcp")
 var _ = describeConnCheckTests("sctp")
 var _ = describeConnCheckTests("udp")
+var _ = describeConnCheckTests("ip4:253")
 var _ = describeConnCheckTests("udp-recvmsg")
 var _ = describeConnCheckTests("udp-noconn")
 
@@ -88,7 +89,9 @@ func describeConnCheckTests(protocol string) bool {
 
 			It("should have host-to-host on right port only", func() {
 				cc.ExpectSome(felixes[0], hostW[1])
-				cc.ExpectNone(felixes[0], hostW[1], 8066)
+				if !strings.HasPrefix(protocol, "ip") {
+					cc.ExpectNone(felixes[0], hostW[1], 8066)
+				}
 				cc.CheckConnectivity()
 			})
 

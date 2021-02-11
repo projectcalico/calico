@@ -820,23 +820,19 @@ out_invalid:
 }
 
 /* creates connection tracking for tracked protocols */
-static CALI_BPF_INLINE int conntrack_create(struct ct_ctx * ct_ctx, int nat)
+static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_ctx * ct_ctx, int nat)
 {
-	switch (ct_ctx->proto) {
-	case IPPROTO_TCP:
-	case IPPROTO_UDP:
-	case IPPROTO_ICMP:
-		switch (nat) {
-		case CT_CREATE_NORMAL:
-			return calico_ct_v4_create(ct_ctx);
-		case CT_CREATE_NAT:
-		case CT_CREATE_NAT_FWD:
-			return calico_ct_v4_create_nat(ct_ctx, nat);
-		}
-		return 0;
-	default:
-		return 0;
+	// Workaround for verifier; make sure verifier sees the skb on all code paths.
+	ct_ctx->skb = ctx->skb;
+
+	switch (nat) {
+	case CT_CREATE_NORMAL:
+		return calico_ct_v4_create(ct_ctx);
+	case CT_CREATE_NAT:
+	case CT_CREATE_NAT_FWD:
+		return calico_ct_v4_create_nat(ct_ctx, nat);
 	}
+	return 0;
 }
 
 #endif /* __CALI_CONNTRACK_H__ */

@@ -23,14 +23,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/fv/connectivity"
-	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+
+	"github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/felix/fv/workload"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ named host endpoints",
@@ -47,13 +50,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ all-interfaces host endpoin
 // If allInterfaces, then interfaceName: "*". Otherwise, interfaceName: "eth0".
 func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfaces bool) {
 	var (
-		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
-		infra      infrastructure.DatastoreInfra
-		felixes    []*infrastructure.Felix
-		client     client.Interface
-		w          [2]*workload.Workload
-		hostW      [2]*workload.Workload
-		cc         *connectivity.Checker
+		bpfEnabled       = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+		infra            infrastructure.DatastoreInfra
+		felixes          []*infrastructure.Felix
+		client           client.Interface
+		w                [2]*workload.Workload
+		hostW            [2]*workload.Workload
+		rawIPHostW253    [2]*workload.Workload
+		rawIPHostW254    [2]*workload.Workload
+		cc, cc253, cc254 *connectivity.Checker // Numbered checkers are for raw IP tests of specific protocols.
 	)
 
 	BeforeEach(func() {
@@ -71,9 +76,13 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			w[ii].ConfigureInInfra(infra)
 
 			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
+			rawIPHostW253[ii] = workload.Run(felixes[ii], fmt.Sprintf("raw-host%d", ii), "", felixes[ii].IP, "", "ip4:253")
+			rawIPHostW254[ii] = workload.Run(felixes[ii], fmt.Sprintf("raw-host%d", ii), "", felixes[ii].IP, "", "ip4:254")
 		}
 
 		cc = &connectivity.Checker{}
+		cc253 = &connectivity.Checker{Protocol: "ip4:253"}
+		cc254 = &connectivity.Checker{Protocol: "ip4:254"}
 	})
 
 	AfterEach(func() {
@@ -213,6 +222,15 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			cc.ResetExpectations()
 		})
 
+		It("should block raw IP", func() {
+			cc253.Expect(connectivity.None, felixes[0], rawIPHostW253[1])
+			cc253.Expect(connectivity.None, felixes[1], rawIPHostW253[0])
+			cc254.Expect(connectivity.None, felixes[0], rawIPHostW254[1])
+			cc254.Expect(connectivity.None, felixes[1], rawIPHostW254[0])
+			cc253.CheckConnectivity()
+			cc254.CheckConnectivity()
+		})
+
 		It("should allow connectivity from nodes to the Kubernetes API server", func() {
 			expectConnectivityToAPIServer()
 			cc.CheckConnectivity()
@@ -268,8 +286,14 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			expectPodToPodTraffic()
 			expectHostToOwnPodTraffic()
 			cc.CheckConnectivity()
-
 			cc.ResetExpectations()
+
+			// Should block raw IP too.
+			By("Blocking raw IP from felix[0] <-> felix[1]")
+			cc253.Expect(connectivity.None, felixes[0], rawIPHostW253[1])
+			cc253.Expect(connectivity.None, felixes[1], rawIPHostW253[0])
+			cc253.CheckConnectivity()
+			cc253.ResetExpectations()
 
 			// Now add a policy selecting felix[1] that allows ingress.
 			policy = api.NewGlobalNetworkPolicy()
@@ -288,6 +312,60 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			expectPodToPodTraffic()
 			expectHostToOwnPodTraffic()
 			cc.CheckConnectivity()
+
+			// Need to test this first because the conntrack is symmetric for portless protocols.
+			By("Blocking raw IP from felix[1] -> felix[0]")
+			cc253.Expect(connectivity.None, felixes[1], rawIPHostW253[0])
+			cc253.CheckConnectivity()
+			cc253.ResetExpectations()
+
+			By("Allowing raw IP from felix[0] -> felix[1]")
+			cc253.Expect(connectivity.Some, felixes[0], rawIPHostW253[1])
+			cc253.CheckConnectivity()
+		})
+
+		It("should allow raw IP with the right protocol only", func() {
+			// Create a policy selecting felix[0] that allows egress.
+			policy := api.NewGlobalNetworkPolicy()
+			policy.Name = "f0-egress"
+			proto253 := numorstring.ProtocolFromInt(253)
+			policy.Spec.Egress = []api.Rule{{
+				Action:   api.Allow,
+				Protocol: &proto253,
+			}}
+			policy.Spec.Selector = fmt.Sprintf("hostname == '%s'", felixes[0].Hostname)
+			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should block all raw IP until we have the second policy in place.
+			By("Blocking raw IP from felix[0] <-> felix[1]")
+			cc253.Expect(connectivity.None, felixes[0], rawIPHostW253[1])
+			cc253.Expect(connectivity.None, felixes[1], rawIPHostW253[0])
+			cc253.CheckConnectivity()
+			cc253.ResetExpectations()
+			cc254.Expect(connectivity.None, felixes[0], rawIPHostW254[1])
+			cc254.Expect(connectivity.None, felixes[1], rawIPHostW254[0])
+			cc254.CheckConnectivity()
+
+			// Now add a policy selecting felix[1] that allows ingress.
+			policy = api.NewGlobalNetworkPolicy()
+			policy.Name = "f1-ingress"
+			policy.Spec.Ingress = []api.Rule{{
+				Action:   api.Allow,
+				Protocol: &proto253,
+			}}
+			policy.Spec.Selector = fmt.Sprintf("hostname == '%s'", felixes[1].Hostname)
+			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			// One-way check because conntrack for unknown protocols is symmetric so, once the
+			// felix[0] -> felix[1] packet goes through, we expect felix[1] -> felix[0] to work too
+			// (and the connectivity checker always does a request-response to check that).
+			cc253.Expect(connectivity.Some, felixes[0], rawIPHostW253[1])
+			cc253.CheckConnectivity()
+
+			// 254 should still be blocked...
+			cc254.CheckConnectivity()
 		})
 
 		It("should not deny host-to-own pod traffic even if an apply-on-forward deny policy is applied", func() {

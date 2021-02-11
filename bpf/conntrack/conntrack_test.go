@@ -34,34 +34,39 @@ import (
 var now = mocktime.StartKTime
 
 var (
-	ip1     = net.ParseIP("10.0.0.1")
-	ip2     = net.ParseIP("10.0.0.2")
-	tcpKey  = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
-	udpKey  = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
-	icmpKey = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
+	ip1        = net.ParseIP("10.0.0.1")
+	ip2        = net.ParseIP("10.0.0.2")
+	tcpKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
+	udpKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
+	icmpKey    = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
+	genericKey = conntrack.NewKey(253, ip1, 0, ip2, 0)
 
 	timeouts = conntrack.DefaultTimeouts()
 
-	udpJustCreated    = tcpEntry(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
-	udpAlmostTimedOut = tcpEntry(now-(2*time.Minute), now-(59*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
-	udpTimedOut       = tcpEntry(now-(2*time.Minute), now-(61*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	genericJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
+	genericAlmostTimedOut = makeValue(now-(20*time.Minute), now-(599*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	genericTimedOut       = makeValue(now-(20*time.Minute), now-(601*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
 
-	icmpJustCreated    = tcpEntry(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
-	icmpAlmostTimedOut = tcpEntry(now-(2*time.Minute), now-(4*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
-	icmpTimedOut       = tcpEntry(now-(2*time.Minute), now-(6*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	udpJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
+	udpAlmostTimedOut = makeValue(now-(2*time.Minute), now-(59*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	udpTimedOut       = makeValue(now-(2*time.Minute), now-(61*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
 
-	tcpJustCreated        = tcpEntry(now-1, now-1, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
-	tcpHandshakeTimeout   = tcpEntry(now-22*time.Second, now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
-	tcpHandshakeTimeout2  = tcpEntry(now-22*time.Second, now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpEstablished        = tcpEntry(now-(10*time.Second), now-1, conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpEstablishedTimeout = tcpEntry(now-(3*time.Hour), now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpSingleFin          = tcpEntry(now-(3*time.Hour), now-(50*time.Minute), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpSingleFinTimeout   = tcpEntry(now-(3*time.Hour), now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpBothFin            = tcpEntry(now-(3*time.Hour), now-(29*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
-	tcpBothFinTimeout     = tcpEntry(now-(3*time.Hour), now-(31*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
+	icmpJustCreated    = makeValue(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
+	icmpAlmostTimedOut = makeValue(now-(2*time.Minute), now-(4*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+	icmpTimedOut       = makeValue(now-(2*time.Minute), now-(6*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
+
+	tcpJustCreated        = makeValue(now-1, now-1, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
+	tcpHandshakeTimeout   = makeValue(now-22*time.Second, now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
+	tcpHandshakeTimeout2  = makeValue(now-22*time.Second, now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpEstablished        = makeValue(now-(10*time.Second), now-1, conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpEstablishedTimeout = makeValue(now-(3*time.Hour), now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpSingleFin          = makeValue(now-(3*time.Hour), now-(50*time.Minute), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpSingleFinTimeout   = makeValue(now-(3*time.Hour), now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpBothFin            = makeValue(now-(3*time.Hour), now-(29*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
+	tcpBothFinTimeout     = makeValue(now-(3*time.Hour), now-(31*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
 )
 
-func tcpEntry(created time.Duration, lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {
+func makeValue(created time.Duration, lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {
 	var e conntrack.Value
 	binary.LittleEndian.PutUint64(e[:8], uint64(created))
 	binary.LittleEndian.PutUint64(e[8:16], uint64(lastSeen))
@@ -138,6 +143,10 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		Entry("UDP just created", udpKey, udpJustCreated, false),
 		Entry("UDP almost timed out", udpKey, udpAlmostTimedOut, false),
 		Entry("UDP timed out", udpKey, udpTimedOut, true),
+
+		Entry("Generic just created", genericKey, genericJustCreated, false),
+		Entry("Generic almost timed out", genericKey, genericAlmostTimedOut, false),
+		Entry("Generic timed out", genericKey, genericTimedOut, true),
 
 		Entry("icmp just created", icmpKey, icmpJustCreated, false),
 		Entry("icmp almost timed out", icmpKey, icmpAlmostTimedOut, false),

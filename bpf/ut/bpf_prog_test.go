@@ -546,6 +546,7 @@ func withSubtests(v bool) testOption {
 		o.subtests = v
 	}
 }
+
 var _ = withSubtests
 
 func withLogLevel(l log.Level) testOption {
@@ -553,6 +554,7 @@ func withLogLevel(l log.Level) testOption {
 		o.logLevel = l
 	}
 }
+
 var _ = withLogLevel
 
 func withExtraMap(m bpf.Map) testOption {
@@ -560,6 +562,7 @@ func withExtraMap(m bpf.Map) testOption {
 		o.extraMaps = append(o.extraMaps, m)
 	}
 }
+
 var _ = withExtraMap
 
 // layersMatchFields matches all Exported fields and ignore the ones explicitly

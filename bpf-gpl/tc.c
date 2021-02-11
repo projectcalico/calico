@@ -236,21 +236,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	ctx.state->pol_rc = CALI_POL_NO_MATCH;
 
-	switch (ctx.state->ip_proto) {
-	case IPPROTO_TCP:
-	case IPPROTO_UDP:
-	case IPPROTO_ICMP:
-		break;
-	default:
-		if (CALI_F_HEP) {
-			// TODO-HEPs allow unknown protocols through on host endpoints.
-			goto allow;
-		}
-		// FIXME non-port based conntrack.
-		CALI_DEBUG("Unknown protocol from workload.\n");
-		goto deny;
-	}
-
 	/* Do conntrack lookup before anything else */
 	ctx.state->ct_result = calico_ct_v4_lookup(&ctx);
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx.state->ct_result.flags);
@@ -740,7 +725,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		// If we get here, we've passed policy.
 
 		if (nat_dest == NULL) {
-			if (conntrack_create(&ct_ctx_nat, CT_CREATE_NORMAL)) {
+			if (conntrack_create(ctx, &ct_ctx_nat, CT_CREATE_NORMAL)) {
 				CALI_DEBUG("Creating normal conntrack failed\n");
 
 				if ((CALI_F_FROM_HEP && rt_addr_is_local_host(ct_ctx_nat.dst)) ||
@@ -813,8 +798,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				}
 			}
 
-
-			if (conntrack_create(&ct_ctx_nat, nat_type)) {
+			if (conntrack_create(ctx, &ct_ctx_nat, nat_type)) {
 				CALI_DEBUG("Creating NAT conntrack failed\n");
 				goto deny;
 			}
