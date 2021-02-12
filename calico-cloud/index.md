@@ -9,12 +9,12 @@ calico_cloud: true
 <br>
 <h3 style="font-style: italic;">If you like Calico, you'll love Calico Cloud!</h3>
 <br>
-<table class="calico-cloud-table" style="max-width: 900px;">
+<table id="calico-cloud-table" style="max-width: 900px;">
   <thead>
     <tr class="">
       <th></th>
       <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-logo-64px.png" alt="Calico" style="margin: auto;"></th>
-      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-cloud-logo.svg" alt="Calico Enterprise" style="margin: auto;"></th>
+      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-cloud-logo.svg" alt="Calico Cloud" style="margin: auto;"></th>
     </tr>
   </thead>
   <tbody>
