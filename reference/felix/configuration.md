@@ -129,9 +129,9 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 eBPF dataplane mode uses the Linux Kernel's eBPF virtual machine to implement networking and policy instead of iptables.  When BPFEnabled is set to `true`, Felix will:
 
 * Require a v5.3 Linux kernel.
-* Implement workload endpoint policy with eBPF programs instead of iptables.
+* Implement policy with eBPF programs instead of iptables.
 * Activate its embedded implementation of `kube-proxy` to implement Kubernetes service load balancing.
-* Disable support for IPv6 and host endpoints.
+* Disable support for IPv6.
 
 See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step-by step instructions to enable this feature.
 
