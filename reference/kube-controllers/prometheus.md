@@ -5,7 +5,7 @@ canonical_url: '/reference/kube-controllers/prometheus'
 ---
 
 kube-controllers can be configured to report a number of metrics through Prometheus.  See the
-[configuration reference](configuration) for how to enable metrics reporting.
+[configuration reference]({{site.baseurl}}/reference/resources/kubecontrollersconfig) for how to enable metrics reporting.
 
 ## Metric reference
 
