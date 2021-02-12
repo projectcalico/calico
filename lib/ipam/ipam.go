@@ -875,6 +875,25 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 		ipsByBlock[cidrStr] = append(ipsByBlock[cidrStr], ip)
 	}
 
+	handleMap := map[string]*model.KVPair{}
+
+	// If we're being asked to release several IP addresses, query all handles in order to
+	// populate a cache. This reduces the number of queries required per-address.
+	//
+	// If we only have a handful of addresses to release, then we don't need to pre-fetch. It's
+	// efficient enough to read each individually. Performing a List() of all handles (which can potentially
+	// be very large) is more work than a few individual Get() requests, but less work than many Get() requests.
+	if len(ips) > 2 {
+		// List all handles, so we don't need to query them individually, and populate the map.
+		allHandles, err := c.blockReaderWriter.listHandles(ctx, "")
+		if err != nil {
+			return unallocated, err
+		}
+		for _, h := range allHandles.KVPairs {
+			handleMap[h.Key.(model.IPAMHandleKey).HandleID] = h
+		}
+	}
+
 	// Release IPs for each block. These don't typically compete for resources, so we can do them in parallel
 	// in order to move quickly.
 	type retVal struct {
@@ -885,16 +904,16 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 	log.Infof("Starting %d routines to release IP addresses", len(ipsByBlock))
 	for cidrStr, ips := range ipsByBlock {
 		_, cidr, _ := net.ParseCIDR(cidrStr)
-		go func(cidr net.IPNet, ips []net.IP) {
+		go func(cidr net.IPNet, ips []net.IP, hm map[string]*model.KVPair) {
 			r := retVal{}
-			unalloc, err := c.releaseIPsFromBlock(ctx, ips, cidr)
+			unalloc, err := c.releaseIPsFromBlock(ctx, hm, ips, cidr)
 			if err != nil {
 				log.Errorf("Error releasing IPs: %v", err)
 				r.Error = err
 			}
 			r.Unallocated = unalloc
 			resultChan <- r
-		}(*cidr, ips)
+		}(*cidr, ips, handleMap)
 	}
 
 	// Read the response from each goroutine.
@@ -910,7 +929,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 	return unallocated, err
 }
 
-func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
+func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[string]*model.KVPair, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
 	logCtx := log.WithField("cidr", blockCIDR)
 	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Info("Getting block so we can release IPs")
@@ -963,18 +982,6 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 				logCtx.WithError(updateErr).Errorf("Error updating block")
 				return nil, updateErr
 			}
-		}
-
-		// List all handles, so we don't need to query them individually.
-		allHandles, err := c.blockReaderWriter.listHandles(ctx, "")
-		if err != nil {
-			return unallocated, err
-		}
-
-		// Build a map for easier lookup.
-		handleMap := map[string]*model.KVPair{}
-		for _, h := range allHandles.KVPairs {
-			handleMap[h.Key.(model.IPAMHandleKey).HandleID] = h
 		}
 
 		// Success - decrement handles.
