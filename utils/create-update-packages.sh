@@ -167,6 +167,7 @@ function do_bld_images {
     docker build -f ubuntu-trusty-build.Dockerfile.${ARCH} -t calico-build/trusty .
     docker build -f ubuntu-xenial-build.Dockerfile.${ARCH} -t calico-build/xenial .
     docker build -f ubuntu-bionic-build.Dockerfile.${ARCH} -t calico-build/bionic .
+    docker build -f ubuntu-focal-build.Dockerfile.${ARCH} -t calico-build/focal .
     docker build --build-arg=UID=`id -u` --build-arg=GID=`id -g` -f centos7-build.Dockerfile.${ARCH} -t calico-build/centos7 .
     popd
     if [ $ARCH = ppc64le ]; then

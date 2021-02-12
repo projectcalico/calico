@@ -46,7 +46,7 @@ for package_type in "$@"; do
 	    # Current time in Debian changelog format; e.g. Wed, 02
 	    # Mar 2016 14:08:51 +0000.
 	    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
-	    for series in trusty xenial bionic; do
+	    for series in trusty xenial bionic focal; do
 		{
 		    cat <<EOF
 ${PKG_NAME} (${DEB_EPOCH}${debver}-$series) $series; urgency=low

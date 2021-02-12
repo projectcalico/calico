@@ -93,9 +93,9 @@ Published column.
 
 We build and publish packages for these platforms:
 
--  Ubuntu 14.04 (Trusty), 16.04 (Xenial) and 18.04 (Bionic).  The
-   hosting for these packages is in PPAs at
-   https://launchpad.net/~project-calico.
+-  Ubuntu 14.04 (Trusty), 16.04 (Xenial), 18.04 (Bionic)
+   and 20.04 (Focal). The hosting for these packages is
+   in PPAs at https://launchpad.net/~project-calico.
 
 -  CentOS 7 or RHEL 7.  The hosting for these packages is in RPM repos
    at binaries.projectcalico.org (for example
@@ -164,9 +164,9 @@ releases is as follows.
 -  v2.79
 
 To get all of these patches requires Dnsmasq v2.79 or later.  Ubuntu
-Bionic has that, but none of our other target platforms do, so we
-build and host v2.79 packages for those platforms ourselves.  The
-source for that comes from the following tags in [our Dnsmasq
+Bionic or later have that, but none of our other target platforms do,
+so we build and host v2.79 packages for those platforms ourselves.
+The source for that comes from the following tags in [our Dnsmasq
 fork](https://github.com/projectcalico/calico-dnsmasq).
 
 -  For Ubuntu Trusty, `2.79test1calico1-3-trusty`.

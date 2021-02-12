@@ -18,7 +18,7 @@ else
 fi
 docker run --rm ${interactive} -v `pwd`:/code -v ${keydir}:/keydir calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' *_*_source.changes"
 
-for series in trusty xenial bionic; do
+for series in trusty xenial bionic focal; do
     # Get the packages and versions that already exist in the PPA, so we can avoid
     # uploading the same package and version as already exist.  (As they would be rejected
     # anyway by Launchpad.)
@@ -30,13 +30,13 @@ for series in trusty xenial bionic; do
     # Use the Distribution header to map changes files to Ubuntu versions, as some of our
     # packages don't include the Ubuntu version name in the changes file name.
     for changes_file in `grep -l "Distribution: ${series}" *_source.changes`; do
-	already_exists=false
-	for existing in ${existing_packages}; do
-	    if [ ${changes_file} = ${existing}_source.changes ]; then
-		already_exists=true
-		break
-	    fi
-	done
-	${already_exists} || docker run --rm -v `pwd`:/code -w /code calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file}
+        already_exists=false
+        for existing in ${existing_packages}; do
+            if [ ${changes_file} = ${existing}_source.changes ]; then
+                already_exists=true
+                break
+            fi
+        done
+        ${already_exists} || docker run --rm -v `pwd`:/code -w /code calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file}
     done
 done
