@@ -89,7 +89,7 @@ section:
     path: /security/comms/secure-metrics
   - title: Secure BGP sessions
     path: /security/comms/secure-bgp
-- title: Calico Cloud
+- title: Calico Enterprise
   path: /security/calico-enterprise/
   section:
   - title: Network visibility
