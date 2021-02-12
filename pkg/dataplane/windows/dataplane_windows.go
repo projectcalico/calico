@@ -546,9 +546,12 @@ func CreateAndAttachHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet
 			}
 			logger.Infof("Deleted stale bridge endpoint [%v]")
 			hnsEndpoint = nil
-		} else if hnsEndpoint.VirtualNetwork == hnsNetwork.Id {
+		} else if strings.ToUpper(hnsEndpoint.VirtualNetwork) == strings.ToUpper(hnsNetwork.Id) {
 			// Endpoint exists for correct network. No processing required
 			attachEndpoint = false
+		} else {
+			logger.Errorf("HnsEndpoint virtual network %s not matching ID %s",
+				hnsEndpoint.VirtualNetwork, hnsNetwork.Id)
 		}
 	}
 
