@@ -21,6 +21,8 @@ import (
 	"math/bits"
 	"runtime"
 
+	"golang.org/x/sync/semaphore"
+
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -895,16 +897,22 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 	}
 
 	// Release IPs for each block. These don't typically compete for resources, so we can do them in parallel
-	// in order to move quickly.
+	// in order to move quickly. We start at most GOMAXPROCS goroutines at a time, each serving a single block.
 	type retVal struct {
 		Error       error
 		Unallocated []net.IP
 	}
-	resultChan := make(chan retVal, len(ipsByBlock))
-	log.Infof("Starting %d routines to release IP addresses", len(ipsByBlock))
+	resultChan := make(chan retVal)
+	sem := semaphore.NewWeighted(int64(runtime.GOMAXPROCS(-1)))
 	for cidrStr, ips := range ipsByBlock {
+		if err := sem.Acquire(ctx, 1); err != nil {
+			// Should only happen if the context finishes.
+			log.WithError(err).Panic("Failed to acquire semaphore")
+		}
+
 		_, cidr, _ := net.ParseCIDR(cidrStr)
 		go func(cidr net.IPNet, ips []net.IP, hm map[string]*model.KVPair) {
+			defer sem.Release(1)
 			r := retVal{}
 			unalloc, err := c.releaseIPsFromBlock(ctx, hm, ips, cidr)
 			if err != nil {
