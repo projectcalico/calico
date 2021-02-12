@@ -56,7 +56,7 @@ eBPF mode has the following pre-requisites:
 
 - A supported Linux distribution:
 
-    - Ubuntu 20.04.
+    - Ubuntu 20.04 (or Ubuntu 18.04.4+, which has an updated kernel).
     - Red Hat v8.2 with Linux kernel v4.18.0-193 or above (Red Hat have backported the required features to that build).
     - Another [supported distribution]({{site.baseurl}}/getting-started/kubernetes/requirements) with Linux kernel v5.3 or above.
 
