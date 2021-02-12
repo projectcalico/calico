@@ -311,16 +311,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   color: white;
 }
 
-#calico-cloud-table {
-  thead {
-    img {
-      max-width: 195px;
-      height: 64px;
-    }
-  }
-}
-
-#enterprise-header .request-demo-button {
+#cloud-header .request-demo-button {
   border: none;
   color: white;
   background-color: #ff9e16;  
@@ -335,9 +326,8 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   font-weight: 700 !important;
 }
 
-#enterprise-header .calico-enterprise-img {
+#cloud-header .calico-cloud-img {
   display: inline-block !important;
-  width: 390px;
 }
 
 #enterprise-footer {
