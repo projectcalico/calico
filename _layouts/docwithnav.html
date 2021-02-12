@@ -132,7 +132,7 @@ The code is a little roundabout for a few reasons:
               </li>
               <li><a href="https://www.projectcalico.org/blog">Blog</a></li>
               <li><a href="https://github.com/projectcalico/calico" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-              <li><a href="{{site.baseurl}}/calico-enterprise/">Enterprise</a></li>
+              <li><a href="{{site.baseurl}}/calico-cloud/">Enterprise</a></li>
               <li><a href="https://www.tigera.io/free-training-resources" class="free-training">Free training</a></li>              
             </ul>
             <form class="navbar-form visible-xs">
@@ -223,8 +223,8 @@ The code is a little roundabout for a few reasons:
               {% include version_warning.html %}
               {% endunless %}
 
-              {% if page.calico_enterprise -%}
-              {% include enterprise_header.html %}   
+              {% if page.calico_cloud -%}
+              {% include cloud_header.html -%}
               {% endif -%}
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
