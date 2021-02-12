@@ -56,6 +56,10 @@ configure API access if needed.
 
 ### Other configuration
 
+> **Note:** Whenever possible, prefer configuring the kube-controllers component using the [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfig) API resource,
+> Some configuration options may not be available through environment variables.
+{: .alert .alert-info}
+
 The following environment variables can be used to configure the {{site.prodname}} Kubernetes controllers.
 
 | Environment   | Description | Schema | Default |
