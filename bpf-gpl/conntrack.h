@@ -443,17 +443,17 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		.ifindex_created = CT_INVALID_IFINDEX,
 	};
 
-	if (tcp_header && tcp_header->syn && !tcp_header->ack) {
-		// SYN should always go through policy.
-		CALI_CT_DEBUG("Packet is a SYN, short-circuiting lookup.\n");
-		goto out_lookup_fail;
-	}
-
 	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
 	struct calico_ct_key k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
+	bool syn = tcp_header && tcp_header->syn && !tcp_header->ack;
 
 	struct calico_ct_value *v = cali_v4_ct_lookup_elem(&k);
 	if (!v) {
+		if (syn) {
+			// SYN packet (new flow); send it to policy.
+			CALI_CT_DEBUG("Miss for TCP SYN, NEW flow.\n");
+			goto out_lookup_fail;
+		}
 		if (CALI_F_FROM_HOST && proto_orig == IPPROTO_TCP) {
 			// Mid-flow TCP packet with no conntrack entry leaving the host namespace.
 			CALI_DEBUG("BPF CT Miss for mid-flow TCP\n");
@@ -728,7 +728,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} if (CALI_F_FROM_HOST) {
-		/* Dest of the packet is the workload, so check the dest whitelist. */
+		/* Dest of the packet is the endpoint, so check the dest whitelist. */
 		if (dst_to_src->whitelisted) {
 			// Packet was whitelisted by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet whitelisted by this workload's policy.\n");
@@ -739,7 +739,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			 * to invoke policy.
 			 */
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (FH).\n");
-			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
+			result.rc = tcp_header && !syn ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	}
 
