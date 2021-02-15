@@ -4,8 +4,8 @@ description: Review metrics for the kube-controllers component if you are using 
 canonical_url: '/reference/kube-controllers/prometheus'
 ---
 
-kube-controllers can be configured to report a number of metrics through Prometheus.  See the
-[configuration reference]({{site.baseurl}}/reference/resources/kubecontrollersconfig) for how to enable metrics reporting.
+kube-controllers can be configured to report a number of metrics through Prometheus.  This reporting is enabled by default on port 9094. See the
+[configuration reference]({{site.baseurl}}/reference/resources/kubecontrollersconfig) for how to change metrics reporting configuration.
 
 ## Metric reference
 
