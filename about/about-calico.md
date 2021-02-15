@@ -141,7 +141,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <img class="img-responsive center-block" src="{{ site.baseurl }}/images/calico-cloud-logo-128px.png">
-    <div style="display: flex; justify-content: center; align-items: center;" id="host-footer">
+    <div style="display: flex; justify-content: center; align-items: center;" id="cloud-footer">
       <a href="https://www.tigera.io/tigera-products/cloud-trial" class="learn-more-button">Learn More</a>
     </div>    
   </div>
