@@ -739,7 +739,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			 * to invoke policy.
 			 */
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (FH).\n");
-			result.rc = tcp_header && !syn ? CALI_CT_INVALID : CALI_CT_NEW;
+			result.rc = (tcp_header && !syn) ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	}
 
