@@ -5,7 +5,7 @@ canonical_url: '/reference/kube-controllers/prometheus'
 ---
 
 kube-controllers can be configured to report a number of metrics through Prometheus.  This reporting is enabled by default on port 9094. See the
-[configuration reference]({{site.baseurl}}/reference/resources/kubecontrollersconfig) for how to change metrics reporting configuration.
+[configuration reference]({{site.baseurl}}/reference/resources/kubecontrollersconfig) for how to change metrics reporting configuration (or disable it completely).
 
 ## Metric reference
 
