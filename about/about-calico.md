@@ -126,8 +126,8 @@ custom_css: css/intro.css
 
 <div id="why-use-calico-10" class="row">
   <div class="col-md-6">
-    <h3 id="enterprise-compatible" style="margin-top: 5px">Calico Enterprise compatible</h3>
-    <p>Calico Enterprise builds on top of open source Calico to provide additional higher-level features and capabilities:</p>
+    <h3 id="cloud-compatible" style="margin-top: 5px">Calico Cloud compatible</h3>
+    <p>Calico Cloud builds on top of open source Calico to provide additional higher-level features and capabilities:</p>
     <ul style="">
         <li>Hierarchical network policy</li>
         <li>Egress access controls (DNS policies, egress gateways)</li>
@@ -140,9 +140,9 @@ custom_css: css/intro.css
     </ul>
   </div>
   <div class="col-md-6">
-    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/calico-enterprise-logo-128px.png">
-    <div style="display: flex; justify-content: center; align-items: center;" id="enterprise-footer">
-      <a href="https://www.tigera.io/tigera-products/calico-enterprise/?utm_referring_url=dynamic&amp;utm_source=projectcalico-docs&amp;utm_medium=website&amp;utm_campaign=calico-docs-conversion" class="learn-more-button">Learn More</a>
+    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/calico-cloud-logo-128px.png">
+    <div style="display: flex; justify-content: center; align-items: center;" id="host-footer">
+      <a href="https://www.tigera.io/tigera-products/cloud-trial" class="learn-more-button">Learn More</a>
     </div>    
   </div>
 </div>
