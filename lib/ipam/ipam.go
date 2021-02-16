@@ -902,7 +902,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 		Error       error
 		Unallocated []net.IP
 	}
-	resultChan := make(chan retVal)
+	resultChan := make(chan retVal, len(ipsByBlock))
 	sem := semaphore.NewWeighted(int64(runtime.GOMAXPROCS(-1)))
 	for cidrStr, ips := range ipsByBlock {
 		if err := sem.Acquire(ctx, 1); err != nil {
