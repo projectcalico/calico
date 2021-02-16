@@ -21,6 +21,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -269,6 +270,60 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
 		}, 20)
+	})
+
+	Describe("ReleaseIPs test", func() {
+		It("should release a multitude of IPs in different blocks", func() {
+			// Create an IP pool with a blocksize such that we'll get multiple blocks per-node.
+			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+			applyPool("fe80:ba:ad:beef::00/120", true, "all()")
+
+			// Assign a number of IPs in different blocks on different nodes.
+			ips := []cnet.IP{}
+			for _, node := range []string{"node1", "node2", "node3", "node4"} {
+				// 4 nodes
+				applyNode(bc, kc, node, map[string]string{"foo": "bar"})
+				for i := 0; i < 6; i++ {
+					// 6 addresses of each family per-node.
+					v4, v6, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 1, Hostname: node})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(len(v4)).To(Equal(1))
+					Expect(len(v6)).To(Equal(1))
+					for _, net := range v4 {
+						ip, _, _ := cnet.ParseCIDR(net.String())
+						ips = append(ips, *ip)
+					}
+					for _, net := range v6 {
+						ip, _, _ := cnet.ParseCIDR(net.String())
+						ips = append(ips, *ip)
+					}
+				}
+
+				// Allocate a few addresses with the same handle.
+				v4, v6, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 13, Num6: 0, Hostname: node})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(13))
+				Expect(len(v6)).To(Equal(0))
+				for _, net := range v4 {
+					ip, _, _ := cnet.ParseCIDR(net.String())
+					ips = append(ips, *ip)
+				}
+			}
+
+			// Expect 4 nodes with:
+			// - 6 IPv4 addresses with unique handles
+			// - 6 IPv6 addresses with unique handles
+			// - 13 IPv4 addresses with the same handle.
+			// for a total of 25 per-node, 100 in all.
+			Expect(len(ips)).To(Equal(100))
+
+			// Release them all. This should complete within a minute easily.
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			unalloc, err := ic.ReleaseIPs(ctx, ips)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(unalloc)).To(Equal(0))
+		})
 	})
 
 	Describe("RemoveIPAMHost tests", func() {
