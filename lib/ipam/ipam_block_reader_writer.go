@@ -390,6 +390,10 @@ func (rw blockReaderWriter) queryHandle(ctx context.Context, handleID, revision 
 	return rw.client.Get(ctx, model.IPAMHandleKey{HandleID: handleID}, revision)
 }
 
+func (rw blockReaderWriter) listHandles(ctx context.Context, revision string) (*model.KVPairList, error) {
+	return rw.client.List(ctx, model.IPAMHandleListOptions{}, revision)
+}
+
 // updateHandle updates the given handle.
 func (rw blockReaderWriter) updateHandle(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	return rw.client.Update(ctx, kvp)

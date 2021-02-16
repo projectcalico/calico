@@ -21,6 +21,8 @@ import (
 	"math/bits"
 	"runtime"
 
+	"golang.org/x/sync/semaphore"
+
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -353,7 +355,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(
 	// Release any emptied blocks still affine to this host but no longer part of an IP Pool which selects this node.
 	for _, block := range affBlocksToRelease {
 		// Determine the pool for each block.
-		pool, err := c.blockReaderWriter.getPoolForIP(net.IP{block.IP}, allPools)
+		pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: block.IP}, allPools)
 		if err != nil {
 			log.WithError(err).Warnf("Failed to get pool for IP")
 			continue
@@ -529,7 +531,6 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 					logCtx.Errorf(errString)
 					return nil, false, errors.New(errString)
 				}
-				s.datastoreRetryCount++
 			}
 			s.datastoreRetryCount++
 		}
@@ -799,7 +800,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 			log.WithError(err).Warningf("Update failed on block %s", block.CIDR.String())
 			if args.HandleID != nil {
-				if err := c.decrementHandle(ctx, *args.HandleID, blockCIDR, 1); err != nil {
+				if err := c.decrementHandle(ctx, *args.HandleID, blockCIDR, 1, nil); err != nil {
 					log.WithError(err).Warn("Failed to decrement handle")
 				}
 			}
@@ -816,17 +817,39 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 	log.Infof("Releasing IP addresses: %v", ips)
 	unallocated := []net.IP{}
 
+	// Get IP pools up front so we don't need to query for each IP address.
+	v4Pools, err := c.pools.GetEnabledPools(4)
+	if err != nil {
+		return nil, err
+	}
+	v6Pools, err := c.pools.GetEnabledPools(6)
+	if err != nil {
+		return nil, err
+	}
+
 	// Group IP addresses by block to minimize the number of writes
 	// to the datastore required to release the given addresses.
 	ipsByBlock := map[string][]net.IP{}
 	for _, ip := range ips {
 		var cidrStr string
 
-		pool, err := c.blockReaderWriter.getPoolForIP(ip, nil)
-		if err != nil {
-			log.WithError(err).Warnf("Failed to get pool for IP")
-			return nil, err
+		// Find the IP pools for this address in the enabled pools if possible.
+		var pool *v3.IPPool
+		switch ip.Version() {
+		case 4:
+			pool, err = c.blockReaderWriter.getPoolForIP(ip, v4Pools)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to get pool for IP")
+				return nil, err
+			}
+		case 6:
+			pool, err = c.blockReaderWriter.getPoolForIP(ip, v6Pools)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to get pool for IP")
+				return nil, err
+			}
 		}
+
 		if pool == nil {
 			if cidr, err := c.blockReaderWriter.getBlockForIP(ctx, ip); err != nil {
 				return nil, err
@@ -854,20 +877,67 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 		ipsByBlock[cidrStr] = append(ipsByBlock[cidrStr], ip)
 	}
 
-	// Release IPs for each block.
-	for cidrStr, ips := range ipsByBlock {
-		_, cidr, _ := net.ParseCIDR(cidrStr)
-		unalloc, err := c.releaseIPsFromBlock(ctx, ips, *cidr)
+	handleMap := map[string]*model.KVPair{}
+
+	// If we're being asked to release several IP addresses, query all handles in order to
+	// populate a cache. This reduces the number of queries required per-address.
+	//
+	// If we only have a handful of addresses to release, then we don't need to pre-fetch. It's
+	// efficient enough to read each individually. Performing a List() of all handles (which can potentially
+	// be very large) is more work than a few individual Get() requests, but less work than many Get() requests.
+	if len(ips) > 2 {
+		// List all handles, so we don't need to query them individually, and populate the map.
+		allHandles, err := c.blockReaderWriter.listHandles(ctx, "")
 		if err != nil {
-			log.Errorf("Error releasing IPs: %v", err)
-			return nil, err
+			return unallocated, err
 		}
-		unallocated = append(unallocated, unalloc...)
+		for _, h := range allHandles.KVPairs {
+			handleMap[h.Key.(model.IPAMHandleKey).HandleID] = h
+		}
 	}
-	return unallocated, nil
+
+	// Release IPs for each block. These don't typically compete for resources, so we can do them in parallel
+	// in order to move quickly. We start at most GOMAXPROCS goroutines at a time, each serving a single block.
+	type retVal struct {
+		Error       error
+		Unallocated []net.IP
+	}
+	resultChan := make(chan retVal)
+	sem := semaphore.NewWeighted(int64(runtime.GOMAXPROCS(-1)))
+	for cidrStr, ips := range ipsByBlock {
+		if err := sem.Acquire(ctx, 1); err != nil {
+			// Should only happen if the context finishes.
+			log.WithError(err).Panic("Failed to acquire semaphore")
+		}
+
+		_, cidr, _ := net.ParseCIDR(cidrStr)
+		go func(cidr net.IPNet, ips []net.IP, hm map[string]*model.KVPair) {
+			defer sem.Release(1)
+			r := retVal{}
+			unalloc, err := c.releaseIPsFromBlock(ctx, hm, ips, cidr)
+			if err != nil {
+				log.Errorf("Error releasing IPs: %v", err)
+				r.Error = err
+			}
+			r.Unallocated = unalloc
+			resultChan <- r
+		}(*cidr, ips, handleMap)
+	}
+
+	// Read the response from each goroutine.
+	err = nil
+	for i := 0; i < len(ipsByBlock); i++ {
+		r := <-resultChan
+		log.Debugf("Received response #%d from release goroutine", i)
+		if r.Error != nil && err == nil {
+			err = r.Error
+		}
+		unallocated = append(unallocated, r.Unallocated...)
+	}
+	return unallocated, err
 }
 
-func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
+func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[string]*model.KVPair, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
 	logCtx := log.WithField("cidr", blockCIDR)
 	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Info("Getting block so we can release IPs")
@@ -925,7 +995,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 		// Success - decrement handles.
 		logCtx.Debugf("Decrementing handles: %v", handles)
 		for handleID, amount := range handles {
-			if err := c.decrementHandle(ctx, handleID, blockCIDR, amount); err != nil {
+			if err := c.decrementHandle(ctx, handleID, blockCIDR, amount, handleMap[handleID]); err != nil {
 				logCtx.WithError(err).Warn("Failed to decrement handle")
 			}
 		}
@@ -975,7 +1045,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 		logCtx.WithError(err).Infof("Failed to update block")
 		if handleID != nil {
 			logCtx.Debug("Decrementing handle since we failed to allocate IP(s)")
-			if err := c.decrementHandle(ctx, *handleID, blockCIDR, num); err != nil {
+			if err := c.decrementHandle(ctx, *handleID, blockCIDR, num, nil); err != nil {
 				logCtx.WithError(err).Warnf("Failed to decrement handle")
 			}
 		}
@@ -1304,7 +1374,7 @@ func (c ipamClient) IPsByHandle(ctx context.Context, handleID string) ([]net.IP,
 	handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 	assignments := []net.IP{}
-	for k, _ := range handle.Block {
+	for k := range handle.Block {
 		_, blockCIDR, _ := net.ParseCIDR(k)
 		obj, err := c.blockReaderWriter.queryBlock(ctx, *blockCIDR, "")
 		if err != nil {
@@ -1330,7 +1400,7 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 	}
 	handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
-	for blockStr, _ := range handle.Block {
+	for blockStr := range handle.Block {
 		_, blockCIDR, _ := net.ParseCIDR(blockStr)
 		if err := c.releaseByHandle(ctx, handleID, *blockCIDR); err != nil {
 			return err
@@ -1401,7 +1471,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 			}
 			logCtx.Debug("Successfully released IPs from block")
 		}
-		if err = c.decrementHandle(ctx, handleID, blockCIDR, num); err != nil {
+		if err = c.decrementHandle(ctx, handleID, blockCIDR, num, nil); err != nil {
 			logCtx.WithError(err).Warn("Failed to decrement handle")
 		}
 
@@ -1467,11 +1537,17 @@ func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockC
 
 }
 
-func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int) error {
+func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int, obj *model.KVPair) error {
 	for i := 0; i < datastoreRetries; i++ {
-		obj, err := c.blockReaderWriter.queryHandle(ctx, handleID, "")
-		if err != nil {
-			return err
+		var err error
+		// Query the handle if either of these conditions is true:
+		// - This is the first iteration, and the caller did not provide the current handle.
+		// - This is a retry.
+		if (i == 0 && obj == nil) || i != 0 {
+			obj, err = c.blockReaderWriter.queryHandle(ctx, handleID, "")
+			if err != nil {
+				return err
+			}
 		}
 		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
@@ -1681,7 +1757,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	}
 
 	// Fetch the pool for the given CIDR and check if it selects the node.
-	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{b.CIDR.IPNet.IP}, nil)
+	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: b.CIDR.IPNet.IP}, nil)
 	if err != nil {
 		return err
 	}
