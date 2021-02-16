@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/Microsoft/hcsshim v0.8.9
 	github.com/aws/aws-sdk-go v1.35.7
+	github.com/containernetworking/cni v0.8.0 // indirect
 	github.com/containernetworking/plugins v0.8.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
@@ -26,9 +27,9 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210211175534-3d85c5968bd0
-	github.com/projectcalico/pod2daemon v0.0.0-20210211175647-7ca429140157
-	github.com/projectcalico/typha v0.7.3-0.20210211181547-bfae6a984afa
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210216181739-086602cbeb62
+	github.com/projectcalico/pod2daemon v0.0.0-20210216173008-b5092452cd7d
+	github.com/projectcalico/typha v0.7.3-0.20210216181901-92d02e554969
 	github.com/prometheus/client_golang v1.0.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
