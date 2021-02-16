@@ -154,6 +154,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		case -2:
 			/* Non-BPF VXLAN packet from another Calico node. */
 			CALI_DEBUG("VXLAN packet from known Calico host, allow.");
+			fwd_fib_set(&ctx.fwd, false);
 			goto allow;
 		}
 	}
