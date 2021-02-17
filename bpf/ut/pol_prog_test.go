@@ -1026,7 +1026,7 @@ var polProgramTests = []polProgramTest{
 			"setB": {"123.0.0.1/32,udp:1024"},
 		},
 	},
-	//ICMP tests
+	// ICMP tests
 	{
 		PolicyName: "allow icmp packet with type 8",
 		Policy: makeRulesSingleTier([]*proto.Rule{{
