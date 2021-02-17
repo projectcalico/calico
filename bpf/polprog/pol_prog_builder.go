@@ -216,6 +216,11 @@ func (p *Builder) writeRules(rules [][][]*proto.Rule) {
 			log.Debugf("Start of policy/profile %d", polIdx)
 			for ruleIdx, rule := range pol {
 				log.Debugf("Start of rule %d", ruleIdx)
+				action := strings.ToLower(rule.Action)
+				if action == "log" {
+					log.Debug("Skipping log rule.  Not supported in BPF mode.")
+					continue
+				}
 				p.writeRule(rule, endOfTierLabel)
 				log.Debugf("End of rule %d", ruleIdx)
 			}
