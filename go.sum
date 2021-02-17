@@ -272,6 +272,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20210119213343-e868fb8ee2fb h1:YO
 github.com/projectcalico/libcalico-go v1.7.2-0.20210119213343-e868fb8ee2fb/go.mod h1:LZuT85oBNPImOTE8eFWrLnLMc2LAvuxLNdQKTdpEoKw=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210203145557-b29066676c74 h1:NFG8wjUXF5W+6T4chnxnLs8G/VJOLZat3o6s5MA6Ll8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210203145557-b29066676c74/go.mod h1:LZuT85oBNPImOTE8eFWrLnLMc2LAvuxLNdQKTdpEoKw=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210216231304-fc7e82fd9f1d h1:5E7fzdqSmb8cBIsUuHqfabZ8g8C5HUEm2dngeB/UgLQ=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210216231304-fc7e82fd9f1d/go.mod h1:epPDUZnPsAntcFWkbQ6cek7+DPLjzOQmMAaA7egfOMM=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
 github.com/prometheus/client_golang v1.1.0 h1:BQ53HtBmfOitExawJ6LokA4x8ov/z0SYYb0+HxJfRI8=
