@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,8 @@
 # limitations under the License.
 ARG ARCH=x86_64
 ARG GIT_VERSION=unknown
-ARG IPTABLES_VER=1.8.2-16
+ARG IPTABLES_VER=1.8.4-15
+ARG LIBNFTNL_VER=1.1.5-4
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
 
@@ -28,9 +29,9 @@ FROM centos:8 as centos
 
 ARG ARCH
 ARG IPTABLES_VER
+ARG LIBNFTNL_VER
 ARG RUNIT_VER
-ARG CENTOS_MIRROR_BASE_URL=http://vault.centos.org/8.1.1911
-ARG LIBNFTNL_VER=1.1.1-4
+ARG CENTOS_MIRROR_BASE_URL=http://vault.centos.org/8.3.2011
 ARG LIBNFTNL_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/libnftnl-${LIBNFTNL_VER}.el8.src.rpm
 ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/iptables-${IPTABLES_VER}.el8.src.rpm
 
@@ -97,6 +98,7 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1 as ubi
 ARG ARCH
 ARG GIT_VERSION
 ARG IPTABLES_VER
+ARG LIBNFTNL_VER
 ARG RUNIT_VER
 
 # Update base packages to pick up security updates.  Must do this before adding the centos repo.
@@ -121,7 +123,7 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     # Don't install copious docs.
     --setopt=tsflags=nodocs \
     # Needed for iptables
-    libpcap libmnl libnfnetlink libnftnl libnetfilter_conntrack \
+    libpcap libmnl libnfnetlink libnetfilter_conntrack \
     ipset \
     iputils \
     # Need arp
@@ -143,6 +145,8 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     # Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
     # version '9.el8_0.1' while the existing iptables-libs (pulled in by the iputils package) has version '9.el8.1'.
     rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.${ARCH}.rpm && \
+    # Install compatible libnftnl version with selected iptables version
+    rpm --force -i /tmp/rpms/libnftnl-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
     rpm -i /tmp/rpms/iptables-${IPTABLES_VER}.el8.${ARCH}.rpm && \
     # Set alternatives
     alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
