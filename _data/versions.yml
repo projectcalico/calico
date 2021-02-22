@@ -1,28 +1,28 @@
-- title: v3.18.0-pre
+- title: v3.18.0
   chart:
     version: 1
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: release-v1.15
+   version: v1.15.0
   components:
      typha:
-      version: release-v3.18
+      version: v3.18.0
      calicoctl:
-      version: release-v3.18
+      version: v3.18.0
      calico/node:
-      version: release-v3.18
+      version: v3.18.0
      calico/cni:
-      version: release-v3.18
+      version: v3.18.0
      calico/kube-controllers:
-      version: release-v3.18
+      version: v3.18.0
      calico/flannel-migration-controller:
-      version: release-v3.18
+      version: v3.18.0
      networking-calico:
-      version: release-v3.18
+      version: v3.18.0
      flannel:
       version: v0.12.0
      calico/dikastes:
-      version: release-v3.18
+      version: v3.18.0
      flexvol:
-      version: release-v3.18
+      version: v3.18.0
