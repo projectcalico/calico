@@ -69,6 +69,11 @@
   to = "https://calico-v3-18.netlify.app/archive/v3.18/:splat"
   status = 200
 
+[[redirects]]
+  from = "/vX.Y/*"
+  to = "https://calico-vX-Y.netlify.app/vX.Y/:splat"
+  status = 200
+
 # proxy redirects for website and manifests for v3.17
 [[redirects]]
   from = "/archive/v3.17/*"

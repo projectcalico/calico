@@ -306,10 +306,9 @@ update_canonical_urls:
 
 ## Tags and builds a release from start to finish.
 release: release-prereqs
-	RELEASE_CHART:=true
-	$(MAKE) release-tag
-	$(MAKE) release-build
-	$(MAKE) release-verify
+	$(MAKE) RELEASE_CHART=true release-tag
+	$(MAKE) RELEASE_CHART=true release-build
+	$(MAKE) RELEASE_CHART=true release-verify
 
 	@echo ""
 	@echo "Release build complete. Next, push the release."
