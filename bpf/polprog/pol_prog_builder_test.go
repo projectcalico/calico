@@ -66,3 +66,19 @@ func TestPolicySanityCheck(t *testing.T) {
 
 	Expect(insns).To(HaveLen(225))
 }
+
+func TestLogActionIgnored(t *testing.T) {
+	RegisterTestingT(t)
+	alloc := idalloc.New()
+
+	pg := NewBuilder(alloc, 1, 2, 3)
+	insns, err := pg.Instructions([][][]*proto.Rule{{{{
+		Action: "Log",
+	}}}})
+	Expect(err).NotTo(HaveOccurred())
+
+	pg = NewBuilder(alloc, 1, 2, 3)
+	noOpInsns, err := pg.Instructions([][][]*proto.Rule{{{}}})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(noOpInsns).To(Equal(insns))
+}
