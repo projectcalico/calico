@@ -22,7 +22,7 @@ to {{site.prodname}}'s Prometheus metrics. Choosing an approach depends on your 
 - [Using a deny-list approach](#using-a-deny-list-approach)
 
   This approach allows all traffic to your hosts by default, but lets you limit access to specific ports using
-  {{site.prodname}} policy. This approach allows you to restrict access to access to specific ports, while leaving other
+  {{site.prodname}} policy. This approach allows you to restrict access to specific ports, while leaving other
   host traffic unaffected.
 
 - [Using an allow-list approach](#using-an-allow-list-approach)
@@ -248,6 +248,46 @@ Then, use `calicoctl` to apply this policy.
 ```bash
 calicoctl apply -f typha-prometheus-policy.yaml
 ```
+### Example for kube-controllers
+
+If your {{site.prodname}} installation exposes metrics from kube-controllers, you can limit access to those metrics
+with the following network policy.
+
+Create a file named `kube-controllers-prometheus-policy.yaml` with the following contents.
+
+```yaml
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: restrict-kube-controllers-prometheus
+  namespace: calico-system
+spec:
+  # Select kube-controllers.
+  selector: k8s-app == "calico-kube-controllers"
+  order: 500
+  types:
+  - Ingress
+  ingress:
+  # Deny anything that tries to access the Prometheus port
+  # but that doesn't match the necessary selector.
+  - action: Deny
+    protocol: TCP
+    source:
+      notSelector: calico-prometheus-access == "true"
+    destination:
+      ports:
+      - 9094
+```
+
+> **Note**: The above policy is installed in the calico-system namespace. If your cluster has {{site.prodname}} installed
+> in the kube-system namespace, you will need to create the policy in that namespace instead.
+{: .alert .alert-info}
+
+Then, use `calicoctl` to apply this policy.
+
+```bash
+calicoctl apply -f kube-controllers-prometheus-policy.yaml
+```
 
 ## Using an allow-list approach
 
@@ -406,7 +446,7 @@ After following the steps above, create a file named `typha-prometheus-policy.ya
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: restrict-calico-node-prometheus
+  name: restrict-typha-prometheus
 spec:
   # Select all {{site.prodname}} nodes.
   selector: running-calico == "true"
@@ -417,7 +457,7 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      notSelector: calico-prometheus-access == "true"
+      selector: calico-prometheus-access == "true"
     destination:
       ports:
       - 9093
@@ -431,4 +471,37 @@ Then, use `calicoctl` to apply this policy.
 
 ```bash
 calicoctl apply -f typha-prometheus-policy.yaml
+```
+
+### Example for kube-controllers
+
+If your {{site.prodname}} installation exposes metrics from kube-controllers, you can limit access to those metrics
+with the following network policy.
+
+Create a file named `kube-controllers-prometheus-policy.yaml` with the following contents.
+
+```yaml
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: restrict-kube-controllers-prometheus
+  namespace: calico-system
+spec:
+  selector: k8s-app == "calico-kube-controllers"
+  order: 500
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: calico-prometheus-access == "true"
+    destination:
+      ports:
+      - 9094
+```
+Then, use `calicoctl` to apply this policy.
+
+```bash
+calicoctl apply -f kube-controllers-prometheus-policy.yaml
 ```

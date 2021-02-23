@@ -42,7 +42,7 @@ components listed above and links to their detailed configuration pages:
 - [calicoctl](/getting-started/clis/calicoctl/install)
 
 Below are examples and suggestions when using a hosted {{site.prodname}} install where
-the {{site.prodname}} components are launched through a Kuberenetes manifest file, this
+the {{site.prodname}} components are launched through a Kubernetes manifest file, this
 is not required and the configuration could be achieved by configuring services
 that run outside of Kubernetes.
 

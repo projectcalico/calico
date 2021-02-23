@@ -15,7 +15,7 @@ Use this quickstart to quickly and easily try {{side.prodname}} features. To dep
 ### Before you begin
 
 - Make sure you have a linux host that meets the following requirements:
-  - x86-64 processor
+  - x86-64, arm64, ppc64le, or s390x processor
   - 2CPU
   - 2GB RAM
   - 10GB free disk space

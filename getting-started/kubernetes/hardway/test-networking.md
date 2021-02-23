@@ -11,13 +11,13 @@ In this lab we will test the {{site.prodname}} cluster to demonstrate networking
 Create three busybox instances
 
 ```bash
-kubectl run pingtest --image=busybox --replicas=3 -- sleep infinity
+kubectl create deployment pingtest --image=busybox --replicas=3 -- sleep infinity
 ```
 
 Check their IP addresses
 
 ```bash
-kubectl get pod -l run=pingtest -o wide
+kubectl get pods --selector=app=pingtest --output=wide
 ```
 
 Result
@@ -33,7 +33,7 @@ pingtest-b4b6f8cf-rn9nm   1/1     Running   0          3m28s   192.168.60.64    
 Note the IP addresses of the second two pods, then exec into the first one. For example
 
 ```bash
-kubectl exec -ti pingtest-b4b6f8cf-b5z78 sh
+kubectl exec -ti pingtest-b4b6f8cf-b5z78 -- sh
 ```
 
 From inside the pod, ping the other two pod IP addresses. For example
@@ -167,7 +167,7 @@ round-trip min/avg/max = 0.459/0.495/0.524 ms
 ## Clean up
 
 ```bash
-kubectl delete deployment pingtest
+kubectl delete deployments.apps pingtest
 kubectl delete pod pingtest-pool2
 ```
 

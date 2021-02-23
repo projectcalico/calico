@@ -56,11 +56,15 @@ configure API access if needed.
 
 ### Other configuration
 
+> **Note:** Whenever possible, prefer configuring the kube-controllers component using the [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfig) API resource,
+> Some configuration options may not be available through environment variables.
+{: .alert .alert-info}
+
 The following environment variables can be used to configure the {{site.prodname}} Kubernetes controllers.
 
 | Environment   | Description | Schema | Default |
 | ------------- | ----------- | ------ | -------
-| `DATASTORE_TYPE`      | Which datastore type to use | etcdv3, kubernetes | etcdv3
+| `DATASTORE_TYPE`      | Which datastore type to use | etcdv3, kubernetes | kubernetes
 | `ENABLED_CONTROLLERS` | Which controllers to run    | namespace, node, policy, serviceaccount, workloadendpoint | policy,namespace,serviceaccount,workloadendpoint,node
 | `LOG_LEVEL`           | Minimum log level to be displayed. | debug, info, warning, error | info
 | `KUBECONFIG`          | Path to a kubeconfig file for Kubernetes API access | path |

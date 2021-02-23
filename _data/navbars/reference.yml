@@ -30,6 +30,8 @@ section:
     section:
     - title: Overview
       path: /reference/calicoctl/ipam/overview
+    - title: check
+      path: /reference/calicoctl/ipam/check
     - title: release
       path: /reference/calicoctl/ipam/release
     - title: show
@@ -55,7 +57,7 @@ section:
     - title: Overview
       path: /reference/calicoctl/datastore/overview
     - title: Migrate
-      path: /reference/calicoctl/datastore/migrate
+      path: /reference/calicoctl/datastore/migrate/
       section:
       - title: Overview
         path: /reference/calicoctl/datastore/migrate/overview
@@ -138,7 +140,12 @@ section:
 - title: Calico CNI plugins
   path: /reference/cni-plugin/configuration
 - title: Calico Kubernetes controllers
-  path: /reference/kube-controllers/configuration
+  path: /reference/kube-controllers/
+  section:
+  - title: Configuration
+    path: /reference/kube-controllers/configuration
+  - title: Prometheus statistics
+    path: /reference/kube-controllers/prometheus
 - title: Configuration on public clouds
   path: /reference/public-cloud/
   section:

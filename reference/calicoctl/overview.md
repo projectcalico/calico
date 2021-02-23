@@ -49,6 +49,7 @@ Options:
   -h --help               Show this screen.
   -l --log-level=<level>  Set the log level (one of panic, fatal, error,
                           warn, info, debug) [default: panic]
+  --context=<context>	    The name of the kubeconfig context to use.
 
 Description:
   The calicoctl command line tool is used to manage Calico network and security
@@ -58,6 +59,10 @@ Description:
   See 'calicoctl <command> --help' to read about a specific subcommand.
 ```
 {: .no-select-button}
+
+
+> **Note:** In a multi cluster environment if you have a {% include open-new-window.html url="https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/" text="kubeconfig" %} file with multiple cluster contexts it is possible to directly change the context using calicoctl `--context` argument.
+{: .alert .alert-info}
 
 ## Top level command line options
 

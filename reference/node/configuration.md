@@ -62,7 +62,7 @@ below.
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
-| DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
+| DATASTORE_TYPE | Type of datastore. [Default: `kubernetes`] | kubernetes, etcdv3 |
 
 #### Configuring Kubernetes Datastore Access
 
@@ -151,6 +151,9 @@ appropriate IP version for the node. When the environment variable is set,
 the address is saved in the
 [node resource configuration]({{ site.baseurl }}/reference/resources/node)
 for this host, overriding any previously configured value.
+
+calico/node will attempt to detect subnet information from the host, and augment the provided address
+if possible.
 
 #### IP setting special case values
 

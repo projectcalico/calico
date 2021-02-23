@@ -14,7 +14,7 @@ If the default kubeconfig does not exist, or you would like to specify alternati
 
 | Configuration file option | Environment variable | Description                                                                                               | Schema
 | --------------------------|----------------------| ----------------------------------------------------------------------------------------------------------|
-| `datastoreType`           | `DATASTORE_TYPE`     | Indicates the datastore to use. [Default: `etcdv3`]                                                       | `kubernetes`, `etcdv3`
+| `datastoreType`           | `DATASTORE_TYPE`     | Indicates the datastore to use. [Default: `kubernetes`]                                                       | `kubernetes`, `etcdv3`
 | `kubeconfig`              | `KUBECONFIG`         | When using the Kubernetes datastore, the location of a kubeconfig file to use, e.g. /path/to/kube/config. | string
 | `k8sAPIEndpoint`          | `K8S_API_ENDPOINT`   | Location of the Kubernetes API. Not required if using kubeconfig. [Default: `https://kubernetes-api:443`] | string
 | `k8sCertFile`             | `K8S_CERT_FILE`      | Location of a client certificate for accessing the Kubernetes API, e.g., `/path/to/cert`.                 | string
@@ -63,6 +63,15 @@ And using `CALICO_` prefixed names:
 export CALICO_DATASTORE_TYPE=kubernetes
 export CALICO_KUBECONFIG=~/.kube/config
 calicoctl get workloadendpoints
+```
+
+With multiple `kubeconfig` files:
+
+```bash
+export DATASTORE_TYPE=kubernetes
+export KUBECONFIG=~/.kube/main:~/.kube/auxy
+calicoctl get --context main workloadendpoints
+calicoctl get --context auxy workloadendpoints
 ```
 
 ### Checking the configuration

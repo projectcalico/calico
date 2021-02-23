@@ -48,6 +48,7 @@ Options:
   -n --namespace=<NS>        Namespace of the resource.
                              Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                              Uses the default namespace if not specified.
+  --context=<context>        The name of the kubeconfig context to use.
 
 Description:
   The replace command is used to replace a set of resources by filename or

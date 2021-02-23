@@ -12,6 +12,9 @@ This tutorial gets you a multi node K3s cluster with {{site.prodname}} in approx
 
 K3s is a lightweight implementation of Kubernetes packaged as a single binary.
 
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:VXLAN,Routing:Calico,Datastore:Kubernetes' %}
+
 ### Before you begin
 
 - Make sure you have a linux host that meets the following requirements

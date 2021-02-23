@@ -43,7 +43,7 @@ You are now ready to start fine-tuning traffic that should be allowed.
 - [Allow ingress traffic from pods in the same namespace](#allow-ingress-traffic-from-pods-in-the-same-namespace)
 - [Allow ingress traffic from pods in a different namespace](#allow-ingress-traffic-from-pods-in-a-different-namespace)
 - [Create egress policies](#create-egress-policies)
-- [Allow ingress traffic from pods in the same namespace](#allow-egress-traffic-from-pods-in-the-same-namespace)
+- [Allow egress traffic from pods in the same namespace](#allow-egress-traffic-from-pods-in-the-same-namespace)
 - [Allow egress traffic to IP addresses or CIDR range](#allow-egress-traffic-to-ip-addresses-or-cidr-range)
 - [Best practice: create deny-all default network policy](#best-practice-create-deny-all-default-network-policy)
 - [Create deny-all default ingress and egress network policy](#create-deny-all-default-ingress-and-egress-network-policy)

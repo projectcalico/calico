@@ -1,5 +1,7 @@
 - title: master
   note: ""
+  chart:
+    version: 1
   tigera-operator:
    image: tigera/operator
    registry: quay.io

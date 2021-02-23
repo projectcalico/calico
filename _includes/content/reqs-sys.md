@@ -1,6 +1,6 @@
 ## Node requirements
 
-- x86-64 processor
+- x86-64, arm64, ppc64le, or s390x processor
 
 - Linux kernel 3.10 or later with [required dependencies](#kernel-dependencies).
   The following distributions have the required kernel, its dependencies, and are

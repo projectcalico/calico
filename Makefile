@@ -45,6 +45,7 @@ POD2DAEMON_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].compone
 DIKASTES_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/dikastes.version')
 FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/flannel-migration-controller.version')
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.typha.version')
+CHART_RELEASE := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].chart.version')
 
 ##############################################################################
 
@@ -62,8 +63,8 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 
 # The following chunk of conditionals sets the Version of the helm chart. 
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
-ifdef CHART_RELEASE
-# the presence of CHART_RELEASE indicates we're trying to cut an official chart release.
+ifdef RELEASE_CHART
+# the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
 chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
 appVersion:=$(CALICO_VER)
 else
@@ -305,6 +306,7 @@ update_canonical_urls:
 
 ## Tags and builds a release from start to finish.
 release: release-prereqs
+	RELEASE_CHART:=true
 	$(MAKE) release-tag
 	$(MAKE) release-build
 	$(MAKE) release-verify
@@ -345,13 +347,13 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
-	cp $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
+	cp $(RELEASE_HELM_CHART) $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
 	ghr -u projectcalico -r calico \
-		-b 'Release notes can be found at https://docs.projectcalico.org/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
+		-b 'Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(UPLOAD_DIR)
 
@@ -377,7 +379,7 @@ endif
 		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
 
 # release-prereqs checks that the environment is configured properly to create a release.
-release-prereqs:
+release-prereqs: charts
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
 		exit 1; fi
@@ -392,6 +394,7 @@ RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
 RELEASE_WINDOWS_ZIP=$(OUTPUT_DIR)/calico-windows-$(NODE_VER).zip
+RELEASE_HELM_CHART=bin/tigera-operator-$(CALICO_VER)-$(CHART_RELEASE).tgz
 
 # Determine where the manifests live. For older versions we used
 # a different location, but we still need to package them up for patch
@@ -496,10 +499,14 @@ $(RELEASE_DIR_BIN)/%:
 # Utilities
 ###############################################################################
 # TODO: stop using bin/helm as an entrypoint in build scripts.
-bin/helm: helm-deps
-	@echo 'make bin/helm' is deprecated. Please use 'make helm-deps' instead.
+bin/helm: bin/helm3
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget -q https://storage.googleapis.com/kubernetes-helm/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
+	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
+	mv $(TMP)/linux-amd64/helm bin/helm
 
-helm-deps: bin/helm3
+helm-deps: bin/helm3 bin/helm
 bin/helm3:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
@@ -576,5 +583,5 @@ build-operator-reference:
 	           git clone --depth=1 -b $(API_GEN_BRANCH) https://github.com/$(API_GEN_REPO) api-gen && cd api-gen && \
 	           go mod edit -replace github.com/tigera/operator=github.com/$(OPERATOR_REPO)@$(OPERATOR_VERSION) && \
 	           go mod download && go build && \
-	           ./gen-crd-api-reference-docs -config ./example-config.json \
+	           ./gen-crd-api-reference-docs -config /go/src/$(PACKAGE_NAME)/reference/installation/config.json \
 	                   -api-dir github.com/tigera/operator/api -out-file /go/src/$(PACKAGE_NAME)/reference/installation/_api.html'

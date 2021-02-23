@@ -17,7 +17,7 @@ in touch for help debugging any issues with Calico.
 
 ## Read the source, Luke!
 
-All of Calico's code is on [GitHub](https://github.com/projectcalico).{:target="_blank"}  The following
+All of Calico's code is on [GitHub](https://github.com/projectcalico){:target="_blank"}.  The following
 list contains the most commonly encountered repositories:
 
 Repository                                                              | Description

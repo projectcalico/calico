@@ -133,6 +133,18 @@ rules:
     verbs:
       - list
       - watch
+  # Needed for operator lock
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
 {{- if eq .Values.installation.kubernetesProvider "openshift" }}
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
@@ -227,4 +239,11 @@ rules:
       - watch
       - create
       - update
+# Add the permissions to monitor the status of certificatesigningrequests when certificate management is enabled.
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - list
 {{- end }}

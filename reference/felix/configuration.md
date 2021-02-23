@@ -12,7 +12,7 @@ order, as follows.
 
 1.  Environment variables.
 2.  The Felix configuration file.
-3.  Host-specific `FelixConfiguration` resources.
+3.  Host-specific `FelixConfiguration` resources (`node.<nodename>`).
 4.  The global `FelixConfiguration` resource (`default`).
 
 The value of any configuration parameter is the value read from the
@@ -21,6 +21,10 @@ contains a value, it takes top precedence.
 
 If not set in any of these locations, most configuration parameters have
 defaults, and it should be rare to have to explicitly set them.
+
+When creating a host-specific `FelixConfiguration` resource called `node.<nodename>`, 
+the `<nodename>` part must match the value for the nodename in the calico 
+datastore - i.e. it must be present in the output of `calicoctl get nodes`
 
 The full list of parameters which can be set is as follows.
 
@@ -106,7 +110,7 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | `FeatureDetectOverride`              | `FELIX_FEATUREDETECTOVERRIDE`              | Is used to override the feature detection. Values are specified in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=". "true" or "false" will force the feature, empty or omitted values are auto-detected. [Default: `""`] | string |
 | `InterfaceExclude`                   | `FELIX_INTERFACEEXCLUDE`                   | A comma-separated list of interface names that should be excluded when Felix is resolving host endpoints.  The default value ensures that Felix ignores Kubernetes' internal `kube-ipvs0` device. If you want to exclude multiple interface names using a single value, the list supports regular expressions. For regular expressions you must wrap the value with `/`. For example having values `/^kube/,veth1` will exclude all interfaces that begin with `kube` and also the interface `veth1`. [Default: `kube-ipvs0`] | string |
 | `IpsetsRefreshInterval`              | `FELIX_IPSETSREFRESHINTERVAL`              | Period, in seconds, at which Felix re-checks the IP sets in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable IP sets refresh.  Note: the default for this value is lower than the other refresh intervals as a workaround for a [Linux kernel bug](https://github.com/projectcalico/felix/issues/1347){:target="_blank"} that was fixed in kernel version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value to reduce Felix CPU usage. [Default: `10`] | int |
-| `IptablesBackend`                    | `FELIX_IPTABLESBACKEND`                    | This parameter controls which variant of iptables binary Felix uses. Set this to `Auto` for auto detection of the backend. If a specific backend is needed then use `NFT` for hosts using a netfilter backend or `Legacy` for others. [Default: `Legacy`] | `Legacy`, `NFT`, `Auto` |
+| `IptablesBackend`                    | `FELIX_IPTABLESBACKEND`                    | This parameter controls which variant of iptables binary Felix uses. Set this to `Auto` for auto detection of the backend. If a specific backend is needed then use `NFT` for hosts using a netfilter backend or `Legacy` for others. [Default: `Auto`] | `Legacy`, `NFT`, `Auto` |
 | `IptablesFilterAllowAction`          | `FELIX_IPTABLESFILTERALLOWACTION`          | This parameter controls what happens to traffic that is allowed by a Felix policy chain in the iptables filter table (i.e., a normal policy chain). The default will immediately `Accept` the traffic. Use `Return` to send the traffic back up to the system chains for further processing. [Default: `Accept`]  | `Accept`, `Return` |
 | `IptablesLockFilePath`               | `FELIX_IPTABLESLOCKFILEPATH`               | *Deprecated:* For iptables versions prior to v1.6.2, location of the iptables lock file (later versions of iptables always use value "/run/xtables.lock").  You may need to change this if the lock file is not in its standard location (for example if you have mapped it into Felix's container at a different path). [Default: `/run/xtables.lock`]  | string |
 | `IptablesLockProbeIntervalMillis`    | `FELIX_IPTABLESLOCKPROBEINTERVALMILLIS`    | Time, in milliseconds, that Felix will wait between attempts to acquire the iptables lock if it is not available.  Lower values make Felix more responsive when the lock is contended, but use more CPU. [Default: `50`]  | int |
@@ -129,9 +133,9 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 eBPF dataplane mode uses the Linux Kernel's eBPF virtual machine to implement networking and policy instead of iptables.  When BPFEnabled is set to `true`, Felix will:
 
 * Require a v5.3 Linux kernel.
-* Implement workload endpoint policy with eBPF programs instead of iptables.
+* Implement policy with eBPF programs instead of iptables.
 * Activate its embedded implementation of `kube-proxy` to implement Kubernetes service load balancing.
-* Disable support for IPv6 and host endpoints.
+* Disable support for IPv6.
 
 See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step-by step instructions to enable this feature.
 
@@ -243,7 +247,7 @@ a global setting and a per-host override.
    vim felix.yaml
    ```
    > **Tip**: For a global change set name to "default".
-   > For a node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
+   > For a node-specific change: set name to `node.<nodename>`, e.g. "node.{{site.prodname}}-node-1"
    {: .alert .alert-success}
 
 1. Replace the current felixconfig settings

@@ -69,7 +69,7 @@ Define a cluster role for Typha with permission to watch {{site.prodname}} datas
 ```bash
 kubectl apply -f - <<EOF
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calico-typha
 rules:

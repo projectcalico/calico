@@ -24,14 +24,37 @@ module Jekyll
         extra_args.slice! "tigera-operator"
       end
 
+      # helm doesn't natively have an --execute-dir flag but it sure would be useful if it did.
+      # here we replace instances of "--execute-dir $dir" with individual calls to "--execute $file" by
+      # iterating over files in that directory.
+      extra_args.gsub!(/--execute-dir (\S*)/) do |_|
+        e = []
+        Dir.foreach "_includes/charts/#{@chart}/#{$1}" do |file|
+            fpath = File.join($1, file)
+            next if File.directory?("_includes/charts/#{@chart}/#{fpath}")
+
+            # for helm v3, when templating crd files, you must specify them relative
+            # to the crd directory. so trim the 'crds' from the name.
+            # we don't need to worry about the helm v2 case because crds are stored in templates/
+            # and can't be --executed from the crds/ directory.
+            if fpath.start_with? "crds" then
+              fpath = Pathname.new(fpath).relative_path_from(Pathname.new("crds"))
+            end
+
+            e << "--execute #{fpath}"
+        end
+        e.join(" ")
+      end
+
       # substitute --execute with --show-only for helm v3 compatibility.
-      extra_args.gsub!(/--execute (\S*)/) do |f|
-        # calico CRDs stay in the templates/crds directory
-        if $1.start_with? "templates/crds/calico" then return f.gsub('--execute', '--show-only') end
-        # operator CRDs have moved to root
-        if $1.start_with? "templates/crds/" then return f.gsub('--execute templates/crds/', '--show-only ') end
-        # all other requests need to use --show-only instead of --execute for helm v3
-        return f.gsub('--execute', '--show-only')
+      if @chart == "tigera-operator" then
+        extra_args.gsub!(/--execute (\S*)/) do |f|
+          # operator CRDs have moved to root
+          if $1.start_with? "templates/crds/" then f.sub('--execute templates/crds/', '--show-only ')
+          # all other requests need to use --show-only instead of --execute for helm v3
+          else f.sub('--execute', '--show-only')
+          end
+        end
       end
 
       @extra_args = extra_args
@@ -59,10 +82,16 @@ module Jekyll
 
       # Execute helm.
       # Set the default etcd endpoint placeholder for rendering in the docs.
-      cmd = """bin/helm3 template --include-crds _includes/charts/#{@chart} \
+      if @chart == "tigera-operator" then
+        cmd = """bin/helm3 template --include-crds _includes/charts/#{@chart} \
+          -f #{tv.path} \
+          -f #{t.path}"""
+      else
+        cmd = """bin/helm template _includes/charts/#{@chart} \
         -f #{tv.path} \
         -f #{t.path} \
         --set etcd.endpoints='http://<ETCD_IP>:<ETCD_PORT>'"""
+      end
 
       cmd += " " + @extra_args.to_s
 

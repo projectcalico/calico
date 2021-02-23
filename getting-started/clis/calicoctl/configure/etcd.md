@@ -8,7 +8,7 @@ canonical_url: '/getting-started/clis/calicoctl/configure/etcd'
 
 | Configuration file option | Environment variable | Description                                                                           | Schema
 | --------------------------| -------------------- | ------------------------------------------------------------------------------------- | ------
-| `datastoreType`           | `DATASTORE_TYPE`     | Indicates the datastore to use. If unspecified, defaults to `etcdv3`. (optional)      | `kubernetes`, `etcdv3`
+| `datastoreType`           | `DATASTORE_TYPE`     | Indicates the datastore to use. If unspecified, defaults to `kubernetes`. (optional)      | `kubernetes`, `etcdv3`
 | `etcdEndpoints`           | `ETCD_ENDPOINTS`     | A comma-separated list of etcd endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379` (required) | string
 | `etcdDiscoverySrv`        | `ETCD_DISCOVERY_SRV` | Domain name to discover etcd endpoints via SRV records. Mutually exclusive with `etcdEndpoints`. Example: `example.com` (optional) | string
 | `etcdUsername`            | `ETCD_USERNAME`      | User name for RBAC. Example: `user` (optional)                                        | string
@@ -23,7 +23,7 @@ canonical_url: '/getting-started/clis/calicoctl/configure/etcd'
 > **Note**:
 > - If you are running with TLS enabled, ensure your endpoint addresses use HTTPS.
 > - When specifying through environment variables, the `DATASTORE_TYPE` environment
->   is not required for etcdv3.
+>   is required for etcdv3.
 > - All environment variables may also be prefixed with `CALICO_`, for example
 >   `CALICO_DATASTORE_TYPE` and `CALICO_ETCD_ENDPOINTS` etc. may also be used.
 >   This is useful if the non-prefixed names clash with existing environment

@@ -1,6 +1,6 @@
 ---
 title: Component logs
-description: Where to find component logs. 
+description: Where to find component logs.
 canonical_url: '/maintenance/troubleshoot/component-logs'
 ---
 
@@ -66,7 +66,7 @@ for details on how to modify the logging level. For example:
    ```
 
    > **Tip**: For a global change set the name to "default".
-   > For a node-specific change set the name to the node name, e.g., "node-1".
+   > For a node-specific change set the name to the node name prefixed with "node.", e.g., "node.node-1".
    {: .alert .alert-success}
 
 1. Replace the current bgpconfig settings.

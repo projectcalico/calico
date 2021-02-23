@@ -13,6 +13,7 @@ spec:
   requiredDropCapabilities:
   - ALL
   volumes:
+  - 'hostPath'
   - 'configMap'
   - 'emptyDir'
   - 'projected'

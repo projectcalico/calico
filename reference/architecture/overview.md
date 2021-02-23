@@ -104,7 +104,7 @@ url='https://github.com/containernetworking/cni/blob/master/SPEC.md#network-conf
 
 - **etcd**
 
-   `etcd` is a consistent, highly-available distributed key-value store that provides data storage for the {{site.prodname}} network, and forcommunications between components. `etcd` is supported for protecting only non-cluster hosts (as of {{site.prodname}} v3.1). For completeness, `etcd ` advantages are:
+   `etcd` is a consistent, highly-available distributed key-value store that provides data storage for the {{site.prodname}} network, and for communications between components. `etcd` is supported for protecting only non-cluster hosts (as of {{site.prodname}} v3.1). For completeness, `etcd ` advantages are:
 
    - Lets you run {{site.prodname}} on non-Kubernetes platforms
    - Separation of concerns between Kubernetes and {{site.prodname}} resources, for example allowing you to scale the datastores independently

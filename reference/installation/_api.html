@@ -8,10 +8,91 @@
 <p>API Schema definitions for configuring the installation of Calico and Calico Enterprise</p>
 Resource Types:
 <ul><li>
+<a href="#operator.tigera.io/v1.ImageSet">ImageSet</a>
+</li><li>
 <a href="#operator.tigera.io/v1.Installation">Installation</a>
 </li><li>
 <a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>
 </li></ul>
+<h3 id="operator.tigera.io/v1.ImageSet">ImageSet
+</h3>
+<p>ImageSet is used to specify image digests for the images that the operator deploys.
+The name of the ImageSet is expected to be in the format <code>&lt;variang&gt;-&lt;release&gt;</code>.
+The <code>variant</code> used is <code>enterprise</code> if the InstallationSpec Variant is
+<code>TigeraSecureEnterprise</code> otherwise it is <code>calico</code>.
+The <code>release</code> must match the version of the variant that the operator is built to deploy,
+this version can be obtained by passing the <code>--version</code> flag to the operator binary.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code><br>
+string</td>
+<td>
+<code>
+operator.tigera.io/v1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code><br>
+string
+</td>
+<td><code>ImageSet</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ImageSetSpec">
+ImageSetSpec
+</a>
+</em>
+</td>
+<td>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>images</code><br>
+<em>
+<a href="#operator.tigera.io/v1.Image">
+[]Image
+</a>
+</em>
+</td>
+<td>
+<p>Images is the list of images to use digests. All images that the operator will deploy
+must be specified.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.Installation">Installation
 </h3>
 <p>Installation configures an installation of Calico or Calico Enterprise. At most one instance
@@ -46,7 +127,7 @@ string
 <td>
 <code>metadata</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta
 </a>
 </em>
@@ -123,7 +204,7 @@ or empty, the default for each image will be used.</p>
 <td>
 <code>imagePullSecrets</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#localobjectreference-v1-core">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
 []Kubernetes core/v1.LocalObjectReference
 </a>
 </em>
@@ -181,6 +262,20 @@ CalicoNetworkSpec
 </tr>
 <tr>
 <td>
+<code>typhaAffinity</code><br>
+<em>
+<a href="#operator.tigera.io/v1.TyphaAffinity">
+TyphaAffinity
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaAffinity allows configuration of node affinity characteristics for Typha pods.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>controlPlaneNodeSelector</code><br>
 <em>
 map[string]string
@@ -188,8 +283,23 @@ map[string]string
 </td>
 <td>
 <em>(Optional)</em>
-<p>ControlPlaneNodeSelector is used to select control plane nodes on which to run specific Calico
-components. This currently only applies to kube-controllers and the apiserver.</p>
+<p>ControlPlaneNodeSelector is used to select control plane nodes on which to run Calico
+components. This is globally applied to all resources created by the operator excluding daemonsets.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>controlPlaneTolerations</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
+[]Kubernetes core/v1.Toleration
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ControlPlaneTolerations specify tolerations which are then globally applied to all resources
+created by the operator.</p>
 </td>
 </tr>
 <tr>
@@ -224,7 +334,7 @@ kubernetesProvider.</p>
 <td>
 <code>nodeUpdateStrategy</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#daemonsetupdatestrategy-v1-apps">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#daemonsetupdatestrategy-v1-apps">
 Kubernetes apps/v1.DaemonSetUpdateStrategy
 </a>
 </em>
@@ -247,6 +357,22 @@ field.</p>
 <td>
 <em>(Optional)</em>
 <p>ComponentResources can be used to customize the resource requirements for each component.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>certificateManagement</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CertificateManagement">
+CertificateManagement
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
 </td>
 </tr>
 </table>
@@ -299,7 +425,7 @@ string
 <td>
 <code>metadata</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#objectmeta-v1-meta">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
 Kubernetes meta/v1.ObjectMeta
 </a>
 </em>
@@ -541,6 +667,75 @@ Default: Disabled</p>
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.CertificateManagement">CertificateManagement
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>caCert</code><br>
+<em>
+[]byte
+</em>
+</td>
+<td>
+<p>Certificate of the authority that signs the CertificateSigningRequests in PEM format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>signerName</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>When a CSR is issued to the certificates.k8s.io API, the signerName is added to the request in order to accommodate for clusters
+with multiple signers.
+Must be formatted as: &ldquo;<my-domain>/<my-signername>&rdquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keyAlgorithm</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Specify the algorithm used by pods to generate a key pair that is associated with the X.509 certificate request.
+Default: RSAWithSize2048</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>signatureAlgorithm</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Specify the algorithm used for the signature of the X.509 certificate request.
+Default: SHA256WithRSA</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.ComponentName">ComponentName
 (<code>string</code> alias)</h3>
 <p>
@@ -580,7 +775,7 @@ ComponentName
 <td>
 <code>resourceRequirements</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#resourcerequirements-v1-core">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements
 </a>
 </em>
@@ -749,11 +944,86 @@ Default: 26 (IPv4), 122 (IPv6)</p>
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.Image">Image
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ImageSetSpec">ImageSetSpec</a>)
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>image</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Image is an image that the operator deploys and instead of using the built in tag
+the operator will use the Digest for the image identifier.
+The value should be the image name without registry or tag or digest.
+For the image <code>docker.io/calico/node:v3.17.1</code> it should be represented as <code>calico/node</code></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>digest</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Digest is the image identifier that will be used for the Image.
+The field should not include a leading <code>@</code> and must be prefixed with <code>sha256:</code>, if other
+digest prefixes are needed please submit a feature request.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ImageSetSpec">ImageSetSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ImageSet">ImageSet</a>)
+</p>
+<p>ImageSetSpec defines the desired state of ImageSet.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>images</code><br>
+<em>
+<a href="#operator.tigera.io/v1.Image">
+[]Image
+</a>
+</em>
+</td>
+<td>
+<p>Images is the list of images to use digests. All images that the operator will deploy
+must be specified.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.InstallationSpec">InstallationSpec
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#operator.tigera.io/v1.Installation">Installation</a>)
+<a href="#operator.tigera.io/v1.Installation">Installation</a>, 
+<a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
 </p>
 <p>InstallationSpec defines configuration for a Calico or Calico Enterprise installation.</p>
 <table>
@@ -817,7 +1087,7 @@ or empty, the default for each image will be used.</p>
 <td>
 <code>imagePullSecrets</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#localobjectreference-v1-core">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
 []Kubernetes core/v1.LocalObjectReference
 </a>
 </em>
@@ -875,6 +1145,20 @@ CalicoNetworkSpec
 </tr>
 <tr>
 <td>
+<code>typhaAffinity</code><br>
+<em>
+<a href="#operator.tigera.io/v1.TyphaAffinity">
+TyphaAffinity
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaAffinity allows configuration of node affinity characteristics for Typha pods.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>controlPlaneNodeSelector</code><br>
 <em>
 map[string]string
@@ -882,8 +1166,23 @@ map[string]string
 </td>
 <td>
 <em>(Optional)</em>
-<p>ControlPlaneNodeSelector is used to select control plane nodes on which to run specific Calico
-components. This currently only applies to kube-controllers and the apiserver.</p>
+<p>ControlPlaneNodeSelector is used to select control plane nodes on which to run Calico
+components. This is globally applied to all resources created by the operator excluding daemonsets.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>controlPlaneTolerations</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
+[]Kubernetes core/v1.Toleration
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ControlPlaneTolerations specify tolerations which are then globally applied to all resources
+created by the operator.</p>
 </td>
 </tr>
 <tr>
@@ -918,7 +1217,7 @@ kubernetesProvider.</p>
 <td>
 <code>nodeUpdateStrategy</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#daemonsetupdatestrategy-v1-apps">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#daemonsetupdatestrategy-v1-apps">
 Kubernetes apps/v1.DaemonSetUpdateStrategy
 </a>
 </em>
@@ -941,6 +1240,22 @@ field.</p>
 <td>
 <em>(Optional)</em>
 <p>ComponentResources can be used to customize the resource requirements for each component.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>certificateManagement</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CertificateManagement">
+CertificateManagement
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
 </td>
 </tr>
 </tbody>
@@ -983,6 +1298,33 @@ int32
 <td>
 <p>MTU is the most recently observed value for pod network MTU. This may be an explicitly
 configured value, or based on Calico&rsquo;s native auto-detetion.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imageSet</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImageSet is the name of the ImageSet being used, if there is an ImageSet
+that is being used. If an ImageSet is not being used then this will not be set.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>computed</code><br>
+<em>
+<a href="#operator.tigera.io/v1.InstallationSpec">
+InstallationSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Computed is the final installation including overlaid resources.</p>
 </td>
 </tr>
 </tbody>
@@ -1082,6 +1424,40 @@ one of the provided CIDRs.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.PreferredNodeAffinity">PreferredNodeAffinity
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.TyphaAffinity">TyphaAffinity</a>)
+</p>
+<p>PreferredNodeAffinity is similar to an affinity except it only exposes the Preferred scheduling option,
+which ensures a pod will still be scheduled even when all the nodes it matches are unschedulable.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>preferredDuringSchedulingIgnoredDuringExecution</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#preferredschedulingterm-v1-core">
+[]Kubernetes core/v1.PreferredSchedulingTerm
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The scheduler will prefer to schedule pods to nodes that satisfy
+the affinity expressions specified by this field, but it may choose
+a node that violates one or more of the expressions.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.ProductVariant">ProductVariant
 (<code>string</code> alias)</h3>
 <p>
@@ -1150,7 +1526,7 @@ ConditionStatus
 <td>
 <code>lastTransitionTime</code><br>
 <em>
-<a href="https://v1-15.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#time-v1-meta">
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time
 </a>
 </em>
@@ -1217,6 +1593,37 @@ string
 <td>
 <p>Conditions represents the latest observed set of conditions for this component. A component may be one or more of
 Available, Progressing, or Degraded.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.TyphaAffinity">TyphaAffinity
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>TyphaAffinity allows configuration of node affinitiy characteristics for Typha pods.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>nodeAffinity</code><br>
+<em>
+<a href="#operator.tigera.io/v1.PreferredNodeAffinity">
+PreferredNodeAffinity
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeAffinity describes node affinity scheduling rules for typha.</p>
 </td>
 </tr>
 </tbody>

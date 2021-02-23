@@ -15,14 +15,15 @@ command.
 
 ```
 Usage:
-  calicoctl ipam release --ip=<IP> [--config=<CONFIG>]
+  calicoctl ipam release [--ip=<IP>] [--from-report=<REPORT>] [--config=<CONFIG>]
 
 Options:
-  -h --help             Show this screen.
-     --ip=<IP>          IP address to release.
-  -c --config=<CONFIG>  Path to the file containing connection
-                          configuration in YAML or JSON format.
-                          [default: /etc/calico/calicoctl.cfg]
+  -h --help                   Show this screen.
+     --ip=<IP>                IP address to release.
+     --from-report=<REPORT>   Release all leaked addresses from the report.
+  -c --config=<CONFIG>        Path to the file containing connection configuration in
+                              YAML or JSON format.
+                              [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam release command releases an IP address from the Calico IP Address
@@ -39,6 +40,10 @@ Description:
 
 ```bash
 calicoctl ipam release --ip=192.168.1.2
+```
+
+```bash
+calicoctl ipam release --from-report=./report.json
 ```
 
 ### General options

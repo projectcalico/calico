@@ -20,6 +20,7 @@ spec:
   logSeverityScreen: Info
   healthChecks: Enabled
   etcdv3CompactionPeriod: 10m
+  prometheusMetricsPort: 9094
   controllers:
     node:
       reconcilerPeriod: 5m
@@ -53,6 +54,7 @@ spec:
 |------------------------|-----------------------------------------------------------|------------------------------------|--------|------------|
 | logSeverityScreen      | The log severity above which logs are sent to the stdout. | Debug, Info, Warning, Error, Fatal | string | Info       |
 | healthChecks           | Enable support for health checks                          | Enabled, Disabled                  | string | Enabled    |
+| prometheusMetricsPort  | Port on which to serve prometheus metrics.                | Set to 0 to disable, > 0 to enable. | TCP port | 9094 |
 | etcdv3CompactionPeriod | The period between etcdv3 compaction requests. Only applies when using etcd as the {{site.prodname}} datastore. | Set to 0 to disable, > 0 to enable |  [Duration string][parse-duration] | 10m |
 | controllers            | Enabled controllers and their settings                    |                                    | [Controllers](#controllers) | |
 
@@ -92,8 +94,8 @@ The policy controller syncs Kubernetes network policies to the Calico datastore.
 
 #### WorkloadEndpointController
 
-The workload endpoint controller automatically syncs Kubernetes pod label changes to the {{site.prodname}} datastore by updating the corresponding workload 
-endpoints appropriately.  This controller is only valid when using etcd as the {{site.prodname}} datastore. 
+The workload endpoint controller automatically syncs Kubernetes pod label changes to the {{site.prodname}} datastore by updating the corresponding workload
+endpoints appropriately.  This controller is only valid when using etcd as the {{site.prodname}} datastore.
 
 | Field            | Description                                                           | Schema                            | Default |
 |------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
@@ -101,7 +103,7 @@ endpoints appropriately.  This controller is only valid when using etcd as the {
 
 #### ServiceAccountController
 
-The service account controller syncs Kubernetes service account changes to the {{site.prodname}} datastore.  This controller is only valid when using etcd as 
+The service account controller syncs Kubernetes service account changes to the {{site.prodname}} datastore.  This controller is only valid when using etcd as
 the {{site.prodname}} datastore.
 
 | Field            | Description                                                           | Schema                            | Default |

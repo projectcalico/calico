@@ -58,6 +58,8 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 - [Advertise service cluster IP addresses](#advertise-service-cluster-ip-addresses)
 - [Advertise service external IP addresses](#advertise-service-external-ip-addresses)
+- [Advertise service load balancer IP addresses](#advertise-service-load-balancer-ip-addresses)
+- [Exclude certain nodes from advertisement](#exclude-certain-nodes-from-advertisement)
 
 #### Advertise service cluster IP addresses
 
@@ -141,6 +143,84 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    ```
 
    For help see, [BGP configuration resource]({{ site.baseurl }}/reference/resources/bgpconfig).
+
+#### Advertise service load balancer IP addresses
+
+The following steps will configure {{site.prodname}} to advertise Service `status.LoadBalancer.Ingress.IP` addresses.
+
+1. Identify the IP ranges to be used for Service LoadBalancer address allocation.
+
+1. Check to see if you have a default BGPConfiguration.
+
+   ```bash
+   calicoctl get bgpconfig default
+   ```
+
+1. Based on above results, update or create a BGPConfiguration.
+
+   **Update default BGPConfiguration**
+   Patch the BGPConfiguration using the following command, adding your own service load balancer IP CIDRs:
+
+   ```bash
+   calicoctl patch BGPConfig default --patch '{"spec": {"serviceLoadBalancerIPs": [{"cidr": "x.x.x.x/16"}]}}'
+   ```
+
+   **Create default BGPConfiguration**
+   Use the following sample command to create a default BGPConfiguration. Add your CIDR blocks for load balancer IPs to be advertised in the `serviceLoadBalancerIPs` field.
+
+   ```bash
+   calicoctl create -f - <<EOF
+   apiVersion: projectcalico.org/v3
+   kind: BGPConfiguration
+   metadata:
+     name: default
+   spec:
+     serviceLoadBalancerIPs:
+     - cidr: x.x.x.x/16
+   EOF
+   ```
+
+   For help see, [BGP configuration resource]({{ site.baseurl }}/reference/resources/bgpconfig).
+
+Service LoadBalancer address allocation is outside the current scope of {{site.prodname}}, but can be implemented with an external controller.
+You can build your own, or use a third-party implementation like the MetalLB project.
+
+To install the MetalLB controller for allocating addresses, perform the following steps.
+
+1. Follow [the MetalLB documentation](https://metallb.universe.tf/installation/#installation-by-manifest) to install the `metallb-system/controller` resources.
+
+   However, do not install the `metallb-system/speaker` component. The speaker component also attempts to establish BGP sessions on the node, and will conflict with Calico.
+
+1. Configure MetalLB to provision addresses by creating the following config map, replacing `x.x.x.x/16` with the CIDR given to {{site.prodname}} in the steps above.
+
+   ```
+   kubectl create -f - <<EOF
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     namespace: metallb-system
+     name: config
+   data:
+     config: |
+       address-pools:
+       - name: default
+         protocol: bgp
+         addresses:
+         - x.x.x.x/16
+   EOF
+   ```
+
+#### Exclude certain nodes from advertisement
+
+In some cases, you may want to exclude certain nodes from advertising service addresses. For example, control plane nodes that do not host any services themselves.
+
+To remove a node from service advertisement, apply the label `node.kubernetes.io/exclude-from-external-load-balancers=true`.
+
+For example, to exclude the node `control-plane-01` from service advertisement, you can run the following command:
+
+```
+kubectl label node control-plane-01 node.kubernetes.io/exclude-from-external-load-balancers=true
+```
 
 ### Tutorial
 
