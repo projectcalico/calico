@@ -25,7 +25,7 @@ print("[INFO] using chart version for Helm artifact: %s" % chart_version)
 
 def test_calico_release_has_helm_chart():
     req = requests.head(
-        "https://github.com/projectcalico/node/releases/download/%s/tigera-operator-%s-%s.tgz"
+        "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s-%s.tgz"
         % (version, version, chart_version)
     )
     assert req.status_code == 302
