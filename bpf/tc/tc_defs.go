@@ -33,5 +33,5 @@ const (
 	MarkLinuxConntrackEstablished     = MarkCalico | 0x08000000
 	MarkLinuxConntrackEstablishedMask = MarkCalico | 0x08000000
 
-	MarksMask = 0xfff00000
+	MarksMask uint32 = 0xfff00000
 )
