@@ -1,6 +1,6 @@
 ---
 title: Calico Cloud
-description: Learn about Calico Enterprise
+description: Learn about Calico Cloud
 show_read_time: false
 show_toc: false
 show_title: false
