@@ -40,30 +40,31 @@ in general:
 
 ```bash
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v3
-  kind: GlobalNetworkPolicy
-  metadata:
-    name: allow-cluster-internal-ingress
-  spec:
-    order: 10
-    preDNAT: true
-    applyOnForward: true
-    ingress:
-      - action: Allow
-        source:
-          nets: [10.240.0.0/16, 192.168.0.0/16]
-    selector: has(host-endpoint)
-- apiVersion: projectcalico.org/v3
-  kind: GlobalNetworkPolicy
-  metadata:
-    name: drop-other-ingress
-  spec:
-    order: 20
-    preDNAT: true
-    applyOnForward: true
-    ingress:
-      - action: Deny
-    selector: has(host-endpoint)
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-cluster-internal-ingress
+spec:
+  order: 10
+  preDNAT: true
+  applyOnForward: true
+  ingress:
+    - action: Allow
+      source:
+        nets: [10.240.0.0/16, 192.168.0.0/16]
+  selector: has(host-endpoint)
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: drop-other-ingress
+spec:
+  order: 20
+  preDNAT: true
+  applyOnForward: true
+  ingress:
+    - action: Deny
+  selector: has(host-endpoint) 
 EOF
 ```
 
@@ -90,17 +91,17 @@ egress traffic will be allowed from local processes (except for traffic that is
 allowed by the [failsafe rules]({{ site.baseurl }}/reference/host-endpoints/failsafe). Because there is no default-deny
 rule for forwarded traffic, forwarded traffic will be allowed for host endpoints.
 
-```
+```bash
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v3
-  kind: GlobalNetworkPolicy
-  metadata:
-    name: allow-outbound-external
-  spec:
-    order: 10
-    egress:
-      - action: Allow
-    selector: has(host-endpoint)
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-outbound-external
+spec:
+  order: 10
+  egress:
+    - action: Allow
+  selector: has(host-endpoint)
 EOF
 ```
 
@@ -127,15 +128,15 @@ definitions.  For example, for `eth0` on `node1`:
 
 ```bash
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v3
-  kind: HostEndpoint
-  metadata:
-    name: node1-eth0
-    labels:
-      host-endpoint: ingress
-  spec:
-    interfaceName: eth0
-    node: node1
+apiVersion: projectcalico.org/v3
+kind: HostEndpoint
+metadata:
+  name: node1-eth0
+  labels:
+    host-endpoint: ingress
+spec:
+  interfaceName: eth0
+  node: node1
 EOF
 ```
 
@@ -154,21 +155,21 @@ pre-DNAT policy like this:
 
 ```bash
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v3
-  kind: GlobalNetworkPolicy
-  metadata:
-    name: allow-nodeport
-  spec:
-    preDNAT: true
-    applyOnForward: true
-    order: 10
-    ingress:
-      - action: Allow
-        protocol: TCP
-        destination:
-          selector: has(host-endpoint)
-          ports: [31852]
-    selector: has(host-endpoint)
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-nodeport
+spec:
+  preDNAT: true
+  applyOnForward: true
+  order: 10
+  ingress:
+    - action: Allow
+      protocol: TCP
+      destination:
+        selector: has(host-endpoint)
+        ports: [31852]
+  selector: has(host-endpoint)
 EOF
 ```
 

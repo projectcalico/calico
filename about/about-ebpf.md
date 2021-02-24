@@ -122,10 +122,10 @@ While the eBPF dataplane has some features that the standard Linux dataplane lac
 | Other routing             | Supported                               | Supported                          | 
 | Supports third party CNI plugins | Yes (compatible plugins only)    | Yes (compatible plugins only)      |
 | Compatible with other iptables rules | Yes (can write rules above or below other rules) | Partial; iptables bypassed for workload traffic |
+| Host endpoint policy      | Supported                               | Supported (apart from doNotTrack policy) |
+| Enterprise version        | Available                               | Available                          |
 | XDP DoS Protection        | Supported                               | Not supported (yet)                |
 | IPv6                      | Supported                               | Not supported (yet)                |
-| Host endpoint policy      | Supported                               | Not supported (yet)                |
-| Enterprise version        | Available                               | Not supported (yet)                |
 
 #### Architecture overview 
 

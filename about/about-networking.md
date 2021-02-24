@@ -138,7 +138,7 @@ apply to the source or destination IP address, or to both addresses.
 One common use case for NAT is to allow devices with private IP address to talk to devices with public IP address across
 the internet. For example, if a device with a private IP address attempts to connect to a public IP address, then the
 router at the border of the private network will typically use SNAT (Source Network Address Translation) to map the
-private source IP address of tha packet to the router's own public IP address before forwarding it on to the internet.
+private source IP address of the packet to the router's own public IP address before forwarding it on to the internet.
 The router then maps response packets coming in the opposite direction back to the original private IP address, so
 packets flow end-to-end in both directions, with neither source or destination being aware the mapping is happening. The
 same technique is commonly used to allow devices connected to an overlay network to connect with devices outside of the
