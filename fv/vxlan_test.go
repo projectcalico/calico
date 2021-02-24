@@ -43,6 +43,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 	for _, vxlanM := range []api.VXLANMode{api.VXLANModeCrossSubnet} {
 		vxlanMode := vxlanM
 		for _, routeSource := range []string{"CalicoIPAM", "WorkloadIPs"} {
+			routeSource := routeSource
 			Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s", vxlanMode, routeSource), func() {
 				var (
 					infra   infrastructure.DatastoreInfra
