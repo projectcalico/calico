@@ -567,6 +567,9 @@ func (s *Syncer) applyDerived(
 
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP().String()))
 	switch t {
+	case svcTypeLoadBalancer:
+		// Handle LB services the same as NodePort type.
+		fallthrough
 	case svcTypeNodePort:
 		if sinfo.OnlyNodeLocalEndpoints() {
 			count = local // use only local eps
