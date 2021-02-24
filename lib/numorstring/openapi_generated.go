@@ -54,8 +54,9 @@ func schema_projectcalico_libcalico_go_lib_numorstring_Port(ref common.Reference
 					},
 					"portName": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
 						},
 					},
 				},
@@ -73,20 +74,23 @@ func schema_projectcalico_libcalico_go_lib_numorstring_Protocol(ref common.Refer
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
 						},
 					},
 					"numVal": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "byte",
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "byte",
 						},
 					},
 					"strVal": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
 						},
 					},
 				},
@@ -105,20 +109,23 @@ func schema_projectcalico_libcalico_go_lib_numorstring_Uint8OrString(ref common.
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
 						},
 					},
 					"numVal": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "byte",
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "byte",
 						},
 					},
 					"strVal": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
 						},
 					},
 				},
