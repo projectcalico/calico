@@ -12,7 +12,7 @@ order, as follows.
 
 1.  Environment variables.
 2.  The Felix configuration file.
-3.  Host-specific `FelixConfiguration` resources.
+3.  Host-specific `FelixConfiguration` resources (`node.<nodename>`).
 4.  The global `FelixConfiguration` resource (`default`).
 
 The value of any configuration parameter is the value read from the
@@ -21,6 +21,10 @@ contains a value, it takes top precedence.
 
 If not set in any of these locations, most configuration parameters have
 defaults, and it should be rare to have to explicitly set them.
+
+When creating a host-specific `FelixConfiguration` resource called `node.<nodename>`, 
+the `<nodename>` part must match the value for the nodename in the calico 
+datastore - i.e. it must be present in the output of `calicoctl get nodes`
 
 The full list of parameters which can be set is as follows.
 
@@ -129,9 +133,9 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 eBPF dataplane mode uses the Linux Kernel's eBPF virtual machine to implement networking and policy instead of iptables.  When BPFEnabled is set to `true`, Felix will:
 
 * Require a v5.3 Linux kernel.
-* Implement workload endpoint policy with eBPF programs instead of iptables.
+* Implement policy with eBPF programs instead of iptables.
 * Activate its embedded implementation of `kube-proxy` to implement Kubernetes service load balancing.
-* Disable support for IPv6 and host endpoints.
+* Disable support for IPv6.
 
 See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step-by step instructions to enable this feature.
 
@@ -243,7 +247,7 @@ a global setting and a per-host override.
    vim felix.yaml
    ```
    > **Tip**: For a global change set name to "default".
-   > For a node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
+   > For a node-specific change: set name to `node.<nodename>`, e.g. "node.{{site.prodname}}-node-1"
    {: .alert .alert-success}
 
 1. Replace the current felixconfig settings
