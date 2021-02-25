@@ -92,6 +92,12 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   The geeky details of what you get by default:
   {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
+- **AKS**
+
+  The geeky details of what you get by default:
+  {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
+
+
 {% tabs %}
   <label:Kubernetes VXLAN,active:true>
   <%
@@ -351,7 +357,8 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    ```bash
    az provider register --namespace Microsoft.ContainerService
    ```
-l. Create AKS cluster with `network-plugin` set to `azure` and `network-policy` set to `calico`. For example,
+
+1. Create AKS cluster with `network-plugin` set to `azure` and `network-policy` set to `calico`. For example,
 
    ```bash
    az group create -n $your-resource-group -l $your-region
