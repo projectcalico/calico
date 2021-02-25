@@ -49,36 +49,7 @@ section:
     - title: Install Calico for policy and flannel for networking
       path: /getting-started/kubernetes/flannel/flannel
     - title: Migrate a cluster from flannel networking to Calico networking
-      path: /getting-started/kubernetes/flannel/migration-from-flannel     
-  - title: Calico for Windows
-    path: /getting-started/windows-calico/
-    section:
-    - title: Limitations and known issues
-      path: /getting-started/windows-calico/limitations
-    - title: Quickstart
-      path: /getting-started/windows-calico/quickstart
-    - title: Basic policy demo
-      path: /getting-started/windows-calico/demo
-    - title: Kubernetes
-      path: /getting-started/windows-calico/kubernetes/
-      section:
-      - title: Requirements
-        path: /getting-started/windows-calico/kubernetes/requirements
-      - title: Install Calico for Windows
-        path: /getting-started/windows-calico/kubernetes/standard
-      - title: Install Calico for Windows on Rancher RKE
-        path: /getting-started/windows-calico/kubernetes/rancher
-    - title: OpenShift
-      path: /getting-started/windows-calico/openshift/
-      section:
-      - title: Install Calico for Windows on OpenShift
-        path: /getting-started/windows-calico/openshift/installation
-    - title: Create kubeconfig for Windows nodes
-      path: /getting-started/windows-calico/kubeconfig
-    - title: Start and stop Calico for Windows services
-      path: /getting-started/windows-calico/maintain
-    - title: Troubleshoot Calico for Windows
-      path: /getting-started/windows-calico/troubleshoot  
+      path: /getting-started/kubernetes/flannel/migration-from-flannel
   - title: K3s
     path: /getting-started/kubernetes/k3s/
     section:
