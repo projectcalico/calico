@@ -48,7 +48,10 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
       kubectl delete rolebinding calico-install-token --namespace calico-system
       kubectl delete role calico-install-token --namespace calico-system
       ```
-
+- Additionally, for AKS:
+    - {{site.prodnameWindows}} can only be enabled on newly created clusters.
+    - Only support Kubernetes version 1.20+
+    
 **Linux control node requirements**
 - Installed with {{site.prodname}} v3.12+
 - If {{site.prodname}} networking is being used:
@@ -318,6 +321,68 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    ```powershell
    Get-Service -Name kubelet
    Get-Service -Name kube-proxy
+   ```
+%>
+
+<label:AKS>
+<%
+
+1. Register `EnableAKSWindowsCalico` feature flag with the following azure cli commad.
+
+   ```bash
+   az feature register --namespace "Microsoft.ContainerService" --name "EnableAKSWindowsCalico"
+   ```
+
+1. Wait until `EnableAKSWindowsCalico` feature flag is registered successfully. Execute following cli command to get current status of the feature.
+
+   ```bash
+   az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/EnableAKSWindowsCalico')].{Name:name,State:properties.state}"
+   ```
+   
+   Move to next step if you see the same output from above command.
+   ```bash
+   Name                                               State
+   -------------------------------------------------  ----------
+   Microsoft.ContainerService/EnableAKSWindowsCalico  Registered
+   ```   
+
+1. Refresh the registration of the `Microsoft.ContainerService` resource provider. Execute following command.
+
+   ```bash
+   az provider register --namespace Microsoft.ContainerService
+   ```
+l. Create AKS cluster with `network-plugin` set to `azure` and `network-policy` set to `calico`. For example,
+
+   ```bash
+   az group create -n $your-resource-group -l $your-region
+   az aks create \
+    --resource-group $your-resource-group \
+    --name $your-cluster-name \
+    --node-count 1 \
+    --enable-addons monitoring \
+    --windows-admin-username azureuser \
+    --windows-admin-password $your-windows-password \
+    --kubernetes-version 1.20.2 \
+    --vm-set-type VirtualMachineScaleSets \
+    --service-principal $your-service-principal \
+    --client-secret $your-client-secret \
+    --load-balancer-sku standard \
+    --node-vm-size Standard_D2s_v3 \
+    --network-plugin azure \
+    --network-policy calico
+   ```
+
+1. Add Windows node pool. For example,
+
+   ```bash
+   az aks nodepool add \
+    --resource-group $your-resource-group \
+    --cluster-name $your-cluster-name \
+    --os-type Windows \
+    --name $your-windows-node-pool-name \
+    --node-count 1 \
+    --kubernetes-version 1.20.2 \
+    --node-vm-size Standard_D2s_v3
    ```
 %>
 

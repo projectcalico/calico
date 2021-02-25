@@ -120,9 +120,13 @@ In addition, it's important that `kubelet` is started after the vSwitch has been
 
 - Waits for {{site.prodname}} to initialise the vSwitch
 - Starts `kubelet` with
-  - CNI enabled
-  - --hostname-override set to match {{site.prodname}}'s nodename
-  - --node-ip set to the IP of the default vEthernet device
+    - --network-plugin set to `cni`
+    - --cni-bin-dir set to `c:\k\cni`
+    - --cni-conf-dir set to `c:\k\cni\config`
+    - --kubeconfig set to the path of node kubeconfig file
+    - --hostname-override set to match {{site.prodname}}'s nodename	  - --hostname-override set to match {{site.prodname}}'s nodename
+    - --node-ip set to the IP of the default vEthernet device	  - --node-ip set to the IP of the default vEthernet device
+    - --cluster-dns set to the IPs of the dns name servers
 
 See the README in the same directory for more details. Feel free to modify the script to adjust other `kubelet` parameters.
 
