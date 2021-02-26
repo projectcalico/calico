@@ -400,6 +400,9 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		if p.Protocol != nil {
 			protval := kapiv1.Protocol(fmt.Sprintf("%s", *p.Protocol))
 			port.Protocol = &protval
+		} else {
+			protval := kapiv1.ProtocolTCP
+			port.Protocol = &protval
 		}
 		ports = append(ports, &port)
 	}
@@ -430,7 +433,14 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		}
 
 		pStr := protocol.String()
-		protocolPorts[pStr] = append(protocolPorts[pStr], calicoPorts...)
+		// treat nil as 'all ports'
+		if calicoPorts == nil {
+			protocolPorts[pStr] = nil
+		} else if _, ok := protocolPorts[pStr]; !ok || len(protocolPorts[pStr]) > 0 {
+			// don't overwrite a nil (allow all ports) if present; if no ports yet for this protocol
+			// or 1+ ports which aren't 'all ports', then add the present ports
+			protocolPorts[pStr] = append(protocolPorts[pStr], calicoPorts...)
+		}
 	}
 
 	protocols := make([]string, 0, len(protocolPorts))
