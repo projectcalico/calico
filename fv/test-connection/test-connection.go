@@ -358,8 +358,8 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 				Timestamp:  time.Now(),
 				SourceAddr: sourceIPAddr,
 				ServerAddr: remoteIPAddr,
-				Request:    connectivity.Request{
-					Payload:      "Dummy request: TCP handshake only for API server connection testing",
+				Request: connectivity.Request{
+					Payload: "Dummy request: TCP handshake only for API server connection testing",
 				},
 			},
 			Stats: connectivity.Stats{
@@ -379,8 +379,8 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 				Timestamp:  time.Now(),
 				SourceAddr: sourceIPAddr,
 				ServerAddr: remoteIPAddr,
-				Request:    connectivity.Request{
-					Payload:      "Dummy request: TCP handshake only for Typha connection testing",
+				Request: connectivity.Request{
+					Payload: "Dummy request: TCP handshake only for Typha connection testing",
 				},
 			},
 			Stats: connectivity.Stats{

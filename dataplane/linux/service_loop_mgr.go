@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,9 +24,9 @@ import (
 
 // The service loop manager maintains an iptables chain in the filter table whose purpose is to
 // prevent forwarding to IPs within known service CIDRs.  Traffic that arrives on the node with such
-// IPs is supposed to be DNAT'd to an endpoint pod IP by kube-proxy iptables or IPVS rules.  If that
-// doesn't happen, it means that target service IP isn't actually in use; and in that case it's
-// better for us to drop it, to avoid a possible routing loop between this node and this node's
+// IPs is supposed to be DNAT'd to an endpoint pod IP:port by kube-proxy iptables or IPVS rules.  If
+// that doesn't happen, it means that target service IP:port isn't actually in use; and in that case
+// it's better for us to drop it, to avoid a possible routing loop between this node and this node's
 // default gateway.  The specific loop-generating scenario is when Calico is configured to advertise
 // service CIDRs and IPs over BGP: then the default gateway will have a route back to this node, for
 // the service CIDR, and there could be a loop if we allowed non-existent service traffic to be
@@ -66,10 +66,12 @@ func (m *serviceLoopManager) OnUpdate(protoBufMsg interface{}) {
 
 func (m *serviceLoopManager) CompleteDeferredWork() error {
 	if m.pendingGlobalBGPConfig != nil {
-		clusterCIDRs := m.pendingGlobalBGPConfig.GetServiceClusterCidrs()
+		blockedCIDRs := []string{}
+		blockedCIDRs = append(blockedCIDRs, m.pendingGlobalBGPConfig.GetServiceClusterCidrs()...)
+		blockedCIDRs = append(blockedCIDRs, m.pendingGlobalBGPConfig.GetServiceExternalCidrs()...)
 
 		// Render chains for those cluster CIDRs.
-		newFilterChains := m.ruleRenderer.BlockedCIDRsToIptablesChains(clusterCIDRs, m.ipVersion)
+		newFilterChains := m.ruleRenderer.BlockedCIDRsToIptablesChains(blockedCIDRs, m.ipVersion)
 
 		// Update iptables if they have changed.
 		if !reflect.DeepEqual(m.activeFilterChains, newFilterChains) {

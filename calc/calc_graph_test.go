@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018,2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,10 +131,16 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 						CIDR: "fd5f::/120",
 					},
 				},
+				ServiceExternalIPs: []v3.ServiceExternalIPBlock{
+					{
+						CIDR: "255.200.0.0/24",
+					},
+				},
 			},
 		},
 		proto.GlobalBGPConfigUpdate{
-			ServiceClusterCidrs: []string{"1.2.0.0/16", "fd5f::/120"},
+			ServiceClusterCidrs:  []string{"1.2.0.0/16", "fd5f::/120"},
+			ServiceExternalCidrs: []string{"255.200.0.0/24"},
 		},
 		proto.GlobalBGPConfigUpdate{}),
 )
