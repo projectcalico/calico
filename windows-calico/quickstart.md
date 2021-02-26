@@ -49,8 +49,8 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
       kubectl delete role calico-install-token --namespace calico-system
       ```
 - Additionally, for AKS:
-    - {{site.prodnameWindows}} can only be enabled on newly created clusters.
-    - Only support Kubernetes version 1.20+
+    - {{site.prodnameWindows}} can be enabled only on newly created clusters.
+    - Kubernetes version 1.20+
     
 **Linux control node requirements**
 - Installed with {{site.prodname}} v3.12+
@@ -333,32 +333,32 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 <label:AKS>
 <%
 
-1. Register `EnableAKSWindowsCalico` feature flag with the following azure cli commad.
+1. Register the `EnableAKSWindowsCalico` feature flag with the following Azure CLI commad.
 
    ```bash
    az feature register --namespace "Microsoft.ContainerService" --name "EnableAKSWindowsCalico"
    ```
 
-1. Wait until `EnableAKSWindowsCalico` feature flag is registered successfully. Execute following cli command to get current status of the feature.
+1. Wait until the `EnableAKSWindowsCalico` feature flag is registered successfully. Execute following CLI command to get current status of the feature.
 
    ```bash
    az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/EnableAKSWindowsCalico')].{Name:name,State:properties.state}"
    ```
-   
-   Move to next step if you see the same output from above command.
+
+   Move to next step if the output from above command matches the following output.
    ```bash
    Name                                               State
    -------------------------------------------------  ----------
    Microsoft.ContainerService/EnableAKSWindowsCalico  Registered
    ```   
 
-1. Refresh the registration of the `Microsoft.ContainerService` resource provider. Execute following command.
+1. Refresh the registration of the `Microsoft.ContainerService` resource provider. Execute the following command.
 
    ```bash
    az provider register --namespace Microsoft.ContainerService
    ```
 
-1. Create AKS cluster with `network-plugin` set to `azure` and `network-policy` set to `calico`. For example,
+1. Create the AKS cluster with these settings: `network-plugin` to `azure`, and `network-policy` to `calico`. For example,
 
    ```bash
    az group create -n $your-resource-group -l $your-region
@@ -379,7 +379,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
     --network-policy calico
    ```
 
-1. Add Windows node pool. For example,
+1. Add a Windows node pool. For example,
 
    ```bash
    az aks nodepool add \

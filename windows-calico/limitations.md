@@ -12,11 +12,11 @@ canonical_url: '/getting-started/windows-calico/limitations'
 |             | GKE, IKS, OpenStack                                          |
 |             | K3 clusters                                                  |
 |             | Typha component for scaling (Linux-based feature)            |
-|             | ebpf (Linux-based feature)                                   |
+|             | eBPF (Linux-based feature)                                   |
 | Security    | Non-cluster hosts, including automatic host endpoints        |
 |             | Application layer policy (ALP) for Istio                     |
 |             | Encryption with Wireguard                                    |
-| Networking  | Non-overlay mode with BGP peering                            |
+| Networking  | Overlay mode with BGP peering                            |
 |             | IP in IP overlay with BPG routing                            |
 |             | Cross-subnet support and MTU setting for VXLAN               |
 |             | Service IP advertisement                                     |
