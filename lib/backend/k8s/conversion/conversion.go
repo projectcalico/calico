@@ -391,18 +391,15 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		if p.Port != nil {
 			portval := intstr.FromString(p.Port.String())
 			port.Port = &portval
-
-			// TCP is the implicit default (as per the definition of NetworkPolicyPort).
-			// Make the default explicit here because our data-model always requires
-			// the protocol to be specified if we're doing a port match.
-			port.Protocol = &protoTCP
 		}
 		if p.Protocol != nil {
 			protval := kapiv1.Protocol(fmt.Sprintf("%s", *p.Protocol))
 			port.Protocol = &protval
 		} else {
-			protval := kapiv1.ProtocolTCP
-			port.Protocol = &protval
+			// TCP is the implicit default (as per the definition of NetworkPolicyPort).
+			// Make the default explicit here because our data-model always requires
+			// the protocol to be specified if we're doing a port match.
+			port.Protocol = &protoTCP
 		}
 		ports = append(ports, &port)
 	}
@@ -423,7 +420,6 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
 		}
 
-		// These are either both present or both nil
 		if protocol == nil && calicoPorts == nil {
 			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
 			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).

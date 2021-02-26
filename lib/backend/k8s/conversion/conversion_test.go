@@ -1034,7 +1034,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			apiv3.Rule{
 				Action:   "Allow",
 				Protocol: &tcp,
-				Source: apiv3.EntityRule{},
+				Source:   apiv3.EntityRule{},
 				Destination: apiv3.EntityRule{
 					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
@@ -1042,7 +1042,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			apiv3.Rule{
 				Action:   "Allow",
 				Protocol: &udp,
-				Source: apiv3.EntityRule{},
+				Source:   apiv3.EntityRule{},
 				Destination: apiv3.EntityRule{
 					Ports: []numorstring.Port{numorstring.SinglePort(53)},
 				},
