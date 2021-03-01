@@ -25,5 +25,4 @@ require (
 	github.com/ugorji/go v0.0.0-20171019201919-bdcc60b419d1 // indirect
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	google.golang.org/grpc v1.23.1
-	k8s.io/client-go v12.0.0+incompatible // indirect
 )
