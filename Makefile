@@ -45,6 +45,7 @@ POD2DAEMON_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].compone
 DIKASTES_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/dikastes.version')
 FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/flannel-migration-controller.version')
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.typha.version')
+CHART_RELEASE := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].chart.version')
 
 ##############################################################################
 
@@ -62,8 +63,8 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 
 # The following chunk of conditionals sets the Version of the helm chart. 
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
-ifdef CHART_RELEASE
-# the presence of CHART_RELEASE indicates we're trying to cut an official chart release.
+ifdef RELEASE_CHART
+# the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
 chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
 appVersion:=$(CALICO_VER)
 else
@@ -305,9 +306,9 @@ update_canonical_urls:
 
 ## Tags and builds a release from start to finish.
 release: release-prereqs
-	$(MAKE) release-tag
-	$(MAKE) release-build
-	$(MAKE) release-verify
+	$(MAKE) RELEASE_CHART=true release-tag
+	$(MAKE) RELEASE_CHART=true release-build
+	$(MAKE) RELEASE_CHART=true release-verify
 
 	@echo ""
 	@echo "Release build complete. Next, push the release."
@@ -345,7 +346,7 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
-	cp $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
+	cp $(RELEASE_HELM_CHART) $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -377,7 +378,7 @@ endif
 		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
 
 # release-prereqs checks that the environment is configured properly to create a release.
-release-prereqs:
+release-prereqs: charts
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
 		exit 1; fi
@@ -392,6 +393,7 @@ RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
 RELEASE_WINDOWS_ZIP=$(OUTPUT_DIR)/calico-windows-$(NODE_VER).zip
+RELEASE_HELM_CHART=bin/tigera-operator-$(CALICO_VER)-$(CHART_RELEASE).tgz
 
 # Determine where the manifests live. For older versions we used
 # a different location, but we still need to package them up for patch
