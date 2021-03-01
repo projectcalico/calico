@@ -57,6 +57,8 @@ section:
         path: /getting-started/kubernetes/k3s/quickstart
       - title: Multi-node install
         path: /getting-started/kubernetes/k3s/multi-node-install
+  - title: Install with Helm 3
+    path: /getting-started/kubernetes/helm
   - title: MicroK8s
     path: /getting-started/kubernetes/microk8s
   - title: Minikube
