@@ -314,14 +314,14 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 		parts := strings.Split(portStr, ":")
 		if len(parts) > 3 {
 			return nil, p.parseFailed(raw,
-				"ports should be <net>:<protocol>:<number> or <protocol>:<number> or <number>")
+				"ports should be <protocol>:<net>:<number> or <protocol>:<number> or <number>")
 		}
 		protocolStr := "tcp"
 		netStr := "0.0.0.0/0"
 
 		if len(parts) > 2 {
-			netStr = parts[0]
-			protocolStr = strings.ToLower(parts[1])
+			netStr = parts[1]
+			protocolStr = strings.ToLower(parts[0])
 			portStr = parts[2]
 		}
 
