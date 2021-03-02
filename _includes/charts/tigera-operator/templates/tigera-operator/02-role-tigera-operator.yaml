@@ -93,6 +93,7 @@ rules:
     - crd.projectcalico.org
     resources:
     - ippools
+    - kubecontrollersconfigurations
     verbs:
     - get
     - list
