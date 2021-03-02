@@ -40,34 +40,29 @@ exposed via the Kubernetes API defined as a custom resource definition.
 
 1. Go to the Calico [releases page](https://github.com/projectcalico/calico/releases) and find the release you want to install.
 
-1. Download the chart from the release artifacts.  It will have a name like: `tigera-operator-{{page.version}}.0-1.tgz`
+1. [Download the chart](https://github.com/projectcalico/calico/releases/download/{{site.versions[0].title}}/tigera-operator-{{site.versions[0].title}}-{{site.versions[0].chart.version}}.tgz) from the release artifacts.  It will have a name like: `tigera-operator-{{site.versions[0].title}}-{{site.versions[0].chart.version}}.tgz`
 
 #### Customize the Helm chart
-If you are installing on a cluster installed by EKS, GKE, AKS, Openshift or Docker Enterprise, or you need to customize TLS certificates, you must customize this Helm chart.
+If you are installing on a cluster installed by EKS, GKE, AKS, Openshift or Docker Enterprise, or you need to customize TLS certificates, you **must** customize this Helm chart.
 
 Otherwise, you can skip this step.
-If you are installing on a cluster installed by EKS, GKE, AKS, Openshift or Docker Enterprise, you will need to customise this Helm chart.  
 
-You might also need to do this if you want to customise TLS certificates.
-
-Otherwise, this part can be skipped.
-
-1. Run `helm show values tigera-operator-{{page.version}}.0-1.tgz` to see the values that can be customised in the chart.
-
-1. Create a `calico-config.yaml` file based on the output of `helm show values tigera-operator-{{page.version}}.0-1.tgz`.  
-
-1. If you are installing on a cluster installed by EKS, GKE, AKS, Openshift or Docker Enterprise, set the `kubernetesProvider` as described in the [Installation reference](../../reference/installation/api#operator.tigera.io/v1.Provider)
+1. If you are installing on a cluster installed by EKS, GKE, AKS, Openshift or Docker Enterprise, set the `kubernetesProvider` as described in the [Installation reference](../../reference/installation/api#operator.tigera.io/v1.Provider).  For example:
+```
+echo '{installation.kubernetesProvider: EKS}' > values.yaml
+```
+1. Add any other customizations you require to `values.yaml`.  You might like to refer to the [helm docs](https://helm.sh/docs/) or run `helm show values tigera-operator-{{site.versions[0].title}}-{{site.versions[0].chart.version}}.tgz` to see the values that can be customized in the chart.
 
 #### Install {{site.prodname}}
 
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
 
    ```
-   helm install tigera-operator-{{page.version}}.0-1.tgz --generate-name 
+   helm install tigera-operator-{{site.versions[0].title}}-{{site.versions[0].chart.version}}.tgz --generate-name 
    ```
-   or if you created a `calico-config.yaml` above:
+   or if you created a `values.yaml` above:
    ```
-   helm install -f calico-config.yaml tigera-operator-{{page.version}}.0-1.tgz --generate-name 
+   helm install -f values.yaml tigera-operator-{{site.versions[0].title}}-{{site.versions[0].chart.version}}.tgz --generate-name 
    ```
 
 1. Confirm that all of the pods are running with the following command.
