@@ -181,7 +181,7 @@ aws ec2 get-password-data --instance-id <instance id> --priv-launch-key <aws pri
    mkdir c:\k
    ```
 
-1. Copy the Kubernetes kubeconfig file from the master node (default, Location $HOME/.kube/config), to the file **c:\k\config**.
+1. Copy the Kubernetes kubeconfig file (default location: openshift-tigera-install/auth/kubeconfig), to the file **c:\k\config**.
 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
