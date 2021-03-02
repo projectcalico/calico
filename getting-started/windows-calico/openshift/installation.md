@@ -119,6 +119,9 @@ calicoctl ipam configure --strictaffinity=true
 
 Download the latest {% include open-new-window.html text='Windows Node Installer (WNI)' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %} binary `wni` that matches your OpenShift minor version.
 
+> **Note**: For OpenShift 4.6, use the latest wni for OpenShift 4.5. A wni binary for OpenShift 4.6 is not published yet.
+{: .alert .alert-info}
+
 Next, determine the AMI id corresponding to Windows Server 1903 (build 18317) or greater. `wni` defaults to using Windows Server 2019 (build 10.0.17763) which does not include WinDSR support.
 One way to do this is by searching for AMI's matching the string `Windows_Server-1903-English-Core-ContainersLatest` in the Amazon EC2 console
 
@@ -178,7 +181,7 @@ aws ec2 get-password-data --instance-id <instance id> --priv-launch-key <aws pri
    mkdir c:\k
    ```
 
-1. Copy the Kubernetes kubeconfig file from the master node (default, Location $HOME/.kube/config), to the file **c:\k\config**.
+1. Copy the Kubernetes kubeconfig file (default location: openshift-tigera-install/auth/kubeconfig), to the file **c:\k\config**.
 
 1. Download the powershell script, **install-calico-windows.ps1**.
 
@@ -222,6 +225,9 @@ From the Windows node, download the Windows Machine Config Bootstrapper `wmcb.ex
 ```powershell
 curl https://github.com/openshift/windows-machine-config-bootstrapper/releases/download/v4.5.2-alpha/wmcb.exe -o c:\wmcb.exe
 ```
+
+> **Note**: For OpenShift 4.6, use the latest wmcb.exe for OpenShift 4.5. A wmcb.ex binary for OpenShift 4.6 is not published yet.
+{: .alert .alert-info}
 
 Next, we will download the the `worker.ign` file from the API server:
 
