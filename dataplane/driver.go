@@ -169,17 +169,36 @@ func StartDataplaneDriver(configParams *config.Config,
 		if configParams.WireguardEnabled {
 			failsafeInboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeInboundHostPorts)+1)
 			copy(failsafeInboundHostPorts, configParams.FailsafeInboundHostPorts)
-			failsafeInboundHostPorts[len(configParams.FailsafeInboundHostPorts)] = config.ProtoPort{
-				Net: "0.0.0.0/0",
-				Port:     uint16(configParams.WireguardListeningPort),
-				Protocol: "udp",
+
+			var found = false
+			for _, i := range failsafeInboundHostPorts {
+				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
+					found = true
+				}
 			}
+			if !found {
+				failsafeInboundHostPorts[len(configParams.FailsafeInboundHostPorts)] = config.ProtoPort{
+					Net:      "0.0.0.0/0",
+					Port:     uint16(configParams.WireguardListeningPort),
+					Protocol: "udp",
+				}
+			}
+
 			failsafeOutboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeOutboundHostPorts)+1)
 			copy(failsafeOutboundHostPorts, configParams.FailsafeOutboundHostPorts)
-			failsafeOutboundHostPorts[len(configParams.FailsafeOutboundHostPorts)] = config.ProtoPort{
-				Net: "0.0.0.0/0",
-				Port:     uint16(configParams.WireguardListeningPort),
-				Protocol: "udp",
+
+			found = false
+			for _, i := range failsafeOutboundHostPorts {
+				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
+					found = true
+				}
+			}
+			if !found {
+				failsafeOutboundHostPorts[len(configParams.FailsafeOutboundHostPorts)] = config.ProtoPort{
+					Net:      "0.0.0.0/0",
+					Port:     uint16(configParams.WireguardListeningPort),
+					Protocol: "udp",
+				}
 			}
 		}
 
