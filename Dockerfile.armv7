@@ -1,4 +1,4 @@
-# Copyright 2019 Tigera, Inc
+# Copyright 2015-2018 Tigera, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 FROM scratch
 LABEL maintainer "Marc Crebassa <aalaesar@gmail.com>"
 
-ADD bin/kubectl-armhf /usr/bin/kubectl
-ADD bin/kube-controllers-linux-armhf /usr/bin/kube-controllers
-ADD bin/check-status-linux-armhf /usr/bin/check-status
+ADD bin/kube-controllers-linux-armv7 /usr/bin/kube-controllers
+ADD bin/check-status-linux-armv7 /usr/bin/check-status
 ENTRYPOINT ["/usr/bin/kube-controllers"]
