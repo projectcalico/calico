@@ -38,6 +38,7 @@ Container images, when added to a container registry, have a unique hash created
 ### Before you begin
 
 **Required**
+- {{site.prodname}} managed by the operator.
 - Docker client is configured to pull images from the container registries where images are stored. 
 - Kubernetes permissions to apply an ImageSet manifest to your cluster.
 
