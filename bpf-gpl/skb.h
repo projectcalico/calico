@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,49 +25,55 @@
 #include <linux/tcp.h>
 
 #include "bpf.h"
+#include "types.h"
 #include "log.h"
 
-#define skb_start_ptr(skb) ((void *)(long)(skb)->data)
-#define skb_shorter(skb, len) ((void *)(long)(skb)->data + (len) > (void *)(long)skb->data_end)
-#define skb_offset(skb, ptr) ((long)(ptr) - (long)(skb)->data)
-#define skb_has_data_after(skb, ptr, size) (!skb_shorter(skb, skb_offset(skb, ptr) + \
-					     sizeof(*ptr) + (size)))
-#define skb_tail_len(skb, ptr) ((skb)->data_end - (long)ptr)
-#define skb_ptr(skb, off) ((void *)((long)(skb)->data + (off)))
-#define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
-
-#define skb_len_dir_access(skb) skb_tail_len(skb, skb_start_ptr(skb))
-
-#define skb_seen(skb) ((skb)->mark & CALI_SKB_MARK_SEEN)
-
-#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
-#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
-
-static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
-{
-	int min_size;
-	if (CALI_F_IPIP_ENCAPPED) {
-		min_size = ETH_IPV4_UDP_SIZE + sizeof(struct iphdr);
-	} else if (CALI_F_L3) {
-		min_size = IPV4_UDP_SIZE;
-	} else {
-		min_size = ETH_IPV4_UDP_SIZE;
-	}
-	if (skb_shorter(skb, min_size)) {
-		// Try to pull in more data.  Ideally enough for TCP, or, failing that, enough for UDP.
-		if (bpf_skb_pull_data(skb, min_size + sizeof(struct tcphdr) - sizeof(struct udphdr))) {
-			CALI_DEBUG("Pull failed (TCP len)\n");
-			if (bpf_skb_pull_data(skb, min_size)) {
-				CALI_DEBUG("Pull failed (UDP len)\n");
-				return true;
-			}
-		}
-		CALI_DEBUG("Pulled data\n");
-		return skb_shorter(skb, min_size);
-	}
-	return false;
+/* skb_start_ptr is equivalent to (void*)((__u64)skb->data); the read is done
+ * in a way that is acceptable to the verifier and it is done as a volatile read
+ * ensuring that a fresh value is returned and the compiler cannot
+ * reorder/recalculate the value later.
+ */
+static CALI_BPF_INLINE void *skb_start_ptr(struct __sk_buff *skb) {
+	void *ptr;
+	asm volatile (\
+		"%[ptr] = *(u32 *)(%[skb] + %[offset])" \
+		: [ptr] "=r" (ptr) /*out*/ \
+		: [skb] "r" (skb),
+		  [offset] "i" (offsetof(struct __sk_buff, data)) /*in*/ \
+		: /*clobber*/ \
+	);
+	return ptr;
 }
 
+/* skb_end_ptr is equivalent to (void*)((__u64)skb->data_end); the read is done
+ * in a way that is acceptable to the verifier and it is done as a volatile read
+ * ensuring that a fresh value is returned and the compiler cannot
+ * reorder/recalculate the value later.
+ */
+static CALI_BPF_INLINE void *skb_end_ptr(struct __sk_buff *skb) {
+ 	void *ptr;
+ 	asm volatile (\
+		"%[ptr] = *(u32 *)(%[skb] + %[offset])" \
+		: [ptr] "=r" (ptr) /*out*/ \
+		: [skb] "r" (skb),
+		  [offset] "i" (offsetof(struct __sk_buff, data_end)) /*in*/ \
+		: /*clobber*/ \
+	 );
+	return ptr;
+}
+
+/* skb_refresh_start_end refreshes the data_start and data_end pointers in the context.
+ * Fresh values are loaded using skb_start/end_ptr.
+ */
+static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
+	ctx->data_start = skb_start_ptr(ctx->skb);
+	ctx->data_end = skb_end_ptr(ctx->skb);
+}
+
+/* skb_iphdr_offset returns the expected offset of the IP header for this type of program.
+ * For example, in programs attached to L3 tunnel devices, the IP header is at location 0.
+ * Whereas, in L2 programs, it's past the ethernet header.
+ */
 static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
 {
 	if (CALI_F_IPIP_ENCAPPED) {
@@ -83,14 +89,63 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
 	}
 }
 
-static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
+/* skb_refresh_hdr_ptrs refreshes the ip_header/nh fields in the context.
+ */
+static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx)
 {
-	long offset = skb_iphdr_offset(skb);
-	struct iphdr *ip = skb_ptr(skb, offset);
+	long offset = skb_iphdr_offset(ctx->skb);
+	struct iphdr *ip =  ctx->data_start + offset;
 	CALI_DEBUG("IP id=%d s=%x d=%x\n",
 			bpf_ntohs(ip->id), bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
-	return ip;
+	ctx->ip_header = ip;
+	ctx->nh = (void*)(ctx->ip_header+1);
 }
+
+#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
+#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
+
+#define ETH_SIZE (sizeof(struct ethhdr))
+#define IP_SIZE (sizeof(struct iphdr))
+#define UDP_SIZE (sizeof(struct udphdr))
+#define TCP_SIZE (sizeof(struct tcphdr))
+#define ICMP_SIZE (sizeof(struct icmphdr))
+
+/* skb_refresh_validate_ptrs refreshes the packet pointers in the context and validates access
+ * to the IP header + nh_len (next header length) bytes.  If the skb is non-linear; attempts to
+ * pull in that many bytes if needed.  If the pull fails, the packet pointers can be left invalid.
+ *
+ * After a successful validation, returns 0 and the following pointers are valid:
+ * - ctx->data_start/end
+ * - ctx->eth (if this BPF program has access to the L2 header)
+ * - ctx->ip_header
+ * - ctx->nh/tcp_header/udp_header/icp_header.
+ */
+static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
+	int min_size = skb_iphdr_offset(ctx->skb) + IP_SIZE;
+	skb_refresh_start_end(ctx);
+	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
+		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
+		// minimum we've been asked for.
+		if (nh_len > TCP_SIZE || bpf_skb_pull_data(ctx->skb, min_size + TCP_SIZE)) {
+			CALI_DEBUG("Pulling %d bytes.\n", min_size + nh_len);
+			if (bpf_skb_pull_data(ctx->skb, min_size + nh_len)) {
+				CALI_DEBUG("Pull failed (min len)\n");
+				return -1;
+			}
+		}
+		CALI_DEBUG("Pulled data\n");
+		skb_refresh_start_end(ctx);
+		if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
+			return -2;
+		}
+	}
+	// Success, refresh the IP header and next header.
+	skb_refresh_hdr_ptrs(ctx);
+	return 0;
+}
+
+#define skb_ptr_after(skb, ptr) ((void *)((ptr) + 1))
+#define skb_seen(skb) (((skb)->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN)
 
 static CALI_BPF_INLINE long skb_l4hdr_offset(struct __sk_buff *skb, __u8 ihl)
 {

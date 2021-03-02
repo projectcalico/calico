@@ -39,10 +39,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	for _, vxlanM := range []api.VXLANMode{api.VXLANModeCrossSubnet} {
 		vxlanMode := vxlanM
 		for _, routeSource := range []string{"CalicoIPAM", "WorkloadIPs"} {
+			routeSource := routeSource
 			Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s", vxlanMode, routeSource), func() {
 				var (
 					infra   infrastructure.DatastoreInfra

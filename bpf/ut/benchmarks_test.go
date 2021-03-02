@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,13 +31,13 @@ func BenchmarkHEP(b *testing.B) {
 	defer cleanUpMaps()
 
 	// Run once to create conntrack entry
-	setupAndRun(b, "no_log", "calico_from_host_ep", rulesDefaultAllow, func(progName string) {
+	setupAndRun(b, "no_log", "calico_from_host_ep", nil, func(progName string) {
 		res, err := bpftoolProgRun(progName, pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	setupAndRun(b, "no_log", "calico_from_host_ep", rulesDefaultAllow, func(progName string) {
+	setupAndRun(b, "no_log", "calico_from_host_ep", nil, func(progName string) {
 		b.ResetTimer()
 		res, err := bpftoolProgRunN(progName, pktBytes, b.N)
 		b.StopTimer()

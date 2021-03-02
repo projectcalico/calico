@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/onsi/ginkgo"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -41,6 +40,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -67,6 +67,8 @@ type K8sDatastoreInfra struct {
 	// needsCleanup is set when we're told to Stop() in order to trigger deferred cleanup
 	// before the next test.  (If there is no next test, we'll skip the cleanup.)
 	needsCleanup bool
+
+	runningTest string
 }
 
 var (
@@ -129,6 +131,9 @@ func createK8sDatastoreInfra() DatastoreInfra {
 
 func GetK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	if K8sInfra != nil {
+		if K8sInfra.runningTest != "" {
+			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra.runningTest))
+		}
 		K8sInfra.EnsureReady()
 		K8sInfra.PerTestSetup()
 		return K8sInfra, nil
@@ -149,6 +154,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup() {
 		kds.bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
 			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 	}
+	K8sInfra.runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
 
 func runK8sApiserver(etcdIp string) *containers.Container {
@@ -438,8 +444,6 @@ func (kds *K8sDatastoreInfra) EnsureReady() {
 }
 
 func (kds *K8sDatastoreInfra) Stop() {
-	kds.bpfLog.Stop()
-
 	// We don't tear down and recreate the Kubernetes infra between tests because it's
 	// too expensive.  We don't even, immediately, clean up any resources that may
 	// have been left behind by the test that has just finished.  Instead, mark all
@@ -448,6 +452,9 @@ func (kds *K8sDatastoreInfra) Stop() {
 	// run, which is a big win when manually running a single test for debugging.)
 	log.Info("K8sDatastoreInfra told to stop, deferring cleanup...")
 	kds.needsCleanup = true
+	kds.runningTest = ""
+
+	kds.bpfLog.Stop()
 }
 
 type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Interface)

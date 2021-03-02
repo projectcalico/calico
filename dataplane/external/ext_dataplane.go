@@ -183,6 +183,21 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 		envelope.Payload = &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: msg}
 	case *proto.NamespaceRemove:
 		envelope.Payload = &proto.ToDataplane_NamespaceRemove{NamespaceRemove: msg}
+	case *proto.RouteUpdate:
+		envelope.Payload = &proto.ToDataplane_RouteUpdate{RouteUpdate: msg}
+	case *proto.RouteRemove:
+		envelope.Payload = &proto.ToDataplane_RouteRemove{RouteRemove: msg}
+	case *proto.VXLANTunnelEndpointUpdate:
+		envelope.Payload = &proto.ToDataplane_VtepUpdate{VtepUpdate: msg}
+	case *proto.VXLANTunnelEndpointRemove:
+		envelope.Payload = &proto.ToDataplane_VtepRemove{VtepRemove: msg}
+	case *proto.WireguardEndpointUpdate:
+		envelope.Payload = &proto.ToDataplane_WireguardEndpointUpdate{WireguardEndpointUpdate: msg}
+	case *proto.WireguardEndpointRemove:
+		envelope.Payload = &proto.ToDataplane_WireguardEndpointRemove{WireguardEndpointRemove: msg}
+	case *proto.GlobalBGPConfigUpdate:
+		envelope.Payload = &proto.ToDataplane_GlobalBgpConfigUpdate{GlobalBgpConfigUpdate: msg}
+
 	default:
 		log.WithField("msg", msg).Panic("Unknown message type")
 	}

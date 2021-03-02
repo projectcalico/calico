@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ func TestLoadAllowAllProgram(t *testing.T) {
 	Expect(rc.RC).To(BeNumerically("==", -1))
 }
 
-func TestLoadProgramWithMapAcccess(t *testing.T) {
+func TestLoadProgramWithMapAccess(t *testing.T) {
 	RegisterTestingT(t)
 
 	ipsMap := ipsets.Map(&bpf.MapContext{})
@@ -90,12 +90,19 @@ func TestLoadProgramWithMapAcccess(t *testing.T) {
 }
 
 func makeRulesSingleTier(protoRules []*proto.Rule) polprog.Rules {
+
+	polRules := make([]polprog.Rule, len(protoRules))
+
+	for i, r := range protoRules {
+		polRules[i].Rule = r
+	}
+
 	return polprog.Rules{
 		Tiers: []polprog.Tier{{
 			Name: "base tier",
 			Policies: []polprog.Policy{{
 				Name:  "test policy",
-				Rules: protoRules,
+				Rules: polRules,
 			}},
 		}},
 	}
@@ -117,7 +124,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 			Name: "base tier",
 			Policies: []polprog.Policy{{
 				Name: "test policy",
-				Rules: []*proto.Rule{{
+				Rules: []polprog.Rule{{Rule: &proto.Rule{
 					Action:                  "Allow",
 					IpVersion:               4,
 					Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},
@@ -140,7 +147,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 					NotDstIpSetIds:          []string{allocID("s:abcdef123456789l")},
 					NotSrcNamedPortIpSetIds: []string{allocID("n:0bcdef1234567890")},
 					NotDstNamedPortIpSetIds: []string{allocID("n:0bcdef1234567890")},
-				}},
+				}}},
 			}},
 		}}})
 
@@ -203,6 +210,7 @@ func udpPkt(src, dst string) packet {
 func icmpPkt(src, dst string) packet {
 	return packetWithPorts(1, src+":0", dst+":0")
 }
+
 func icmpPktWithTypeCode(src, dst string, icmpType, icmpCode int) packet {
 	return packet{
 		protocol: 1,
@@ -213,6 +221,14 @@ func icmpPktWithTypeCode(src, dst string, icmpType, icmpCode int) packet {
 	}
 }
 
+func packetNoPorts(proto int, src, dst string) packet {
+	return packet{
+		protocol: proto,
+		srcAddr:  src,
+		dstAddr:  dst,
+	}
+}
+
 var polProgramTests = []polProgramTest{
 	// Tests of actions and flow control.
 	{
@@ -220,27 +236,62 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-			icmpPkt("10.0.0.1", "10.0.0.2")},
+			icmpPkt("10.0.0.1", "10.0.0.2"),
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
+		},
+	},
+	{
+		PolicyName: "empty tier has no impact",
+		Policy: polprog.Rules{
+			Tiers: []polprog.Tier{
+				{
+					Name:      "empty tier",
+					EndAction: polprog.TierEndPass, // this would be set by the caller
+				},
+				{
+					Name: "allow",
+					Policies: []polprog.Policy{{
+						Name: "allow all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Allow",
+						}}},
+					}},
+				},
+			},
+		},
+		AllowedPackets: []packet{
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
+			icmpPkt("10.0.0.1", "10.0.0.2"),
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
+		},
 	},
 	{
 		PolicyName: "unreachable tier",
 		Policy: polprog.Rules{
 			Tiers: []polprog.Tier{
 				{
-					Name: "empty tier",
+					Name: "allow all",
+					Policies: []polprog.Policy{{
+						Name: "allow all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Allow",
+						}}},
+					}},
 				},
 				{
 					Name: "unreachable",
 					Policies: []polprog.Policy{{
-						Name: "allow all",
-						Rules: []*proto.Rule{{
-							Action: "Allow",
-						}},
+						Name: "deny all",
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Deny",
+						}}},
 					}},
 				},
 			},
 		},
-		DroppedPackets: []packet{
+		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -253,12 +304,13 @@ var polProgramTests = []polProgramTest{
 					Name: "pass",
 					Policies: []polprog.Policy{{
 						Name:  "pass rule",
-						Rules: []*proto.Rule{{Action: "Pass"}},
+						Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Pass"}}},
 					}},
 				},
 			},
 		},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -271,9 +323,9 @@ var polProgramTests = []polProgramTest{
 					Name: "pass",
 					Policies: []polprog.Policy{{
 						Name: "pass through",
-						Rules: []*proto.Rule{
-							{Action: "Pass"},
-							{Action: "Deny"},
+						Rules: []polprog.Rule{
+							{Rule: &proto.Rule{Action: "Pass"}},
+							{Rule: &proto.Rule{Action: "Deny"}},
 						},
 					}},
 				},
@@ -281,14 +333,15 @@ var polProgramTests = []polProgramTest{
 					Name: "allow",
 					Policies: []polprog.Policy{{
 						Name: "allow all",
-						Rules: []*proto.Rule{
-							{Action: "Allow"},
-						},
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Allow",
+						}}},
 					}},
 				},
 			},
 		},
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -301,9 +354,9 @@ var polProgramTests = []polProgramTest{
 					Name: "pass",
 					Policies: []polprog.Policy{{
 						Name: "pass through",
-						Rules: []*proto.Rule{
-							{Action: "Pass"},
-							{Action: "Allow"},
+						Rules: []polprog.Rule{
+							{Rule: &proto.Rule{Action: "Pass"}},
+							{Rule: &proto.Rule{Action: "Allow"}},
 						},
 					}},
 				},
@@ -311,14 +364,15 @@ var polProgramTests = []polProgramTest{
 					Name: "allow",
 					Policies: []polprog.Policy{{
 						Name: "deny all",
-						Rules: []*proto.Rule{
-							{Action: "Deny"},
-						},
+						Rules: []polprog.Rule{{Rule: &proto.Rule{
+							Action: "Deny",
+						}}},
 					}},
 				},
 			},
 		},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -329,6 +383,7 @@ var polProgramTests = []polProgramTest{
 			Action: "Allow",
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
@@ -360,6 +415,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -371,6 +427,7 @@ var polProgramTests = []polProgramTest{
 			NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -388,6 +445,7 @@ var polProgramTests = []polProgramTest{
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -402,10 +460,12 @@ var polProgramTests = []polProgramTest{
 			SrcNet: []string{"10.0.0.1/32"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
@@ -416,12 +476,14 @@ var polProgramTests = []polProgramTest{
 			SrcNet: []string{"10.0.0.0/8"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "11.0.0.1", "10.0.0.2"),
 			icmpPkt("11.0.0.1", "10.0.0.2")},
 	},
 	{
@@ -431,9 +493,11 @@ var polProgramTests = []polProgramTest{
 			SrcNet: []string{"102.0.0.0/8", "10.0.0.1/32", "11.0.0.1/32"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			icmpPkt("11.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
 	{
@@ -443,8 +507,10 @@ var polProgramTests = []polProgramTest{
 			NotSrcNet: []string{"102.0.0.0/8", "10.0.0.1/32", "11.0.0.1/32"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.2"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			icmpPkt("11.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 	},
@@ -455,8 +521,10 @@ var polProgramTests = []polProgramTest{
 			DstNet: []string{"102.0.0.0/8", "10.0.0.1/32", "11.0.0.1/32"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 	},
 	{
@@ -466,8 +534,10 @@ var polProgramTests = []polProgramTest{
 			NotDstNet: []string{"102.0.0.0/8", "10.0.0.1/32", "11.0.0.1/32"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "123.0.0.1"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
 	{
@@ -477,8 +547,10 @@ var polProgramTests = []polProgramTest{
 			NotSrcNet: []string{"10.0.0.0/8"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.1"),
 			icmpPkt("11.0.0.1", "10.0.0.2")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
@@ -492,9 +564,11 @@ var polProgramTests = []polProgramTest{
 			DstNet: []string{"10.0.0.1/32"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
@@ -507,6 +581,7 @@ var polProgramTests = []polProgramTest{
 			DstNet: []string{"10.0.0.0/8"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
@@ -514,6 +589,7 @@ var polProgramTests = []polProgramTest{
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			icmpPkt("11.0.0.1", "10.0.0.2")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "123.0.0.2"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 	},
 	{
@@ -523,8 +599,10 @@ var polProgramTests = []polProgramTest{
 			NotDstNet: []string{"10.0.0.0/8"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "123.0.0.2"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2"),
@@ -547,6 +625,7 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
@@ -566,6 +645,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.2:81", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:79", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.2:82", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
@@ -585,6 +665,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:0", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:81", "10.0.0.1:31245")},
 	},
 	{
@@ -601,6 +682,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:65535")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:79")},
 	},
 	{
@@ -618,6 +700,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:81"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:90")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.1", "10.0.0.2"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:79"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:82"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:89"),
@@ -640,6 +723,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:89"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:91")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:81"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:90"),
@@ -658,6 +742,7 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
@@ -676,6 +761,7 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
@@ -695,6 +781,7 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:65535")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 	},
 	{
@@ -710,6 +797,7 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
@@ -725,6 +813,7 @@ var polProgramTests = []polProgramTest{
 			SrcIpSetIds: []string{"setA"},
 		}}),
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
@@ -745,6 +834,7 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
@@ -759,12 +849,14 @@ var polProgramTests = []polProgramTest{
 			SrcIpSetIds: []string{"setA"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
 			icmpPkt("10.0.0.1", "10.0.0.2")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.1"),
 			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080")},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.0/8"},
@@ -777,8 +869,10 @@ var polProgramTests = []polProgramTest{
 			DstIpSetIds: []string{"setA"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "11.0.0.1"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.1"),
 			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		IPSets: map[string][]string{
@@ -792,8 +886,10 @@ var polProgramTests = []polProgramTest{
 			NotSrcIpSetIds: []string{"setA"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.1"),
 			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "10.0.0.2", "10.0.0.1"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
 			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),
@@ -810,9 +906,11 @@ var polProgramTests = []polProgramTest{
 			NotDstIpSetIds: []string{"setA"},
 		}}),
 		AllowedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.1"),
 			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),
 			udpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "11.0.0.1"),
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024")},
 		IPSets: map[string][]string{
 			"setA": {"11.0.0.0/8", "123.0.0.1/32"},
@@ -828,10 +926,11 @@ var polProgramTests = []polProgramTest{
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
-			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"), // Wrong port
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Wrong proto
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Src/dest confusion
-			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),   // Wrong dest
+			packetNoPorts(253, "11.0.0.2", "10.0.0.2"), // Wrong proto, no ports
+			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),  // Wrong port
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Wrong proto
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Src/dest confusion
+			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),    // Wrong dest
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80", "123.0.0.1/32,udp:1024"},
@@ -847,10 +946,11 @@ var polProgramTests = []polProgramTest{
 			udpPkt("10.0.0.2:12345", "123.0.0.1:1024"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:80")},
 		DroppedPackets: []packet{
-			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"), // Wrong port
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Wrong proto
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Src/dest confusion
-			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),   // Wrong dest
+			packetNoPorts(253, "11.0.0.2", "10.0.0.2"), // Wrong proto, no ports
+			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),  // Wrong port
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Wrong proto
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Src/dest confusion
+			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),    // Wrong dest
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80"},
@@ -874,10 +974,11 @@ var polProgramTests = []polProgramTest{
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:90"),
 			tcpPkt("10.0.0.1:31245", "10.0.0.2:82")},
 		DroppedPackets: []packet{
-			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"), // Wrong port
-			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Wrong proto
-			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Src/dest confusion
-			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),   // Wrong dest
+			packetNoPorts(253, "11.0.0.2", "10.0.0.2"), // Wrong proto, no ports
+			tcpPkt("11.0.0.1:12345", "10.0.0.2:8080"),  // Wrong port
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Wrong proto
+			tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Src/dest confusion
+			tcpPkt("10.0.0.2:31245", "10.0.0.1:80"),    // Wrong dest
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80"},
@@ -894,10 +995,11 @@ var polProgramTests = []polProgramTest{
 			udpPkt("123.0.0.1:1024", "10.0.0.2:12345"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
-			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"), // Wrong port
-			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Wrong proto
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Src/dest confusion
-			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),   // Wrong src
+			packetNoPorts(253, "10.0.0.2", "10.0.0.2"), // Wrong proto, no ports
+			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"),  // Wrong port
+			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Wrong proto
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Src/dest confusion
+			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),    // Wrong src
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80", "123.0.0.1/32,udp:1024"},
@@ -913,17 +1015,18 @@ var polProgramTests = []polProgramTest{
 			udpPkt("123.0.0.1:1024", "10.0.0.2:12345"),
 			tcpPkt("10.0.0.2:80", "10.0.0.1:31245")},
 		DroppedPackets: []packet{
-			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"), // Wrong port
-			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),   // Wrong proto
-			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),   // Src/dest confusion
-			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),   // Wrong src
+			packetNoPorts(253, "10.0.0.2", "10.0.0.2"), // Wrong proto, no ports
+			tcpPkt("10.0.0.2:8080", "11.0.0.1:12345"),  // Wrong port
+			udpPkt("10.0.0.2:80", "10.0.0.1:31245"),    // Wrong proto
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),    // Src/dest confusion
+			tcpPkt("10.0.0.1:80", "10.0.0.2:31245"),    // Wrong src
 		},
 		IPSets: map[string][]string{
 			"setA": {"10.0.0.2/32,tcp:80"},
 			"setB": {"123.0.0.1/32,udp:1024"},
 		},
 	},
-	//ICMP tests
+	// ICMP tests
 	{
 		PolicyName: "allow icmp packet with type 8",
 		Policy: makeRulesSingleTier([]*proto.Rule{{
@@ -933,6 +1036,7 @@ var polProgramTests = []polProgramTest{
 		AllowedPackets: []packet{
 			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 0)},
 		DroppedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.2"), // Wrong proto
 			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0)},
 	},
 	{
@@ -972,6 +1076,297 @@ var polProgramTests = []polProgramTest{
 		DroppedPackets: []packet{
 			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)},
 	},
+	// Generic protocol tests.
+	{
+		PolicyName: "Protocol match",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 253}},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.2"),
+		},
+		DroppedPackets: []packet{
+			icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 10, 0),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			packetNoPorts(254, "11.0.0.2", "10.0.0.2"),
+		},
+	},
+}
+
+var hostPolProgramTests = []polProgramTest{
+	{
+		PolicyName: "no policy",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "pre-DNAT",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostPreDnatTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.96.0.10"),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+		},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "11.0.0.2", "10.0.0.10"),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+		},
+	},
+	{
+		PolicyName: "apply-on-forward",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "normal host policy",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "AoF + normal",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p2", "10.96.5.0/24"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").fromHost(),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+		},
+	},
+	{
+		PolicyName: "AoF + suppressed normal",
+		Policy: polprog.Rules{
+			ForHostInterface: false,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p2", "10.96.5.0/24"),
+			}},
+			SuppressNormalHostPolicy: true,
+			// Workload policy.
+			Tiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			// Allowed by workload and AoF host policy.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			// Allowed by workload policy, normal host policy suppressed.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+		},
+		DroppedPackets: []packet{
+			// Denied by workload policy.
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").fromHost(),
+		},
+	},
+	{
+		PolicyName: "pre-DNAT policy + normal profiles",
+		Policy: polprog.Rules{
+			ForHostInterface: true,
+			HostPreDnatTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDest("p1", "10.96.0.10/32"),
+			}},
+			HostProfiles: allowDest("p2", "10.96.5.0/24"),
+		},
+		AllowedPackets: []packet{
+			// Allowed by pre-DNAT policy.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			// Passed by pre-DNAT policy.  No AoF policy.
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53"),
+			// Passed by pre-DNAT policy.  Allowed by normal profile.
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.5.10:53").fromHost(),
+			// Allowed by pre-DNAT policy.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+		},
+		DroppedPackets: []packet{
+			// Passed by pre-DNAT policy.  Denied by normal profile.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "pre-DNAT + workload",
+		Policy: polprog.Rules{
+			ForHostInterface: false,
+			HostPreDnatTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDest("p1", "10.96.0.10/31"),
+			}},
+			// Workload policy.
+			Tiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "deny",
+				Policies:  allowDest("p1", "10.96.0.10/32"),
+			}},
+			SuppressNormalHostPolicy: true,
+		},
+		AllowedPackets: []packet{
+			// Allowed by pre-DNAT and workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			// Passed by pre-DNAT.  Allowed by workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+		},
+		DroppedPackets: []packet{
+			// Allowed by pre-DNAT.  Denied by workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53").fromHost(),
+			// Allowed pre-DNAT.  Post-NAT IP denied by workload.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.10:53").fromHost(),
+			// Passed by pre-DNAT.  Post-NAT IP denied by workload.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+		},
+	},
+	{
+		PolicyName: "AoF + workload",
+		Policy: polprog.Rules{
+			ForHostInterface: false,
+			HostForwardTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.11/32"),
+			}},
+			// Workload policy.
+			Tiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "deny",
+				Policies:  allowDest("p1", "10.96.0.10/31"),
+			}},
+			SuppressNormalHostPolicy: true,
+		},
+		AllowedPackets: []packet{
+			// Allowed by AoF and workload.
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+			// Allowed by workload; normal host policy suppressed.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").toHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").fromHost(),
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53").preNAT("10.0.0.2:12345").toHost(),
+		},
+		DroppedPackets: []packet{
+			// Denied by AoF.
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+			// Allowed by AoF.  Denied by workload.
+			udpPkt("123.0.0.1:1024", "10.0.0.2:12345").preNAT("10.96.0.11:53").toHost(),
+		},
+	},
+}
+
+func allowDestElseDeny(name, dst string) []polprog.Policy {
+	return []polprog.Policy{{
+		Name: name,
+		Rules: []polprog.Rule{{
+			Rule: &proto.Rule{
+				Action: "Allow",
+				DstNet: []string{dst},
+			}}, {
+			Rule: &proto.Rule{
+				Action: "Deny",
+			}},
+		}},
+	}
+}
+
+func allowDest(name, dst string) []polprog.Policy {
+	return []polprog.Policy{{
+		Name: name,
+		Rules: []polprog.Rule{{
+			Rule: &proto.Rule{
+				Action: "Allow",
+				DstNet: []string{dst},
+			}},
+		}},
+	}
 }
 
 // polProgramTestWrapper allows to keep polProgramTest intact as well as the tests that
@@ -1017,6 +1412,12 @@ func TestPolicyPrograms(t *testing.T) {
 	}
 }
 
+func TestHostPolicyPrograms(t *testing.T) {
+	for i, p := range hostPolProgramTests {
+		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), func(t *testing.T) { runTest(t, wrap(p)) })
+	}
+}
+
 type polProgramTest struct {
 	PolicyName     string
 	Policy         polprog.Rules
@@ -1031,6 +1432,32 @@ type packet struct {
 	srcPort  int
 	dstAddr  string
 	dstPort  int
+
+	preNATDstAddr string
+	preNATDstPort int
+	fromHostFlag  bool
+	toHostFlag    bool
+}
+
+func (p packet) preNAT(dst string) packet {
+	var err error
+	parts := strings.Split(dst, ":")
+	p.preNATDstAddr = parts[0]
+	p.preNATDstPort, err = strconv.Atoi(parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+func (p packet) fromHost() packet {
+	p.fromHostFlag = true
+	return p
+}
+
+func (p packet) toHost() packet {
+	p.toHostFlag = true
+	return p
 }
 
 func (p packet) String() string {
@@ -1043,10 +1470,36 @@ func (p packet) String() string {
 	case 1:
 		protoName = "icmp"
 	}
-	return fmt.Sprintf("%s-%s:%d->%s:%d", protoName, p.srcAddr, p.srcPort, p.dstAddr, p.dstPort)
+	preNAT := ""
+	if p.preNATDstAddr != "" {
+		preNAT = fmt.Sprintf("%s:%d->", p.preNATDstAddr, p.preNATDstPort)
+	}
+	fromHost := ""
+	if p.fromHostFlag {
+		fromHost = "(H)"
+	}
+	toHost := ""
+	if p.toHostFlag {
+		toHost = "(H)"
+	}
+	return fmt.Sprintf("%s-%s%s:%d->%s%s%s:%d", protoName, p.srcAddr, fromHost, p.srcPort, preNAT, p.dstAddr, toHost, p.dstPort)
 }
 
 func (p packet) StateIn() state.State {
+	preNATDstAddr := p.dstAddr
+	preNATDstPort := p.dstPort
+	if p.preNATDstAddr != "" {
+		preNATDstAddr = p.preNATDstAddr
+		preNATDstPort = p.preNATDstPort
+	}
+	flags := uint8(0)
+	if p.fromHostFlag {
+		flags |= polprog.FlagSrcIsHost
+	}
+	if p.toHostFlag {
+		flags |= polprog.FlagDestIsHost
+	}
+
 	if uint8(p.protocol) == 1 {
 		return state.State{
 			IPProto:        uint8(p.protocol),
@@ -1054,6 +1507,9 @@ func (p packet) StateIn() state.State {
 			PostNATDstAddr: ipUintFromString(p.dstAddr),
 			SrcPort:        uint16(p.srcPort),
 			DstPort:        uint16(p.dstPort),
+			PreNATDstAddr:  ipUintFromString(preNATDstAddr),
+			PreNATDstPort:  uint16(preNATDstPort),
+			Flags:          flags,
 		}
 	}
 	return state.State{
@@ -1062,6 +1518,9 @@ func (p packet) StateIn() state.State {
 		PostNATDstAddr: ipUintFromString(p.dstAddr),
 		SrcPort:        uint16(p.srcPort),
 		PostNATDstPort: uint16(p.dstPort),
+		PreNATDstAddr:  ipUintFromString(preNATDstAddr),
+		PreNATDstPort:  uint16(preNATDstPort),
+		Flags:          flags,
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,15 +29,15 @@ import (
 	"github.com/projectcalico/felix/proto"
 )
 
-var rulesAllowUDP = polprog.Rules{
+var rulesAllowUDP = &polprog.Rules{
 	Tiers: []polprog.Tier{{
 		Name: "base tier",
 		Policies: []polprog.Policy{{
 			Name: "allow all udp",
-			Rules: []*proto.Rule{{
+			Rules: []polprog.Rule{{Rule: &proto.Rule{
 				Action:   "Allow",
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
-			}},
+			}}},
 		}},
 	}},
 }

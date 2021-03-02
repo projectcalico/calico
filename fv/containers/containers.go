@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -609,6 +610,13 @@ func (c *Container) Exec(cmd ...string) {
 	utils.Run("docker", arg...)
 }
 
+func (c *Container) ExecWithInput(input []byte, cmd ...string) {
+	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
+	arg := []string{"exec", "-i", c.Name}
+	arg = append(arg, cmd...)
+	utils.RunWithInput(input, "docker", arg...)
+}
+
 func (c *Container) ExecMayFail(cmd ...string) error {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
@@ -669,4 +677,116 @@ func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity
 // AttachTCPDump returns tcpdump attached to the container
 func (c *Container) AttachTCPDump(iface string) *tcpdump.TCPDump {
 	return tcpdump.AttachUnavailable(c.Name, c.GetID(), iface)
+}
+
+// NumTCBPFProgs Returns the number of TC BPF programs attached to the given interface.  Only direct-action
+// programs are listed (i.e. the type that we use).
+func (c *Container) NumTCBPFProgs(ifaceName string) int {
+	var total int
+	for _, dir := range []string{"ingress", "egress"} {
+		out, err := c.ExecOutput("tc", "filter", "show", "dev", ifaceName, dir)
+		Expect(err).NotTo(HaveOccurred())
+		count := strings.Count(out, "direct-action")
+		log.Debugf("Output from tc filter show for %s, dir=%s: %q (count=%d)", c.Name, dir, out, count)
+		total += count
+	}
+	return total
+}
+
+// NumTCBPFProgs Returns the number of TC BPF programs attached to eth0.  Only direct-action programs are
+// listed (i.e. the type that we use).
+func (c *Container) NumTCBPFProgsEth0() int {
+	return c.NumTCBPFProgs("eth0")
+}
+
+// BPFRoutes returns the output of calico-bpf routes dump, trimmed of whitespace and sorted.
+func (c *Container) BPFRoutes() string {
+	out, err := c.ExecOutput("calico-bpf", "routes", "dump")
+	if err != nil {
+		log.WithError(err).Error("Failed to run calico-bpf")
+	}
+
+	lines := strings.Split(out, "\n")
+	var filteredLines []string
+	for _, l := range lines {
+		l = strings.TrimLeft(l, " ")
+		if len(l) == 0 {
+			continue
+		}
+		filteredLines = append(filteredLines, l)
+	}
+	sort.Strings(filteredLines)
+	return strings.Join(filteredLines, "\n")
+}
+
+// BPFNATDump returns parsed out NAT maps keyed by "<ip> port <port> proto <proto>". Each
+// value is list of "<ip>:<port>".
+func (c *Container) BPFNATDump() map[string][]string {
+	out, err := c.ExecOutput("calico-bpf", "nat", "dump")
+	if err != nil {
+		log.WithError(err).Error("Failed to run calico-bpf")
+	}
+
+	feMatch := regexp.MustCompile(`(.* port \d+ proto \d+) id (\d+) count.*`)
+
+	lines := strings.Split(out, "\n")
+	front := ""
+	id := ""
+	back := []string(nil)
+	nat := make(map[string][]string)
+
+	var beMatch *regexp.Regexp
+
+	for _, l := range lines {
+		if front != "" {
+			if be := beMatch.FindStringSubmatch(l); be != nil {
+				back = append(back, be[1])
+			} else {
+				nat[front] = back
+				back = []string(nil)
+				front = ""
+			}
+		}
+
+		if front == "" {
+			if fe := feMatch.FindStringSubmatch(l); fe == nil {
+				continue
+			} else {
+				front = fe[1]
+				id = fe[2]
+				beMatch = regexp.MustCompile("\\s+" + id + ":\\d+\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+)")
+			}
+		}
+
+	}
+
+	if front != "" {
+		nat[front] = back
+	}
+
+	return nat
+}
+
+// BPFNATHasBackendForService returns true is the given service has the given backend programed in NAT tables
+func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
+	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
+	back := fmt.Sprintf("%s:%d", ip, port)
+
+	nat := c.BPFNATDump()
+	if natBack, ok := nat[front]; ok {
+		found := false
+		for _, b := range natBack {
+			if b == back {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	} else {
+		return false
+	}
+
+	return true
 }

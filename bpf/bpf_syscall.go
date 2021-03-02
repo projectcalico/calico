@@ -312,6 +312,15 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 	return nil
 }
 
+func DeleteMapEntryIfExists(mapFD MapFD, k []byte, valueSize int) error {
+	err := DeleteMapEntry(mapFD, k, valueSize)
+	if err == unix.ENOENT {
+		// Delete failed because entry did not exist.
+		err = nil
+	}
+	return err
+}
+
 // Batch size established by trial and error; 8-32 seemed to be the sweet spot for the conntrack map.
 const MapIteratorNumKeys = 16
 

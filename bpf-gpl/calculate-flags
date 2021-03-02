@@ -50,8 +50,6 @@ fi
 
 if [[ "${filename}" =~ test_.* ]]; then
   args+=("-D__BPFTOOL_LOADER__")
-  args+=("-DCALI_VXLAN_PORT=5665")
-  args+=("-DCALI_NAT_TUNNEL_MTU=700")
 fi
 
 flags=0
@@ -67,7 +65,7 @@ flags=0
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
   ((flags |= CALI_TC_HOST_EP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="host"
 elif [[ "${filename}" =~ .*tnl.* ]]; then
   # Tunnel.

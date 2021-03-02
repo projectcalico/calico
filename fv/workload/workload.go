@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -146,10 +146,8 @@ func (w *Workload) Start() error {
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
 	var protoArg string
-	if w.Protocol == "udp" {
-		protoArg = "--udp"
-	} else if w.Protocol == "sctp" {
-		protoArg = "--sctp"
+	if w.Protocol != "" {
+		protoArg = "--protocol=" + w.Protocol
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
@@ -353,6 +351,10 @@ func (w *Workload) Port(port uint16) *Port {
 func (w *Workload) NamespaceID() string {
 	splits := strings.Split(w.namespacePath, "/")
 	return splits[len(splits)-1]
+}
+
+func (w *Workload) NamespacePath() string {
+	return w.namespacePath
 }
 
 func (w *Workload) Exec(args ...string) {
@@ -684,4 +686,13 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 		Port:       fmt.Sprint(p.Port),
 		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
 	}
+}
+
+func (w *Workload) InterfaceIndex() int {
+	out, err := w.C.ExecOutput("ip", "link", "show", "dev", w.InterfaceName)
+	Expect(err).NotTo(HaveOccurred())
+	ifIndex, err := strconv.Atoi(strings.SplitN(out, ":", 2)[0])
+	Expect(err).NotTo(HaveOccurred())
+	log.Infof("%v is ifindex %v", w.InterfaceName, ifIndex)
+	return ifIndex
 }

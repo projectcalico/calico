@@ -1,5 +1,5 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
-//
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -647,6 +647,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 			routeTable      *mockRouteTable
 			mockProcSys     *testProcSys
 			statusReportRec *statusReportRecorder
+			hepListener     *testHEPListener
 		)
 
 		BeforeEach(func() {
@@ -686,6 +687,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 			}
 			mockProcSys = &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
 			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}}
+			hepListener = &testHEPListener{}
 			epMgr = newEndpointManagerWithShims(
 				rawTable,
 				mangleTable,
@@ -700,6 +702,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				mockProcSys.write,
 				mockProcSys.stat,
 				false,
+				hepListener,
 				newCallbacks(),
 			)
 		})
@@ -768,7 +771,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 						ExpectedIpv6Addrs: spec.ipv6Addrs,
 					},
 				})
-				err := epMgr.CompleteDeferredWork()
+				err := epMgr.ResolveUpdateBatch()
+				Expect(err).ToNot(HaveOccurred())
+				err = epMgr.CompleteDeferredWork()
 				Expect(err).ToNot(HaveOccurred())
 			}
 		}
@@ -813,7 +818,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 						EndpointId: id,
 					},
 				})
-				err := epMgr.CompleteDeferredWork()
+				err := epMgr.ResolveUpdateBatch()
+				Expect(err).ToNot(HaveOccurred())
+				err = epMgr.CompleteDeferredWork()
 				Expect(err).ToNot(HaveOccurred())
 			}
 		}
@@ -836,13 +843,35 @@ func endpointManagerTests(ipVersion uint8) func() {
 					Name:  "lo",
 					Addrs: loAddrs,
 				})
-				err := epMgr.CompleteDeferredWork()
+				err := epMgr.ResolveUpdateBatch()
+				Expect(err).ToNot(HaveOccurred())
+				err = epMgr.CompleteDeferredWork()
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should have empty dispatch chains", expectEmptyChains())
 			It("should make no status reports", func() {
 				Expect(statusReportRec.currentState).To(BeEmpty())
+			})
+
+			Describe("with * host endpoint", func() {
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:      "id1",
+					name:    "*",
+					polName: "polA",
+				}))
+
+				It("should report id1 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id1"}: "up",
+					}))
+				})
+
+				It("should define host endpoints", func() {
+					Expect(hepListener.state).To(Equal(map[string]string{
+						"any-interface-at-all": "profiles=,normal=I=polA,E=polA,untracked=,preDNAT=,AoF=",
+					}))
+				})
 			})
 
 			// Configure host endpoints with tier names here, so we can check which of
@@ -862,6 +891,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}))
 				})
 
+				It("should define host endpoints", func() {
+					Expect(hepListener.state).To(Equal(map[string]string{
+						"eth0": "profiles=,normal=I=polA,E=polA,untracked=,preDNAT=,AoF=",
+					}))
+				})
+
 				Context("with another host ep (>ID) that matches the IPv4 address", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:        "id2",
@@ -876,6 +911,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						}))
 					})
 
+					It("should define host endpoints", func() {
+						Expect(hepListener.state).To(Equal(map[string]string{
+							"eth0": "profiles=,normal=I=polA,E=polA,untracked=,preDNAT=,AoF=",
+						}))
+					})
+
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
 						It("should have expected chains", expectChainsFor("eth0_polB"))
@@ -884,9 +925,20 @@ func endpointManagerTests(ipVersion uint8) func() {
 								proto.HostEndpointID{EndpointId: "id2"}: "up",
 							}))
 						})
+
+						It("should define host endpoints", func() {
+							Expect(hepListener.state).To(Equal(map[string]string{
+								"eth0": "profiles=,normal=I=polB,E=polB,untracked=,preDNAT=,AoF=",
+							}))
+						})
+
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id2"))
 							It("should have empty dispatch chains", expectEmptyChains())
+
+							It("should define host endpoints", func() {
+								Expect(hepListener.state).To(BeEmpty())
+							})
 						})
 					})
 				})
@@ -905,6 +957,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						}))
 					})
 
+					It("should define host endpoints", func() {
+						Expect(hepListener.state).To(Equal(map[string]string{
+							"eth0": "profiles=,normal=I=polB,E=polB,untracked=,preDNAT=,AoF=",
+						}))
+					})
+
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
 						It("should have expected chains", expectChainsFor("eth0_polB"))
@@ -914,12 +972,22 @@ func endpointManagerTests(ipVersion uint8) func() {
 							}))
 						})
 
+						It("should define host endpoints", func() {
+							Expect(hepListener.state).To(Equal(map[string]string{
+								"eth0": "profiles=,normal=I=polB,E=polB,untracked=,preDNAT=,AoF=",
+							}))
+						})
+
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id0"))
 							It("should have empty dispatch chains", expectEmptyChains())
 
 							It("should remove all status reports", func() {
 								Expect(statusReportRec.currentState).To(BeEmpty())
+							})
+
+							It("should define host endpoints", func() {
+								Expect(hepListener.state).To(BeEmpty())
 							})
 						})
 					})
@@ -932,6 +1000,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						polName: "polA_untracked",
 					}))
 					It("should have expected chains", expectChainsFor("eth0_polA_untracked"))
+
+					It("should define host endpoints", func() {
+						Expect(hepListener.state).To(Equal(map[string]string{
+							"eth0": "profiles=,normal=,untracked=I=polA,E=polA,preDNAT=,AoF=",
+						}))
+					})
 				})
 
 				Describe("replaced with applyOnForward version", func() {
@@ -941,6 +1015,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						polName: "polA_applyOnForward",
 					}))
 					It("should have expected chains", expectChainsFor("eth0_polA_applyOnForward"))
+
+					It("should define host endpoints", func() {
+						Expect(hepListener.state).To(Equal(map[string]string{
+							"eth0": "profiles=,normal=,untracked=,preDNAT=,AoF=I=polA,E=polA",
+						}))
+					})
 				})
 
 				Describe("replaced with pre-DNAT version", func() {
@@ -950,6 +1030,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						polName: "polA_preDNAT",
 					}))
 					It("should have expected chains", expectChainsFor("eth0_polA_preDNAT"))
+
+					It("should define host endpoints", func() {
+						Expect(hepListener.state).To(Equal(map[string]string{
+							"eth0": "profiles=,normal=,untracked=,preDNAT=I=polA,E=,AoF=",
+						}))
+					})
 				})
 
 				Describe("replaced with ingress-only version", func() {
@@ -959,6 +1045,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						polName: "polA_ingress",
 					}))
 					It("should have expected chains", expectChainsFor("eth0_polA_ingress"))
+
+					It("should define host endpoints", func() {
+						Expect(hepListener.state).To(Equal(map[string]string{
+							"eth0": "profiles=,normal=I=polA,E=,untracked=,preDNAT=,AoF=",
+						}))
+					})
 				})
 
 				Describe("replaced with egress-only version", func() {
@@ -968,6 +1060,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						polName: "polA_egress",
 					}))
 					It("should have expected chains", expectChainsFor("eth0_polA_egress"))
+
+					It("should define host endpoints", func() {
+						Expect(hepListener.state).To(Equal(map[string]string{
+							"eth0": "profiles=,normal=I=,E=polA,untracked=,preDNAT=,AoF=",
+						}))
+					})
 				})
 			})
 
@@ -1137,7 +1235,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
-						err := epMgr.CompleteDeferredWork()
+						err := epMgr.ResolveUpdateBatch()
+						Expect(err).ToNot(HaveOccurred())
+						err = epMgr.CompleteDeferredWork()
 						Expect(err).ToNot(HaveOccurred())
 					})
 
@@ -1341,7 +1441,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Name:  "eth0",
 						Addrs: eth0Addrs,
 					})
-					err := epMgr.CompleteDeferredWork()
+					err := epMgr.ResolveUpdateBatch()
+					Expect(err).ToNot(HaveOccurred())
+					err = epMgr.CompleteDeferredWork()
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should have expected chains", expectChainsFor("eth0"))
@@ -1394,7 +1496,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Ipv6Nets:   []string{"2001:db8:2::2/128"},
 						},
 					})
-					err := epMgr.CompleteDeferredWork()
+					err := epMgr.ResolveUpdateBatch()
+					Expect(err).ToNot(HaveOccurred())
+					err = epMgr.CompleteDeferredWork()
 					Expect(err).ToNot(HaveOccurred())
 				})
 
@@ -1428,7 +1532,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
 							})
-							err := epMgr.CompleteDeferredWork()
+							err := epMgr.ResolveUpdateBatch()
+							Expect(err).ToNot(HaveOccurred())
+							err = epMgr.CompleteDeferredWork()
 							Expect(err).ToNot(HaveOccurred())
 						})
 
@@ -1440,7 +1546,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 								epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 									Id: &wlEPID1,
 								})
-								err := epMgr.CompleteDeferredWork()
+								err := epMgr.ResolveUpdateBatch()
+								Expect(err).ToNot(HaveOccurred())
+								err = epMgr.CompleteDeferredWork()
 								Expect(err).ToNot(HaveOccurred())
 							})
 
@@ -1456,7 +1564,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EndpointId:     "endpoint-id-11",
 										},
 									})
-									err := epMgr.CompleteDeferredWork()
+									err := epMgr.ResolveUpdateBatch()
+									Expect(err).ToNot(HaveOccurred())
+									err = epMgr.CompleteDeferredWork()
 									Expect(err).ToNot(HaveOccurred())
 								})
 
@@ -1484,7 +1594,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
 							})
-							err := epMgr.CompleteDeferredWork()
+							err := epMgr.ResolveUpdateBatch()
+							Expect(err).ToNot(HaveOccurred())
+							err = epMgr.CompleteDeferredWork()
 							Expect(err).ToNot(HaveOccurred())
 						})
 
@@ -1496,7 +1608,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 								epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 									Id: &wlEPID1,
 								})
-								err := epMgr.CompleteDeferredWork()
+								err := epMgr.ResolveUpdateBatch()
+								Expect(err).ToNot(HaveOccurred())
+								err = epMgr.CompleteDeferredWork()
 								Expect(err).ToNot(HaveOccurred())
 							})
 
@@ -1512,7 +1626,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EndpointId:     "endpoint-id-11",
 										},
 									})
-									err := epMgr.CompleteDeferredWork()
+									err := epMgr.ResolveUpdateBatch()
+									Expect(err).ToNot(HaveOccurred())
+									err = epMgr.CompleteDeferredWork()
 									Expect(err).ToNot(HaveOccurred())
 								})
 
@@ -1576,7 +1692,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "cali12345-ab",
 							Addrs: set.New(),
 						})
-						err := epMgr.CompleteDeferredWork()
+						err := epMgr.ResolveUpdateBatch()
+						Expect(err).ToNot(HaveOccurred())
+						err = epMgr.CompleteDeferredWork()
 						Expect(err).ToNot(HaveOccurred())
 					})
 					It("should report the interface in error", func() {
@@ -1596,7 +1714,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "cali12345-ab",
 							Addrs: set.New(),
 						})
-						err := epMgr.CompleteDeferredWork()
+						err := epMgr.ResolveUpdateBatch()
+						Expect(err).ToNot(HaveOccurred())
+						err = epMgr.CompleteDeferredWork()
 						Expect(err).ToNot(HaveOccurred())
 					})
 
@@ -1647,7 +1767,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 									},
 								},
 							})
-							err := epMgr.CompleteDeferredWork()
+							err := epMgr.ResolveUpdateBatch()
+							Expect(err).ToNot(HaveOccurred())
+							err = epMgr.CompleteDeferredWork()
 							Expect(err).ToNot(HaveOccurred())
 						})
 
@@ -1693,7 +1815,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 								Id: &wlEPID1,
 							})
-							err := epMgr.CompleteDeferredWork()
+							err := epMgr.ResolveUpdateBatch()
+							Expect(err).ToNot(HaveOccurred())
+							err = epMgr.CompleteDeferredWork()
 							Expect(err).ToNot(HaveOccurred())
 						})
 
@@ -1729,7 +1853,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
 							})
-							err := epMgr.CompleteDeferredWork()
+							err := epMgr.ResolveUpdateBatch()
+							Expect(err).ToNot(HaveOccurred())
+							err = epMgr.CompleteDeferredWork()
 							Expect(err).ToNot(HaveOccurred())
 						})
 
@@ -1780,7 +1906,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Ipv6Nets:   []string{"2001:db8:2::2/128"},
 						},
 					})
-					err := epMgr.CompleteDeferredWork()
+					err := epMgr.ResolveUpdateBatch()
+					Expect(err).ToNot(HaveOccurred())
+					err = epMgr.CompleteDeferredWork()
 					Expect(err).ToNot(HaveOccurred())
 				})
 
@@ -1860,4 +1988,29 @@ func (t *testProcSys) stat(path string) (os.FileInfo, error) {
 
 func (t *testProcSys) checkState(expected map[string]string) {
 	Expect(t.state).To(Equal(expected))
+}
+
+type testHEPListener struct {
+	state map[string]string
+}
+
+func (t *testHEPListener) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint) {
+	log.Infof("OnHEPUpdate: %v", hostIfaceToEpMap)
+	t.state = map[string]string{}
+	stringify := func(tiers []*proto.TierInfo) string {
+		var tierStrings []string
+		for _, tier := range tiers {
+			tierStrings = append(tierStrings,
+				"I="+strings.Join(tier.IngressPolicies, ",")+
+					",E="+strings.Join(tier.EgressPolicies, ","))
+		}
+		return strings.Join(tierStrings, "/")
+	}
+	for ifaceName, hep := range hostIfaceToEpMap {
+		t.state[ifaceName] = "profiles=" + strings.Join(hep.ProfileIds, ",") +
+			",normal=" + stringify(hep.Tiers) +
+			",untracked=" + stringify(hep.UntrackedTiers) +
+			",preDNAT=" + stringify(hep.PreDnatTiers) +
+			",AoF=" + stringify(hep.ForwardTiers)
+	}
 }

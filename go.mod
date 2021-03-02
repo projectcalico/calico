@@ -5,12 +5,14 @@ go 1.15
 require (
 	github.com/Microsoft/hcsshim v0.8.9
 	github.com/aws/aws-sdk-go v1.35.7
+	github.com/containernetworking/cni v0.8.0 // indirect
 	github.com/containernetworking/plugins v0.8.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/go-ini/ini v1.44.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
+	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/google/gopacket v1.1.17
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
@@ -25,9 +27,9 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20201216184858-ce76ca74b9cc
-	github.com/projectcalico/pod2daemon v0.0.0-20201209191447-44c7b48b4b61
-	github.com/projectcalico/typha v0.7.3-0.20201216192140-dfc88e8d219e
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210218200932-58d83bf50222
+	github.com/projectcalico/pod2daemon v0.0.0-20210216173008-b5092452cd7d
+	github.com/projectcalico/typha v0.7.3-0.20210218201053-5a8f32effd7f
 	github.com/prometheus/client_golang v1.0.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -35,17 +37,18 @@ require (
 	github.com/spf13/viper v1.6.1
 	github.com/stretchr/testify v1.5.1 // indirect
 	github.com/vishvananda/netlink v1.1.0
-	golang.org/x/net v0.0.0-20200520004742-59133d7f0dd7
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
-	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
+	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
 	golang.org/x/tools v0.0.0-20200502202811-ed308ab3e770 // indirect
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
-	google.golang.org/grpc v1.26.0
+	google.golang.org/genproto v0.0.0-20191203220235-3fa9dbf08042 // indirect
+	google.golang.org/grpc v1.27.0
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
-	k8s.io/api v0.18.12
-	k8s.io/apimachinery v0.18.12
-	k8s.io/client-go v0.18.12
+	k8s.io/api v0.19.6
+	k8s.io/apimachinery v0.19.6
+	k8s.io/client-go v0.19.6
 	k8s.io/kubernetes v1.18.12
 )
 

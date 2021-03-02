@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,10 @@ type Map struct {
 	logCxt *logrus.Entry
 
 	Contents map[string]string
+
+	UpdateCount int
+	GetCount    int
+	IterCount   int
 }
 
 func (m Map) MapFD() bpf.MapFD {
@@ -51,6 +55,7 @@ func (m *Map) Path() string {
 }
 
 func (m Map) Iter(f bpf.IterCallback) error {
+	m.IterCount++
 	for kstr, vstr := range m.Contents {
 		action := f([]byte(kstr), []byte(vstr))
 		if action == bpf.IterDelete {
@@ -61,6 +66,7 @@ func (m Map) Iter(f bpf.IterCallback) error {
 }
 
 func (m Map) Update(k, v []byte) error {
+	m.UpdateCount++
 	if len(k) != m.KeySize {
 		m.logCxt.Panicf("Key had wrong size (%d)", len(k))
 	}
@@ -68,10 +74,13 @@ func (m Map) Update(k, v []byte) error {
 		m.logCxt.Panicf("Value had wrong size (%d)", len(v))
 	}
 	m.Contents[string(k)] = string(v)
+
 	return nil
 }
 
 func (m Map) Get(k []byte) ([]byte, error) {
+	m.GetCount++
+
 	vstr, ok := m.Contents[string(k)]
 	if !ok {
 		return nil, unix.ENOENT
@@ -85,6 +94,10 @@ func (m Map) Delete(k []byte) error {
 	}
 	delete(m.Contents, string(k))
 	return nil
+}
+
+func (m Map) OpCount() int {
+	return m.UpdateCount + m.IterCount + m.GetCount
 }
 
 func NewMockMap(params bpf.MapParameters) *Map {

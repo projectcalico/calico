@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	bpfDP       BPFDataplane
+	bpfDP BPFDataplane
 )
 
 func cleanup(calicoDir string) error {

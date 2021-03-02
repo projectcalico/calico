@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"os"
@@ -44,18 +45,19 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin]
 
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
-  --source-port=<source>  Source port to use for the connection [default: 0].
-  --protocol=<protocol>  Protocol to test tcp (default), udp (connected) udp-noconn (unconnected).
-  --duration=<seconds>   Total seconds test should run. 0 means run a one off connectivity check. Non-Zero means packets loss test.[default: 0]
+  --source-port=<source>   Source port to use for the connection [default: 0].
+  --protocol=<protocol>    Protocol to test tcp (default), udp (connected) udp-noconn (unconnected).
+  --duration=<seconds>     Total seconds test should run. 0 means run a one off connectivity check. Non-Zero means packets loss test.[default: 0]
   --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
-  --log-pongs  Whether to log every response
-  --debug Enable debug logging
-  --sendlen=<bytes> How many additional bytes to send
-  --recvlen=<bytes> Tell the other side to send this many additional bytes
+  --log-pongs              Whether to log every response
+  --debug                  Enable debug logging
+  --sendlen=<bytes>        How many additional bytes to send
+  --recvlen=<bytes>        Tell the other side to send this many additional bytes
+  --stdin                  Read and send data from stdin
 
 If connection is successful, test-connection exits successfully.
 
@@ -92,8 +94,14 @@ func main() {
 	log.WithField("args", arguments).Info("Parsed arguments")
 	namespacePath := arguments["<namespace-path>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
-	port := arguments["<port>"].(string)
-	sourcePort := arguments["--source-port"].(string)
+	protocol := arguments["--protocol"].(string)
+	port := ""
+	sourcePort := ""
+	// No such thing as a port for raw IP.
+	if !strings.HasPrefix(protocol, "ip") {
+		port = arguments["<port>"].(string)
+		sourcePort = arguments["--source-port"].(string)
+	}
 	sourceIpAddress := arguments["--source-ip"].(string)
 	if debug, err := arguments.Bool("--debug"); err == nil && debug {
 		log.SetLevel(log.DebugLevel)
@@ -119,7 +127,6 @@ func main() {
 		sourceIpAddress = defaultIPv6SourceIP
 	}
 
-	protocol := arguments["--protocol"].(string)
 	duration := arguments["--duration"].(string)
 	seconds, err := strconv.Atoi(duration)
 	if err != nil {
@@ -136,9 +143,14 @@ func main() {
 		log.WithError(err).Fatal("Invalid --log-pongs")
 	}
 
+	stdin, err := arguments.Bool("--stdin")
+	if err != nil {
+		log.WithError(err).Fatal("Invalid --stdin")
+	}
+
 	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v "+
-		"max duration %d seconds, logging pongs (%v)",
-		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds, logPongs)
+		"max duration %d seconds, logging pongs (%v), stdin %v",
+		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds, logPongs, stdin)
 
 	if loopFile == "" {
 		// I found that configuring the timeouts on all the network calls was a bit fiddly.  Since
@@ -156,7 +168,7 @@ func main() {
 		// Test connection from wherever we are already running.
 		if err == nil {
 			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin)
 		}
 	} else {
 		// Get the specified network namespace (representing a workload).
@@ -175,7 +187,7 @@ func main() {
 				return e
 			}
 			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin)
 		})
 	}
 
@@ -221,6 +233,7 @@ type testConn struct {
 
 	sendLen int
 	recvLen int
+	stdin   bool
 }
 
 type protocolDriver interface {
@@ -233,8 +246,7 @@ type protocolDriver interface {
 }
 
 func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol string,
-	duration time.Duration, sendLen, recvLen int) (*testConn, error) {
-
+	duration time.Duration, sendLen, recvLen int, stdin bool) (*testConn, error) {
 	err := utils.RunCommand("ip", "r")
 	if err != nil {
 		return nil, err
@@ -243,44 +255,58 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 	var localAddr string
 	var remoteAddr string
 	if strings.Contains(remoteIpAddr, ":") {
-		localAddr = "[" + sourceIpAddr + "]:" + sourcePort
-		remoteAddr = "[" + remoteIpAddr + "]:" + remotePort
+		localAddr = "[" + sourceIpAddr + "]"
+		remoteAddr = "[" + remoteIpAddr + "]"
 	} else {
-		localAddr = sourceIpAddr + ":" + sourcePort
-		remoteAddr = remoteIpAddr + ":" + remotePort
+		localAddr = sourceIpAddr
+		remoteAddr = remoteIpAddr
+	}
+
+	if !strings.HasPrefix(protocol, "ip") {
+		// All the protocols apart from our raw IP protocol have ports.
+		localAddr += ":" + sourcePort
+		remoteAddr += ":" + remotePort
 	}
 
 	log.Infof("Connecting from %v to %v over %s", localAddr, remoteAddr, protocol)
 
 	var driver protocolDriver
 
-	switch protocol {
-	case "udp":
-		driver = &connectedUDP{
+	if strings.HasPrefix(protocol, "ip") {
+		driver = &rawIP{
 			localAddr:  localAddr,
 			remoteAddr: remoteAddr,
+			protocol:   protocol,
 		}
-	case "udp-recvmsg":
-		driver = &connectedUDP{
-			localAddr:   localAddr,
-			remoteAddr:  remoteAddr,
-			useReadFrom: true,
-		}
-	case "udp-noconn":
-		driver = &unconnectedUDP{
-			localAddr:  localAddr,
-			remoteAddr: remoteAddr,
-		}
-	case "sctp":
-		driver = &connectedSCTP{
-			sourcePort:   sourcePort,
-			remoteIpAddr: remoteIpAddr,
-			remotePort:   remotePort,
-		}
-	default:
-		driver = &connectedTCP{
-			localAddr:  localAddr,
-			remoteAddr: remoteAddr,
+	} else {
+		switch protocol {
+		case "udp":
+			driver = &connectedUDP{
+				localAddr:  localAddr,
+				remoteAddr: remoteAddr,
+			}
+		case "udp-recvmsg":
+			driver = &connectedUDP{
+				localAddr:   localAddr,
+				remoteAddr:  remoteAddr,
+				useReadFrom: true,
+			}
+		case "udp-noconn":
+			driver = &unconnectedUDP{
+				localAddr:  localAddr,
+				remoteAddr: remoteAddr,
+			}
+		case "sctp":
+			driver = &connectedSCTP{
+				sourcePort:   sourcePort,
+				remoteIpAddr: remoteIpAddr,
+				remotePort:   remotePort,
+			}
+		default:
+			driver = &connectedTCP{
+				localAddr:  localAddr,
+				remoteAddr: remoteAddr,
+			}
 		}
 	}
 
@@ -306,15 +332,16 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 		duration: duration,
 		sendLen:  sendLen,
 		recvLen:  recvLen,
+		stdin:    stdin,
 	}, nil
 
 }
 
 func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol string,
-	seconds int, loopFile string, sendLen, recvLen int, logPongs bool) error {
+	seconds int, loopFile string, sendLen, recvLen int, logPongs, stdin bool) error {
 
 	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
-		time.Duration(seconds)*time.Second, sendLen, recvLen)
+		time.Duration(seconds)*time.Second, sendLen, recvLen, stdin)
 	if err != nil {
 		tc.sendErrorResp(err)
 		log.WithError(err).Fatal("Failed to create TestConn")
@@ -326,14 +353,42 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	if remotePort == "6443" {
 		// Testing for connectivity to the Kubernetes API server.  If we reach here, we're
 		// good.  Skip sending and receiving any data, as that would need TLS.
-		connectivity.Result{}.PrintToStdout()
+		connectivity.Result{
+			LastResponse: connectivity.Response{
+				Timestamp:  time.Now(),
+				SourceAddr: sourceIPAddr,
+				ServerAddr: remoteIPAddr,
+				Request:    connectivity.Request{
+					Payload:      "Dummy request: TCP handshake only for API server connection testing",
+				},
+			},
+			Stats: connectivity.Stats{
+				RequestsSent:      1,
+				ResponsesReceived: 1,
+			},
+			ClientMTU: connectivity.MTUPair{},
+		}.PrintToStdout()
 		return nil
 	}
 
 	if remotePort == "5473" {
 		// Testing for connectivity to Typha. If we reach here, we're good.
 		// Skip sending and receiving any data.
-		connectivity.Result{}.PrintToStdout()
+		connectivity.Result{
+			LastResponse: connectivity.Response{
+				Timestamp:  time.Now(),
+				SourceAddr: sourceIPAddr,
+				ServerAddr: remoteIPAddr,
+				Request:    connectivity.Request{
+					Payload:      "Dummy request: TCP handshake only for Typha connection testing",
+				},
+			},
+			Stats: connectivity.Stats{
+				RequestsSent:      1,
+				ResponsesReceived: 1,
+			},
+			ClientMTU: connectivity.MTUPair{},
+		}.PrintToStdout()
 		return nil
 	}
 
@@ -421,6 +476,17 @@ func (tc *testConn) sendErrorResp(err error) {
 
 func (tc *testConn) tryConnectOnceOff() error {
 	log.Info("Doing single-shot test...")
+
+	if tc.stdin {
+		var buf bytes.Buffer
+		count, err := io.Copy(&buf, os.Stdin)
+		log.WithError(err).WithField("count", count).Info("Read message bytes from stdin")
+		err = tc.protocol.Send(buf.Bytes())
+		if err != nil {
+			log.WithError(err).Panic("Failed to send stdin request")
+		}
+		return nil
+	}
 
 	req := tc.GetTestMessage(0)
 	msg, err := json.Marshal(req)
@@ -801,6 +867,65 @@ type connectedSCTP struct {
 	conn net.Conn
 	r    *bufio.Reader
 	w    *bufio.Writer
+}
+
+// rawIP implements a raw IP connection on the given protocol number.  I.e. is sends the message as the body of the
+// IP packet with no additional header.
+type rawIP struct {
+	localAddr          string
+	remoteAddr         string
+	protocol           string
+	remoteAddrResolved net.Addr
+
+	conn net.PacketConn
+}
+
+func (d *rawIP) Close() error {
+	if d.conn == nil {
+		return nil
+	}
+	return d.conn.Close()
+}
+
+func (d *rawIP) Connect() error {
+	log.Info("'Connecting' raw IP, proto=", d.protocol)
+
+	var err error
+	d.remoteAddrResolved, err = net.ResolveIPAddr(d.protocol, d.remoteAddr)
+	if err != nil {
+		return err
+	}
+
+	d.conn, err = net.ListenPacket(d.protocol, d.localAddr)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+
+	return nil
+}
+
+func (d *rawIP) Send(msg []byte) error {
+	_, err := d.conn.WriteTo(msg, d.remoteAddrResolved)
+	if err != nil {
+		return err
+	}
+	log.WithField("message", string(msg)).Infof("Sent message over raw IP to %v", d.remoteAddr)
+	return nil
+}
+
+func (d *rawIP) Receive() ([]byte, error) {
+	bufIn := make([]byte, 8<<10)
+	n, from, err := d.conn.ReadFrom(bufIn)
+	if err != nil {
+		log.WithError(err).Error("Failed to read from")
+	} else {
+		log.Infof("Received %d bytes from %s", n, from)
+	}
+	return bufIn[:n], err
+}
+
+func (d *rawIP) MTU() (int, error) {
+	return 0, nil
 }
 
 func (d *connectedSCTP) Connect() error {

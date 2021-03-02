@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,40 +17,43 @@
 package fv_test
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/utils"
 
-	"context"
-	"errors"
-	"fmt"
-	"strings"
-	"time"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
+
+	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/workload"
 )
 
-var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		client  client.Interface
-		w       [2]*workload.Workload
-		hostW   [2]*workload.Workload
-		cc      *connectivity.Checker
+		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+		infra      infrastructure.DatastoreInfra
+		felixes    []*infrastructure.Felix
+		client     client.Interface
+		w          [2]*workload.Workload
+		hostW      [2]*workload.Workload
+		cc         *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -83,6 +86,12 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			w[ii].ConfigureInInfra(infra)
 
 			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
+		}
+
+		if bpfEnabled {
+			for _, f := range felixes {
+				Eventually(f.NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
+			}
 		}
 
 		cc = &connectivity.Checker{}
@@ -318,7 +327,11 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 		BeforeEach(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			l, err := client.Nodes().List(ctx, options.ListOptions{})
+			listOptions := options.ListOptions{}
+			if bpfEnabled {
+				listOptions.Name = felixes[0].Hostname
+			}
+			l, err := client.Nodes().List(ctx, listOptions)
 			Expect(err).NotTo(HaveOccurred())
 			for _, node := range l.Items {
 				node.Spec.BGP = nil
@@ -326,13 +339,17 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			// Removing the BGP config triggers a Felix restart and Felix has a 2s timer during
-			// a config restart to ensure that it doesn't tight loop.  Wait for the ipset to be
-			// updated as a signal that Felix has restarted.
-			for _, f := range felixes {
-				Eventually(func() int {
-					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-				}, "5s", "200ms").Should(BeZero())
+			if bpfEnabled {
+				Eventually(felixes[1].NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
+			} else {
+				for _, f := range felixes {
+					// Removing the BGP config triggers a Felix restart and Felix has a 2s timer during
+					// a config restart to ensure that it doesn't tight loop.  Wait for the ipset to be
+					// updated as a signal that Felix has restarted.
+					Eventually(func() int {
+						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+					}, "5s", "200ms").Should(BeZero())
+				}
 			}
 		})
 
@@ -363,10 +380,12 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			}
 			// Removing the BGP config triggers a Felix restart. Wait for the ipset to be updated as a signal that Felix
 			// has restarted.
-			for _, f := range felixes {
-				Eventually(func() int {
-					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-				}, "5s", "200ms").Should(Equal(1))
+			if !bpfEnabled {
+				for _, f := range felixes {
+					Eventually(func() int {
+						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+					}, "5s", "200ms").Should(Equal(1))
+				}
 			}
 
 			updateConfig := func(addr string) {
@@ -380,12 +399,18 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 				Expect(err).NotTo(HaveOccurred())
 			}
 			updateConfig(prevBGPSpec.IPv4Address)
+
 			// Wait for the config to take
 			for _, f := range felixes {
-				Eventually(func() int {
-					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-				}, "5s", "200ms").Should(Equal(3))
+				if bpfEnabled {
+					Eventually(f.BPFRoutes, "5s", "200ms").Should(ContainSubstring("1.1.1.1/32"))
+				} else {
+					Eventually(func() int {
+						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+					}, "5s", "200ms").Should(Equal(3))
+				}
 			}
+
 		})
 
 		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {

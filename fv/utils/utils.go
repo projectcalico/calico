@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,14 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
@@ -29,7 +31,9 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
@@ -61,19 +65,27 @@ var Ctx = context.Background()
 var NoOptions = options.SetOptions{}
 
 func Run(command string, args ...string) {
-	_ = run(true, command, args...)
+	_ = run(nil, true, command, args...)
+}
+
+func RunWithInput(input []byte, command string, args ...string) {
+	_ = run(input, true, command, args...)
 }
 
 func RunMayFail(command string, args ...string) error {
-	return run(false, command, args...)
+	return run(nil, false, command, args...)
 }
 
 var currentTestOutput = []string{}
 
 var LastRunOutput string
 
-func run(checkNoError bool, command string, args ...string) error {
-	outputBytes, err := Command(command, args...).CombinedOutput()
+func run(input []byte, checkNoError bool, command string, args ...string) error {
+	cmd := Command(command, args...)
+	if input != nil {
+		cmd.Stdin = bytes.NewReader(input)
+	}
+	outputBytes, err := cmd.CombinedOutput()
 	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
 	currentTestOutput = append(currentTestOutput, string(outputBytes))
 	LastRunOutput = string(outputBytes)
@@ -104,7 +116,8 @@ var _ = BeforeEach(func() {
 
 var _ = AfterEach(func() {
 	if CurrentGinkgoTestDescription().Failed {
-		os.Stdout.WriteString("\n===== begin output from failed test =====\n")
+		os.Stdout.WriteString(fmt.Sprintf("\n===== begin output from failed test %s =====\n",
+			CurrentGinkgoTestDescription().FullTestText))
 		for _, output := range currentTestOutput {
 			os.Stdout.WriteString(output)
 		}
@@ -238,4 +251,22 @@ func ConnMTU(hsc HasSyscallConn) (int, error) {
 	}
 
 	return mtu, nil
+}
+
+func UpdateFelixConfig(client client.Interface, deltaFn func(*api.FelixConfiguration)) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cfg, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+	if _, doesNotExist := err.(cerrors.ErrorResourceDoesNotExist); doesNotExist {
+		cfg = api.NewFelixConfiguration()
+		cfg.Name = "default"
+		deltaFn(cfg)
+		_, err = client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	} else {
+		Expect(err).NotTo(HaveOccurred())
+		deltaFn(cfg)
+		_, err = client.FelixConfigurations().Update(ctx, cfg, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
 }

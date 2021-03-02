@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -46,12 +46,32 @@ struct bpf_map_def_extended {
 };
 
 /* These constants must be kept in sync with the calculate-flags script. */
+
+// CALI_TC_HOST_EP is set for all host interfaces including tunnels.
 #define CALI_TC_HOST_EP		(1<<0)
+// CALI_TC_INGRESS is set when compiling a program in the "ingress" direction as defined by
+// policy.  For host endpoints, ingress has its natural meaning (towards the host namespace)
+// and it agrees with TC's definition of ingress. For workload endpoint programs, ingress is
+// relative to the workload so the ingress program is applied at egress from the host namespace
+// and vice-versa.
 #define CALI_TC_INGRESS		(1<<1)
+// CALI_TC_TUNNEL is set when compiling the program for the IPIP tunnel. It is *not* set
+// when compiling the wireguard or tunnel program (or VXLAN).  IPIP is a special case because
+// it is a layer 3 device, so we don't see an ethernet header on packets arriving from the IPIP
+// device.
 #define CALI_TC_TUNNEL		(1<<2)
+// CALI_CGROUP is set when compiling the cgroup connect-time load balancer programs.
 #define CALI_CGROUP		(1<<3)
+// CALI_TC_DSR is set when compiling programs for DSR mode.  In DSR mode, traffic to node
+// ports is encapped on the "request" leg but the response is returned directly from the
+// node with the backing workload.
 #define CALI_TC_DSR		(1<<4)
+// CALI_TC_WIREGUARD is set for the programs attached to the wireguard interface.
 #define CALI_TC_WIREGUARD	(1<<5)
+
+#ifndef CALI_DROP_WORKLOAD_TO_HOST
+#define CALI_DROP_WORKLOAD_TO_HOST false
+#endif
 
 #ifndef CALI_COMPILE_FLAGS
 #define CALI_COMPILE_FLAGS 0
@@ -80,12 +100,19 @@ struct bpf_map_def_extended {
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
 #define CALI_F_DSR	(CALI_COMPILE_FLAGS & CALI_TC_DSR)
 
-#define CALI_RES_REDIR_BACK	(TC_ACT_VALUE_MAX + 100) /* packet should be sent back the same iface */
-#define CALI_RES_REDIR_IFINDEX	(TC_ACT_VALUE_MAX + 101) /* packet should be sent straight to
-							  * state->ct_result->ifindex_fwd
-							  */
+#define CALI_RES_REDIR_BACK	108 /* packet should be sent back the same iface */
+#define CALI_RES_REDIR_IFINDEX	109 /* packet should be sent straight to
+				     * state->ct_result->ifindex_fwd
+				     */
+#if CALI_RES_REDIR_BACK <= TC_ACT_VALUE_MAX
+#error CALI_RES_ values need to be increased above TC_ACT_VALUE_MAX
+#endif
 
-#define FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+#ifndef CALI_FIB_LOOKUP_ENABLED
+#define CALI_FIB_LOOKUP_ENABLED true
+#endif
+
+#define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
@@ -103,17 +130,66 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 }
 
 enum calico_skb_mark {
-	// TODO allocate marks from the mark pool.
+	/* Bits that we set in all _our_ mark patterns. */
 	CALI_MARK_CALICO                     = 0xc0000000,
 	CALI_MARK_CALICO_MASK                = 0xf0000000,
+	/* The "SEEN" bit is set by any BPF program that allows a packet through.  It allows
+	 * a second BPF program that handles the same packet to determine that another program
+	 * handled it first. */
 	CALI_SKB_MARK_SEEN                   = CALI_MARK_CALICO      | 0x01000000,
 	CALI_SKB_MARK_SEEN_MASK              = CALI_MARK_CALICO_MASK | CALI_SKB_MARK_SEEN,
+	/* The "BYPASS" bit is an even stronger indication than "SEEN". It is set by BPF programs
+	 * that have determined that the packet is approved and any downstream programs do not need
+	 * to further validate the packet. */
 	CALI_SKB_MARK_BYPASS                 = CALI_SKB_MARK_SEEN    | 0x02000000,
+	/* "BYPASS_FWD" is a special case of "BYPASS" used when a packet returns from one of our
+	 * VXLAN tunnels.  It tells the downstream program to forward the packet. */
 	CALI_SKB_MARK_BYPASS_FWD             = CALI_SKB_MARK_BYPASS  | 0x00300000,
+	/* "BYPASS_FWD_SRC_FIXUP" is a special case of "BYPASS" used when a from-workload program
+	 * is returning a packet to our VXLAN tunnel.  The from-workload program does the encapsulation
+	 * but, due to RPF, it cannot set the source IP of the outer IP header.  The mark bit
+	 * tells the downstream HEP program to fix up the source IP to be the host IP as it leaves the
+	 * host namespace. */
 	CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP   = CALI_SKB_MARK_BYPASS  | 0x00500000,
+	CALI_SKB_MARK_BYPASS_MASK            = CALI_SKB_MARK_SEEN_MASK | 0x02700000,
+	/* The FALLTHROUGH bit is used by programs that are towards the host namespace to indicate
+	 * that the packet is not known in BPF conntrack. We have iptables rules to drop or allow
+	 * such packets based on their Linux conntrack state. This allows for us to handle flows that
+	 * were live before BPF was enabled. */
+	CALI_SKB_MARK_FALLTHROUGH            = CALI_SKB_MARK_SEEN    | 0x04000000,
+	/* The SKIP_RPF bit is used by programs that are towards the host namespace to disable our
+	 * RPF check for htat packet.  Typically used for a packet that we originate (such as an ICMP
+	 * response). */
 	CALI_SKB_MARK_SKIP_RPF               = CALI_SKB_MARK_BYPASS  | 0x00400000,
+	/* The NAT_OUT bit is used by programs that are towards the host namespace to tell iptables to
+	 * do SNAT for this flow.  Subsequent packets will also be allowed to fall through to the host
+	 * netns. */
 	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_BYPASS  | 0x00800000,
+
+	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
+	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
+	 * flows at start of day. */
+	CALI_SKB_MARK_CT_ESTABLISHED         = CALI_MARK_CALICO      | 0x08000000,
+	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = CALI_MARK_CALICO      | 0x08000000,
 };
+
+/* bpf_exit inserts a BPF exit instruction with the given return value. In a fully-inlined
+ * BPF program this allows us to terminate early.  However(!) the exit instruction is also used
+ * for function return so we need to be careful if we ever start using non-inlined
+ * functions in anger. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-noreturn"
+static CALI_BPF_INLINE _Noreturn void bpf_exit(int rc) {
+	// Need volatile here because we don't use rc after this assembler fragment.
+	// The BPF assembler rejects an input-only operand so we make r0 an in/out operand.
+	asm volatile ( \
+		"exit" \
+		: "=r0" (rc) /*out*/ \
+		: "0" (rc) /*in*/ \
+		: /*clobber*/ \
+	);
+}
+#pragma clang diagnostic pop
 
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_frag_no(ip) ((ip)->frag_off & bpf_htons(0x1fff))
@@ -143,9 +219,11 @@ static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
 
 CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* be 0x54534f48 = ASCII(HOST) */
 CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(TMTU) */
+CALI_CONFIGURABLE_DEFINE(vxlan_port, 0x52505856) /* be 0x52505856 = ASCII(VXPR) */
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
+#define VXLAN_PORT 	CALI_CONFIGURABLE(vxlan_port)
 
 #define MAP_PIN_GLOBAL	2
 

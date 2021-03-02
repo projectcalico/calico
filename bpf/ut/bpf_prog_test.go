@@ -28,16 +28,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/projectcalico/felix/ip"
-
-	"github.com/projectcalico/felix/bpf/ipsets"
-	"github.com/projectcalico/felix/bpf/jump"
-	"github.com/projectcalico/felix/bpf/polprog"
-	"github.com/projectcalico/felix/bpf/state"
-	"github.com/projectcalico/felix/logutils"
-
-	"github.com/projectcalico/felix/idalloc"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
@@ -50,8 +40,16 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/arp"
 	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/failsafes"
+	"github.com/projectcalico/felix/bpf/ipsets"
+	"github.com/projectcalico/felix/bpf/jump"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/idalloc"
+	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/proto"
 )
 
@@ -67,12 +65,12 @@ const (
 )
 
 var (
-	rulesDefaultAllow = polprog.Rules{
+	rulesDefaultAllow = &polprog.Rules{
 		Tiers: []polprog.Tier{{
 			Name: "base tier",
 			Policies: []polprog.Policy{{
 				Name:  "allow all",
-				Rules: []*proto.Rule{{Action: "Allow"}},
+				Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}}},
 			}},
 		}},
 	}
@@ -122,7 +120,7 @@ var retvalToStr = map[int]string{
 }
 
 func TestCompileTemplateRun(t *testing.T) {
-	runBpfTest(t, "calico_to_workload_ep", polprog.Rules{}, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", &polprog.Rules{}, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketUDPDefault()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -148,7 +146,31 @@ type testLogger interface {
 	Logf(format string, args ...interface{})
 }
 
-func setupAndRun(logger testLogger, loglevel string, section string, rules polprog.Rules, runFn func(progName string)) {
+func setupAndRun(logger testLogger, loglevel string, section string, rules *polprog.Rules,
+	runFn func(progName string), opts ...testOption) {
+
+	topts := testOpts{
+		subtests: true,
+		logLevel: log.DebugLevel,
+	}
+
+	for _, o := range opts {
+		o(&topts)
+	}
+
+	maps := make([]bpf.Map, len(progMaps))
+	copy(maps, progMaps)
+
+outter:
+	for _, m := range topts.extraMaps {
+		for i := range maps {
+			if maps[i].Path() == m.Path() {
+				continue outter
+			}
+		}
+		maps = append(maps, m)
+	}
+
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(tempDir)
@@ -187,6 +209,7 @@ func setupAndRun(logger testLogger, loglevel string, section string, rules polpr
 	}
 
 	obj += ".o"
+	log.Infof("Patching binary %s", obj)
 
 	bin, err := bpf.BinaryFromFile(obj)
 	Expect(err).NotTo(HaveOccurred())
@@ -194,11 +217,12 @@ func setupAndRun(logger testLogger, loglevel string, section string, rules polpr
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
+	bin.PatchVXLANPort(testVxlanPort)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpftoolProgLoadAll(tempObj, bpfFsDir)
+	err = bpftoolProgLoadAll(tempObj, bpfFsDir, rules != nil, maps...)
 	Expect(err).NotTo(HaveOccurred())
 
 	if err != nil {
@@ -206,23 +230,25 @@ func setupAndRun(logger testLogger, loglevel string, section string, rules polpr
 	}
 	Expect(err).NotTo(HaveOccurred())
 
-	alloc := &forceAllocator{alloc: idalloc.New()}
-	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
-	insns, err := pg.Instructions(rules)
-	Expect(err).NotTo(HaveOccurred())
-	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
-	Expect(err).NotTo(HaveOccurred())
-	defer func() { _ = polProgFD.Close() }()
-	progFDBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
-	err = jumpMap.Update([]byte{0, 0, 0, 0}, progFDBytes)
-	Expect(err).NotTo(HaveOccurred())
+	if rules != nil {
+		alloc := &forceAllocator{alloc: idalloc.New()}
+		pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
+		insns, err := pg.Instructions(*rules)
+		Expect(err).NotTo(HaveOccurred())
+		polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = polProgFD.Close() }()
+		progFDBytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
+		err = jumpMap.Update([]byte{0, 0, 0, 0}, progFDBytes)
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	runFn(bpfFsDir + "/" + section)
 }
 
 // runBpfTest runs a specific section of the entire bpf program in isolation
-func runBpfTest(t *testing.T, section string, rules polprog.Rules, testFn func(bpfProgRunFn)) {
+func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
 	setupAndRun(t, "debug", section, rules, func(progName string) {
 		t.Run(section, func(_ *testing.T) {
@@ -235,7 +261,7 @@ func runBpfTest(t *testing.T, section string, rules polprog.Rules, testFn func(b
 				return res, err
 			})
 		})
-	})
+	}, opts...)
 }
 
 type forceAllocator struct {
@@ -265,8 +291,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap bpf.Map
-	allMaps                                                                                      []bpf.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap, fsafeMap bpf.Map
+	allMaps, progMaps                                                                                      []bpf.Map
 )
 
 func initMapsOnce() {
@@ -283,14 +309,28 @@ func initMapsOnce() {
 		jumpMap = jump.MapForTest(mc)
 		affinityMap = nat.AffinityMap(mc)
 		arpMap = arp.Map(mc)
+		fsafeMap = failsafes.Map(mc)
 
-		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap}
+		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap, fsafeMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
 				log.WithError(err).Panic("Failed to initialise maps")
 			}
 		}
+
+		progMaps = []bpf.Map{
+			natMap,
+			natBEMap,
+			ctMap,
+			rtMap,
+			jumpMap,
+			stateMap,
+			affinityMap,
+			arpMap,
+			fsafeMap,
+		}
+
 	})
 }
 
@@ -316,25 +356,33 @@ func cleanUpMaps() {
 	log.Info("Cleaned up all maps")
 }
 
-func bpftoolProgLoadAll(fname, bpfFsDir string) error {
+func bpftoolProgLoadAll(fname, bpfFsDir string, polProg bool, maps ...bpf.Map) error {
+	args := []string{"prog", "loadall", fname, bpfFsDir, "type", "classifier"}
+
+	for _, m := range maps {
+		args = append(args, "map", "name", m.GetName(), "pinned", m.Path())
+	}
+
 	log.WithField("program", fname).Debug("Loading BPF program")
-	_, err := bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
-		"map", "name", natMap.GetName(), "pinned", natMap.Path(),
-		"map", "name", natBEMap.GetName(), "pinned", natBEMap.Path(),
-		"map", "name", ctMap.GetName(), "pinned", ctMap.Path(),
-		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
-		"map", "name", jumpMap.GetName(), "pinned", jumpMap.Path(),
-		"map", "name", stateMap.GetName(), "pinned", stateMap.Path(),
-		"map", "name", affinityMap.GetName(), "pinned", affinityMap.Path(),
-		"map", "name", arpMap.GetName(), "pinned", arpMap.Path(),
-	)
+	_, err := bpftool(args...)
 	if err != nil {
 		return err
 	}
 
-	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_0"))
-	if err != nil {
-		return errors.Wrap(err, "failed to update jump map (epilogue program)")
+	if polProg {
+		polProgPath := path.Join(bpfFsDir, "1_0")
+		_, err = os.Stat(polProgPath)
+		if err == nil {
+			_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0", "value", "pinned", polProgPath)
+			if err != nil {
+				return errors.Wrap(err, "failed to update jump map (policy program)")
+			}
+		}
+	} else {
+		_, err = bpftool("map", "delete", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0")
+		if err != nil {
+			log.WithError(err).Info("failed to update jump map (deleting policy program)")
+		}
 	}
 	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "1", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_1"))
 	if err != nil {
@@ -342,7 +390,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	}
 	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "2", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_2"))
 	if err != nil {
-		return errors.Wrap(err, "failed to update jump map (epilogue program)")
+		return errors.Wrap(err, "failed to update jump map (icmp program)")
 	}
 
 	return nil
@@ -406,9 +454,37 @@ func bpftoolProgRunN(progName string, dataIn []byte, N int) (bpfRunResult, error
 type bpfProgRunFn func(data []byte) (bpfRunResult, error)
 
 // runBpfUnitTest runs a small unit in isolation. It requires a small .c file
-// that wrapsthe unit and compiles into a calico_unittest section.
-func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
+// that wraps the unit and compiles into a calico_unittest section.
+func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
+
+	topts := testOpts{
+		subtests: true,
+		logLevel: log.DebugLevel,
+	}
+
+	for _, o := range opts {
+		o(&topts)
+	}
+
+	loglevel := log.GetLevel()
+	if topts.logLevel != loglevel {
+		defer log.SetLevel(loglevel)
+		log.SetLevel(topts.logLevel)
+	}
+
+	maps := make([]bpf.Map, len(progMaps))
+	copy(maps, progMaps)
+
+outter:
+	for _, m := range topts.extraMaps {
+		for i := range maps {
+			if maps[i].Path() == m.Path() {
+				continue outter
+			}
+		}
+		maps = append(maps, m)
+	}
 
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
@@ -423,19 +499,21 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
+	log.Infof("Patching binary %s", objFname)
 	bin, err := bpf.BinaryFromFile(objFname)
 	Expect(err).NotTo(HaveOccurred())
 	err = bin.PatchIPv4(hostIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
+	bin.PatchVXLANPort(testVxlanPort)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpftoolProgLoadAll(tempObj, bpfFsDir)
+	err = bpftoolProgLoadAll(tempObj, bpfFsDir, true, maps...)
 	Expect(err).NotTo(HaveOccurred())
 
-	t.Run(source, func(_ *testing.T) {
+	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
 			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn)
 			log.Debugf("dataIn  = %+v", dataIn)
@@ -444,8 +522,48 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 			}
 			return res, err
 		})
-	})
+	}
+
+	if topts.subtests {
+		t.Run(source, func(_ *testing.T) {
+			runTest()
+		})
+	} else {
+		runTest()
+	}
 }
+
+type testOpts struct {
+	subtests  bool
+	logLevel  log.Level
+	extraMaps []bpf.Map
+}
+
+type testOption func(opts *testOpts)
+
+func withSubtests(v bool) testOption {
+	return func(o *testOpts) {
+		o.subtests = v
+	}
+}
+
+var _ = withSubtests
+
+func withLogLevel(l log.Level) testOption {
+	return func(o *testOpts) {
+		o.logLevel = l
+	}
+}
+
+var _ = withLogLevel
+
+func withExtraMap(m bpf.Map) testOption {
+	return func(o *testOpts) {
+		o.extraMaps = append(o.extraMaps, m)
+	}
+}
+
+var _ = withExtraMap
 
 // layersMatchFields matches all Exported fields and ignore the ones explicitly
 // listed. It always ignores BaseLayer as that is not set by the tests.
@@ -814,4 +932,38 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 		Expect(out).To(HaveKey(uint64(i)))
 		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
 	}
+}
+
+func TestJumpMap(t *testing.T) {
+	RegisterTestingT(t)
+
+	jumpMapFD := jumpMap.MapFD()
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD)
+	rules := polprog.Rules{}
+	insns, err := pg.Instructions(rules)
+	Expect(err).NotTo(HaveOccurred())
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	Expect(err).NotTo(HaveOccurred())
+
+	k := make([]byte, 4)
+	v := make([]byte, 4)
+	binary.LittleEndian.PutUint32(v, uint32(progFD))
+
+	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntry(jumpMapFD, k, 4)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpf.DeleteMapEntry(jumpMapFD, k, 4)
+	Expect(err).To(HaveOccurred())
 }

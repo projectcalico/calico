@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--udp | --sctp] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
+  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -60,8 +60,7 @@ func main() {
 	interfaceName := arguments["<interface-name>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
 	portsStr := arguments["<ports>"].(string)
-	udp := arguments["--udp"].(bool)
-	useSctp := arguments["--sctp"].(bool)
+	protocol := arguments["--protocol"].(string)
 	nsPath := ""
 	if arg, ok := arguments["--namespace-path"]; ok && arg != nil {
 		nsPath = arg.(string)
@@ -394,16 +393,25 @@ func main() {
 		for _, port := range ports {
 			var myAddr string
 			if strings.Contains(ipAddress, ":") {
-				myAddr = "[" + ipAddress + "]:" + port
+				myAddr = "[" + ipAddress + "]"
 			} else {
-				myAddr = ipAddress + ":" + port
+				myAddr = ipAddress
+			}
+			if !strings.HasPrefix(protocol, "ip") {
+				myAddr += ":" + port
 			}
 			logCxt := log.WithFields(log.Fields{
-				"udp":    udp,
-				"sctp":   useSctp,
-				"myAddr": myAddr,
+				"protocol": protocol,
+				"myAddr":   myAddr,
 			})
-			if udp {
+			if strings.HasPrefix(protocol, "ip") {
+				logCxt.Info("About to listen for raw IP packets")
+				p, err := net.ListenPacket(protocol, myAddr)
+				panicIfError(err)
+				logCxt.Info("Listening for raw IP packets")
+
+				go loopRespondingToPackets(logCxt, p)
+			} else if protocol == "udp" {
 				// Since UDP is connectionless, we can't use Listen() as we do for TCP.  Instead,
 				// we use ListenPacket so that we can directly send/receive individual packets.
 				logCxt.Info("About to listen for UDP packets")
@@ -411,43 +419,8 @@ func main() {
 				panicIfError(err)
 				logCxt.Info("Listening for UDP connections")
 
-				go func() {
-					defer p.Close()
-					for {
-						buffer := make([]byte, 1024)
-						n, addr, err := p.ReadFrom(buffer)
-						panicIfError(err)
-
-						var request connectivity.Request
-						err = json.Unmarshal(buffer[:n], &request)
-						if err != nil {
-							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Failed to parse data")
-							continue
-						}
-
-						response := connectivity.Response{
-							Timestamp:  time.Now(),
-							SourceAddr: addr.String(),
-							ServerAddr: p.LocalAddr().String(),
-							Request:    request,
-						}
-
-						data, err := json.Marshal(&response)
-						if err != nil {
-							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Failed to respond")
-							continue
-						}
-						data = append(data, '\n')
-
-						_, err = p.WriteTo(data, addr)
-
-						if !connectivity.IsMessagePartOfStream(request.Payload) {
-							// Only print when packet is not part of stream.
-							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
-						}
-					}
-				}()
-			} else if useSctp {
+				go loopRespondingToPackets(logCxt, p)
+			} else if protocol == "sctp" {
 				portInt, err := strconv.Atoi(port)
 				panicIfError(err)
 				netIP, err := net.ResolveIPAddr("ip", ipAddress)
@@ -488,6 +461,43 @@ func main() {
 		}
 	})
 	panicIfError(err)
+}
+
+func loopRespondingToPackets(logCxt *log.Entry, p net.PacketConn) {
+	defer p.Close()
+	for {
+		buffer := make([]byte, 1024)
+		n, addr, err := p.ReadFrom(buffer)
+		panicIfError(err)
+
+		var request connectivity.Request
+		err = json.Unmarshal(buffer[:n], &request)
+		if err != nil {
+			logCxt.WithError(err).WithField("remoteAddr", addr).Info("Failed to parse data")
+			continue
+		}
+
+		response := connectivity.Response{
+			Timestamp:  time.Now(),
+			SourceAddr: addr.String(),
+			ServerAddr: p.LocalAddr().String(),
+			Request:    request,
+		}
+
+		data, err := json.Marshal(&response)
+		if err != nil {
+			logCxt.WithError(err).WithField("remoteAddr", addr).Info("Failed to respond")
+			continue
+		}
+		data = append(data, '\n')
+
+		_, err = p.WriteTo(data, addr)
+
+		if !connectivity.IsMessagePartOfStream(request.Payload) {
+			// Only print when packet is not part of stream.
+			logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
+		}
+	}
 }
 
 func panicIfError(err error) {

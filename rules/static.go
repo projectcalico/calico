@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -820,7 +820,7 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 		},
 	)
 
-	// Now (=> not from a workload) dispatch to host endpoint chain for the incoming interface.
+	// Now dispatch to host endpoint chain for the incoming interface.
 	rules = append(rules,
 		Rule{
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},

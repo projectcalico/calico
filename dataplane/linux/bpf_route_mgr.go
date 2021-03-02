@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,9 +27,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type bpfRouteManager struct {
@@ -61,6 +63,9 @@ type bpfRouteManager struct {
 	// ifaceNameToWEPIDs maps local interface name to the set of local proto.WorkloadEndpointIDs that have that name.
 	// (Usually a single WEP).
 	ifaceNameToWEPIDs map[string]set.Set
+	// externalNodeCIDRs is a set of CIDRs that should be treated as external nodes (and hence we should allow
+	// IPIP and VXLAN to/from them).
+	externalNodeCIDRs set.Set
 	// Set of CIDRs for which we need to update the BPF routes.
 	dirtyCIDRs set.Set
 
@@ -78,7 +83,25 @@ type bpfRouteManager struct {
 	routesDeleteCB  func(routes.Key)
 }
 
-func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
+func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapContext) *bpfRouteManager {
+	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
+	// which would restart Felix.
+	extCIDRs := set.New()
+	dirtyCIDRs := set.New()
+	for _, cidrStr := range externalCIDRs {
+		if strings.Contains(cidrStr, ":") {
+			log.WithField("cidr", cidrStr).Debug("Ignoring IPv6 external CIDR")
+			continue
+		}
+		cidr, err := ip.ParseCIDROrIP(cidrStr)
+		if err != nil {
+			log.WithError(err).WithField("cidr", cidr).Error(
+				"Failed to parse external node CIDR (which should have been validated already).")
+		}
+		extCIDRs.Add(cidr)
+		dirtyCIDRs.Add(cidr)
+	}
+
 	return &bpfRouteManager{
 		myNodename:        myNodename,
 		cidrToRoute:       map[ip.V4CIDR]proto.RouteUpdate{},
@@ -88,7 +111,8 @@ func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager 
 		wepIDToWorklaod:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		ifaceNameToIdx:    map[string]int{},
 		ifaceNameToWEPIDs: map[string]set.Set{},
-		dirtyCIDRs:        set.New(),
+		externalNodeCIDRs: extCIDRs,
+		dirtyCIDRs:        dirtyCIDRs,
 
 		desiredRoutes: map[routes.Key]routes.Value{},
 		routeMap:      routes.Map(mc),
@@ -193,6 +217,17 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
 	_, ok := m.cidrToLocalIfaces[cidr]
 	if ok {
 		flags |= routes.FlagsLocalHost
+	}
+
+	// Similarly, handle external node CIDRs, which are derived from config, not the calc graph.
+	// For now, we don't examine all CIDRs to see if they might be inside an external node CIDR since
+	// other routes are either
+	// - Derived from IP pools and workloads, in which case, overlap would be a misconfiguration and
+	//   avoiding treating workloads as nodes is safer.
+	// - Derived from hosts, in which case we'll set the host flag anyway from its CG route.
+	if m.externalNodeCIDRs.Contains(cidr) {
+		log.WithField("cidr", cidr).Debug("CIDR is for external nodes.")
+		flags |= routes.FlagHost
 	}
 
 	cgRoute, cgRouteExists := m.cidrToRoute[cidr]
@@ -327,7 +362,7 @@ func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
 // Already-correct routes are removed from the dirty set.  Missing, incorrect, and, superfluous routes are added.
 func (m *bpfRouteManager) resyncWithDataplane() {
 	debug := log.GetLevel() >= log.DebugLevel
-	log.Info("Doing full resync of BPF IP sets map")
+	log.Info("Doing full resync of BPF routes map")
 
 	// Mark all desired routes as dirty.
 	m.dirtyRoutes.Clear()

@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -59,7 +59,31 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, __u8 proto)
 
 	__u32 dport_be = host_to_ctx_port(nat_dest->port);
 
+	__u64 cookie = bpf_get_socket_cookie(ctx);
+	CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
+			bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
+
+	/* For all protocols, record recent NAT operations in an LRU map; other BPF programs use this
+	 * cache to reverse our DNAT so they can do pre-DNAT policy. */
+	struct ct_nats_key natk = {
+		.cookie = cookie,
+		.ip = nat_dest->addr,
+		.port = dport_be,
+		.proto = proto,
+	};
+	struct sendrecv4_val val = {
+		.ip	= ctx->user_ip4,
+		.port	= ctx->user_port,
+	};
+	int rc = cali_v4_ct_nats_update_elem(&natk, &val, 0);
+	if (rc) {
+		/* if this happens things are really bad! report */
+		CALI_INFO("Failed to update ct_nats map rc=%d\n", rc);
+	}
+
 	if (proto != IPPROTO_TCP) {
+		/* For UDP, store a long-lived reverse mapping, which we use to reverse the DNAT for programs that
+		 * check the source on the return packets. */
 		__u64 cookie = bpf_get_socket_cookie(ctx);
 		CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
 				bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
@@ -67,13 +91,6 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, __u8 proto)
 			.ip	= nat_dest->addr,
 			.port	= dport_be,
 			.cookie	= cookie,
-		};
-		struct sendrecv4_val val = {
-			.ip	= ctx->user_ip4,
-			.port	= ctx->user_port,
-			/* XXX we should also store the backend key to verify that it is
-			 * XXX still ok upon recvmsg.
-			 */
 		};
 
 		if (cali_v4_srmsg_update_elem(&key, &val, 0)) {

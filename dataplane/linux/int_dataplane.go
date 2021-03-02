@@ -25,43 +25,39 @@ import (
 	"sync"
 	"time"
 
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-
-	"github.com/projectcalico/felix/bpf/state"
-	"github.com/projectcalico/felix/bpf/tc"
-	"github.com/projectcalico/felix/idalloc"
-	"github.com/projectcalico/felix/logutils"
-
-	"k8s.io/client-go/kubernetes"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-
-	"github.com/projectcalico/libcalico-go/lib/health"
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/libcalico-go/lib/set"
-
-	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/arp"
 	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/failsafes"
 	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
 	"github.com/projectcalico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/bpf/tc"
+	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/jitter"
 	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/throttle"
 	"github.com/projectcalico/felix/wireguard"
+	"github.com/projectcalico/libcalico-go/lib/health"
+	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
+	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
@@ -124,6 +120,7 @@ type Config struct {
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
 	VXLANMTU             int
+	VXLANPort            int
 
 	MaxIPSetSize int
 
@@ -187,6 +184,14 @@ type Config struct {
 	// Populated with the smallest host MTU based on auto-detection.
 	hostMTU         int
 	MTUIfacePattern *regexp.Regexp
+}
+
+type UpdateBatchResolver interface {
+	// Opportunity for a manager component to resolve state that depends jointly on the updates
+	// that it has seen since the preceding CompleteDeferredWork call.  Processing here can
+	// include passing resolved state to other managers.  It should not include any actual
+	// dataplane updates yet.  (Those should be actioned in CompleteDeferredWork.)
+	ResolveUpdateBatch() error
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -530,12 +535,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	for i, r := range config.RulesConfig.WorkloadIfacePrefixes {
 		interfaceRegexes[i] = "^" + r + ".*"
 	}
+	bpfMapContext := &bpf.MapContext{
+		RepinningEnabled: config.BPFMapRepin,
+	}
+
+	var (
+		bpfEndpointManager *bpfEndpointManager
+	)
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
-		bpfMapContext := &bpf.MapContext{
-			RepinningEnabled: config.BPFMapRepin,
-		}
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
@@ -549,14 +558,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsConfigV4,
 			ipSetIDAllocator,
 			ipSetsMap,
+			dp.loopSummarizer,
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks))
-		bpfRTMgr := newBPFRouteManager(config.Hostname, bpfMapContext)
+		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext)
 		dp.RegisterManager(bpfRTMgr)
 
-		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
-		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
+		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
+		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
+		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		stateMap := state.Map(bpfMapContext)
 		err = stateMap.EnsureExists()
 		if err != nil {
@@ -569,23 +580,40 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create ARP BPF map.")
 		}
 
+		// The failsafe manager sets up the failsafe port map.  It's important that it is registered before the
+		// endpoint managers so that the map is brought up to date before they run for the first time.
+		failsafesMap := failsafes.Map(bpfMapContext)
+		err = arpMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create failsafe port BPF map.")
+		}
+		failsafeMgr := failsafes.NewManager(
+			failsafesMap,
+			config.RulesConfig.FailsafeInboundHostPorts,
+			config.RulesConfig.FailsafeOutboundHostPorts,
+			dp.loopSummarizer,
+		)
+		dp.RegisterManager(failsafeMgr)
+
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
-		dp.RegisterManager(newBPFEndpointManager(
+		bpfEndpointManager = newBPFEndpointManager(
 			config.BPFLogLevel,
 			config.Hostname,
 			fibLookupEnabled,
-			config.RulesConfig.EndpointToHostAction == "DROP",
+			config.RulesConfig.EndpointToHostAction,
 			config.BPFDataIfacePattern,
 			workloadIfaceRegex,
 			ipSetIDAllocator,
 			config.VXLANMTU,
+			uint16(config.VXLANPort),
 			config.BPFNodePortDSREnabled,
 			ipSetsMap,
 			stateMap,
 			ruleRenderer,
 			filterTableV4,
 			dp.reportHealth,
-		))
+		)
+		dp.RegisterManager(bpfEndpointManager)
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)
@@ -689,6 +717,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		config.BPFEnabled,
+		bpfEndpointManager,
 		callbacks)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -785,6 +814,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			config.BPFEnabled,
+			nil,
 			callbacks))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -1064,8 +1094,6 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 }
 
 func (d *InternalDataplane) setUpIptablesBPF() {
-	// TODO Make make bits configurable.
-
 	for _, t := range d.iptablesFilterTables {
 		fwdRules := []iptables.Rule{
 			{
@@ -1077,7 +1105,38 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			},
 		}
 
-		var inputRules []iptables.Rule
+		var inputRules, outputRules []iptables.Rule
+
+		// Handle packets for flows that pre-date the BPF programs.  The BPF program doesn't have any conntrack
+		// state for these so it allows them to fall through to iptables with a mark set.
+		inputRules = append(inputRules,
+			iptables.Rule{
+				Match: iptables.Match().
+					MarkMatchesWithMask(tc.MarkSeenFallThrough, tc.MarkSeenFallThroughMask).
+					ConntrackState("ESTABLISHED,RELATED"),
+				Comment: []string{"Accept packets from flows that pre-date BPF."},
+				Action:  iptables.AcceptAction{},
+			},
+			iptables.Rule{
+				Match:   iptables.Match().MarkMatchesWithMask(tc.MarkSeenFallThrough, tc.MarkSeenFallThroughMask),
+				Comment: []string{"Drop packets from unknown flows."},
+				Action:  iptables.DropAction{},
+			},
+		)
+
+		// Mark traffic leaving the host that already has an established linux conntrack entry.
+		outputRules = append(outputRules,
+			iptables.Rule{
+				Match: iptables.Match().
+					ConntrackState("ESTABLISHED,RELATED"),
+				Comment: []string{"Mark pre-established host flows."},
+				Action: iptables.SetMaskedMarkAction{
+					Mark: tc.MarkLinuxConntrackEstablished,
+					Mask: tc.MarkLinuxConntrackEstablishedMask,
+				},
+			},
+		)
+
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
 				// Drop packets that have come from a workload but have not been through our BPF program.
@@ -1096,6 +1155,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					Action: iptables.AcceptAction{},
 				})
 			}
+
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
 				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
@@ -1113,6 +1173,18 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				})
 			}
 		} else {
+			// Let the BPF programs know if Linux conntrack knows about the flow.
+			fwdRules = append(fwdRules,
+				iptables.Rule{
+					Match: iptables.Match().
+						ConntrackState("ESTABLISHED,RELATED"),
+					Comment: []string{"Mark pre-established flows."},
+					Action: iptables.SetMaskedMarkAction{
+						Mark: tc.MarkLinuxConntrackEstablished,
+						Mask: tc.MarkLinuxConntrackEstablishedMask,
+					},
+				},
+			)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF
 			// program attached (yet).  To catch that case, we send the packet through a dispatch chain.  We only
 			// add interfaces to the dispatch chain if the BPF program is in place.
@@ -1144,6 +1216,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 		t.InsertOrAppendRules("INPUT", inputRules)
 		t.InsertOrAppendRules("FORWARD", fwdRules)
+		t.InsertOrAppendRules("OUTPUT", outputRules)
 	}
 
 	for _, t := range d.iptablesNATTables {
@@ -1574,7 +1647,23 @@ func (d *InternalDataplane) apply() {
 	// Unset the needs-sync flag, we'll set it again if something fails.
 	d.dataplaneNeedsSync = false
 
-	// First, give the managers a chance to update IP sets and iptables.
+	// First, give the managers a chance to resolve any state based on the preceding batch of
+	// updates.  In some cases, e.g. EndpointManager, this can result in an update to another
+	// manager (BPFEndpointManager.OnHEPUpdate) that must happen before either of those managers
+	// begins its dataplane programming updates.
+	for _, mgr := range d.allManagers {
+		if handler, ok := mgr.(UpdateBatchResolver); ok {
+			err := handler.ResolveUpdateBatch()
+			if err != nil {
+				log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
+					"couldn't resolve update batch for manager, will try again later")
+				d.dataplaneNeedsSync = true
+			}
+			d.reportHealth()
+		}
+	}
+
+	// Now allow managers to complete the dataplane programming updates that they need.
 	for _, mgr := range d.allManagers {
 		err := mgr.CompleteDeferredWork()
 		if err != nil {
