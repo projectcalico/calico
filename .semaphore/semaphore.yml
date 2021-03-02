@@ -2,7 +2,7 @@ version: v1.0
 name: Kube Controllers
 
 execution_time_limit:
-  minutes: 30
+  minutes: 45
 
 agent:
   machine:
