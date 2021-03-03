@@ -1,6 +1,6 @@
 - title: v3.17.3
   chart:
-￼    version: 1
+   version: 1
   tigera-operator:
    image: tigera/operator
    registry: quay.io
