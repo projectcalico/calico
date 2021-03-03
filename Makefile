@@ -135,7 +135,7 @@ unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
 space :=
 space +=
 comma := ,
-prefix_linux = $(addprefix linux/,$(strip $1))
+prefix_linux = $(addprefix linux/,$(strip $(subst armv,arm/v,$1)))
 join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 imagetag:
@@ -160,7 +160,7 @@ sub-manifest-%:
 	# Docker login to hub.docker.com required before running this target as we are using
 	# $(DOCKER_CONFIG) holds the docker login credentials path to credentials based on
 	# manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
-	docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c "/usr/bin/manifest-tool push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*:$(IMAGETAG))-ARCH --target $(call unescapefs,$*:$(IMAGETAG))"
+	docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c "/usr/bin/manifest-tool push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*:$(IMAGETAG))-ARCHVARIANT --target $(call unescapefs,$*:$(IMAGETAG))"
 
  ## push default amd64 arch where multi-arch manifest is not supported
 push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
