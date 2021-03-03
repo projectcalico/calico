@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -281,5 +281,38 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 				MatchRegexp("-A cali-cidr-block -d fd5e::/119 .* -j DROP"),
 			))
 		}
+
+		By("resetting BGP config")
+		updateBGPConfig(func(cfg *api.BGPConfiguration) {
+			cfg.Spec.ServiceClusterIPs = nil
+		})
+	})
+
+	It("ServiceExternalIPs also blocks service routing loop", func() {
+		By("configuring service external IPs")
+		updateBGPConfig(func(cfg *api.BGPConfiguration) {
+			cfg.Spec.ServiceExternalIPs = []api.ServiceExternalIPBlock{
+				{
+					CIDR: "10.96.0.0/17",
+				},
+			}
+		})
+
+		By("test that we don't get a routing loop")
+		tryRoutingLoop(false)
+
+		By("configuring ServiceLoopPrevention=Disabled")
+		updateFelixConfig(func(cfg *api.FelixConfiguration) {
+			cfg.Spec.ServiceLoopPrevention = "Disabled"
+		})
+
+		By("test that we DO get a routing loop")
+		// (In order to test that the tryRoutingLoop setup is genuine.)
+		tryRoutingLoop(true)
+
+		By("resetting BGP config")
+		updateBGPConfig(func(cfg *api.BGPConfiguration) {
+			cfg.Spec.ServiceExternalIPs = nil
+		})
 	})
 })
