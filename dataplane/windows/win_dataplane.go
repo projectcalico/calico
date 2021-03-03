@@ -173,7 +173,7 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 	for _, i := range dp.ipSets {
 		ipsc = append(ipsc, i)
 	}
-	dp.policySets = policysets.NewPolicySets(hns, ipsc)
+	dp.policySets = policysets.NewPolicySets(hns, ipsc, policysets.FileReader(policysets.StaticFileName))
 
 	dp.RegisterManager(newIPSetsManager(ipSetsV4))
 	dp.RegisterManager(newPolicyManager(dp.policySets))
