@@ -103,11 +103,13 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   <%
 
 1. Ensure that BGP is disabled.
+   If you installed Calico using operator, you can do this by:
 
    ```bash
    kubectl patch installation default --type=merge -p '{"spec": {"calicoNetwork": {"bgp": "Disabled"}}}'
    ```
-  
+   If you installed Calico using the manifest from https://docs.projectcalico.org/manifests/calico-vxlan.yaml then BGP is already disabled.
+
 1. Prepare directory for Kubernetes files on Windows node.
 
    ```powershell
