@@ -28,7 +28,7 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210218200932-58d83bf50222
-	github.com/projectcalico/pod2daemon v0.0.0-20210216173008-b5092452cd7d
+	github.com/projectcalico/pod2daemon v0.0.0-20210303174516-f4d124e8d7e6
 	github.com/projectcalico/typha v0.7.3-0.20210218201053-5a8f32effd7f
 	github.com/prometheus/client_golang v1.0.0
 	github.com/satori/go.uuid v1.2.0
