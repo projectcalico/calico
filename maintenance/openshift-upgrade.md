@@ -6,7 +6,7 @@ canonical_url: '/maintenance/openshift-upgrade'
 
 ## About upgrading {{site.prodname}}
 
-This page describes how to upgrade to {{page.version}} for OpenShift 4 from an existing {{side.prodname}} cluster.
+This page describes how to upgrade to {{page.version}} for OpenShift 4 from an existing {{site.prodname}} cluster.
 
 {% include content/hostendpoints-upgrade.md orch="OpenShift" %}
 
