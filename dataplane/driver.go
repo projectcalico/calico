@@ -166,9 +166,6 @@ func StartDataplaneDriver(configParams *config.Config,
 		failsafeInboundHostPorts := configParams.FailsafeInboundHostPorts
 		failsafeOutboundHostPorts := configParams.FailsafeOutboundHostPorts
 		if configParams.WireguardEnabled {
-			failsafeInboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeInboundHostPorts)+1)
-			copy(failsafeInboundHostPorts, configParams.FailsafeInboundHostPorts)
-
 			var found = false
 			for _, i := range failsafeInboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
@@ -178,9 +175,12 @@ func StartDataplaneDriver(configParams *config.Config,
 						"protocol": i.Protocol,
 					}).Debug("FailsafeInboundHostPorts is already configured for wireguard")
 					found = true
+					break
 				}
 			}
 			if !found {
+				failsafeInboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeInboundHostPorts)+1)
+				copy(failsafeInboundHostPorts, configParams.FailsafeInboundHostPorts)
 				log.Debug("Adding permissive FailsafeInboundHostPorts for wireguard")
 				failsafeInboundHostPorts[len(configParams.FailsafeInboundHostPorts)] = config.ProtoPort{
 					Net:      "0.0.0.0/0",
@@ -188,9 +188,6 @@ func StartDataplaneDriver(configParams *config.Config,
 					Protocol: "udp",
 				}
 			}
-
-			failsafeOutboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeOutboundHostPorts)+1)
-			copy(failsafeOutboundHostPorts, configParams.FailsafeOutboundHostPorts)
 
 			found = false
 			for _, i := range failsafeOutboundHostPorts {
@@ -201,9 +198,12 @@ func StartDataplaneDriver(configParams *config.Config,
 						"protocol": i.Protocol,
 					}).Debug("FailsafeOutboundHostPorts is already configured for wireguard")
 					found = true
+					break
 				}
 			}
 			if !found {
+				failsafeOutboundHostPorts = make([]config.ProtoPort, len(configParams.FailsafeOutboundHostPorts)+1)
+				copy(failsafeOutboundHostPorts, configParams.FailsafeOutboundHostPorts)
 				log.Debug("Adding permissive FailsafeOutboundHostPorts for wireguard")
 				failsafeOutboundHostPorts[len(configParams.FailsafeOutboundHostPorts)] = config.ProtoPort{
 					Net:      "0.0.0.0/0",
