@@ -173,10 +173,16 @@ func StartDataplaneDriver(configParams *config.Config,
 			var found = false
 			for _, i := range failsafeInboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
+					log.WithFields(log.Fields{
+						"net": i.Net,
+						"port": i.Port,
+						"protocol": i.Protocol,
+					}).Debug("FailsafeInboundHostPorts is already configured for wireguard")
 					found = true
 				}
 			}
 			if !found {
+				log.Debug("Adding permissive FailsafeInboundHostPorts for wireguard")
 				failsafeInboundHostPorts[len(configParams.FailsafeInboundHostPorts)] = config.ProtoPort{
 					Net:      "0.0.0.0/0",
 					Port:     uint16(configParams.WireguardListeningPort),
@@ -190,10 +196,16 @@ func StartDataplaneDriver(configParams *config.Config,
 			found = false
 			for _, i := range failsafeOutboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
+					log.WithFields(log.Fields{
+						"net": i.Net,
+						"port": i.Port,
+						"protocol": i.Protocol,
+					}).Debug("FailsafeOutboundHostPorts is already configured for wireguard")
 					found = true
 				}
 			}
 			if !found {
+				log.Debug("Adding permissive FailsafeOutboundHostPorts for wireguard")
 				failsafeOutboundHostPorts[len(configParams.FailsafeOutboundHostPorts)] = config.ProtoPort{
 					Net:      "0.0.0.0/0",
 					Port:     uint16(configParams.WireguardListeningPort),
