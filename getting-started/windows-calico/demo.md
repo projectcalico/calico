@@ -13,8 +13,6 @@ Windows Server 1809 (build 10.0.17763). More recent versions of Windows Server c
 >**Note**: Windows Server 1809 (build 10.0.17763) does not currently support [direct server return](https://techcommunity.microsoft.com/t5/networking-blog/direct-server-return-dsr-in-a-nutshell/ba-p/693710){:target="_blank"}. This means that policy support is limited to only pod IP addresses.
 {: .alert .alert-info}
 
-You will also need [calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) installed and configured.
-
 ## Create pods on Linux nodes
 
 First, create a client (busybox) and server (nginx) pod on the Linux nodes:
@@ -211,21 +209,26 @@ RawContentLength  : 49
 Now let's apply a basic network policy that allows only the busybox pod to reach the porter pod.
 
 ```bash
-calicoctl apply -f - <<EOF
-apiVersion: projectcalico.org/v3
+kubectl apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-busybox
   namespace: calico-demo
 spec:
-  selector: app == 'porter'
-  types:
+  podSelector:
+    matchLabels:
+      app: porter
+  policyTypes:
   - Ingress
   ingress:
-  - action: Allow
-    protocol: TCP
-    source:
-      selector: app == 'busybox'
+  - from:
+    - podSelector:
+        matchLabels:
+          app: busybox
+    ports:
+    - protocol: TCP
+      port: 80
 EOF
 ```
 
