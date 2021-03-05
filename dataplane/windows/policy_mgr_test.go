@@ -33,7 +33,7 @@ func TestPolicyManager(t *testing.T) {
 		IPSets: map[string][]string{},
 	}
 
-	ps := policysets.NewPolicySets(&h, []policysets.IPSetCache{&ipsc})
+	ps := policysets.NewPolicySets(&h, []policysets.IPSetCache{&ipsc}, mockReader(""))
 	policyMgr := newPolicyManager(ps)
 
 	//Apply policy update
@@ -142,4 +142,13 @@ type mockIPSetCache struct {
 
 func (c *mockIPSetCache) GetIPSetMembers(ipsetID string) []string {
 	return c.IPSets[ipsetID]
+}
+
+type mockReader string
+
+func (m mockReader) ReadData() ([]byte, error) {
+	if len(m) == 0 {
+		return []byte{}, policysets.ErrNoRuleSpecified
+	}
+	return []byte(string(m)), nil
 }
