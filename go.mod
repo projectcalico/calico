@@ -27,9 +27,9 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210216231304-fc7e82fd9f1d
-	github.com/projectcalico/pod2daemon v0.0.0-20201209191447-44c7b48b4b61
-	github.com/projectcalico/typha v0.7.3-0.20210216231434-86327ba312ac
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210305184916-02db57c95742
+	github.com/projectcalico/pod2daemon v0.0.0-20210303175725-63bffe4262de
+	github.com/projectcalico/typha v0.7.3-0.20210305191109-86f3147c19f1
 	github.com/prometheus/client_golang v1.0.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
