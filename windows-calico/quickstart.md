@@ -48,7 +48,10 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
       kubectl delete rolebinding calico-install-token --namespace calico-system
       kubectl delete role calico-install-token --namespace calico-system
       ```
-
+- Additionally, for AKS:
+    - {{site.prodnameWindows}} can be enabled only on newly created clusters.
+    - Kubernetes version 1.20+
+    
 **Linux control node requirements**
 - Installed with {{site.prodname}} v3.12+
 - If {{site.prodname}} networking is being used:
@@ -89,16 +92,24 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   The geeky details of what you get by default:
   {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
+- **AKS**
+
+  The geeky details of what you get by default:
+  {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
+
+
 {% tabs %}
   <label:Kubernetes VXLAN,active:true>
   <%
 
 1. Ensure that BGP is disabled.
+   If you installed Calico using operator, you can do this by:
 
    ```bash
    kubectl patch installation default --type=merge -p '{"spec": {"calicoNetwork": {"bgp": "Disabled"}}}'
    ```
-  
+   If you installed Calico using the manifest from https://docs.projectcalico.org/manifests/calico-vxlan.yaml then BGP is already disabled.
+
 1. Prepare directory for Kubernetes files on Windows node.
 
    ```powershell
@@ -318,6 +329,69 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    ```powershell
    Get-Service -Name kubelet
    Get-Service -Name kube-proxy
+   ```
+%>
+
+<label:AKS>
+<%
+
+1. Register the `EnableAKSWindowsCalico` feature flag with the following Azure CLI commad.
+
+   ```bash
+   az feature register --namespace "Microsoft.ContainerService" --name "EnableAKSWindowsCalico"
+   ```
+
+1. Wait until the `EnableAKSWindowsCalico` feature flag is registered successfully. Execute following CLI command to get current status of the feature.
+
+   ```bash
+   az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/EnableAKSWindowsCalico')].{Name:name,State:properties.state}"
+   ```
+
+   Move to next step if the output from above command matches the following output.
+   ```bash
+   Name                                               State
+   -------------------------------------------------  ----------
+   Microsoft.ContainerService/EnableAKSWindowsCalico  Registered
+   ```   
+
+1. Refresh the registration of the `Microsoft.ContainerService` resource provider. Execute the following command.
+
+   ```bash
+   az provider register --namespace Microsoft.ContainerService
+   ```
+
+1. Create the AKS cluster with these settings: `network-plugin` to `azure`, and `network-policy` to `calico`. For example,
+
+   ```bash
+   az group create -n $your-resource-group -l $your-region
+   az aks create \
+    --resource-group $your-resource-group \
+    --name $your-cluster-name \
+    --node-count 1 \
+    --enable-addons monitoring \
+    --windows-admin-username azureuser \
+    --windows-admin-password $your-windows-password \
+    --kubernetes-version 1.20.2 \
+    --vm-set-type VirtualMachineScaleSets \
+    --service-principal $your-service-principal \
+    --client-secret $your-client-secret \
+    --load-balancer-sku standard \
+    --node-vm-size Standard_D2s_v3 \
+    --network-plugin azure \
+    --network-policy calico
+   ```
+
+1. Add a Windows node pool. For example,
+
+   ```bash
+   az aks nodepool add \
+    --resource-group $your-resource-group \
+    --cluster-name $your-cluster-name \
+    --os-type Windows \
+    --name $your-windows-node-pool-name \
+    --node-count 1 \
+    --kubernetes-version 1.20.2 \
+    --node-vm-size Standard_D2s_v3
    ```
 %>
 

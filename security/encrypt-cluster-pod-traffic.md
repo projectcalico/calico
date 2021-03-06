@@ -25,7 +25,7 @@ This how-to guide uses the following {{site.prodname}} features:
     - Set `IP` (or `IP6`) environment variable to `autodetect`.
     - Set `IP_AUTODETECTION_METHOD` (or `IP6_AUTODETECTION_METHOD`) to an appropriate value. If there are multiple interfaces on a node, set the value to detect the IP address of the primary interface.
 
-> **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. Also, encryption using WireGuard is not supported if `CALICO_NETWORKING_BACKEND=none` (e.g. managed Kubernetes platforms EKS, AKS and GKE).
+> **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. Also, encryption using WireGuard is not supported if not using Calico CNI (e.g. managed Kubernetes platforms EKS, AKS and GKE).
 {: .alert .alert-info}
 
 ### How to
