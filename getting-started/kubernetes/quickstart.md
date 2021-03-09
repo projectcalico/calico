@@ -10,7 +10,7 @@ This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
 
 ### Value
 
-Use this quickstart to quickly and easily try {{side.prodname}} features. To deploy a cluster suitable for production, refer to [{{site.prodname}} on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
+Use this quickstart to quickly and easily try {{site.prodname}} features. To deploy a cluster suitable for production, refer to [{{site.prodname}} on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes/).
 
 ### Before you begin
 

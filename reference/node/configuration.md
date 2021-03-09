@@ -124,7 +124,7 @@ The `{{site.nodecontainer}}` must know the name of the node on which it is runni
 retrieve the [Node resource]({{site.baseurl}}/reference/resources/node) configured for this node if it exists, or to create a new node resource representing the node if it does not. It is
 also used to associate the node with per-node [BGP configuration]({{site.baseurl}}/reference/resources/bgpconfig), [felix configuration]({{site.baseurl}}/reference/resources/felixconfig), and endpoints.
 
-When launched, the `{{side.nodecontainer}}` container sets the node name according to the following order of precedence:
+When launched, the `{{site.nodecontainer}}` container sets the node name according to the following order of precedence:
 
 1. The value specified in the `NODENAME` environment variable, if set.
 1. The value specified in `/var/lib/calico/nodename`, if it exists.
