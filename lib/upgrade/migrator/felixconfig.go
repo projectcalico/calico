@@ -317,12 +317,12 @@ func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error)
 
 		if len(parts) > 2 {
 			netStr = parts[1]
-			protocolStr = strings.ToLower(parts[0])
+			protocolStr = strings.ToUpper(parts[0])
 			portStr = parts[2]
 		}
 
 		if len(parts) == 2 {
-			protocolStr = strings.ToLower(parts[0])
+			protocolStr = strings.ToUpper(parts[0])
 			portStr = parts[1]
 		}
 
