@@ -160,7 +160,8 @@ func (s *Scanner) iterStart() {
 }
 
 func (s *Scanner) iterEnd() {
-	for _, scanner := range s.scanners {
+	for i := len(s.scanners) - 1; i >= 0; i-- {
+		scanner := s.scanners[i]
 		if synced, ok := scanner.(EntryScannerSynced); ok {
 			synced.IterationEnd()
 		}
