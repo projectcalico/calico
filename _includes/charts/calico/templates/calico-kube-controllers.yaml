@@ -84,7 +84,7 @@ spec:
         - name: etcd-certs
           secret:
             secretName: calico-etcd-secrets
-            defaultMode: 0400
+            defaultMode: 0440
 {{- else }}
       containers:
         - name: calico-kube-controllers
