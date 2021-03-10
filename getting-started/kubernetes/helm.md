@@ -1,5 +1,5 @@
 ---
-title: Install Calico using Helm
+title: Install using Helm
 description: Install Calico on a Kubernetes cluster using Helm 3.
 canonical_url: '/getting-started/kubernetes/helm'
 ---
@@ -19,7 +19,7 @@ Helm is also used by tools like ArgoCD to manage applications in a cluster, taki
 
 - Install Helm 3
 - Kubernetes cluster meets these requirements:
-  - Kubernetes is installed *without* a CNI plugin **OR** cluster is running a compatible CNI for Calico to run in policy-only mode 
+  - Kubernetes is installed *without* a CNI plugin **OR** cluster is running a compatible CNI for {{site.prodname}} to run in policy-only mode 
   - x86-64, arm64, ppc64le, or s390x processors
   - RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
 - `kubeconfig` is configured to work with your cluster (check by running `kubectl get nodes`)
@@ -40,7 +40,7 @@ exposed via the Kubernetes API defined as a custom resource definition.
 
 1. [Download the chart for the latest release](https://github.com/projectcalico/calico/releases/download/{{site.data.versions[0].title}}/tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz) from the release artifacts.  
 **OR**   
-Go to the Calico [releases page](https://github.com/projectcalico/calico/releases) and find the release you want to install. The chart will be in the release artifacts and will have a name like: `tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz`
+Go to the {{site.prodname}} [releases page](https://github.com/projectcalico/calico/releases) and find the release you want to install. The chart will be in the release artifacts and will have a name like: `tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz`
 
 #### Customize the Helm chart
 If you are installing on a cluster installed by EKS, GKE, AKS, Openshift or Docker Enterprise, or you need to customize TLS certificates, you **must** customize this Helm chart by creating a `values.yaml` file.
@@ -62,11 +62,11 @@ echo '{installation.kubernetesProvider: EKS}' > values.yaml
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
 
    ```
-   helm install tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz --generate-name 
+   helm install tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz calico 
    ```
    or if you created a `values.yaml` above:
    ```
-   helm install -f values.yaml tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz --generate-name 
+   helm install -f values.yaml tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz calico 
    ```
 
 1. Confirm that all of the pods are running with the following command.
