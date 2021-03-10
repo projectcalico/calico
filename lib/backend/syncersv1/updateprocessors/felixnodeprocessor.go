@@ -205,14 +205,14 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	if c.usePodCIDR {
 		// If we're using host-local IPAM based off the Kubernetes node PodCIDR, then
 		// we need to send Blocks based on the CIDRs to felix.
-		log.Info("Using pod cidr")
+		log.Debug("Using pod cidr")
 		var currentPodCIDRs []string
 		if node != nil {
 			currentPodCIDRs = node.Status.PodCIDRs
 		}
 		toRemove := c.nodeCIDRTracker.SetNodeCIDRs(name, currentPodCIDRs)
-		log.Infof("Current CIDRS: %s", currentPodCIDRs)
-		log.Infof("Old CIDRS: %s", toRemove)
+		log.Debugf("Current CIDRS: %s", currentPodCIDRs)
+		log.Debugf("Old CIDRS: %s", toRemove)
 
 		// Send deletes for any CIDRs which are no longer present.
 		for _, c := range toRemove {
