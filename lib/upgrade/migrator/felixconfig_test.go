@@ -55,14 +55,17 @@ var _ = Describe("Test felix configuration upgrade", func() {
 			{
 				Protocol: "TCP",
 				Port:     1234,
+				Net:      "0.0.0.0/0",
 			},
 			{
 				Protocol: "UDP",
 				Port:     22,
+				Net:      "0.0.0.0/0",
 			},
 			{
 				Protocol: "TCP",
 				Port:     65535,
+				Net:      "0.0.0.0/0",
 			},
 		},
 	}
@@ -83,14 +86,17 @@ var _ = Describe("Test felix configuration upgrade", func() {
 			{
 				Protocol: "TCP",
 				Port:     1234,
+				Net:      "0.0.0.0/0",
 			},
 			{
 				Protocol: "UDP",
 				Port:     22,
+				Net:      "0.0.0.0/0",
 			},
 			{
 				Protocol: "TCP",
 				Port:     65535,
+				Net:      "0.0.0.0/0",
 			},
 		},
 	}

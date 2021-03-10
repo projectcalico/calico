@@ -48,7 +48,7 @@ var protoPortSliceToString = func(value interface{}) interface{} {
 	}
 	parts := make([]string, len(pps))
 	for i, pp := range pps {
-		parts[i] = fmt.Sprintf("%s:%d", strings.ToLower(pp.Protocol), pp.Port)
+		parts[i] = fmt.Sprintf("%s:%s:%d", strings.ToLower(pp.Protocol), pp.Net, pp.Port)
 	}
 	return strings.Join(parts, ",")
 }

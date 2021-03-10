@@ -26,6 +26,7 @@ import (
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 )
 
@@ -308,14 +309,33 @@ func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error)
 		}
 
 		parts := strings.Split(portStr, ":")
-		if len(parts) > 2 {
-			return nil, m.parseProtoPortFailed("ports should be <protocol>:<number> or <number>")
+		if len(parts) > 3 {
+			return nil, m.parseProtoPortFailed("ports should be <protocol>:<net>:<number> or <protocol>:<number> or <number>")
 		}
 		protocolStr := "TCP"
-		if len(parts) > 1 {
-			protocolStr = strings.ToUpper(parts[0])
+		netStr := "0.0.0.0/0"
+
+		if len(parts) > 2 {
+			netStr = parts[1]
+			protocolStr = strings.ToLower(parts[0])
+			portStr = parts[2]
+		}
+
+		if len(parts) == 2 {
+			protocolStr = strings.ToLower(parts[0])
 			portStr = parts[1]
 		}
+
+		ip, netParsed, err := net.ParseCIDROrIP(netStr)
+		if err != nil {
+			err = m.parseProtoPortFailed("invalid CIDR or IP " + netStr)
+			return nil, err
+		}
+		if ip.Version() != 4 {
+			err = m.parseProtoPortFailed("invalid CIDR or IP (not v4)")
+			return nil, err
+		}
+
 		if protocolStr != "TCP" && protocolStr != "UDP" {
 			return nil, m.parseProtoPortFailed("unknown protocol: " + protocolStr)
 		}
@@ -329,6 +349,7 @@ func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error)
 			return nil, err
 		}
 		result = append(result, apiv3.ProtoPort{
+			Net:      netParsed.String(),
 			Protocol: protocolStr,
 			Port:     uint16(port),
 		})
