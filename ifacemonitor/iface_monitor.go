@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package ifacemonitor
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"syscall"
 	"time"
@@ -56,16 +57,17 @@ type Config struct {
 type InterfaceMonitor struct {
 	Config
 
-	netlinkStub   netlinkStub
-	resyncC       <-chan time.Time
-	upIfaces      map[string]int // Map from interface name to index.
-	StateCallback InterfaceStateCallback
-	AddrCallback  AddrStateCallback
-	ifaceName     map[int]string
-	ifaceAddrs    map[int]set.Set
+	netlinkStub      netlinkStub
+	resyncC          <-chan time.Time
+	upIfaces         map[string]int // Map from interface name to index.
+	StateCallback    InterfaceStateCallback
+	AddrCallback     AddrStateCallback
+	ifaceName        map[int]string
+	ifaceAddrs       map[int]set.Set
+	fatalErrCallback func(error)
 }
 
-func New(config Config) *InterfaceMonitor {
+func New(config Config, fatalErrCallback func(error)) *InterfaceMonitor {
 	// Interface monitor using the real netlink, and resyncing every 10 seconds.
 	var resyncC <-chan time.Time
 	if config.ResyncInterval > 0 {
@@ -74,17 +76,18 @@ func New(config Config) *InterfaceMonitor {
 		resyncTicker := time.NewTicker(config.ResyncInterval)
 		resyncC = resyncTicker.C
 	}
-	return NewWithStubs(config, &netlinkReal{}, resyncC)
+	return NewWithStubs(config, &netlinkReal{}, resyncC, fatalErrCallback)
 }
 
-func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Time) *InterfaceMonitor {
+func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Time, fatalErrCallback func(error)) *InterfaceMonitor {
 	return &InterfaceMonitor{
-		Config:      config,
-		netlinkStub: netlinkStub,
-		resyncC:     resyncC,
-		upIfaces:    map[string]int{},
-		ifaceName:   map[int]string{},
-		ifaceAddrs:  map[int]set.Set{},
+		Config:           config,
+		netlinkStub:      netlinkStub,
+		resyncC:          resyncC,
+		upIfaces:         map[string]int{},
+		ifaceName:        map[int]string{},
+		ifaceAddrs:       map[int]set.Set{},
+		fatalErrCallback: fatalErrCallback,
 	}
 }
 
@@ -111,7 +114,7 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	// subscription vs a list operation as used by resync().
 	err := m.resync()
 	if err != nil {
-		log.WithError(err).Panic("Failed to read link states from netlink.")
+		m.fatalErrCallback(fmt.Errorf("failed to read from netlink: %w", err))
 	}
 
 readLoop:
@@ -140,11 +143,11 @@ readLoop:
 			log.Debug("Resync trigger")
 			err := m.resync()
 			if err != nil {
-				log.WithError(err).Panic("Failed to read link states from netlink.")
+				m.fatalErrCallback(fmt.Errorf("failed to read from netlink: %w", err))
 			}
 		}
 	}
-	log.Panic("Failed to read events from Netlink.")
+	m.fatalErrCallback(fmt.Errorf("failed to read from netlink: %w", err))
 }
 
 func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {

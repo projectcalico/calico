@@ -47,6 +47,7 @@ import (
 func StartDataplaneDriver(configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
 	configChangedRestartCallback func(),
+	fatalErrorCallback func(error),
 	k8sClientSet *kubernetes.Clientset) (DataplaneDriver, *exec.Cmd) {
 
 	if !configParams.IsLeader() {
@@ -68,7 +69,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				log.Info("Kube-proxy in ipvs mode, enabling felix kube-proxy ipvs support.")
 			}
 		}
-		if configChangedRestartCallback == nil {
+		if configChangedRestartCallback == nil || fatalErrorCallback == nil {
 			log.Panic("Starting dataplane with nil callback func.")
 		}
 
@@ -170,8 +171,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			for _, i := range failsafeInboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
 					log.WithFields(log.Fields{
-						"net": i.Net,
-						"port": i.Port,
+						"net":      i.Net,
+						"port":     i.Port,
 						"protocol": i.Protocol,
 					}).Debug("FailsafeInboundHostPorts is already configured for wireguard")
 					found = true
@@ -193,8 +194,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			for _, i := range failsafeOutboundHostPorts {
 				if i.Port == uint16(configParams.WireguardListeningPort) && i.Protocol == "udp" {
 					log.WithFields(log.Fields{
-						"net": i.Net,
-						"port": i.Port,
+						"net":      i.Net,
+						"port":     i.Port,
 						"protocol": i.Protocol,
 					}).Debug("FailsafeOutboundHostPorts is already configured for wireguard")
 					found = true
@@ -311,6 +312,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
 
 			ConfigChangedRestartCallback: configChangedRestartCallback,
+			FatalErrorRestartCallback:    fatalErrorCallback,
 
 			PostInSyncCallback: func() {
 				// The initial resync uses a lot of scratch space so now is

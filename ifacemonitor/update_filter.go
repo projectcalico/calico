@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -51,7 +52,11 @@ func WithTimeShim(t timeshim.Interface) UpdateFilterOp {
 func FilterUpdates(ctx context.Context,
 	addrOutC chan<- netlink.RouteUpdate, routeInC <-chan netlink.RouteUpdate,
 	linkOutC chan<- netlink.LinkUpdate, linkInC <-chan netlink.LinkUpdate,
-	options ...UpdateFilterOp) {
+	options ...UpdateFilterOp,
+) {
+	// Propagate failures to the downstream channels.
+	defer close(addrOutC)
+	defer close(linkOutC)
 
 	u := &updateFilter{
 		Time: timeshim.RealTime(),
@@ -76,7 +81,11 @@ mainLoop:
 		case <-ctx.Done():
 			logrus.Info("FilterUpdates: Context expired, stopping")
 			return
-		case linkUpd := <-linkInC:
+		case linkUpd, ok := <-linkInC:
+			if !ok {
+				log.Error("FilterUpdates: link input channel closed.")
+				return
+			}
 			idx := int(linkUpd.Index)
 			linkIsUp := linkUpd.Header.Type == syscall.RTM_NEWLINK && linkIsOperUp(linkUpd.Link)
 			var delay time.Duration
@@ -99,7 +108,11 @@ mainLoop:
 					ReadyAt: u.Time.Now().Add(delay),
 					Update:  linkUpd,
 				})
-		case routeUpd := <-routeInC:
+		case routeUpd, ok := <-routeInC:
+			if !ok {
+				log.Error("FilterUpdates: route input channel closed.")
+				return
+			}
 			logrus.WithField("route", routeUpd).Debug("Route update")
 			if !routeIsLocalUnicast(routeUpd.Route) {
 				logrus.WithField("route", routeUpd).Debug("Ignoring non-local route.")

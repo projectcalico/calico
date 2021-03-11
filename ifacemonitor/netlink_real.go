@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,11 +30,21 @@ func (nl *netlinkReal) Subscribe(
 ) error {
 	cancel := make(chan struct{})
 
-	if err := netlink.LinkSubscribe(linkUpdates, cancel); err != nil {
+	if err := netlink.LinkSubscribeWithOptions(linkUpdates, cancel, netlink.LinkSubscribeOptions{
+		ErrorCallback: func(err error) {
+			// Not necessarily fatal (can be an unexpected message, which the library will drop).
+			log.WithError(err).Warn("Netlink reported an error.")
+		},
+	}); err != nil {
 		log.WithError(err).Panic("Failed to subscribe to link updates")
 		return err
 	}
-	if err := netlink.RouteSubscribe(routeUpdates, cancel); err != nil {
+	if err := netlink.RouteSubscribeWithOptions(routeUpdates, cancel, netlink.RouteSubscribeOptions{
+		ErrorCallback: func(err error) {
+			// Not necessarily fatal (can be an unexpected message, which the library will drop).
+			log.WithError(err).Warn("Netlink reported an error.")
+		},
+	}); err != nil {
 		log.WithError(err).Panic("Failed to subscribe to addr updates")
 		return err
 	}
