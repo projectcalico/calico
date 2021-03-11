@@ -22,8 +22,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/projectcalico/felix/dataplane/windows/hns"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/dataplane/windows/hns"
 )
 
 const (

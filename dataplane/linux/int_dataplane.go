@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -149,6 +149,7 @@ type Config struct {
 	StatusReportingInterval time.Duration
 
 	ConfigChangedRestartCallback func()
+	FatalErrorRestartCallback    func(error)
 
 	PostInSyncCallback func()
 	HealthAggregator   *health.HealthAggregator
@@ -326,7 +327,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		toDataplane:      make(chan interface{}, msgPeekLimit),
 		fromDataplane:    make(chan interface{}, 100),
 		ruleRenderer:     ruleRenderer,
-		ifaceMonitor:     ifacemonitor.New(config.IfaceMonitorConfig),
+		ifaceMonitor:     ifacemonitor.New(config.IfaceMonitorConfig, config.FatalErrorRestartCallback),
 		ifaceUpdates:     make(chan *ifaceUpdate, 100),
 		ifaceAddrUpdates: make(chan *ifaceAddrsUpdate, 100),
 		config:           config,
