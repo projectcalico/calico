@@ -419,8 +419,8 @@ var _ = Describe("ifacemonitor", func() {
 		fatalErrC = make(chan struct{})
 		fatalErrCallback := func(err error) {
 			log.WithError(err).Info("Fatal error reported")
-			close(fatalErrC)
-			panic(errFatal)
+			close(fatalErrC) // Signal to test code that we saw the fatal error callback.
+			panic(errFatal)  // Break out of the MonitorInterfaces goroutine (this panic is recovered below).
 		}
 		im = ifacemonitor.NewWithStubs(config, nl, resyncC, fatalErrCallback)
 
