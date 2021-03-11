@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,26 @@ const (
 	chanPollTime  = "10ms"
 	chanPollIntvl = "100us"
 )
+
+func TestUpdateFilter_FilterUpdates_LinkCClosed(t *testing.T) {
+	t.Log("Link channel closure should be propagated to output channel")
+	harness, cancel := setUpFilterTest(t)
+	defer cancel()
+
+	close(harness.LinkIn)
+	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+}
+
+func TestUpdateFilter_FilterUpdates_RouteCClosed(t *testing.T) {
+	t.Log("Link channel closure should be propagated to output channel")
+	harness, cancel := setUpFilterTest(t)
+	defer cancel()
+
+	close(harness.RouteIn)
+	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+}
 
 func TestUpdateFilter_FilterUpdates_LinkUpdateDelay(t *testing.T) {
 	t.Log("Link updates should be delayed")

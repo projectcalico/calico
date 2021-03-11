@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package ifacemonitor
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"syscall"
 	"time"
@@ -31,7 +32,7 @@ type netlinkStub interface {
 	Subscribe(
 		linkUpdates chan netlink.LinkUpdate,
 		routeUpdates chan netlink.RouteUpdate,
-	) error
+	) (cancel chan struct{}, err error)
 	LinkList() ([]netlink.Link, error)
 	ListLocalRoutes(link netlink.Link, family int) ([]netlink.Route, error)
 }
@@ -56,16 +57,17 @@ type Config struct {
 type InterfaceMonitor struct {
 	Config
 
-	netlinkStub   netlinkStub
-	resyncC       <-chan time.Time
-	upIfaces      map[string]int // Map from interface name to index.
-	StateCallback InterfaceStateCallback
-	AddrCallback  AddrStateCallback
-	ifaceName     map[int]string
-	ifaceAddrs    map[int]set.Set
+	netlinkStub      netlinkStub
+	resyncC          <-chan time.Time
+	upIfaces         map[string]int // Map from interface name to index.
+	StateCallback    InterfaceStateCallback
+	AddrCallback     AddrStateCallback
+	ifaceName        map[int]string
+	ifaceAddrs       map[int]set.Set
+	fatalErrCallback func(error)
 }
 
-func New(config Config) *InterfaceMonitor {
+func New(config Config, fatalErrCallback func(error)) *InterfaceMonitor {
 	// Interface monitor using the real netlink, and resyncing every 10 seconds.
 	var resyncC <-chan time.Time
 	if config.ResyncInterval > 0 {
@@ -74,17 +76,18 @@ func New(config Config) *InterfaceMonitor {
 		resyncTicker := time.NewTicker(config.ResyncInterval)
 		resyncC = resyncTicker.C
 	}
-	return NewWithStubs(config, &netlinkReal{}, resyncC)
+	return NewWithStubs(config, &netlinkReal{}, resyncC, fatalErrCallback)
 }
 
-func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Time) *InterfaceMonitor {
+func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Time, fatalErrCallback func(error)) *InterfaceMonitor {
 	return &InterfaceMonitor{
-		Config:      config,
-		netlinkStub: netlinkStub,
-		resyncC:     resyncC,
-		upIfaces:    map[string]int{},
-		ifaceName:   map[int]string{},
-		ifaceAddrs:  map[int]set.Set{},
+		Config:           config,
+		netlinkStub:      netlinkStub,
+		resyncC:          resyncC,
+		upIfaces:         map[string]int{},
+		ifaceName:        map[int]string{},
+		ifaceAddrs:       map[int]set.Set{},
+		fatalErrCallback: fatalErrCallback,
 	}
 }
 
@@ -96,55 +99,66 @@ func IsInterfacePresent(name string) bool {
 func (m *InterfaceMonitor) MonitorInterfaces() {
 	log.Info("Interface monitoring thread started.")
 
-	updates := make(chan netlink.LinkUpdate, 10)
-	routeUpdates := make(chan netlink.RouteUpdate, 10)
-	if err := m.netlinkStub.Subscribe(updates, routeUpdates); err != nil {
-		log.WithError(err).Panic("Failed to subscribe to netlink stub")
-	}
-	filteredUpdates := make(chan netlink.LinkUpdate, 10)
-	filteredRouteUpdates := make(chan netlink.RouteUpdate, 10)
-	go FilterUpdates(context.Background(), filteredRouteUpdates, routeUpdates, filteredUpdates, updates)
-	log.Info("Subscribed to netlink updates.")
-
-	// Start of day, do a resync to notify all our existing interfaces.  We also do periodic
-	// resyncs because it's not clear what the ordering guarantees are for our netlink
-	// subscription vs a list operation as used by resync().
-	err := m.resync()
-	if err != nil {
-		log.WithError(err).Panic("Failed to read link states from netlink.")
-	}
-
-readLoop:
+	// Reconnection loop.
 	for {
-		log.WithFields(log.Fields{
-			"updates":      filteredUpdates,
-			"routeUpdates": filteredRouteUpdates,
-			"resyncC":      m.resyncC,
-		}).Debug("About to select on possible triggers")
-		select {
-		case update, ok := <-filteredUpdates:
-			log.WithField("update", update).Debug("Link update")
-			if !ok {
-				log.Warn("Failed to read a link update")
-				break readLoop
+		var nlCancelC chan struct{}
+		filterUpdatesCtx, filterUpdatesCancel := context.WithCancel(context.Background())
+		filteredUpdates := make(chan netlink.LinkUpdate, 10)
+		filteredRouteUpdates := make(chan netlink.RouteUpdate, 10)
+		{
+			updates := make(chan netlink.LinkUpdate, 10)
+			routeUpdates := make(chan netlink.RouteUpdate, 10)
+			var err error
+			if nlCancelC, err = m.netlinkStub.Subscribe(updates, routeUpdates); err != nil {
+				// If we can't even subscribe, something must have gone very wrong.  Bail.
+				m.fatalErrCallback(fmt.Errorf("failed to subscribe to netlink: %w", err))
 			}
-			m.handleNetlinkUpdate(update)
-		case routeUpdate, ok := <-filteredRouteUpdates:
-			log.WithField("addrUpdate", routeUpdate).Debug("Address update")
-			if !ok {
-				log.Warn("Failed to read an address update")
-				break readLoop
-			}
-			m.handleNetlinkRouteUpdate(routeUpdate)
-		case <-m.resyncC:
-			log.Debug("Resync trigger")
-			err := m.resync()
-			if err != nil {
-				log.WithError(err).Panic("Failed to read link states from netlink.")
+			go FilterUpdates(filterUpdatesCtx, filteredRouteUpdates, routeUpdates, filteredUpdates, updates)
+		}
+		log.Info("Subscribed to netlink updates.")
+
+		// Do a resync to notify all our existing interfaces.  We also do periodic
+		// resyncs because it's not clear what the ordering guarantees are for our netlink
+		// subscription vs a list operation as used by resync().
+		err := m.resync()
+		if err != nil {
+			m.fatalErrCallback(fmt.Errorf("failed to read from netlink (initial resync): %w", err))
+		}
+
+	readLoop:
+		for {
+			log.WithFields(log.Fields{
+				"updates":      filteredUpdates,
+				"routeUpdates": filteredRouteUpdates,
+				"resyncC":      m.resyncC,
+			}).Debug("About to select on possible triggers")
+			select {
+			case update, ok := <-filteredUpdates:
+				log.WithField("update", update).Debug("Link update")
+				if !ok {
+					log.Warn("Failed to read a link update")
+					break readLoop
+				}
+				m.handleNetlinkUpdate(update)
+			case routeUpdate, ok := <-filteredRouteUpdates:
+				log.WithField("addrUpdate", routeUpdate).Debug("Address update")
+				if !ok {
+					log.Warn("Failed to read an address update")
+					break readLoop
+				}
+				m.handleNetlinkRouteUpdate(routeUpdate)
+			case <-m.resyncC:
+				log.Debug("Resync trigger")
+				err := m.resync()
+				if err != nil {
+					m.fatalErrCallback(fmt.Errorf("failed to read from netlink (resync): %w", err))
+				}
 			}
 		}
+		close(nlCancelC)
+		filterUpdatesCancel()
+		log.Warn("Reconnecting to netlink after a failure...")
 	}
-	log.Panic("Failed to read events from Netlink.")
 }
 
 func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,9 +49,13 @@ func WithTimeShim(t timeshim.Interface) UpdateFilterOp {
 // * When we see a potential flap (i.e. an IP deletion), defer processing the queue for a while.
 // * If the flap resolves itself (i.e. the IP is added back), suppress the IP deletion.
 func FilterUpdates(ctx context.Context,
-	addrOutC chan<- netlink.RouteUpdate, routeInC <-chan netlink.RouteUpdate,
+	routeOutC chan<- netlink.RouteUpdate, routeInC <-chan netlink.RouteUpdate,
 	linkOutC chan<- netlink.LinkUpdate, linkInC <-chan netlink.LinkUpdate,
-	options ...UpdateFilterOp) {
+	options ...UpdateFilterOp,
+) {
+	// Propagate failures to the downstream channels.
+	defer close(routeOutC)
+	defer close(linkOutC)
 
 	u := &updateFilter{
 		Time: timeshim.RealTime(),
@@ -76,7 +80,11 @@ mainLoop:
 		case <-ctx.Done():
 			logrus.Info("FilterUpdates: Context expired, stopping")
 			return
-		case linkUpd := <-linkInC:
+		case linkUpd, ok := <-linkInC:
+			if !ok {
+				logrus.Error("FilterUpdates: link input channel closed.")
+				return
+			}
 			idx := int(linkUpd.Index)
 			linkIsUp := linkUpd.Header.Type == syscall.RTM_NEWLINK && linkIsOperUp(linkUpd.Link)
 			var delay time.Duration
@@ -99,7 +107,11 @@ mainLoop:
 					ReadyAt: u.Time.Now().Add(delay),
 					Update:  linkUpd,
 				})
-		case routeUpd := <-routeInC:
+		case routeUpd, ok := <-routeInC:
+			if !ok {
+				logrus.Error("FilterUpdates: route input channel closed.")
+				return
+			}
 			logrus.WithField("route", routeUpd).Debug("Route update")
 			if !routeIsLocalUnicast(routeUpd.Route) {
 				logrus.WithField("route", routeUpd).Debug("Ignoring non-local route.")
@@ -121,7 +133,7 @@ mainLoop:
 					// Short circuit.  We care about flaps where IPs are temporarily removed so no need to
 					// delay an add.
 					logrus.Debug("FilterUpdates: add with empty queue, short circuit.")
-					addrOutC <- routeUpd
+					routeOutC <- routeUpd
 					continue
 				}
 
@@ -177,7 +189,7 @@ mainLoop:
 					logrus.WithField("update", firstUpd).Debug("FilterUpdates: update ready to send.")
 					switch u := firstUpd.Update.(type) {
 					case netlink.RouteUpdate:
-						addrOutC <- u
+						routeOutC <- u
 					case netlink.LinkUpdate:
 						linkOutC <- u
 					}
