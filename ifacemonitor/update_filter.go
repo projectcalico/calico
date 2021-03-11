@@ -20,7 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -50,12 +49,12 @@ func WithTimeShim(t timeshim.Interface) UpdateFilterOp {
 // * When we see a potential flap (i.e. an IP deletion), defer processing the queue for a while.
 // * If the flap resolves itself (i.e. the IP is added back), suppress the IP deletion.
 func FilterUpdates(ctx context.Context,
-	addrOutC chan<- netlink.RouteUpdate, routeInC <-chan netlink.RouteUpdate,
+	routeOutC chan<- netlink.RouteUpdate, routeInC <-chan netlink.RouteUpdate,
 	linkOutC chan<- netlink.LinkUpdate, linkInC <-chan netlink.LinkUpdate,
 	options ...UpdateFilterOp,
 ) {
 	// Propagate failures to the downstream channels.
-	defer close(addrOutC)
+	defer close(routeOutC)
 	defer close(linkOutC)
 
 	u := &updateFilter{
@@ -83,7 +82,7 @@ mainLoop:
 			return
 		case linkUpd, ok := <-linkInC:
 			if !ok {
-				log.Error("FilterUpdates: link input channel closed.")
+				logrus.Error("FilterUpdates: link input channel closed.")
 				return
 			}
 			idx := int(linkUpd.Index)
@@ -110,7 +109,7 @@ mainLoop:
 				})
 		case routeUpd, ok := <-routeInC:
 			if !ok {
-				log.Error("FilterUpdates: route input channel closed.")
+				logrus.Error("FilterUpdates: route input channel closed.")
 				return
 			}
 			logrus.WithField("route", routeUpd).Debug("Route update")
@@ -134,7 +133,7 @@ mainLoop:
 					// Short circuit.  We care about flaps where IPs are temporarily removed so no need to
 					// delay an add.
 					logrus.Debug("FilterUpdates: add with empty queue, short circuit.")
-					addrOutC <- routeUpd
+					routeOutC <- routeUpd
 					continue
 				}
 
@@ -190,7 +189,7 @@ mainLoop:
 					logrus.WithField("update", firstUpd).Debug("FilterUpdates: update ready to send.")
 					switch u := firstUpd.Update.(type) {
 					case netlink.RouteUpdate:
-						addrOutC <- u
+						routeOutC <- u
 					case netlink.LinkUpdate:
 						linkOutC <- u
 					}

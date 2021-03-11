@@ -18,7 +18,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
-	//"syscall"
 )
 
 type netlinkReal struct {
@@ -27,7 +26,7 @@ type netlinkReal struct {
 func (nl *netlinkReal) Subscribe(
 	linkUpdates chan netlink.LinkUpdate,
 	routeUpdates chan netlink.RouteUpdate,
-) error {
+) (chan struct{}, error) {
 	cancel := make(chan struct{})
 
 	if err := netlink.LinkSubscribeWithOptions(linkUpdates, cancel, netlink.LinkSubscribeOptions{
@@ -36,8 +35,9 @@ func (nl *netlinkReal) Subscribe(
 			log.WithError(err).Warn("Netlink reported an error.")
 		},
 	}); err != nil {
-		log.WithError(err).Panic("Failed to subscribe to link updates")
-		return err
+		log.WithError(err).Error("Failed to subscribe to link updates")
+		close(cancel)
+		return nil, err
 	}
 	if err := netlink.RouteSubscribeWithOptions(routeUpdates, cancel, netlink.RouteSubscribeOptions{
 		ErrorCallback: func(err error) {
@@ -45,11 +45,12 @@ func (nl *netlinkReal) Subscribe(
 			log.WithError(err).Warn("Netlink reported an error.")
 		},
 	}); err != nil {
-		log.WithError(err).Panic("Failed to subscribe to addr updates")
-		return err
+		log.WithError(err).Error("Failed to subscribe to route updates")
+		close(cancel)
+		return nil, err
 	}
 
-	return nil
+	return cancel, nil
 }
 
 func (nl *netlinkReal) LinkList() ([]netlink.Link, error) {

@@ -46,6 +46,7 @@ type netlinkTest struct {
 	linkUpdates    chan netlink.LinkUpdate
 	routeUpdates   chan netlink.RouteUpdate
 	userSubscribed chan int
+	cancel         chan struct{}
 
 	nextIndex int
 	links     map[string]linkModel
@@ -224,11 +225,12 @@ func (nl *netlinkTest) signalAddr(name string, addr string, exists bool) {
 func (nl *netlinkTest) Subscribe(
 	linkUpdates chan netlink.LinkUpdate,
 	routeUpdates chan netlink.RouteUpdate,
-) error {
+) (chan struct{}, error) {
 	nl.linkUpdates = linkUpdates
 	nl.routeUpdates = routeUpdates
+	nl.cancel = make(chan struct{})
 	nl.userSubscribed <- 1
-	return nil
+	return nl.cancel, nil
 }
 
 func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
@@ -652,13 +654,19 @@ var _ = Describe("ifacemonitor", func() {
 		Expect(fatalErrC).ToNot(BeClosed())
 	})
 
-	It("should report a fatal error if link channel goes down", func() {
+	It("should reconnect to netlink if channel goes down", func() {
+		oldCancel := nl.cancel
 		close(nl.linkUpdates)
-		Eventually(fatalErrC).Should(BeClosed())
+		Eventually(oldCancel).Should(BeClosed())
+		Eventually(nl.userSubscribed).Should(Receive())
+		Expect(fatalErrC).ToNot(BeClosed())
 	})
 
 	It("should report a fatal error if routes channel goes down", func() {
+		oldCancel := nl.cancel
 		close(nl.routeUpdates)
-		Eventually(fatalErrC).Should(BeClosed())
+		Eventually(oldCancel).Should(BeClosed())
+		Eventually(nl.userSubscribed).Should(Receive())
+		Expect(fatalErrC).ToNot(BeClosed())
 	})
 })

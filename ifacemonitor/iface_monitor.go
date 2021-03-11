@@ -32,7 +32,7 @@ type netlinkStub interface {
 	Subscribe(
 		linkUpdates chan netlink.LinkUpdate,
 		routeUpdates chan netlink.RouteUpdate,
-	) error
+	) (cancel chan struct{}, err error)
 	LinkList() ([]netlink.Link, error)
 	ListLocalRoutes(link netlink.Link, family int) ([]netlink.Route, error)
 }
@@ -99,55 +99,66 @@ func IsInterfacePresent(name string) bool {
 func (m *InterfaceMonitor) MonitorInterfaces() {
 	log.Info("Interface monitoring thread started.")
 
-	updates := make(chan netlink.LinkUpdate, 10)
-	routeUpdates := make(chan netlink.RouteUpdate, 10)
-	if err := m.netlinkStub.Subscribe(updates, routeUpdates); err != nil {
-		log.WithError(err).Panic("Failed to subscribe to netlink stub")
-	}
-	filteredUpdates := make(chan netlink.LinkUpdate, 10)
-	filteredRouteUpdates := make(chan netlink.RouteUpdate, 10)
-	go FilterUpdates(context.Background(), filteredRouteUpdates, routeUpdates, filteredUpdates, updates)
-	log.Info("Subscribed to netlink updates.")
-
-	// Start of day, do a resync to notify all our existing interfaces.  We also do periodic
-	// resyncs because it's not clear what the ordering guarantees are for our netlink
-	// subscription vs a list operation as used by resync().
-	err := m.resync()
-	if err != nil {
-		m.fatalErrCallback(fmt.Errorf("failed to read from netlink: %w", err))
-	}
-
-readLoop:
+	// Reconnection loop.
 	for {
-		log.WithFields(log.Fields{
-			"updates":      filteredUpdates,
-			"routeUpdates": filteredRouteUpdates,
-			"resyncC":      m.resyncC,
-		}).Debug("About to select on possible triggers")
-		select {
-		case update, ok := <-filteredUpdates:
-			log.WithField("update", update).Debug("Link update")
-			if !ok {
-				log.Warn("Failed to read a link update")
-				break readLoop
+		var nlCancelC chan struct{}
+		filterUpdatesCtx, filterUpdatesCancel := context.WithCancel(context.Background())
+		filteredUpdates := make(chan netlink.LinkUpdate, 10)
+		filteredRouteUpdates := make(chan netlink.RouteUpdate, 10)
+		{
+			updates := make(chan netlink.LinkUpdate, 10)
+			routeUpdates := make(chan netlink.RouteUpdate, 10)
+			var err error
+			if nlCancelC, err = m.netlinkStub.Subscribe(updates, routeUpdates); err != nil {
+				// If we can't even subscribe, something must have gone very wrong.  Bail.
+				m.fatalErrCallback(fmt.Errorf("failed to subscribe to netlink: %w", err))
 			}
-			m.handleNetlinkUpdate(update)
-		case routeUpdate, ok := <-filteredRouteUpdates:
-			log.WithField("addrUpdate", routeUpdate).Debug("Address update")
-			if !ok {
-				log.Warn("Failed to read an address update")
-				break readLoop
-			}
-			m.handleNetlinkRouteUpdate(routeUpdate)
-		case <-m.resyncC:
-			log.Debug("Resync trigger")
-			err := m.resync()
-			if err != nil {
-				m.fatalErrCallback(fmt.Errorf("failed to read from netlink: %w", err))
+			go FilterUpdates(filterUpdatesCtx, filteredRouteUpdates, routeUpdates, filteredUpdates, updates)
+		}
+		log.Info("Subscribed to netlink updates.")
+
+		// Do a resync to notify all our existing interfaces.  We also do periodic
+		// resyncs because it's not clear what the ordering guarantees are for our netlink
+		// subscription vs a list operation as used by resync().
+		err := m.resync()
+		if err != nil {
+			m.fatalErrCallback(fmt.Errorf("failed to read from netlink (initial resync): %w", err))
+		}
+
+	readLoop:
+		for {
+			log.WithFields(log.Fields{
+				"updates":      filteredUpdates,
+				"routeUpdates": filteredRouteUpdates,
+				"resyncC":      m.resyncC,
+			}).Debug("About to select on possible triggers")
+			select {
+			case update, ok := <-filteredUpdates:
+				log.WithField("update", update).Debug("Link update")
+				if !ok {
+					log.Warn("Failed to read a link update")
+					break readLoop
+				}
+				m.handleNetlinkUpdate(update)
+			case routeUpdate, ok := <-filteredRouteUpdates:
+				log.WithField("addrUpdate", routeUpdate).Debug("Address update")
+				if !ok {
+					log.Warn("Failed to read an address update")
+					break readLoop
+				}
+				m.handleNetlinkRouteUpdate(routeUpdate)
+			case <-m.resyncC:
+				log.Debug("Resync trigger")
+				err := m.resync()
+				if err != nil {
+					m.fatalErrCallback(fmt.Errorf("failed to read from netlink (resync): %w", err))
+				}
 			}
 		}
+		close(nlCancelC)
+		filterUpdatesCancel()
+		log.Warn("Reconnecting to netlink after a failure...")
 	}
-	m.fatalErrCallback(fmt.Errorf("failed to read from netlink: %w", err))
 }
 
 func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {
