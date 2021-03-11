@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package ifacemonitor_test
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -45,6 +46,7 @@ type netlinkTest struct {
 	linkUpdates    chan netlink.LinkUpdate
 	routeUpdates   chan netlink.RouteUpdate
 	userSubscribed chan int
+	cancel         chan struct{}
 
 	nextIndex int
 	links     map[string]linkModel
@@ -53,7 +55,8 @@ type netlinkTest struct {
 	// possible after we've read and/or written that data - instead of using defer - because we
 	// don't want to hold the mutex when writing to a channel (which is often what happens next
 	// in the same function).
-	linksMutex sync.Mutex
+	linksMutex  sync.Mutex
+	LinkListErr error
 }
 
 type addrState struct {
@@ -222,14 +225,19 @@ func (nl *netlinkTest) signalAddr(name string, addr string, exists bool) {
 func (nl *netlinkTest) Subscribe(
 	linkUpdates chan netlink.LinkUpdate,
 	routeUpdates chan netlink.RouteUpdate,
-) error {
+) (chan struct{}, error) {
 	nl.linkUpdates = linkUpdates
 	nl.routeUpdates = routeUpdates
+	nl.cancel = make(chan struct{})
 	nl.userSubscribed <- 1
-	return nil
+	return nl.cancel, nil
 }
 
 func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
+	if nl.LinkListErr != nil {
+		return nil, nl.LinkListErr
+	}
+
 	links := []netlink.Link{}
 	nl.linksMutex.Lock()
 	for name, link := range nl.links {
@@ -383,9 +391,12 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, presen
 	}
 }
 
+var errFatal = errors.New("fatal error")
+
 var _ = Describe("ifacemonitor", func() {
 	var nl *netlinkTest
 	var resyncC chan time.Time
+	var fatalErrC chan struct{}
 	var im *ifacemonitor.InterfaceMonitor
 	var dp *mockDataplane
 
@@ -405,7 +416,13 @@ var _ = Describe("ifacemonitor", func() {
 				regexp.MustCompile("dummy"),
 			},
 		}
-		im = ifacemonitor.NewWithStubs(config, nl, resyncC)
+		fatalErrC = make(chan struct{})
+		fatalErrCallback := func(err error) {
+			log.WithError(err).Info("Fatal error reported")
+			close(fatalErrC) // Signal to test code that we saw the fatal error callback.
+			panic(errFatal)  // Break out of the MonitorInterfaces goroutine (this panic is recovered below).
+		}
+		im = ifacemonitor.NewWithStubs(config, nl, resyncC, fatalErrCallback)
 
 		// Register this test code's callbacks, which (a) log; and (b) send to a 1- or
 		// 2-buffered channel, so that the test code _must_ explicitly indicate when it
@@ -421,11 +438,35 @@ var _ = Describe("ifacemonitor", func() {
 		}
 		im.StateCallback = dp.linkStateCallback
 		im.AddrCallback = dp.addrStateCallback
+	})
 
+	JustBeforeEach(func() {
 		// Start the monitor running, and wait until it has subscribed to our test netlink
 		// stub.
-		go im.MonitorInterfaces()
-		<-nl.userSubscribed
+		go func() {
+			defer GinkgoRecover()
+			defer func() {
+				v := recover()
+				if v == errFatal { // Our expected fatal error.
+					return
+				}
+				panic(v)
+			}()
+			im.MonitorInterfaces()
+		}()
+		Eventually(nl.userSubscribed).Should(Receive())
+		log.Info("Monitor interfaces subscribed")
+	})
+
+	Context("with an error from LinkList", func() {
+		BeforeEach(func() {
+			nl.LinkListErr = fmt.Errorf("dummy err")
+		})
+
+		It("should report a fatal error", func() {
+			log.Info("Waiting for fatal error...")
+			Eventually(fatalErrC).Should(BeClosed())
+		})
 	})
 
 	It("should skip netlink address updates for ipvs", func() {
@@ -475,6 +516,8 @@ var _ = Describe("ifacemonitor", func() {
 
 		// Repeat test for third interface exclude entry
 		netlinkUpdates("0dummy1")
+
+		Expect(fatalErrC).ToNot(BeClosed())
 	})
 
 	It("should handle mainline netlink updates", func() {
@@ -534,6 +577,8 @@ var _ = Describe("ifacemonitor", func() {
 		// ready to read it.)
 		resyncC <- time.Time{}
 		resyncC <- time.Time{}
+
+		Expect(fatalErrC).ToNot(BeClosed())
 	})
 
 	It("should handle an interface rename", func() {
@@ -570,6 +615,8 @@ var _ = Describe("ifacemonitor", func() {
 		// ready to read it.)
 		resyncC <- time.Time{}
 		resyncC <- time.Time{}
+
+		Expect(fatalErrC).ToNot(BeClosed())
 	})
 
 	It("should handle link flap", func() {
@@ -603,5 +650,23 @@ var _ = Describe("ifacemonitor", func() {
 
 		// Now we should see an address callback again.
 		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
+
+		Expect(fatalErrC).ToNot(BeClosed())
+	})
+
+	It("should reconnect to netlink if channel goes down", func() {
+		oldCancel := nl.cancel
+		close(nl.linkUpdates)
+		Eventually(oldCancel).Should(BeClosed())
+		Eventually(nl.userSubscribed).Should(Receive())
+		Expect(fatalErrC).ToNot(BeClosed())
+	})
+
+	It("should report a fatal error if routes channel goes down", func() {
+		oldCancel := nl.cancel
+		close(nl.routeUpdates)
+		Eventually(oldCancel).Should(BeClosed())
+		Eventually(nl.userSubscribed).Should(Receive())
+		Expect(fatalErrC).ToNot(BeClosed())
 	})
 })

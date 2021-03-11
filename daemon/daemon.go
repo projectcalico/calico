@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,9 +79,13 @@ const (
 	// String sent on the failure report channel to indicate we're shutting down for config
 	// change.
 	reasonConfigChanged = "config changed"
+	reasonFatalError    = "fatal error"
 	// Process return code used to report a config change.  This is the same as the code used
 	// by SIGHUP, which means that the wrapper script also restarts Felix on a SIGHUP.
 	configChangedRC = 129
+
+	// Grace period we allow for graceful shutdown before panicking.
+	gracefulShutdownTimeout = 30 * time.Second
 )
 
 // Run is the entry point to run a Felix instance.
@@ -373,12 +377,23 @@ configRetry:
 	var dpDriverCmd *exec.Cmd
 
 	failureReportChan := make(chan string)
-	configChangedRestartCallback := func() { failureReportChan <- reasonConfigChanged }
+	configChangedRestartCallback := func() {
+		failureReportChan <- reasonConfigChanged
+		time.Sleep(gracefulShutdownTimeout)
+		log.Panic("Graceful shutdown took too long")
+	}
+	fatalErrorCallback := func(err error) {
+		log.WithError(err).Error("Shutting down due to fatal error")
+		failureReportChan <- reasonFatalError
+		time.Sleep(gracefulShutdownTimeout)
+		log.Panic("Graceful shutdown took too long")
+	}
 
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		healthAggregator,
 		configChangedRestartCallback,
+		fatalErrorCallback,
 		k8sClientSet)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
