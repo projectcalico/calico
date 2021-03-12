@@ -237,6 +237,18 @@ prometheus metrics may still be configured through FelixConfiguration.</p>
 </tr>
 <tr>
 <td>
+<code>typhaMetricsPort</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaMetricsPort specifies which port calico/typha serves prometheus metrics on. By default, metrics are not enabled.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>flexVolumePath</code><br>
 <em>
 string
@@ -957,6 +969,18 @@ int32
 <p>NodeMetricsPort specifies which port calico/node serves prometheus metrics on. By default, metrics are not enabled.
 If specified, this overrides any FelixConfiguration resources which may exist. If omitted, then
 prometheus metrics may still be configured through FelixConfiguration.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>typhaMetricsPort</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaMetricsPort specifies which port calico/typha serves prometheus metrics on. By default, metrics are not enabled.</p>
 </td>
 </tr>
 <tr>
