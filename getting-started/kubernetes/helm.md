@@ -62,11 +62,11 @@ echo '{installation.kubernetesProvider: EKS}' > values.yaml
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
 
    ```
-   helm install tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz calico 
+   helm install calico tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz 
    ```
    or if you created a `values.yaml` above:
    ```
-   helm install -f values.yaml tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz calico 
+   helm install calico tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz -f values.yaml
    ```
 
 1. Confirm that all of the pods are running with the following command.
