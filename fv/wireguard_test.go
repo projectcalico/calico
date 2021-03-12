@@ -19,11 +19,12 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -257,7 +258,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 	Context("traffic with Wireguard enabled", func() {
 		// Checks the TCP dump for a count value. Retries until count is correct, or fails after 1.5s.
 		waitForPackets := func(t *tcpdump.TCPDump, timeout time.Time, name string, num int) error {
-			for ;; time.Now().Before(timeout) {
+			for ; ; time.Now().Before(timeout) {
 				if num == 0 && t.MatchCount(name) > 0 {
 					// We expect no traffic, but got some.  Error immediately.
 					break
@@ -308,7 +309,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Supported", []apiconfig.Data
 			// Now check the packet counts are as expected. We should have no WL->WL traffic visible on eth0, but
 			// we should be able to see tunnel traffic. Since we want to verify
 			By("Checking the packet stats from tcpdump")
-			timeout := time.Now().Add(2*time.Second)
+			timeout := time.Now().Add(2 * time.Second)
 			for i := range felixes {
 				if err := waitForPackets(tcpdumps[i], timeout, "numInTunnelPackets", 10); err != nil {
 					return err

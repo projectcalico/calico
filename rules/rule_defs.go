@@ -57,9 +57,9 @@ const (
 	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
-	IPSetIDAllHostNets          = "all-hosts-net"
-	IPSetIDAllVXLANSourceNets   = "all-vxlan-net"
-	IPSetIDThisHostIPs          = "this-host"
+	IPSetIDAllHostNets        = "all-hosts-net"
+	IPSetIDAllVXLANSourceNets = "all-vxlan-net"
+	IPSetIDThisHostIPs        = "this-host"
 
 	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
 	ChainFIPSnat = ChainNamePrefix + "fip-snat"
