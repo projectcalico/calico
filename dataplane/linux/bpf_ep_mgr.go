@@ -249,7 +249,8 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	// Interface updates.
 	case *ifaceUpdate:
 		m.onInterfaceUpdate(msg)
-
+        case *ifaceAddrsUpdate:
+		m.onInterfaceAddrsUpdate(msg)
 	// Updates from the datamodel:
 
 	// Workloads.
@@ -286,6 +287,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 			}
 		}
 	}
+}
+
+func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
+	log.Debugf("Interface address update for %v, state %v", update.Name, update.Addrs)
 }
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
