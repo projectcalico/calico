@@ -29,4 +29,7 @@ The resource structures include the JSON tags for each exposed field.  These are
 go-lang tags that define the JSON format of the structures as used by calicoctl.  The YAML
 format also used by calicoctl is directly mapped from the JSON.
 */
+
+// +k8s:openapi-gen=true
+
 package v1
