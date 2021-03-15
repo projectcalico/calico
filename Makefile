@@ -5,9 +5,8 @@ GO_BUILD_VER=v0.49
 SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_TYPHA_PROJECT_ID) $(SEMAPHORE_KUBE_CONTROLLERS_PROJECT_ID) \
 	$(SEMAPHORE_CALICOCTL_PROJECT_ID) $(SEMAPHORE_CNI_PROJECT_ID)
 
-# libcalico-go still relies on vendoring
-GOMOD_VENDOR = true
-LOCAL_CHECKS = vendor goimports check-gen-files
+GOMOD_VENDOR = false
+LOCAL_CHECKS = goimports check-gen-files
 
 ###############################################################################
 # Download and include Makefile.common
@@ -42,18 +41,17 @@ TEST_CERT_PATH := test/etcd-ut-certs/
 
 .PHONY: clean
 clean:
-	rm -rf .go-pkg-cache vendor $(BINDIR) checkouts Makefile.common*
+	rm -rf .go-pkg-cache $(BINDIR) checkouts Makefile.common*
 	find . -name '*.coverprofile' -type f -delete
 
 ###############################################################################
 # Building the binary
 ###############################################################################
-# Build the vendor directory.
-vendor: mod-download
-	$(DOCKER_GO_BUILD) go mod vendor
-
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
-           ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go
+	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
+	./lib/apis/v3/openapi_generated.go \
+	./lib/apis/v1/openapi_generated.go \
+	./lib/numorstring/openapi_generated.go
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
@@ -62,22 +60,25 @@ gen-files: gen-crds
 	$(MAKE) $(GENERATED_FILES)
 
 ## Force a rebuild of custom resource definition yamls
-gen-crds: vendor bin/controller-gen
+gen-crds: bin/controller-gen
 	rm -rf config
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c './bin/controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
 	@rm config/crd/_.yaml
 	patch -s -p0 < ./config.patch
 
 # Used for generating CRD files.
-bin/controller-gen:
+$(BINDIR)/controller-gen:
 	# Download a version of controller-gen that has been hacked to support additional types (e.g., float).
 	# We can remove this once we update the Calico v3 APIs to use only types which are supported by the upstream controller-gen
 	# tooling. Some examples: float, all the types in the numorstring package, etc.
 	mkdir -p bin
 	wget -O $@ https://github.com/caseydavenport/controller-tools/releases/download/float-support/controller-gen && chmod +x $@
 
-$(BINDIR)/deepcopy-gen: vendor
-	$(DOCKER_GO_BUILD) sh -c 'go build -o $@ $(PACKAGE_NAME)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
+$(BINDIR)/openapi-gen: 
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/openapi-gen"
+
+$(BINDIR)/deepcopy-gen: 
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/deepcopy-gen"
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS) $(BINDIR)/deepcopy-gen
 	$(DOCKER_GO_BUILD) sh -c '$(BINDIR)/deepcopy-gen \
@@ -95,6 +96,32 @@ $(BINDIR)/deepcopy-gen: vendor
 		--bounding-dirs "github.com/projectcalico/libcalico-go" \
 		--output-file-base zz_generated.deepcopy'
 
+# Generate OpenAPI spec
+./lib/apis/v3/openapi_generated.go: $(APIS_SRCS) $(BINDIR)/openapi-gen
+	$(DOCKER_GO_BUILD) \
+           sh -c '$(BINDIR)/openapi-gen \
+                --v 1 --logtostderr \
+                --go-header-file "./docs/boilerplate.go.txt" \
+                --input-dirs "$(PACKAGE_NAME)/lib/apis/v3,$(PACKAGE_NAME)/lib/apis/v1,$(PACKAGE_NAME)/lib/numorstring" \
+                --output-package "$(PACKAGE_NAME)/lib/apis/v3"'
+
+	$(DOCKER_GO_BUILD) \
+           sh -c '$(BINDIR)/openapi-gen \
+                --v 1 --logtostderr \
+                --go-header-file "./docs/boilerplate.go.txt" \
+                --input-dirs "$(PACKAGE_NAME)/lib/apis/v1,$(PACKAGE_NAME)/lib/numorstring" \
+                --output-package "$(PACKAGE_NAME)/lib/apis/v1"'
+
+	$(DOCKER_GO_BUILD) \
+           sh -c '$(BINDIR)/openapi-gen \
+                --v 1 --logtostderr \
+                --go-header-file "./docs/boilerplate.go.txt" \
+                --input-dirs "$(PACKAGE_NAME)/lib/numorstring" \
+                --output-package "$(PACKAGE_NAME)/lib/numorstring"; \
+                sed -i "/numorstring /d" ./lib/numorstring/openapi_generated.go'
+                # Above 'sed' to workaround a bug in openapi-gen which ends up
+                # importing "numorstring github.com/.../lib/numorstring" causing eventual build error
+
 ###############################################################################
 # Static checks
 ###############################################################################
@@ -106,8 +133,7 @@ check-gen-files: $(GENERATED_FILES)
 	git diff --exit-code -- $(GENERATED_FILES) || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
 
 .PHONY: check-format
-# Depends on the vendor directory because goimports needs to be able to resolve the imports.
-check-format: vendor
+check-format:
 	@if $(DOCKER_GO_BUILD) goimports -l lib | grep -v zz_generated | grep .; then \
 	  echo "Some files in ./lib are not goimported"; \
 	  false ;\
@@ -120,7 +146,7 @@ check-format: vendor
 ###############################################################################
 .PHONY: ut-cover
 ## Run the UTs natively with code coverage.  This requires a local etcd and local kubernetes master to be running.
-ut-cover: vendor
+ut-cover:
 	./run-uts
 
 WHAT?=.
@@ -128,16 +154,16 @@ GINKGO_FOCUS?=.*
 
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
-ut: vendor
+ut:
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
-fv: vendor run-etcd run-etcd-tls run-kubernetes-master run-coredns
+fv: run-etcd run-etcd-tls run-kubernetes-master run-coredns
 	$(DOCKER_RUN) --privileged --dns \
 		$(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 	$(MAKE) stop-etcd-tls
 
 ## Run etcd, with tls enabled, as a container (calico-etcd-tls)

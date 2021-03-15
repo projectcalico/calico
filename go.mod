@@ -6,6 +6,7 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
+	github.com/go-openapi/spec v0.19.3
 	github.com/go-playground/locales v0.12.1 // indirect
 	github.com/go-playground/universal-translator v0.0.0-20170327191703-71201497bace // indirect
 	github.com/gorilla/websocket v1.4.0 // indirect
@@ -35,6 +36,7 @@ require (
 	k8s.io/apimachinery v0.19.6
 	k8s.io/client-go v0.19.6
 	k8s.io/code-generator v0.19.6
+	k8s.io/kube-openapi v0.0.0-20200805222855-6aeccd4b50c6
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico

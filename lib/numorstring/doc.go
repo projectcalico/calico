@@ -16,4 +16,7 @@
 Package numorstring implements a set of type definitions that in YAML or JSON
 format may be represented by either a number or a string.
 */
+
+// +k8s:openapi-gen=true
+
 package numorstring
