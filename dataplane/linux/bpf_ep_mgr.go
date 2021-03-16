@@ -787,7 +787,12 @@ func (m *bpfEndpointManager) ifaceIsUp(ifaceName string) (up bool) {
 }
 
 func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.HostEndpoint, polDirection PolDirection) error {
-	log.Debugf("Attach program on iface %+v dir %+v", ifaceName, polDirection)
+	ip, err := getInterfaceIP(ifaceName)
+	if err != nil {
+		log.Debugf("Error getting IP for interface %+v", ifaceName)
+		return err
+	}
+	log.Debugf("Attach program on iface %+v dir %+v ip address %+v", ifaceName, polDirection, ip)
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
@@ -1350,3 +1355,27 @@ func FindJumpMap(ap *tc.AttachPoint) (mapFD bpf.MapFD, err error) {
 	}
 	return 0, errors.New("failed to find TC program")
 }
+
+func getInterfaceIP(ifaceName string) (net.IP, error) {
+        ifaces, err := net.Interfaces()
+        var ip net.IP
+        if err != nil {
+		return ip,err
+        }
+        for _, i := range ifaces {
+                addrs, err := i.Addrs()
+		if err != nil {
+			return ip, err
+		}
+                for _, addr := range addrs {
+                        switch v := addr.(type) {
+                        case *net.IPNet:
+                                ip = v.IP
+                        case *net.IPAddr:
+                                ip = v.IP
+                        }
+                }
+        }
+        return ip, nil
+}
+
