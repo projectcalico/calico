@@ -127,7 +127,8 @@ The route reflector controller scales BGP topology inside the cluster based on t
 |------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
 | reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
 | clusterId | Route reflector cluster id | string | 224.0.0.0 |
-| zoneLabel | ZoneLabel zone label on Kubernetes nodes | string | failure-domain.beta.kubernetes.io/zone |
+| hostnameLabel | hostname label on Kubernetes nodes | string | kubernetes.io/hostname |
+| zoneLabel | zone label on Kubernetes nodes | string | failure-domain.beta.kubernetes.io/zone |
 | min | The minimum number of route refletors | integer | 3 |
 | max | The maxium number of route refletors | integer | 10 |
 | ratio | ration of route reflectors and clients, between 0.001 and 0.05 | number | 0.005 |
