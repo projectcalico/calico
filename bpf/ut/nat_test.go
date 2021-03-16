@@ -1322,6 +1322,97 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	resetCTMap(ctMap)
 }
 
+// TestNATSYNRetryGoesToSameBackend checks that SYN retries all go to the same backend.  I.e.
+// that we conntrack SYN packets once they're past policy.  If we load balance each SYN independently
+// then we run into trouble if the response SYN-ACK is lost.  In that case, the client can end up
+// talking to two backends at the same time.
+func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
+	RegisterTestingT(t)
+
+	mc := &bpf.MapContext{}
+	natMap := nat.FrontendMap(mc)
+	err := natMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	natBEMap := nat.BackendMap(mc)
+	err = natBEMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMap := conntrack.Map(mc)
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	tcpSyn := &layers.TCP{
+		SrcPort:    54321,
+		DstPort:    7890,
+		SYN:        true,
+		DataOffset: 5,
+	}
+
+	_, ipv4, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(tcpSyn.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 2, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIPs := []net.IP{net.IPv4(192, 0, 0, 1), net.IPv4(192, 0, 0, 2)}
+	natPort := uint16(666)
+	for i, natIP := range natIPs {
+		err = natBEMap.Update(
+			nat.NewNATBackendKey(0, uint32(i)).AsBytes(),
+			nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+		)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	defer resetRTMap(rtMap)
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		// Part 1: if we resend the same SYN, then it should get conntracked to the same backend.
+		var firstIP net.IP
+		for attempt := 0; attempt < 10; attempt ++ {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+			fmt.Printf("pktR = %+v\n", pktR)
+			ipv4L := pktR.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+			if attempt == 0 {
+				firstIP = ipv4L.DstIP
+			} else {
+				Expect(ipv4L.DstIP).To(Equal(firstIP), "SYN retries should go to the same backend")
+			}
+		}
+
+		// Part 2: If we vary the source port, we should hit both backends eventually.
+		seenOtherIP := false
+		for attempt := 0; attempt < 100; attempt ++ {
+			tcpSyn.SrcPort++
+			_, _, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
+			Expect(err).NotTo(HaveOccurred())
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+			fmt.Printf("pktR = %+v\n", pktR)
+			ipv4L := pktR.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+			if !firstIP.Equal(ipv4L.DstIP) {
+				seenOtherIP = true
+				break
+			}
+		}
+		Expect(seenOtherIP).To(BeTrue(), "SYNs from varying source ports all went to same backend")
+	})
+}
+
 func TestNATAffinity(t *testing.T) {
 	RegisterTestingT(t)
 
