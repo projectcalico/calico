@@ -1357,28 +1357,19 @@ func FindJumpMap(ap *tc.AttachPoint) (mapFD bpf.MapFD, err error) {
 }
 
 func getInterfaceIP(ifaceName string) (net.IP, error) {
-        ifaces, err := net.Interfaces()
-        var ip net.IP
-        if err != nil {
-		return ip,err
-        }
-        for _, i := range ifaces {
-                addrs, err := i.Addrs()
-		if err != nil {
-			return ip, err
+	intf,err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return net.IPv4zero, err
+	}
+	addrs, err := intf.Addrs()
+	if err != nil{
+		return net.IPv4zero, err
+	}
+	for _,addr := range addrs {
+		if ipv4Addr := addr.(*net.IPNet).IP.To4(); ipv4Addr != nil {
+			return ipv4Addr, nil
 		}
-                for _, addr := range addrs {
-                        switch v := addr.(type) {
-                        case *net.IPNet:
-                                ip = v.IP
-                        case *net.IPAddr:
-                                ip = v.IP
-				if ip.To4() != nil {
-					break
-				}
-                        }
-                }
-        }
-        return ip, nil
+	}
+	return net.IPv4zero, errors.New("IP address not present")
 }
 
