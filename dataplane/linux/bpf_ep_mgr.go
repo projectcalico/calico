@@ -295,7 +295,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	log.Debugf("Interface address update for %v, addrs %v", update.Name, update.Addrs)
 	update.Addrs.Iter(func(item interface{}) error {
-		log.Debugf("Sridhar %+v",item.(string))
+		ip := net.ParseIP(item.(string))
+		if ip.To4() != nil {
+			log.Debugf("Interface %+v address %+v", update.Name, ip)
+		}
 		return nil
 	})
 }
