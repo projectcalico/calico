@@ -1373,6 +1373,9 @@ func getInterfaceIP(ifaceName string) (net.IP, error) {
                                 ip = v.IP
                         case *net.IPAddr:
                                 ip = v.IP
+				if ip.To4() != nil {
+					break
+				}
                         }
                 }
         }
