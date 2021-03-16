@@ -274,11 +274,24 @@ kubectl delete ns calico-demo
 
   <label:PowerShell>
   <%
+## Installing kubectl on Windows
+
+To run the commands in this demo you need the Windows version of kubectl installed and add it to the system path. 
+[Install kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/){:target="_blank"} and move the kubectl binary to **c:\k**.
+
+Add `c:\k` to the system path
+1. Open a PowerShell window as Administrator
+
+```powershell
+$env:Path += ";C:\k"
+```
+1. close all PowerShell windows.
+
 ## Create pods on Linux nodes
 
 First, create a client (busybox) and server (nginx) pod on the Linux nodes.
 
-### create a YAML file policy-demo-linux.yaml
+### create a YAML file policy-demo-linux.yaml using your favorite editor on Windows
 
 ```yaml
 
@@ -330,8 +343,8 @@ spec:
 
 ### Apply the policy-demo-linux.yaml file to the Kubernetes cluster
 
-1. Open a powershell window.
-1. Use `kubectl` to apply the `policy-demo-linux.yaml` configuration
+1. Open a PowerShell window.
+1. Use `kubectl` to apply the `policy-demo-linux.yaml` configuration.
 
 ```powershell
 kubectl apply -f policy-demo-linux.yaml
@@ -343,7 +356,7 @@ Next, we’ll create a client (pwsh) and server (porter) pod on the Windows node
 >[!Note]
 >The pwsh and porter pod manifests below use images based on mcr.microsoft.com/windows/servercore:1809. If you are using a more recent Windows Server version, update the manifests to use a servercore image that matches your Windows Server version.
 
-### create the policy-demo-windows.yaml
+### create the policy-demo-windows.yaml using your favorite editor on Windows
 
 ```yaml
 
@@ -389,7 +402,7 @@ spec:
 
 ### Apply the policy-demo-windows.yaml file to the Kubernetes cluster
 
-1. Open a powershell window.
+1. Open a PowerShell window.
 1. Use `kubectl` to apply the `policy-demo-windows.yaml` configuration
 
 ```powershell
@@ -432,7 +445,7 @@ pwsh      1/1     Running   0          5m19s
 
 Now that client and server pods are running on both Linux and Windows nodes, let’s verify that client pods on Linux nodes can reach server pods on Windows nodes.
 
-1. Open a powershell window.
+1. Open a PowerShell window.
 1. Using `kubectl` to determine the porter pod IP address:
 
     ```powershell
@@ -525,7 +538,7 @@ In a real world deployment you would want to make sure only pods that are suppos
 
 To achieve this you wil apply a basic network policy which allows only the busybox pod to reach the porter pod.
 
-### Create the network-policy.yaml file
+### Create the network-policy.yaml file using your favorite editor on Windows
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -551,7 +564,7 @@ spec:
 
 ### Apply the network-policy.yaml file
 
-1. Open a powershell window.
+1. Open a PowerShell window.
 1. Use `kubectl` to apply the network-policy.yaml file.
 
 ```powershell
@@ -591,6 +604,8 @@ command terminated with exit code 1
 
 In this demo we’ve configured pods on Linux and Windows nodes, verified basic pod connectivity, and tried a basic network policy to isolate pod to pod traffic.
 as the final step you can clean up all of the demo resources:
+
+1. Open a PowerShell window.
 
 ```powershell
 kubectl delete namespace calico-demo
