@@ -295,7 +295,7 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	log.Debugf("Interface address update for %v, addrs %v", update.Name, update.Addrs)
 	update.Addrs.Iter(func(item interface{}) error {
-		log.Debugf("Sridhar: %+v", item)
+		log.Debugf("Sridhar %+v",item.(string))
 		return nil
 	})
 }
