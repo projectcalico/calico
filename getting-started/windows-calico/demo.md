@@ -597,3 +597,5 @@ kubectl delete namespace calico-demo
 ```
 
   %>
+  
+  {% endtabs %}
