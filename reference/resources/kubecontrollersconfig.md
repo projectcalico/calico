@@ -130,7 +130,7 @@ The route reflector controller scales BGP topology inside the cluster based on t
 | zoneLabel | ZoneLabel zone label on Kubernetes nodes | string | failure-domain.beta.kubernetes.io/zone |
 | min | The minimum number of route refletors | integer | 3 |
 | max | The maxium number of route refletors | integer | 10 |
-| ratio | ration of route reflectors and clients, between 0.001 and 0.05 | float | 0.005 |
+| ratio | ration of route reflectors and clients, between 0.001 and 0.05 | number | 0.005 |
 | routeReflectorLabelKey | label key of route reflector selector | string | calico-route-reflector |
 | routeReflectorLabelValue | label value of route reflector selector | string | |
 | incompatibleLabels | List of node labels to disallow route reflector selection | string | |
