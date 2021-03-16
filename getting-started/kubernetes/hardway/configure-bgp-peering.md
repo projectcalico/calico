@@ -153,6 +153,10 @@ No IPv6 peers found.
 ```
 {: .no-select-button}
 
+# Topology autoscaling
+
+By default BGP topology is configured manually by the user. Doing the re-configuration each time when the cluster size or state changes is an expensive and boring operation. {{site.prodname}} has a built in `kubernetes` controller under [kubernetes-controllers]({{site.baseurl}}/reference/kube-controllers/configuration)`, to achieve BGP topology autoscaling. Multiple topologies are supported, for more details follow the controller's [documentation]({{site.baseurl}}/reference/route-reflector-ctrl/configuration).
+
 ## Next
 
 [Test networking](./test-networking)

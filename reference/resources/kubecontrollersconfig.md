@@ -119,6 +119,22 @@ The namespace controller syncs Kubernetes namespace label changes to the {{site.
 |------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
 | reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
 
+#### RouteReflectorController
+
+The route reflector controller scales BGP topology inside the cluster based on the given configuration.
+
+| Field            | Description                                                           | Schema                            | Default |
+|------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
+| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
+| clusterId | Route reflector cluster id | string | 224.0.0.0 |
+| zoneLabel | ZoneLabel zone label on Kubernetes nodes | string | failure-domain.beta.kubernetes.io/zone |
+| min | The minimum number of route refletors | integer | 3 |
+| max | The maxium number of route refletors | integer | 10 |
+| ratio | ration of route reflectors and clients, between 0.001 and 0.05 | float | 0.005 |
+| routeReflectorLabelKey | label key of route reflector selector | string | calico-route-reflector |
+| routeReflectorLabelValue | label value of route reflector selector | string | |
+| incompatibleLabels | List of node labels to disallow route reflector selection | string | |
+
 ### Supported operations
 
 | Datastore type        | Create  | Delete (Global `default`)  |  Update  | Get/List | Notes

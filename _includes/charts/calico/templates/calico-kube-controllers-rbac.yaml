@@ -105,12 +105,25 @@ rules:
     verbs:
       # read its own config
       - get
+      # list its own config
+      - list
       # create a default if none exists
       - create
       # update status
       - update
       # watch for changes
       - watch
+  # Needs access to configure route reflectors.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - bgppeers
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - watch
+      - delete
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

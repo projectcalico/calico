@@ -147,5 +147,15 @@ The service account controller is enabled by default if `ENABLED_CONTROLLERS` is
 
 This controller is only valid when using etcd as the {{site.prodname}} datastore.
 
+### Route reflector controller
+
+The route reflector controller scales BGP topology inside the cluster based on the given configuration.
+The controller continously watches Kubernetes node changes and re-calculate BGP peerings to achieve high availability and cluster stability.
+
+To enable the route reflector controller when using `kubernetes`, set the list of enabled controllers
+in the environment for kube-controllers to `routereflector`. For example: `ENABLED_CONTROLLERS=routereflector`
+
+Multiple topologies are supported, for more details follow the controller's [documentation]({{site.baseurl}}/reference/route-reflector-ctrl/configuration).
+
 [in-cluster-config]: https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
 [kubeconfig]: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/

@@ -146,6 +146,11 @@ section:
     path: /reference/kube-controllers/configuration
   - title: Prometheus statistics
     path: /reference/kube-controllers/prometheus
+- title: Route reflector controller
+  path: /reference/route-reflector-ctrl/
+  section:
+  - title: Configuration
+    path: /reference/route-reflector-ctrl/configuration
 - title: Configuration on public clouds
   path: /reference/public-cloud/
   section:
