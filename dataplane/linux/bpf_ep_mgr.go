@@ -148,6 +148,8 @@ type bpfEndpointManager struct {
 
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
+
+	ifaceToIpMap	map[string]net.IP
 }
 
 type bpfAllowChainRenderer interface {
@@ -204,6 +206,7 @@ func newBPFEndpointManager(
 		}),
 		onStillAlive:     livenessCallback,
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
+		ifaceToIpMap: map[string]net.IP{},
 	}
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
@@ -290,7 +293,11 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
-	log.Debugf("Interface address update for %v, state %v", update.Name, update.Addrs)
+	log.Debugf("Interface address update for %v, addrs %v", update.Name, update.Addrs)
+	update.Addrs.Iter(func(item interface{}) error {
+		log.Debugf("Sridhar: %+v", item)
+		return nil
+	})
 }
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
