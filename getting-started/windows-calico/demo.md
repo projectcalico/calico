@@ -409,7 +409,7 @@ spec:
 kubectl apply -f policy-demo-windows.yaml
 ```
 
-### Verify four pds have been created and are running
+### Verify four pods have been created and are running
 
 >**Note**: Launching the Windows pods is going to take some time depending on your network download speed.
 {: .alert .alert-info}
