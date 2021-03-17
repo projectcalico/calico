@@ -411,8 +411,8 @@ kubectl apply -f policy-demo-windows.yaml
 
 ### Verify four pds have been created and are running
 
->[!Note]
->Launching the Windows pods is going to take sometime depending on your network download speed.
+>**Note**: Launching the Windows pods is going to take some time depending on your network download speed.
+{: .alert .alert-info}
 
 1. Open a powershell window.
 1. Using `kubectl` to list the pods in the `calico-demo` namespace.
