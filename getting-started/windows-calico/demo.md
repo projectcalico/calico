@@ -458,8 +458,8 @@ Now that client and server pods are running on both Linux and Windows nodes, let
     kubectl exec --namespace calico-demo busybox -- nc -vz <porter_ip> 80
     ```
 
-    >[!Note]
-    >You can also combine both of the above steps:
+    >**Note**: You can also combine both of the above steps:
+    {: .alert .alert-info}
 
     ```powershell
     kubectl exec --namespace calico-demo busybox -- nc -vz $(kubectl get pod porter --namespace calico-demo -o 'jsonpath={.status.podIP}') 80
