@@ -382,7 +382,7 @@ mod-download:
 	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
 
 .PHONY: ci
-ci: clean mod-download build-all static-checks ut
+ci: mod-download build-all static-checks ut
 
 ###############################################################################
 # CD
