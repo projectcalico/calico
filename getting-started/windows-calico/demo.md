@@ -471,8 +471,9 @@ Now that client and server pods are running on both Linux and Windows nodes, let
     192.168.40.166 (192.168.40.166:80) open
     ```
 
->[!Note]
-> The IP addresses returned will vary depending on your environment setup.
+
+    >**Note**: The IP addresses returned will vary depending on your environment setup.
+    {: .alert .alert-info}
 
 1. Now you can verify that the pwsh pod can reach the nginx pod:
 
