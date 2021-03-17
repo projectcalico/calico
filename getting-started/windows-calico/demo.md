@@ -291,7 +291,7 @@ $env:Path += ";C:\k"
 
 First, create a client (busybox) and server (nginx) pod on the Linux nodes.
 
-### create a YAML file policy-demo-linux.yaml using your favorite editor on Windows
+### Create a YAML file policy-demo-linux.yaml using your favorite editor on Windows
 
 ```yaml
 
