@@ -528,8 +528,6 @@ Now that client and server pods are running on both Linux and Windows nodes, let
 
     ```
 
-### Conclusion
-
 You have now verified that communication is possible between all pods in the application.
 
 ## Apply policy to the Windows client pod
