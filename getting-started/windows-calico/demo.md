@@ -508,7 +508,7 @@ Now that client and server pods are running on both Linux and Windows nodes, let
 
     If that succeeds, you will see something like:
 
-    ```powershell
+    ```
     StatusCode        : 200
     StatusDescription : OK
     Content           : This is a Calico for Windows demo.
