@@ -7,7 +7,7 @@ The route reflector controller is one of the operators within [kubernetes-contro
 
 {{site.prodname}} by default doesn't manage BGP peer configuration actively. The user has to design the right topology for the specific cluster.
 Route reflector controller aims to extend {{site.prodname}}'s static configurations with autoscaling based on different variables like number of active nodes or available route reflectors per zone.
-The controller support multiple topologies and uses `kubernetes` custom resource for configuration, just like opther controllers.
+The controller supports multiple topologies and uses `kubernetes` custom resource as configuration, just like other controllers.
 
 ## Topologies
 

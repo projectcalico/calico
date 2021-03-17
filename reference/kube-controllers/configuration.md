@@ -150,7 +150,7 @@ This controller is only valid when using etcd as the {{site.prodname}} datastore
 ### Route reflector controller
 
 The route reflector controller scales BGP topology inside the cluster based on the given configuration.
-The controller continously watches Kubernetes node changes and re-calculate BGP peerings to achieve high availability and cluster stability.
+The controller continously watches Kubernetes node changes and re-calculates BGP peerings to achieve high availability and cluster stability.
 
 To enable the route reflector controller when using `kubernetes`, set the list of enabled controllers
 in the environment for kube-controllers to `routereflector`. For example: `ENABLED_CONTROLLERS=routereflector`
