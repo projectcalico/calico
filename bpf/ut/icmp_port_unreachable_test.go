@@ -104,7 +104,7 @@ func checkICMPPortUnreachable(pktR gopacket.Packet, ipv4 *layers.IPv4) {
 	ipv4R := ipv4L.(*layers.IPv4)
 
 	Expect(ipv4R.Protocol).To(Equal(layers.IPProtocolICMPv4))
-	Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
+	Expect(ipv4R.SrcIP.String()).To(Equal(intfIP.String()))
 	Expect(ipv4R.DstIP).To(Equal(ipv4.SrcIP))
 
 	icmpL := pktR.Layer(layers.LayerTypeICMPv4)

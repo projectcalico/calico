@@ -293,11 +293,14 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
-	log.Debugf("Interface address update for %v, addrs %v", update.Name, update.Addrs)
+	log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
 	update.Addrs.Iter(func(item interface{}) error {
 		ip := net.ParseIP(item.(string))
 		if ip.To4() != nil {
-			log.Debugf("Interface %+v address %+v", update.Name, ip)
+			m.ifaceToIpMap[update.Name] = ip
+			m.ifacesLock.Lock()
+			m.dirtyIfaceNames.Add(update.Name)
+			m.ifacesLock.Unlock()
 		}
 		return nil
 	})
@@ -797,15 +800,15 @@ func (m *bpfEndpointManager) ifaceIsUp(ifaceName string) (up bool) {
 }
 
 func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.HostEndpoint, polDirection PolDirection) error {
-	ip, err := getInterfaceIP(ifaceName)
+	ip, err := m.getInterfaceIP(ifaceName)
 	if err != nil {
 		log.Debugf("Error getting IP for interface %+v", ifaceName)
-		return err
 	}
 	log.Debugf("Attach program on iface %+v dir %+v ip address %+v", ifaceName, polDirection, ip)
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
+	ap.IntfIP = ip
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap, polDirection)
 	if err != nil {
@@ -1366,7 +1369,10 @@ func FindJumpMap(ap *tc.AttachPoint) (mapFD bpf.MapFD, err error) {
 	return 0, errors.New("failed to find TC program")
 }
 
-func getInterfaceIP(ifaceName string) (net.IP, error) {
+func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (net.IP, error) {
+	if ip, ok := m.ifaceToIpMap[ifaceName]; ok {
+		return ip, nil
+	}
 	intf,err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		return net.IPv4zero, err

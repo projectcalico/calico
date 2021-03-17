@@ -110,7 +110,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 #endif
 
 	/* use the host IP of the program that handles the packet */
-	ctx->ip_header->saddr = HOST_IP;
+	ctx->ip_header->saddr = INTF_IP;
 	ctx->ip_header->daddr = ip_orig.saddr;
 
 	ctx->icmp_header->type = type;

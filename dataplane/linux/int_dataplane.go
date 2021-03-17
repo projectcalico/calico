@@ -1035,6 +1035,9 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) 
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
 	}).Info("Linux interface addrs changed.")
+	if d.ifaceAddrUpdates == nil {
+		log.Debugf("Sridhar: Addrs channel nil")
+	}
 	d.ifaceAddrUpdates <- &ifaceAddrsUpdate{
 		Name:  ifaceName,
 		Addrs: addrs,
