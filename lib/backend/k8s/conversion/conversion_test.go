@@ -2661,9 +2661,10 @@ var _ = Describe("Test Namespace conversion", func() {
 		Expect(crdRev).To(Equal("1234"))
 		Expect(k8sRev).To(Equal(""))
 
-		By("failing to convert an invalid combined version")
-		_, _, err = c.SplitNetworkPolicyRevision("1234")
-		Expect(err).To(HaveOccurred())
+		crdRev, k8sRev, err = c.SplitNetworkPolicyRevision("1234")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(crdRev).To(Equal("1234"))
+		Expect(k8sRev).To(Equal(""))
 
 		_, _, err = c.SplitNetworkPolicyRevision("1234/5678/1313")
 		Expect(err).To(HaveOccurred())

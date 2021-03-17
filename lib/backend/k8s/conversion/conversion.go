@@ -661,13 +661,16 @@ func (c converter) SplitNetworkPolicyRevision(rev string) (crdNPRev string, k8sN
 	}
 
 	revs := strings.Split(rev, "/")
-	if len(revs) != 2 {
+	if len(revs) > 2 {
 		err = fmt.Errorf("ResourceVersion is not valid: %s", rev)
 		return
 	}
 
+	// A single rev value is valid from the apiserver.
 	crdNPRev = revs[0]
-	k8sNPRev = revs[1]
+	if len(revs) == 2 {
+		k8sNPRev = revs[1]
+	}
 	return
 }
 
