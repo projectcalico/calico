@@ -572,8 +572,8 @@ kubectl apply -f network-policy.yaml
 ### Verify the policy is in effect
 
 With the policy in place, the busybox pod should still be able to reach the porter pod:
->[!Note]
->We will be using the combined command line from earlier in this chapter.
+>**Note**: We will be using the combined command line from earlier in this chapter.
+{: .alert .alert-info}
 
 ```powershell
 kubectl exec --namespace calico-demo busybox -- nc -vz $(kubectl get po porter -n calico-demo -o 'jsonpath={.status.podIP}') 80
