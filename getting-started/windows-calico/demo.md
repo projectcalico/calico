@@ -601,7 +601,7 @@ command terminated with exit code 1
 ## Wrap up
 
 In this demo we’ve configured pods on Linux and Windows nodes, verified basic pod connectivity, and tried a basic network policy to isolate pod to pod traffic.
-as the final step you can clean up all of the demo resources:
+As the final step you can clean up all of the demo resources:
 
 1. Open a PowerShell window.
 
