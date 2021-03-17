@@ -1042,6 +1042,7 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) 
 		Name:  ifaceName,
 		Addrs: addrs,
 	}
+	log.Debugf("Sridhar: %+v", d.ifaceAddrUpdates)
 }
 
 type ifaceAddrsUpdate struct {
