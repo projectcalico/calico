@@ -282,10 +282,10 @@ To run the commands in this demo you need the Windows version of kubectl install
 Add `c:\k` to the system path
 1. Open a PowerShell window as Administrator
 
-```powershell
-$env:Path += ";C:\k"
-```
-1. close all PowerShell windows.
+    ```powershell
+    $env:Path += ";C:\k"
+    ```
+1. Close all PowerShell windows.
 
 ## Create pods on Linux nodes
 
