@@ -356,7 +356,7 @@ Next, we’ll create a client (pwsh) and server (porter) pod on the Windows node
 >[!Note]
 >The pwsh and porter pod manifests below use images based on mcr.microsoft.com/windows/servercore:1809. If you are using a more recent Windows Server version, update the manifests to use a servercore image that matches your Windows Server version.
 
-### create the policy-demo-windows.yaml using your favorite editor on Windows
+### Create the policy-demo-windows.yaml using your favorite editor on Windows
 
 ```yaml
 
