@@ -21,6 +21,11 @@ existing metrics.
 | `ipam_blocks_per_node` | Number of IPAM blocks, indexed by the node to which they have affinity. |
 | `ipam_allocations_per_node` | Number of Calico IP allocations, indexed by node on which the allocation was made. |
 | `ipam_borrowed_allocations_per_node` | Number of Calico IP allocations borrowed from a non-affine block, indexed by node on which the allocation was made. |
+| `route_reflector_total_count` | Actual number of route reflectors. |
+| `route_reflector_bgp_updated` | BGP peer config operations per type. |
+| `route_reflector_total_missing_count` | Total number of missing route reflectors. |
+| `route_reflector_revert_count` | Total number of reverts need to be applied in controller per node. |
+| `route_reflector_error_count` | Total number of errors in controller per node. |
 
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
 metrics along with their help text and type information.
