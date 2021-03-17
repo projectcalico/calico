@@ -483,7 +483,7 @@ Now that client and server pods are running on both Linux and Windows nodes, let
 
     If the connection succeeds, you will see output similar to:
 
-    ```powershell
+    ```
     StatusCode        : 200
     StatusDescription : OK
     Content           : <!DOCTYPE html>
