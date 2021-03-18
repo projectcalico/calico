@@ -47,8 +47,7 @@ spec:
                     digest:
                       description: Digest is the image identifier that will be used
                         for the Image. The field should not include a leading `@`
-                        and must be prefixed with `sha256:`, if other digest prefixes
-                        are needed please submit a feature request.
+                        and must be prefixed with `sha256:`.
                       type: string
                     image:
                       description: Image is an image that the operator deploys and
