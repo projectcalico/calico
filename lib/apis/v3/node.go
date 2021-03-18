@@ -64,6 +64,7 @@ type NodeSpec struct {
 type NodeAddress struct {
 	// Address is a string representation of the actual address.
 	Address string `json:"address" validate:"net"`
+	Type string `json:"type" validate:"omitempty"`
 }
 
 type NodeStatus struct {

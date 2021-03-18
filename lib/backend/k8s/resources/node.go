@@ -306,17 +306,19 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 func fillAllAddresses(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) {
 	if bgp := calicoNode.Spec.BGP; bgp != nil {
 		if addr := bgp.IPv4Address; addr != "" {
-			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: addr})
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: addr, Type: "bgp"})
 		}
 		if addr := bgp.IPv6Address; addr != "" {
-			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: addr})
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: addr, Type: "bgp"})
 		}
 	}
 
 	for _, kaddr := range k8sNode.Status.Addresses {
 		switch kaddr.Type {
-		case kapiv1.NodeInternalIP, kapiv1.NodeExternalIP:
-			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: kaddr.Address})
+		case kapiv1.NodeInternalIP:
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: kaddr.Address, Type: "int"})
+		case kapiv1.NodeExternalIP:
+			calicoNode.Spec.Addresses = append(calicoNode.Spec.Addresses, apiv3.NodeAddress{Address: kaddr.Address, Type: "ext"})
 		default:
 			continue
 		}
