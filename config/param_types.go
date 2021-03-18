@@ -312,15 +312,34 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 		}
 
 		parts := strings.Split(portStr, ":")
-		if len(parts) > 2 {
+		if len(parts) > 3 {
 			return nil, p.parseFailed(raw,
-				"ports should be <protocol>:<number> or <number>")
+				"ports should be <protocol>:<net>:<number> or <protocol>:<number> or <number>")
 		}
 		protocolStr := "tcp"
-		if len(parts) > 1 {
+		netStr := "0.0.0.0/0"
+
+		if len(parts) > 2 {
+			netStr = parts[1]
+			protocolStr = strings.ToLower(parts[0])
+			portStr = parts[2]
+		}
+
+		if len(parts) == 2 {
 			protocolStr = strings.ToLower(parts[0])
 			portStr = parts[1]
 		}
+
+		ip, netParsed, err := cnet.ParseCIDROrIP(netStr)
+		if err != nil {
+			err = p.parseFailed(raw, "invalid CIDR or IP "+netStr)
+			return nil, err
+		}
+		if ip.Version() != 4 {
+			err = p.parseFailed(raw, "invalid CIDR or IP (not v4)")
+			return nil, err
+		}
+
 		if protocolStr != "tcp" && protocolStr != "udp" {
 			return nil, p.parseFailed(raw, "unknown protocol: "+protocolStr)
 		}
@@ -335,6 +354,7 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 			return nil, err
 		}
 		result = append(result, ProtoPort{
+			Net:      netParsed.String(),
 			Protocol: protocolStr,
 			Port:     uint16(port),
 		})
