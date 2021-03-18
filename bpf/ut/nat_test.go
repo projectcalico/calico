@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1378,7 +1378,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		// Part 1: if we resend the same SYN, then it should get conntracked to the same backend.
 		var firstIP net.IP
-		for attempt := 0; attempt < 10; attempt ++ {
+		for attempt := 0; attempt < 10; attempt++ {
 			res, err := bpfrun(synPkt)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -1394,7 +1394,7 @@ func TestNATSYNRetryGoesToSameBackend(t *testing.T) {
 
 		// Part 2: If we vary the source port, we should hit both backends eventually.
 		seenOtherIP := false
-		for attempt := 0; attempt < 100; attempt ++ {
+		for attempt := 0; attempt < 100; attempt++ {
 			tcpSyn.SrcPort++
 			_, _, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
 			Expect(err).NotTo(HaveOccurred())

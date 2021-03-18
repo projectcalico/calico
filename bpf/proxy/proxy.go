@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -147,8 +147,9 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		&isIPv6,
 		p.recorder,
 		p.endpointSlicesEnabled,
+		nil,
 	)
-	p.svcChanges = k8sp.NewServiceChangeTracker(nil, &isIPv6, p.recorder)
+	p.svcChanges = k8sp.NewServiceChangeTracker(nil, &isIPv6, p.recorder, nil)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
 	if err != nil {
