@@ -149,7 +149,7 @@ type bpfEndpointManager struct {
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
 
-	ifaceToIpMap	map[string]net.IP
+	ifaceToIpMap map[string]net.IP
 }
 
 type bpfAllowChainRenderer interface {
@@ -206,7 +206,7 @@ func newBPFEndpointManager(
 		}),
 		onStillAlive:     livenessCallback,
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
-		ifaceToIpMap: map[string]net.IP{},
+		ifaceToIpMap:     map[string]net.IP{},
 	}
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
@@ -252,7 +252,7 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	// Interface updates.
 	case *ifaceUpdate:
 		m.onInterfaceUpdate(msg)
-        case *ifaceAddrsUpdate:
+	case *ifaceAddrsUpdate:
 		m.onInterfaceAddrsUpdate(msg)
 	// Updates from the datamodel:
 
@@ -804,7 +804,6 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	if err != nil {
 		log.Debugf("Error getting IP for interface %+v", ifaceName)
 	}
-	log.Debugf("Attach program on iface %+v dir %+v ip address %+v", ifaceName, polDirection, ip)
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
@@ -1373,19 +1372,18 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (net.IP, error) {
 	if ip, ok := m.ifaceToIpMap[ifaceName]; ok {
 		return ip, nil
 	}
-	intf,err := net.InterfaceByName(ifaceName)
+	intf, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		return net.IPv4zero, err
 	}
 	addrs, err := intf.Addrs()
-	if err != nil{
+	if err != nil {
 		return net.IPv4zero, err
 	}
-	for _,addr := range addrs {
+	for _, addr := range addrs {
 		if ipv4Addr := addr.(*net.IPNet).IP.To4(); ipv4Addr != nil {
 			return ipv4Addr, nil
 		}
 	}
 	return net.IPv4zero, errors.New("IP address not present")
 }
-
