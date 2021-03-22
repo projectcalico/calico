@@ -59,7 +59,7 @@ To install WireGuard for OpenShift v4.3:
 
   This approach uses kernel modules via container installation as outlined here https://github.com/projectcalico/atomic-wireguard
 
-   1. Create MachineConfig for WireGuard.
+   1. Create MachineConfig for WireGuard on your local machine.
    ```bash
    cat <<EOF > mc-wg-worker.yaml
    apiVersion: machineconfiguration.openshift.io/v1
@@ -89,7 +89,7 @@ To install WireGuard for OpenShift v4.3:
    EOF
    ```
 
-   3. Configure files.
+   3. Download and configure the tools needed for kmods.
    ```bash
    FAKEROOT=$(mktemp -d)
    git clone https://github.com/kmods-via-containers/kmods-via-containers
@@ -102,21 +102,15 @@ To install WireGuard for OpenShift v4.3:
    cd ..
    ```
 
-   4. You must set the URLs for the `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` vars for the correct host kernel in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. You can determine the host kernel by running `uname -r` on a host in your cluster. 
-  
-  Example:
-  ```
-  KERNEL_CORE_RPM=https://rpmfind.net/linux/centos/8/BaseOS/x86_64/os/Packages/kernel-core-4.18.0-240.15.1.el8_3.x86_64.rpm
-  KERNEL_DEVEL_RPM=https://rpmfind.net/linux/centos/8/BaseOS/x86_64/os/Packages/kernel-devel-4.18.0-240.15.1.el8_3.x86_64.rpm
-  KERNEL_MODULES_RPM=https://rpmfind.net/linux/centos/8/BaseOS/x86_64/os/Packages/kernel-modules-4.18.0-240.15.1.el8_3.x86_64.rpm
-  ```
+   4. You must then set the value for the `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` packages in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. These will be URLs to the RPMs. You can determine the host kernel version to use in the URL by running `uname -r` on a host in your cluster. You can find links to  official packages in your Red Hat subscription at https://access.redhat.com/downloads/content/package-browser 
 
-   5. Get RHEL Entitlement data from your own RHEL8 system.
+
+   5. Get RHEL Entitlement data from your own RHEL8 system from a host in your cluster.
    ```bash
    # tar -czf subs.tar.gz /etc/pki/entitlement/ /etc/rhsm/ /etc/yum.repos.d/redhat.repo
    ```
 
-   6. Copy the `subs.tar.gz` file to your workspace and use the following command to add it to the MachineConfig.
+   6. Copy the `subs.tar.gz` file to your workspace and then extract the contents using the following command.
    ```bash
    tar -x -C ${FAKEROOT} -f subs.tar.gz
    ```
