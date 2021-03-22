@@ -4,7 +4,6 @@ go 1.13
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
-	github.com/coreos/etcd v3.3.18+incompatible // indirect
 	github.com/docopt/docopt-go v0.0.0-20160216232012-784ddc588536
 	github.com/eapache/channels v1.1.0 // indirect
 	github.com/eapache/queue v0.0.0-20180227141424-093482f3f8ce // indirect
@@ -19,7 +18,7 @@ require (
 	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200902230107-7172b374bef1
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210316183353-6b457d988945
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -29,5 +28,4 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	k8s.io/apiextensions-apiserver v0.16.10
 	k8s.io/apimachinery v0.17.2
-	k8s.io/client-go v0.17.2
 )
