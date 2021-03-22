@@ -278,8 +278,8 @@ var _ = Describe("Test Node conversion", func() {
 		calicoNodeWithMergedLabels.Annotations[nodeK8sLabelAnnotation] = "{\"net.beta.kubernetes.io/role\":\"master\"}"
 		calicoNodeWithMergedLabels.Labels["net.beta.kubernetes.io/role"] = "master"
 		calicoNodeWithMergedLabels.Spec.Addresses = []apiv3.NodeAddress{
-			apiv3.NodeAddress{Address: "172.17.17.10/24",Type: "bgp"},
-			apiv3.NodeAddress{Address: "aa:bb:cc::ffff/120", Type: "bgp"},
+			apiv3.NodeAddress{Address: "172.17.17.10/24", Type: apiv3.CalicoNodeIP},
+			apiv3.NodeAddress{Address: "aa:bb:cc::ffff/120", Type: apiv3.CalicoNodeIP},
 		}
 		Expect(newCalicoNode.Value).To(Equal(calicoNodeWithMergedLabels))
 	})
@@ -540,10 +540,10 @@ var _ = Describe("Test Node conversion", func() {
 
 		addrs := n.Value.(*apiv3.Node).Spec.Addresses
 		Expect(addrs).To(ConsistOf([]apiv3.NodeAddress{
-			{Address: "fd10::10",Type: "bgp"},
-			{Address: "172.17.17.10", Type: "bgp"}, // from BGP
-			{Address: "172.17.17.10", Type: "int"}, // from k8s InternalIP
-			{Address: "192.168.1.100", Type: "ext"},
+			{Address: "fd10::10", Type: apiv3.CalicoNodeIP},
+			{Address: "172.17.17.10", Type: apiv3.CalicoNodeIP}, // from BGP
+			{Address: "172.17.17.10", Type: apiv3.InternalIP},   // from k8s InternalIP
+			{Address: "192.168.1.100", Type: apiv3.ExternalIP},
 		}))
 	})
 })

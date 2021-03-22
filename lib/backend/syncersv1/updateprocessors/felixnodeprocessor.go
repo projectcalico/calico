@@ -95,34 +95,10 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 		// Look for internal node address, if BGP is not running
 		if ipv4 == nil {
-			var ip *cnet.IP
-			var cidr *cnet.IPNet
-			for _,addr := range node.Spec.Addresses {
-				if addr.Type == "int" {
-					ip, cidr, err = cnet.ParseCIDROrIP(addr.Address)
-					if err == nil {
-						log.WithFields(log.Fields{"ip": ip, "cidr": cidr}).Debug("Parsed IPv4 address")
-						ipv4 = ip
-						break
-					} else {
-						log.WithError(err).WithField("IPv4Address", addr.Address).Warn("Failed to parse IPv4Address")
-					}
-				}
-			}
-			if ipv4 == nil {
-				for _,addr := range node.Spec.Addresses {
-					if addr.Type == "ext" {
-						ip, cidr, err = cnet.ParseCIDROrIP(addr.Address)
-						if err == nil {
-							log.WithFields(log.Fields{"ip": ip, "cidr": cidr}).Debug("Parsed IPv4 address")
-							ipv4 = ip
-							break
-						} else {
-							log.WithError(err).WithField("IPv4Address", addr.Address).Warn("Failed to parse IPv4Address")
-						}
-					}
-				}
-			}
+			ipv4 = c.findNodeAddress(node, apiv3.InternalIP)
+		}
+		if ipv4 == nil {
+			ipv4 = c.findNodeAddress(node, apiv3.ExternalIP)
 		}
 
 		// Parse the IPv4 VXLAN tunnel address, Felix expects this as a HostConfigKey.  If we fail to parse then
@@ -290,4 +266,22 @@ func (c *FelixNodeUpdateProcessor) extractName(k model.Key) (string, error) {
 		return "", errors.New("Incorrect key type - expecting resource of kind Node")
 	}
 	return rk.Name, nil
+}
+
+func (c *FelixNodeUpdateProcessor) findNodeAddress(node *apiv3.Node, ipType string) *cnet.IP {
+	for _, addr := range node.Spec.Addresses {
+		if addr.Type == ipType {
+			ip, cidr, err := cnet.ParseCIDROrIP(addr.Address)
+			if err == nil {
+				if ip.To4() == nil {
+					continue
+				}
+				log.WithFields(log.Fields{"ip": ip, "cidr": cidr}).Debug("Parsed IPv4 address")
+				return ip
+			} else {
+				log.WithError(err).WithField("IPv4Address", addr.Address).Warn("Failed to parse IPv4Address")
+			}
+		}
+	}
+	return nil
 }

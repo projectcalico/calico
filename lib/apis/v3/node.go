@@ -23,6 +23,9 @@ import (
 const (
 	KindNode     = "Node"
 	KindNodeList = "NodeList"
+	CalicoNodeIP = "CalicoNodeIP"
+	InternalIP   = "InternalIP"
+	ExternalIP   = "ExternalIP"
 )
 
 // +genclient
@@ -64,7 +67,9 @@ type NodeSpec struct {
 type NodeAddress struct {
 	// Address is a string representation of the actual address.
 	Address string `json:"address" validate:"net"`
-	Type string `json:"type" validate:"omitempty"`
+
+	// Type is the node IP type
+	Type string `json:"type,omitempty" validate:"omitempty,ipType"`
 }
 
 type NodeStatus struct {
