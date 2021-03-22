@@ -145,8 +145,8 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
 
    ```
    NAME                  CIDR             NAT    IPIPMODE   DISABLED   SELECTOR
-   rack-1-ippool         192.168.0.0/24   true   Always     false      rack == "0"
-   rack-2-ippool         192.168.1.0/24   true   Always     false      rack == "1"
+   rack-0-ippool         192.168.0.0/24   true   Always     false      rack == "0"
+   rack-1-ippool         192.168.1.0/24   true   Always     false      rack == "1"
    ```
    {: .no-select-button}
 
