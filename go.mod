@@ -18,7 +18,7 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
 	github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef // indirect
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210316183334-972c05ab950d
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210322201501-2b65b0b2cee3
 	github.com/prometheus/client_golang v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/tinylib/msgp v1.1.0 // indirect
