@@ -293,7 +293,7 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
-	if update.Addrs.Len() > 0 {
+	if update.Addrs != nil && update.Addrs.Len() > 0 {
 		log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
 		update.Addrs.Iter(func(item interface{}) error {
 			ip := net.ParseIP(item.(string))
