@@ -86,6 +86,7 @@ github.com/envoyproxy/data-plane-api v0.0.0-20191011171527-905fefb56fcb h1:R1Ca1
 github.com/envoyproxy/data-plane-api v0.0.0-20191013220143-9ad4478ef57a h1:8pyu5eVvtmTjenl5fBbMLrKNLImzGD6XdDgl2HBFc5U=
 github.com/envoyproxy/data-plane-api v0.0.0-20191016214043-f687ccda3d5a h1:aHmsmyvSJwZYJZPbuID0/7mOWaF8M00gklKbYwvb6U4=
 github.com/envoyproxy/data-plane-api v0.0.0-20200428215905-0365877d8e33 h1:HDUtgtiBu4IRIEYTWGBHeWKH7sfAfA9tE9L/VP9woF8=
+github.com/envoyproxy/data-plane-api v0.0.0-20210319174236-9b1f3a123489 h1:fIgCFM9jZArXY+7HngxehvHaTISZWoULQlUxLrARsMo=
 github.com/evanphx/json-patch v0.0.0-20190203023257-5858425f7550/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/evanphx/json-patch v4.2.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
@@ -318,6 +319,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20201123182625-8c8e0fb91da9 h1:0S
 github.com/projectcalico/libcalico-go v1.7.2-0.20201123182625-8c8e0fb91da9/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210304221211-14f96d6945b5 h1:tyiSsyeTqDz8LM/7uj3SGCmBm9HmD6lNfBMbAIROJ8A=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210304221211-14f96d6945b5/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210316183334-972c05ab950d h1:YB4ZtDJT24ZOI7nPLd8YWFEP0svNyZAXM0o1yxYXHmM=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210316183334-972c05ab950d/go.mod h1:+HQmSvCZc2MCvkgOm1tn0zAkpJikDhvhcRcAiavLYtg=
 github.com/projectcalico/libcalico-go v1.7.3 h1:qcbxAhsq/5zqZqpHE24VqMHfmoBVdXZV0Kf82+5rbqU=
 github.com/projectcalico/libcalico-go v1.7.3/go.mod h1:0b/n/rPzNXjhn4ywFcEJuQdA/5olt9UxFIATz57xkbc=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
@@ -508,6 +511,7 @@ google.golang.org/grpc v1.2.1 h1:uXbsPclX7+aYIzPCched4e5D5dguzKH7wW8cyJ9r2Pk=
 google.golang.org/grpc v1.2.1/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
 google.golang.org/grpc v1.19.0 h1:cfg4PD8YEdSFnm7qLV4++93WcmhH2nIUhMjhdCvl3j8=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
+google.golang.org/grpc v1.23.1 h1:q4XQuHFC6I28BKZpo6IYyb3mNO+l7lSOxRuYTCiDfXk=
 google.golang.org/grpc v1.23.1/go.mod h1:Y5yQAOtifL1yxbo5wqy6BxZv8vAUGQwXBOALyacEbxg=
 gopkg.in/airbrake/gobrake.v2 v2.0.9/go.mod h1:/h5ZAUhDkGaJfjzjKLSjv6zCL6O0LLBxU4K+aSYdM/U=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=
