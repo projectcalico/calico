@@ -92,10 +92,11 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 					err = fmt.Errorf("failed to parsed IPv4IPIPTunnelAddr as an IP address")
 				}
 			}
-		} else {
+		}
+		// Look for internal node address, if BGP is not running
+		if ipv4 == nil {
 			var ip *cnet.IP
 			var cidr *cnet.IPNet
-
 			for _,addr := range node.Spec.Addresses {
 				if addr.Type == "int" {
 					ip, cidr, err = cnet.ParseCIDROrIP(addr.Address)

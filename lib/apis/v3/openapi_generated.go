@@ -5216,8 +5216,14 @@ func schema_libcalico_go_lib_apis_v3_NodeAddress(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
-				Required: []string{"address"},
+				Required: []string{"address", "type"},
 			},
 		},
 	}
