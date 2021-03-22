@@ -74,10 +74,10 @@ var (
 			}},
 		}},
 	}
-	node1ip  = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2 = net.IPv4(10, 10, 2, 1).To4()
-	node2ip  = net.IPv4(10, 10, 0, 2).To4()
-	intfIP = net.IPv4(10, 10, 0, 3).To4()
+	node1ip   = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
+	node2ip   = net.IPv4(10, 10, 0, 2).To4()
+	intfIP    = net.IPv4(10, 10, 0, 3).To4()
 	node1CIDR = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),

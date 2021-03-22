@@ -293,17 +293,19 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
-	log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
-	update.Addrs.Iter(func(item interface{}) error {
-		ip := net.ParseIP(item.(string))
-		if ip.To4() != nil {
-			m.ifaceToIpMap[update.Name] = ip
-			m.ifacesLock.Lock()
-			m.dirtyIfaceNames.Add(update.Name)
-			m.ifacesLock.Unlock()
-		}
-		return nil
-	})
+	if update.Addrs.Len() > 0 {
+		log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
+		update.Addrs.Iter(func(item interface{}) error {
+			ip := net.ParseIP(item.(string))
+			if ip.To4() != nil {
+				m.ifaceToIpMap[update.Name] = ip
+				m.ifacesLock.Lock()
+				m.dirtyIfaceNames.Add(update.Name)
+				m.ifacesLock.Unlock()
+			}
+			return nil
+		})
+	}
 }
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
