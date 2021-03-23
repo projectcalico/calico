@@ -1,0 +1,99 @@
+version: v1.0
+name: API Server
+execution_time_limit:
+  minutes: 30
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+auto_cancel:
+  running:
+    when: "branch != 'master'"
+  queued:
+    when: "branch != 'master'"
+
+global_job_config:
+  secrets:
+    - name: docker-hub
+    # Mount the github SSH secret for pulling private repositories.
+    - name: private-repo
+    # Mount a secret for pulling images from GCR.
+    - name: tigera-dev-ci-pull-credentials
+
+  prologue:
+    commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+    # Load the github access secrets.  First fix the permissions.
+    - chmod 0600 ~/.keys/*
+    - ssh-add ~/.keys/*
+    - docker login --username casey@tigera.io -u _json_key -p "$(cat /home/semaphore/tigera-dev-ci.json)" https://gcr.io
+
+blocks:
+  - name: Unit Tests
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - checkout
+          # Semaphore is doing shallow clone on a commit without tags.
+          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
+          - git fetch --unshallow
+      jobs:
+        - name: CI
+          commands:
+            - make ci
+
+  - name: Static Checks
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - checkout
+          # Semaphore is doing shallow clone on a commit without tags.
+          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
+          - git fetch --unshallow
+      jobs:
+        - name: Static Checks
+          commands:
+            - make static-checks
+
+  - name: 'Push Images (non-PR builds only)'
+    dependencies: ["Unit Tests", "Static Checks"]
+    skip:
+      # Only run on branches, not PRs.
+      when: "branch !~ '.+'"
+    task:
+      secrets:
+        - name: quay-robot-calico+semaphoreci
+        - name: docker
+      prologue:
+        commands:
+          - checkout
+          # Semaphore is doing shallow clone on a commit without tags.
+          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
+          - git fetch --unshallow
+          # Correct permissions since they are too open by default:
+          - chmod 0600 ~/.keys/*
+          # Add the key to the ssh agent:
+          - ssh-add ~/.keys/*
+          # Login to docker in order to pull images.
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      jobs:
+        - name: Run CD
+          commands:
+            - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi
+
+  - name: Trigger pin updates
+    dependencies: []
+    skip:
+      when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
+    task:
+      secrets:
+        - name: semaphore-api
+      jobs:
+        - name: Trigger pin updates
+          commands:
+            - checkout
+            - make semaphore-run-auto-pin-update-workflows

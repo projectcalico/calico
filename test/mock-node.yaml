@@ -1,0 +1,14 @@
+# This is a Node used by the k8s FV tests.  A number of tests
+# rely on this Node existing in the Kubernetes API.
+kind: Node
+apiVersion: v1
+metadata:
+  name: "127.0.0.1"
+spec:
+  podCIDR: "10.10.10.0/24"
+status:
+  addresses:
+  - type: NodeInternalIP
+    address: "127.0.0.1/32"
+  - type: NodeExternalIP
+    address: "5.6.7.8/32"

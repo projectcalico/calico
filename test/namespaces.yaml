@@ -1,0 +1,13 @@
+# Create namespaces required for namespaced NetworkPolicy and NetworkSet tests.
+kind: List
+metadata:
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: namespace-1
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: namespace-2
