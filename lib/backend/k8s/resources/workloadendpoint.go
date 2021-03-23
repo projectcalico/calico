@@ -209,7 +209,7 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 		}
 	}
 
-	return nil, kerrors.NewNotFound(apiv3.Resource("WorkloadEndpoint"), key.String())
+	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 }
 
 func (c *WorkloadEndpointClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
