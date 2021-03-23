@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -45,7 +44,6 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/typha/pkg/syncproto"
@@ -121,7 +119,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		cacheRevision:     1,
 		revisionsByPrefix: make(map[string]uint64),
 		nodeMeshEnabled:   nodeMeshEnabled,
-		nodeLabels:        make(map[string]map[string]string),
+		nodeLabelManager:  newNodeLabelManager(),
 		bgpPeers:          make(map[string]*apiv3.BGPPeer),
 		sourceReady:       make(map[string]bool),
 		nodeListenPorts:   make(map[string]uint16),
@@ -263,7 +261,7 @@ type client struct {
 	// The BGP syncer.
 	syncer           api.Syncer
 	nodeV1Processor  watchersyncer.SyncerUpdateProcessor
-	nodeLabels       map[string]map[string]string
+	nodeLabelManager nodeLabelManager
 	bgpPeers         map[string]*apiv3.BGPPeer
 	globalListenPort uint16
 	nodeListenPorts  map[string]uint16
@@ -357,7 +355,7 @@ func (c *client) onStatusUpdated(status api.SyncStatus) {
 func (c *client) ExcludeServiceAdvertisement() bool {
 	excludeLabel := "node.kubernetes.io/exclude-from-external-load-balancers"
 
-	labels, ok := c.nodeLabels[template.NodeName]
+	labels, ok := c.nodeLabelManager.labelsForNode(template.NodeName)
 	if ok && labels[excludeLabel] == "true" {
 		return true
 	}
@@ -501,7 +499,7 @@ func (c *client) updatePeersV1() {
 
 			var localNodeNames []string
 			if v3res.Spec.NodeSelector != "" {
-				localNodeNames = c.nodesMatching(v3res.Spec.NodeSelector)
+				localNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.NodeSelector)
 			} else if v3res.Spec.Node != "" {
 				localNodeNames = []string{v3res.Spec.Node}
 			}
@@ -509,7 +507,7 @@ func (c *client) updatePeersV1() {
 
 			var peers []*bgpPeer
 			if v3res.Spec.PeerSelector != "" {
-				for _, peerNodeName := range c.nodesMatching(v3res.Spec.PeerSelector) {
+				for _, peerNodeName := range c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector) {
 					peers = append(peers, c.nodeAsBGPPeers(peerNodeName)...)
 				}
 			} else {
@@ -575,7 +573,7 @@ func (c *client) updatePeersV1() {
 		// in BGPPeer, i.e. PeerIP, ASNumber and PeerSelector...
 		var localNodeNames []string
 		if v3res.Spec.PeerSelector != "" {
-			localNodeNames = c.nodesMatching(v3res.Spec.PeerSelector)
+			localNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector)
 		} else {
 			ip, port := parseIPPort(v3res.Spec.PeerIP)
 			localNodeNames = c.nodesWithIPPortAndAS(ip, v3res.Spec.ASNumber, port)
@@ -591,11 +589,11 @@ func (c *client) updatePeersV1() {
 		// Node and NodeSelector.
 		var peerNodeNames []string
 		if v3res.Spec.NodeSelector != "" {
-			peerNodeNames = c.nodesMatching(v3res.Spec.NodeSelector)
+			peerNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.NodeSelector)
 		} else if v3res.Spec.Node != "" {
 			peerNodeNames = []string{v3res.Spec.Node}
 		} else {
-			peerNodeNames = c.nodesMatching("all()")
+			peerNodeNames = c.nodeLabelManager.nodesMatching("all()")
 		}
 		log.Debugf("Peers %#v", peerNodeNames)
 
@@ -665,21 +663,6 @@ func parseIPPort(ipPort string) (string, uint16) {
 	return host, uint16(p)
 }
 
-func (c *client) nodesMatching(rawSelector string) []string {
-	nodeNames := []string{}
-	sel, err := selector.Parse(rawSelector)
-	if err != nil {
-		log.Errorf("Couldn't parse selector: %v", rawSelector)
-		return nodeNames
-	}
-	for nodeName, labels := range c.nodeLabels {
-		if sel.Evaluate(labels) {
-			nodeNames = append(nodeNames, nodeName)
-		}
-	}
-	return nodeNames
-}
-
 func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, port uint16) []string {
 	globalAS := c.globalAS()
 	var asStr string
@@ -689,7 +672,8 @@ func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, por
 		asStr = asNum.String()
 	}
 	nodeNames := []string{}
-	for nodeName := range c.nodeLabels {
+
+	for _, nodeName := range c.nodeLabelManager.listNodes() {
 		nodeIPv4, nodeIPv6, nodeAS, _ := c.nodeToBGPFields(nodeName)
 		if (nodeIPv4 != ip) && (nodeIPv6 != ip) {
 			continue
@@ -851,8 +835,8 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 			// Update our cache of node labels.
 			if u.Value == nil {
 				// This was a delete - remove node labels.
-				if _, ok := c.nodeLabels[v3key.Name]; ok {
-					delete(c.nodeLabels, v3key.Name)
+				if c.nodeLabelManager.nodeExists(v3key.Name) {
+					c.nodeLabelManager.deleteNode(v3key.Name)
 					needUpdatePeersV1 = true
 					needUpdatePeersReasons = append(needUpdatePeersReasons, v3key.Name+" deleted")
 				}
@@ -863,9 +847,8 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 					log.Warning("Bad value for Node resource")
 					continue
 				}
-				existingLabels, isSet := c.nodeLabels[v3key.Name]
-				if !isSet || !reflect.DeepEqual(existingLabels, v3res.Labels) {
-					c.nodeLabels[v3key.Name] = v3res.Labels
+
+				if changed := c.nodeLabelManager.setLabels(v3key.Name, v3res.Labels); changed {
 					needUpdatePeersV1 = true
 					needUpdatePeersReasons = append(needUpdatePeersReasons, v3key.Name+" updated")
 
