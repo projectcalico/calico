@@ -95,10 +95,16 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 		// Look for internal node address, if BGP is not running
 		if ipv4 == nil {
-			ipv4 = c.findNodeAddress(node, apiv3.InternalIP)
+			ip := c.findNodeAddress(node, apiv3.InternalIP)
+			if ip != nil {
+				ipv4 = ip
+			}
 		}
 		if ipv4 == nil {
-			ipv4 = c.findNodeAddress(node, apiv3.ExternalIP)
+			ip := c.findNodeAddress(node, apiv3.ExternalIP)
+			if ip != nil {
+				ipv4 = ip
+			}
 		}
 
 		// Parse the IPv4 VXLAN tunnel address, Felix expects this as a HostConfigKey.  If we fail to parse then
