@@ -18,6 +18,8 @@ package failsafes
 
 import (
 	"errors"
+	"net"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -95,9 +97,33 @@ func (m *Manager) ResyncFailsafes() error {
 			log.WithField("proto", p.Protocol).Warn("Ignoring failsafe port; protocol not supported in BPF mode.")
 			return
 		}
-		k := MakeKey(ipProto, p.Port, outbound)
+
+		// Slice up the CIDR and convert the string representations to uints
+		parts := strings.Split(p.Net, "/")
+		ipStr := parts[0]
+		maskStr := parts[1]
+
+		parsedIP := net.ParseIP(ipStr).To4()
+		if parsedIP == nil || len(parsedIP) != 4 {
+			// If parsedIP is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
+			log.Error("Invalid IPv4 address configured in the failsafe ports")
+			syncFailed = true
+			return
+		}
+
+		mask, err := strconv.Atoi(maskStr)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse CIDR mask for failsafe port.")
+			syncFailed = true
+			return
+		}
+
+		// Mask the IP
+		ip := parsedIP.Mask(net.CIDRMask(mask, 32))
+
+		k := MakeKey(ipProto, p.Port, outbound, ip, mask)
 		unknownKeys.Discard(k)
-		err := m.failsafesMap.Update(k.ToSlice(), Value())
+		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {
 			log.WithError(err).Error("Failed to update failsafe port.")
 			syncFailed = true
