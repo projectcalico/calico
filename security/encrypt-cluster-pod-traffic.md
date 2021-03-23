@@ -55,9 +55,9 @@ To install WireGuard on the default Amazon Machine Image (AMI):
 %>
 <label:OpenShift>
 <%
-To install WireGuard for OpenShift v4.3:
+To install WireGuard for OpenShift v4.6:
 
-  This approach uses kernel modules via container installation as outlined here https://github.com/projectcalico/atomic-wireguard
+  This approach uses kernel modules via container installation as outlined here {% include open-new-window.html text='atmoic wireguard' url='https://github.com/projectcalico/atomic-wireguard' %} 
 
    1. Create MachineConfig for WireGuard on your local machine.
    ```bash
@@ -102,12 +102,12 @@ To install WireGuard for OpenShift v4.3:
    cd ..
    ```
 
-   4. You must then set the value for the `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` packages in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. These will be URLs to the RPMs. You can determine the host kernel version to use in the URL by running `uname -r` on a host in your cluster. You can find links to  official packages in your Red Hat subscription at https://access.redhat.com/downloads/content/package-browser 
+   4. You must then set the URLs for the `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` packages in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. You can determine the host kernel version to use in the URL by running `uname -r` on a host in your cluster. You can find links to  official packages in your {% include open-new-window.html text='Red Hat subscription' url='https://access.redhat.com/downloads/content/package-browser' %} 
 
 
    5. Get RHEL Entitlement data from your own RHEL8 system from a host in your cluster.
    ```bash
-   # tar -czf subs.tar.gz /etc/pki/entitlement/ /etc/rhsm/ /etc/yum.repos.d/redhat.repo
+   tar -czf subs.tar.gz /etc/pki/entitlement/ /etc/rhsm/ /etc/yum.repos.d/redhat.repo
    ```
 
    6. Copy the `subs.tar.gz` file to your workspace and then extract the contents using the following command.
