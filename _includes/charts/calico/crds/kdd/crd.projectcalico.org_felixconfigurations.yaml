@@ -524,7 +524,7 @@ spec:
                 type: boolean
               wireguardInterfaceName:
                 description: 'WireguardInterfaceName specifies the name to use for
-                  the Wireguard interface. [Default: wg.calico]'
+                  the Wireguard interface. [Default: wireguard.cali]'
                 type: string
               wireguardListeningPort:
                 description: 'WireguardListeningPort controls the listening port used
