@@ -73,7 +73,7 @@ To install WireGuard for OpenShift v4.6:
    EOF
    ```
 
-   2. Create base Ignition config.
+   2. Create base {% include open-new-window.html text='Ignition' url='https://github.com/coreos/ignition' %} config.
    ```bash
    cat <<EOF > ./wg-config.ign
    {
@@ -96,7 +96,7 @@ To install WireGuard for OpenShift v4.6:
    cd kmods-via-containers
    make install DESTDIR=${FAKEROOT}/usr/local CONFDIR=${FAKEROOT}/etc/
    cd ..
-   git clone https://github.com/projectcalico/kvc-wireguard-kmod
+   git clone https://github.com/tigera/kvc-wireguard-kmod
    cd kvc-wireguard-kmod
    make install DESTDIR=${FAKEROOT}/usr/local CONFDIR=${FAKEROOT}/etc/
    cd ..
