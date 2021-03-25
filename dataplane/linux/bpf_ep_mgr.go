@@ -1394,6 +1394,7 @@ func FindJumpMap(ap *tc.AttachPoint) (mapFD bpf.MapFD, err error) {
 }
 
 func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
+	var ipAddrs []net.IP
 	if ip, ok := m.ifaceToIpMap[ifaceName]; ok {
 		return &ip, nil
 	}
@@ -1405,14 +1406,19 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(addrs, func(i, j int) bool {
-		return bytes.Compare(addrs[i].(*net.IPNet).IP, addrs[j].(*net.IPNet).IP) < 0
-	})
-
 	for _, addr := range addrs {
-		if ipv4Addr := addr.(*net.IPNet).IP.To4(); ipv4Addr != nil {
-			return &ipv4Addr, nil
+		switch t := addr.(type) {
+		case *net.IPNet:
+			if t.IP.To4() != nil {
+				ipAddrs = append(ipAddrs, t.IP)
+			}
 		}
+	}
+	sort.Slice(ipAddrs, func(i, j int) bool {
+		return bytes.Compare(ipAddrs[i], ipAddrs[j]) < 0
+	})
+	if len(ipAddrs) > 0 {
+		return &ipAddrs[0], nil
 	}
 	return nil, errors.New("interface ip address not found")
 }
