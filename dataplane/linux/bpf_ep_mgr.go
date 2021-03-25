@@ -17,6 +17,7 @@
 package intdataplane
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -28,11 +29,10 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
-	"bytes"
-	"sort"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -313,13 +313,13 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 		})
 		if len(ipAddrs) > 0 {
 			ip, ok := m.ifaceToIpMap[update.Name]
-			if !ok || ip.Equal(ipAddrs[0]) == false {
+			if !ok || !ip.Equal(ipAddrs[0]) {
 				m.ifaceToIpMap[update.Name] = ipAddrs[0]
 				m.dirtyIfaceNames.Add(update.Name)
 			}
 
 		}
-	} else{
+	} else {
 		_, ok := m.ifaceToIpMap[update.Name]
 		if ok {
 			delete(m.ifaceToIpMap, update.Name)
