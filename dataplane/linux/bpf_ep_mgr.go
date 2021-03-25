@@ -1405,6 +1405,10 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
+	sort.Slice(addrs, func(i, j int) bool {
+		return bytes.Compare(addrs[i].(*net.IPNet).IP, addrs[j].(*net.IPNet).IP) < 0
+	})
+
 	for _, addr := range addrs {
 		if ipv4Addr := addr.(*net.IPNet).IP.To4(); ipv4Addr != nil {
 			return &ipv4Addr, nil
