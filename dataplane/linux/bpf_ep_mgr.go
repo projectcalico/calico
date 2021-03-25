@@ -17,6 +17,7 @@
 package intdataplane
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -28,6 +29,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -148,6 +150,8 @@ type bpfEndpointManager struct {
 
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
+
+	ifaceToIpMap map[string]net.IP
 }
 
 type bpfAllowChainRenderer interface {
@@ -204,6 +208,7 @@ func newBPFEndpointManager(
 		}),
 		onStillAlive:     livenessCallback,
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
+		ifaceToIpMap:     map[string]net.IP{},
 	}
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
@@ -249,7 +254,8 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	// Interface updates.
 	case *ifaceUpdate:
 		m.onInterfaceUpdate(msg)
-
+	case *ifaceAddrsUpdate:
+		m.onInterfaceAddrsUpdate(msg)
 	// Updates from the datamodel:
 
 	// Workloads.
@@ -284,6 +290,40 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 			} else {
 				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
 			}
+		}
+	}
+}
+
+func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
+	var ipAddrs []net.IP
+	m.ifacesLock.Lock()
+	defer m.ifacesLock.Unlock()
+
+	if update.Addrs != nil && update.Addrs.Len() > 0 {
+		log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
+		update.Addrs.Iter(func(item interface{}) error {
+			ip := net.ParseIP(item.(string))
+			if ip.To4() != nil {
+				ipAddrs = append(ipAddrs, ip)
+			}
+			return nil
+		})
+		sort.Slice(ipAddrs, func(i, j int) bool {
+			return bytes.Compare(ipAddrs[i], ipAddrs[j]) < 0
+		})
+		if len(ipAddrs) > 0 {
+			ip, ok := m.ifaceToIpMap[update.Name]
+			if !ok || !ip.Equal(ipAddrs[0]) {
+				m.ifaceToIpMap[update.Name] = ipAddrs[0]
+				m.dirtyIfaceNames.Add(update.Name)
+			}
+
+		}
+	} else {
+		_, ok := m.ifaceToIpMap[update.Name]
+		if ok {
+			delete(m.ifaceToIpMap, update.Name)
+			m.dirtyIfaceNames.Add(update.Name)
 		}
 	}
 }
@@ -708,6 +748,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	//   for resizing the packet, so we have to reduce the apparent MTU by another 50 bytes
 	//   when we cannot encap the packet - non-GSO & too close to veth MTU
 	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
+	ap.IntfIP = calicoRouterIP
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap, polDirection)
 	if err != nil {
@@ -785,6 +826,13 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
+	ip, err := m.getInterfaceIP(ifaceName)
+	if err != nil {
+		log.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
+		ap.IntfIP = m.hostIP
+	} else {
+		ap.IntfIP = *ip
+	}
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap, polDirection)
 	if err != nil {
@@ -1343,4 +1391,34 @@ func FindJumpMap(ap *tc.AttachPoint) (mapFD bpf.MapFD, err error) {
 		}
 	}
 	return 0, errors.New("failed to find TC program")
+}
+
+func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
+	var ipAddrs []net.IP
+	if ip, ok := m.ifaceToIpMap[ifaceName]; ok {
+		return &ip, nil
+	}
+	intf, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := intf.Addrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, addr := range addrs {
+		switch t := addr.(type) {
+		case *net.IPNet:
+			if t.IP.To4() != nil {
+				ipAddrs = append(ipAddrs, t.IP)
+			}
+		}
+	}
+	sort.Slice(ipAddrs, func(i, j int) bool {
+		return bytes.Compare(ipAddrs[i], ipAddrs[j]) < 0
+	})
+	if len(ipAddrs) > 0 {
+		return &ipAddrs[0], nil
+	}
+	return nil, errors.New("interface ip address not found")
 }

@@ -103,6 +103,16 @@ func (b *Binary) PatchIPv4(ip net.IP) error {
 	return nil
 }
 
+// PatchIntfIPv4 replaces a place holder Intf IP with the actual IPv4
+func (b *Binary) PatchIntfAddr(ip net.IP) error {
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return errors.Errorf("%s is not IPv4", ip)
+	}
+	b.replaceAllLoadImm32([]byte("INTF"), []byte(ipv4))
+	return nil
+}
+
 // PatchLogPrefix patches in the log prefix. Is is trimmed to 8 bytes and padded
 // with '-' on the right
 func (b *Binary) PatchLogPrefix(prefix string) {

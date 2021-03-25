@@ -61,6 +61,7 @@ func TestJumpMapCleanup(t *testing.T) {
 		startingJumpMaps := countJumpMaps()
 		startingTCDirs := countTCDirs()
 		ap.HostIP = net.ParseIP("10.0.0.1")
+		ap.IntfIP = net.ParseIP("10.0.0.2")
 		err := tc.EnsureQdisc(ap.Iface)
 		Expect(err).NotTo(HaveOccurred())
 		err = ap.AttachProgram()

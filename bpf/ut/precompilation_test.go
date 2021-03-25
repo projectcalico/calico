@@ -85,6 +85,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 								DSR:        dsr,
 								LogLevel:   logLevel,
 								HostIP:     net.ParseIP("10.0.0.1"),
+								IntfIP:     net.ParseIP("10.0.0.2"),
 							}
 
 							t.Run(ap.FileName(), func(t *testing.T) {

@@ -74,10 +74,10 @@ var (
 			}},
 		}},
 	}
-	node1ip  = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2 = net.IPv4(10, 10, 2, 1).To4()
-	node2ip  = net.IPv4(10, 10, 0, 2).To4()
-
+	node1ip   = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
+	node2ip   = net.IPv4(10, 10, 0, 2).To4()
+	intfIP    = net.IPv4(10, 10, 0, 3).To4()
 	node1CIDR = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
@@ -200,6 +200,7 @@ outter:
 	}
 
 	log.WithField("hostIP", hostIP).Info("Host IP")
+	log.WithField("intfIP", intfIP).Info("Intf IP")
 	obj += fmt.Sprintf("fib_%s_skb0x%x", loglevel, skbMark)
 
 	if strings.Contains(section, "_dsr") {
@@ -215,6 +216,8 @@ outter:
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchLogPrefix(progLog + "-" + bpfIfaceName)
 	err = bin.PatchIPv4(hostIP)
+	Expect(err).NotTo(HaveOccurred())
+	err = bin.PatchIntfAddr(intfIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
@@ -503,6 +506,8 @@ outter:
 	bin, err := bpf.BinaryFromFile(objFname)
 	Expect(err).NotTo(HaveOccurred())
 	err = bin.PatchIPv4(hostIP)
+	Expect(err).NotTo(HaveOccurred())
+	err = bin.PatchIntfAddr(intfIP)
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
