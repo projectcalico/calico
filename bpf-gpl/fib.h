@@ -106,6 +106,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 skip_redir_ifindex:
 		CALI_DEBUG("Redirect directly to interface (%d) failed.\n", iface);
 		/* fall through to FIB if enabled or the IP stack, don't give up yet. */
+		rc = TC_ACT_UNSPEC;
 	}
 
 #if CALI_FIB_ENABLED
