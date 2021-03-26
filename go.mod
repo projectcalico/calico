@@ -8,7 +8,7 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/cni-plugin v1.11.1-0.20210324172329-7c62253795fd
-	github.com/projectcalico/felix v0.0.0-20210325182036-03b645b333ad
+	github.com/projectcalico/felix v0.0.0-20210326003707-1adadda68163
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210325191429-ca777641bd69
 	github.com/projectcalico/typha v0.7.3-0.20210322224353-6a396341289b
 	github.com/sirupsen/logrus v1.6.0
@@ -22,7 +22,7 @@ require (
 
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210323231636-942eab843a6d
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210326000915-42d61068a324
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
