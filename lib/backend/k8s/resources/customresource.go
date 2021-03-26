@@ -16,7 +16,6 @@ package resources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -238,10 +237,6 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	logContext.Debug("List Custom K8s Resource")
 	kvps := []*model.KVPair{}
 
-	if revision != "" {
-		return nil, errors.New("Cannot List this resource type specifying a ResourceVersion")
-	}
-
 	// Attempt to convert the ListInterface to a Key.  If possible, the parameters
 	// indicate a fully qualified resource, and we'll need to use Get instead of
 	// List.
@@ -279,6 +274,7 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	err := c.restClient.Get().
 		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
+		Param("resourceVersion", revision).
 		Do(ctx).Into(reslOut)
 	if err != nil {
 		// Don't return errors for "not found".  This just
