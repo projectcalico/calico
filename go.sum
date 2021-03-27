@@ -562,8 +562,8 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210324172329-7c62253795fd h1:I90puji0yEF8j0j45WdI8bKSq1GOj3jyUwkosmdgCQY=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210324172329-7c62253795fd/go.mod h1:QLWVsgdg1OtNfvpeECQC3UtzGNKQ44KijsN13wkwE9o=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210327172717-f4b8bf6292a1 h1:rjqTn5EAGn/c6VJtkSZGvo4I2EifA3ESz8TedjN0r70=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210327172717-f4b8bf6292a1/go.mod h1:/fghwU7kJt20ZFKNoiWyH9aI9QtBpBClcANW/vapTT8=
 github.com/projectcalico/confd v1.0.1-0.20210326000915-42d61068a324 h1:OnwYjwRqJyCnMYZur7qcT3i3Qx5kZjItGRgEYYS6f54=
 github.com/projectcalico/confd v1.0.1-0.20210326000915-42d61068a324/go.mod h1:g2YVYIINwMXkS8CRCpgQfaqSSrRPczROaWcvdx953TU=
 github.com/projectcalico/felix v0.0.0-20210326003707-1adadda68163 h1:2D1hhcpCQEvIU2BT72wrpwvi7aEDX0uSlwuIsqCbzxA=
