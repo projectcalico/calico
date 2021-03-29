@@ -4,8 +4,7 @@ go 1.15
 
 require (
 	github.com/go-openapi/spec v0.19.4
-	github.com/google/gofuzz v1.1.0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210218200932-58d83bf50222
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210329180743-db4d06dfb8a1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
@@ -22,7 +21,6 @@ require (
 )
 
 replace (
-	github.com/projectcalico/libcalico-go => github.com/projectcalico/libcalico-go v1.7.2-0.20210317234036-578a9110e77b
 	k8s.io/api => k8s.io/api v0.19.6
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.6
 	k8s.io/apimachinery => k8s.io/apimachinery v0.19.6

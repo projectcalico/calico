@@ -2,10 +2,12 @@ version: v1.0
 name: API Server
 execution_time_limit:
   minutes: 30
+
 agent:
   machine:
     type: e1-standard-2
     os_image: ubuntu1804
+
 auto_cancel:
   running:
     when: "branch != 'master'"
@@ -15,43 +17,24 @@ auto_cancel:
 global_job_config:
   secrets:
     - name: docker-hub
-    # Mount the github SSH secret for pulling private repositories.
-    - name: private-repo
-    # Mount a secret for pulling images from GCR.
-    - name: tigera-dev-ci-pull-credentials
-
   prologue:
     commands:
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-    # Load the github access secrets.  First fix the permissions.
-    - chmod 0600 ~/.keys/*
-    - ssh-add ~/.keys/*
-    - docker login --username casey@tigera.io -u _json_key -p "$(cat /home/semaphore/tigera-dev-ci.json)" https://gcr.io
+    - checkout 
+    #- git fetch --unshallow
 
 blocks:
   - name: Unit Tests
     dependencies: []
     task:
-      prologue:
-        commands:
-          - checkout
-          # Semaphore is doing shallow clone on a commit without tags.
-          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
-          - git fetch --unshallow
       jobs:
-        - name: CI
+        - name: "make ci"
           commands:
             - make ci
 
   - name: Static Checks
     dependencies: []
     task:
-      prologue:
-        commands:
-          - checkout
-          # Semaphore is doing shallow clone on a commit without tags.
-          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
-          - git fetch --unshallow
       jobs:
         - name: Static Checks
           commands:
@@ -68,14 +51,6 @@ blocks:
         - name: docker
       prologue:
         commands:
-          - checkout
-          # Semaphore is doing shallow clone on a commit without tags.
-          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
-          - git fetch --unshallow
-          # Correct permissions since they are too open by default:
-          - chmod 0600 ~/.keys/*
-          # Add the key to the ssh agent:
-          - ssh-add ~/.keys/*
           # Login to docker in order to pull images.
           - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
