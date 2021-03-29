@@ -317,6 +317,11 @@ the operator's `Installation` resource to `"BPF"`:
 kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"BPF"}}}'
 ```
 
+> **Note**: the operator rolls out the change with a rolling update which means that some nodes will be in eBPF mode
+> before others.  This can disrupt the flow of traffic through node ports.  We plan to improve this in an upcoming release
+> by having the operator do the update in two phases.
+{: .alert .alert-info}
+
 %>
 <label:Manifest>
 <%
@@ -355,8 +360,14 @@ Switching external traffic mode can disrupt in-progress connections.
 
 To revert to standard Linux networking:
 
-1. Disable Calico eBPF mode:
+1. (Depending on whether you installed Calico with the operator or with a manifest) reverse the changes to the operator's `Installation` or the `FelixConfiguration` resource:
 
+   ```bash
+   kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Iptables"}}}'
+   ```
+   
+   or:
+   
    ```
    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": false}}'
    ```
