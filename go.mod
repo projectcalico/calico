@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/go-openapi/spec v0.19.4
+	github.com/google/gofuzz v1.1.0
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210329180743-db4d06dfb8a1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
