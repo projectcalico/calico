@@ -42,6 +42,7 @@ component needs access to in etcd to function successfully.
 | /calico/resources/v3/projectcalico.org/workloadendpoints/\*   |   RW   |
 | /calico/resources/v3/projectcalico.org/ippools/\*             |   R    |
 | /calico/resources/v3/projectcalico.org/clusterinformations/\* |   R    |
+| /calico/resources/v3/projectcalico.org/nodes/\*               |   R    |
 
 ## calico/kube-controllers
 
