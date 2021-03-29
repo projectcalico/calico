@@ -16,6 +16,10 @@ package errors
 
 import (
 	"fmt"
+	"net/http"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Error indicating a problem connecting to the backend.
@@ -26,6 +30,23 @@ type ErrorDatastoreError struct {
 
 func (e ErrorDatastoreError) Error() string {
 	return e.Err.Error()
+}
+
+func (e ErrorDatastoreError) Status() metav1.Status {
+	if i, ok := e.Err.(apierrors.APIStatus); ok {
+		return i.Status()
+	}
+
+	// Just wrap in a status error.
+	return metav1.Status{
+		Status:  metav1.StatusFailure,
+		Code:    http.StatusBadRequest,
+		Reason:  metav1.StatusReasonInvalid,
+		Message: fmt.Sprintf(e.Error()),
+		Details: &metav1.StatusDetails{
+			Name: fmt.Sprintf("%v", e.Identifier),
+		},
+	}
 }
 
 // Error indicating a resource does not exist.  Used when attempting to delete or
