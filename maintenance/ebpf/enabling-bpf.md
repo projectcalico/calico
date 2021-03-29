@@ -310,7 +310,7 @@ kubectl patch networks.operator.openshift.io cluster --type merge -p '{"spec":{"
 <label:Operator,active:true>
 <%
 
-If you installed {{site.prodname}} using the operator, change the `spec.calicoNetowrk.linuxDataplane` parameter in 
+If you installed {{site.prodname}} using the operator, change the `spec.calicoNetwork.linuxDataplane` parameter in 
 the operator's `Installation` resource to `"BPF"`:
 
 ```bash
