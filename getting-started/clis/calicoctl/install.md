@@ -305,6 +305,8 @@ docker pull {{page.registry}}{{page.imageNames["calicoctl"]}}:{{site.data.versio
 
 
 Use the YAML that matches your datastore type to deploy the `calicoctl` container to your nodes.
+Determine datastore type using `kubectl exec -ti -n kube-system calicoctl -- calicoctl version` 
+Cluster type of fdd indicates kubernetes api as a datastore.
 
 - **etcd**
 
