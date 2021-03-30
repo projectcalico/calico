@@ -105,6 +105,16 @@ spec:
                       - cidr
                       type: object
                     type: array
+                  linuxDataplane:
+                    description: 'LinuxDataplane is used to select the dataplane used
+                      for Linux nodes. In particular, it causes the operator to add
+                      required mounts and environment variables for the particular
+                      dataplane. If not specified, iptables mode is used. Default:
+                      Iptables'
+                    enum:
+                    - Iptables
+                    - BPF
+                    type: string
                   mtu:
                     description: MTU specifies the maximum transmission unit to use
                       on the pod network. If not specified, Calico will perform MTU
@@ -670,6 +680,16 @@ spec:
                           - cidr
                           type: object
                         type: array
+                      linuxDataplane:
+                        description: 'LinuxDataplane is used to select the dataplane
+                          used for Linux nodes. In particular, it causes the operator
+                          to add required mounts and environment variables for the
+                          particular dataplane. If not specified, iptables mode is
+                          used. Default: Iptables'
+                        enum:
+                        - Iptables
+                        - BPF
+                        type: string
                       mtu:
                         description: MTU specifies the maximum transmission unit to
                           use on the pod network. If not specified, Calico will perform
