@@ -19,9 +19,12 @@ import (
 	"reflect"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // Create a new SyncerUpdateProcessor to sync FelixConfiguration data in v1 format for
@@ -48,7 +51,19 @@ var protoPortSliceToString = func(value interface{}) interface{} {
 	}
 	parts := make([]string, len(pps))
 	for i, pp := range pps {
-		parts[i] = fmt.Sprintf("%s:%s:%d", strings.ToLower(pp.Protocol), pp.Net, pp.Port)
+		if pp.Net != "" {
+			ip, _, err := cnet.ParseCIDROrIP(pp.Net)
+			if err != nil {
+				log.WithError(err).Error("Unable to parse CIDR to sync FelixConfiguration data in v1 format")
+			}
+			if ip.Version() == 6 {
+				parts[i] = fmt.Sprintf("%s:[%s]:%d", strings.ToLower(pp.Protocol), pp.Net, pp.Port)
+			} else {
+				parts[i] = fmt.Sprintf("%s:%s:%d", strings.ToLower(pp.Protocol), pp.Net, pp.Port)
+			}
+		} else {
+			parts[i] = fmt.Sprintf("%s:%d", strings.ToLower(pp.Protocol), pp.Port)
+		}
 	}
 	return strings.Join(parts, ",")
 }

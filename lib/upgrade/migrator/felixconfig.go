@@ -27,6 +27,7 @@ import (
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 )
 
@@ -308,12 +309,27 @@ func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error)
 			continue
 		}
 
+		protocolStr := "tcp"
+		netStr := ""
+
+		// Check if IPv6 network is set
+		if strings.Contains(portStr, "[") && strings.Contains(portStr, "]") {
+			// Grab the IPv6 network
+			startIndex := strings.Index(portStr, "[")
+			endIndex := strings.Index(portStr, "]:")
+			netStr = portStr[startIndex+1 : endIndex]
+
+			// Remove the IPv6 network value from portStr
+			var withoutIPv6 strings.Builder
+			withoutIPv6.WriteString(portStr[:startIndex])
+			withoutIPv6.WriteString(portStr[endIndex+2:])
+			portStr = withoutIPv6.String()
+		}
+
 		parts := strings.Split(portStr, ":")
 		if len(parts) > 3 {
 			return nil, m.parseProtoPortFailed("ports should be <protocol>:<net>:<number> or <protocol>:<number> or <number>")
 		}
-		protocolStr := "TCP"
-		netStr := "0.0.0.0/0"
 
 		if len(parts) > 2 {
 			netStr = parts[1]
@@ -324,16 +340,6 @@ func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error)
 		if len(parts) == 2 {
 			protocolStr = strings.ToUpper(parts[0])
 			portStr = parts[1]
-		}
-
-		ip, netParsed, err := net.ParseCIDROrIP(netStr)
-		if err != nil {
-			err = m.parseProtoPortFailed("invalid CIDR or IP " + netStr)
-			return nil, err
-		}
-		if ip.Version() != 4 {
-			err = m.parseProtoPortFailed("invalid CIDR or IP (not v4)")
-			return nil, err
 		}
 
 		if protocolStr != "TCP" && protocolStr != "UDP" {
@@ -348,11 +354,22 @@ func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error)
 			err = m.parseProtoPortFailed("ports must be in range 0-65535")
 			return nil, err
 		}
-		result = append(result, apiv3.ProtoPort{
-			Net:      netParsed.String(),
+
+		protoPort := apiv3.ProtoPort{
 			Protocol: protocolStr,
 			Port:     uint16(port),
-		})
+		}
+
+		if netStr != "" {
+			_, netParsed, err := cnet.ParseCIDROrIP(netStr)
+			if err != nil {
+				err = m.parseProtoPortFailed("invalid CIDR or IP " + netStr)
+				return nil, err
+			}
+			protoPort.Net = netParsed.String()
+		}
+
+		result = append(result, protoPort)
 	}
 
 	return &result, nil
