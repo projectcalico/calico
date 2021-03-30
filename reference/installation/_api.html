@@ -568,6 +568,22 @@ Calico Enterprise installation.</p>
 <tbody>
 <tr>
 <td>
+<code>linuxDataplane</code><br>
+<em>
+<a href="#operator.tigera.io/v1.LinuxDataplaneOption">
+LinuxDataplaneOption
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>LinuxDataplane is used to select the dataplane used for Linux nodes. In particular, it
+causes the operator to add required mounts and environment variables for the particular dataplane.
+If not specified, iptables mode is used.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>bgp</code><br>
 <em>
 <a href="#operator.tigera.io/v1.BGPOption">
@@ -1365,6 +1381,12 @@ InstallationSpec
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.LinuxDataplaneOption">LinuxDataplaneOption
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
 <h3 id="operator.tigera.io/v1.MultiInterfaceMode">MultiInterfaceMode
 (<code>string</code> alias)</h3>
 <p>
@@ -1506,6 +1528,11 @@ a node that violates one or more of the expressions.</p>
 </p>
 <p>ProductVariant represents the variant of the product.</p>
 <p>One of: Calico, TigeraSecureEnterprise</p>
+<h3 id="operator.tigera.io/v1.PromptType">PromptType
+(<code>string</code> alias)</h3>
+<p>PromptType is a value that specifies whether the identity provider prompts the end user for re-authentication and
+consent.
+One of: None, Login, Consent, SelectAccount.</p>
 <h3 id="operator.tigera.io/v1.Provider">Provider
 (<code>string</code> alias)</h3>
 <p>
