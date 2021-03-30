@@ -160,7 +160,7 @@ First, make a note of the address of the API server:
 > **Tip**: If your cluster uses a ConfigMap to configure `kube-proxy` you can find the "right" way to reach the API
 > server by examining the config map.  For example:
 > ```
-> $ kubectl get configmap -n kube-system kube-proxy -o jsonpath='{.data.kubeconfig}' | grep server`
+> $ kubectl get configmap -n kube-system kube-proxy -o yaml | grep server`
 >     server: https://d881b853ae312e00302a84f1e346a77.gr7.us-west-2.eks.amazonaws.com
 > ```
 > In this case, the server is `d881b853aea312e00302a84f1e346a77.gr7.us-west-2.eks.amazonaws.com` and the port is
