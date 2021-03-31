@@ -310,13 +310,28 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 			continue
 		}
 
+		protocolStr := "tcp"
+		netStr := ""
+
+		// Check if IPv6 network is set
+		if strings.Contains(portStr, "[") && strings.Contains(portStr, "]") {
+			// Grab the IPv6 network
+			startIndex := strings.Index(portStr, "[")
+			endIndex := strings.Index(portStr, "]:")
+			netStr = portStr[startIndex+1 : endIndex]
+
+			// Remove the IPv6 network value from portStr
+			var withoutIPv6 strings.Builder
+			withoutIPv6.WriteString(portStr[:startIndex])
+			withoutIPv6.WriteString(portStr[endIndex+2:])
+			portStr = withoutIPv6.String()
+		}
+
 		parts := strings.Split(portStr, ":")
 		if len(parts) > 3 {
 			return nil, p.parseFailed(raw,
 				"ports should be <protocol>:<net>:<number> or <protocol>:<number> or <number>")
 		}
-		protocolStr := "tcp"
-		netStr := "0.0.0.0/0"
 
 		if len(parts) > 2 {
 			netStr = parts[1]
@@ -327,16 +342,6 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 		if len(parts) == 2 {
 			protocolStr = strings.ToLower(parts[0])
 			portStr = parts[1]
-		}
-
-		ip, netParsed, err := cnet.ParseCIDROrIP(netStr)
-		if err != nil {
-			err = p.parseFailed(raw, "invalid CIDR or IP "+netStr)
-			return nil, err
-		}
-		if ip.Version() != 4 {
-			err = p.parseFailed(raw, "invalid CIDR or IP (not v4)")
-			return nil, err
 		}
 
 		if protocolStr != "tcp" && protocolStr != "udp" {
@@ -352,11 +357,22 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 			err = p.parseFailed(raw, "ports must be in range 0-65535")
 			return nil, err
 		}
-		result = append(result, ProtoPort{
-			Net:      netParsed.String(),
+
+		protoPort := ProtoPort{
 			Protocol: protocolStr,
 			Port:     uint16(port),
-		})
+		}
+
+		if netStr != "" {
+			_, netParsed, err := cnet.ParseCIDROrIP(netStr)
+			if err != nil {
+				err = p.parseFailed(raw, "invalid CIDR or IP "+netStr)
+				return nil, err
+			}
+			protoPort.Net = netParsed.String()
+		}
+
+		result = append(result, protoPort)
 	}
 	return result, nil
 }
