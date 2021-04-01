@@ -85,7 +85,7 @@ container-optimised OS with an emphasis on security; it has a version of the ker
   ```
 
   > **Note**: Do not use the manifests from the [<u>current EKS docs</u>](https://docs.aws.amazon.com/eks/latest/userguide/calico.html)
-  > because they reference an older version of Calico, which does not support eBPF mode.
+  > because they reference an older version of Calico, which does not have the latest eBPF fixes.
   >
   > It's important to use the operator to install {{site.prodname}}, not a "manifest" install.  The "manifest" installs
   > are not specialised for EKS (but the operator knows how to customise the installation for EKS).
