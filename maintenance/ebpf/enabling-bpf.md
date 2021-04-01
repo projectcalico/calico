@@ -311,10 +311,11 @@ kubectl patch networks.operator.openshift.io cluster --type merge -p '{"spec":{"
 <%
 
 If you installed {{site.prodname}} using the operator, change the `spec.calicoNetwork.linuxDataplane` parameter in 
-the operator's `Installation` resource to `"BPF"`; you must also disable host ports because these are not supported in BPF mode:
+the operator's `Installation` resource to `"BPF"`; you must also clear the `hostPorts` setting because host ports 
+are not supported in BPF mode:
 
 ```bash
-kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"BPF", "hostPorts":"Disabled"}}}'
+kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"BPF", "hostPorts":null}}}'
 ```
 
 > **Note**: the operator rolls out the change with a rolling update which means that some nodes will be in eBPF mode
@@ -363,7 +364,7 @@ To revert to standard Linux networking:
 1. (Depending on whether you installed Calico with the operator or with a manifest) reverse the changes to the operator's `Installation` or the `FelixConfiguration` resource:
 
    ```bash
-   kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Iptables", "hostPorts":"Enabled"}}}'
+   kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Iptables"}}}'
    ```
    
    or:
