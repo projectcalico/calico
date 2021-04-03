@@ -98,6 +98,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 			ip := c.findNodeAddress(node, apiv3.InternalIP)
 			if ip != nil {
 				ipv4 = ip
+				log.Debugf("Sridhar: Filling with internalIP")
 			}
 		}
 		if ipv4 == nil {
