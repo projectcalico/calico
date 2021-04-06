@@ -371,15 +371,15 @@ data:
           {{ toYaml $value | indent 4 }}
           {{ end }}
           {{- end }}
+{% endraw %}{% include non-helm-manifests/istio-proxy-volume-mounts %}
+{% include non-helm-manifests/dikastes-container %}
+{%- raw %}
       {{- if .ProxyConfig.ProxyMetadata.ISTIO_META_DNS_CAPTURE }}
       dnsConfig:
         options:
         - name: "ndots"
           value: "4"
       {{- end }}
-{% endraw %}{% include non-helm-manifests/istio-proxy-volume-mounts %}
-{% include non-helm-manifests/dikastes-container %}
-{%- raw %}
       volumes:
       {{- if (isset .ObjectMeta.Annotations `sidecar.istio.io/bootstrapOverride`) }}
       - name: custom-bootstrap-volume
