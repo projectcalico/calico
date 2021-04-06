@@ -43,7 +43,12 @@ func (c *NodeController) initSyncer() {
 func (c *NodeController) listBlocks() (map[string]model.KVPair, error) {
 	c.Lock()
 	defer c.Unlock()
-	blocks := c.allBlocks
+
+	// Make a copy of the blocks map to return.
+	blocks := make(map[string]model.KVPair, len(c.allBlocks))
+	for k, v := range c.allBlocks {
+		blocks[k] = v
+	}
 	return blocks, nil
 }
 
