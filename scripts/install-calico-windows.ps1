@@ -420,3 +420,10 @@ StartCalico
 if ($Backend -NE "none") {
     New-NetFirewallRule -Name KubectlExec10250 -Description "Enable kubectl exec and log" -Action Allow -LocalPort 10250 -Enabled True -DisplayName "kubectl exec 10250" -Protocol TCP -ErrorAction SilentlyContinue
 }
+
+$nodeName = Get-Content $RootDir\nodename
+if ((c:\k\kubectl.exe --kubeconfig c:\k\config get node $nodeName -o jsonpath='{.metadata.labels}' | Select-String "kubernetes.io/role") -EQ $null)
+{
+   Write-Host "Node $nodeName is missing worker role label, adding it"
+   c:\k\kubectl.exe --kubeconfig c:\k\config label node $nodeName kubernetes.io/role=worker
+}
