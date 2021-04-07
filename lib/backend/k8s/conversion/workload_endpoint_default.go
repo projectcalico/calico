@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -187,6 +187,8 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 				switch containerPort.Protocol {
 				case kapiv1.ProtocolUDP:
 					modelProto = numorstring.ProtocolFromString("udp")
+				case kapiv1.ProtocolSCTP:
+					modelProto = numorstring.ProtocolFromString("sctp")
 				case kapiv1.ProtocolTCP, kapiv1.Protocol("") /* K8s default is TCP. */ :
 					modelProto = numorstring.ProtocolFromString("tcp")
 				default:
