@@ -262,3 +262,23 @@ func (r nodes) List(ctx context.Context, opts options.ListOptions) (*apiv3.NodeL
 func (r nodes) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	return r.client.resources.Watch(ctx, opts, apiv3.KindNode, nil)
 }
+
+// FindNodeAddress returns node address of the specified type. Type can be one of
+// CalicoNodeIP, InternalIP or ExternalIP
+func FindNodeAddress(node *apiv3.Node, ipType string) (*cnet.IP, *cnet.IPNet) {
+        for _, addr := range node.Spec.Addresses {
+                if addr.Type == ipType {
+                        ip, cidr, err := cnet.ParseCIDROrIP(addr.Address)
+                        if err == nil {
+                                if ip.To4() == nil {
+                                        continue
+                                }
+                                log.WithFields(log.Fields{"ip": ip, "cidr": cidr}).Debug("Parsed IPv4 address")
+                                return ip, cidr
+                        } else {
+                                log.WithError(err).WithField("IPv4Address", addr.Address).Warn("Failed to parse IPv4Address")
+                        }
+                }
+        }
+        return nil, nil
+}

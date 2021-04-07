@@ -17,9 +17,7 @@ package v3
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -144,22 +142,4 @@ func NewNodeList() *NodeList {
 			APIVersion: GroupVersionCurrent,
 		},
 	}
-}
-
-func (n *Node) FindNodeAddress(ipType string) (*cnet.IP, *cnet.IPNet) {
-	for _, addr := range n.Spec.Addresses {
-		if addr.Type == ipType {
-			ip, cidr, err := cnet.ParseCIDROrIP(addr.Address)
-			if err == nil {
-				if ip.To4() == nil {
-					continue
-				}
-				log.WithFields(log.Fields{"ip": ip, "cidr": cidr}).Debug("Parsed IPv4 address")
-				return ip, cidr
-			} else {
-				log.WithError(err).WithField("IPv4Address", addr.Address).Warn("Failed to parse IPv4Address")
-			}
-		}
-	}
-	return nil, nil
 }
