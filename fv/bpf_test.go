@@ -275,6 +275,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
 			options.ExternalIPs = true
+			options.ExtraEnvVars["FELIX_BPFToHostMark"] = "0x80"
 		})
 
 		JustAfterEach(func() {

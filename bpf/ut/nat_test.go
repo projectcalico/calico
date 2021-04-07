@@ -144,6 +144,14 @@ func TestNATPodPodXNode(t *testing.T) {
 		Expect(res.dataOut).To(Equal(natedPkt))
 	})
 
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
+	Expect(ok).To(BeTrue())
+	// No NATing, service already resolved
+	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
+	Expect(v.Flags()).To(Equal(uint8(0)))
+
 	// Arriving at workload at node 2
 	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -370,6 +378,12 @@ func TestNATNodePort(t *testing.T) {
 	})
 
 	dumpCTMap(ctMap)
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
+	Expect(ok).To(BeTrue())
+	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
+	Expect(v.Flags()).To(Equal(conntrack.FlagNATNPFwd))
 
 	skbMark = tc.MarkSeenBypassForwardSourceFixup // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
 	// Leaving node 1
@@ -474,6 +488,13 @@ func TestNATNodePort(t *testing.T) {
 	})
 
 	dumpCTMap(ctMap)
+	ct, err = conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	v, ok = ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
+	Expect(ok).To(BeTrue())
+	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
+	Expect(v.Flags()).To(Equal(conntrack.FlagExtLocal))
+
 	dumpARPMap(arpMap)
 
 	arpMapN2 = saveARPMap(arpMap)
@@ -917,6 +938,13 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
 
 	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
+
+	ct, err := conntrack.LoadMapMem(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
+	Expect(ok).To(BeTrue())
+	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
+	Expect(v.Flags()).To(Equal(conntrack.FlagExtLocal))
 
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {

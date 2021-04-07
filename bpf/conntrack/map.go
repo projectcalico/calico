@@ -144,6 +144,8 @@ const (
 	FlagNATOut    uint8 = (1 << 0)
 	FlagNATFwdDsr uint8 = (1 << 1)
 	FlagNATNPFwd  uint8 = (1 << 2)
+	FlagSkipFIB   uint8 = (1 << 3)
+	FlagExtLocal  uint8 = (1 << 4)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -337,6 +339,18 @@ func (e Value) String() string {
 
 		if flags&FlagNATFwdDsr != 0 {
 			flagsStr += " fwd-dsr"
+		}
+
+		if flags&FlagNATNPFwd != 0 {
+			flagsStr += " np-fwd"
+		}
+
+		if flags&FlagSkipFIB != 0 {
+			flagsStr += " skip-fib"
+		}
+
+		if flags&FlagExtLocal != 0 {
+			flagsStr += " ext-local"
 		}
 	}
 

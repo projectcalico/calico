@@ -617,6 +617,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.tun_ip = v->tun_ip;
 		CALI_CT_DEBUG("tun_ip:%x\n", bpf_ntohl(v->tun_ip));
 
+		result.flags = v->flags;
+
 		if (ct_ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;

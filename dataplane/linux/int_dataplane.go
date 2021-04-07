@@ -163,6 +163,7 @@ type Config struct {
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
+	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
@@ -608,6 +609,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.VXLANMTU,
 			uint16(config.VXLANPort),
 			config.BPFNodePortDSREnabled,
+			config.BPFExtToServiceConnmark,
 			ipSetsMap,
 			stateMap,
 			ruleRenderer,

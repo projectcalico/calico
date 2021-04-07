@@ -124,6 +124,7 @@ type Config struct {
 	BPFKubeProxyIptablesCleanupEnabled bool           `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration  `config:"seconds;1"`
 	BPFKubeProxyEndpointSlicesEnabled  bool           `config:"bool;false"`
+	BPFExtToServiceConnmark            int            `config:"int;0"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
