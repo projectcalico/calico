@@ -57,7 +57,7 @@ To install WireGuard on the default Amazon Machine Image (AMI):
 <%
 To install WireGuard for OpenShift v4.6:
 
-  This approach uses kernel modules via container installation as outlined here {% include open-new-window.html text='atmoic wireguard' url='https://github.com/projectcalico/atomic-wireguard' %} 
+  This approach uses kernel modules via container installation as outlined here {% include open-new-window.html text='atomic wireguard' url='https://github.com/projectcalico/atomic-wireguard' %} 
 
    1. Create MachineConfig for WireGuard on your local machine.
    ```bash
@@ -102,7 +102,13 @@ To install WireGuard for OpenShift v4.6:
    cd ..
    ```
 
-   4. You must then set the URLs for the `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` packages in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. You can determine the host kernel version to use in the URL by running `uname -r` on a host in your cluster. You can find links to  official packages in your {% include open-new-window.html text='Red Hat subscription' url='https://access.redhat.com/downloads/content/package-browser' %} 
+   4. Configure/edit `kvc-wireguard-kmod/wireguard-kmod.conf`. 
+   
+       a. You must then set the URLs for the `WIREGUARD_KERNEL_VERSION`, `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` packages in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. 
+   
+       b. You can determine the host kernel version to use in the URL by running `uname -r` on a host in your cluster. You can find links to  official packages in your {% include open-new-window.html text='Red Hat subscription' url='https://access.redhat.com/downloads/content/package-browser' %}
+
+       c. For more details and help about configuring `kvc-wireguard-kmod/wireguard-kmod.conf`, see the {% include open-new-window.html text='kvc-wireguard-kmod README file' url='https://github.com/tigera/kvc-wireguard-kmod#quick-config-variables-guide' %} 
 
 
    5. Get RHEL Entitlement data from your own RHEL8 system from a host in your cluster.
