@@ -364,6 +364,14 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 					logrus.WithError(err).WithField("addr", a.Address).Warn("not an IP")
 				}
 			}
+		} else if len(node.Spec.Addresses) > 0 {
+			ipv4, caliNodeCIDR, err := cnet.ParseCIDROrIP(node.Spec.Addresses[0].Address)
+			if err == nil {
+				nodeInfo = &l3rrNodeInfo{
+					Addr: ip.FromCalicoIP(*ipv4).(ip.V4Addr),
+					CIDR: ip.CIDRFromCalicoNet(*caliNodeCIDR).(ip.V4CIDR),
+				}
+			}
 		}
 	}
 
