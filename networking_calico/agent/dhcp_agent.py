@@ -485,7 +485,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Dnsmasqs if no longer needed.  Also remove all port and subnet
         # information.
         LOG.debug("Reset cache for new snapshot")
-        for network_id in self.agent.cache.get_network_ids():
+        for network_id in list(self.agent.cache.get_network_ids()):
             self.dirty_networks.add(network_id)
             self._fix_network_cache_port_lookup(network_id)
             self.agent.cache.put(empty_network(network_id))
