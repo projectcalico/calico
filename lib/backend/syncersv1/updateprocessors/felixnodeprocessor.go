@@ -23,8 +23,9 @@ import (
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
+	cresources "github.com/projectcalico/libcalico-go/lib/resources"
+
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	wg "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
@@ -95,13 +96,13 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 		// Look for internal node address, if BGP is not running
 		if ipv4 == nil {
-			ip, _ := clientv3.FindNodeAddress(node, apiv3.InternalIP)
+			ip, _ := cresources.FindNodeAddress(node, apiv3.InternalIP)
 			if ip != nil {
 				ipv4 = ip
 			}
 		}
 		if ipv4 == nil {
-			ip, _ := clientv3.FindNodeAddress(node, apiv3.ExternalIP)
+			ip, _ := cresources.FindNodeAddress(node, apiv3.ExternalIP)
 			if ip != nil {
 				ipv4 = ip
 			}
