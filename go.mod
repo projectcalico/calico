@@ -25,9 +25,9 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210331213939-4450c4d1497b
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210408190741-c3e93310c062
 	github.com/projectcalico/pod2daemon v0.0.0-20210303174516-f4d124e8d7e6
-	github.com/projectcalico/typha v0.7.3-0.20210401040343-426ff799d7d7
+	github.com/projectcalico/typha v0.7.3-0.20210408192513-9f25fa0cd78e
 	github.com/prometheus/client_golang v1.7.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.6.0
@@ -35,16 +35,16 @@ require (
 	github.com/spf13/viper v1.6.1
 	github.com/stretchr/testify v1.5.1 // indirect
 	github.com/vishvananda/netlink v1.1.0
-	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
-	golang.org/x/sys v0.0.0-20201112073958-5cba982894dd
+	golang.org/x/net v0.0.0-20210224082022-3d97a244fca7
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	golang.org/x/sys v0.0.0-20201119102817-f84b799fce68
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/grpc v1.27.0
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
-	k8s.io/api v0.19.6
-	k8s.io/apimachinery v0.19.6
-	k8s.io/client-go v0.19.6
+	k8s.io/api v0.21.0-rc.0
+	k8s.io/apimachinery v0.21.0-rc.0
+	k8s.io/client-go v0.21.0-rc.0
 	k8s.io/kubernetes v1.19.6
 )
 
