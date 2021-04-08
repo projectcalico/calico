@@ -141,15 +141,15 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
 
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder)
-	isIPv6 := false
+
 	p.epsChanges = k8sp.NewEndpointChangeTracker(p.hostname,
 		nil, // change if you want to provide more ctx
-		&isIPv6,
+		v1.IPv4Protocol,
 		p.recorder,
 		p.endpointSlicesEnabled,
 		nil,
 	)
-	p.svcChanges = k8sp.NewServiceChangeTracker(nil, &isIPv6, p.recorder, nil)
+	p.svcChanges = k8sp.NewServiceChangeTracker(nil, v1.IPv4Protocol, p.recorder, nil)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
 	if err != nil {
@@ -229,7 +229,7 @@ func (p *proxy) invokeDPSyncer() {
 	p.runnerLck.Lock()
 	defer p.runnerLck.Unlock()
 
-	svcUpdateResult := k8sp.UpdateServiceMap(p.svcMap, p.svcChanges)
+	svcUpdateResult := p.svcMap.Update(p.svcChanges)
 	epsUpdateResult := p.epsMap.Update(p.epsChanges)
 
 	if err := p.svcHealthServer.SyncServices(svcUpdateResult.HCServiceNodePorts); err != nil {

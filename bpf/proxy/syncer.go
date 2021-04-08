@@ -571,7 +571,7 @@ func (s *Syncer) applyDerived(
 		// Handle LB services the same as NodePort type.
 		fallthrough
 	case svcTypeNodePort:
-		if sinfo.OnlyNodeLocalEndpoints() {
+		if sinfo.NodeLocalExternal() {
 			count = local // use only local eps
 		}
 	}
@@ -653,7 +653,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				npInfo := serviceInfoFromK8sServicePort(sinfo)
 				npInfo.clusterIP = npip
 				npInfo.port = nport
-				if npip.Equal(podNPIP) && sinfo.OnlyNodeLocalEndpoints() {
+				if npip.Equal(podNPIP) && sinfo.NodeLocalExternal() {
 					// do not program the meta entry, program each node
 					// separately
 					continue
@@ -664,7 +664,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					continue
 				}
 			}
-			if sinfo.OnlyNodeLocalEndpoints() {
+			if sinfo.NodeLocalExternal() {
 				if miss := s.expandNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
 					expNPMisses = append(expNPMisses, miss)
 				}
@@ -1346,7 +1346,10 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.loadBalancerIPStrings = sport.LoadBalancerIPStrings()
 	sinfo.loadBalancerSourceRanges = sport.LoadBalancerSourceRanges()
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
-	sinfo.onlyNodeLocalEndpoints = sport.OnlyNodeLocalEndpoints()
+	sinfo.nodeLocalExternal = sport.NodeLocalExternal()
+	sinfo.nodeLocalInternal = sport.NodeLocalInternal()
+	sinfo.hintsAnnotation = sport.HintsAnnotation()
+	sinfo.internalTrafficPolicy = sport.InternalTrafficPolicy()
 	sinfo.topologyKeys = sport.TopologyKeys()
 
 	return sinfo
@@ -1363,8 +1366,11 @@ type serviceInfo struct {
 	loadBalancerSourceRanges []string
 	loadBalancerIPStrings    []string
 	healthCheckNodePort      int
-	onlyNodeLocalEndpoints   bool
+	nodeLocalExternal        bool
+	nodeLocalInternal        bool
 	topologyKeys             []string
+	hintsAnnotation          string
+	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
 }
 
 // TopologyKeys is part of ServicePort interface.
@@ -1427,9 +1433,24 @@ func (info *serviceInfo) LoadBalancerIPStrings() []string {
 	return info.loadBalancerIPStrings
 }
 
-// OnlyNodeLocalEndpoints is part of ServicePort interface.
-func (info *serviceInfo) OnlyNodeLocalEndpoints() bool {
-	return info.onlyNodeLocalEndpoints
+// NodeLocalExternal is part of ServicePort interface.
+func (info *serviceInfo) NodeLocalExternal() bool {
+	return info.nodeLocalExternal
+}
+
+// NodeLocalInternal is part of ServicePort interface
+func (info *serviceInfo) NodeLocalInternal() bool {
+	return info.nodeLocalInternal
+}
+
+// HintsAnnotation is part of ServicePort interface.
+func (info *serviceInfo) HintsAnnotation() string {
+	return info.hintsAnnotation
+}
+
+// InternalTrafficPolicy is part of ServicePort interface
+func (info *serviceInfo) InternalTrafficPolicy() *v1.ServiceInternalTrafficPolicyType {
+	return info.internalTrafficPolicy
 }
 
 // K8sServicePortOption defines options for NewK8sServicePort
@@ -1463,7 +1484,10 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.Protocol() == b.Protocol() &&
 		a.HealthCheckNodePort() == b.HealthCheckNodePort() &&
 		a.NodePort() == b.NodePort() &&
-		a.OnlyNodeLocalEndpoints() == b.OnlyNodeLocalEndpoints() &&
+		a.NodeLocalExternal() == b.NodeLocalExternal() &&
+		a.NodeLocalInternal() == b.NodeLocalInternal() &&
+		a.HintsAnnotation() == b.HintsAnnotation() &&
+		a.InternalTrafficPolicy() == b.InternalTrafficPolicy() &&
 		stringsEqual(a.ExternalIPStrings(), b.ExternalIPStrings()) &&
 		stringsEqual(a.LoadBalancerIPStrings(), b.LoadBalancerIPStrings()) &&
 		stringsEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges()) &&
@@ -1555,7 +1579,7 @@ func K8sSvcWithNodePort(np int) K8sServicePortOption {
 // K8sSvcWithLocalOnly sets OnlyNodeLocalEndpoints=true
 func K8sSvcWithLocalOnly() K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).onlyNodeLocalEndpoints = true
+		s.(*serviceInfo).nodeLocalExternal = true
 	}
 }
 
