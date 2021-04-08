@@ -120,6 +120,18 @@ func (eds *EtcdDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx 
 	}
 }
 
+func (eds *EtcdDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
+        node, err := eds.GetCalicoClient().Nodes().Get(utils.Ctx, felix.Hostname, options.GetOptions{})
+        if err != nil {
+                panic(err)
+        }
+        node.Spec.Addresses = []api.NodeAddress{}
+        _, err = eds.GetCalicoClient().Nodes().Update(utils.Ctx, node, utils.NoOptions)
+        if err != nil {
+                panic(err)
+        }
+}
+
 func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	felixNode := api.NewNode()
 	felixNode.Name = felix.Hostname

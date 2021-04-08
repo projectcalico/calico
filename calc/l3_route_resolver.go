@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	cresources "github.com/projectcalico/libcalico-go/lib/resources"
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/dispatcher"
@@ -343,9 +344,12 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 				Addr: ip.FromCalicoIP(*ipv4).(ip.V4Addr),
 				CIDR: ip.CIDRFromCalicoNet(*caliNodeCIDR).(ip.V4CIDR),
 			}
-		} else if len(node.Spec.Addresses) > 0 {
-			ipv4, caliNodeCIDR, err := cnet.ParseCIDROrIP(node.Spec.Addresses[0].Address)
-			if err == nil {
+		} else {
+			ipv4, caliNodeCIDR := cresources.FindNodeAddress(node, apiv3.InternalIP)
+			if ipv4 == nil {
+				ipv4, caliNodeCIDR = cresources.FindNodeAddress(node, apiv3.ExternalIP)
+			}
+			if ipv4 != nil && caliNodeCIDR != nil {
 				nodeInfo = &l3rrNodeInfo{
 					Addr: ip.FromCalicoIP(*ipv4).(ip.V4Addr),
 					CIDR: ip.CIDRFromCalicoNet(*caliNodeCIDR).(ip.V4CIDR),

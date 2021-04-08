@@ -558,6 +558,18 @@ func (kds *K8sDatastoreInfra) SetExternalIP(felix *Felix, idx int) {
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExternalIP)
 }
 
+func (kds *K8sDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
+	node, err := kds.K8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
+	if err != nil {
+		panic(err)
+	}
+	node.Status.Addresses = []v1.NodeAddress{}
+	_, err = kds.K8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	nodeIn := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{

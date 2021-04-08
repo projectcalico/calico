@@ -323,13 +323,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 	})
 
 	Context("after removing BGP address from nodes", func() {
-		// After removing BGP address from nodes, the nodeAddress should be used.
-		// Hence we expect the IPSets to have the HostIPs of Felix[0], Felix[1] in case of IPTables
-		// In BPF mode, the route should not be removed for Felix[0].IP and workload IP
-		// Connectivity between workloads should still work.
+		// Simulate having a host send IPIP traffic from an unknown source, should get blocked.
 		BeforeEach(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
+			if bpfEnabled {
+				infra.RemoveNodeAddresses(felixes[0])
+			} else {
+				for _, f := range felixes {
+					infra.RemoveNodeAddresses(f)
+				}
+			}
+
 			listOptions := options.ListOptions{}
 			if bpfEnabled {
 				listOptions.Name = felixes[0].Hostname
@@ -351,14 +356,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					// updated as a signal that Felix has restarted.
 					Eventually(func() int {
 						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "5s", "200ms").Should(Equal(2))
+					}, "5s", "200ms").Should(BeZero())
 				}
 			}
 		})
 
 		It("should have no workload to workload connectivity", func() {
-			cc.ExpectSome(w[0], w[1])
-			cc.ExpectSome(w[1], w[0])
+			cc.ExpectNone(w[0], w[1])
+			cc.ExpectNone(w[1], w[0])
 			cc.CheckConnectivity()
 		})
 	})
@@ -367,6 +372,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		BeforeEach(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
+			// Remove the node addresses
+			infra.RemoveNodeAddresses(felixes[0])
 			l, err := client.Nodes().List(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			// Now remove the BGP configuration for felixes[0]
@@ -387,7 +394,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				for _, f := range felixes {
 					Eventually(func() int {
 						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "5s", "200ms").Should(Equal(2))
+					}, "5s", "200ms").Should(Equal(1))
 				}
 			}
 
@@ -410,7 +417,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				} else {
 					Eventually(func() int {
 						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "5s", "200ms").Should(Equal(4))
+					}, "5s", "200ms").Should(Equal(3))
 				}
 			}
 
