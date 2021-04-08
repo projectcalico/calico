@@ -99,6 +99,11 @@ func init() {
 		reflect.TypeOf(apiv3.NetworkPolicy{}),
 	)
 	registerResourceInfo(
+		KindKubernetesNetworkPolicy,
+		"kubernetesnetworkpolicies",
+		reflect.TypeOf(apiv3.NetworkPolicy{}),
+	)
+	registerResourceInfo(
 		apiv3.KindNetworkSet,
 		"networksets",
 		reflect.TypeOf(apiv3.NetworkSet{}),

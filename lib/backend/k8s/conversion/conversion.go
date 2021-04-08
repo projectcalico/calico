@@ -56,8 +56,6 @@ type Converter interface {
 	StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string
 	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
 	ProfileNameToNamespace(profileName string) (string, error)
-	JoinNetworkPolicyRevisions(crdNPRev, k8sNPRev string) string
-	SplitNetworkPolicyRevision(rev string) (crdNPRev string, k8sNPRev string, err error)
 	ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error)
 	ProfileNameToServiceAccount(profileName string) (ns, sa string, err error)
 	JoinProfileRevisions(nsRev, saRev string) string
@@ -673,33 +671,6 @@ func (c converter) ProfileNameToNamespace(profileName string) (string, error) {
 	}
 
 	return strings.TrimPrefix(profileName, NamespaceProfileNamePrefix), nil
-}
-
-// JoinNetworkPolicyRevisions constructs the revision from the individual CRD and K8s NetworkPolicy
-// revisions.
-func (c converter) JoinNetworkPolicyRevisions(crdNPRev, k8sNPRev string) string {
-	return crdNPRev + "/" + k8sNPRev
-}
-
-// SplitNetworkPolicyRevision extracts the CRD and K8s NetworkPolicy revisions from the combined
-// revision returned on the KDD NetworkPolicy client.
-func (c converter) SplitNetworkPolicyRevision(rev string) (crdNPRev string, k8sNPRev string, err error) {
-	if rev == "" {
-		return
-	}
-
-	revs := strings.Split(rev, "/")
-	if len(revs) > 2 {
-		err = fmt.Errorf("ResourceVersion is not valid: %s", rev)
-		return
-	}
-
-	// A single rev value is valid from the apiserver.
-	crdNPRev = revs[0]
-	if len(revs) == 2 {
-		k8sNPRev = revs[1]
-	}
-	return
 }
 
 // serviceAccountNameToProfileName creates a profile name that is a join

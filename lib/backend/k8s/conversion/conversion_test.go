@@ -2844,52 +2844,6 @@ var _ = Describe("Test Namespace conversion", func() {
 			Expect(Egress[0]).To(Equal(apiv3.Rule{Action: apiv3.Allow}))
 		})
 	})
-
-	It("should handle NetworkPolicy resource versions", func() {
-		By("converting crd and k8s versions to the correct combined version")
-		rev := c.JoinNetworkPolicyRevisions("1234", "5678")
-		Expect(rev).To(Equal("1234/5678"))
-
-		rev = c.JoinNetworkPolicyRevisions("", "5678")
-		Expect(rev).To(Equal("/5678"))
-
-		rev = c.JoinNetworkPolicyRevisions("1234", "")
-		Expect(rev).To(Equal("1234/"))
-
-		By("extracting crd and k8s versions from the combined version")
-		crdRev, k8sRev, err := c.SplitNetworkPolicyRevision("")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(crdRev).To(Equal(""))
-		Expect(k8sRev).To(Equal(""))
-
-		crdRev, k8sRev, err = c.SplitNetworkPolicyRevision("/")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(crdRev).To(Equal(""))
-		Expect(k8sRev).To(Equal(""))
-
-		crdRev, k8sRev, err = c.SplitNetworkPolicyRevision("1234/5678")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(crdRev).To(Equal("1234"))
-		Expect(k8sRev).To(Equal("5678"))
-
-		crdRev, k8sRev, err = c.SplitNetworkPolicyRevision("/5678")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(crdRev).To(Equal(""))
-		Expect(k8sRev).To(Equal("5678"))
-
-		crdRev, k8sRev, err = c.SplitNetworkPolicyRevision("1234/")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(crdRev).To(Equal("1234"))
-		Expect(k8sRev).To(Equal(""))
-
-		crdRev, k8sRev, err = c.SplitNetworkPolicyRevision("1234")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(crdRev).To(Equal("1234"))
-		Expect(k8sRev).To(Equal(""))
-
-		_, _, err = c.SplitNetworkPolicyRevision("1234/5678/1313")
-		Expect(err).To(HaveOccurred())
-	})
 })
 
 var _ = Describe("Test ServiceAccount conversion", func() {

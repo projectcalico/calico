@@ -29,7 +29,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -78,14 +77,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			be.Clean()
 
 			By("Updating the NetworkPolicy before it is created")
-			var rv string
-			if config.Spec.DatastoreType != apiconfig.Kubernetes {
-				rv = "1234"
-			} else {
-				// Resource version for KDD is a combination of both the CRD and K8s NP backed
-				// resources separated by a slash.
-				rv = conversion.NewConverter().JoinNetworkPolicyRevisions("1234", "5678")
-			}
+			rv := "1234"
 			_, outError := c.NetworkPolicies().Update(ctx, &apiv3.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: rv, CreationTimestamp: metav1.Now(), UID: "test-fail-networkpolicy"},
 				Spec:       spec1,

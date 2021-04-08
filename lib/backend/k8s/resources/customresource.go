@@ -320,6 +320,11 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 		// We've been asked to watch a specific customresource.
 		log.WithField("name", rlo.Name).Debug("Watching a single customresource")
 		fieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name)
+
+		// If this is a namespaced resource, we also need the namespace specified.
+		if c.namespaced && rlo.Namespace == "" {
+			return nil, fmt.Errorf("name present, but missing namespace on watch request")
+		}
 	}
 
 	k8sWatchClient := cache.NewListWatchFromClient(c.restClient, c.resource, rlo.Namespace, fieldSelector)

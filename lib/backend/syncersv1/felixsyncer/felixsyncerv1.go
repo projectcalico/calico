@@ -81,6 +81,15 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 			},
 		}
 
+		// If running in kdd mode, also watch Kubernetes network policies directly.
+		// We don't need this in etcd mode, since kube-controllers copies k8s policies into etcd.
+		if cfg.DatastoreType == apiconfig.Kubernetes {
+			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
+				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
+			})
+		}
+
 		// If using Calico IPAM, include IPAM resources the felix cares about.
 		if !cfg.K8sUsePodCIDR {
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{ListInterface: model.BlockListOptions{}})

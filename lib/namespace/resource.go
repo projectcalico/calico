@@ -14,11 +14,23 @@
 
 package namespace
 
-import apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+import (
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+)
+
+const (
+	// Re-implement the model.KindKubernetesNetworkPolicy constant here
+	// to avoid an import loop.
+	KindKubernetesNetworkPolicy = "KubernetesNetworkPolicy"
+)
 
 func IsNamespaced(kind string) bool {
 	switch kind {
 	case apiv3.KindWorkloadEndpoint, apiv3.KindNetworkPolicy, apiv3.KindNetworkSet:
+		return true
+	case KindKubernetesNetworkPolicy:
+		// KindKubernetesNetworkPolicy is a special-case resource. We don't expose it over the
+		// v3 API, but it is used in the felix syncer to implement the Kubernetes NetworkPolicy API.
 		return true
 	default:
 		return false
