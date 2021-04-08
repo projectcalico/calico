@@ -7,12 +7,12 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210331213939-4450c4d1497b
-	github.com/projectcalico/typha v0.7.3-0.20210401040343-426ff799d7d7
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210408190741-c3e93310c062
+	github.com/projectcalico/typha v0.7.3-0.20210408192513-9f25fa0cd78e
 	github.com/sirupsen/logrus v1.4.2
-	k8s.io/api v0.19.6
-	k8s.io/apimachinery v0.19.6
-	k8s.io/client-go v0.19.6
+	k8s.io/api v0.21.0-rc.0
+	k8s.io/apimachinery v0.21.0-rc.0
+	k8s.io/client-go v0.21.0-rc.0
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
