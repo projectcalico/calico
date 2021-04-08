@@ -23,9 +23,9 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210406182717-69124451b1ef
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210408190741-c3e93310c062
 	github.com/projectcalico/pod2daemon v0.0.0-20210303174516-f4d124e8d7e6
-	github.com/projectcalico/typha v0.7.3-0.20210406203422-bbbc1ca12ed4
+	github.com/projectcalico/typha v0.7.3-0.20210408192513-9f25fa0cd78e
 	github.com/prometheus/client_golang v1.7.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0
@@ -46,6 +46,7 @@ require (
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799
+
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
 	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for
 	// transient imports.
