@@ -343,6 +343,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 						ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 						defer cancel()
+						infra.RemoveNodeAddresses(felixes[2])
 						node, err := client.Nodes().Get(ctx, felixes[2].Hostname, options.GetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 

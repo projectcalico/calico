@@ -51,6 +51,8 @@ type DatastoreInfra interface {
 	// ExpectedWireguardTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
 	SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWireguard bool)
+	// RemoveNodeAddresses will remove all the addresses (InternalIP, ExternalIP)
+	RemoveNodeAddresses(felix *Felix)
 	// AddNode will take the appropriate steps to add a node to the datastore.
 	// From the passed in felix the Hostname and IPv4 address will be pulled
 	// and added to the Node appropriately.

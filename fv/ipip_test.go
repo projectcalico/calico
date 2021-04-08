@@ -327,6 +327,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		BeforeEach(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
+			if bpfEnabled {
+				infra.RemoveNodeAddresses(felixes[0])
+			} else {
+				for _, f := range felixes {
+					infra.RemoveNodeAddresses(f)
+				}
+			}
+
 			listOptions := options.ListOptions{}
 			if bpfEnabled {
 				listOptions.Name = felixes[0].Hostname
@@ -364,6 +372,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		BeforeEach(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
+			// Remove the node addresses
+			infra.RemoveNodeAddresses(felixes[0])
 			l, err := client.Nodes().List(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			// Now remove the BGP configuration for felixes[0]
