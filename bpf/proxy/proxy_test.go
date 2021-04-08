@@ -691,7 +691,7 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 				"kubernetes.io/service-name": eps.ObjectMeta.Name,
 			},
 		},
-		AddressType: discovery.AddressTypeIP,
+		AddressType: discovery.AddressTypeIPv4,
 	}
 
 	for i, subset := range eps.Subsets {
