@@ -219,6 +219,11 @@ var _ = Describe("Test Pod conversion", func() {
 								ContainerPort: 432,
 							},
 							{
+								Name:          "sctp-proto",
+								Protocol:      kapiv1.ProtocolSCTP,
+								ContainerPort: 891,
+							},
+							{
 								Name:          "unkn-proto",
 								Protocol:      kapiv1.Protocol("unknown"),
 								ContainerPort: 567,
@@ -261,6 +266,7 @@ var _ = Describe("Test Pod conversion", func() {
 
 		nsProtoTCP := numorstring.ProtocolFromString("tcp")
 		nsProtoUDP := numorstring.ProtocolFromString("udp")
+		nsProtoSCTP := numorstring.ProtocolFromString("sctp")
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Ports).To(ConsistOf(
 			// No proto defaults to TCP (as defined in k8s API spec)
 			apiv3.EndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
@@ -270,6 +276,8 @@ var _ = Describe("Test Pod conversion", func() {
 			apiv3.EndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP},
 			// UDP is also an option.
 			apiv3.EndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
+			// SCTP.
+			apiv3.EndpointPort{Name: "sctp-proto", Port: 891, Protocol: nsProtoSCTP},
 			// Unknown protocol port is ignored.
 		))
 
