@@ -28,4 +28,7 @@ vendor
 
 # Test reports
 report/
+
 Makefile.common*
+.go-pkg-cache
+
