@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/projectcalico/felix v0.0.0-20210401050103-65f99db2d86b
+	github.com/projectcalico/felix v0.0.0-20210408233811-3fae190b1c5f
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210408205943-bb0bd60e8fec
 	github.com/prometheus/client_golang v1.7.1
 	github.com/satori/go.uuid v1.2.0
@@ -36,6 +36,8 @@ replace (
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.21.0-rc.0
 	k8s.io/code-generator => k8s.io/code-generator v0.21.0-rc.0
 	k8s.io/component-base => k8s.io/component-base v0.21.0-rc.0
+	k8s.io/component-helpers => k8s.io/component-helpers v0.21.0-rc.0
+	k8s.io/controller-manager => k8s.io/controller-manager v0.21.0-rc.0
 	k8s.io/cri-api => k8s.io/cri-api v0.21.0-rc.0
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.21.0-rc.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.21.0-rc.0
@@ -46,5 +48,6 @@ replace (
 	k8s.io/kubelet => k8s.io/kubelet v0.21.0-rc.0
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.21.0-rc.0
 	k8s.io/metrics => k8s.io/metrics v0.21.0-rc.0
+	k8s.io/mount-utils => k8s.io/mount-utils v0.21.0-rc.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.21.0-rc.0
 )
