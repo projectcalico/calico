@@ -1265,6 +1265,20 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
 	}
+
+	if d.config.BPFExtToServiceConnmark != 0 {
+		mark := uint32(d.config.BPFExtToServiceConnmark)
+		for _, t := range d.iptablesMangleTables {
+			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
+				Match: iptables.Match().MarkMatchesWithMask(
+					tc.MarkSeen|mark,
+					tc.MarkSeenMask|mark,
+				),
+				Comment: []string{"Mark connections with ExtToServiceConnmark"},
+				Action:  iptables.SetConnMarkAction{Mark: mark, Mask: mark},
+			}})
+		}
+	}
 }
 
 func (d *InternalDataplane) setUpIptablesNormal() {

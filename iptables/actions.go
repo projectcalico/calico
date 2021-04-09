@@ -269,3 +269,24 @@ func (c RestoreConnMarkAction) ToFragment(features *Features) string {
 func (c RestoreConnMarkAction) String() string {
 	return fmt.Sprintf("RestoreConnMarkWithMask:%#x", c.RestoreMask)
 }
+
+type SetConnMarkAction struct {
+	Mark         uint32
+	Mask         uint32
+	TypeConnMark struct{}
+}
+
+func (c SetConnMarkAction) ToFragment(features *Features) string {
+	var mask uint32
+	if c.Mask == 0 {
+		// If Mask field is ignored, default to full mark.
+		mask = 0xffffffff
+	} else {
+		mask = c.Mask
+	}
+	return fmt.Sprintf("--jump CONNMARK --set-mark %#x/%#x", c.Mark, mask)
+}
+
+func (c SetConnMarkAction) String() string {
+	return fmt.Sprintf("SetConnMarkWithMask:%#x/%#x", c.Mark, c.Mask)
+}
