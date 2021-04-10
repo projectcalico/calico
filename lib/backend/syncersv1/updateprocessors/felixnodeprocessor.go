@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,8 +25,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	cresources "github.com/projectcalico/libcalico-go/lib/resources"
 
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	wg "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // Create a new SyncerUpdateProcessor to sync Node data in v1 format for
