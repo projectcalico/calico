@@ -148,9 +148,18 @@ blocks:
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
     jobs:
-    - name: CI excluding FV
+    - name: Build All
       commands:
-      - make ci EXCEPT=fv
+        - make image-all
+    - name: UT
+      commands:
+        - make ut
+    - name: K8sfv with Typha
+      commands:
+        - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+    - name: K8sfv without Typha
+      commands:
+        - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 - name: Trigger pin updates
   dependencies: []
   skip:
