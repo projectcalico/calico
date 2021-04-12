@@ -23,16 +23,9 @@ spec:
     port: 443
     protocol: TCP
     targetPort: 5443
-  - name: queryserver
-    port: 8080
-    protocol: TCP
-    targetPort: 8080
   selector:
     apiserver: "true"
-  sessionAffinity: None
   type: ClusterIP
-status:
-  loadBalancer: {}
 
 ---
 
@@ -45,9 +38,7 @@ metadata:
   name: calico-apiserver
   namespace: calico-apiserver
 spec:
-  progressDeadlineSeconds: 600
   replicas: 1
-  revisionHistoryLimit: 10
   selector:
     matchLabels:
       apiserver: "true"
@@ -69,17 +60,13 @@ spec:
         - name: DATASTORE_TYPE
           value: kubernetes
         image: {{page.registry}}{{page.imageNames["calico/apiserver"]}}:{{site.data.versions.first.components["calico/apiserver"].version}}
-        imagePullPolicy: Always
         livenessProbe:
-          failureThreshold: 3
           httpGet:
             path: /version
             port: 5443
             scheme: HTTPS
           initialDelaySeconds: 90
           periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 1
         name: calico-apiserver
         readinessProbe:
           exec:
@@ -88,14 +75,9 @@ spec:
           failureThreshold: 5
           initialDelaySeconds: 5
           periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 1
-        resources: {}
         securityContext:
           privileged: false
           runAsUser: 0
-        terminationMessagePath: /dev/termination-log
-        terminationMessagePolicy: File
         volumeMounts:
         - mountPath: /code/apiserver.local.config/certificates
           name: calico-apiserver-certs
@@ -105,14 +87,12 @@ spec:
       restartPolicy: Always
       serviceAccount: calico-apiserver
       serviceAccountName: calico-apiserver
-      terminationGracePeriodSeconds: 30
       tolerations:
       - effect: NoSchedule
         key: node-role.kubernetes.io/master
       volumes:
       - name: calico-apiserver-certs
         secret:
-          defaultMode: 420
           secretName: calico-apiserver-certs
 
 ---
@@ -178,7 +158,12 @@ rules:
   - ipamblocks
   - blockaffinities
   verbs:
-  - '*'
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
 - apiGroups:
   - policy
   resourceNames:
@@ -204,7 +189,6 @@ rules:
   verbs:
   - list
   - watch
-  - get
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
