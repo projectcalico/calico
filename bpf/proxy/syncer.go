@@ -134,6 +134,8 @@ type Syncer struct {
 	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
 	stickySvcDeleted bool
+
+	TriggerFn func()
 }
 
 type ipPort struct {
@@ -412,13 +414,29 @@ type expandMiss struct {
 	nport int
 }
 
-func (s *Syncer) expandNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
+func (s *Syncer) expandAndApplyNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint, nport int, rtLookup func(addr ip.Addr) (routes.Value, bool)) *expandMiss {
 
-	m := make(map[ip.V4Addr][]k8sp.Endpoint)
+	ipToEp, miss := s.expandNodePorts(sname, sinfo, eps, nport, rtLookup)
 
+	for node, neps := range ipToEp {
+		if err := s.applyExpandedNP(sname, sinfo, neps, node, nport); err != nil {
+			log.WithField("error", err).Errorf("Failed to expand NodePort")
+		}
+	}
+
+	return miss
+}
+
+func (s *Syncer) expandNodePorts(
+	sname k8sp.ServicePortName,
+	sinfo k8sp.ServicePort,
+	eps []k8sp.Endpoint,
+	nport int,
+	rtLookup func(addr ip.Addr) (routes.Value, bool),
+) (map[ip.V4Addr][]k8sp.Endpoint, *expandMiss) {
+	ipToEp := make(map[ip.V4Addr][]k8sp.Endpoint)
 	var miss *expandMiss
-
 	for _, ep := range eps {
 		ipv4 := ip.FromString(ep.IP()).(ip.V4Addr)
 
@@ -441,16 +459,9 @@ func (s *Syncer) expandNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServiceP
 			log.Debugf("found rt %s for dest %s", nodeIP, ipv4)
 		}
 
-		m[nodeIP] = append(m[nodeIP], ep)
+		ipToEp[nodeIP] = append(ipToEp[nodeIP], ep)
 	}
-
-	for node, neps := range m {
-		if err := s.applyExpandedNP(sname, sinfo, neps, node, nport); err != nil {
-			log.WithField("error", err).Errorf("Failed to expand NodePort")
-		}
-	}
-
-	return miss
+	return ipToEp, miss
 }
 
 func (s *Syncer) applyDerived(
@@ -506,8 +517,8 @@ func (s *Syncer) applyDerived(
 }
 
 func (s *Syncer) apply(state DPSyncerState) error {
-	log.Infof("applying new state, %d service", len(state.SvcMap))
-	log.Debugf("applying new state, %v", state)
+	log.Infof("Applying new state, %d service", len(state.SvcMap))
+	log.Debugf("Applying new state, %v", state)
 
 	// we need to copy the maps from the new state to compute the diff in the
 	// next call. We cannot keep the provided maps as the generic k8s proxy code
@@ -574,7 +585,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				}
 			}
 			if sinfo.NodeLocalExternal() {
-				if miss := s.expandNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
+				if miss := s.expandAndApplyNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
 					expNPMisses = append(expNPMisses, miss)
 				}
 			}
@@ -1033,13 +1044,21 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 			// We do one pass rightaway since we cannot know whether there
 			// was an update or not before we got here
 			s.rt.WaitAfter(ctx, func(lookup func(addr ip.Addr) (routes.Value, bool)) bool {
+				log.Debug("Woke up")
 				var again []*expandMiss
 				for _, m := range misses {
-					if miss := s.expandNodePorts(m.sname, m.sinfo, m.eps, m.nport, lookup); miss != nil {
+					if _, miss := s.expandNodePorts(m.sname, m.sinfo, m.eps, m.nport, lookup); miss != nil {
 						again = append(again, miss)
 					}
 				}
 
+				// FIXME: would like to only trigger if there's a possibility that the change has helped.
+				if s.TriggerFn != nil {
+					log.Debug("Triggering a sync...")
+					s.TriggerFn()
+				} else {
+					log.Debug("Not triggering sync")
+				}
 				misses = again
 
 				return len(misses) == 0 // block or not block
@@ -1050,6 +1069,10 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 			}
 		}
 	}()
+}
+
+func (s *Syncer) SetTriggerFn(f func()){
+	s.TriggerFn = f
 }
 
 func (s *Syncer) stopExpandNPFixup() {

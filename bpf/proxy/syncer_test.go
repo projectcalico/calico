@@ -535,6 +535,13 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("adding a route should fix one missing expanded NP", makestep(func() {
+			s.SetTriggerFn(func() {
+				go func() {
+					logrus.Info("Syncer triggered")
+					err := s.Apply(state)
+					logrus.WithError(err).Info("Syncer result")
+				}()
+			})
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.1.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
