@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/logutils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -32,6 +33,7 @@ import (
 )
 
 func init() {
+	logutils.ConfigureEarlyLogging()
 	logrus.SetOutput(GinkgoWriter)
 	logrus.SetLevel(logrus.DebugLevel)
 }

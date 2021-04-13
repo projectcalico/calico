@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -509,7 +509,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)),feCache, beCache, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -936,6 +936,10 @@ func (m *mockNATMap) Iter(iter bpf.IterCallback) error {
 }
 
 func (m *mockNATMap) Update(k, v []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k, "v": v,
+	}).Debug("mockNATMap.Update()")
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -964,6 +968,10 @@ func (m *mockNATMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATMap) Delete(k []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k,
+	}).Debug("mockNATMap.Delete()")
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -1021,6 +1029,10 @@ func (m *mockNATBackendMap) Iter(iter bpf.IterCallback) error {
 }
 
 func (m *mockNATBackendMap) Update(k, v []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k, "v": v,
+	}).Debug("mockNATBackendMap.Update()")
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -1049,6 +1061,10 @@ func (m *mockNATBackendMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATBackendMap) Delete(k []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k,
+	}).Debug("mockNATBackendMap.Delete()")
+
 	m.Lock()
 	defer m.Unlock()
 

@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+
+	"github.com/sirupsen/logrus"
 )
 
 type CachingMap struct {
@@ -26,7 +28,7 @@ type CachingMap struct {
 	params       MapParameters
 
 	// desiredStateOfDataplane stores the complete set of key/value pairs that we _want_ to
-	// be in the dataplane.  Calling ApplyUpdatesToDataplane attempts to bring the dataplane into
+	// be in the dataplane.  Calling ApplyAllToDataplane attempts to bring the dataplane into
 	// sync.
 	//
 	// For occupancy's sake we may want to drop this copy and instead maintain the invariant:
@@ -48,6 +50,7 @@ func NewCachingMap(mapParams MapParameters, dataplaneMap Map) *CachingMap {
 }
 
 func (c *CachingMap) LoadCacheFromDataplane() error {
+	logrus.WithField("name", c.params.Name).Debug("Loading cache of dataplane state.")
 	c.initCache()
 	err := c.dataplaneMap.Iter(func(k, v []byte) IteratorAction {
 		c.cacheOfDataplane.Set(k, v)
@@ -94,8 +97,12 @@ func (c *CachingMap) recalculatePendingOperations() {
 }
 
 func (c *CachingMap) SetDesiredState(k, v []byte) {
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		logrus.WithFields(logrus.Fields{"name": c.params.Name, "k": k, "v": v}).Debug("SetDesiredState")
+	}
 	c.desiredStateOfDataplane.Set(k, v)
 	if c.cacheOfDataplane == nil {
+		logrus.Debug("SetDesiredState: initial sync pending.")
 		return // Initial sync is pending, we're not tracking deltas yet.
 	}
 	c.pendingDeletions.Delete(k)
@@ -104,6 +111,7 @@ func (c *CachingMap) SetDesiredState(k, v []byte) {
 	currentVal := c.cacheOfDataplane.Get(k)
 	if reflect.DeepEqual(currentVal, v) {
 		// Dataplane already agrees with the new value so clear any pending update.
+		logrus.Debug("SetDesiredState: Key in dataplane already, ignoring.")
 		c.pendingUpdates.Delete(k)
 		return
 	}
@@ -111,8 +119,12 @@ func (c *CachingMap) SetDesiredState(k, v []byte) {
 }
 
 func (c *CachingMap) DeleteDesiredState(k []byte) {
+	if logrus.GetLevel() >= logrus.DebugLevel {
+		logrus.WithFields(logrus.Fields{"name": c.params.Name, "k": k}).Debug("DeleteDesiredState")
+	}
 	c.desiredStateOfDataplane.Delete(k)
 	if c.cacheOfDataplane == nil {
+		logrus.Debug("DeleteDesiredState: initial sync pending.")
 		return // Initial sync is pending, we're not tracking deltas yet.
 	}
 	c.pendingUpdates.Delete(k)
@@ -121,6 +133,7 @@ func (c *CachingMap) DeleteDesiredState(k []byte) {
 	currentVal := c.cacheOfDataplane.Get(k)
 	if currentVal == nil {
 		// We don't think this value is in the dataplane so clear any pending delete.
+		logrus.Debug("DeleteDesiredState: Key not in dataplane, ignoring.")
 		c.pendingDeletions.Delete(k)
 		return
 	}
@@ -128,6 +141,7 @@ func (c *CachingMap) DeleteDesiredState(k []byte) {
 }
 
 func (c *CachingMap) DeleteAll() {
+	logrus.WithField("name", c.params.Name).Debug("DeleteAll")
 	c.desiredStateOfDataplane.Iter(func(k, v []byte) {
 		c.DeleteDesiredState(k)
 	})
@@ -144,28 +158,72 @@ func (c *CachingMap) GetDataplaneCache(k []byte) []byte {
 	return c.cacheOfDataplane.Get(k)
 }
 
-func (c *CachingMap) ApplyUpdatesToDataplane() error {
+func (c *CachingMap) ApplyAllToDataplane() error {
+	var errs ErrSlice
+	err := c.ApplyDeletionsToDataplane()
+	if err != nil {
+		errs = append(errs, err)
+	}
+	err = c.ApplyUpdatesToDataplane()
+	if err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return errs
+	}
+	return nil
+}
+
+func (c *CachingMap) maybeLoadCache() error {
 	if c.cacheOfDataplane == nil {
 		err := c.LoadCacheFromDataplane()
 		if err != nil {
 			return err
 		}
 	}
-	var errs []error
-	c.pendingDeletions.Iter(func(k, v []byte) {
-		err := c.dataplaneMap.Delete(k)
-		if err != nil && !IsNotExists(err) {
-			errs = append(errs, err)
-		}
-	})
+	return nil
+}
+
+func (c *CachingMap) ApplyUpdatesToDataplane() error {
+	logrus.WithField("name", c.params.Name).Debug("Applying updates to BPF map.")
+	err := c.maybeLoadCache()
+	if err != nil {
+		return err
+	}
+	var errs ErrSlice
 	c.pendingUpdates.Iter(func(k, v []byte) {
 		err := c.dataplaneMap.Update(k, v)
 		if err != nil {
 			errs = append(errs, err)
+		} else {
+			c.pendingUpdates.Delete(k)
+			c.cacheOfDataplane.Set(k, v)
 		}
 	})
 	if len(errs) > 0 {
-		return ErrSlice(errs)
+		return errs
+	}
+	return nil
+}
+
+func (c *CachingMap) ApplyDeletionsToDataplane() error {
+	logrus.WithField("name", c.params.Name).Debug("Applying deletions to BPF map.")
+	err := c.maybeLoadCache()
+	if err != nil {
+		return err
+	}
+	var errs ErrSlice
+	c.pendingDeletions.Iter(func(k, v []byte) {
+		err := c.dataplaneMap.Delete(k)
+		if err != nil && !IsNotExists(err) {
+			errs = append(errs, err)
+		} else {
+			c.pendingDeletions.Delete(k)
+			c.cacheOfDataplane.Delete(k)
+		}
+	})
+	if len(errs) > 0 {
+		return errs
 	}
 	return nil
 }
