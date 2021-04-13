@@ -27,6 +27,14 @@
   > [Preventing NetworkManager from controlling {{site.prodname}} interfaces]({{ site.baseurl }}/maintenance/troubleshoot/troubleshooting#configure-networkmanager)
   > before installing {{site.prodname}}.
   {: .alert .alert-info}
+  
+- If distribution comes with installed Firewalld or another iptables manager it should be disabled. 
+  It would interfere with rules added by {{site.prodname}}/Felix and caused problems with pod communication.
+  
+  > **Note**: 
+  > If a host firewall is needed, it can be configured by {{site.prodname}} HostEndpoint and GlobalNetworkPolicy.
+  > More info about configuration at [Security for host]({{ site.baseurl }}/security/hosts).
+  {: .alert .alert-info}
 
 ## Key/value store
 
