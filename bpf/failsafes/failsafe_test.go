@@ -17,7 +17,6 @@
 package failsafes
 
 import (
-	"net"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -27,7 +26,7 @@ import (
 	"github.com/projectcalico/felix/logutils"
 )
 
-const zeroValue = "\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+const zeroValue = "\x00\x00\x00\x00"
 
 type failsafeTest struct {
 	Name                string
@@ -72,10 +71,10 @@ var tests = []failsafeTest{
 			{Protocol: "udp", Port: 53, Net: "0.0.0.0/0"},
 		},
 		ExpectedMapContents: map[string]string{
-			string(Key{Port: 22, IPProto: 6, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                       zeroValue,
-			string(Key{Port: 1234, IPProto: 17, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                    zeroValue,
-			string(Key{Port: 443, IPProto: 6, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()): zeroValue,
-			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()): zeroValue,
+			string(Key{Port: 22, IPProto: 6, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                       zeroValue,
+			string(Key{Port: 1234, IPProto: 17, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                    zeroValue,
+			string(Key{Port: 443, IPProto: 6, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()): zeroValue,
+			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()): zeroValue,
 		},
 	},
 	{
@@ -89,27 +88,27 @@ var tests = []failsafeTest{
 			{Protocol: "udp", Port: 53, Net: "0.0.0.0/0"},
 		},
 		InitialMapContents: map[string]string{
-			string(Key{Port: 22, IPProto: 6, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                        zeroValue,
-			string(Key{Port: 2345, IPProto: 17, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                     zeroValue,
-			string(Key{Port: 1443, IPProto: 6, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()): zeroValue,
-			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):  zeroValue,
-			string(Key{Port: 57, IPProto: 17, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):  zeroValue,
+			string(Key{Port: 22, IPProto: 6, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                        zeroValue,
+			string(Key{Port: 2345, IPProto: 17, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                     zeroValue,
+			string(Key{Port: 1443, IPProto: 6, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()): zeroValue,
+			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()):  zeroValue,
+			string(Key{Port: 57, IPProto: 17, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()):  zeroValue,
 		},
 		ExpectedMapContents: map[string]string{
-			string(Key{Port: 22, IPProto: 6, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                       zeroValue,
-			string(Key{Port: 1234, IPProto: 17, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                    zeroValue,
-			string(Key{Port: 443, IPProto: 6, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()): zeroValue,
-			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()): zeroValue,
+			string(Key{Port: 22, IPProto: 6, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                       zeroValue,
+			string(Key{Port: 1234, IPProto: 17, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                    zeroValue,
+			string(Key{Port: 443, IPProto: 6, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()): zeroValue,
+			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()): zeroValue,
 		},
 	},
 	{
 		Name: "ShouldRemoveAll",
 		InitialMapContents: map[string]string{
-			string(Key{Port: 22, IPProto: 6, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                        zeroValue,
-			string(Key{Port: 2345, IPProto: 17, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):                     zeroValue,
-			string(Key{Port: 1443, IPProto: 6, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()): zeroValue,
-			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):  zeroValue,
-			string(Key{Port: 57, IPProto: 17, Flags: FlagOutbound, IP: net.ParseIP("0.0.0.0"), IPMask: 0}.ToSlice()):  zeroValue,
+			string(Key{Port: 22, IPProto: 6, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                        zeroValue,
+			string(Key{Port: 2345, IPProto: 17, IP: "0.0.0.0", IPMask: 0}.ToSlice()):                     zeroValue,
+			string(Key{Port: 1443, IPProto: 6, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()): zeroValue,
+			string(Key{Port: 53, IPProto: 17, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()):  zeroValue,
+			string(Key{Port: 57, IPProto: 17, Flags: FlagOutbound, IP: "0.0.0.0", IPMask: 0}.ToSlice()):  zeroValue,
 		},
 		ExpectedMapContents: map[string]string{},
 	},

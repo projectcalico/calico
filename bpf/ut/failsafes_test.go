@@ -44,7 +44,7 @@ func TestFailsafes(t *testing.T) {
 
 	// Set up failsafe to accept incoming connections from srcIP (1.1.1.1/16)
 	err = fsafeMap.Update(
-		failsafes.MakeKey(17, 5678, false, srcIP, 16).ToSlice(),
+		failsafes.MakeKey(17, 5678, false, srcIP.String(), 16).ToSlice(),
 		failsafes.Value(),
 	)
 	Expect(err).NotTo(HaveOccurred())
@@ -52,7 +52,7 @@ func TestFailsafes(t *testing.T) {
 	// Set up failsafe to accept outgoing connections to 3.3.3.3/16
 	fsafeDstIP := net.IPv4(3, 3, 3, 3)
 	err = fsafeMap.Update(
-		failsafes.MakeKey(17, 5678, true, fsafeDstIP, 16).ToSlice(),
+		failsafes.MakeKey(17, 5678, true, fsafeDstIP.String(), 16).ToSlice(),
 		failsafes.Value(),
 	)
 	Expect(err).NotTo(HaveOccurred())

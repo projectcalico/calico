@@ -121,7 +121,7 @@ func (m *Manager) ResyncFailsafes() error {
 		// Mask the IP
 		ip := parsedIP.Mask(net.CIDRMask(mask, 32))
 
-		k := MakeKey(ipProto, p.Port, outbound, ip, mask)
+		k := MakeKey(ipProto, p.Port, outbound, ip.String(), mask)
 		unknownKeys.Discard(k)
 		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {

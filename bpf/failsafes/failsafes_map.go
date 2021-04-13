@@ -40,7 +40,7 @@ type Key struct {
 	Port    uint16
 	IPProto uint8
 	Flags   uint8
-	IP      net.IP
+	IP      string
 	IPMask  int
 }
 
@@ -58,7 +58,7 @@ func Map(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(MapParams)
 }
 
-func MakeKey(ipProto uint8, port uint16, outbound bool, ip net.IP, mask int) Key {
+func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) Key {
 	var flags uint8
 	if outbound {
 		flags |= FlagOutbound
@@ -78,7 +78,8 @@ func (k Key) ToSlice() []byte {
 	binary.LittleEndian.PutUint16(key[4:6], k.Port)
 	key[6] = k.IPProto
 	key[7] = k.Flags
-	maskedIP := k.IP.Mask(net.CIDRMask(k.IPMask, 32))
+	ip := net.ParseIP(k.IP).To4()
+	maskedIP := ip.Mask(net.CIDRMask(k.IPMask, 32))
 	for i := 0; i < 4; i++ {
 		key[8+i] = maskedIP.To4()[i]
 	}
@@ -97,7 +98,7 @@ func KeyFromSlice(data []byte) Key {
 	for i := 8; i < len(data); i++ {
 		ipBytes[i-8] = data[i]
 	}
-	k.IP = net.IPv4(ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3])
+	k.IP = net.IPv4(ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3]).String()
 
 	return k
 }
