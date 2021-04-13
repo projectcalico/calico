@@ -4,18 +4,49 @@ description: Install the CLI for Calico.
 canonical_url: '/getting-started/clis/calicoctl/install'
 ---
 
-## About installing calicoctl
+### Big picture
 
-`calicoctl` allows you to create, read, update, and delete {{site.prodname}} objects
-from the command line. {{site.prodname}} objects are stored in one of two datastores,
-either etcd or Kubernetes. The choice of datastore is determined at the time Calico
-is installed. Typically for Kubernetes installations the Kubernetes datastore is the
-default.
+This guide helps you install the `calicoctl` command line tool to manage {{site.prodname}} resources 
+and perform administrative functions.
 
-You can run `calicoctl` on any host with network access to the
-{{site.prodname}} datastore as either a binary or a container.
-For step-by-step instructions, refer to the section that
-corresponds to your desired deployment.
+### Value 
+
+The `calicoctl` command line tool is required in order to use many of {{site.prodname}}'s features. It 
+is used to manage {{site.prodname}} policies and configuration, as well as view detailed cluster status.
+
+### Concepts
+
+#### API groups
+
+All Kubernetes resources belong to an API group. The API group is indicated by the resource's `apiVersion`. For example, {{site.prodname}}
+uses resources in the `projectcalico.org/v3` API group for configuration, and the operator uses resources in the `operator.tigera.io/v1` API group.
+
+You can read more about API groups in [the Kubernetes documentation](https://kubernetes.io/docs/reference/using-api/#api-groups).
+
+#### calicoctl and kubectl
+
+In order to manage {{site.prodname}} APIs in the `projectcalico.org/v3` API group, you should use `calicoctl`. This is because
+`calicoctl` provides important validation and defaulting for these resources that is not available in `kubectl`. However, `kubectl`
+should still be used to manage other Kubernetes resources.
+
+> **Note**: If you would like to use `kubectl` to manage `projectcalico.org/v3` API resources, you can try the 
+>           [Calico API server tech-preview]({{site.baseurl}}/getting-started/kubernetes/apiserver-preview).
+{: .alert .alert-info}
+
+> **Warning**: Never modify resources in the `crd.projectcalico.org` API group directly. These are internal data representations 
+>              and modifying them directly may result in unexpected behavior.
+{: .alert .alert-warning}
+
+In addition to resource management, `calicoctl` also enables other {{site.prodname}} administrative tasks such as viewing IP pool utilization
+and BGP status.
+
+#### Datastore
+
+{{site.prodname}} objects are stored in one of two datastores, either etcd or Kubernetes. The choice of datastore is determined at the time {{site.prodname}}
+is installed. Typically for Kubernetes installations the Kubernetes datastore is the default.
+
+You can run `calicoctl` on any host with network access to the {{site.prodname}} datastore as either a binary or a container.
+For step-by-step instructions, refer to the section that corresponds to your desired deployment.
 
 <!--- Change download URL to latest release if user browsing master branch.  --->
 {%- if page.version == "master" -%}
@@ -24,7 +55,17 @@ corresponds to your desired deployment.
 {% assign version = "download/" | append: site.data.versions.first.components.calicoctl.version %}
 {% endif %}
 
-## Install calicoctl as a binary on a single host
+### How to
+
+> **Note**: Make sure you always install the version of `calicoctl` that matches the version of {{site.prodname}} running on your cluster.
+{: .alert .alert-info}
+
+- Install calicoctl as a binary on a single host (#install-calicoctl-as-a-binary-on-a-single-host)
+- Install calicoctl as a kubectl plugin on a single host (#install-calicoctl-as-a-kubectl-plugin-on-a-single-host)
+- Install calicoctl as a container on a single host (#install-calicoctl-as-a-container-on-a-single-host)
+- Install calicoctl as a Kubernetes pod (#install-calicoctl-as-a-kubernetes-pod)
+
+#### Install calicoctl as a binary on a single host
 
 {% tabs %}
 <label:Linux,active:true>
@@ -151,7 +192,8 @@ you want to install the binary.
 %>
 {% endtabs %}
 
-## Install calicoctl as a kubectl plugin on a single host
+#### Install calicoctl as a kubectl plugin on a single host
+
 {% tabs %}
 <label:Linux,active:true>
 <%
@@ -292,7 +334,7 @@ You can now run any `calicoctl` subcommands through `kubectl calico`.
 > the node related subcommands will not work (like node status).
 {: .alert .alert-info}
 
-## Install calicoctl as a container on a single host
+#### Install calicoctl as a container on a single host
 
 To install `calicoctl` as a container on a single host, log into the
 target host and issue the following command.
@@ -301,7 +343,7 @@ target host and issue the following command.
 docker pull {{page.registry}}{{page.imageNames["calicoctl"]}}:{{site.data.versions.first.title}}
 ```
 
-## Install calicoctl as a Kubernetes pod
+#### Install calicoctl as a Kubernetes pod
 
 
 Use the YAML that matches your datastore type to deploy the `calicoctl` container to your nodes.
