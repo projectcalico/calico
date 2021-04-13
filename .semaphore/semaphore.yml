@@ -144,16 +144,3 @@ blocks:
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi
-
-  - name: Trigger pin updates
-    dependencies: []
-    skip:
-      when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
-    task:
-      secrets:
-        - name: semaphore-api
-      jobs:
-        - name: Trigger pin updates
-          commands:
-            - checkout
-            - make semaphore-run-auto-pin-update-workflows

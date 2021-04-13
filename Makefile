@@ -333,7 +333,7 @@ test-install-cni: image pkg/install/install.test
 ci: clean mod-download build static-checks test-cni-versions image-all test-install-cni
 
 ## Deploys images to registry
-cd:
+cd: image-all
 ifndef CONFIRM
 	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
 endif
