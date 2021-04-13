@@ -241,7 +241,13 @@ spec:
             - name: FELIX_TYPHAKEYFILE
               value: /calico-node-certs/calico-node.key
           securityContext:
-            privileged: true
+            privileged: false
+            # Need root in order to write files to hostpath volume /var/lib/calico
+            runAsUser: 0
+            capabilities:
+              add:
+              - NET_RAW
+              - NET_ADMIN
           resources:
             requests:
               cpu: 250m

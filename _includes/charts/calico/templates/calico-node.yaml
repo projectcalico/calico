@@ -84,7 +84,8 @@ spec:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
           securityContext:
-            privileged: true
+            privileged: false
+            runAsUser: 1000
 {{- end }}
         # This container installs the CNI binaries
         # and CNI network config file on each node.
@@ -177,7 +178,9 @@ spec:
               name: etcd-certs
 {{- end }}
           securityContext:
-            privileged: true
+            privileged: false
+            # Need root to copy files to /opt/cni/bin
+            runAsUser: 0
         # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
@@ -186,7 +189,9 @@ spec:
           - name: flexvol-driver-host
             mountPath: /host/driver
           securityContext:
-            privileged: true
+            privileged: false
+            # Need root in order to write to flexvol driver. (.uds)
+            runAsUser: 0
       containers:
         # Runs {{ include "nodeName" . }} container on each Kubernetes node. This
         # container programs network policy and routes on each
@@ -354,7 +359,13 @@ spec:
 {{ toYaml .Values.node.env | indent 12 }}
 {{- end }}
           securityContext:
-            privileged: true
+            privileged: false
+            # Need root in order to write files to hostpath volume /var/lib/calico
+            runAsUser: 0
+            capabilities:
+              add:
+              - NET_RAW
+              - NET_ADMIN
           resources:
             requests:
               cpu: 250m
@@ -427,7 +438,12 @@ spec:
           image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
           command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
           securityContext:
-            privileged: true
+            privileged: false
+            # Need root in order to write files to hostpath volume /run/xtables.lock
+            runAsUser: 0
+            capabilities:
+              add:
+              - NET_ADMIN
           env:
             - name: POD_NAME
               valueFrom:
@@ -523,7 +539,12 @@ spec:
 {{ toYaml .Values.flannel.env | indent 12 }}
 {{- end }}
           securityContext:
-            privileged: true
+            privileged: false
+            # Need root in order to write files to hostpath volume /run/flannel
+            runAsUser: 0
+            capabilities:
+              add:
+              - NET_ADMIN
           volumeMounts:
             - mountPath: /etc/resolv.conf
               name: resolv
