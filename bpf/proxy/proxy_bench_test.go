@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/nat"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -41,10 +43,13 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 		eps := makeEps(svcN, epsN)
 		k8s := fake.NewSimpleClientset(append(svcs, eps...)...)
 
+		feCache := bpf.NewCachingMap(nat.FrontendMapParameters, &mock.DummyMap{})
+		beCache := bpf.NewCachingMap(nat.BackendMapParameters, &mock.DummyMap{})
+
 		syncer, err := proxy.NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
-			&mock.DummyMap{},
-			&mock.DummyMap{},
+			feCache,
+			beCache,
 			&mock.DummyMap{},
 			proxy.NewRTCache(),
 		)
