@@ -117,6 +117,8 @@ func benchmarkStartupSync(b *testing.B, svcCnt, epCnt int) {
 				bpfSvcs:    origSvcs,
 				bpfEps:     origEps,
 			}
+			Expect(origSvcs.LoadCacheFromDataplane()).NotTo(HaveOccurred())
+			Expect(origEps.LoadCacheFromDataplane()).NotTo(HaveOccurred())
 
 			b.StartTimer()
 			err := s.startupBuildPrev(state)
