@@ -6,7 +6,7 @@ canonical_url: '/reference/public-cloud/azure'
 
 ## About {{site.prodname}} on Azure
 
-While Azure does not support {{site.prodname}} networking, you can use
+While Azure does not support {{site.prodname}} networking without encapsulation, you can use
 {{site.prodname}} policy with one of the following networking options.
 
 - **Azure user-defined routes**: This option provides networking without overlays.
