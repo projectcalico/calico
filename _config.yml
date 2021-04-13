@@ -27,6 +27,7 @@ noderunning: calico-node
 imageNames:
   node: docker.io/calico/node
   calicoctl: docker.io/calico/ctl
+  apiserver: docker.io/calico/apiserver
   typha: docker.io/calico/typha
   cni: docker.io/calico/cni
   kubeControllers: docker.io/calico/kube-controllers
@@ -78,6 +79,7 @@ defaults:
         calicoctl: calico/ctl
         typha: calico/typha
         calico/cni: calico/cni
+        calico/apiserver: calico/apiserver
         calico/kube-controllers: calico/kube-controllers
         calico-upgrade: calico/upgrade
         flannel: quay.io/coreos/flannel
@@ -85,4 +87,3 @@ defaults:
         calico/dikastes: calico/dikastes
         pilot-webhook: calico/pilot-webhook
         flexvol: calico/pod2daemon-flexvol
-

@@ -128,6 +128,3 @@ in order to use the following match criteria.
 |--------------------------|---------------|--------|----------|------
 | etcdv3                   | Yes           | Yes    | Yes      |
 | Kubernetes API datastore | Yes           | Yes    | Yes      |
-
-> **Note**: {{site.prodname}} `NetworkPolicy` resources with `knp.` prefixed names are determined from Kubernetes `NetworkPolicy`
-> resources and are read-only through `calicoctl`.
