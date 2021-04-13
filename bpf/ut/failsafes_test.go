@@ -15,6 +15,7 @@
 package ut_test
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -27,6 +28,131 @@ import (
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
 )
+
+var fsafeDstIP = net.IPv4(3, 3, 3, 3)
+
+var denyAllRulesHost = polprog.Rules{
+	ForHostInterface: true,
+	HostNormalTiers: []polprog.Tier{{
+		Policies: []polprog.Policy{{
+			Name: "deny all",
+			Rules: []polprog.Rule{{Rule: &proto.Rule{
+				Action: "Deny",
+			}}},
+		}},
+	}},
+}
+
+var denyAllRulesWorkloads = polprog.Rules{
+	Tiers: []polprog.Tier{{
+		Policies: []polprog.Policy{{
+			Name: "deny all",
+			Rules: []polprog.Rule{{Rule: &proto.Rule{
+				Action: "Deny",
+			}}},
+		}},
+	}},
+}
+
+var failsafeTests = []failsafeTest{
+	{
+		Description: "Packets from failsafe IP to localhost are allowed",
+		Rules:       &denyAllRulesHost,
+		IPHeader:    ipv4Default,
+		Outbound:    false,
+		Allowed:     true,
+	},
+	{
+		Description: "Packets from non-failsafe IP to localhost are denied",
+		Rules:       &denyAllRulesHost,
+		IPHeader: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    net.IPv4(4, 4, 4, 4),
+			DstIP:    dstIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: false,
+		Allowed:  false,
+	},
+	{
+		Description: "Packets from localhost to failsafe IP are allowed",
+		Rules:       &denyAllRulesHost,
+		IPHeader: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    dstIP,
+			DstIP:    fsafeDstIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: true,
+		Allowed:  true,
+	},
+	{
+		Description: "Packets from localhost to non-failsafe IP are denied",
+		Rules:       &denyAllRulesHost,
+		IPHeader: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    dstIP,
+			DstIP:    net.IPv4(4, 4, 4, 4),
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: false,
+		Allowed:  false,
+	},
+	{
+		Description: "Packets from outbound failsafes to inbound failsafes are denied",
+		Rules:       &denyAllRulesWorkloads,
+		IPHeader: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    fsafeDstIP,
+			DstIP:    srcIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: false,
+		Allowed:  false,
+	},
+	{
+		Description: "Packets from non-failsafe IP to failsafe IP are denied",
+		Rules:       &denyAllRulesWorkloads,
+		IPHeader: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    net.IPv4(4, 4, 4, 4),
+			DstIP:    fsafeDstIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: false,
+		Allowed:  false,
+	},
+	{
+		Description: "Packets from failsafe IP to non-failsafe IP are denied",
+		Rules:       &denyAllRulesWorkloads,
+		IPHeader: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    fsafeDstIP,
+			DstIP:    net.IPv4(4, 4, 4, 4),
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: false,
+		Allowed:  false,
+	},
+}
 
 func TestFailsafes(t *testing.T) {
 	RegisterTestingT(t)
@@ -50,158 +176,38 @@ func TestFailsafes(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Set up failsafe to accept outgoing connections to 3.3.3.3/16
-	fsafeDstIP := net.IPv4(3, 3, 3, 3)
 	err = fsafeMap.Update(
 		failsafes.MakeKey(17, 5678, true, fsafeDstIP.String(), 16).ToSlice(),
 		failsafes.Value(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	denyAllRules := polprog.Rules{
-		ForHostInterface: true,
-		HostNormalTiers: []polprog.Tier{{
-			Policies: []polprog.Policy{{
-				Name: "deny all",
-				Rules: []polprog.Rule{{Rule: &proto.Rule{
-					Action: "Deny",
-				}}},
-			}},
-		}},
-	}
-
-	denyAllRulesWorkloads := polprog.Rules{
-		Tiers: []polprog.Tier{{
-			Policies: []polprog.Policy{{
-				Name: "deny all",
-				Rules: []polprog.Rule{{Rule: &proto.Rule{
-					Action: "Deny",
-				}}},
-			}},
-		}},
-	}
-
-	// Packet from 1.1.1.1 to 2.2.2.2
-	iphdr := *ipv4Default
-	_, _, _, _, pktBytesIn, err := testPacket(nil, &iphdr, nil, nil)
-	Expect(err).NotTo(HaveOccurred())
-	// Packets from failsafe IP to localhost are allowed
-	runBpfTest(t, "calico_from_host_ep", &denyAllRules, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pktBytesIn)
+	for _, test := range failsafeTests {
+		_, _, _, _, pktBytes, err := testPacket(nil, test.IPHeader, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"), "expected program to return TC_ACT_UNSPEC")
-	})
 
-	// Packet from IP not in failsafe (4.4.4.4) to localhost (2.2.2.2)
-	ipHeaderInBlocked := &layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      64,
-		Flags:    layers.IPv4DontFragment,
-		SrcIP:    net.IPv4(4, 4, 4, 4),
-		DstIP:    dstIP,
-		Protocol: layers.IPProtocolUDP,
-	}
-	_, _, _, _, pktBytesInBlocked, err := testPacket(nil, ipHeaderInBlocked, nil, nil)
-	Expect(err).NotTo(HaveOccurred())
-	// Packets from non-failsafe IP to localhost are denied
-	runBpfTest(t, "calico_from_host_ep", &denyAllRules, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pktBytesInBlocked)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
-	})
+		prog := "calico_from_host_ep"
+		if test.Outbound {
+			prog = "calico_to_host_ep"
+		}
 
-	// Packet from 2.2.2.2 to 3.3.3.3
-	ipHeaderOut := &layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      64,
-		Flags:    layers.IPv4DontFragment,
-		SrcIP:    dstIP,
-		DstIP:    fsafeDstIP,
-		Protocol: layers.IPProtocolUDP,
-	}
-	_, _, _, _, pktBytesOut, err := testPacket(nil, ipHeaderOut, nil, nil)
-	Expect(err).NotTo(HaveOccurred())
-	// Packets from localhost to failsafe IP are allowed
-	runBpfTest(t, "calico_to_host_ep", &denyAllRules, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pktBytesOut)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"), "expected program to return TC_ACT_UNSPEC")
-	})
+		result := "TC_ACT_SHOT"
+		if test.Allowed {
+			result = "TC_ACT_UNSPEC"
+		}
 
-	// Packet from localhost (2.2.2.2) to IP not in failsafe (4.4.4.4)
-	ipHeaderOutBlocked := &layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      64,
-		Flags:    layers.IPv4DontFragment,
-		SrcIP:    dstIP,
-		DstIP:    net.IPv4(4, 4, 4, 4),
-		Protocol: layers.IPProtocolUDP,
+		runBpfTest(t, prog, test.Rules, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected program to return %s", result))
+		})
 	}
-	_, _, _, _, pktBytesOutBlocked, err := testPacket(nil, ipHeaderOutBlocked, nil, nil)
-	Expect(err).NotTo(HaveOccurred())
-	// Packets from localhost to non-failsafe IP are denied
-	runBpfTest(t, "calico_from_host_ep", &denyAllRules, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pktBytesOutBlocked)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
-	})
+}
 
-	// Packet from an allowed outbound failsafe IP (3.3.3.3) to an allowed inbound failsafe IP (1.1.1.1)
-	ipHeaderSwappedFailsafes := &layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      64,
-		Flags:    layers.IPv4DontFragment,
-		SrcIP:    fsafeDstIP,
-		DstIP:    srcIP,
-		Protocol: layers.IPProtocolUDP,
-	}
-	_, _, _, _, pktBytesSwappedFailsafes, err := testPacket(nil, ipHeaderSwappedFailsafes, nil, nil)
-	Expect(err).NotTo(HaveOccurred())
-	// Packets from outbound failsafes to inbound failsafes are denied
-	runBpfTest(t, "calico_from_host_ep", &denyAllRulesWorkloads, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pktBytesSwappedFailsafes)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
-	})
-
-	// Packet from unallowed IP (4.4.4.4) to failsafe IP (3.3.3.3)
-	ipHeaderToFailsafe := &layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      64,
-		Flags:    layers.IPv4DontFragment,
-		SrcIP:    net.IPv4(4, 4, 4, 4),
-		DstIP:    fsafeDstIP,
-		Protocol: layers.IPProtocolUDP,
-	}
-	_, _, _, _, pktBytesToFailsafe, err := testPacket(nil, ipHeaderToFailsafe, nil, nil)
-	Expect(err).NotTo(HaveOccurred())
-	// Packets from non-failsafe IP to failsafe IP are denied
-	runBpfTest(t, "calico_from_host_ep", &denyAllRulesWorkloads, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pktBytesToFailsafe)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
-	})
-
-	// Packet from failsafe IP (3.3.3.3) to unallowed IP (4.4.4.4)
-	ipHeaderFromFailsafe := &layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      64,
-		Flags:    layers.IPv4DontFragment,
-		SrcIP:    fsafeDstIP,
-		DstIP:    net.IPv4(4, 4, 4, 4),
-		Protocol: layers.IPProtocolUDP,
-	}
-	_, _, _, _, pktBytesFromFailsafe, err := testPacket(nil, ipHeaderFromFailsafe, nil, nil)
-	Expect(err).NotTo(HaveOccurred())
-	// Packets from failsafe IP to non-failsafe IP are denied
-	runBpfTest(t, "calico_from_host_ep", &denyAllRulesWorkloads, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pktBytesFromFailsafe)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
-	})
+type failsafeTest struct {
+	Description string
+	Rules       *polprog.Rules
+	IPHeader    *layers.IPv4
+	Outbound    bool
+	Allowed     bool
 }
