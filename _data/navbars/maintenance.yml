@@ -11,11 +11,15 @@ section:
     path: /maintenance/openshift-upgrade
   - title: OpenStack
     path: /maintenance/openstack-upgrade
-- title: Deploy image options
-  path: /maintenance/image-options/
-  section:
-  - title: Deploy images by digest
-    path: /maintenance/image-options/imageset
+- title: Deploy images by digest
+  path: /maintenance/image-options/digest/imageset
+- title: Deploy images from private private registry
+  path: /maintenance/image-options/private-registry/
+  section: 
+  - title: Install using default directories
+    path: /maintenance/image-options/private-registry/private-registry-regular  
+  - title: Install using custom directories
+    path: /maintenance/image-options/private-registry/private-registry-image-path  
 - title: Migrate datastore from etcd to Kubernetes
   path: /maintenance/datastore-migration
 - title: The eBPF dataplane

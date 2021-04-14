@@ -1,7 +1,7 @@
 ---
 title: Deploy image options
 description: Tasks for configuring different image deployment options.
-canonical_url: '/maintenance/image-options/index'
+canonical_url: '/maintenance/image-options/digest/index'
 ---
 
 {{ page.description }}

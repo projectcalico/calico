@@ -1,6 +1,7 @@
 ---
 title: Deploy images by digest
 description: Specify the digests the operator will use to deploy images.
+canonical_url: '/maintenance/image-options/digest/imageset'
 ---
 
 {% assign operator = site.data.versions.first.tigera-operator %}
