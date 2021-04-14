@@ -113,6 +113,12 @@ var _ = Describe("BPF Syncer", func() {
 				Name:      "second-service",
 			},
 		}
+		svcKey3 := k8sp.ServicePortName{
+			NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "third-service",
+			},
+		}
 
 		By("inserting another service with multiple endpoints", makestep(func() {
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
@@ -289,6 +295,39 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
+		By("adding and removing overlapping external IP", makestep(func() {
+			state.SvcMap[svcKey3] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			// At this (invalid) point the dataplane may have one service or the other...
+
+			// After cleaning up the overlap, we should get back to a good state.
+			delete(state.SvcMap, svcKey3)
+			err = s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(2))
+
+			val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val1.Count()).To(Equal(uint32(1)))
+
+			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(35, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val1).To(Equal(val2))
+
+			Expect(eps.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
+			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
 		By("removing ExternalIP for existing service", makestep(func() {
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
@@ -358,13 +397,6 @@ var _ = Describe("BPF Syncer", func() {
 			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			checkAfterResync()
 		}))
-
-		svcKey3 := k8sp.ServicePortName{
-			NamespacedName: types.NamespacedName{
-				Namespace: "default",
-				Name:      "third-service",
-			},
-		}
 
 		By("inserting another service after resync", makestep(func() {
 			state.SvcMap[svcKey3] = proxy.NewK8sServicePort(
