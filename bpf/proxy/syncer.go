@@ -1368,35 +1368,6 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		stringsEqual(a.TopologyKeys(), b.TopologyKeys())
 }
 
-func serviceEpsEqual(a, b []k8sp.Endpoint) bool {
-	l := len(a)
-	if l != len(b) {
-		return false
-	}
-
-	for ia, aa := range a {
-		// We assume that most of the time (always?) the endpoints are in the
-		// same order since the slice is not updated unless there was a change
-		// in the service. And we compare in O(n). But if there is a mismatch,
-		// we fall back to O(n^2) in case the order changed.
-		if !aa.Equal(b[ia]) {
-			found := false
-			for i := 0; i < l-1; i++ {
-				ib := (ia + i + 1) % l
-				if aa.Equal(b[ib]) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
 func stringsEqual(a, b []string) bool {
 
 	if len(a) != len(b) {
