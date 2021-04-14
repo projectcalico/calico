@@ -628,8 +628,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210409232714-340d56d618af h1:o7QvLyXr7PPBEQQE4LpALr4hnThEfrmoQOydBT5XM2w=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210409232714-340d56d618af/go.mod h1:DiXNrli5/BMtOTgeqkmlUchmp9KX8WzQEujtkYpeugM=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210414092143-f1a4044755d7 h1:Q6yy3MusGzbqvmTftsvAH0N0GhvjipLqCVyVxTMO5bo=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210414092143-f1a4044755d7/go.mod h1:DiXNrli5/BMtOTgeqkmlUchmp9KX8WzQEujtkYpeugM=
 github.com/projectcalico/confd v1.0.1-0.20210410011115-a4d1658c655e h1:CYzZlVpqNOVFSCA6xSfm020xO/BOz0iuHLOuQRIotrc=
 github.com/projectcalico/confd v1.0.1-0.20210410011115-a4d1658c655e/go.mod h1:m52khx2TtOR3Cb1BjvwGB6m1EqgVD1CAb+jktVYPlfU=
 github.com/projectcalico/felix v0.0.0-20210412223940-2a0a572644ca h1:xu6nm1rZ9KpgR0GP0nyt2hHIjjR8DkOWsG7N9FXGAuw=
