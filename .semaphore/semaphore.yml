@@ -1,5 +1,9 @@
 version: v1.0
 name: CNIPlugin
+
+execution_time_limit:
+  hours: 2
+
 agent:
   machine:
     type: e1-standard-2
