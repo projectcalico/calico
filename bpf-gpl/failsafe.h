@@ -33,7 +33,7 @@ struct failsafe_val {
 	__u32 unused;
 };
 
-CALI_MAP_V1(cali_v4_fsafes,
+CALI_MAP(cali_v4_fsafes, 2,
 		BPF_MAP_TYPE_LPM_TRIE,
 		struct failsafe_key, struct failsafe_val,
 		65536,

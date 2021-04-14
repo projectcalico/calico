@@ -18,12 +18,11 @@ package failsafes
 
 import (
 	"errors"
-	"net"
-	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/bpf"
@@ -98,30 +97,33 @@ func (m *Manager) ResyncFailsafes() error {
 			return
 		}
 
-		// Slice up the CIDR and convert the string representations to uints
-		parts := strings.Split(p.Net, "/")
-		ipStr := parts[0]
-		maskStr := parts[1]
+		// Parse the CIDR and split out the IP and mask
+		ip, ipnet, err := cnet.ParseCIDROrIP(p.Net)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse CIDR for failsafe port")
+			syncFailed = true
+			return
+		}
 
-		parsedIP := net.ParseIP(ipStr).To4()
-		if parsedIP == nil || len(parsedIP) != 4 {
-			// If parsedIP is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
+		ipv4 := ip.To4()
+		if ipv4 == nil || len(ipv4) != 4 {
+			// If ipv4 is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
 			log.Error("Invalid IPv4 address configured in the failsafe ports")
 			syncFailed = true
 			return
 		}
 
-		mask, err := strconv.Atoi(maskStr)
-		if err != nil {
-			log.WithError(err).Error("Failed to parse CIDR mask for failsafe port.")
+		mask, bits := ipnet.Mask.Size()
+		if bits != 32 {
+			log.Errorf("CIDR mask size not valid for IPv4 addresses: %d", bits)
 			syncFailed = true
 			return
 		}
 
 		// Mask the IP
-		ip := parsedIP.Mask(net.CIDRMask(mask, 32))
+		maskedIP := ipv4.Mask(ipnet.Mask)
 
-		k := MakeKey(ipProto, p.Port, outbound, ip.String(), mask)
+		k := MakeKey(ipProto, p.Port, outbound, maskedIP.String(), mask)
 		unknownKeys.Discard(k)
 		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {

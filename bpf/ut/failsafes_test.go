@@ -19,6 +19,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 
@@ -56,16 +57,16 @@ var denyAllRulesWorkloads = polprog.Rules{
 
 var failsafeTests = []failsafeTest{
 	{
-		Description: "Packets from failsafe IP to localhost are allowed",
-		Rules:       &denyAllRulesHost,
-		IPHeader:    ipv4Default,
-		Outbound:    false,
-		Allowed:     true,
+		Description:  "Packets from failsafe IP and port to localhost are allowed",
+		Rules:        &denyAllRulesHost,
+		IPHeaderIPv4: ipv4Default,
+		Outbound:     false,
+		Allowed:      true,
 	},
 	{
 		Description: "Packets from non-failsafe IP to localhost are denied",
 		Rules:       &denyAllRulesHost,
-		IPHeader: &layers.IPv4{
+		IPHeaderIPv4: &layers.IPv4{
 			Version:  4,
 			IHL:      5,
 			TTL:      64,
@@ -78,9 +79,9 @@ var failsafeTests = []failsafeTest{
 		Allowed:  false,
 	},
 	{
-		Description: "Packets from localhost to failsafe IP are allowed",
+		Description: "Packets from localhost to failsafe IP and port are allowed",
 		Rules:       &denyAllRulesHost,
-		IPHeader: &layers.IPv4{
+		IPHeaderIPv4: &layers.IPv4{
 			Version:  4,
 			IHL:      5,
 			TTL:      64,
@@ -95,7 +96,7 @@ var failsafeTests = []failsafeTest{
 	{
 		Description: "Packets from localhost to non-failsafe IP are denied",
 		Rules:       &denyAllRulesHost,
-		IPHeader: &layers.IPv4{
+		IPHeaderIPv4: &layers.IPv4{
 			Version:  4,
 			IHL:      5,
 			TTL:      64,
@@ -110,7 +111,7 @@ var failsafeTests = []failsafeTest{
 	{
 		Description: "Packets from outbound failsafes to inbound failsafes are denied",
 		Rules:       &denyAllRulesWorkloads,
-		IPHeader: &layers.IPv4{
+		IPHeaderIPv4: &layers.IPv4{
 			Version:  4,
 			IHL:      5,
 			TTL:      64,
@@ -125,7 +126,7 @@ var failsafeTests = []failsafeTest{
 	{
 		Description: "Packets from non-failsafe IP to failsafe IP are denied",
 		Rules:       &denyAllRulesWorkloads,
-		IPHeader: &layers.IPv4{
+		IPHeaderIPv4: &layers.IPv4{
 			Version:  4,
 			IHL:      5,
 			TTL:      64,
@@ -140,7 +141,7 @@ var failsafeTests = []failsafeTest{
 	{
 		Description: "Packets from failsafe IP to non-failsafe IP are denied",
 		Rules:       &denyAllRulesWorkloads,
-		IPHeader: &layers.IPv4{
+		IPHeaderIPv4: &layers.IPv4{
 			Version:  4,
 			IHL:      5,
 			TTL:      64,
@@ -150,6 +151,34 @@ var failsafeTests = []failsafeTest{
 			Protocol: layers.IPProtocolUDP,
 		},
 		Outbound: false,
+		Allowed:  false,
+	},
+	{
+		Description:  "Packets from failsafe IP and non-failsafe port to localhost are denied",
+		Rules:        &denyAllRulesHost,
+		IPHeaderIPv4: ipv4Default,
+		IPHeaderUDP: &layers.UDP{
+			DstPort: 161,
+		},
+		Outbound: false,
+		Allowed:  false,
+	},
+	{
+		Description: "Packets from localhost to failsafe IP and non-failsafe port are denied",
+		Rules:       &denyAllRulesHost,
+		IPHeaderIPv4: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    dstIP,
+			DstIP:    fsafeDstIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		IPHeaderUDP: &layers.UDP{
+			DstPort: 161,
+		},
+		Outbound: true,
 		Allowed:  false,
 	},
 }
@@ -183,7 +212,7 @@ func TestFailsafes(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	for _, test := range failsafeTests {
-		_, _, _, _, pktBytes, err := testPacket(nil, test.IPHeader, nil, nil)
+		_, _, _, _, pktBytes, err := testPacket(nil, test.IPHeaderIPv4, test.IPHeaderUDP, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		prog := "calico_from_host_ep"
@@ -205,9 +234,10 @@ func TestFailsafes(t *testing.T) {
 }
 
 type failsafeTest struct {
-	Description string
-	Rules       *polprog.Rules
-	IPHeader    *layers.IPv4
-	Outbound    bool
-	Allowed     bool
+	Description  string
+	Rules        *polprog.Rules
+	IPHeaderIPv4 *layers.IPv4
+	IPHeaderUDP  gopacket.Layer
+	Outbound     bool
+	Allowed      bool
 }

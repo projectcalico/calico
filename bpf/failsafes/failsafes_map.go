@@ -52,6 +52,7 @@ var MapParams = bpf.MapParameters{
 	MaxEntries: 65536,
 	Name:       "cali_v4_fsafes",
 	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {
