@@ -134,7 +134,9 @@ type Syncer struct {
 	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
 
-	TriggerFn func()
+	// triggerFn is called when one of the syncer's background threads needs to trigger an Apply().
+	// The proxy sets this to the runner's Run() method.  We assume that the method doesn't block.
+	triggerFn func()
 }
 
 type ipPort struct {
@@ -1051,9 +1053,9 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 				}
 
 				// FIXME: would like to only trigger if there's a possibility that the change has helped.
-				if s.TriggerFn != nil {
+				if s.triggerFn != nil {
 					log.Debug("Triggering a sync...")
-					s.TriggerFn()
+					s.triggerFn()
 				} else {
 					log.Debug("Not triggering sync")
 				}
@@ -1070,7 +1072,7 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 }
 
 func (s *Syncer) SetTriggerFn(f func()){
-	s.TriggerFn = f
+	s.triggerFn = f
 }
 
 func (s *Syncer) stopExpandNPFixup() {
