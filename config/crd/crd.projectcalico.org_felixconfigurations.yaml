@@ -79,6 +79,13 @@ spec:
                 description: 'BPFEnabled, if enabled Felix will use the BPF dataplane.
                   [Default: false]'
                 type: boolean
+              bpfExtToServiceConnmark:
+                description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
+                  mark that is set on connections from an external client to a local
+                  service. This mark allows us to control how packets of that connection
+                  are routed within the host and how is routing intepreted by RPF
+                  check. [Default: 0]'
+                type: integer
               bpfExternalServiceMode:
                 description: 'BPFExternalServiceMode in BPF mode, controls how connections
                   from outside the cluster to services (node ports and cluster IPs)
