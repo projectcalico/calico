@@ -133,7 +133,6 @@ type Syncer struct {
 
 	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
 	stickyEps        map[uint32]map[nat.BackendValue]struct{}
-	stickySvcDeleted bool
 
 	TriggerFn func()
 }
@@ -639,7 +638,6 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	// preallocate maps to track sticky services for cleanup
 	s.stickySvcs = make(map[nat.FrontEndAffinityKey]stickyFrontend)
 	s.stickyEps = make(map[uint32]map[nat.BackendValue]struct{})
-	s.stickySvcDeleted = false
 
 	defer func() {
 		// not needed anymore
@@ -1095,12 +1093,6 @@ func (s *Syncer) Stop() {
 }
 
 func (s *Syncer) cleanupSticky() error {
-	if len(s.stickySvcs) == 0 && !s.stickySvcDeleted {
-		// no sticky service was updated, there cannot be any stale affinity entries
-		// to clean up
-		return nil
-	}
-
 	debug := log.GetLevel() >= log.DebugLevel
 	_ = debug // Work around linter false-positive.
 
