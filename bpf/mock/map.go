@@ -31,6 +31,10 @@ type Map struct {
 	GetCount    int
 	DeleteCount int
 	IterCount   int
+
+	IterErr   error
+	UpdateErr error
+	DeleteErr error
 }
 
 func (m *Map) MapFD() bpf.MapFD {
@@ -57,6 +61,11 @@ func (m *Map) Path() string {
 
 func (m *Map) Iter(f bpf.IterCallback) error {
 	m.IterCount++
+
+	if m.IterErr != nil {
+		return m.IterErr
+	}
+
 	for kstr, vstr := range m.Contents {
 		action := f([]byte(kstr), []byte(vstr))
 		if action == bpf.IterDelete {
@@ -68,6 +77,9 @@ func (m *Map) Iter(f bpf.IterCallback) error {
 
 func (m *Map) Update(k, v []byte) error {
 	m.UpdateCount++
+	if m.UpdateErr != nil {
+		return m.UpdateErr
+	}
 
 	if len(k) != m.KeySize {
 		m.logCxt.Panicf("Key had wrong size (%d)", len(k))
@@ -92,6 +104,9 @@ func (m *Map) Get(k []byte) ([]byte, error) {
 
 func (m *Map) Delete(k []byte) error {
 	m.DeleteCount++
+	if m.DeleteErr != nil {
+		return m.DeleteErr
+	}
 
 	if len(k) != m.KeySize {
 		m.logCxt.Panicf("Key had wrong size (%d)", len(k))

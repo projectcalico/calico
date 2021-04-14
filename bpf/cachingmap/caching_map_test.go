@@ -15,6 +15,7 @@
 package cachingmap
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -40,6 +41,51 @@ var cachingMapParams = bpf.MapParameters{
 func TestCachingMap_Empty(t *testing.T) {
 	mockMap, cm := setupCachingMapTest(t)
 	err := cm.ApplyAllChanges()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(mockMap.Contents).To(BeEmpty())
+}
+
+
+var ErrFail = fmt.Errorf("fail")
+
+// TestCachingMap_Errors tests returning of errors from the underlying map.
+func TestCachingMap_Errors(t *testing.T) {
+	mockMap, cm := setupCachingMapTest(t)
+	mockMap.IterErr = ErrFail
+	err := cm.ApplyAllChanges()
+	Expect(err).To(HaveOccurred())
+
+	// Failure should have cleared the cache again so next Apply should see this new entry.
+	mockMap.Contents = map[string]string{
+		string([]byte{1, 1}): string([]byte{1, 2, 4, 3}),
+	}
+	mockMap.IterErr = nil
+	err = cm.ApplyAllChanges()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(mockMap.Contents).To(BeEmpty())
+
+	// Now check errors on update
+	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 4})
+	mockMap.UpdateErr = ErrFail
+	err = cm.ApplyAllChanges()
+	Expect(err).To(HaveOccurred())
+
+	// And then success
+	mockMap.UpdateErr = nil
+	err = cm.ApplyAllChanges()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(mockMap.Contents).To(Equal(map[string]string{
+		string([]byte{1, 1}): string([]byte{1, 2, 4, 4}),
+	}))
+
+	// And delete.
+	mockMap.DeleteErr = ErrFail
+	cm.DeleteAll()
+	err = cm.ApplyAllChanges()
+	Expect(err).To(HaveOccurred())
+
+	mockMap.DeleteErr = nil
+	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(BeEmpty())
 }
@@ -214,6 +260,7 @@ func TestCachingMap_PreLoad(t *testing.T) {
 	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
 	cm.SetDesiredState([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
 	cm.SetDesiredState([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.DeleteDesiredState([]byte{1, 8})                  // Delete of non-existent key is a no-op.
 
 	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())

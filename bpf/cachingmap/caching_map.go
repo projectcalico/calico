@@ -214,6 +214,7 @@ func (c *CachingMap) ApplyUpdatesOnly() error {
 	c.pendingUpdates.Iter(func(k, v []byte) {
 		err := c.dataplaneMap.Update(k, v)
 		if err != nil {
+			logrus.WithError(err).Warn("Error while updating BPF map")
 			errs = append(errs, err)
 		} else {
 			c.pendingUpdates.Delete(k)
@@ -236,6 +237,7 @@ func (c *CachingMap) ApplyDeletionsOnly() error {
 	c.pendingDeletions.Iter(func(k, v []byte) {
 		err := c.dataplaneMap.Delete(k)
 		if err != nil && !bpf.IsNotExists(err) {
+			logrus.WithError(err).Warn("Error while deleting from BPF map")
 			errs = append(errs, err)
 		} else {
 			c.pendingDeletions.Delete(k)
