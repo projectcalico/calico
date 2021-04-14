@@ -22,6 +22,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/felix/bpf/cachingmap"
+
 	"github.com/projectcalico/felix/bpf/nat"
 
 	"github.com/projectcalico/felix/bpf"
@@ -108,8 +110,8 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	copy(withLocalNP, hostIPs)
 	withLocalNP = append(withLocalNP, podNPIP)
 
-	feCache := bpf.NewCachingMap(nat.FrontendMapParameters, kp.frontendMap)
-	beCache := bpf.NewCachingMap(nat.BackendMapParameters, kp.backendMap)
+	feCache := cachingmap.New(nat.FrontendMapParameters, kp.frontendMap)
+	beCache := cachingmap.New(nat.BackendMapParameters, kp.backendMap)
 
 	syncer, err := NewSyncer(withLocalNP, feCache, beCache, kp.affinityMap, kp.rt)
 	if err != nil {

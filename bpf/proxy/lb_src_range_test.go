@@ -17,7 +17,7 @@ package proxy_test
 import (
 	"net"
 
-	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/cachingmap"
 	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/logutils"
 
@@ -49,8 +49,8 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	externalIP := makeIPs([]string{"35.0.0.2"})
 	twoExternalIPs := makeIPs([]string{"35.0.0.2", "45.0.1.2"})
 
-	feCache := bpf.NewCachingMap(nat.FrontendMapParameters, svcs)
-	beCache := bpf.NewCachingMap(nat.BackendMapParameters, eps)
+	feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+	beCache := cachingmap.New(nat.BackendMapParameters, eps)
 
 	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 
@@ -205,8 +205,8 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
-			feCache := bpf.NewCachingMap(nat.FrontendMapParameters, svcs)
-			beCache := bpf.NewCachingMap(nat.BackendMapParameters, eps)
+			feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+			beCache := cachingmap.New(nat.BackendMapParameters, eps)
 			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
@@ -220,8 +220,8 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				v1.ProtocolTCP,
 				externalIP,
 			)
-			feCache := bpf.NewCachingMap(nat.FrontendMapParameters, svcs)
-			beCache := bpf.NewCachingMap(nat.BackendMapParameters, eps)
+			feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+			beCache := cachingmap.New(nat.BackendMapParameters, eps)
 			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())

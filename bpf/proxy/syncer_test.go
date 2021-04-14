@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/felix/bpf/cachingmap"
 	"github.com/projectcalico/felix/bpf/nat"
 
 	. "github.com/onsi/ginkgo"
@@ -53,8 +54,8 @@ var _ = Describe("BPF Syncer", func() {
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	feCache := bpf.NewCachingMap(nat.FrontendMapParameters, svcs)
-	beCache := bpf.NewCachingMap(nat.BackendMapParameters, eps)
+	feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+	beCache := cachingmap.New(nat.BackendMapParameters, eps)
 
 	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 

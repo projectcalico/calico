@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bpf
+package cachingmap
 
 import (
 	"fmt"
@@ -20,15 +20,17 @@ import (
 	"reflect"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/bpf"
 )
 
 type CachingMap struct {
 	// dataplaneMap is the backing map in the dataplane
-	dataplaneMap Map
-	params       MapParameters
+	dataplaneMap bpf.Map
+	params       bpf.MapParameters
 
 	// desiredStateOfDataplane stores the complete set of key/value pairs that we _want_ to
-	// be in the dataplane.  Calling ApplyAllToDataplane attempts to bring the dataplane into
+	// be in the dataplane.  Calling ApplyAllChanges attempts to bring the dataplane into
 	// sync.
 	//
 	// For occupancy's sake we may want to drop this copy and instead maintain the invariant:
@@ -40,7 +42,7 @@ type CachingMap struct {
 	pendingDeletions *ByteArrayToByteArrayMap
 }
 
-func NewCachingMap(mapParams MapParameters, dataplaneMap Map) *CachingMap {
+func New(mapParams bpf.MapParameters, dataplaneMap bpf.Map) *CachingMap {
 	cm := &CachingMap{
 		params:                  mapParams,
 		dataplaneMap:            dataplaneMap,
@@ -52,13 +54,17 @@ func NewCachingMap(mapParams MapParameters, dataplaneMap Map) *CachingMap {
 func (c *CachingMap) LoadCacheFromDataplane() error {
 	logrus.WithField("name", c.params.Name).Debug("Loading cache of dataplane state.")
 	c.initCache()
-	err := c.dataplaneMap.Iter(func(k, v []byte) IteratorAction {
+	err := c.dataplaneMap.Iter(func(k, v []byte) bpf.IteratorAction {
 		c.cacheOfDataplane.Set(k, v)
-		return IterNone
+		return bpf.IterNone
 	})
 	if err != nil {
+		logrus.WithError(err).WithField("name", c.params.Name).Warn("Failed to load cache of BPF map")
+		c.clearCache()
 		return err
 	}
+	logrus.WithField("name", c.params.Name).WithField("count", c.cacheOfDataplane.Len()).Info(
+		"Loaded cache of BPF map")
 	c.recalculatePendingOperations()
 	return nil
 }
@@ -70,12 +76,15 @@ func (c *CachingMap) initCache() {
 }
 
 func (c *CachingMap) clearCache() {
+	logrus.WithField("name", c.params.Name).Debug("Clearing cache of BPF map")
 	c.cacheOfDataplane = nil
 	c.pendingDeletions = nil
 	c.pendingUpdates = nil
 }
 
 func (c *CachingMap) recalculatePendingOperations() {
+	debug := logrus.GetLevel() >= logrus.DebugLevel
+
 	// Look for any discrepancies and queue up updates.
 	c.desiredStateOfDataplane.Iter(func(k, desiredVal []byte) {
 		actualVal := c.cacheOfDataplane.Get(k)
@@ -89,11 +98,25 @@ func (c *CachingMap) recalculatePendingOperations() {
 	// queue up deletions.
 	c.cacheOfDataplane.Iter(func(k, actualVal []byte) {
 		desiredVal := c.desiredStateOfDataplane.Get(k)
+		if debug {
+			logrus.WithFields(logrus.Fields{
+				"k":        k,
+				"v":        actualVal,
+				"expected": desiredVal,
+			}).Debug("Checking cache against desired")
+		}
 		if desiredVal == nil {
 			c.pendingDeletions.Set(k, actualVal)
 			return
 		}
 	})
+
+	logrus.WithFields(logrus.Fields{
+		"cached":         c.cacheOfDataplane.Len(),
+		"pendingDels":    c.pendingDeletions.Len(),
+		"pendingUpdates": c.pendingUpdates.Len(),
+		"name":           c.params.Name,
+	}).Info("Recalculated pending operations")
 }
 
 func (c *CachingMap) SetDesiredState(k, v []byte) {
@@ -145,9 +168,6 @@ func (c *CachingMap) DeleteAll() {
 	c.desiredStateOfDataplane.Iter(func(k, v []byte) {
 		c.DeleteDesiredState(k)
 	})
-	c.pendingUpdates.Iter(func(k, v []byte) {
-		c.DeleteDesiredState(k)
-	})
 }
 
 func (c *CachingMap) IterDataplaneCache(f func(k, v []byte)) {
@@ -158,13 +178,13 @@ func (c *CachingMap) GetDataplaneCache(k []byte) []byte {
 	return c.cacheOfDataplane.Get(k)
 }
 
-func (c *CachingMap) ApplyAllToDataplane() error {
+func (c *CachingMap) ApplyAllChanges() error {
 	var errs ErrSlice
-	err := c.ApplyDeletionsToDataplane()
+	err := c.ApplyDeletionsOnly()
 	if err != nil {
 		errs = append(errs, err)
 	}
-	err = c.ApplyUpdatesToDataplane()
+	err = c.ApplyUpdatesOnly()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -184,7 +204,7 @@ func (c *CachingMap) maybeLoadCache() error {
 	return nil
 }
 
-func (c *CachingMap) ApplyUpdatesToDataplane() error {
+func (c *CachingMap) ApplyUpdatesOnly() error {
 	logrus.WithField("name", c.params.Name).Debug("Applying updates to BPF map.")
 	err := c.maybeLoadCache()
 	if err != nil {
@@ -206,7 +226,7 @@ func (c *CachingMap) ApplyUpdatesToDataplane() error {
 	return nil
 }
 
-func (c *CachingMap) ApplyDeletionsToDataplane() error {
+func (c *CachingMap) ApplyDeletionsOnly() error {
 	logrus.WithField("name", c.params.Name).Debug("Applying deletions to BPF map.")
 	err := c.maybeLoadCache()
 	if err != nil {
@@ -215,7 +235,7 @@ func (c *CachingMap) ApplyDeletionsToDataplane() error {
 	var errs ErrSlice
 	c.pendingDeletions.Iter(func(k, v []byte) {
 		err := c.dataplaneMap.Delete(k)
-		if err != nil && !IsNotExists(err) {
+		if err != nil && !bpf.IsNotExists(err) {
 			errs = append(errs, err)
 		} else {
 			c.pendingDeletions.Delete(k)
@@ -316,4 +336,8 @@ func (b *ByteArrayToByteArrayMap) Iter(f func(k, v []byte)) {
 		reflect.Copy(val, iter.Value())
 		f(key.Slice(0, b.keySize).Interface().([]byte), val.Slice(0, b.valueSize).Interface().([]byte))
 	}
+}
+
+func (b *ByteArrayToByteArrayMap) Len() int {
+	return b.m.Len()
 }

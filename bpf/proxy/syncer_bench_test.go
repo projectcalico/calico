@@ -24,6 +24,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/bpf/cachingmap"
+
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -73,7 +75,7 @@ func makeState(svcCnt, epCnt int, opts ...K8sServicePortOption) DPSyncerState {
 	return state
 }
 
-func stateToBPFMaps(state DPSyncerState) (*bpf.CachingMap, *bpf.CachingMap) {
+func stateToBPFMaps(state DPSyncerState) (*cachingmap.CachingMap, *cachingmap.CachingMap) {
 	fe := mock.NewMockMap(nat.FrontendMapParameters)
 	be := mock.NewMockMap(nat.BackendMapParameters)
 
@@ -98,8 +100,8 @@ func stateToBPFMaps(state DPSyncerState) (*bpf.CachingMap, *bpf.CachingMap) {
 		id++
 	}
 
-	feCache := bpf.NewCachingMap(nat.FrontendMapParameters, fe)
-	beCache := bpf.NewCachingMap(nat.BackendMapParameters, be)
+	feCache := cachingmap.New(nat.FrontendMapParameters, fe)
+	beCache := cachingmap.New(nat.BackendMapParameters, be)
 
 	return feCache, beCache
 }
@@ -156,8 +158,8 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 
 	if mockMaps {
 
-		feCache := bpf.NewCachingMap(nat.FrontendMapParameters, &mock.DummyMap{})
-		beCache := bpf.NewCachingMap(nat.BackendMapParameters, &mock.DummyMap{})
+		feCache := cachingmap.New(nat.FrontendMapParameters, &mock.DummyMap{})
+		beCache := cachingmap.New(nat.BackendMapParameters, &mock.DummyMap{})
 
 		syncer, err = NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
@@ -175,8 +177,8 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 		err = beMap.EnsureExists()
 		Expect(err).ShouldNot(HaveOccurred())
 
-		feCache := bpf.NewCachingMap(nat.FrontendMapParameters, feMap)
-		beCache := bpf.NewCachingMap(nat.BackendMapParameters, beMap)
+		feCache := cachingmap.New(nat.FrontendMapParameters, feMap)
+		beCache := cachingmap.New(nat.BackendMapParameters, beMap)
 
 		syncer, err = NewSyncer(
 			[]net.IP{net.IPv4(1, 1, 1, 1)},

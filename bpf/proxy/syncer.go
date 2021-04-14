@@ -28,6 +28,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
+	"github.com/projectcalico/felix/bpf/cachingmap"
+
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
@@ -99,8 +101,8 @@ type stickyFrontend struct {
 // Syncer is an implementation of DPSyncer interface. It is not thread safe and
 // should be called only once at a time
 type Syncer struct {
-	bpfSvcs *bpf.CachingMap
-	bpfEps  *bpf.CachingMap
+	bpfSvcs *cachingmap.CachingMap
+	bpfEps  *cachingmap.CachingMap
 	bpfAff  bpf.Map
 
 	nextSvcID uint32
@@ -131,8 +133,8 @@ type Syncer struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
-	stickySvcs       map[nat.FrontEndAffinityKey]stickyFrontend
-	stickyEps        map[uint32]map[nat.BackendValue]struct{}
+	stickySvcs map[nat.FrontEndAffinityKey]stickyFrontend
+	stickyEps  map[uint32]map[nat.BackendValue]struct{}
 
 	// triggerFn is called when one of the syncer's background threads needs to trigger an Apply().
 	// The proxy sets this to the runner's Run() method.  We assume that the method doesn't block.
@@ -187,7 +189,7 @@ func uniqueIPs(ips []net.IP) []net.IP {
 }
 
 // NewSyncer returns a new Syncer
-func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap *bpf.CachingMap, affmap bpf.Map, rt Routes) (*Syncer, error) {
+func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap *cachingmap.CachingMap, affmap bpf.Map, rt Routes) (*Syncer, error) {
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
 		bpfEps:      epsmap,
@@ -594,22 +596,22 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	}
 
 	// Delete any front-ends first so the backends become unreachable.
-	err := s.bpfSvcs.ApplyDeletionsToDataplane()
+	err := s.bpfSvcs.ApplyDeletionsOnly()
 	if err != nil {
 		return err
 	}
 	// Update the backend maps so that any new backends become available before we update the frontends to use them.
-	err = s.bpfEps.ApplyUpdatesToDataplane()
+	err = s.bpfEps.ApplyUpdatesOnly()
 	if err != nil {
 		return err
 	}
 	// Update the frontends, after this is done we should be handling packets correctly.
-	err = s.bpfSvcs.ApplyUpdatesToDataplane()
+	err = s.bpfSvcs.ApplyUpdatesOnly()
 	if err != nil {
 		return err
 	}
 	// Remove any unused backends.
-	err = s.bpfEps.ApplyDeletionsToDataplane()
+	err = s.bpfEps.ApplyDeletionsOnly()
 	if err != nil {
 		return err
 	}
@@ -739,17 +741,6 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 	return nil
 }
 
-func (s *Syncer) deleteSvcBackend(svcID uint32, idx uint32) {
-	if log.GetLevel() >= log.DebugLevel {
-		log.WithFields(log.Fields{
-			"svcID": svcID,
-			"idx":   idx,
-		}).Debug("Deleting service backend.")
-	}
-	key := nat.NewNATBackendKey(svcID, uint32(idx))
-	s.bpfEps.DeleteDesiredState(key[:])
-}
-
 func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
 	ip := svc.ClusterIP()
 	port := svc.Port()
@@ -843,35 +834,6 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 			id:    svcID,
 			timeo: time.Duration(affinityTimeo) * time.Second,
 		}
-	}
-
-	return nil
-}
-
-func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error {
-	for i := 0; i < count; i++ {
-		s.deleteSvcBackend(svcID, uint32(i))
-	}
-
-	key, err := getSvcNATKey(svc)
-	if err != nil {
-		return err
-	}
-
-	if log.GetLevel() >= log.DebugLevel {
-		log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
-	}
-	s.bpfSvcs.DeleteDesiredState(key[:])
-
-	keys, err := getSvcNATKeyLBSrcRange(svc)
-	if err != nil {
-		return err
-	}
-	for _, key := range keys {
-		if log.GetLevel() >= log.DebugLevel {
-			log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
-		}
-		s.bpfSvcs.DeleteDesiredState(key[:])
 	}
 
 	return nil
@@ -1071,7 +1033,7 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 	}()
 }
 
-func (s *Syncer) SetTriggerFn(f func()){
+func (s *Syncer) SetTriggerFn(f func()) {
 	s.triggerFn = f
 }
 
