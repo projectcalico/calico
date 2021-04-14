@@ -106,7 +106,8 @@ func ProtoIPSetMemberToBPFEntry(id uint64, member string) *IPSetEntry {
 		case "udp":
 			protocol = 17
 		default:
-			logrus.WithField("member", member).Panic("Unknown protocol in named port member")
+			logrus.WithField("member", member).Error("Unknown protocol in named port member")
+			return nil
 		}
 		port64, err := strconv.ParseUint(parts[1], 10, 16)
 		if err != nil {
