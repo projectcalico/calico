@@ -108,7 +108,7 @@ func (m *Manager) ResyncFailsafes() error {
 		ipv4 := ip.To4()
 		if ipv4 == nil || len(ipv4) != 4 {
 			// If ipv4 is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
-			log.Error("Invalid IPv4 address configured in the failsafe ports")
+			log.Errorf("Invalid IPv4 address configured in the failsafe ports: %s", p.Net)
 			syncFailed = true
 			return
 		}
