@@ -98,7 +98,11 @@ func (m *Manager) ResyncFailsafes() error {
 		}
 
 		// Parse the CIDR and split out the IP and mask
-		ip, ipnet, err := cnet.ParseCIDROrIP(p.Net)
+		cidr := p.Net
+		if p.Net == "" {
+			cidr = "0.0.0.0/0"
+		}
+		ip, ipnet, err := cnet.ParseCIDROrIP(cidr)
 		if err != nil {
 			log.WithError(err).Error("Failed to parse CIDR for failsafe port")
 			syncFailed = true
@@ -108,7 +112,7 @@ func (m *Manager) ResyncFailsafes() error {
 		ipv4 := ip.To4()
 		if ipv4 == nil || len(ipv4) != 4 {
 			// If ipv4 is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
-			log.Errorf("Invalid IPv4 address configured in the failsafe ports: %s", p.Net)
+			log.Errorf("Invalid IPv4 address configured in the failsafe ports: %s", cidr)
 			syncFailed = true
 			return
 		}
