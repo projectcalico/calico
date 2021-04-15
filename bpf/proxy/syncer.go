@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -1007,15 +1008,20 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 			// was an update or not before we got here
 			s.rt.WaitAfter(ctx, func(lookup func(addr ip.Addr) (routes.Value, bool)) bool {
 				log.Debug("Woke up")
+				missesChanged := false
 				var again []*expandMiss
 				for _, m := range misses {
 					if _, miss := s.expandNodePorts(m.sname, m.sinfo, m.eps, m.nport, lookup); miss != nil {
 						again = append(again, miss)
+						if !reflect.DeepEqual(m.eps, miss.eps) {
+							missesChanged = true
+						}
+					} else {
+						missesChanged = true
 					}
 				}
 
-				// FIXME: would like to only trigger if there's a possibility that the change has helped.
-				if s.triggerFn != nil {
+				if missesChanged && s.triggerFn != nil {
 					log.Debug("Triggering a sync...")
 					s.triggerFn()
 				} else {
