@@ -9,4 +9,5 @@ type Config struct {
 	RoutingTableIndex   int
 	InterfaceName       string
 	MTU                 int
+	RouteSource         string
 }

@@ -601,7 +601,7 @@ var _ = Describe("Static", func() {
 			})
 		})
 
-		Describe("with IPIP enabled", func() {
+		Describe(fmt.Sprintf("with IPIP enabled and IPVS=%v", kubeIPVSEnabled), func() {
 			epMark := uint32(0xff00)
 			BeforeEach(func() {
 				conf = Config{
@@ -1355,6 +1355,51 @@ var _ = Describe("Static", func() {
 				}))
 			})
 		}
+	})
+
+	Describe("with WireGuard enabled", func() {
+		BeforeEach(func() {
+			conf = Config{
+				WorkloadIfacePrefixes:       []string{"cali"},
+				IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				IptablesMarkAccept:          0x10,
+				IptablesMarkPass:            0x20,
+				IptablesMarkScratch0:        0x40,
+				IptablesMarkScratch1:        0x80,
+				IptablesMarkEndpoint:        0xff00,
+				IptablesMarkNonCaliEndpoint: 0x100,
+				WireguardEnabled:            true,
+				WireguardInterfaceName:      "wireguard.cali",
+				WireguardIptablesMark:       0x100000,
+				WireguardListeningPort:      51820,
+				RouteSource:                 "WorkloadIPs",
+			}
+		})
+
+		var ipVersion uint8 = 4
+
+		It("should include the expected WireGuard PREROUTING chain in the raw chains", func() {
+			Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-PREROUTING")).To(Equal(&Chain{
+				Name: "cali-PREROUTING",
+				Rules: []Rule{
+					{Match: nil,
+						Action: ClearMarkAction{Mark: 0xf0}},
+					{Match: Match().Protocol("udp").
+						DestPorts(51820).
+						NotSrcAddrType(AddrTypeLocal, false),
+						Action: SetMarkAction{Mark: 0x100000}},
+					{Match: Match().InInterface("cali+"),
+						Action: SetMarkAction{Mark: 0x40}},
+					{Match: Match().MarkMatchesWithMask(0x40, 0x40).RPFCheckFailed(false),
+						Action: DropAction{}},
+					{Match: Match().MarkClear(0x40),
+						Action: JumpAction{Target: "cali-from-host-endpoint"}},
+					{Match: Match().MarkMatchesWithMask(0x10, 0x10),
+						Action: AcceptAction{}},
+				},
+			}))
+		})
 	})
 })
 
