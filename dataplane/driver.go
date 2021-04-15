@@ -155,7 +155,6 @@ func StartDataplaneDriver(configParams *config.Config,
 				copy(failsafeInboundHostPorts, configParams.FailsafeInboundHostPorts)
 				log.Debug("Adding permissive FailsafeInboundHostPorts for wireguard")
 				failsafeInboundHostPorts[len(configParams.FailsafeInboundHostPorts)] = config.ProtoPort{
-					Net:      "0.0.0.0/0",
 					Port:     uint16(configParams.WireguardListeningPort),
 					Protocol: "udp",
 				}
@@ -178,7 +177,6 @@ func StartDataplaneDriver(configParams *config.Config,
 				copy(failsafeOutboundHostPorts, configParams.FailsafeOutboundHostPorts)
 				log.Debug("Adding permissive FailsafeOutboundHostPorts for wireguard")
 				failsafeOutboundHostPorts[len(configParams.FailsafeOutboundHostPorts)] = config.ProtoPort{
-					Net:      "0.0.0.0/0",
 					Port:     uint16(configParams.WireguardListeningPort),
 					Protocol: "udp",
 				}

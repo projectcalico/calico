@@ -123,37 +123,75 @@ var _ = Describe("Static", func() {
 					expRawFailsafeIn := &Chain{
 						Name: "cali-failsafe-in",
 						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(23).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(1023).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(22), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1022), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(23), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(1023), Action: AcceptAction{}},
 						},
 					}
 
 					expRawFailsafeOut := &Chain{
 						Name: "cali-failsafe-out",
 						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(23).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1023).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(23), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1023), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(22), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(1022), Action: AcceptAction{}},
 						},
 					}
 
 					expFailsafeIn := &Chain{
 						Name: "cali-failsafe-in",
 						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(22), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1022), Action: AcceptAction{}},
 						},
 					}
 
 					expFailsafeOut := &Chain{
 						Name: "cali-failsafe-out",
 						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(23).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1023).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(23), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1023), Action: AcceptAction{}},
 						},
+					}
+
+					if ipVersion == 4 {
+						expRawFailsafeIn = &Chain{
+							Name: "cali-failsafe-in",
+							Rules: []Rule{
+								{Match: Match().Protocol("tcp").DestPorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").SourcePorts(23).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").SourcePorts(1023).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+							},
+						}
+
+						expRawFailsafeOut = &Chain{
+							Name: "cali-failsafe-out",
+							Rules: []Rule{
+								{Match: Match().Protocol("tcp").DestPorts(23).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").DestPorts(1023).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").SourcePorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").SourcePorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+							},
+						}
+
+						expFailsafeIn = &Chain{
+							Name: "cali-failsafe-in",
+							Rules: []Rule{
+								{Match: Match().Protocol("tcp").DestPorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+							},
+						}
+
+						expFailsafeOut = &Chain{
+							Name: "cali-failsafe-out",
+							Rules: []Rule{
+								{Match: Match().Protocol("tcp").DestPorts(23).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").DestPorts(1023).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
+							},
+						}
 					}
 
 					expForwardCheck := &Chain{
