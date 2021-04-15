@@ -22,6 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/bpf"
@@ -95,9 +96,40 @@ func (m *Manager) ResyncFailsafes() error {
 			log.WithField("proto", p.Protocol).Warn("Ignoring failsafe port; protocol not supported in BPF mode.")
 			return
 		}
-		k := MakeKey(ipProto, p.Port, outbound)
+
+		// Parse the CIDR and split out the IP and mask
+		cidr := p.Net
+		if p.Net == "" {
+			cidr = "0.0.0.0/0"
+		}
+		ip, ipnet, err := cnet.ParseCIDROrIP(cidr)
+		if err != nil {
+			log.WithError(err).Error("Failed to parse CIDR for failsafe port")
+			syncFailed = true
+			return
+		}
+
+		ipv4 := ip.To4()
+		if ipv4 == nil || len(ipv4) != 4 {
+			// If ipv4 is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
+			log.Errorf("Invalid IPv4 address configured in the failsafe ports: %s", cidr)
+			syncFailed = true
+			return
+		}
+
+		mask, bits := ipnet.Mask.Size()
+		if bits != 32 {
+			log.Errorf("CIDR mask size not valid for IPv4 addresses: %d", bits)
+			syncFailed = true
+			return
+		}
+
+		// Mask the IP
+		maskedIP := ipv4.Mask(ipnet.Mask)
+
+		k := MakeKey(ipProto, p.Port, outbound, maskedIP.String(), mask)
 		unknownKeys.Discard(k)
-		err := m.failsafesMap.Update(k.ToSlice(), Value())
+		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {
 			log.WithError(err).Error("Failed to update failsafe port.")
 			syncFailed = true

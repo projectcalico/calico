@@ -18,6 +18,7 @@ package failsafes
 
 import (
 	"encoding/binary"
+	"net"
 
 	"golang.org/x/sys/unix"
 
@@ -25,33 +26,40 @@ import (
 )
 
 const (
-	KeySize   = 4
+	// PrefixLen (4) + Port (2) + Proto (1) + Flags (1) + IP (4)
+	KeySize   = 12
 	ValueSize = 4
 
 	FlagOutbound = 1
+
+	// sizeof(port) + sizeof(proto) + sizeof(flags)
+	ZeroCIDRPrefixLen = 32
 )
 
 type Key struct {
 	Port    uint16
 	IPProto uint8
 	Flags   uint8
+	IP      string
+	IPMask  int
 }
 
 var MapParams = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_fsafes",
-	Type:       "hash",
+	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
 	MaxEntries: 65536,
 	Name:       "cali_v4_fsafes",
 	Flags:      unix.BPF_F_NO_PREALLOC,
+	Version:    2,
 }
 
 func Map(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(MapParams)
 }
 
-func MakeKey(ipProto uint8, port uint16, outbound bool) Key {
+func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) Key {
 	var flags uint8
 	if outbound {
 		flags |= FlagOutbound
@@ -60,22 +68,39 @@ func MakeKey(ipProto uint8, port uint16, outbound bool) Key {
 		Port:    port,
 		IPProto: ipProto,
 		Flags:   flags,
+		IP:      ip,
+		IPMask:  mask,
 	}
 }
 
 func (k Key) ToSlice() []byte {
 	key := make([]byte, KeySize)
-	binary.LittleEndian.PutUint16(key[:2], k.Port)
-	key[2] = k.IPProto
-	key[3] = k.Flags
+	binary.LittleEndian.PutUint32(key[:4], uint32(ZeroCIDRPrefixLen)+uint32(k.IPMask))
+	binary.LittleEndian.PutUint16(key[4:6], k.Port)
+	key[6] = k.IPProto
+	key[7] = k.Flags
+	ip := net.ParseIP(k.IP).To4()
+	maskedIP := ip.Mask(net.CIDRMask(k.IPMask, 32))
+	for i := 0; i < 4; i++ {
+		key[8+i] = maskedIP.To4()[i]
+	}
 	return key
 }
 
 func KeyFromSlice(data []byte) Key {
 	var k Key
-	k.Port = binary.LittleEndian.Uint16(data[:2])
-	k.IPProto = data[2]
-	k.Flags = data[3]
+	k.Port = binary.LittleEndian.Uint16(data[4:6])
+	k.IPProto = data[6]
+	k.Flags = data[7]
+
+	prefixLen := binary.LittleEndian.Uint32(data[:4])
+	k.IPMask = int(prefixLen) - ZeroCIDRPrefixLen
+	ipBytes := make([]byte, 4)
+	for i := 8; i < len(data); i++ {
+		ipBytes[i-8] = data[i]
+	}
+	k.IP = net.IPv4(ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3]).String()
+
 	return k
 }
 
