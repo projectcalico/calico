@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 
 func init() {
 	// We need some pointers to ints, so just define as values here.
+	var Vneg1 = -1
 	var V0 = 0
 	var V4 = 4
 	var V6 = 6
@@ -38,6 +39,8 @@ func init() {
 	var V254 = 254
 	var V255 = 255
 	var V256 = 256
+	var Vffffffff = 0xffffffff
+	var V100000000 = 0x100000000
 
 	// Set up some values we use in various tests.
 	ipv4_1 := "1.2.3.4"
@@ -621,6 +624,11 @@ func init() {
 		Entry("should reject a valid BPFExternalServiceMode value 'Foo'", api.FelixConfigurationSpec{BPFExternalServiceMode: "Foo"}, false),
 		Entry("should accept a valid BPFExternalServiceMode value 'Tunnel'", api.FelixConfigurationSpec{BPFExternalServiceMode: "Tunnel"}, true),
 		Entry("should accept a valid BPFExternalServiceMode value 'DSR'", api.FelixConfigurationSpec{BPFExternalServiceMode: "DSR"}, true),
+
+		Entry("should reject a negative BPFExtToServiceConnmark value", api.FelixConfigurationSpec{BPFExtToServiceConnmark: &Vneg1}, false),
+		Entry("should reject a gte 32bit BPFExtToServiceConnmark value", api.FelixConfigurationSpec{BPFExtToServiceConnmark: &V100000000}, false),
+		Entry("should accept a zero BPFExtToServiceConnmark value", api.FelixConfigurationSpec{BPFExtToServiceConnmark: &V0}, true),
+		Entry("should accept a 0xffffffff BPFExtToServiceConnmark value", api.FelixConfigurationSpec{BPFExtToServiceConnmark: &Vffffffff}, true),
 
 		Entry("should reject an invalid BPFDataIfacePattern value '*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "*"}, false),
 		Entry("should accept a valid BPFDataIfacePattern value 'eth.*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "eth.*"}, true),

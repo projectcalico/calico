@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -322,6 +322,10 @@ type FelixConfigurationSpec struct {
 	// is sent directly from the remote node.  In "DSR" mode, the remote node appears to use the IP of the ingress
 	// node; this requires a permissive L2 network.  [Default: Tunnel]
 	BPFExternalServiceMode string `json:"bpfExternalServiceMode,omitempty" validate:"omitempty,bpfServiceMode"`
+	// BPFExtToServiceConnmark in BPF mode, control a 32bit mark that is set on connections from an
+	// external client to a local service. This mark allows us to control how packets of that
+	// connection are routed within the host and how is routing intepreted by RPF check. [Default: 0]
+	BPFExtToServiceConnmark *int `json:"bpfExtToServiceConnmark,omitempty" validate:"omitempty,gte=0,lte=4294967295"`
 	// BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF mode, Felix will proactively clean up the upstream
 	// Kubernetes kube-proxy's iptables chains.  Should only be enabled if kube-proxy is not running.  [Default: true]
 	BPFKubeProxyIptablesCleanupEnabled *bool `json:"bpfKubeProxyIptablesCleanupEnabled,omitempty" validate:"omitempty"`
