@@ -33,13 +33,13 @@ $(LOCAL_BUILD_DEP):
 	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
 endif
 
-include Makefile.common
-
-###############################################################################
-
 BUILD_IMAGE?=calico/ctl
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/ctl
 RELEASE_IMAGES?=
+
+include Makefile.common
+
+###############################################################################
 
 CALICOCTL_DIR=calicoctl
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
