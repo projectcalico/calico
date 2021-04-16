@@ -119,17 +119,18 @@ type bpfEndpointManager struct {
 
 	dirtyIfaceNames set.Set
 
-	bpfLogLevel        string
-	hostname           string
-	hostIP             net.IP
-	fibLookupEnabled   bool
-	dataIfaceRegex     *regexp.Regexp
-	workloadIfaceRegex *regexp.Regexp
-	ipSetIDAlloc       *idalloc.IDAllocator
-	epToHostAction     string
-	vxlanMTU           int
-	vxlanPort          uint16
-	dsrEnabled         bool
+	bpfLogLevel             string
+	hostname                string
+	hostIP                  net.IP
+	fibLookupEnabled        bool
+	dataIfaceRegex          *regexp.Regexp
+	workloadIfaceRegex      *regexp.Regexp
+	ipSetIDAlloc            *idalloc.IDAllocator
+	epToHostAction          string
+	vxlanMTU                int
+	vxlanPort               uint16
+	dsrEnabled              bool
+	bpfExtToServiceConnmark int
 
 	ipSetMap bpf.Map
 	stateMap bpf.Map
@@ -169,6 +170,7 @@ func newBPFEndpointManager(
 	vxlanMTU int,
 	vxlanPort uint16,
 	dsrEnabled bool,
+	bpfExtToServiceConnmark int,
 	ipSetMap bpf.Map,
 	stateMap bpf.Map,
 	iptablesRuleRenderer bpfAllowChainRenderer,
@@ -179,29 +181,30 @@ func newBPFEndpointManager(
 		livenessCallback = func() {}
 	}
 	m := &bpfEndpointManager{
-		allWEPs:             map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		happyWEPs:           map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		happyWEPsDirty:      true,
-		policies:            map[proto.PolicyID]*proto.Policy{},
-		profiles:            map[proto.ProfileID]*proto.Profile{},
-		nameToIface:         map[string]bpfInterface{},
-		policiesToWorkloads: map[proto.PolicyID]set.Set{},
-		profilesToWorkloads: map[proto.ProfileID]set.Set{},
-		dirtyIfaceNames:     set.New(),
-		bpfLogLevel:         bpfLogLevel,
-		hostname:            hostname,
-		fibLookupEnabled:    fibLookupEnabled,
-		dataIfaceRegex:      dataIfaceRegex,
-		workloadIfaceRegex:  workloadIfaceRegex,
-		ipSetIDAlloc:        ipSetIDAlloc,
-		epToHostAction:      epToHostAction,
-		vxlanMTU:            vxlanMTU,
-		vxlanPort:           vxlanPort,
-		dsrEnabled:          dsrEnabled,
-		ipSetMap:            ipSetMap,
-		stateMap:            stateMap,
-		ruleRenderer:        iptablesRuleRenderer,
-		iptablesFilterTable: iptablesFilterTable,
+		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		happyWEPsDirty:          true,
+		policies:                map[proto.PolicyID]*proto.Policy{},
+		profiles:                map[proto.ProfileID]*proto.Profile{},
+		nameToIface:             map[string]bpfInterface{},
+		policiesToWorkloads:     map[proto.PolicyID]set.Set{},
+		profilesToWorkloads:     map[proto.ProfileID]set.Set{},
+		dirtyIfaceNames:         set.New(),
+		bpfLogLevel:             bpfLogLevel,
+		hostname:                hostname,
+		fibLookupEnabled:        fibLookupEnabled,
+		dataIfaceRegex:          dataIfaceRegex,
+		workloadIfaceRegex:      workloadIfaceRegex,
+		ipSetIDAlloc:            ipSetIDAlloc,
+		epToHostAction:          epToHostAction,
+		vxlanMTU:                vxlanMTU,
+		vxlanPort:               vxlanPort,
+		dsrEnabled:              dsrEnabled,
+		bpfExtToServiceConnmark: bpfExtToServiceConnmark,
+		ipSetMap:                ipSetMap,
+		stateMap:                stateMap,
+		ruleRenderer:            iptablesRuleRenderer,
+		iptablesFilterTable:     iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
 			log.Debug("Jump map cleanup triggered.")
 			tc.CleanUpJumpMaps()
@@ -749,6 +752,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 	//   when we cannot encap the packet - non-GSO & too close to veth MTU
 	ap.TunnelMTU = uint16(m.vxlanMTU - 50)
 	ap.IntfIP = calicoRouterIP
+	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap, polDirection)
 	if err != nil {
@@ -826,6 +830,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
+	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 	ip, err := m.getInterfaceIP(ifaceName)
 	if err != nil {
 		log.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)

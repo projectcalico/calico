@@ -175,6 +175,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			vxlanMTU,
 			uint16(rrConfigNormal.VXLANPort),
 			nodePortDSR,
+			0,
 			ipSetsMap,
 			stateMap,
 			ruleRenderer,

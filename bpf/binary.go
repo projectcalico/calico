@@ -133,6 +133,12 @@ func (b *Binary) PatchVXLANPort(port uint16) {
 	b.patchU32Placeholder("VXPR", uint32(port))
 }
 
+// PatchExtToServiceConnmark replaces the MARK placeholder with the actual mark.
+func (b *Binary) PatchExtToServiceConnmark(mark uint32) {
+	logrus.WithField("mark", mark).Debug("Patching to-host mark")
+	b.patchU32Placeholder("MARK", uint32(mark))
+}
+
 // patchU32Placeholder replaces a placeholder with the given value.
 func (b *Binary) patchU32Placeholder(from string, to uint32) {
 	toBytes := make([]byte, 4)

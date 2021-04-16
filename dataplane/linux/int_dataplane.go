@@ -163,6 +163,7 @@ type Config struct {
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
+	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
@@ -608,6 +609,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.VXLANMTU,
 			uint16(config.VXLANPort),
 			config.BPFNodePortDSREnabled,
+			config.BPFExtToServiceConnmark,
 			ipSetsMap,
 			stateMap,
 			ruleRenderer,
@@ -1262,6 +1264,20 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
+	}
+
+	if d.config.BPFExtToServiceConnmark != 0 {
+		mark := uint32(d.config.BPFExtToServiceConnmark)
+		for _, t := range d.iptablesMangleTables {
+			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
+				Match: iptables.Match().MarkMatchesWithMask(
+					tc.MarkSeen|mark,
+					tc.MarkSeenMask|mark,
+				),
+				Comment: []string{"Mark connections with ExtToServiceConnmark"},
+				Action:  iptables.SetConnMarkAction{Mark: mark, Mask: mark},
+			}})
+		}
 	}
 }
 
