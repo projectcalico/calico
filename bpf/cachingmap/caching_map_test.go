@@ -45,7 +45,6 @@ func TestCachingMap_Empty(t *testing.T) {
 	Expect(mockMap.Contents).To(BeEmpty())
 }
 
-
 var ErrFail = fmt.Errorf("fail")
 
 // TestCachingMap_Errors tests returning of errors from the underlying map.
@@ -357,7 +356,9 @@ func TestByteArrayToByteArrayMap(t *testing.T) {
 	m.Iter(func(k, v []byte) {
 		Expect(k).To(HaveLen(2))
 		Expect(v).To(HaveLen(4))
-		seenValues[string(k)] = v
+		vCopy := make([]byte, len(v))
+		copy(vCopy, v)
+		seenValues[string(k)] = vCopy
 	})
 	Expect(seenValues).To(Equal(map[string][]byte{
 		string([]byte{1, 2}): {1, 2, 3, 5},

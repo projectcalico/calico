@@ -99,7 +99,7 @@ func (c *CachingMap) recalculatePendingOperations() {
 	// Look for any discrepancies and queue up updates.
 	c.desiredStateOfDataplane.Iter(func(k, desiredVal []byte) {
 		actualVal := c.cacheOfDataplane.Get(k)
-		if reflect.DeepEqual(actualVal, desiredVal) {
+		if slicesEqual(actualVal, desiredVal) {
 			return
 		}
 		c.pendingUpdates.Set(k, desiredVal)
@@ -145,13 +145,25 @@ func (c *CachingMap) SetDesired(k, v []byte) {
 
 	// Check if we think we need to update the dataplane as a result.
 	currentVal := c.cacheOfDataplane.Get(k)
-	if reflect.DeepEqual(currentVal, v) {
+	if slicesEqual(currentVal, v) {
 		// Dataplane already agrees with the new value so clear any pending update.
 		logrus.Debug("SetDesired: Key in dataplane already, ignoring.")
 		c.pendingUpdates.Delete(k)
 		return
 	}
 	c.pendingUpdates.Set(k, v)
+}
+
+func slicesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if b[i] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // DeleteDesired deletes the given key from the desired state of the dataplane. This is an in-memory operation,
@@ -293,6 +305,14 @@ type ByteArrayToByteArrayMap struct {
 	valueType reflect.Type
 
 	m reflect.Value // map[[keySize]byte][valueSize]byte
+
+	// key and value that we reuse when reading/writing the map.  Since the map uses value types (not
+	// pointers), we can reuse the same key/value to read/write the map and the map will save the
+	// actual key/value internally rather than sharing storage with our reflect.Value.
+	key        reflect.Value
+	value      reflect.Value
+	keySlice   []byte // Slice backed by key
+	valueSlice []byte // Slice backed by value
 }
 
 func NewByteArrayToByteArrayMap(keySize, valueSize int) *ByteArrayToByteArrayMap {
@@ -302,12 +322,18 @@ func NewByteArrayToByteArrayMap(keySize, valueSize int) *ByteArrayToByteArrayMap
 	mapType := reflect.MapOf(keyType, valueType)
 	mapVal := reflect.MakeMap(mapType)
 
+	key := reflect.New(keyType).Elem()
+	value := reflect.New(valueType).Elem()
 	return &ByteArrayToByteArrayMap{
-		keySize:   keySize,
-		valueSize: valueSize,
-		keyType:   keyType,
-		valueType: valueType,
-		m:         mapVal,
+		keySize:    keySize,
+		valueSize:  valueSize,
+		keyType:    keyType,
+		valueType:  valueType,
+		m:          mapVal,
+		key:        key,
+		value:      value,
+		keySlice:   key.Slice(0, keySize).Interface().([]byte),
+		valueSlice: value.Slice(0, valueSize).Interface().([]byte),
 	}
 }
 
@@ -319,12 +345,9 @@ func (b *ByteArrayToByteArrayMap) Set(k, v []byte) {
 		log.Panic("ByteArrayToByteArrayMap.Set() called with incorrect key length")
 	}
 
-	key := reflect.New(b.keyType).Elem()
-	val := reflect.New(b.valueType).Elem()
-	reflect.Copy(key, reflect.ValueOf(k))
-	reflect.Copy(val, reflect.ValueOf(v))
-
-	b.m.SetMapIndex(key, val)
+	copy(b.keySlice, k)
+	copy(b.valueSlice, v)
+	b.m.SetMapIndex(b.key, b.value)
 }
 
 func (b *ByteArrayToByteArrayMap) Get(k []byte) []byte {
@@ -332,10 +355,8 @@ func (b *ByteArrayToByteArrayMap) Get(k []byte) []byte {
 		log.Panic("ByteArrayToByteArrayMap.Get() called with incorrect key length")
 	}
 
-	key := reflect.New(b.keyType).Elem()
-	reflect.Copy(key, reflect.ValueOf(k))
-
-	valVal := b.m.MapIndex(key)
+	copy(b.keySlice, k)
+	valVal := b.m.MapIndex(b.key)
 	if !valVal.IsValid() {
 		return nil
 	}
@@ -349,20 +370,26 @@ func (b *ByteArrayToByteArrayMap) Delete(k []byte) {
 		log.Panic("ByteArrayToByteArrayMap.Delete() called with incorrect key length")
 	}
 
-	key := reflect.New(b.keyType).Elem()
-	reflect.Copy(key, reflect.ValueOf(k))
+	copy(b.keySlice, k)
 	var zeroVal reflect.Value
-	b.m.SetMapIndex(key, zeroVal)
+	b.m.SetMapIndex(b.key, zeroVal)
 }
 
+// Iter iterates over the map, passing each key/value to the given func as a slice.  For performance,
+// The slice is reused between iterations and should not be retained.  As with a normal map, it is safe
+// to delete from the map during iteration.
 func (b *ByteArrayToByteArrayMap) Iter(f func(k, v []byte)) {
 	iter := b.m.MapRange()
+	// Since it's valid for a user to call Get/Set while we're iterating, make sure we have our own
+	// values for key/value to avoid aliasing.
+	key := reflect.New(b.keyType).Elem()
+	val := reflect.New(b.valueType).Elem()
+	keySlice := key.Slice(0, b.keySize).Interface().([]byte)
+	valSlice := val.Slice(0, b.valueSize).Interface().([]byte)
 	for iter.Next() {
-		key := reflect.New(b.keyType).Elem()
-		val := reflect.New(b.valueType).Elem()
 		reflect.Copy(key, iter.Key())
 		reflect.Copy(val, iter.Value())
-		f(key.Slice(0, b.keySize).Interface().([]byte), val.Slice(0, b.valueSize).Interface().([]byte))
+		f(keySlice, valSlice)
 	}
 }
 
