@@ -111,6 +111,7 @@ func benchmarkStartupSync(b *testing.B, svcCnt, epCnt int) {
 	state := makeState(svcCnt, epCnt)
 
 	b.Run(fmt.Sprintf("Services %d Endpoints %d", svcCnt, epCnt), func(b *testing.B) {
+		b.StopTimer()
 		for n := 0; n < b.N; n++ {
 			origSvcs, origEps := stateToBPFMaps(state)
 			s := &Syncer{
@@ -199,6 +200,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 	}
 
 	b.Run(title, func(b *testing.B) {
+		b.StopTimer()
 		for n := 0; n < b.N; n++ {
 			delKey := makeSvcKey(n)
 			newIdx := svcCnt + n
