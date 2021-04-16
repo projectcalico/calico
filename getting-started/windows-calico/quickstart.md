@@ -412,6 +412,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 | ServiceCidr        | Service IP range of the Kubernetes cluster. Not required for most managed Kubernetes clusters. Note: EKS has non-default value. | 10.96.0.0/12 |
 | DNSServerIPs       | Comma-delimited list of DNS service IPs used by Windows pod. Not required for most managed Kubernetes clusters. Note: EKS has a non-default value. | 10.96.0.10 |
 | CalicoBackend      | Calico backend network type (`vxlan` or `bgp`). If the value is an empty string (default), backend network type is auto detected. | "" |
+| ContainerRuntime   | Container runtime to configure Calico to use [`docker` or `containerd`]. If the value is not supplied `docker` is used. | "" |
 
 Congratulations! You now have a Kubernetes cluster with {{site.prodnameWindows}} and a Linux control node.
 

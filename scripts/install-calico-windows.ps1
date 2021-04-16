@@ -49,7 +49,8 @@ Param(
     [parameter(Mandatory = $false)] $EtcdCaCert="",
     [parameter(Mandatory = $false)] $ServiceCidr="10.96.0.0/12",
     [parameter(Mandatory = $false)] $DNSServerIPs="10.96.0.10",
-    [parameter(Mandatory = $false)] $CalicoBackend=""
+    [parameter(Mandatory = $false)] $CalicoBackend="",
+    [parameter(Mandatory = $false)] $ContainerRuntime="docker"
 )
 
 function DownloadFiles()
@@ -335,6 +336,7 @@ Expand-Archive $CalicoZip c:\
 Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
 SetConfigParameters -OldString '<your etcd endpoints>' -NewString "$EtcdEndpoints"
+SetConfigParameters -OldString '<your container runtime>' -NewString "$ContainerRuntime"
 
 if (-Not [string]::IsNullOrEmpty($EtcdTlsSecretName)) {
     $calicoNs = GetCalicoNamespace
