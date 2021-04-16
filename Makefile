@@ -33,6 +33,12 @@ $(LOCAL_BUILD_DEP):
 		-replace=github.com/projectcalico/felix=../felix
 endif
 
+# Makefile configuration options
+BUILD_IMAGE?=calico/kube-controllers
+FLANNEL_MIGRATION_BUILD_IMAGE?=calico/flannel-migration-controller
+PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/$(BUILD_IMAGE) $(FLANNEL_MIGRATION_BUILD_IMAGE) quay.io/$(FLANNEL_MIGRATION_BUILD_IMAGE)
+RELEASE_IMAGES?=
+
 include Makefile.common
 
 ###############################################################################
@@ -43,12 +49,6 @@ ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 ifeq ($(BUILDARCH),amd64)
 	ETCD_IMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
-
-# Makefile configuration options
-BUILD_IMAGE?=calico/kube-controllers
-FLANNEL_MIGRATION_BUILD_IMAGE?=calico/flannel-migration-controller
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/$(BUILD_IMAGE) $(FLANNEL_MIGRATION_BUILD_IMAGE) quay.io/$(FLANNEL_MIGRATION_BUILD_IMAGE)
-RELEASE_IMAGES?=
 
 SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
 
