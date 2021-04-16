@@ -77,7 +77,7 @@ blocks:
           commands:
             - make static-checks
 
-  - name: Windows FV
+  - name: Windows FV - docker
     dependencies: []
     task:
       secrets:
@@ -89,7 +89,7 @@ blocks:
           - export REPORT_DIR=~/report
           - export LOGS_DIR=~/fv.log
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
+          - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}-docker
           - export KEYPAIR_NAME=${CLUSTER_NAME}
           - echo CLUSTER_NAME=${CLUSTER_NAME}
           - sudo apt-get install putty-tools
@@ -121,8 +121,56 @@ blocks:
           commands:
             - ./.semaphore/run-win-fv.sh
 
+  - name: Windows FV - containerd
+    dependencies: []
+    task:
+      secrets:
+        - name: banzai-secrets
+      prologue:
+        commands:
+          # Prepare aws configuration.
+          - pip install --upgrade --user awscli
+          - export REPORT_DIR=~/report
+          - export LOGS_DIR=~/fv.log
+          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+          - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}-containerd
+          - export KEYPAIR_NAME=${CLUSTER_NAME}
+          - echo CLUSTER_NAME=${CLUSTER_NAME}
+          - sudo apt-get install putty-tools
+          - git clone git@github.com:tigera/process.git
+          - checkout
+          - make build && make bin/windows/win-fv.exe
+      epilogue:
+        always:
+          commands:
+            - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+            - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+      env_vars:
+        - name: SEMAPHORE_ARTIFACT_EXPIRY
+          value: 2w
+        - name: AWS_DEFAULT_REGION
+          value: us-west-2
+        - name: MASTER_CONNECT_KEY_PUB
+          value: master_ssh_key.pub
+        - name: MASTER_CONNECT_KEY
+          value: master_ssh_key
+        - name: WIN_PPK_KEY
+          value: win_ppk_key
+        - name: K8S_VERSION
+          value: 1.17.2
+        - name: CONTAINER_RUNTIME
+          value: containerd
+        - name: CONTAINERD_VERSION
+          value: 1.4.4
+      jobs:
+        - name: FV Test matrix
+          commands:
+            - ./.semaphore/run-win-fv.sh
+
   - name: 'Push Images (non-PR builds only)'
-    dependencies: ["Unit Tests", "Static Checks", "Windows FV"]
+    dependencies: ["Unit Tests", "Static Checks", "Windows FV - docker", "Windows FV - containerd"]
     skip:
       # Only run on branches, not PRs.
       when: "branch !~ '.+'"

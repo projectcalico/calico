@@ -32,6 +32,7 @@ import (
 	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/mutex"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils/winpol"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -201,7 +202,7 @@ func (d *windowsDataplane) DoNetworking(
 	}
 
 	// Create endpoint for container
-	hnsEndpointCont, err := d.createAndAttachContainerEP(args, hnsNetwork, subNet, allIPAMPools, natOutgoing, result, n)
+	hnsEndpointCont, hcsEndpoint, err := d.createAndAttachContainerEP(args, hnsNetwork, subNet, allIPAMPools, natOutgoing, result, n)
 	if err != nil {
 		epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 		d.logger.Errorf("Unable to create container hns endpoint %s", epName)
@@ -213,23 +214,53 @@ func (d *windowsDataplane) DoNetworking(
 	// The Priority has to be set to a large enough value for the default
 	// policy so that if other policies exist then they take precedence.
 	if d.conf.WindowsDisableDefaultDenyAllPolicy == false {
-		defaultDenyAllACL := &hcsshim.ACLPolicy{
-			Id:        "CNIDefaultDenyAllPolicy",
-			Type:      hcsshim.ACL,
-			RuleType:  hcsshim.Switch,
-			Action:    hcsshim.Block,
-			Direction: hcsshim.In,
-			Protocol:  256,
-			Priority:  65500,
-		}
+		var err error
+		if cri.IsDockershimV1(args.Netns) {
+			defaultDenyAllACL := &hcsshim.ACLPolicy{
+				Id:        "CNIDefaultDenyAllPolicy",
+				Type:      hcsshim.ACL,
+				RuleType:  hcsshim.Switch,
+				Action:    hcsshim.Block,
+				Direction: hcsshim.In,
+				Protocol:  256,
+				Priority:  65500,
+			}
+			err = hnsEndpointCont.ApplyACLPolicy(defaultDenyAllACL)
+		} else {
+			aclPolicySettings := hcn.AclPolicySetting{
+				RuleType:  hcn.RuleTypeSwitch,
+				Action:    hcn.ActionTypeBlock,
+				Direction: hcn.DirectionTypeIn,
+				Protocols: "256",
+				Priority:  65500,
+			}
 
-		err := hnsEndpointCont.ApplyACLPolicy(defaultDenyAllACL)
+			policyJSON, err := json.Marshal(aclPolicySettings)
+			if err != nil {
+				d.logger.WithError(err).Error("Failed to marshal ACL policy")
+				return "", "", err
+			}
+
+			defaultDenyAllACL := hcn.PolicyEndpointRequest{
+				Policies: []hcn.EndpointPolicy{
+					{
+						Type:     hcn.ACL,
+						Settings: json.RawMessage(policyJSON),
+					},
+				},
+			}
+			err = hcsEndpoint.ApplyPolicy(hcn.RequestTypeUpdate, defaultDenyAllACL)
+		}
 		if err != nil {
 			d.logger.Errorf("Error applying ACL policy DenyAll")
 			return "", "", err
 		}
 	}
-	contVethMAC = hnsEndpointCont.MacAddress
+	if cri.IsDockershimV1(args.Netns) {
+		contVethMAC = hnsEndpointCont.MacAddress
+	} else {
+		contVethMAC = hcsEndpoint.MacAddress
+	}
 	return hostVethName, contVethMAC, err
 }
 
@@ -658,7 +689,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	allIPAMPools []*net.IPNet,
 	natOutgoing bool,
 	result *current.Result,
-	n *hns.NetConf) (*hcsshim.HNSEndpoint, error) {
+	n *hns.NetConf) (*hcsshim.HNSEndpoint, *hcn.HostComputeEndpoint, error) {
 
 	var gatewayAddress string
 	if d.conf.Mode == "vxlan" {
@@ -672,12 +703,12 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	mgmtIP := net.ParseIP(hnsNetwork.ManagementIP)
 	if len(mgmtIP) == 0 {
 		// We just checked the management IP so we shouldn't lose it again.
-		return nil, fmt.Errorf("HNS network lost its management IP")
+		return nil, nil, fmt.Errorf("HNS network lost its management IP")
 	}
 
-	pols, err := winpol.CalculateEndpointPolicies(n, natExclusions, natOutgoing, mgmtIP, d.logger)
+	v1pols, v2pols, err := winpol.CalculateEndpointPolicies(n, natExclusions, natOutgoing, mgmtIP, d.logger)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	endpointName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
@@ -689,7 +720,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		vxlanMACPrefix := d.conf.VXLANMacPrefix
 		if len(vxlanMACPrefix) != 0 {
 			if len(vxlanMACPrefix) != 5 || vxlanMACPrefix[2] != '-' {
-				return nil, fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", vxlanMACPrefix)
+				return nil, nil, fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", vxlanMACPrefix)
 			}
 		} else {
 			vxlanMACPrefix = "0E-2A"
@@ -697,10 +728,17 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		// conjure a MAC based on the IP for Overlay
 		macAddr = fmt.Sprintf("%v-%02x-%02x-%02x-%02x", vxlanMACPrefix, epIPBytes[0], epIPBytes[1], epIPBytes[2], epIPBytes[3])
 
-		pols = append(pols, []json.RawMessage{
+		v1pols = append(v1pols, []json.RawMessage{
 			[]byte(fmt.Sprintf(`{"Type":"PA","PA":"%s"}`, hnsNetwork.ManagementIP)),
 		}...)
 
+		hcnPol := hcn.EndpointPolicy{
+			Type: hcn.NetworkProviderAddress,
+			Settings: json.RawMessage(
+				fmt.Sprintf(`{"ProviderAddress":"%s"}`, hnsNetwork.ManagementIP),
+			),
+		}
+		v2pols = append(v2pols, hcnPol)
 	} else {
 		// Add an entry to force encap to the management IP.  We think this is required for node ports. The encap is
 		// local to the host so there's no real vxlan going on here.
@@ -711,44 +749,97 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		}
 		encoded, err := json.Marshal(dict)
 		if err != nil {
-			return nil, fmt.Errorf("failed to add route encap policy")
+			return nil, nil, fmt.Errorf("failed to add route encap policy")
 		}
 
-		pols = append(pols, json.RawMessage(encoded))
+		v1pols = append(v1pols, json.RawMessage(encoded))
+
+		hcnPol := hcn.EndpointPolicy{
+			Type: hcn.SDNRoute,
+			Settings: json.RawMessage(
+				fmt.Sprintf(`{"DestinationPrefix": "%s", "NeedEncap": true}`, mgmtIP.String()+"/32"),
+			),
+		}
+		v2pols = append(v2pols, hcnPol)
 	}
 
+	isDockerV1 := cri.IsDockershimV1(args.Netns)
 	attempts := 3
 	for {
 		var hnsEndpointCont *hcsshim.HNSEndpoint
+		var hcsEndpoint *hcn.HostComputeEndpoint
 		var err error
-		d.logger.Infof("Attempting to create HNS endpoint name : %s for container", endpointName)
-		_, err = hns.ProvisionEndpoint(endpointName, hnsNetwork.Id, args.ContainerID, args.Netns, func() (*hcsshim.HNSEndpoint, error) {
-			hnsEP := &hcsshim.HNSEndpoint{
-				Name:           endpointName,
-				VirtualNetwork: hnsNetwork.Id,
-				DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-				DNSSuffix:      strings.Join(result.DNS.Search, ","),
-				GatewayAddress: gatewayAddress,
-				IPAddress:      epIP,
-				MacAddress:     macAddr,
-				Policies:       pols,
+
+		// Create the container endpoint. For Dockershim, use the V1 API.
+		// For remote runtimes, we use the V2 API.
+		if isDockerV1 {
+			d.logger.Infof("Attempting to create HNS endpoint name: %s for container", endpointName)
+			_, err = hns.ProvisionEndpoint(endpointName, hnsNetwork.Id, args.ContainerID, args.Netns, func() (*hcsshim.HNSEndpoint, error) {
+				hnsEP := &hcsshim.HNSEndpoint{
+					Name:           endpointName,
+					VirtualNetwork: hnsNetwork.Id,
+					DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
+					DNSSuffix:      strings.Join(result.DNS.Search, ","),
+					GatewayAddress: gatewayAddress,
+					IPAddress:      epIP,
+					MacAddress:     macAddr,
+					Policies:       v1pols,
+				}
+				return hnsEP, nil
+			})
+
+			// We cannot trust hns.ProvisionEndpoint error status. https://github.com/containernetworking/plugins/blob/v0.8.6/pkg/hns/endpoint_windows.go#L244
+			// For instance, if a container exited for any reason when we reach here,
+			// hns.ProvisionEndpoint will follow the execution steps below:
+			// 1. Create endpoint
+			// 2. Failed to attach endpoint because of error "The requested virtual machine or container operation is not valid in the current state."
+			//    and return hcsshim.ErrComputeSystemDoesNotExist
+			// 3. Deprovision endpoint
+			// 4. Return endpoint with no error. However, endpoint is no longer in the system.
+
+			// However, both upstream win_bridge and win_overlay plugins do not handle this case.
+			if err == nil {
+				// Evaluate endpoint status by reading from the system.
+				hnsEndpointCont, err = hcsshim.GetHNSEndpointByName(endpointName)
+
+				d.logger.Infof("Endpoint to container created! %v", hnsEndpointCont)
 			}
-			return hnsEP, nil
-		})
+		} else {
+			d.logger.Infof("Attempting to create HostComputeEndpoint: %s for container", endpointName)
 
-		// We cannot trust hns.ProvisionEndpoint error status. https://github.com/containernetworking/plugins/blob/v0.8.6/pkg/hns/endpoint_windows.go#L244
-		// For instance, if a container exited for any reason when we reach here,
-		// hns.ProvisionEndpoint will follow the execution steps below:
-		// 1. Create endpoint
-		// 2. Failed to attach endpoint because of error "The requested virtual machine or container operation is not valid in the current state."
-		//    and return hcsshim.ErrComputeSystemDoesNotExist
-		// 3. Deprovision endpoint
-		// 4. Return endpoint with no error. However, endpoint is no longer in the system.
+			hcsEndpoint, err = hns.AddHcnEndpoint(endpointName, hnsNetwork.Id, args.Netns, func() (*hcn.HostComputeEndpoint, error) {
+				hce := &hcn.HostComputeEndpoint{
+					Name:               endpointName,
+					HostComputeNetwork: hnsNetwork.Id,
+					Dns: hcn.Dns{
+						Domain:     result.DNS.Domain,
+						Search:     result.DNS.Search,
+						ServerList: result.DNS.Nameservers,
+						Options:    result.DNS.Options,
+					},
+					MacAddress: macAddr,
+					Routes: []hcn.Route{
+						{
+							NextHop:           gatewayAddress,
+							DestinationPrefix: "0.0.0.0/0",
+						},
+					},
+					IpConfigurations: []hcn.IpConfig{
+						{
+							IpAddress: epIP.String(),
+						},
+					},
+					SchemaVersion: hcn.SchemaVersion{
+						Major: 2,
+					},
+					Policies: v2pols,
+				}
+				return hce, nil
+			})
 
-		// However, both upstream win_bridge and win_overlay plugins do not handle this case.
-		if err == nil {
-			// Evaluate endpoint status by reading from the system.
-			hnsEndpointCont, err = hcsshim.GetHNSEndpointByName(endpointName)
+			if err == nil {
+				d.logger.Infof("Endpoint to container created! %v", hcsEndpoint)
+			}
 		}
 
 		if err != nil {
@@ -756,7 +847,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 
 			// If a previous call failed here, before cleaning up, it may have left an orphaned endpoint.  Check for that
 			// and clean up.
-			cleanupErr := cleanUpEndpointByIP(epIP, d.logger)
+			cleanupErr := cleanUpEndpointByIP(epIP, d.logger, isDockerV1)
 			if cleanupErr != nil {
 				d.logger.WithError(err).Error("Failed to clean up (by IP) after failure.")
 			} else {
@@ -765,7 +856,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 
 			// If provision endpoint fails at the attach stage, we can be left with an orphaned endpoint.  Check for
 			// that and clean it up.
-			cleanupErr = cleanUpEndpointByName(endpointName, d.logger)
+			cleanupErr = cleanUpEndpointByName(endpointName, d.logger, isDockerV1)
 			if cleanupErr != nil {
 				d.logger.WithError(err).Error("Failed to clean up (by name) after failure.")
 			} else {
@@ -779,46 +870,80 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 				time.Sleep(time.Second)
 				continue
 			}
-			return nil, err
+			return nil, nil, err
 		}
 
-		d.logger.Infof("Endpoint to container created! %v", hnsEndpointCont)
-		return hnsEndpointCont, nil
+		return hnsEndpointCont, hcsEndpoint, nil
 	}
 }
 
-func cleanUpEndpointByIP(IP net.IP, logger *logrus.Entry) error {
-	endpoints, err := hcsshim.HNSListEndpointRequest()
-	if err != nil {
-		logger.WithError(err).Error("Failed to list endpoints")
-		return err
-	}
-	for _, ep := range endpoints {
-		if ep.IPAddress.Equal(IP) {
-			logger.WithField("conflictingEndpoint", ep).Error("Found pre-existing conflicting endpoint.")
-			_, err := ep.Delete()
-			if err != nil {
-				logger.WithError(err).Error("Failed to delete old endpoint")
+func cleanUpEndpointByIP(IP net.IP, logger *logrus.Entry, isDockerV1 bool) error {
+	if isDockerV1 {
+		endpoints, err := hcsshim.HNSListEndpointRequest()
+		if err != nil {
+			logger.WithError(err).Error("Failed to list endpoints")
+			return err
+		}
+		for _, ep := range endpoints {
+			if ep.IPAddress.Equal(IP) {
+				logger.WithField("conflictingEndpoint", ep).Error("Found pre-existing conflicting endpoint.")
+				_, err := ep.Delete()
+				if err != nil {
+					logger.WithError(err).Error("Failed to delete old endpoint")
+				}
+				return err // Exit early since there can be only one endpoint with the same IP.
 			}
-			return err // Exit early since there can be only one endpoint with the same IP.
+		}
+	} else {
+		endpoints, err := hcn.ListEndpoints()
+		if err != nil {
+			logger.WithError(err).Error("Failed to list endpoints")
+			return err
+		}
+		for _, ep := range endpoints {
+			for _, ipConf := range ep.IpConfigurations {
+				if ipConf.IpAddress == IP.String() {
+					logger.WithField("conflictingEndpoint", ep).Error("Found pre-existing conflicting host compute endpoint.")
+					err := ep.Delete()
+					if err != nil {
+						logger.WithError(err).Error("Failed to delete old host compute endpoint")
+					}
+					return err // Exit early since there can be only one endpoint with the same IP.
+				}
+			}
 		}
 	}
 	return nil
 }
 
-func cleanUpEndpointByName(endpointName string, logger *logrus.Entry) error {
-	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(endpointName)
-	if hcsshim.IsNotExist(err) {
-		logger.Debug("Endpoint already gone.  Nothing to do.")
-		return nil
-	}
-	if err != nil {
-		logger.WithError(err).Error("Failed to get endpoint for cleanup.")
+func cleanUpEndpointByName(endpointName string, logger *logrus.Entry, isDockerV1 bool) error {
+	if isDockerV1 {
+		hnsEndpoint, err := hcsshim.GetHNSEndpointByName(endpointName)
+		if hcsshim.IsNotExist(err) {
+			logger.Debug("Endpoint already gone.  Nothing to do.")
+			return nil
+		}
+		if err != nil {
+			logger.WithError(err).Error("Failed to get endpoint for cleanup.")
+			return err
+		}
+
+		_, err = hnsEndpoint.Delete()
+		return err
+	} else {
+		hceEndpoint, err := hcn.GetEndpointByName(endpointName)
+		if hcn.IsNotFoundError(err) {
+			logger.Debug("Endpoint already gone.  Nothing to do.")
+			return nil
+		}
+		if err != nil {
+			logger.WithError(err).Error("Failed to get endpoint for cleanup.")
+			return err
+		}
+
+		err = hceEndpoint.Delete()
 		return err
 	}
-
-	_, err = hnsEndpoint.Delete()
-	return err
 }
 
 func lookupManagementAddr(mgmtIP net.IP, logger *logrus.Entry) (*net.IPNet, error) {
@@ -885,10 +1010,20 @@ func (d *windowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 	d.logger.Infof("Attempting to delete HNS endpoint name : %s for container", epName)
 
-	err = hns.DeprovisionEndpoint(epName, args.Netns, args.ContainerID)
-	if err != nil && strings.Contains(err.Error(), "not found") {
-		d.logger.WithError(err).Warn("Endpoint not found during delete, assuming it's already been cleaned up")
-		return nil
+	if cri.IsDockershimV1(args.Netns) {
+		err = hns.DeprovisionEndpoint(epName, args.Netns, args.ContainerID)
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			d.logger.WithError(err).Warn("Endpoint not found during delete, assuming it's already been cleaned up")
+			return nil
+		}
+	} else {
+		// RemoveHcnEndpoint returns nil if error was because the ep doesn't
+		// exist.
+		err = hns.RemoveHcnEndpoint(epName)
+		if err != nil {
+			d.logger.WithError(err).Warn("Failed to find or delete endpoint, assuming it's already been cleaned up")
+			return nil
+		}
 	}
 	return err
 }

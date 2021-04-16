@@ -38,7 +38,7 @@ func RegisterDeletedWep(containerID string) error {
 	return nil
 }
 
-func CheckForSpuriousAdd(args *skel.CmdArgs,
+func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	conf types.NetConf,
 	epIDs WEPIdentifiers,
 	endpoint *api.WorkloadEndpoint,

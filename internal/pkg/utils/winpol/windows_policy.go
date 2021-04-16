@@ -17,9 +17,11 @@ package winpol
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"strings"
 
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/hcn"
 	"github.com/sirupsen/logrus"
 )
 
@@ -34,9 +36,11 @@ func CalculateEndpointPolicies(
 	natOutgoing bool,
 	mgmtIP net.IP,
 	logger *logrus.Entry,
-) ([]json.RawMessage, error) {
+) ([]json.RawMessage, []hcn.EndpointPolicy, error) {
 	inputPols := n.MarshalPolicies()
-	var outputPols []json.RawMessage
+	var outputV1Pols []json.RawMessage
+	var outputV2Pols []hcn.EndpointPolicy
+
 	found := false
 	for _, inPol := range inputPols {
 		// Decode the raw policy as a dict so we can inspect it without losing any fields.
@@ -44,7 +48,7 @@ func CalculateEndpointPolicies(
 		err := json.Unmarshal(inPol, &decoded)
 		if err != nil {
 			logger.WithError(err).Error("MarshalPolicies() returned bad JSON")
-			return nil, err
+			return nil, nil, err
 		}
 
 		// For NAT outgoing, we're looking for an entry like this (we'll add the other IPAM pools to the list):
@@ -56,7 +60,9 @@ func CalculateEndpointPolicies(
 		//   ]
 		// }
 		outPol := inPol
-		if strings.EqualFold(decoded["Type"].(string), "OutBoundNAT") {
+		policyType := decoded["Type"].(string)
+
+		if strings.EqualFold(policyType, "OutBoundNAT") {
 			found = true
 			if !natOutgoing {
 				logger.Info("NAT-outgoing disabled for this IP pool, ignoring OutBoundNAT policy from NetConf.")
@@ -69,12 +75,22 @@ func CalculateEndpointPolicies(
 			outPol, err = json.Marshal(decoded)
 			if err != nil {
 				logger.WithError(err).Error("Failed to add outbound NAT exclusion.")
-				return nil, err
+				return nil, nil, err
 			}
 			logger.WithField("policy", string(outPol)).Debug(
 				"Updated OutBoundNAT policy to add Calico IP pools.")
 		}
-		outputPols = append(outputPols, outPol)
+
+		outputV1Pols = append(outputV1Pols, outPol)
+
+		// Convert v2 policy. If the conversion to V2 policy fails just log and
+		// continue.
+		v2Pol, err := convertToHcnEndpointPolicy(decoded)
+		if err != nil {
+			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", decoded)
+		} else {
+			outputV2Pols = append(outputV2Pols, v2Pol)
+		}
 	}
 	if !found && natOutgoing && len(extraNATExceptions) > 0 {
 		exceptions := appendCIDRs(nil, extraNATExceptions)
@@ -85,13 +101,64 @@ func CalculateEndpointPolicies(
 		encoded, err := json.Marshal(dict)
 		if err != nil {
 			logger.WithError(err).Error("Failed to add outbound NAT exclusion.")
-			return nil, err
+			return nil, nil, err
 		}
 
-		outputPols = append(outputPols, json.RawMessage(encoded))
+		outputV1Pols = append(outputV1Pols, json.RawMessage(encoded))
+
+		// Convert v2 policy. If the conversion to V2 policy fails just log and
+		// continue.
+		v2Pol, err := convertToHcnEndpointPolicy(dict)
+		if err != nil {
+			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", dict)
+		} else {
+			outputV2Pols = append(outputV2Pols, v2Pol)
+		}
 	}
 
-	return outputPols, nil
+	return outputV1Pols, outputV2Pols, nil
+}
+
+// convertToHcnEndpointPolicy converts a map representing the raw data of a V1
+// policy and converts it to an HCN endpoint policy.
+//
+// For example, we convert from raw JSON like:
+//
+// {
+//   "Type":  "OutBoundNAT",
+//   "ExceptionList":  [
+//     "10.96.0.0/12",
+//     "192.168.0.0/16"
+//   ]
+// }
+//
+// to:
+//
+// hcn.EndpointPolicy{
+//   Type: hcn.OutBoundNAT,
+//   Settings: json.RawMessage(
+//     []byte(`{"ExceptionList":["10.96.0.0/12","192.168.0.0/16"]}`),
+//   ),
+// }
+func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPolicy, error) {
+	hcnPolicy := hcn.EndpointPolicy{}
+
+	// Get v2 policy type.
+	policyType, ok := policy["Type"].(string)
+	if !ok {
+		return hcnPolicy, fmt.Errorf("Invalid HNS V2 endpoint policy type: %v", policy["Type"])
+	}
+
+	// Remove the Type key from the map, leaving just the policy settings
+	// that we marshall.
+	delete(policy, "Type")
+	policySettings, err := json.Marshal(policy)
+	if err != nil {
+		return hcnPolicy, fmt.Errorf("Failed to marshal policy settings.")
+	}
+	hcnPolicy.Type = hcn.EndpointPolicyType(policyType)
+	hcnPolicy.Settings = json.RawMessage(policySettings)
+	return hcnPolicy, nil
 }
 
 func appendCIDRs(excList []interface{}, extraNATExceptions []*net.IPNet) []interface{} {

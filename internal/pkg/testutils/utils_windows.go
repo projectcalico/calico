@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@ package testutils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
@@ -90,7 +92,7 @@ func CreateContainerUsingDocker() (string, error) {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(err)
+		log.Warn(err)
 		return "", err
 	}
 
@@ -99,23 +101,117 @@ func CreateContainerUsingDocker() (string, error) {
 	return temp, nil
 }
 
-func DeleteContainerUsingDocker(containerId string) error {
-	command := fmt.Sprintf("docker rm -f %s", containerId)
+// CreateContainerByIdUsingContainerd creates a container with containerd with the specified
+// container ID and returns the container ID and netns.
+func CreateContainerByIdUsingContainerd(overrideContainerID string) (string, string, error) {
+	return createContainerUsingContainerd(overrideContainerID)
+}
+
+// CreateContainerUsingContainerd creates a container with containerd and
+// returns the container ID and netns.
+func CreateContainerUsingContainerd() (string, string, error) {
+	containerId := fmt.Sprintf("ctr%d", rand.Uint32())
+	return createContainerUsingContainerd(containerId)
+}
+
+// GetContainerNamespace gets the namespace that is associated with the container.
+func GetContainerNamespace(containerId string) (string, error) {
+	command := fmt.Sprintf("Get-HnsNamespace | Where Containers -eq %v | Select-Object -expandproperty ID", containerId)
 	cmd := exec.Command("powershell.exe", command)
+
+	log.Infof("Running powershell command: %v", command)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.WithError(err).Info("could not get namespace for container")
+		return "", err
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+func createContainerUsingContainerd(containerId string) (string, string, error) {
+	// Create the container with ctr.exe that is shipped with containerd.
+	// When 'ctr run' is invoked, a running container is started with no
+	// networking.
+	image := "k8s.gcr.io/pause:3.5"
+
+	command := fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' images pull %v`, image)
+	cmd := exec.Command("powershell.exe", command)
+
+	log.Infof("Running powershell command: %v", command)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		log.WithError(err).WithField("id", containerId).Error("Failed to stop docker container")
-		return err
+		return "", "", errors.New(fmt.Sprintf("failed to pull image: %v", err))
+	}
+	command = fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' run --detach %v %v`, image, containerId)
+	cmd = exec.Command("powershell.exe", command)
+
+	log.Infof("Running powershell command: %v", command)
+	_, err = cmd.CombinedOutput()
+	if err != nil {
+		return "", "", errors.New(fmt.Sprintf("failed to create container: %v", err))
+	}
+
+	// Next, get the namespace that is associated with the container
+	ns, err := GetContainerNamespace(containerId)
+	if err != nil {
+		return "", "", errors.New(fmt.Sprintf("failed to get container namespace: %v", err))
+	}
+
+	log.Infof("ctr namespace: %s", ns)
+	return containerId, ns, nil
+}
+
+func DeleteRunningContainer(containerId string) error {
+	if os.Getenv("CONTAINER_RUNTIME") != "containerd" {
+		command := fmt.Sprintf("docker rm -f %s", containerId)
+		cmd := exec.Command("powershell.exe", command)
+		_, err := cmd.CombinedOutput()
+		if err != nil {
+			log.WithError(err).WithField("id", containerId).Error("Failed to stop docker container")
+			return err
+		}
+		return nil
+	}
+
+	// Delete the running task and container with ctr.exe that is shipped with containerd.
+	cmds := []string{
+		fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' tasks kill %v`, containerId),
+		fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' containers delete %v`, containerId),
+	}
+
+	for _, c := range cmds {
+		cmd := exec.Command("powershell.exe", c)
+		log.Infof("Running powershell command: %v", c)
+		_, err := cmd.CombinedOutput()
+		if err != nil {
+			log.WithError(err).WithField("id", containerId).Warn("Failed to stop docker container")
+			return err
+		}
 	}
 	return nil
 }
 
 func CreateContainer(netconf, podName, podNamespace, ip, k8sNs string) (containerID string, result *current.Result, contVeth string, contAddr []string, contRoutes []string, err error) {
-	containerID, err = CreateContainerUsingDocker()
+	// Create a container using dockershim.
+	if os.Getenv("CONTAINER_RUNTIME") != "containerd" {
+		containerID, err = CreateContainerUsingDocker()
+		if err != nil {
+			return "", nil, "", []string{}, []string{}, err
+		}
+		result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", k8sNs)
+		if err != nil {
+			return containerID, nil, "", []string{}, []string{}, err
+		}
+		return
+	}
+
+	// Otherwise create a container using containerd.
+	containerID, targetNs, err := CreateContainerUsingContainerd()
 	if err != nil {
 		return "", nil, "", []string{}, []string{}, err
 	}
-	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", k8sNs)
+	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, targetNs, ip, containerID, "", k8sNs)
 	if err != nil {
 		return containerID, nil, "", []string{}, []string{}, err
 	}
@@ -126,16 +222,31 @@ func CreateContainer(netconf, podName, podNamespace, ip, k8sNs string) (containe
 //
 // Deprecated: Please call CreateContainerNamespace and then RunCNIPluginWithID directly.
 func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID, k8sNs string) (containerID string, result *current.Result, contVeth string, contAddr []string, contRoutes []string, err error) {
-	containerID, err = CreateContainerUsingDocker()
+	// Create a container using dockershim.
+	if os.Getenv("CONTAINER_RUNTIME") != "containerd" {
+		containerID, err = CreateContainerUsingDocker()
+		if err != nil {
+			return "", nil, "", []string{}, []string{}, err
+		}
+
+		if overrideContainerID != "" {
+			containerID = overrideContainerID
+		}
+
+		result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", k8sNs)
+		if err != nil {
+			log.Errorf("Error: ", err)
+			return containerID, nil, "", []string{}, []string{}, err
+		}
+	}
+
+	// Otherwise create a container using containerd.
+	containerID, targetNs, err := CreateContainerByIdUsingContainerd(overrideContainerID)
 	if err != nil {
 		return "", nil, "", []string{}, []string{}, err
 	}
 
-	if overrideContainerID != "" {
-		containerID = overrideContainerID
-	}
-
-	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", k8sNs)
+	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
 	if err != nil {
 		log.Errorf("Error: ", err)
 		return containerID, nil, "", []string{}, []string{}, err
@@ -193,7 +304,7 @@ func RunCNIPluginWithId(
 	r, err = invoke.ExecPluginWithResult(context.Background(), pluginPath, []byte(netconf), args, nil)
 	if err != nil {
 		log.Errorf("error from invoke.ExecPluginWithResult %v", err)
-		_ = DeleteContainerUsingDocker(containerId)
+		_ = DeleteRunningContainer(containerId)
 		return
 	}
 
@@ -249,6 +360,16 @@ func DeleteContainerWithIdAndIfaceName(netconf, podName, podNamespace, container
 
 	// Set up the env for running the CNI plugin
 	env := os.Environ()
+
+	// For containerd: override the podNamespace with the actual namespace for the container.
+	if os.Getenv("CONTAINER_RUNTIME") == "containerd" {
+		podNamespace, err = GetContainerNamespace(containerId)
+		if err != nil {
+			log.Errorf("Error deleting container %s", containerId)
+			return
+		}
+	}
+
 	env = append(env, []string{
 		"CNI_COMMAND=DEL",
 		fmt.Sprintf("CNI_CONTAINERID=%s", containerId),
@@ -261,8 +382,8 @@ func DeleteContainerWithIdAndIfaceName(netconf, podName, podNamespace, container
 	log.Infof("Deleting container with ID %v CNI plugin with the following env vars: %v", containerId, env)
 	//now delete the container
 	if containerId != "" {
-		log.Debugf(" calling DeleteContainerUsingDocker with ContainerID %v", containerId)
-		err = DeleteContainerUsingDocker(containerId)
+		log.Debugf("calling DeleteRunningContainer with ContainerID %v", containerId)
+		err = DeleteRunningContainer(containerId)
 		if err != nil {
 			log.Errorf("Error deleting container %s", containerId)
 		}
