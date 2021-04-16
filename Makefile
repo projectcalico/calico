@@ -103,7 +103,7 @@ ci: clean mod-download build-all static-checks ut
 ###############################################################################
 .PHONY: cd
 ## Deploys images to registry
-cd: cd-common
+cd: image-all cd-common
 
 ###############################################################################
 # Release
