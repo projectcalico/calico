@@ -65,7 +65,7 @@ func TestCachingMap_Errors(t *testing.T) {
 	Expect(mockMap.Contents).To(BeEmpty())
 
 	// Now check errors on update
-	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 4})
+	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 4})
 	mockMap.UpdateErr = ErrFail
 	err = cm.ApplyAllChanges()
 	Expect(err).To(HaveOccurred())
@@ -80,7 +80,7 @@ func TestCachingMap_Errors(t *testing.T) {
 
 	// And delete.
 	mockMap.DeleteErr = ErrFail
-	cm.DeleteAll()
+	cm.DeleteAllDesired()
 	err = cm.ApplyAllChanges()
 	Expect(err).To(HaveOccurred())
 
@@ -110,9 +110,9 @@ func TestCachingMap_SplitUpdateAndDelete(t *testing.T) {
 		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
 	}
 
-	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesiredState([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesiredState([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
 	// Shouldn't do anything until we hit apply.
 	Expect(mockMap.OpCount()).To(Equal(0))
 
@@ -160,9 +160,9 @@ func TestCachingMap_ApplyAll(t *testing.T) {
 		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
 	}
 
-	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesiredState([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesiredState([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
 	// Shouldn't do anything until we hit apply.
 	Expect(mockMap.OpCount()).To(Equal(0))
 
@@ -186,7 +186,7 @@ func TestCachingMap_ApplyAll(t *testing.T) {
 	Expect(mockMap.OpCount()).To(Equal(preApplyOpCount))
 
 	// Finish with a DeleteAll()
-	cm.DeleteAll()
+	cm.DeleteAllDesired()
 	Expect(mockMap.OpCount()).To(Equal(preApplyOpCount)) // No immediate change
 	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
@@ -209,12 +209,12 @@ func TestCachingMap_DeleteBeforeLoad(t *testing.T) {
 		string([]byte{1, 3}): string([]byte{1, 2, 4, 4}),
 	}
 
-	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesiredState([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesiredState([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
-	cm.DeleteDesiredState([]byte{1, 2})                  // Changed my mind.
-	cm.DeleteDesiredState([]byte{1, 4})                  // Changed my mind.
-	cm.DeleteDesiredState([]byte{1, 8})                  // Delete of non-existent key is a no-op.
+	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.DeleteDesired([]byte{1, 2})                  // Changed my mind.
+	cm.DeleteDesired([]byte{1, 4})                  // Changed my mind.
+	cm.DeleteDesired([]byte{1, 8})                  // Delete of non-existent key is a no-op.
 	// Shouldn't do anything until we hit apply.
 	Expect(mockMap.OpCount()).To(Equal(0))
 
@@ -257,10 +257,10 @@ func TestCachingMap_PreLoad(t *testing.T) {
 	})
 	Expect(seenValues).To(Equal(mockMap.Contents))
 
-	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesiredState([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesiredState([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
-	cm.DeleteDesiredState([]byte{1, 8})                  // Delete of non-existent key is a no-op.
+	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.DeleteDesired([]byte{1, 8})                  // Delete of non-existent key is a no-op.
 
 	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
@@ -297,9 +297,9 @@ func TestCachingMap_Resync(t *testing.T) {
 	Expect(mockMap.IterCount).To(Equal(1))
 	Expect(mockMap.OpCount()).To(Equal(1))
 
-	cm.SetDesiredState([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
-	cm.SetDesiredState([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
-	cm.SetDesiredState([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
+	cm.SetDesired([]byte{1, 1}, []byte{1, 2, 4, 3}) // Same value for existing key.
+	cm.SetDesired([]byte{1, 2}, []byte{1, 2, 3, 6}) // New value for existing key.
+	cm.SetDesired([]byte{1, 4}, []byte{1, 2, 3, 5}) // New K/V
 
 	// At this point we've got some updates and a deletion queued up. Change the contents
 	// of the map:

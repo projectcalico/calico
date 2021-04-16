@@ -24,6 +24,13 @@ import (
 	"github.com/projectcalico/felix/bpf"
 )
 
+// CachingMap provides a caching layer around a bpf.Map, when one of the Apply methods is called, it applies
+// a minimal set of changes to the dataplane map to bring it into sync with the desired state.  Updating the
+// desired state in and of itself has no effect on the dataplane.
+//
+// CachingMap will load a cache of the dataplane state on the first call to ApplyXXX, or the cache can be loaded
+// explicitly by calling LoadCacheFromDataplane().  This allows for client code to inspect the dataplane cache
+// with IterDataplaneCache and GetDataplaneCache.
 type CachingMap struct {
 	// dataplaneMap is the backing map in the dataplane
 	dataplaneMap bpf.Map
@@ -51,6 +58,8 @@ func New(mapParams bpf.MapParameters, dataplaneMap bpf.Map) *CachingMap {
 	return cm
 }
 
+// LoadCacheFromDataplane loads the contents of the BPF map into the dataplane cache, allowing it to be queried with
+// GetDataplaneCache and IterDataplaneCache.
 func (c *CachingMap) LoadCacheFromDataplane() error {
 	logrus.WithField("name", c.params.Name).Debug("Loading cache of dataplane state.")
 	c.initCache()
@@ -82,6 +91,8 @@ func (c *CachingMap) clearCache() {
 	c.pendingUpdates = nil
 }
 
+// recalculatePendingOperations compares the dataplane cache against he desired state and adds entries to
+// pendingUpdates/pendingDeletions that would bring the dataplane into sync with the desired state.
 func (c *CachingMap) recalculatePendingOperations() {
 	debug := logrus.GetLevel() >= logrus.DebugLevel
 
@@ -119,13 +130,15 @@ func (c *CachingMap) recalculatePendingOperations() {
 	}).Info("Recalculated pending operations")
 }
 
-func (c *CachingMap) SetDesiredState(k, v []byte) {
+// SetDesired sets the desired state of the given key to the given value. This is an in-memory operation,
+// it doesn't actually touch the dataplane.
+func (c *CachingMap) SetDesired(k, v []byte) {
 	if logrus.GetLevel() >= logrus.DebugLevel {
-		logrus.WithFields(logrus.Fields{"name": c.params.Name, "k": k, "v": v}).Debug("SetDesiredState")
+		logrus.WithFields(logrus.Fields{"name": c.params.Name, "k": k, "v": v}).Debug("SetDesired")
 	}
 	c.desiredStateOfDataplane.Set(k, v)
 	if c.cacheOfDataplane == nil {
-		logrus.Debug("SetDesiredState: initial sync pending.")
+		logrus.Debug("SetDesired: initial sync pending.")
 		return // Initial sync is pending, we're not tracking deltas yet.
 	}
 	c.pendingDeletions.Delete(k)
@@ -134,20 +147,22 @@ func (c *CachingMap) SetDesiredState(k, v []byte) {
 	currentVal := c.cacheOfDataplane.Get(k)
 	if reflect.DeepEqual(currentVal, v) {
 		// Dataplane already agrees with the new value so clear any pending update.
-		logrus.Debug("SetDesiredState: Key in dataplane already, ignoring.")
+		logrus.Debug("SetDesired: Key in dataplane already, ignoring.")
 		c.pendingUpdates.Delete(k)
 		return
 	}
 	c.pendingUpdates.Set(k, v)
 }
 
-func (c *CachingMap) DeleteDesiredState(k []byte) {
+// DeleteDesired deletes the given key from the desired state of the dataplane. This is an in-memory operation,
+// it doesn't actually touch the dataplane.
+func (c *CachingMap) DeleteDesired(k []byte) {
 	if logrus.GetLevel() >= logrus.DebugLevel {
-		logrus.WithFields(logrus.Fields{"name": c.params.Name, "k": k}).Debug("DeleteDesiredState")
+		logrus.WithFields(logrus.Fields{"name": c.params.Name, "k": k}).Debug("DeleteDesired")
 	}
 	c.desiredStateOfDataplane.Delete(k)
 	if c.cacheOfDataplane == nil {
-		logrus.Debug("DeleteDesiredState: initial sync pending.")
+		logrus.Debug("DeleteDesired: initial sync pending.")
 		return // Initial sync is pending, we're not tracking deltas yet.
 	}
 	c.pendingUpdates.Delete(k)
@@ -156,28 +171,35 @@ func (c *CachingMap) DeleteDesiredState(k []byte) {
 	currentVal := c.cacheOfDataplane.Get(k)
 	if currentVal == nil {
 		// We don't think this value is in the dataplane so clear any pending delete.
-		logrus.Debug("DeleteDesiredState: Key not in dataplane, ignoring.")
+		logrus.Debug("DeleteDesired: Key not in dataplane, ignoring.")
 		c.pendingDeletions.Delete(k)
 		return
 	}
 	c.pendingDeletions.Set(k, currentVal)
 }
 
-func (c *CachingMap) DeleteAll() {
+// DeleteAllDesired deletes all entries from the in-memory desired state of the map.  It doesn't actually touch
+// the dataplane.
+func (c *CachingMap) DeleteAllDesired() {
 	logrus.WithField("name", c.params.Name).Debug("DeleteAll")
 	c.desiredStateOfDataplane.Iter(func(k, v []byte) {
-		c.DeleteDesiredState(k)
+		c.DeleteDesired(k)
 	})
 }
 
+// IterDataplaneCache iterates over the cache of the dataplane. The cache must have previously been loaded with
+// a successful call to LoadCacheFromDataplane() or one of the ApplyXXX methods.
 func (c *CachingMap) IterDataplaneCache(f func(k, v []byte)) {
 	c.cacheOfDataplane.Iter(f)
 }
 
+// GetDataplaneCache gets a single value from the cache of the dataplane. The cache must have previously been
+// loaded with a successful call to LoadCacheFromDataplane() or one of the ApplyXXX methods.
 func (c *CachingMap) GetDataplaneCache(k []byte) []byte {
 	return c.cacheOfDataplane.Get(k)
 }
 
+// ApplyAllChanges attempts to bring the dataplane map into sync with the desired state.
 func (c *CachingMap) ApplyAllChanges() error {
 	var errs ErrSlice
 	err := c.ApplyDeletionsOnly()
@@ -204,6 +226,8 @@ func (c *CachingMap) maybeLoadCache() error {
 	return nil
 }
 
+// ApplyUpdatesOnly applies any pending adds/updates to the dataplane map.  It doesn't delete any keys that are no
+// longer wanted.
 func (c *CachingMap) ApplyUpdatesOnly() error {
 	logrus.WithField("name", c.params.Name).Debug("Applying updates to BPF map.")
 	err := c.maybeLoadCache()
@@ -227,6 +251,8 @@ func (c *CachingMap) ApplyUpdatesOnly() error {
 	return nil
 }
 
+// ApplyDeletionsOnly applies any pending deletions to the dataplane map.  It doesn't add or update any keys that
+// are new/changed.
 func (c *CachingMap) ApplyDeletionsOnly() error {
 	logrus.WithField("name", c.params.Name).Debug("Applying deletions to BPF map.")
 	err := c.maybeLoadCache()

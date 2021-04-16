@@ -535,8 +535,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 	// Start with a completely empty slate (in memory).  We'll then repopulate both maps from scratch and
 	// let CachingMap calculate deltas...
-	s.bpfSvcs.DeleteAll()
-	s.bpfEps.DeleteAll()
+	s.bpfSvcs.DeleteAllDesired()
+	s.bpfEps.DeleteAllDesired()
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
@@ -733,7 +733,7 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 		return errors.Errorf("no port for endpoint %q: %s", ep, err)
 	}
 	val := nat.NewNATBackendValue(ip, uint16(tgtPort))
-	s.bpfEps.SetDesiredState(key[:], val[:])
+	s.bpfEps.SetDesired(key[:], val[:])
 
 	if s.stickyEps[svcID] != nil {
 		s.stickyEps[svcID][val] = struct{}{}
@@ -798,14 +798,14 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 		if log.GetLevel() >= log.DebugLevel {
 			log.Debugf("bpf map writing %s:%s", key, val)
 		}
-		s.bpfSvcs.SetDesiredState(key[:], val[:])
+		s.bpfSvcs.SetDesired(key[:], val[:])
 	}
 	key, err = getSvcNATKey(svc)
 	if err != nil {
 		return err
 	}
 	val = nat.NewNATValue(svcID, nat.BlackHoleCount, uint32(0), uint32(0))
-	s.bpfSvcs.SetDesiredState(key[:], val[:])
+	s.bpfSvcs.SetDesired(key[:], val[:])
 	return nil
 }
 
@@ -825,7 +825,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 	if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("bpf map writing %s:%s", key, val)
 	}
-	s.bpfSvcs.SetDesiredState(key[:], val[:])
+	s.bpfSvcs.SetDesired(key[:], val[:])
 
 	var affkey nat.FrontEndAffinityKey
 	copy(affkey[:], key.Affinitykey())
