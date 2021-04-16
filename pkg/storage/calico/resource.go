@@ -140,7 +140,8 @@ func (rs *resourceStore) Create(ctx context.Context, key string, obj, out runtim
 // Delete removes the specified key and returns the value that existed at that spot.
 // If key didn't exist, it will return NotFound storage error.
 func (rs *resourceStore) Delete(ctx context.Context, key string, out runtime.Object,
-	preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc) error {
+	preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc,
+	cachedExistingObject runtime.Object) error {
 	klog.Infof("Delete called with key: %v for resource %v\n", key, rs.resourceName)
 
 	ns, name, err := NamespaceAndNameFromKey(key, rs.isNamespaced)
@@ -151,6 +152,9 @@ func (rs *resourceStore) Delete(ctx context.Context, key string, out runtime.Obj
 	if preconditions != nil {
 		// Get the object to check for validity of UID
 		opts := options.GetOptions{}
+		// TODO use the cachedExisting object if it exists to check the preconditions. When this is done, we'll
+		// need to add the resource version of the cached object and retry if the delete failed because the
+		// the resource version was out of sync (first getting a new object from the k8s API).
 		libcalicoObj, err := rs.get(ctx, rs.client, ns, name, opts)
 		if err != nil {
 			return aapiError(err, key)
@@ -356,12 +360,11 @@ func decode(
 // })
 func (rs *resourceStore) GuaranteedUpdate(
 	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
-	precondtions *storage.Preconditions, userUpdate storage.UpdateFunc, suggestion ...runtime.Object) error {
-	// If a suggestion was passed, use that as the initial object, otherwise
-	// use Get() to retrieve it
+	precondtions *storage.Preconditions, userUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
+	// If a cachedExistingObject was passed, use that as the initial object, otherwise use Get() to retrieve it
 	var initObj runtime.Object
-	if len(suggestion) == 1 && suggestion[0] != nil {
-		initObj = suggestion[0]
+	if cachedExistingObject != nil {
+		initObj = cachedExistingObject
 	} else {
 		initObj = reflect.New(rs.aapiType).Interface().(runtime.Object)
 		opts := storage.GetOptions{IgnoreNotFound: ignoreNotFound}

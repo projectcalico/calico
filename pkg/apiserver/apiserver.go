@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 
 package apiserver
 
@@ -90,6 +90,7 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 	}
 
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(projectcalico.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	apiGroupInfo.NegotiatedSerializer = newProtocolShieldSerializer(&Codecs)
 
 	// TODO: Make the storage type configurable
 	calicostore := calicorest.RESTStorageProvider{StorageType: "calico"}
