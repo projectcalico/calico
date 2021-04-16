@@ -20,13 +20,13 @@ Makefile.common.$(MAKE_BRANCH):
 	rm -f Makefile.common.*
 	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
-include Makefile.common
-
-###############################################################################
-
 BUILD_IMAGE?=calico/pod2daemon-flexvol
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/pod2daemon-flexvol
 RELEASE_IMAGES?=
+
+include Makefile.common
+
+###############################################################################
 
 SRC_FILES=$(shell find -name '*.go')
 
