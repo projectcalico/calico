@@ -5,6 +5,10 @@ GO_BUILD_VER=v0.51
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/cni
 
+BUILD_IMAGE_ORG?=calico
+BUILD_IMAGE?=$(BUILD_IMAGE_ORG)/cni
+RELEASE_IMAGES?=gcr.io/projectcalico-org/cni eu.gcr.io/projectcalico-org/cni asia.gcr.io/projectcalico-org/cni us.gcr.io/projectcalico-org/cni
+
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
 
@@ -46,15 +50,11 @@ CURL=curl -C - -sSf
 
 CNI_VERSION=v0.8.6
 
-BUILD_IMAGE_ORG?=calico
-
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
 
-BUILD_IMAGE?=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
-RELEASE_IMAGES?=gcr.io/projectcalico-org/cni eu.gcr.io/projectcalico-org/cni asia.gcr.io/projectcalico-org/cni us.gcr.io/projectcalico-org/cni
 
 ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 # If building on amd64 omit the arch in the container name.
