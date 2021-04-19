@@ -11,6 +11,9 @@ SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_FELIX_PROJECT_ID) $(SEMAPHORE_
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/typha
 
+BUILD_IMAGE=calico/typha
+RELEASE_IMAGES?=gcr.io/projectcalico-org/typha eu.gcr.io/projectcalico-org/typha asia.gcr.io/projectcalico-org/typha us.gcr.io/projectcalico-org/typha
+
 ###############################################################################
 # Download and include Makefile.common
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -41,9 +44,6 @@ endif
 include Makefile.common
 
 ###############################################################################
-
-BUILD_IMAGE=calico/typha
-RELEASE_IMAGES?=gcr.io/projectcalico-org/typha eu.gcr.io/projectcalico-org/typha asia.gcr.io/projectcalico-org/typha us.gcr.io/projectcalico-org/typha
 
 # Linker flags for building Typha.
 #
