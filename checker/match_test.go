@@ -17,8 +17,8 @@ package checker
 import (
 	"testing"
 
-	core "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
-	auth "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	auth "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/app-policy/policystore"
@@ -29,7 +29,7 @@ var (
 	socketAddressProtocolTCP = &core.Address{
 		Address: &core.Address_SocketAddress{
 			SocketAddress: &core.SocketAddress{
-				Protocol: core.TCP,
+				Protocol: core.SocketAddress_TCP,
 			},
 		},
 	}
@@ -37,7 +37,7 @@ var (
 	socketAddressProtocolUDP = &core.Address{
 		Address: &core.Address_SocketAddress{
 			SocketAddress: &core.SocketAddress{
-				Protocol: core.UDP,
+				Protocol: core.SocketAddress_UDP,
 			},
 		},
 	}
@@ -202,7 +202,7 @@ func TestMatchRule(t *testing.T) {
 			Address: &core.Address{Address: &core.Address_SocketAddress{
 				SocketAddress: &core.SocketAddress{
 					Address:       srcAddr,
-					Protocol:      core.TCP,
+					Protocol:      core.SocketAddress_TCP,
 					PortSpecifier: &core.SocketAddress_PortValue{PortValue: 8458},
 				}}},
 		},
@@ -211,7 +211,7 @@ func TestMatchRule(t *testing.T) {
 			Address: &core.Address{Address: &core.Address_SocketAddress{
 				SocketAddress: &core.SocketAddress{
 					Address:       dstAddr,
-					Protocol:      core.TCP,
+					Protocol:      core.SocketAddress_TCP,
 					PortSpecifier: &core.SocketAddress_PortValue{PortValue: 80},
 				}}},
 		},

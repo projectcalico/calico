@@ -30,8 +30,9 @@ import (
 	"github.com/projectcalico/app-policy/uds"
 
 	"github.com/docopt/docopt-go"
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
-	authzv2alpha "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
+	authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
+	authz_v2alpha "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2alpha"
+	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -103,7 +104,9 @@ func runServer(arguments map[string]interface{}) {
 	stores := make(chan *policystore.PolicyStore)
 	checkServer := checker.NewServer(ctx, stores)
 	authz.RegisterAuthorizationServer(gs, checkServer)
-	authzv2alpha.RegisterAuthorizationServer(gs, checkServer)
+	checkServerV2 := checkServer.V2Compat()
+	authz_v2alpha.RegisterAuthorizationServer(gs, checkServerV2)
+	authz_v2.RegisterAuthorizationServer(gs, checkServerV2)
 
 	// Synchronize the policy store
 	opts := uds.GetDialOptions()
