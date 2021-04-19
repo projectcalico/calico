@@ -42,6 +42,10 @@ spec:
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
       priorityClassName: system-node-critical
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
       initContainers:
 {{- if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") }}
         # This container performs upgrade from host-local IPAM to calico-ipam.
