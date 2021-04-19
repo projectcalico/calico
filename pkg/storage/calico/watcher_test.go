@@ -114,7 +114,7 @@ func testWatch(t *testing.T, list bool) {
 			err = store.GuaranteedUpdate(ctx, watchTest.key, out, true, nil, storage.SimpleUpdate(
 				func(runtime.Object) (runtime.Object, error) {
 					return watchTest.obj, nil
-				}))
+				}), nil)
 			if err != nil {
 				t.Fatalf("GuaranteedUpdate failed: %v", err)
 			}

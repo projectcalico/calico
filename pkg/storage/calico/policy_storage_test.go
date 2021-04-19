@@ -200,7 +200,7 @@ func TestNetworkPolicyUnconditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &calico.NetworkPolicy{} // reset
-		err := store.Delete(ctx, tt.key, out, nil, nil)
+		err := store.Delete(ctx, tt.key, out, nil, nil, nil)
 		if tt.expectNotFoundErr {
 			if err == nil || !storage.IsNotFound(err) {
 				t.Errorf("#%d: expecting not found error, but get: %s", i, err)
@@ -235,7 +235,7 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &calico.NetworkPolicy{}
-		err := store.Delete(ctx, key, out, tt.precondition, nil)
+		err := store.Delete(ctx, key, out, tt.precondition, nil, nil)
 		if tt.expectInvalidObjErr {
 			if err == nil || !storage.IsInvalidObj(err) {
 				t.Errorf("#%d: expecting invalid UID error, but get: %s", i, err)
@@ -260,7 +260,7 @@ func TestNetworkPolicyDeleteDisallowK8sPrefix(t *testing.T) {
 
 	key := fmt.Sprintf("projectcalico.org/networkpolicies/%s/%s", ns, name)
 	out := &calico.NetworkPolicy{}
-	err := store.Delete(ctx, key, out, nil, nil)
+	err := store.Delete(ctx, key, out, nil, nil, nil)
 	if err == nil {
 		t.Fatalf("Expected deleting a k8s network policy to error")
 	}
@@ -404,7 +404,7 @@ func TestNetworkPolicyGuaranteedUpdate(t *testing.T) {
 					policy.Spec.Selector = selector
 				}
 				return &policy, nil
-			}))
+			}), nil)
 
 		if tt.expectNotFoundErr {
 			if err == nil || !storage.IsNotFound(err) {
@@ -454,7 +454,7 @@ func TestNetworkPolicyGuaranteedUpdateWithTTL(t *testing.T) {
 		func(_ runtime.Object, _ storage.ResponseMeta) (runtime.Object, *uint64, error) {
 			ttl := uint64(1)
 			return input, &ttl, nil
-		})
+		}, nil)
 	if err != nil {
 		t.Fatalf("Guranteed Update failed: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestNetworkPolicyGuaranteedUpdateWithConflict(t *testing.T) {
 				policy.Spec.Selector = "my_label == \"foo-1\""
 				secondToEnter.Wait()
 				return policy, nil
-			}))
+			}), nil)
 		firstToFinish.Done()
 		errChan <- err
 	}()
@@ -501,7 +501,7 @@ func TestNetworkPolicyGuaranteedUpdateWithConflict(t *testing.T) {
 			policy := obj.(*calico.NetworkPolicy)
 			policy.Spec.Selector = "my_label == \"foo-2\""
 			return policy, nil
-		}))
+		}), nil)
 	if err != nil {
 		t.Fatalf("Second GuaranteedUpdate error %#v", err)
 	}
