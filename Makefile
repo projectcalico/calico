@@ -1,8 +1,11 @@
 PACKAGE_NAME?=github.com/projectcalico/node
 GO_BUILD_VER?=v0.51
 
-# This needs to be evaluated before the common makefile is included.
-# This var contains some default values that the common makefile may append to.
+# These need to be defined before the common makefile is included due to the way
+# the common makefile expands certain variables. (If they are not pre-defined then
+# the variables won't expand correctly in pre-requisites.)
+BUILD_IMAGE?=calico/node
+RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node asia.gcr.io/projectcalico-org/node us.gcr.io/projectcalico-org/node
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/node
 
 ORGANIZATION=projectcalico
@@ -44,9 +47,6 @@ endif
 include Makefile.common
 
 ###############################################################################
-
-BUILD_IMAGE?=calico/node
-RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node asia.gcr.io/projectcalico-org/node us.gcr.io/projectcalico-org/node
 
 # Versions and location of dependencies used in the build.
 BIRD_VERSION=v0.3.3-167-g0a2f8d2d
