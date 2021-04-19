@@ -19,9 +19,65 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Concepts
 
+#### About IP pools
+
+By default, {{site.prodname}} uses an IPAM block size of 64 addresses – /26 for IPv4, and /122 for IPv6. However, the block size can be changed depending on the IP pool address family.
+
+- IPv4: 20-32, inclusive
+- IPv6: 116-128, inclusive
+
+You can have **only one default IP pool for per protocol** in your installation manifest. In this example, there is one IP pool for IPv4 (/26), and one IP pool for IPv6 (/122).
+
+```
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+  pec:
+   # Configures Calico networking.
+   calicoNetwork:
+     # Note: The ipPools section cannot be modified post-install.
+    ipPools:
+    - blockSize: 26
+      cidr: 10.48.0.0/21
+      encapsulation: IPIP
+      natOutgoing: Enabled
+      nodeSelector: all()
+    - blockSize: 122
+      cidr: 2001::00/64 
+      encapsulation: None 
+      natOutgoing: Enabled 
+      nodeSelector: all()
+``` 
+
+However, the following is invalid because it has two IP pools for IPv4. 
+
+```
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+  spec:
+   # Configures Calico networking.
+   calicoNetwork:
+     # Note: The ipPools section cannot be modified post-install.
+    ipPools:
+    - blockSize: 26
+      cidr: 10.48.0.0/21
+      encapsulation: IPIP
+      natOutgoing: Enabled
+      nodeSelector: all()
+    - blockSize: 31
+      cidr: 10.48.8.0/21
+      encapsulation: IPIP
+      natOutgoing: Enabled
+      nodeSelector: all()
+
+```
+
 #### Expand or shrink IP pool block sizes
 
-By default, the {{site.prodname}} IPAM block size for an IP pool is /26. To expand from the default size /26, lower the `blockSize` (for example, /24). To shrink the `blockSize` from the default /26, raise the number (for example, /28). 
+By default, the {{site.prodname}} IPAM block size for an IP pool is /26. To expand from the default size /26, lower the `blockSize` (for example, /24). To shrink the `blockSize` from the default /26, raise the number (for example, /28).
 
 #### Best practice: change IP pool block size before installation 
 
@@ -111,7 +167,7 @@ temporary-pool        10.0.0.0/16      true   Always     false
 Disable allocations in the default pool.
 
 ```
-calicoctl patch ippool default-ipv4-ippool -p '{"spec": {"disabled": "true"}}'
+calicoctl patch ippool default-ipv4-ippool -p '{"spec": {"disabled": true}}'
 ```
 
 Verify the changes.
@@ -152,7 +208,7 @@ calicoctl delete ippool default-ipv4-ippool
 
 #### Create a new IP pool with the desired block size
 
-In this step, we update the IPPool with the new block size of (/28).
+In this step, we update the IPPool with the new block size of (/28). 
 
 <pre>
 apiVersion: projectcalico.org/v3
@@ -175,7 +231,7 @@ calicoctl apply -f pool.yaml
 #### Disable the temporary IP pool
 
 ```
-calicoctl patch ippool temporary-pool -p '{"spec": {"disabled": "true"}}'
+calicoctl patch ippool temporary-pool -p '{"spec": {"disabled": true}}'
 ```
 
 #### Delete pods from the temporary IP pool

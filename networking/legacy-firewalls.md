@@ -58,7 +58,7 @@ Also, cluster administrators must have [configured IP pools]({{ site.baseurl }}/
 
 Annotate the pod with key `cni.projectcalico.org/ipv4pools` and/or `cni.projectcalico.org/ipv6pools` and value set to a list of IP pool names, enclosed in brackets.  For example:
 
-`cni.projectcalico.org/ipv4pools: "[\"pool-1\", \"pool-2\"]"`
+`cni.projectcalico.org/ipv4pools: '["pool-1", "pool-2"]'`
 
 Note the use of the escaped \" for the inner double quotes around the pool names.
 
@@ -66,7 +66,7 @@ Note the use of the escaped \" for the inner double quotes around the pool names
 
  Annotate the namespace with key `cni.projectcalico.org/ipv4pools` and/or `cni.projectcalico.org/ipv6pools` and value set to a list of IP pool names, enclosed in brackets.  For example:
 
-`cni.projectcalico.org/ipv4pools: "[\"pool-1\", \"pool-2\"]"`
+`cni.projectcalico.org/ipv4pools: '["pool-1", "pool-2"]'`
 
 Note the use of the escaped `\"` for the inner double quotes around the pool names.
 
