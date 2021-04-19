@@ -29,19 +29,24 @@ type Map struct {
 
 	UpdateCount int
 	GetCount    int
+	DeleteCount int
 	IterCount   int
+
+	IterErr   error
+	UpdateErr error
+	DeleteErr error
 }
 
-func (m Map) MapFD() bpf.MapFD {
+func (m *Map) MapFD() bpf.MapFD {
 	panic("implement me")
 }
 
-func (m Map) Open() error {
+func (m *Map) Open() error {
 	m.logCxt.Info("Open called")
 	return nil
 }
 
-func (m Map) EnsureExists() error {
+func (m *Map) EnsureExists() error {
 	m.logCxt.Info("EnsureExists called")
 	return nil
 }
@@ -54,8 +59,13 @@ func (m *Map) Path() string {
 	return m.Filename
 }
 
-func (m Map) Iter(f bpf.IterCallback) error {
+func (m *Map) Iter(f bpf.IterCallback) error {
 	m.IterCount++
+
+	if m.IterErr != nil {
+		return m.IterErr
+	}
+
 	for kstr, vstr := range m.Contents {
 		action := f([]byte(kstr), []byte(vstr))
 		if action == bpf.IterDelete {
@@ -65,8 +75,12 @@ func (m Map) Iter(f bpf.IterCallback) error {
 	return nil
 }
 
-func (m Map) Update(k, v []byte) error {
+func (m *Map) Update(k, v []byte) error {
 	m.UpdateCount++
+	if m.UpdateErr != nil {
+		return m.UpdateErr
+	}
+
 	if len(k) != m.KeySize {
 		m.logCxt.Panicf("Key had wrong size (%d)", len(k))
 	}
@@ -78,7 +92,7 @@ func (m Map) Update(k, v []byte) error {
 	return nil
 }
 
-func (m Map) Get(k []byte) ([]byte, error) {
+func (m *Map) Get(k []byte) ([]byte, error) {
 	m.GetCount++
 
 	vstr, ok := m.Contents[string(k)]
@@ -88,7 +102,12 @@ func (m Map) Get(k []byte) ([]byte, error) {
 	return []byte(vstr), nil
 }
 
-func (m Map) Delete(k []byte) error {
+func (m *Map) Delete(k []byte) error {
+	m.DeleteCount++
+	if m.DeleteErr != nil {
+		return m.DeleteErr
+	}
+
 	if len(k) != m.KeySize {
 		m.logCxt.Panicf("Key had wrong size (%d)", len(k))
 	}
@@ -96,8 +115,8 @@ func (m Map) Delete(k []byte) error {
 	return nil
 }
 
-func (m Map) OpCount() int {
-	return m.UpdateCount + m.IterCount + m.GetCount
+func (m *Map) OpCount() int {
+	return m.UpdateCount + m.IterCount + m.GetCount + m.DeleteCount
 }
 
 func NewMockMap(params bpf.MapParameters) *Map {
