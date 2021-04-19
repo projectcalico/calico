@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,10 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/felix/bpf/cachingmap"
+
+	"github.com/projectcalico/felix/bpf/nat"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/routes"
@@ -106,7 +110,10 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	copy(withLocalNP, hostIPs)
 	withLocalNP = append(withLocalNP, podNPIP)
 
-	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
+	feCache := cachingmap.New(nat.FrontendMapParameters, kp.frontendMap)
+	beCache := cachingmap.New(nat.BackendMapParameters, kp.backendMap)
+
+	syncer, err := NewSyncer(withLocalNP, feCache, beCache, kp.affinityMap, kp.rt)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

@@ -1276,6 +1276,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
 						cc.CheckConnectivity()
 					})
+
+					It("should handle temporary overlap of external IPs", func() {
+						By("Having connectivity to external IP initially")
+						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
+						cc.CheckConnectivity()
+
+						By("Adding second service with same external IP")
+						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName+"-2", "10.101.0.11", w[0][0], 80, tgtPort,
+							testOpts.protocol, externalIP, srcIPRange)
+
+						By("Deleting first service")
+						err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).Delete(context.Background(), testSvcName, metav1.DeleteOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						By("Sleeping")
+						time.Sleep(20 * time.Second)
+						By("And still having connectivity...")
+						cc.ExpectSome(externalClient, TargetIP(ip[0]), port)
+						cc.CheckConnectivity()
+					})
 				})
 
 				Context("Test load balancer service with src ranges", func() {

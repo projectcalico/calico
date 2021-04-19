@@ -61,6 +61,7 @@ type DPSyncer interface {
 	ConntrackScanEnd()
 	ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool
 	Stop()
+	SetTriggerFn(func())
 }
 
 type proxy struct {
@@ -139,6 +140,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	// will kick it
 	p.runner = async.NewBoundedFrequencyRunner("dp-sync-runner",
 		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
+	dp.SetTriggerFn(p.runner.Run)
 
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder)
 
