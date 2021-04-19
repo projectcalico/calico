@@ -39,14 +39,13 @@ endif
 EXTRA_DOCKER_ARGS += -e GOLANGCI_LINT_CACHE=/lint-cache -v $(CURDIR)/.lint-cache:/lint-cache:rw \
 				 -v $(CURDIR)/hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
 
-include Makefile.common
-
 ###############################################################################
 K8S_VERSION = v1.16.3
 BINDIR ?= bin
 BUILD_IMAGE?=calico/apiserver
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/apiserver
 BUILD_DIR ?= build
+
 TOP_SRC_DIRS = pkg cmd
 SRC_DIRS = $(shell sh -c "find $(TOP_SRC_DIRS) -name \\*.go \
                    -exec dirname {} \\; | sort | uniq")
@@ -79,6 +78,9 @@ VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERS
 BUILD_LDFLAGS = -ldflags "$(VERSION_FLAGS)"
 RELEASE_LDFLAGS = -ldflags "$(VERSION_FLAGS) -s -w"
 KUBECONFIG_DIR? = /etc/kubernetes/admin.conf
+
+# Common Makefile must be included after the build env variables are set
+include Makefile.common
 
 ###############################################################################
 # Managing the upstream library pins
