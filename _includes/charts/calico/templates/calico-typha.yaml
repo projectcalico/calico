@@ -59,6 +59,10 @@ spec:
       # as a host-networked pod.
       serviceAccountName: calico-node
       priorityClassName: system-cluster-critical
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
       # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
       securityContext:
         fsGroup: 65534

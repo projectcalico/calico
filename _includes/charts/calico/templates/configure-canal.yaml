@@ -17,6 +17,10 @@ spec:
         kubernetes.io/os: linux
       hostNetwork: true
       restartPolicy: OnFailure
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
       containers:
         # Writes basic flannel configuration to etcd.
         - name: configure-flannel

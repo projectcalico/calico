@@ -31,6 +31,10 @@ spec:
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
       priorityClassName: system-cluster-critical
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
 {{- if eq .Values.datastore "etcd" }}
       # The controllers must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
