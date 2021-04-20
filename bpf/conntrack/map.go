@@ -145,7 +145,9 @@ const (
 	FlagNATFwdDsr uint8 = (1 << 1)
 	FlagNATNPFwd  uint8 = (1 << 2)
 	FlagSkipFIB   uint8 = (1 << 3)
-	FlagExtLocal  uint8 = (1 << 4)
+	FlagReserved4 uint8 = (1 << 4)
+	FlagReserved5 uint8 = (1 << 5)
+	FlagExtLocal  uint8 = (1 << 6)
 )
 
 func (e Value) ReverseNATKey() Key {
