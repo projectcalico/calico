@@ -2247,13 +2247,18 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	})
 })
 
-// Tests for determining IP pools to use.
-var _ = DescribeTable("determinePools tests",
+var (
+	v4Pool1CIDR = "10.0.0.1/24" // host bit set
+	v4Pool2CIDR = "20.0.0.0/24"
+)
+
+// Tests for determining IPV4 pools to use.
+var _ = DescribeTable("determinePools tests IPV4",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
 		ipPools.pools = map[string]pool{
-			"10.0.0.0/24": {enabled: pool1Enabled, nodeSelector: pool1Selector},
-			"20.0.0.0/24": {enabled: pool2Enabled, nodeSelector: pool2Selector},
+			v4Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector},
+			v4Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
@@ -2265,11 +2270,11 @@ var _ = DescribeTable("determinePools tests",
 		// Prep input data
 		reqPools := []cnet.IPNet{}
 		if requestPool1 {
-			cidr := cnet.MustParseCIDR("10.0.0.0/24")
+			cidr := cnet.MustParseCIDR(v4Pool1CIDR)
 			reqPools = append(reqPools, cidr)
 		}
 		if requestPool2 {
-			cidr := cnet.MustParseCIDR("20.0.0.0/24")
+			cidr := cnet.MustParseCIDR(v4Pool2CIDR)
 			reqPools = append(reqPools, cidr)
 		}
 
@@ -2290,25 +2295,94 @@ var _ = DescribeTable("determinePools tests",
 		}
 		Expect(actual).To(Equal(expectation))
 	},
-	Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{"10.0.0.0/24", "20.0.0.0/24"}, false),
-	Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{"10.0.0.0/24"}, false),
+	Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{v4Pool1CIDR, v4Pool2CIDR}, false),
+	Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{v4Pool1CIDR}, false),
 
-	Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, `foo != "bar"`, false, false, []string{"10.0.0.0/24"}, false),
-	Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, `foo != "bar"`, true, false, []string{"10.0.0.0/24"}, false),
+	Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, `foo != "bar"`, false, false, []string{v4Pool1CIDR}, false),
+	Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, `foo != "bar"`, true, false, []string{v4Pool1CIDR}, false),
 
-	Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "all()", false, false, []string{"20.0.0.0/24"}, false),
-	Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{"10.0.0.0/24"}, false),
+	Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "all()", false, false, []string{v4Pool2CIDR}, false),
+	Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{v4Pool1CIDR}, false),
 
-	Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{"20.0.0.0/24"}, false),
+	Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{v4Pool2CIDR}, false),
 
-	Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{v4Pool2CIDR}, false),
 	Entry("pool1 disabled, none with node selector, pool1 requested", false, true, "", "", true, false, []string{}, true),
-	Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{v4Pool2CIDR}, false),
 
-	Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{"20.0.0.0/24"}, false),
-	Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{v4Pool2CIDR}, false),
+	Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{v4Pool2CIDR}, false),
 	Entry("pool1 disabled, pool2 mismatching node selector, no requested pools", false, true, "", `foo != "bar"`, false, false, []string{}, false),
-	Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo != "bar"`, false, true, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo != "bar"`, false, true, []string{v4Pool2CIDR}, false),
+)
+
+var (
+	v6Pool1CIDR = "5001:0000:0000:001a:0000:0000:0000:0000/64" // ipv6 full representation
+	v6Pool2CIDR = "5001:0:0:1b::/64"
+)
+
+// Tests for determining IPV6 pools to use.
+var _ = DescribeTable("determinePools tests IPV6",
+	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
+		// Seed data
+		ipPools.pools = map[string]pool{
+			v6Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector},
+			v6Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector},
+		}
+		// Create a new IPAM client, giving a nil datastore client since determining pools
+		// doesn't require datastore access (we mock out the IP pool accessor).
+		ic := NewIPAMClient(nil, ipPools)
+
+		// Create a node object for the test.
+		node := v3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+
+		// Prep input data
+		reqPools := []cnet.IPNet{}
+		if requestPool1 {
+			cidr := cnet.MustParseCIDR(v6Pool1CIDR)
+			reqPools = append(reqPools, cidr)
+		}
+		if requestPool2 {
+			cidr := cnet.MustParseCIDR(v6Pool2CIDR)
+			reqPools = append(reqPools, cidr)
+		}
+
+		// Call determinePools
+		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 6, node, 128)
+
+		// Assert on any returned error.
+		if expectErr {
+			Expect(err).To(HaveOccurred())
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Check that the expected pools match the returned.
+		actual := []string{}
+		for _, pool := range pools {
+			actual = append(actual, pool.Spec.CIDR)
+		}
+		Expect(actual).To(Equal(expectation))
+	},
+	Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{v6Pool1CIDR, v6Pool2CIDR}, false),
+	Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{v6Pool1CIDR}, false),
+
+	Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, `foo != "bar"`, false, false, []string{v6Pool1CIDR}, false),
+	Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, `foo != "bar"`, true, false, []string{v6Pool1CIDR}, false),
+
+	Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "all()", false, false, []string{v6Pool2CIDR}, false),
+	Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{v6Pool1CIDR}, false),
+
+	Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{v6Pool2CIDR}, false),
+
+	Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{v6Pool2CIDR}, false),
+	Entry("pool1 disabled, none with node selector, pool1 requested", false, true, "", "", true, false, []string{}, true),
+	Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{v6Pool2CIDR}, false),
+
+	Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{v6Pool2CIDR}, false),
+	Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{v6Pool2CIDR}, false),
+	Entry("pool1 disabled, pool2 mismatching node selector, no requested pools", false, true, "", `foo != "bar"`, false, false, []string{}, false),
+	Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo != "bar"`, false, true, []string{v6Pool2CIDR}, false),
 )
 
 // assignIPutil is a utility function to help with assigning a single IP address to a hostname passed in.

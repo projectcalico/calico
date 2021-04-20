@@ -248,12 +248,18 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	// Build a map so we can lookup existing pools.
 	pm := map[string]v3.IPPool{}
 
+	var cidr *net.IPNet
 	for _, p := range enabledPools {
 		if p.Spec.BlockSize > maxPrefixLen {
 			log.Warningf("skipping pool %v due to blockSize %d bigger than %d", p, p.Spec.BlockSize, maxPrefixLen)
 			continue
 		}
-		pm[p.Spec.CIDR] = p
+		_, cidr, err = net.ParseCIDR(p.Spec.CIDR)
+		if err != nil {
+			log.WithError(err).Errorf("Pool %s has invalid CIDR %s", p.Name, p.Spec.CIDR)
+			return
+		}
+		pm[cidr.String()] = p
 	}
 
 	if len(pm) == 0 {
@@ -266,9 +272,10 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	// that each one actually exists and is enabled for IPAM.
 	requestedPools := []v3.IPPool{}
 	for _, rp := range requestedPoolNets {
-		if pool, ok := pm[rp.String()]; !ok {
+		cidr := rp.Network()
+		if pool, ok := pm[cidr.String()]; !ok {
 			// The requested pool doesn't exist.
-			err = fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
+			err = fmt.Errorf("the given pool (%s) does not exist, or is not enabled", cidr.String())
 			return
 		} else {
 			requestedPools = append(requestedPools, pool)
