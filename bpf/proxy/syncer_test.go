@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/felix/bpf/cachingmap"
 	"github.com/projectcalico/felix/bpf/nat"
 
 	. "github.com/onsi/ginkgo"
@@ -53,7 +54,10 @@ var _ = Describe("BPF Syncer", func() {
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+	feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+	beCache := cachingmap.New(nat.BackendMapParameters, eps)
+
+	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -107,6 +111,12 @@ var _ = Describe("BPF Syncer", func() {
 			NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "second-service",
+			},
+		}
+		svcKey3 := k8sp.ServicePortName{
+			NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "third-service",
 			},
 		}
 
@@ -285,6 +295,39 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
+		By("adding and removing overlapping external IP", makestep(func() {
+			state.SvcMap[svcKey3] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			// At this (invalid) point the dataplane may have one service or the other...
+
+			// After cleaning up the overlap, we should get back to a good state.
+			delete(state.SvcMap, svcKey3)
+			err = s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(2))
+
+			val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val1.Count()).To(Equal(uint32(1)))
+
+			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(35, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val1).To(Equal(val2))
+
+			Expect(eps.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
+			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
 		By("removing ExternalIP for existing service", makestep(func() {
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
@@ -343,7 +386,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			checkAfterResync()
 		}))
 
@@ -351,16 +394,9 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			checkAfterResync()
 		}))
-
-		svcKey3 := k8sp.ServicePortName{
-			NamespacedName: types.NamespacedName{
-				Namespace: "default",
-				Name:      "third-service",
-			},
-		}
 
 		By("inserting another service after resync", makestep(func() {
 			state.SvcMap[svcKey3] = proxy.NewK8sServicePort(
@@ -506,7 +542,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -532,6 +568,13 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("adding a route should fix one missing expanded NP", makestep(func() {
+			s.SetTriggerFn(func() {
+				go func() {
+					logrus.Info("Syncer triggered")
+					err := s.Apply(state)
+					logrus.WithError(err).Info("Syncer result")
+				}()
+			})
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.1.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
@@ -589,7 +632,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -668,7 +711,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -933,6 +976,10 @@ func (m *mockNATMap) Iter(iter bpf.IterCallback) error {
 }
 
 func (m *mockNATMap) Update(k, v []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k, "v": v,
+	}).Debug("mockNATMap.Update()")
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -961,6 +1008,10 @@ func (m *mockNATMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATMap) Delete(k []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k,
+	}).Debug("mockNATMap.Delete()")
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -1018,6 +1069,10 @@ func (m *mockNATBackendMap) Iter(iter bpf.IterCallback) error {
 }
 
 func (m *mockNATBackendMap) Update(k, v []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k, "v": v,
+	}).Debug("mockNATBackendMap.Update()")
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -1046,6 +1101,10 @@ func (m *mockNATBackendMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATBackendMap) Delete(k []byte) error {
+	logrus.WithFields(logrus.Fields{
+		"k": k,
+	}).Debug("mockNATBackendMap.Delete()")
+
 	m.Lock()
 	defer m.Unlock()
 

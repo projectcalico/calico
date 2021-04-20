@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ package proxy_test
 import (
 	"net"
 
+	"github.com/projectcalico/felix/bpf/cachingmap"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/logutils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -31,6 +33,7 @@ import (
 )
 
 func init() {
+	logutils.ConfigureEarlyLogging()
 	logrus.SetOutput(GinkgoWriter)
 	logrus.SetLevel(logrus.DebugLevel)
 }
@@ -46,7 +49,10 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	externalIP := makeIPs([]string{"35.0.0.2"})
 	twoExternalIPs := makeIPs([]string{"35.0.0.2", "45.0.1.2"})
 
-	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+	feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+	beCache := cachingmap.New(nat.BackendMapParameters, eps)
+
+	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -199,7 +205,9 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+			beCache := cachingmap.New(nat.BackendMapParameters, eps)
+			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
@@ -212,7 +220,9 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				v1.ProtocolTCP,
 				externalIP,
 			)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
+			feCache := cachingmap.New(nat.FrontendMapParameters, svcs)
+			beCache := cachingmap.New(nat.BackendMapParameters, eps)
+			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(2))
