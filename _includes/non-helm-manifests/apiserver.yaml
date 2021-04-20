@@ -189,6 +189,7 @@ rules:
   verbs:
   - list
   - watch
+  - get
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
