@@ -25,7 +25,8 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 - Versions:
   - Windows Server 1809 (build Build 17763.1432 or greater)
   - Windows Server 1903 (AKA 19H1 build 18362.1049 or greater)
-  - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater), with Docker service enabled
+  - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater)
+- Docker or containerd installed and running. If containerd is running, it will be used as the container runtime otherwise Docker is assumed.
 - Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
 - Be able to run a command as Administrator using powershell.
 - Additionally, for EKS:

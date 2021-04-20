@@ -68,7 +68,7 @@ calicoctl ipam configure --strictaffinity=true
     - OS 1903: Build 18362.1049, binary version: 10.0.18362.1049
     - OS 1909: Build 18363.1049, binary version: 10.0.18363.1049
 - Powershell for the installer
-- Make sure the Docker service is installed and running. {% include open-new-window.html text='Install Docker on Windows node' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server' %}.
+- Make sure {% include open-new-window.html text='Docker' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server' %} or {% include open-new-window.html text='containerd' url='https://kubernetes.io/docs/setup/production-environment/container-runtimes/#containerd' %} is installed and running.
 - If you are using {{site.prodname}} BGP networking, the RemoteAccess service must be installed for the Windows BGP Router.
 - Windows nodes support only a single IP pool type (so, if using a VXLAN pool, you should only use VXLAN throughout the cluster).
 - TLS v1.2 enabled. For example:
