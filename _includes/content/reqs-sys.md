@@ -28,7 +28,7 @@
   > before installing {{site.prodname}}.
   {: .alert .alert-info}
   
-- If your Linux distribution distribution comes with installed Firewalld or another iptables manager it should be disabled. 
+- If your Linux distribution comes with installed Firewalld or another iptables manager it should be disabled. 
   These may interfere with rules added by {{site.prodname}} and result in unexpected behavior.
   
   > **Note**: 
