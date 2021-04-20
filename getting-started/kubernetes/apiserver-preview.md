@@ -1,5 +1,5 @@
 ---
-title: Try out the Calico API server tech-preview
+title: Enable kubectl to manage Calico APIs (tech-preview)
 description: Install the Calico API server on an existing Calico cluster
 canonical_url: '/getting-started/kubernetes/quickstart'
 ---
