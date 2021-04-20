@@ -1,4 +1,4 @@
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ Param(
 
 $baseDir = "$PSScriptRoot\.."
 . $baseDir\config.ps1
+ipmo $baseDir\libs\calico\calico.psm1
 
 Write-Host "Running kubelet service."
 Write-Host "Using configured nodename: $env:NODENAME DNS: $env:DNS_NAME_SERVERS"
@@ -37,22 +38,36 @@ $argList = @(`
     "--hostname-override=$env:NODENAME", `
     "--node-ip=$NodeIp", `
     "--v=4",`
-    "--pod-infra-container-image=kubeletwin/pause",`
     "--resolv-conf=""""",`
     "--enable-debugging-handlers",`
     "--cluster-dns=$env:DNS_NAME_SERVERS",`
     "--cluster-domain=cluster.local",`
     "--kubeconfig=c:\k\config",`
     "--hairpin-mode=promiscuous-bridge",`
-    "--image-pull-progress-deadline=20m",`
     "--cgroups-per-qos=false",`
     "--logtostderr=true",`
     "--enforce-node-allocatable=""""",`
-    "--network-plugin=cni",`
-    "--cni-bin-dir=""c:\k\cni""",`
-    "--cni-conf-dir=""c:\k\cni\config""",`
     "--kubeconfig=""c:\k\config"""`
 )
 
-Write-Host "Start to run c:\k\kubelet.exe"
+# Configure kubelet for containerd if it is running.
+if (Get-IsContainerdRunning)
+{
+    Write-Host "Detected containerd running, configuring kubelet for containerd"
+    $argList += "--container-runtime=remote"
+    $argList += "--container-runtime-endpoint=npipe:////.//pipe//containerd-containerd"
+}
+else
+{
+    #
+    # These params are only applicable for the docker container runtime.
+    #
+    $argList += "--cni-bin-dir=""c:\k\cni"""
+    $argList += "--cni-conf-dir=""c:\k\cni\config"""
+    $argList += "--network-plugin=cni"
+    $argList += "--pod-infra-container-image=kubeletwin/pause"
+    $argList += "--image-pull-progress-deadline=20m"
+}
+
+Write-Host "Start c:\k\kubelet.exe"
 c:\k\kubelet.exe  $argList

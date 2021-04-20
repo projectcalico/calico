@@ -55,7 +55,7 @@
     {
       "Name":  "EndpointPolicy",
       "Value":  {
-        "Type":  "ROUTE",
+        "Type":  "__ROUTE_TYPE__",
         "DestinationPrefix":  "__K8S_SERVICE_CIDR__",
         "NeedEncap":  true
       }

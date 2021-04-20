@@ -94,7 +94,7 @@ function Test-CalicoConfiguration()
 
 function Install-CNIPlugin()
 {
-    Write-Host "Copying CNI binaries into place."
+    Write-Host "Copying CNI binaries to $env:CNI_BIN_DIR"
     cp "$baseDir\cni\*.exe" "$env:CNI_BIN_DIR"
 
     $cniConfFile = $env:CNI_CONF_DIR + "\" + $env:CNI_CONF_FILENAME
@@ -116,6 +116,13 @@ function Install-CNIPlugin()
     }
     $dnsIPList=($ipList -join ",").TrimEnd(',')
 
+    # HNS v1 and v2 have different string values for the ROUTE endpoint policy type.
+    $routeType = "ROUTE"
+    if (Get-IsContainerdRunning)
+    {
+        $routeType = "SDNROUTE"
+    }
+
     (Get-Content "$baseDir\cni.conf.template") | ForEach-Object {
         $_.replace('__NODENAME_FILE__', $nodeNameFile).
                 replace('__KUBECONFIG__', $kubeconfigFile).
@@ -129,7 +136,8 @@ function Install-CNIPlugin()
                 replace('__IPAM_TYPE__', $env:CNI_IPAM_TYPE).
                 replace('__MODE__', $mode).
                 replace('__VNI__', $env:VXLAN_VNI).
-                replace('__MAC_PREFIX__', $env:VXLAN_MAC_PREFIX)
+                replace('__MAC_PREFIX__', $env:VXLAN_MAC_PREFIX).
+                replace('__ROUTE_TYPE__', $routeType)
     } | Set-Content "$cniConfFile"
     Write-Host "Wrote CNI configuration."
 }
@@ -411,6 +419,40 @@ function Set-MetaDataServerRoute($mgmtIP)
             Write-Host "Warning! Failed to restore metadata server route."
         }
     }
+}
+
+# Assume same relative path for containerd CNI bin/conf dir
+# By default, containerd is installed in c:\Program Files\containerd, and CNI bin/conf is in
+# c:\Program Files\containerd\cni\bin and c:\Program Files\containerd\cni\conf.
+function Get-ContainerdCniBinDir()
+{
+    $path = getContainerdPath
+    return "$path\cni\bin"
+}
+function Get-ContainerdCniConfDir()
+{
+    $path = getContainerdPath
+    return "$path\cni\conf"
+}
+
+function getContainerdService()
+{
+    # Don't use get-wmiobject since that is not available in Powershell 7.
+    return Get-CimInstance -Query "SELECT * from Win32_Service WHERE name = 'containerd'"
+}
+
+function getContainerdPath()
+{
+    # Get the containerd service pathname.
+    $containerdPathName = getContainerdService | Select-Object -ExpandProperty PathName
+
+    # Get the path only, and remove any extra quotes left over.
+    return (Split-Path -Path $containerdPathname) -replace '"', ""
+}
+
+function Get-IsContainerdRunning()
+{
+    return (getContainerdService | Select-Object -ExpandProperty State) -EQ "Running"
 }
 
 Export-ModuleMember -Function 'Test-*'
