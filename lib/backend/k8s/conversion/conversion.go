@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -144,9 +144,6 @@ func (c converter) IsReadyCalicoPod(pod *kapiv1.Pod) bool {
 	} else if !c.HasIPAddress(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod does not have an IP address.")
 		return false
-	} else if IsFinished(pod) {
-		log.WithField("pod", pod.Name).Debug("Pod is finished.")
-		return false
 	}
 	return true
 }
@@ -159,12 +156,8 @@ const (
 
 func IsFinished(pod *kapiv1.Pod) bool {
 	if pod.DeletionTimestamp != nil {
-		// Pod is being deleted but it may still be in its termination grace period.  If Calico CNI
-		// was used, then we use AnnotationPodIP to signal the moment that the pod actually loses its
-		// IP by setting the annotation to "".  (Otherwise, just fall back on the status of the pod.)
-		if ip, ok := pod.Annotations[AnnotationPodIP]; ok && ip == "" {
-			// AnnotationPodIP is explicitly set to empty string, Calico CNI has removed the network
-			// from the pod.
+		// Pod is Terminating, check if it still has its IPs.
+		if pod.Annotations[AnnotationPodIP] == "" {
 			log.Debug("Pod is being deleted and IPs have been removed.")
 			return true
 		}
@@ -186,18 +179,9 @@ func (c converter) IsHostNetworked(pod *kapiv1.Pod) bool {
 }
 
 func (c converter) HasIPAddress(pod *kapiv1.Pod) bool {
+	return pod.Status.PodIP != "" || pod.Annotations[AnnotationPodIP] != ""
 	// Note: we don't need to check PodIPs and AnnotationPodIPs here, because those cannot be
 	// non-empty if the corresponding singular field is empty.
-	if ip, ok := pod.Annotations[AnnotationPodIP]; ok && ip == "" {
-		// AnnotationPodIP explicitly set to empty string, we use this to signal that the
-		// CNI plugin has been called to remove the IP(s) from the pod.
-		return false
-	} else if ip != "" {
-		// Our annotation has an IP in it.
-		return true
-	}
-	// Our annotation is not set, fall back on the PodIP field.
-	return pod.Status.PodIP != ""
 }
 
 // getPodIPs extracts the IP addresses from a Kubernetes Pod.  We support a single IPv4 address
@@ -205,11 +189,7 @@ func (c converter) HasIPAddress(pod *kapiv1.Pod) bool {
 // present, or the calico podIP annotation.
 func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 	var podIPs []string
-	if ip, ok := pod.Annotations[AnnotationPodIP]; ok && ip == "" {
-		// Special case, our CNI plugin uses explicit empty string to signal to us that the IP has been
-		// removed.
-		log.Debug("Empty podIP annotation: Pod has no IPs")
-	} else if ips := pod.Status.PodIPs; len(ips) != 0 {
+	if ips := pod.Status.PodIPs; len(ips) != 0 {
 		log.WithField("ips", ips).Debug("PodIPs field filled in")
 		for _, ip := range ips {
 			podIPs = append(podIPs, ip.IP)
