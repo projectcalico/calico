@@ -113,6 +113,8 @@ spec:
 | bpfKubeProxyMinSyncPeriod          | In eBPF dataplane mode, controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | `5s`, `10s`, `1m` etc. | duration | `1s` |
 | BPFKubeProxyEndpointSlicesEnabled  | In eBPF dataplane mode, controls whether Felix's embedded kube-proxy derives its services from Kubernetes' EndpointSlices resources. Using EndpointSlices is more efficient but it requires EndpointSlices support to be enabled at the Kubernetes API server. | true,false | boolean | false |
 | routeSource                        | Where Felix gets is routing information from for VXLAN and the BPF dataplane. The CalicoIPAM setting is more efficient because it supports route aggregation, but it only works when Calico's IPAM or host-local IPAM is in use. Use the WorkloadIPs setting if you are using Calico's VXLAN or BPF dataplane and not using Calico IPAM or host-local IPAM. | CalicoIPAM,WorkloadIPs | string | `CalicoIPAM` |
+| mtuIfacePattern                    | Pattern used to discover the host's interface for MTU auto-detection. | regex | string | `^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)` |
+
 
 #### ProtoPort
 
