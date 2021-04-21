@@ -90,7 +90,7 @@ spec:
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
               bpfExtToServiceConnmark:
-                description: 'BPFExtToServiceConnmark in BPF mode, control a
+                description: 'BPFExtToServiceConnmark in BPF mode, controls a
                   32bit mark that is set on connections from an external client to
                   a local service. This mark allows us to control how packets of
                   that connection are routed within the host and how is routing
