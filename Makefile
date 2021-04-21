@@ -37,6 +37,9 @@ BUILD_IMAGE?=calico/ctl
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/ctl
 RELEASE_IMAGES?=
 
+# Remove any excluded architectures since for calicoctl we want to build everything.
+EXCLUDEARCH?=
+
 include Makefile.common
 
 ###############################################################################
