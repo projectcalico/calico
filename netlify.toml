@@ -41,7 +41,7 @@
 
 [build.environment]
   RUBY_VERSION = "2.5.4"
-  RELEASE_VERSION = "master"
+  RELEASE_VERSION = "v3.19"
 
 [context.deploy-preview]
   command = '''
@@ -62,6 +62,12 @@
   export PATH=$PATH:$(pwd)/bin
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
   '''
+
+# proxy redirects for website and manifests for v3.19
+[[redirects]]
+  from = "/archive/v3.19/*"
+  to = "https://calico-v3-19.netlify.app/archive/v3.19/:splat"
+  status = 200
 
 # proxy redirects for website and manifests for v3.18
 [[redirects]]
