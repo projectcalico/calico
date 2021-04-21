@@ -52,7 +52,7 @@ calicoctl is still required for the following subcommands:
 1. Generate a private key and CA bundle using the following openssl command. This certificate will be used by the main API server to authenticate with the Calico API server.
 
    ```
-   openssl req -x509 -nodes -newkey rsa:4096 -keyout apiserver.key -out apiserver.crt -days 365 -subj '/CN=calico-api.calico-apiserver.svc' 
+   openssl req -x509 -nodes -newkey rsa:4096 -keyout apiserver.key -out apiserver.crt -days 365 -subj "/" -addext "subjectAltName = DNS:calico-api.calico-apiserver.svc"
    ```
 
 1. Provide the key and certificate to the Calico API server as a Kubernetes secret.
