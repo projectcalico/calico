@@ -185,8 +185,15 @@ func Run() {
 		configureASNumber(node)
 
 		if clientset != nil {
+			// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
+			// value is provided.
+			k8sNodeName := nodeName
+			if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
+				k8sNodeName = nodeRef
+			}
+
 			log.Info("Setting NetworkUnavailable to False")
-			err := setNodeNetworkUnavailableFalse(*clientset, nodeName)
+			err := setNodeNetworkUnavailableFalse(*clientset, k8sNodeName)
 			if err != nil {
 				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
 			}
@@ -483,7 +490,6 @@ func writeNodeConfig(nodeName string) {
 // been created, it returns a blank node resource.
 func getNode(ctx context.Context, client client.Interface, nodeName string) *api.Node {
 	node, err := client.Nodes().Get(ctx, nodeName, options.GetOptions{})
-
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			log.WithError(err).WithField("Name", nodeName).Info("Unable to query node configuration")
