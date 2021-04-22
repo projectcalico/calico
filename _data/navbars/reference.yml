@@ -192,6 +192,15 @@ section:
       path: /reference/architecture/design/l2-interconnect-fabric
     - title: Calico over IP fabrics
       path: /reference/architecture/design/l3-interconnect-fabric
+- title: VPP dataplane
+  path: /reference/vpp/
+  section:
+  - title: Uplink interface configuration
+    path: /reference/vpp/uplink-configuration
+  - title: Integration architecture
+    path: /reference/vpp/technical-details
+  - title: Host network configuration
+    path: /reference/vpp/host-network
 - title: Frequently asked questions
   path: /reference/faq
 - title: Getting involved
