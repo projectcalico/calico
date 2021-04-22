@@ -108,6 +108,9 @@ LABEL name="Calico node" \
       description="Calico node handles networking and policy for Calico" \
       maintainer="laurence@tigera.io"
 
+# Update base packages to pick up security updates.  Must do this before adding the centos repo.
+RUN microdnf update
+
 # Copy in runit binaries
 COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 
