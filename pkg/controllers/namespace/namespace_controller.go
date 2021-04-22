@@ -192,9 +192,8 @@ func (c *namespaceController) processNextItem() bool {
 	}
 
 	// Sync the object to the Calico datastore.
-	if err := c.syncToDatastore(key.(string)); err != nil {
-		c.handleErr(err, key.(string))
-	}
+	err := c.syncToDatastore(key.(string))
+	c.handleErr(err, key.(string))
 
 	// Indicate that we're done processing this key, allowing for safe parallel processing such that
 	// two objects with the same key are never processed in parallel.

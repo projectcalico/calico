@@ -247,9 +247,8 @@ func (c *podController) processNextItem() bool {
 	}
 
 	// Sync the object to the Calico datastore.
-	if err := c.syncToCalico(key.(string)); err != nil {
-		c.handleErr(err, key.(string))
-	}
+	err := c.syncToCalico(key.(string))
+	c.handleErr(err, key.(string))
 
 	// Indicate that we're done processing this key, allowing for safe parallel processing such that
 	// two objects with the same key are never processed in parallel.

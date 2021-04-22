@@ -35,6 +35,7 @@ func main() {
 	version := flagSet.BoolP("version", "v", false, "Display version")
 	file := flagSet.StringP("file", "f", status.DefaultStatusFile, "File to read with status information")
 	checkReady := flagSet.BoolP("ready", "r", false, "Check readiness")
+	checkLive := flagSet.BoolP("live", "l", false, "Check liveness")
 	err := flagSet.Parse(os.Args[1:])
 	if err != nil {
 		fmt.Println("Failed to parse flags")
@@ -46,7 +47,7 @@ func main() {
 	}
 
 	// Read the status file
-	if *checkReady {
+	if *checkReady || *checkLive {
 		var st *status.Status
 		var err error
 
