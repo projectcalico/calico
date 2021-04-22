@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/calicoctl
-GO_BUILD_VER=add-arm-7
+GO_BUILD_VER=v0.52
 
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
 
