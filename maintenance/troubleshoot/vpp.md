@@ -151,7 +151,7 @@ ipv4-VRF:0, fib_index:0, flow hash:[src dst sport dport symmetric ] epoch:0 flag
   [...]
 
 # This one is behind `tun3`
-# If you want more info about this interace (name in linux, queues, descriptors, ...)
+# If you want more info about this interace (name in Linux, queues, descriptors, ...)
 vpp# show tun tun3
 Interface: tun3 (ifindex 5)
   name "eth0"
@@ -164,9 +164,9 @@ Interface: tun3 (ifindex 5)
 
 Let's take the case of two pods talking to each other in your cluster (see the schema above).
 You might want to inspect the traffic at 3 different locations :
-* as it exits the pod (in linux inside the first pod)
+* as it exits the pod (in Linux inside the first pod)
 * as it goes through VPP
-* as it is received in the second pod (in linux again)
+* as it is received in the second pod (in Linux again)
 
 We cover the three cases, first inside VPP (depending on where your traffic is coming from : a pod or outside your host)
 then inside your pods (usually with tcpdump)
@@ -276,7 +276,7 @@ cat somefile | grep '1.2.3.4 -> 5.6.7.8' -A40 -B40
 
 ##### With Wireshark
 
-Alternatively to the trace, you can do a capture and analyze it inside Wireshark. You can do this with
+Alternatively to the trace, you can do a capture and analyze it inside Wireshark. You can do this with:
 ````
 vpp# pcap dispatch trace on max 1000 file vppcapture buffer-trace dpdk-input 1000
 vpp# pcap dispatch trace off
@@ -300,7 +300,7 @@ To inspect traffic actually received by the pods (if `tcpdump` is installed in t
 
 ##### Tcpdump is available on the host
 
-* provided that you have `tcpdump` installed on the host, you can use `nsenter` to attach to the pod's network namespace and use the host's `tcpdump` on the container's interface.
+Provided that you have `tcpdump` installed on the host, you can use `nsenter` to attach to the pod's network namespace and use the host's `tcpdump` on the container's interface.
 
 This works on docker as follows :
 ````bash

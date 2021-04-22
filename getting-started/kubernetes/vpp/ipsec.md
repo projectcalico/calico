@@ -1,6 +1,6 @@
 ---
 title: IPsec configuration
-description: Enable IPsec for faster encryption between nodes.
+description: Enable IPsec for faster encryption between nodes when using the VPP data plane.
 canonical_url: '/getting-started/kubernetes/vpp/ipsec'
 ---
 
@@ -42,15 +42,15 @@ Once IPsec is enabled, all the traffic that uses IP-in-IP encapsulation in the c
 
 ### Next steps
 
-#### Verifying encryption
+#### Verify encryption
 
 In order to verify that the traffic is encrypted, open a VPP debug CLI session to check the configuration with [calivppctl]({{ site.baseurl }}/maintenance/troubleshoot/vpp)
 ```bash
 calivppctl vppctl myk8node1
 ```
 Then at the `vpp#` prompt, you can run the following commands:
-- `show ikev2 profile` will list the configured IKEv2 profiles, there should be one per other node in your cluster.
-- `show ipsec sa` will list the establish IPsec SA, two per IKEv2 profile.
-- `show interface` will list all the interfaces configured in VPP. The ipip interfaces (which correspond to the IPsec tunnels) should be up.
+- `show ikev2 profile` will list the configured IKEv2 profiles, there should be one per other node in your cluster
+- `show ipsec sa` will list the establish IPsec SA, two per IKEv2 profile
+- `show interface` will list all the interfaces configured in VPP. The ipip interfaces (which correspond to the IPsec tunnels) should be up
 
 You can also [capture the traffic]({{ site.baseurl }}/maintenance/troubleshoot/vpp#tracing-packets) flowing between the nodes to verify that it is encrypted.
