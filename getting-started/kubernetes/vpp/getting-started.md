@@ -40,17 +40,23 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### VPP
 
-The Vector Packet Processor (VPP) is a high-performance, open-source userspace network dataplane written in C, developed under the [fd.io](https://fd.io) umbrella. It supports many standard networking features (L2, L3 routing, NAT, encapsulations), and is easily extensible using plugins. The VPP dataplane uses plugins to efficiently implement Kubernetss services load balancing and {{site.prodname}} policies.
+The Vector Packet Processor (VPP) is a high-performance, open-source userspace network dataplane written in C, developed under the [fd.io](https://fd.io) umbrella. It supports many standard networking features (L2, L3 routing, NAT, encapsulations), and is easily extensible using plugins. The VPP dataplane uses plugins to efficiently implement Kubernetes services load balancing and {{site.prodname}} policies.
 
 ### How to
 
-This guide details two ways to install Calico with the VPP dataplane:
-- On a [managed EKS cluster](#install-calico-with-the-vpp-dataplane-on-an-eks-cluster). This is the option that requires the least configuration.
-- On [any Kubernetes cluster](#install-calico-with-the-vpp-dataplane-on-any-kubernetes-cluster).
+This guide details two ways to install {{site.prodname}} with the VPP dataplane:
+- On a managed EKS cluster. This is the option that requires the least configuration
+- On any Kubernetes cluster
 
 In both cases, here are the details of what you will get:
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
+
+
+
+{% tabs %}
+<label:Install on EKS,active:true>
+<%
 
 ### Install Calico with the VPP dataplane on an EKS cluster
 
@@ -68,34 +74,35 @@ Before you get started, make sure you have downloaded and configured the {% incl
    eksctl create cluster --name my-calico-cluster --without-nodegroup
    ```
 
-2. Since this cluster will use {{site.prodname}} for networking, you must delete the `aws-node` daemon set to disable AWS VPC networking for pods.
+1. Since this cluster will use {{site.prodname}} for networking, you must delete the `aws-node` daemon set to disable AWS VPC networking for pods.
 
    ```bash
    kubectl delete daemonset -n kube-system aws-node
    ```
 
-3. Now that you have a cluster configured, you can install {{site.prodname}}.
+1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
+   Standard install:
    ```bash
    kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-eks.yaml
    ```
+   Install using the optional DPDK driver for better networking performance:
+   ```bash
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-eks-dpdk.yaml
+```
 
-3. Finally, add nodes to the cluster.
+1. Finally, add nodes to the cluster.
 
    ```bash
    eksctl create nodegroup --cluster my-calico-cluster --node-type t3.medium --node-ami auto --max-pods-per-node 100
    ```
 
-   > **Tip**: Without the `--max-pods-per-node` option above, EKS will limit the {% include open-new-window.html text='number of pods based on node-type' url='https://github.com/awslabs/amazon-eks-ami/blob/master/files/eni-max-pods.txt' %}. See `eksctl create nodegroup --help` for the full set of node group options.
+   > **Tip**: The --max-pods-per-node option above, ensures that EKS does not limit the {% include open-new-window.html text='number of pods based on node-type' url='https://github.com/awslabs/amazon-eks-ami/blob/master/files/eni-max-pods.txt' %}. For the full set of node group options, see `eksctl create nodegroup --help`.
    {: .alert .alert-success}
 
-#### (Optional) Switch to the DPDK driver
-
-The DPDK driver is supported on EKS, and will provide better networking performance. In order to enable it, follow the steps above, but use th following manifest at step 3:
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-eks-dpdk.yaml
-```
+%>
+<label:Install on any cluster>
+<%
 
 ### Install Calico with the VPP dataplane on any Kubernetes cluster
 
@@ -105,23 +112,22 @@ The VPP dataplane has the following requirements:
 
 **Required**
 - A blank Kubernetes cluster, where no CNI was ever configured.
-- The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply, except those related to the management of `cali*`, `tunl*` and `vxlan.calico` interfaces.
+- These [base requirements]({{site.baseurl}}/getting-started/kubernetes/requirements), except those related to the management of `cali*`, `tunl*` and `vxlan.calico` interfaces.
 
 **Optional**
+For some hardware, the following hugepages configuration may enable VPP to use more efficient drivers:
 
-The following may enable VPP to use more efficient drivers on some hardware:
 - At least 128 x 2MB-hugepages are available (`cat /proc/meminfo | grep HugePages_Free`)
-- The `vfio-pci` (named `vfio_pci` on centos) or `uio_pci_generic` kernel module is loaded
+- The `vfio-pci` (`vfio_pci` on centos) or `uio_pci_generic` kernel module is loaded. For example:
 
-These requirements can be satisfied with the following commands:
-````bash
-echo "vfio-pci" > /etc/modules-load.d/95-vpp.conf
-modprobe vfio-pci
-echo "vm.nr_hugepages = 128" >> /etc/sysctl.conf
-sysctl -p
-# restart kubelet to take the changes into account, you may need to use a different command depending on how kubelet was installed
-systemctl restart kubelet
-````
+   ````bash
+   echo "vfio-pci" > /etc/modules-load.d/95-vpp.conf
+   modprobe vfio-pci
+   echo "vm.nr_hugepages = 128" >> /etc/sysctl.conf
+   sysctl -p
+   # restart kubelet to take the changes into account, you may need to use a different command depending on how kubelet was installed
+   systemctl restart kubelet
+   ````
 
 #### Configure nodes for VPP
 
@@ -140,7 +146,7 @@ Then configure these parameters in the `calico-config` ConfigMap in the yaml man
 **Required**
 
 * `vpp_dataplane_interface` is the primary interface that VPP will use. It must be the name of a Linux interface, configured with an address. The address configured on this interface must be the node address in Kubernetes (`kubectl get nodes -o wide`).
-* service_prefix is the Kubernetes service CIDR. You can retrieve it by running:
+* `service_prefix` is the Kubernetes service CIDR. You can retrieve it by running:
 ````bash
 kubectl cluster-info dump | grep -m 1 service-cluster-ip-range
 ````
@@ -149,13 +155,13 @@ If this command doesn't return anything, you can leave the default value of `10.
 **Optional**
 
 * `default_ipv4_pool_cidr` allows you to customize the default {{ site.prodname }} IPv4 pool. For details, see [reference]({{ site.baseurl }}/reference/node/configuration)
-* `vpp_uplink_driver` configures how VPP grabs the physical interface, available values are :
+* `vpp_uplink_driver` configures how VPP grabs the physical interface, available values are:
   * `""` : will automatically select and try drivers based on available resources, starting with the fastest
-  * `avf` : use the native AVF driver.
-  * `virtio` : use the native virtio driver (requires hugepages).
-  * `af_xdp` : use an AF_XDP socket to drive the interface (requires kernel 5.4 or newer).
-  * `af_packet` : use an AF_PACKET socket to drive the interface (slow but works everywhere).
-  * `none` : do not configure connectivity automatically. This can be used when [configuring the interface manually]({{ site.baseurl }}/reference/vpp/uplink-configuration).
+  * `avf` : use the native AVF driver
+  * `virtio` : use the native virtio driver (requires hugepages)
+  * `af_xdp` : use an AF_XDP socket to drive the interface (requires kernel 5.4 or newer)
+  * `af_packet` : use an AF_PACKET socket to drive the interface (slow but works everywhere)
+  * `none` : do not configure connectivity automatically. This can be used when [configuring the interface manually]({{ site.baseurl }}/reference/vpp/uplink-configuration)
 
 **Example**
 
@@ -180,19 +186,21 @@ To apply the configuration, run:
 kubectl apply -f calico-vpp.yaml
 ````
 
-This will create all the resources necessary to connect your pods through VPP and configure the CNI on the nodes.
+This will create all the resources necessary to connect your pods through VPP and configure Calico on the nodes.
+
+%>
+{% endtabs %}
+
+
+
 
 ### Next steps
 
-After installing {{ site.prodname }} with the VPP dataplane, you can benefit from the goodies of the VPP dataplane, such as fast [IPsec]({{ site.baseurl }}/getting-started/kubernetes/vpp/ipsec) or [Wireguard]({{ site.baseurl }}/security/encrypt-cluster-pod-traffic) encryption.
+After installing {{ site.prodname }} with the VPP dataplane, you can benefit from the features of the VPP dataplane, such as fast [IPsec]({{ site.baseurl }}/getting-started/kubernetes/vpp/ipsec) or [Wireguard]({{ site.baseurl }}/security/encrypt-cluster-pod-traffic) encryption.
 
 **Tools**
 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install) to configure and monitor your cluster.
-
-**Networking**
-
-- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.baseurl}}/networking/bgp) to get traffic flowing between pods.
 
 **Security**
 
