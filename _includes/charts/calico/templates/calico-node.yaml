@@ -192,6 +192,26 @@ spec:
             privileged: false
             # Need root in order to write to flexvol driver. (.uds)
             runAsUser: 0
+        # Mounts the BPF filesystem so that privileged permissions can be limited to an init
+        # container. It is important that the BPF filesystem is mounted on the host itself,
+        # otherwise a restart of the node container would tear down the mount and destroy
+        # the BPF dataplane's BPF maps.
+        - name: mount-bpffs
+          image: {{.Values.node.image}}:{{.Values.node.tag}}
+          command:
+          - /bin/calico-node
+          - -init
+          volumeMounts:
+          # For eBPF mode, we need to be able to mount the BPF filesystem at /sys/fs/bpf so we mount in the
+          # parent directory.
+          - name: sysfs
+            mountPath: /sys/fs/
+            # Bidirectional means that, if we mount the BPF filesystem at /sys/fs/bpf it will propagate to the host.
+            # If the host is known to mount that filesystem already then Bidirectional can be omitted.
+            mountPropagation: Bidirectional
+          securityContext:
+            # Requires privileged in order to use bidirectional mount propagation
+            privileged: true
       containers:
         # Runs {{ include "nodeName" . }} container on each Kubernetes node. This
         # container programs network policy and routes on each
@@ -359,10 +379,6 @@ spec:
 {{ toYaml .Values.node.env | indent 12 }}
 {{- end }}
           securityContext:
-{{- if .Values.bpf }}
-            # Need privileged in order to write to bpffs at /sys/fs/bpf
-            privileged: true
-{{- else }}
             privileged: false
             # Need root in order to write files to hostpath volume /var/lib/calico
             runAsUser: 0
@@ -370,7 +386,6 @@ spec:
               add:
               - NET_RAW
               - NET_ADMIN
-{{- end }}
           resources:
             requests:
               cpu: 250m
@@ -425,13 +440,8 @@ spec:
 {{- end }}
             - name: policysync
               mountPath: /var/run/nodeagent
-            # For eBPF mode, we need to be able to mount the BPF filesystem at /sys/fs/bpf so we mount in the
-            # parent directory.
-            - name: sysfs
-              mountPath: /sys/fs/
-              # Bidirectional means that, if we mount the BPF filesystem at /sys/fs/bpf it will propagate to the host.
-              # If the host is known to mount that filesystem already then Bidirectional can be omitted.
-              mountPropagation: Bidirectional
+            - name: bpffs
+              mountPath: /sys/fs/bpf
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
               readOnly: true
@@ -578,6 +588,10 @@ spec:
           hostPath:
             path: /sys/fs/
             type: DirectoryOrCreate
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
 {{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
         # Used by flannel.
         - name: flannel-cfg
