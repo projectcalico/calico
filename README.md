@@ -48,6 +48,7 @@ The binary will be put in `./dist/` and named `calicoctl-<os>-<arch>`, e.g.:
 $ ls -1 ./dist/
 calicoctl-linux-amd64
 calicoctl-linux-arm64
+calicoctl-linux-armv7
 calicoctl-linux-ppc64le
 calicoctl-linux-s390x
 calicoctl-darwin-amd64

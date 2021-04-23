@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/calicoctl
-GO_BUILD_VER=v0.51
+GO_BUILD_VER=v0.52
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
@@ -83,6 +83,7 @@ build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-window
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
+bin/calicoctl-%-armv7: ARCH=armv7
 bin/calicoctl-%-arm64: ARCH=arm64
 bin/calicoctl-%-ppc64le: ARCH=ppc64le
 bin/calicoctl-%-s390x: ARCH=s390x
@@ -199,6 +200,7 @@ st: bin/calicoctl-linux-amd64
 # arm64: 3.3.7-arm64
 # ppc64le: 3.3.7-ppc64le
 # s390x is not available
+# armv7 is not available
 COREOS_ETCD?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
 ifeq ($(ARCH),amd64)
 COREOS_ETCD=quay.io/coreos/etcd:$(ETCD_VERSION)
