@@ -5,8 +5,7 @@ go 1.15
 require (
 	github.com/go-openapi/spec v0.19.5
 	github.com/google/gofuzz v1.2.0
-	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210416001455-0b0b0574f5a1
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210420172941-9c7cafdba48b
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
