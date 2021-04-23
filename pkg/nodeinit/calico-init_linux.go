@@ -37,7 +37,7 @@ func Run() {
 	err := ensureBPFFilesystem()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to mount BPF filesystem.")
-		os.Exit(2)
+		os.Exit(2) // Using 2 just to distinguish from the usage error case.
 	}
 }
 
