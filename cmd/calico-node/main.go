@@ -21,6 +21,7 @@ import (
 
 	confdConfig "github.com/kelseyhightower/confd/pkg/config"
 	confd "github.com/kelseyhightower/confd/pkg/run"
+	"github.com/projectcalico/node/pkg/nodeinit"
 
 	"github.com/sirupsen/logrus"
 
@@ -42,7 +43,8 @@ var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 var version = flagSet.Bool("v", false, "Display version")
 var runFelix = flagSet.Bool("felix", false, "Run Felix")
 var runBPF = flagSet.Bool("bpf", false, "Run BPF debug tool")
-var runStartup = flagSet.Bool("startup", false, "Initialize a new node")
+var runInit = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
+var runStartup = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
 var monitorAddrs = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
 var runAllocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 var allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
@@ -114,6 +116,9 @@ func main() {
 		// Command-line tools should log to stderr to avoid confusion with the output.
 		logrus.SetOutput(os.Stderr)
 		bpf.RunBPFCmd()
+	} else if *runInit {
+		logrus.SetFormatter(&logutils.Formatter{Component: "init"})
+		nodeinit.Run()
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
