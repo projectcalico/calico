@@ -71,7 +71,7 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
 		hcn.EndpointPolicy{
 			Type:     "OutBoundNAT",
-			Settings: json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
+			Settings: json.RawMessage(`{"Exceptions":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
 		},
 		hcn.EndpointPolicy{
 			Type:     "SomethingElse",
@@ -96,7 +96,7 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 		},
 		hcn.EndpointPolicy{
 			Type:     "OutBoundNAT",
-			Settings: json.RawMessage(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
+			Settings: json.RawMessage(`{"Exceptions":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
 		},
 	}))
 

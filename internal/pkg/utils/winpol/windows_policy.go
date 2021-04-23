@@ -83,8 +83,12 @@ func CalculateEndpointPolicies(
 
 		outputV1Pols = append(outputV1Pols, outPol)
 
-		// Convert v2 policy. If the conversion to V2 policy fails just log and
-		// continue.
+		// Convert v2 policy. If the conversion to V2 policy fails just log and continue.
+		// OutBoundNAT "ExceptionList" field is "Exceptions" in v2.
+		if strings.EqualFold(policyType, "OutBoundNAT") {
+			decoded["Exceptions"] = decoded["ExceptionList"]
+			delete(decoded, "ExceptionList")
+		}
 		v2Pol, err := convertToHcnEndpointPolicy(decoded)
 		if err != nil {
 			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", decoded)
@@ -106,8 +110,10 @@ func CalculateEndpointPolicies(
 
 		outputV1Pols = append(outputV1Pols, json.RawMessage(encoded))
 
-		// Convert v2 policy. If the conversion to V2 policy fails just log and
-		// continue.
+		// Convert v2 policy. If the conversion to V2 policy fails just log and continue.
+		// OutBoundNAT "ExceptionList" field is "Exceptions" in v2.
+		dict["Exceptions"] = exceptions
+		delete(dict, "ExceptionList")
 		v2Pol, err := convertToHcnEndpointPolicy(dict)
 		if err != nil {
 			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", dict)
