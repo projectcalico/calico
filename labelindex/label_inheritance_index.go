@@ -189,7 +189,7 @@ func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {
 	// Since the selectorRoot struct has cache fields, the easiest way to compare two
 	// selectors is to compare their IDs.
 	if oldSel != nil && oldSel.UniqueID() == sel.UniqueID() {
-		log.WithField("selID", id).Info("Skipping unchanged selector")
+		log.WithField("selID", id).Debug("Skipping unchanged selector")
 		return
 	}
 	log.WithField("selID", id).Info("Updating selector")
