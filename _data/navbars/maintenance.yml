@@ -18,6 +18,8 @@ section:
     path: /maintenance/image-options/imageset
 - title: Migrate datastore from etcd to Kubernetes
   path: /maintenance/datastore-migration
+- title: Migrate Calico to an operator-managed installation
+  path: /maintenance/operator-migration
 - title: The eBPF dataplane
   path: /maintenance/ebpf/
   section:
