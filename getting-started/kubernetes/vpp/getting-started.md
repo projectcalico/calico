@@ -141,7 +141,7 @@ curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-data
 curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-nohuge.yaml
 ```
 
-Then configure these parameters in the `calico-config` ConfigMap in the yaml manifest.
+Then configure these parameters in the `calico-vpp-config` ConfigMap in the yaml manifest.
 
 **Required**
 
@@ -154,7 +154,6 @@ If this command doesn't return anything, you can leave the default value of `10.
 
 **Optional**
 
-* `default_ipv4_pool_cidr` allows you to customize the default {{ site.prodname }} IPv4 pool. For details, see [reference]({{ site.baseurl }}/reference/node/configuration)
 * `vpp_uplink_driver` configures how VPP grabs the physical interface, available values are:
   * `""` : will automatically select and try drivers based on available resources, starting with the fastest
   * `avf` : use the native AVF driver
@@ -170,14 +169,15 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: calico-config
-  namespace: kube-system
+  namespace: calico-vpp-dataplane
 data:
   service_prefix: 10.96.0.0/12
   vpp_dataplane_interface: eth1
-  default_ipv4_pool_cidr: 172.16.0.0/16
   vpp_uplink_driver: ""
   ...
 ````
+
+**Note** {{ site.prodname }} uses `192.168.0.0/16` as the IP range for the pods by default. If this IP range is used somewhere else in your environment, you should further [customize the manifest]({{ site.baseurl }}/getting-started/kubernetes/installation/config-options) to change it.
 
 #### Apply the configuration
 
