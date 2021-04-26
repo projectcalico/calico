@@ -27,8 +27,8 @@ docker cp ${vppcontainer}:/usr/bin/calivppctl /usr/bin/calivppctl
 ````
 * With kubectl (and a cluster with calico-vpp runnning)
 ````bash
-vpppod=$(kubectl -n kube-system get pods -o wide | grep calico-vpp-node- | awk '{ print $1 }' | head -1)
-kubectl -n kube-system exec -it ${vpppod} -c vpp -- cat /usr/bin/calivppctl | tee /usr/bin/calivppctl > /dev/null
+vpppod=$(kubectl -n calico-vpp-dataplane get pods -o wide | grep calico-vpp-node- | awk '{ print $1 }' | head -1)
+kubectl -n calico-vpp-dataplane exec -it ${vpppod} -c vpp -- cat /usr/bin/calivppctl | tee /usr/bin/calivppctl > /dev/null
 chmod +x /usr/bin/calivppctl
 ````
 
@@ -49,7 +49,7 @@ Once the cluster is correctly started, the next issue can come from the Daemonse
 Best is to start by inspecting the pods : are they running correctly ?
 Usually configuration issues (available hugepages, memory, ...) will be reported here
 ````bash
-kubectl -n kube-system describe pod/calico-vpp-node-XXXXX
+kubectl -n calico-vpp-dataplane describe pod/calico-vpp-node-XXXXX
 ````
 
  >**Note** If at this point you don't have enough hugepages, you'll have to restart kubelet

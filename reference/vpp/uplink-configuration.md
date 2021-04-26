@@ -27,7 +27,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: calico-vpp-node
-  namespace: kube-system
+  namespace: calico-vpp-dataplane
 spec:
   template:
     spec:
@@ -65,7 +65,7 @@ You can use this driver if your primary interface is virtio [`realpath /sys/bus/
 
 ## Using the native AVF driver
 
-You can use this driver if your primary interface is supported by AVF [`realpath /sys/bus/pci/devices/<PCI_ID>/driver` gives `... i40e`]
+You can use this driver if your primary interface is supported by AVF [`realpath /sys/bus/pci/devices/<PCI_ID>/driver` gives `.../i40e`]
 
 * Ensure `vfio-pci` is loaded (`sudo modprobe vfio-pci`)
 
@@ -82,13 +82,13 @@ You can use this driver if your primary interface is supported by AVF [`realpath
 * Also ensure that your vpp config has no `dpdk` stanza and its plugin disabled
 * Optionally `CALICOVPP_RX_QUEUES` controls the number of queues used, `CALICOVPP_RING_SIZE` their size
 * `CALICOVPP_RX_MODE` controls whether we busy-poll the interface (`polling`), only use interrupts to wake us up (`interrupt`) or switch between both depending on the load (`adaptive`)
-* Finally `FELIX_XDPENABLED` should be set to `false` otherwise felix will periodically cleanup the VPP configuration
+* Finally `FELIX_XDPENABLED` should be set to `false` on the `calico-node` container otherwise felix will periodically cleanup the VPP configuration
 ````yaml
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: calico-vpp-node
-  namespace: kube-system
+  namespace: calico-vpp-dataplane
 spec:
   template:
     spec:
@@ -103,6 +103,16 @@ spec:
               value: "1"
             - name: CALICOVPP_RX_MODE
               value: "polling"
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: calico-node
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      containers:
         - name: calico-node
           env:
             - name: FELIX_XDPENABLED
@@ -230,7 +240,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: calico-vpp-node
-  namespace: kube-system
+  namespace: calico-vpp-dataplane
 spec:
   template:
     spec:
