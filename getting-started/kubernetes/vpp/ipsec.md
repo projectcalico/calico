@@ -1,6 +1,6 @@
 ---
-title: IPsec configuration
-description: Enable IPsec for faster encryption between nodes when using the VPP data plane.
+title: IPsec configuration with VPP
+description: Enable IPsec for faster encryption between nodes when using the VPP dataplane.
 canonical_url: '/getting-started/kubernetes/vpp/ipsec'
 ---
 
@@ -27,7 +27,7 @@ In order to enable IPsec encryption, you will need a Kubernetes cluster with:
 
 Create a Kubernetes secret that contains the PSK used for the IKEv2 exchange between the nodes. You can use the following command to create a random PSK. It will generate a unique random key. You may also replace the part after `psk=` with a key of your choice.
 ```bash
-kubectl -n kube-system create secret generic calicovpp-ipsec-secret \
+kubectl -n calico-vpp-dataplane create secret generic calicovpp-ipsec-secret \
    --from-literal=psk="$(dd if=/dev/urandom bs=1 count=36 2>/dev/null | base64)"
 ```
 
@@ -35,7 +35,7 @@ kubectl -n kube-system create secret generic calicovpp-ipsec-secret \
 
 To enable IPsec, you need to configure two environment variables on the `calico-vpp-node` pod. You can do so with the following kubectl command:
 ````bash
-kubectl -n kube-system patch daemonset calico-vpp-node --patch "$(curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/patches/ipsec.yaml)"
+kubectl -n calico-vpp-dataplane patch daemonset calico-vpp-node --patch "$(curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/patches/ipsec.yaml)"
 ````
 
 Once IPsec is enabled, all the traffic that uses IP-in-IP encapsulation in the cluster will be automatically encrypted.
