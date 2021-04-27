@@ -127,16 +127,20 @@ custom_css: css/intro.css
 <div id="why-use-calico-10" class="row">
   <div class="col-md-6">
     <h3 id="enterprise-compatible" style="margin-top: 5px">Calico Cloud compatible</h3>
-    <p>Calico Cloud builds on top of open source Calico to provide additional higher-level features and capabilities:</p>
+    <p>Calico Cloud builds on top of open-source Calico to provide Kubernetes security and observability features and capabilities:</p>
     <ul style="">
-        <li>Hierarchical network policy</li>
-        <li>Egress access controls (DNS policies, egress gateways)</li>
-        <li>Network visualization and troubleshooting</li>
-        <li>Network policy recommendations</li>
-        <li>Network policy preview and staging</li>
-        <li>Compliance controls and reporting</li>
-        <li>Intrusion detection (suspicious activity, anomaly detection)</li>
-        <li>Multi-cluster management with multi-cloud federation</li>
+        <li>Egress access controls (DNS policies, Egress gateway)</li>
+        <li>Extend firewall to Kubernetes</li>
+        <li>Hierarchical tiers</li>
+        <li>FQDN / DNS based policy</li>
+        <li>Micro-segmentation across Host/VMs/Containers</li>
+        <li>Security policy preview, staging, and recommendation</li>
+        <li>Compliance reporting and alerts</li>
+        <li>Intrusion detection & prevention (IDS / IPS) for Kubernetes</li>
+        <li>SIEM Integrations</li>
+        <li>Application Layer (L7) Observability</li>
+        <li>Dynamic Packet Capture</li>
+        <li>DNS Dashboards</li>
     </ul>
   </div>
   <div class="col-md-6">
