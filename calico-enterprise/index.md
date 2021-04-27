@@ -1,20 +1,20 @@
 ---
-title: Calico Enterprise
-description: Learn about Calico Enterprise
+title: Calico Cloud
+description: Learn about Calico Cloud
 show_read_time: false
 show_toc: false
 show_title: false
 calico_enterprise: true
 ---
 <br>
-<h3 style="font-style: italic;">If you like Calico, you'll love Calico Enterprise!</h3>
+<h3 style="font-style: italic;">If you like Calico, you'll love Calico Cloud!</h3>
 <br>
 <table style="max-width: 900px;">
   <thead>
     <tr>
       <th></th>
       <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-logo-64px.png" alt="Calico" style="margin: auto;"></th>
-      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-enterprise-logo-64px.png" alt="Calico Enterprise" style="margin: auto;"></th>
+      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-cloud-logo.png" alt="Calico Cloud" style="margin: auto;"></th>
     </tr>
   </thead>
   <tbody>
