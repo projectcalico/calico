@@ -84,11 +84,11 @@ Before you get started, make sure you have downloaded and configured the {% incl
 
    Standard install:
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-eks.yaml
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp-eks.yaml
    ```
    Install using the optional DPDK driver for better networking performance:
    ```bash
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-eks-dpdk.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp-eks-dpdk.yaml
 ```
 
 1. Finally, add nodes to the cluster.
@@ -134,11 +134,11 @@ For some hardware, the following hugepages configuration may enable VPP to use m
 Start by getting the appropriate yaml manifest for the {{ site.prodname }} VPP dataplane:
 ```bash
 # If you have configured hugepages on your machines
-curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp.yaml
+curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp.yaml
 ```
 ```bash
 # If not, or if you're unsure
-curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-nohuge.yaml
+curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp-nohuge.yaml
 ```
 
 Then configure these parameters in the `calico-vpp-config` ConfigMap in the yaml manifest.

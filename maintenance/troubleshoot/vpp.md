@@ -16,7 +16,7 @@ If you're encountering issues with the VPP dataplane, feel free to reach out to 
 
 * With curl
 ````bash
-curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/test/scripts/vppdev.sh \
+curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/test/scripts/vppdev.sh \
   | tee /usr/bin/calivppctl
 chmod +x /usr/bin/calivppctl
 ````
