@@ -4,7 +4,7 @@ description: Learn about Calico Cloud
 show_read_time: false
 show_toc: false
 show_title: false
-calico_enterprise: false
+calico_enterprise: true
 ---
 <br>
 <h3 style="font-style: italic;">If you like Calico, you'll love Calico Cloud!</h3>
