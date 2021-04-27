@@ -113,8 +113,16 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 			}
 			log.Debugf("Got ADD event for pod: %s", key)
 
+			// Safely extract the pod from the update so we can determine if we should
+			// skip it. We skip pods that are host networked below.
+			pod, err := converter.ExtractPodFromUpdate(obj)
+			if err != nil {
+				log.WithError(err).Error("Failed to extract pod")
+				return
+			}
+
 			// Ignore updates for host networked pods.
-			if isHostNetworked(obj.(*v1.Pod)) {
+			if isHostNetworked(pod) {
 				log.Debugf("Skipping irrelevant pod %s", key)
 				return
 			}
@@ -140,8 +148,14 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 			}
 			log.Debugf("Got UPDATE event for pod: %s", key)
 
+			pod, err := converter.ExtractPodFromUpdate(newObj)
+			if err != nil {
+				log.WithError(err).Error("Failed to extract pod")
+				return
+			}
+
 			// Ignore updates for not ready / irrelevant pods.
-			if !isReadyCalicoPod(newObj.(*v1.Pod)) {
+			if !isReadyCalicoPod(pod) {
 				log.Debugf("Skipping irrelevant pod %s", key)
 				return
 			}
@@ -167,12 +181,21 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 			}
 			log.Debugf("Got DELETE event for pod: %s", key)
 
+			// Safely extract the pod from the update so we can determine if we should
+			// skip it. We skip pods that are host networked below.
+			pod, err := converter.ExtractPodFromUpdate(obj)
+			if err != nil {
+				log.WithError(err).Error("Failed to extract pod")
+				return
+			}
+
 			// Ignore updates for host networked pods.
-			if isHostNetworked(obj.(*v1.Pod)) {
+			if isHostNetworked(pod) {
 				log.Debugf("Skipping irrelevant pod %s", key)
 				return
 			}
 
+			// Convert to workload endpoint(s).
 			wepDataList, err := podConverter.Convert(obj)
 			if err != nil {
 				log.WithError(err).Errorf("Error while converting %v to wep.", key)
