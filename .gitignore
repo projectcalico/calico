@@ -1,6 +1,5 @@
 .idea/
 vendor/
-proto/*.pb.go
 .go-pkg-cache/
 bin
 *.created-*

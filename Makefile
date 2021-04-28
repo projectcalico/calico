@@ -89,8 +89,7 @@ include Makefile.common
 .PHONY: clean
 ## Clean enough that a new release build will be clean
 clean:
-	rm -rf .go-pkg-cache report vendor bin proto/felixbackend.pb.go \
-		   proto/healthz.pb.go Makefile.common*
+	rm -rf .go-pkg-cache report vendor bin Makefile.common*
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
 	-docker rmi $(BUILD_IMAGE):latest-$(ARCH)
 	-docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH)
@@ -145,7 +144,7 @@ PROTOC_IMPORTS =  -I proto\
 # Also remap the output modules to gogo versions of google/protobuf and google/rpc
 PROTOC_MAPPINGS = Menvoy/api/v2/core/address.proto=github.com/envoyproxy/data-plane-api/envoy/api/v2/core,Menvoy/api/v2/core/base.proto=github.com/envoyproxy/data-plane-api/envoy/api/v2/core,Menvoy/type/http_status.proto=github.com/envoyproxy/data-plane-api/envoy/type,Menvoy/type/percent.proto=github.com/envoyproxy/data-plane-api/envoy/type,Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc,Menvoy/service/auth/v2/external_auth.proto=github.com/envoyproxy/data-plane-api/envoy/service/auth/v2
 
-proto: proto/felixbackend.pb.go proto/healthz.proto
+proto: proto/felixbackend.pb.go proto/healthz.pb.go
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
@@ -193,7 +192,17 @@ ut: local_build proto
 ###############################################################################
 
 .PHONY: ci
-ci: mod-download build-all static-checks ut
+ci: mod-download build-all check-generated-files static-checks ut
+
+## Check if generated files are out of date
+.PHONY: check-generated-files
+check-generated-files: proto
+	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
+	  echo "Generated files are out of date."; \
+	  false; \
+	else \
+	  echo "Generated files are up to date."; \
+	fi
 
 ###############################################################################
 # CD
