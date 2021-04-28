@@ -91,12 +91,12 @@ The geeky details of what you get:
 1. Confirm that all of the pods are running with the following command.
 
    ```
-   watch kubectl get pods -n calico-system
+   watch kubectl get pods -n tigera-operator
    ```
 
    Wait until each pod has the `STATUS` of `Running`.
 
-   > **Note**: The Tigera operator installs resources in the `calico-system` namespace. Other install methods may use
+   > **Note**: The Tigera operator installs resources in the `tigera-operator` namespace. Other install methods may use
    > the `kube-system` namespace instead.
    {: .alert .alert-info}
 
