@@ -56,7 +56,7 @@ kind: HostEndpoint
 metadata:
   name: production-host
   labels:
-    apply-dos-mitigation: true
+    apply-dos-mitigation: "true"
 spec:
   interfaceName: eth0
   node: jasper
