@@ -23,23 +23,9 @@ import (
 // NewClusterInformationStorage creates a new libcalico-based storage.Interface implementation for ClusterInformation
 func NewClusterInformationStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
-	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
-		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.ClusterInformation)
-		return c.ClusterInformation().Create(ctx, res, oso)
-	}
-	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
-		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.ClusterInformation)
-		return c.ClusterInformation().Update(ctx, res, oso)
-	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
 		ogo := opts.(options.GetOptions)
 		return c.ClusterInformation().Get(ctx, name, ogo)
-	}
-	deleteFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
-		odo := opts.(options.DeleteOptions)
-		return c.ClusterInformation().Delete(ctx, name, odo)
 	}
 	listFn := func(ctx context.Context, c clientv3.Interface, opts clientOpts) (resourceListObject, error) {
 		olo := opts.(options.ListOptions)
@@ -58,10 +44,7 @@ func NewClusterInformationStorage(opts Options) (registry.DryRunnableStorage, fa
 		libCalicoType:     reflect.TypeOf(libcalicoapi.ClusterInformation{}),
 		libCalicoListType: reflect.TypeOf(libcalicoapi.ClusterInformationList{}),
 		isNamespaced:      false,
-		create:            createFn,
-		update:            updateFn,
 		get:               getFn,
-		delete:            deleteFn,
 		list:              listFn,
 		watch:             watchFn,
 		resourceName:      "ClusterInformation",

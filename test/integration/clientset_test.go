@@ -1101,6 +1101,20 @@ func testClusterInformationClient(client calicoclient.Interface, name string) er
 		return fmt.Errorf("items field should not be set to nil")
 	}
 
+	// Confirm it's not possible to edit the default cluster information.
+	info := ci.Items[0]
+	info.Spec.CalicoVersion = "fakeVersion"
+	_, err = clusterInformationClient.Update(ctx, &info, metav1.UpdateOptions{})
+	if err == nil {
+		return fmt.Errorf("expected error updating default clusterinformation")
+	}
+
+	// Should also not be able to delete it.
+	err = clusterInformationClient.Delete(ctx, "default", metav1.DeleteOptions{})
+	if err == nil {
+		return fmt.Errorf("expected error updating default clusterinformation")
+	}
+
 	// Confirm it's not possible to create a clusterInformation obj with name other than "default"
 	invalidClusterInfo := &v3.ClusterInformation{ObjectMeta: metav1.ObjectMeta{Name: "test-clusterinformation"}}
 	_, err = clusterInformationClient.Create(ctx, invalidClusterInfo, metav1.CreateOptions{})
