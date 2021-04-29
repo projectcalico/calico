@@ -1,12 +1,12 @@
 ---
 title: Requirements 
-description: Review requirements for the standard install for Calico for Windows.
+description: Review the requirements for the standard install for Calico for Windows.
 canonical_url: '/getting-started/windows-calico/kubernetes/requirements'
 ---
 
 ### About {{site.prodnameWindows}}
 
-Because the Kubernetes and {{site.prodname}} control components do not run on Windows yet, a hybrid Linux/Windows cluster is required. {{site.prodnameWindows}} standard installation is distributed as a **.zip archive**. 
+Because the Kubernetes and {{site.prodname}} control components do not run on Windows yet, a hybrid Linux/Windows cluster is required. The {{site.prodnameWindows}} standard installation is distributed as a **.zip archive**.
 
 ### What's supported in this release
 
@@ -35,7 +35,7 @@ The following table summarizes the networking options and considerations.
 
 #### Datastores
 
-Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodnameWindows}} implementation.)
+Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in {{site.prodnameWindows}}.)
 
 #### Kubernetes version 
 
@@ -45,8 +45,8 @@ Earlier versions may work, but we do not actively test {{site.prodnameWindows}} 
 
 #### Linux platform 
 
-- At least one Linux Kubernetes worker node to run {{site.prodname}}'s cluster-wide components that meets [Linux system requirements]({{site.baseurl}}/getting-started/kubernetes/requirements), and is installed with {{site.prodname}} v3.12.0+.
-- VXLAN or BGP without encapsulation is supported if using Calico CNI. IPIP (default encapsulation mode) is not supported. Use the following command to turn off IPIP.
+- At least one Linux Kubernetes worker node to run {{site.prodname}}'s cluster-wide components that meets [Linux system requirements]({{site.baseurl}}/getting-started/kubernetes/requirements), and is installed with {{site.prodname}} v3.12+.
+- VXLAN or BGP without encapsulation is supported if using Calico CNI. IPIP (Calico's default encapsulation mode) is not supported. Use the following command to turn off IPIP.
 ```bash
 calicoctl patch felixconfiguration default -p '{"spec":{"ipipEnabled":false}}'
 ```
