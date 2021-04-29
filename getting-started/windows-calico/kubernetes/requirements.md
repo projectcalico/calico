@@ -64,12 +64,10 @@ calicoctl ipam configure --strictaffinity=true
 #### Windows platform 
 
 - Windows versions:
-  - Windows Server 1903 (AKA 19H1) build 18317 or greater
-  - Windows Server 2019 / 1809 (RS5) or greater, with [some limitations]({{site.baseurl}}/getting-started/windows-calico/limitations)
-  - Windows Server 2019 with DSR support:
-    - OS 1809: Build 17763.1432, binary version: 10.0.17763.1432
-    - OS 1903: Build 18362.1049, binary version: 10.0.18362.1049
-    - OS 1909: Build 18363.1049, binary version: 10.0.18363.1049
+  - Windows Server 1809 (build Build 17763.1432 or greater)
+  - Windows Server 1903 (AKA 19H1 build 18362.1049 or greater)
+  - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater)
+  - Windows Server 2004 (AKA 20H2 build)
 - PowerShell for the installer
 - Make sure {% include open-new-window.html text='Docker' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server' %} or {% include open-new-window.html text='containerd' url='https://kubernetes.io/docs/setup/production-environment/container-runtimes/#containerd' %} is installed and running.
 - If you are using {{site.prodname}} BGP networking, the RemoteAccess service must be installed for the Windows BGP Router.
