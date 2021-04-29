@@ -10,9 +10,11 @@ Install {{site.prodnameWindows}} on your Kubernetes cluster in approximately 5 m
 
 ### Concepts
 
-{{site.prodnameWindows}} is a hybrid implementation that requires a Linux control node for {{site.prodname}} components, and a Windows cluster for Windows nodes.
+{{site.prodnameWindows}} is a hybrid implementation that requires a Linux cluster for {{site.prodname}} components and Linux workloads, and Windows nodes for Windows workloads.
 
 ### Before you begin
+
+Review the requirements below and setup a {{site.prodname}} cluster on Linux nodes and provision Windows machines.
 
 **Datastore requirements**
 
@@ -26,7 +28,12 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
   - Windows Server 1809 (build Build 17763.1432 or greater)
   - Windows Server 1903 (AKA 19H1 build 18362.1049 or greater)
   - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater)
-- Docker or containerd installed and running. If containerd is running, it will be used as the container runtime otherwise Docker is assumed.
+  - Windows Server 2004 (AKA 20H2 build)
+
+  > **Note**: Windows Server version support differs for each Kubernetes version. Review the {% include open-new-window.html text='Windows OS Version Support' url='https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#windows-os-version-support' %} table for the Windows Server versions supported by each Kubernetes version.
+  {: .alert .alert-info}
+  
+- Container runtime: Docker or containerd installed and running. If containerd is running, it will be used as the container runtime otherwise Docker is assumed.
 - Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
 - Be able to run a command as Administrator using powershell.
 - Additionally, for EKS:
@@ -34,7 +41,8 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
   - The Windows instance role must have permissions to get `namespaces` and get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
     - Run these commands below to install the permissions needed to install {{site.prodnameWindows}}.
       Replace `<eks_node_name>` with the Kubernetes node name of the EKS Windows node, for example `ip-192-168-42-34.us-west-2.compute.internal`.
-      Replace the namespace `calico-system` with `kube-system` in the commands below if you are using a non operator-managed {{site.prodname}} installation.
+      > **Note**: If you are using a non operator-managed {{site.prodname}} installation, replace the namespace `calico-system` with `kube-system` in the commands below.
+      {: .alert .alert-info}
 
       ```bash
       kubectl create clusterrole calico-install-ns --verb=get --resource=namespace
@@ -54,7 +62,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
     - Kubernetes version 1.20+
     
 **Linux control node requirements**
-- Installed with {{site.prodname}} v3.12+
+- A Linux cluster installed with {{site.prodname}} v3.12+
 - If {{site.prodname}} networking is being used:
     - Networking must be VXLAN or BGP without encapsulation. (Note: for EKS, networking is set to none since AWS VPC networking is used.)
     - Strict affinity must be set to `true`
