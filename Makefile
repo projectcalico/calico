@@ -464,9 +464,9 @@ ifneq ($(VERSION), $(GIT_VERSION))
 endif
 
 	$(MAKE) image
-	$(MAKE) tag-image IMAGETAG=$(VERSION)
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	$(MAKE) tag-image IMAGETAG=latest
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
