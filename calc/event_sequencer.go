@@ -777,6 +777,9 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 		for _, block := range cfg.Spec.ServiceExternalIPs {
 			buf.pendingGlobalBGPConfig.ServiceExternalCidrs = append(buf.pendingGlobalBGPConfig.ServiceExternalCidrs, block.CIDR)
 		}
+		for _, block := range cfg.Spec.ServiceLoadBalancerIPs {
+			buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs = append(buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs, block.CIDR)
+		}
 	}
 }
 

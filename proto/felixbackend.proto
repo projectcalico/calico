@@ -555,4 +555,5 @@ message WireguardEndpointRemove {
 message GlobalBGPConfigUpdate {
   repeated string service_cluster_cidrs = 1;
   repeated string service_external_cidrs = 2;
+  repeated string service_loadbalancer_cidrs = 3;
 }

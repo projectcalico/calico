@@ -69,6 +69,7 @@ func (m *serviceLoopManager) CompleteDeferredWork() error {
 		blockedCIDRs := []string{}
 		blockedCIDRs = append(blockedCIDRs, m.pendingGlobalBGPConfig.GetServiceClusterCidrs()...)
 		blockedCIDRs = append(blockedCIDRs, m.pendingGlobalBGPConfig.GetServiceExternalCidrs()...)
+		blockedCIDRs = append(blockedCIDRs, m.pendingGlobalBGPConfig.GetServiceLoadbalancerCidrs()...)
 
 		// Render chains for those cluster CIDRs.
 		newFilterChains := m.ruleRenderer.BlockedCIDRsToIptablesChains(blockedCIDRs, m.ipVersion)

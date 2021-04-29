@@ -136,11 +136,17 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 						CIDR: "255.200.0.0/24",
 					},
 				},
+				ServiceLoadBalancerIPs: []v3.ServiceLoadBalancerIPBlock{
+					{
+						CIDR: "255.220.0.0/24",
+					},
+				},
 			},
 		},
 		proto.GlobalBGPConfigUpdate{
-			ServiceClusterCidrs:  []string{"1.2.0.0/16", "fd5f::/120"},
-			ServiceExternalCidrs: []string{"255.200.0.0/24"},
+			ServiceClusterCidrs:      []string{"1.2.0.0/16", "fd5f::/120"},
+			ServiceExternalCidrs:     []string{"255.200.0.0/24"},
+			ServiceLoadbalancerCidrs: []string{"255.220.0.0/24"},
 		},
 		proto.GlobalBGPConfigUpdate{}),
 )
