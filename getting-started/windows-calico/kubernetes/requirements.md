@@ -58,7 +58,7 @@ calicoctl patch felixconfiguration default -p '{"spec":{"ipipEnabled":false}}'
 calicoctl ipam configure --strictaffinity=true
 ```
 
->**Note**: {{site.prodnameWindows}} requires four Linux worker nodes in order to meet high-availability requirements for Typha.
+>**Note**: For operator-managed Linux {{site.prodname}} clusters, three Linux worker nodes are required in order to meet high-availability requirements for Typha.
 {: .alert .alert-info}
 
 #### Windows platform 
