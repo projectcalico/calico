@@ -12,11 +12,14 @@ Because the Kubernetes and {{site.prodname}} control components do not run on Wi
 
 ✓ Install: Manifest install for Kubernetes clusters
 
-✓ Platforms: Kubernetes, EKS
+✓ Platforms: Kubernetes, OpenShift, RKE, EKS, AKS
 
 ✓ Networking: 
   - Kubernetes, on-premises: Calico CNI with BGP or VXLAN
+  - OpenShift: Calico CNI with BGP or VXLAN
+  - Rancher Kubernetes Engine: Calico CNI with BGP or VXLAN
   - EKS: VPC CNI, or Calico CNI with BGP or VXLAN
+  - AKS: Azure CNI
 
 ### Requirements
 
