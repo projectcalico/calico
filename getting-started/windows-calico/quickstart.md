@@ -38,25 +38,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 - Be able to run a command as Administrator using powershell.
 - Additionally, for EKS:
   - The VPC controllers must be installed to run Windows pods.
-  - The Windows instance role must have permissions to get `namespaces` and get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
-    - Run these commands below to install the permissions needed to install {{site.prodnameWindows}}.
-      Replace `<eks_node_name>` with the Kubernetes node name of the EKS Windows node, for example `ip-192-168-42-34.us-west-2.compute.internal`.
-      > **Note**: If you are using a non operator-managed {{site.prodname}} installation, replace the namespace `calico-system` with `kube-system` in the commands below.
-      {: .alert .alert-info}
-
-      ```bash
-      kubectl create clusterrole calico-install-ns --verb=get --resource=namespace
-      kubectl create clusterrolebinding calico-install-ns --clusterrole=calico-install-ns --user=system:node:<eks_node_name>
-      kubectl create role calico-install-token --verb=get,list --resource=secrets --namespace calico-system
-      kubectl create rolebinding calico-install-token --role=calico-install-token --user=system:node:<eks_node_name> --namespace calico-system
-      ```
-    - When {{site.prodnameWindows}} installation is complete, delete the temporary resources:
-      ```bash
-      kubectl delete clusterrolebinding calico-install-ns
-      kubectl delete clusterrole calico-install-ns
-      kubectl delete rolebinding calico-install-token --namespace calico-system
-      kubectl delete role calico-install-token --namespace calico-system
-      ```
+  - An instance role on the Windows instance must have permissions to get `namespaces` and get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
 - Additionally, for AKS:
     - {{site.prodnameWindows}} can be enabled only on newly created clusters.
     - Kubernetes version 1.20+
@@ -287,6 +269,17 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   <label:EKS>
   <%
 
+1. Ensure that a Windows instance role has permissions to get `namespaces` and to get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
+   One way to do this is by running the following comands to install the required permissions temporarily. Before running the commands, replace `<eks_node_name>` with the Kubernetes node name of the EKS Windows node, for example `ip-192-168-42-34.us-west-2.compute.internal`.
+   > **Note**: If you are using a non operator-managed {{site.prodname}} installation, replace the namespace `calico-system` with `kube-system` in the commands below.
+   {: .alert .alert-info}
+   ```bash
+   kubectl create clusterrole calico-install-ns --verb=get --resource=namespace
+   kubectl create clusterrolebinding calico-install-ns --clusterrole=calico-install-ns --user=system:node:<eks_node_name>
+   kubectl create role calico-install-token --verb=get,list --resource=secrets --namespace calico-system
+   kubectl create rolebinding calico-install-token --role=calico-install-token --user=system:node:<eks_node_name> --namespace calico-system
+   ```
+  
 1. Prepare directory for Kubernetes files on the Windows node.
 
    ```powershell
@@ -338,6 +331,16 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    ```powershell
    Get-Service -Name kubelet
    Get-Service -Name kube-proxy
+   ```
+   
+1. If you installed temporary RBAC in the first step, remove the permissions by running the following commands.
+   > **Note**: If you are using a non operator-managed {{site.prodname}} installation, replace the namespace `calico-system` with `kube-system` in the commands below.
+   {: .alert .alert-info}
+   ```bash
+   kubectl delete clusterrolebinding calico-install-ns
+   kubectl delete clusterrole calico-install-ns
+   kubectl delete rolebinding calico-install-token --namespace calico-system
+   kubectl delete role calico-install-token --namespace calico-system
    ```
 %>
 
