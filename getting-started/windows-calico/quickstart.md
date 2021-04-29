@@ -35,7 +35,7 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
   
 - Container runtime: Docker or containerd installed and running. If containerd is running, it will be used as the container runtime otherwise Docker is assumed.
 - Remote access to the Windows node via Remote Desktop Protocol (RDP) or Windows Remote Management (WinRM)
-- Be able to run a command as Administrator using powershell.
+- Be able to run a command as Administrator using PowerShell.
 - Additionally, for EKS:
   - The VPC controllers must be installed to run Windows pods.
   - An instance role on the Windows instance must have permissions to get `namespaces` and get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
@@ -101,7 +101,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    ```
    If you installed Calico using the manifest from https://docs.projectcalico.org/manifests/calico-vxlan.yaml then BGP is already disabled.
 
-1. Prepare directory for Kubernetes files on Windows node.
+1. Prepare the directory for Kubernetes files on Windows node.
 
    ```powershell
    mkdir c:\k
@@ -109,14 +109,14 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. Copy the Kubernetes kubeconfig file from the master node (default, Location $HOME/.kube/config), to **c:\k\config**.
 
-1. Download the powershell script, **install-calico-windows.ps1**.
+1. Download the PowerShell script, **install-calico-windows.ps1**.
 
    ```powershell
    Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
 
 1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
-   The powershell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
+   The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
 
    You do not need to pass a parameter if the default value of the parameter is correct for your cluster.
 
@@ -153,7 +153,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Get-Service -Name CalicoFelix
    ```
 
-1. Install and start kubelet/kube-proxy service. Execute following powershell script/commands.
+1. Install and start kubelet/kube-proxy service. Execute following PowerShell script/commands.
 
    ```powershell
    {{site.rootDirWindows}}\kubernetes\install-kube-services.ps1
@@ -198,7 +198,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Start-Service RemoteAccess
    ```
 
-1. Prepare directory for Kubernetes files on Windows node.
+1. Prepare the directory for Kubernetes files on Windows node.
 
    ```powershell
    mkdir c:\k
@@ -206,14 +206,14 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. Copy the Kubernetes kubeconfig file from the master node (default, Location $HOME/.kube/config), to **c:\k\config**.
 
-1. Download the powershell script, **install-calico-windows.ps1**.
+1. Download the PowerShell script, **install-calico-windows.ps1**.
 
    ```powershell
    Invoke-WebRequest {{ "/scripts/install-calico-windows.ps1" | absolute_url }} -OutFile c:\install-calico-windows.ps1
    ```
 
 1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
-   The powershell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
+   The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
 
    You do not need to pass a parameter if the default value of the parameter is correct for your cluster.
 
@@ -250,7 +250,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    Get-Service -Name CalicoFelix
    ```
 
-1. Install and start kubelet/kube-proxy service. Execute following powershell script/commands.
+1. Install and start kubelet/kube-proxy service. Execute following PowerShell script/commands.
 
    ```powershell
    {{site.rootDirWindows}}\kubernetes\install-kube-services.ps1
@@ -280,7 +280,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
    kubectl create rolebinding calico-install-token --role=calico-install-token --user=system:node:<eks_node_name> --namespace calico-system
    ```
   
-1. Prepare directory for Kubernetes files on the Windows node.
+1. Prepare the directory for Kubernetes files on the Windows node.
 
    ```powershell
    mkdir c:\k
@@ -288,14 +288,14 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
 1. [Install kubectl](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#windows){:target="_blank"} and move the kubectl binary to **c:\k**.
 
-1. Download the powershell script, **install-calico-windows.ps1**.
+1. Download the PowerShell script, **install-calico-windows.ps1**.
 
    ```powershell
    Invoke-WebRequest {{site.url}}/scripts/install-calico-windows.ps1 -OutFile c:\install-calico-windows.ps1
    ```
 
 1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
-   The powershell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
+   The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
    
    You do not need to pass a parameter if the default value of the parameter is correct for your cluster.
 

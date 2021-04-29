@@ -138,7 +138,7 @@ expected IP of a node or an external BGP peer. If the IP of the failed peering i
 
 **Examine BGP state on a Windows host**
 
-The Windows BGP router exposes its configuration and state as Powershell commandlets.
+The Windows BGP router exposes its configuration and state as PowerShell commandlets.
 
 **To show BGP peers**:
 
