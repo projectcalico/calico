@@ -1,31 +1,31 @@
-- title: v3.19
+- title: v3.19.0
   note: ""
   chart:
     version: 1
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: release-v1.17
+   version: v1.17.0
   components:
      typha:
-      version: release-v3.19
+      version: v3.19.0
      calicoctl:
-      version: release-v3.19
+      version: v3.19.0
      calico/node:
-      version: release-v3.19
+      version: v3.19.0
      calico/cni:
-      version: release-v3.19
+      version: v3.19.0
      calico/apiserver:
-      version: release-v3.19
+      version: v3.19.0
      calico/kube-controllers:
-      version: release-v3.19
+      version: v3.19.0
      calico/flannel-migration-controller:
-      version: release-v3.19
+      version: v3.19.0
      networking-calico:
-      version: release-v3.19
+      version: v3.19.0
      flannel:
       version: v0.13.0
      calico/dikastes:
-      version: release-v3.19
+      version: v3.19.0
      flexvol:
-      version: release-v3.19
+      version: v3.19.0
