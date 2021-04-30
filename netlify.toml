@@ -63,6 +63,17 @@
   jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /master --destination _site/master
   '''
 
+# proxy redirects for website and manifests for v3.19
+[[redirects]]
+  from = "/archive/v3.19/*"
+  to = "https://calico-v3-19.netlify.app/archive/v3.19/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/v3.19/*"
+  to = "https://calico-v3-19.netlify.app/v3.19/:splat"
+  status = 200
+
 # proxy redirects for website and manifests for v3.18
 [[redirects]]
   from = "/archive/v3.18/*"
