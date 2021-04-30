@@ -261,6 +261,9 @@ func StartDataplaneDriver(configParams *config.Config,
 
 				WireguardEnabled:       configParams.WireguardEnabled,
 				WireguardInterfaceName: configParams.WireguardInterfaceName,
+				WireguardIptablesMark:  markWireguard,
+				WireguardListeningPort: configParams.WireguardListeningPort,
+				RouteSource:            configParams.RouteSource,
 
 				IptablesLogPrefix:         configParams.LogPrefix,
 				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
@@ -286,6 +289,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				RoutingTableIndex:   wireguardTableIndex,
 				InterfaceName:       configParams.WireguardInterfaceName,
 				MTU:                 configParams.WireguardMTU,
+				RouteSource:         configParams.RouteSource,
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
 			VXLANMTU:                       configParams.VXLANMTU,
@@ -346,6 +350,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			KubeClientSet: k8sClientSet,
 
 			FeatureDetectOverrides: configParams.FeatureDetectOverride,
+
+			RouteSource: configParams.RouteSource,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

@@ -17,6 +17,7 @@ package wireguard
 import (
 	"errors"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -43,6 +44,11 @@ const (
 	// For wireguard client connections we back off retries and only try to actually connect once every
 	// <wireguardClientRetryInterval> requests.
 	wireguardClientRetryInterval = 10
+
+	wireguardType       = "wireguard"
+	ipVersion           = 4
+	ipPrefixLen         = 32
+	allSrcValidMarkPath = "/proc/sys/net/ipv4/conf/all/src_valid_mark"
 )
 
 var (
@@ -53,12 +59,6 @@ var (
 	errWrongInterfaceType = errors.New("incorrect interface type for wireguard")
 
 	zeroKey = wgtypes.Key{}
-)
-
-const (
-	wireguardType = "wireguard"
-	ipVersion     = 4
-	ipPrefixLen   = 32
 )
 
 type noOpConnTrack struct{}
@@ -1343,6 +1343,14 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 // ensureLink checks that the wireguard link is configured correctly. Returns true if the link is oper up.
 func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error) {
 	logCxt := log.WithField("ifaceName", w.config.InterfaceName)
+
+	if w.config.RouteSource == "WorkloadIPs" {
+		log.Info("Enabling src valid mark for WireGuard")
+		if err := writeProcSys(allSrcValidMarkPath, "1"); err != nil {
+			return false, err
+		}
+	}
+
 	link, err := netlinkClient.LinkByName(w.config.InterfaceName)
 	if netlinkshim.IsNotExist(err) {
 		// Create the wireguard device.
@@ -1678,4 +1686,19 @@ func getOnlyItemInSet(s set.Set) interface{} {
 		return set.StopIteration
 	})
 	return i
+}
+
+// writeProcSys writes the value to the given sysctl path
+func writeProcSys(path, value string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	if _, err = f.Write([]byte(value)); err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	return nil
 }
