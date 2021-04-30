@@ -1,5 +1,4 @@
 - title: v3.19.0
-  note: ""
   chart:
     version: 1
   tigera-operator:
