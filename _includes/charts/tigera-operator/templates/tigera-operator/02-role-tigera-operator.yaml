@@ -84,6 +84,17 @@ rules:
       - delete
       - watch
   - apiGroups:
+    - networking.k8s.io
+    resources:
+    - networkpolicies
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
+  - apiGroups:
     - crd.projectcalico.org
     resources:
     - felixconfigurations
@@ -134,6 +145,8 @@ rules:
     verbs:
       - list
       - watch
+      - create 
+      - update
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
@@ -240,6 +253,7 @@ rules:
       - watch
       - create
       - update
+      - delete
 # Add the permissions to monitor the status of certificatesigningrequests when certificate management is enabled.
   - apiGroups:
       - certificates.k8s.io
