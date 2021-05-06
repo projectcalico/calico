@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,9 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
@@ -28,6 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
 const (
@@ -63,7 +67,50 @@ func retriable(err error) bool {
 	return false
 }
 
-func UpdateSrcDstCheck(caliCheckOption string) error {
+type SrcDstCheckUpdater interface {
+	Update(option string) error
+}
+
+func WaitForEC2SrcDstCheckUpdate(check string, healthAgg *health.HealthAggregator, updater SrcDstCheckUpdater, c clock.Clock) {
+	log.Infof("Setting AWS EC2 source-destination-check to %s", check)
+
+	const (
+		initBackoff   = 30 * time.Second
+		maxBackoff    = 8 * time.Minute
+		resetDuration = time.Hour
+		backoffFactor = 2.0
+		jitter        = 0.1
+	)
+
+	backoffMgr := wait.NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration, backoffFactor, jitter, c)
+	defer backoffMgr.Backoff().Stop()
+
+	const healthName = "aws-source-destination-check"
+	healthAgg.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
+
+	// set not-ready.
+	healthAgg.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+
+	for {
+		if err := updater.Update(check); err != nil {
+			log.WithField("src-dst-check", check).Warnf("Failed to set source-destination-check: %v", err)
+		} else {
+			// set ready.
+			healthAgg.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+			return
+		}
+
+		<-backoffMgr.Backoff().C()
+	}
+}
+
+type EC2SrcDstCheckUpdater struct{}
+
+func NewEC2SrcDstCheckUpdater() *EC2SrcDstCheckUpdater {
+	return &EC2SrcDstCheckUpdater{}
+}
+
+func (updater *EC2SrcDstCheckUpdater) Update(caliCheckOption string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

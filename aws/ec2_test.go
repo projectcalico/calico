@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,12 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"time"
+
+	"k8s.io/apimachinery/pkg/util/clock"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -25,6 +29,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+
+	"github.com/projectcalico/libcalico-go/lib/health"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -92,6 +98,44 @@ func (c *mockClient) DescribeInstancesWithContext(ctx aws.Context, input *ec2.De
 	}, nil
 }
 
+type mockSrcDstCheckUpdater struct {
+	fakeClock        *clock.FakeClock
+	healthAggregator *health.HealthAggregator
+	retryCount       int
+	totalRetries     int
+}
+
+func newMockSrcDstCheckUpdater(healthAgg *health.HealthAggregator, fc *clock.FakeClock) *mockSrcDstCheckUpdater {
+	return &mockSrcDstCheckUpdater{
+		fakeClock:        fc,
+		healthAggregator: healthAgg,
+		retryCount:       0,
+		totalRetries:     6,
+	}
+}
+
+func (updater *mockSrcDstCheckUpdater) Update(option string) error {
+	// taking jitter into consideration, each fakeClock step should be slightly longer
+	fakeClockSteps := []time.Duration{
+		40 * time.Second,
+		70 * time.Second,
+		3 * time.Minute,
+		5 * time.Minute,
+		9 * time.Minute,
+		9 * time.Minute,
+		9 * time.Minute,
+	}
+
+	Expect(updater.healthAggregator.Summary().Ready).To(BeFalse())
+
+	updater.fakeClock.Step(fakeClockSteps[updater.retryCount])
+	updater.retryCount += 1
+	if updater.retryCount > updater.totalRetries {
+		return nil
+	}
+	return errors.New("Some AWS EC2 errors")
+}
+
 var _ = Describe("AWS Tests", func() {
 	It("should correctly convert between errors and awserrors", func() {
 		fakeCode := "fakeCode"
@@ -148,5 +192,15 @@ var _ = Describe("AWS Tests", func() {
 		_, err := newEC2Client(context.TODO())
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("EC2 metadata service is unavailable"))
+	})
+
+	It("should retry EC2 source-destination-check on error and exit the retry loop on success", func() {
+		fc := clock.NewFakeClock(time.Now())
+		healthAgg := health.NewHealthAggregator()
+		mockSrcDstCheckUpdater := newMockSrcDstCheckUpdater(healthAgg, fc)
+
+		WaitForEC2SrcDstCheckUpdate("Disable", healthAgg, mockSrcDstCheckUpdater, fc)
+		Expect(mockSrcDstCheckUpdater.retryCount).To(Equal(1 + mockSrcDstCheckUpdater.totalRetries))
+		Expect(healthAgg.Summary().Ready).To(BeTrue())
 	})
 })

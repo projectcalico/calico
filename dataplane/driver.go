@@ -23,6 +23,7 @@ import (
 	"runtime/debug"
 
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/aws"
@@ -363,21 +364,9 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		// Set source-destination-check on AWS EC2 instance.
 		if configParams.AWSSrcDstCheck != string(apiv3.AWSSrcDstCheckOptionDoNothing) {
-			const healthName = "aws-source-destination-check"
-			healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
-
-			go func(check, healthName string, healthAgg *health.HealthAggregator) {
-				log.Infof("Setting AWS EC2 source-destination-check to %s", check)
-				err := aws.UpdateSrcDstCheck(check)
-				if err != nil {
-					log.WithField("src-dst-check", check).Errorf("Failed to set source-destination-check: %v", err)
-					// set not-ready.
-					healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
-					return
-				}
-				// set ready.
-				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-			}(configParams.AWSSrcDstCheck, healthName, healthAggregator)
+			c := &clock.RealClock{}
+			updater := aws.NewEC2SrcDstCheckUpdater()
+			go aws.WaitForEC2SrcDstCheckUpdate(configParams.AWSSrcDstCheck, healthAggregator, updater, c)
 		}
 
 		return intDP, nil
