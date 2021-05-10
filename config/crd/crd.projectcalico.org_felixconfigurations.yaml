@@ -185,7 +185,7 @@ spec:
                   udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667]'
                 items:
                   description: ProtoPort is combination of protocol, port, and CIDR.
-                    All three must be specified.
+                    Protocol and port must be specified.
                   properties:
                     net:
                       type: string
@@ -194,7 +194,6 @@ spec:
                     protocol:
                       type: string
                   required:
-                  - net
                   - port
                   - protocol
                   type: object
@@ -213,7 +212,7 @@ spec:
                   tcp:6667, udp:53, udp:67]'
                 items:
                   description: ProtoPort is combination of protocol, port, and CIDR.
-                    All three must be specified.
+                    Protocol and port must be specified.
                   properties:
                     net:
                       type: string
@@ -222,7 +221,6 @@ spec:
                     protocol:
                       type: string
                   required:
-                  - net
                   - port
                   - protocol
                   type: object
