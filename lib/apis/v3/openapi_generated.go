@@ -5954,7 +5954,7 @@ func schema_libcalico_go_lib_apis_v3_ProtoPort(ref common.ReferenceCallback) com
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ProtoPort is combination of protocol, port, and CIDR. All three must be specified.",
+				Description: "ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"protocol": {
@@ -5979,7 +5979,7 @@ func schema_libcalico_go_lib_apis_v3_ProtoPort(ref common.ReferenceCallback) com
 						},
 					},
 				},
-				Required: []string{"protocol", "port", "net"},
+				Required: []string{"protocol", "port"},
 			},
 		},
 	}
