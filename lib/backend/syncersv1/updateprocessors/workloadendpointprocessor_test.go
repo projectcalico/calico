@@ -70,7 +70,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 	It("should handle conversion of valid WorkloadEndpoints", func() {
 		netmac2, err := net.ParseMAC("01:23:45:67:89:ab")
 		Expect(err).NotTo(HaveOccurred())
-		mac2 := cnet.MAC{netmac2}
+		mac2 := cnet.MAC{HardwareAddr: netmac2}
 
 		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
 
@@ -134,7 +134,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		expectedIPv4Net = *(ipn.Network())
 		res.Spec.IPNATs = []apiv3.IPNAT{
-			apiv3.IPNAT{
+			{
 				InternalIP: "10.100.1.1",
 				ExternalIP: "10.1.10.1",
 			},
@@ -145,7 +145,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		res.Spec.IPv6Gateway = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
 		expectedIPv6Gateway, _, err := cnet.ParseCIDROrIP("2001:0db8:85a3:0000:0000:8a2e:0370:7334")
 		res.Spec.Ports = []apiv3.EndpointPort{
-			apiv3.EndpointPort{
+			{
 				Name:     "portname",
 				Protocol: numorstring.ProtocolFromInt(uint8(30)),
 				Port:     uint16(8080),
@@ -317,6 +317,51 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
 					"k1":                             "v1",
+				},
+				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
+			},
+			Revision: "abcde",
+		}))
+	})
+
+	It("should add a label representing the serviceaccount name", func() {
+		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
+
+		res := apiv3.NewWorkloadEndpoint()
+		res.Namespace = ns1
+		res.Labels = map[string]string{
+			"projectcalico.org/namespace":    ns1,
+			"projectcalico.org/orchestrator": oid1,
+			"k1":                             "v1",
+		}
+		res.Spec.Node = hn1
+		res.Spec.Orchestrator = oid1
+		res.Spec.Workload = wid1
+		res.Spec.Endpoint = eid1
+		res.Spec.InterfaceName = iface1
+		res.Spec.IPNetworks = []string{"10.100.10.1"}
+		res.Spec.ServiceAccountName = "test-serviceaccount-name"
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3WorkloadEndpointKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		_, ipn, err := cnet.ParseCIDROrIP("10.100.10.1")
+		expectedIPv4Net := *(ipn.Network())
+		Expect(kvps).To(HaveLen(1))
+		Expect(kvps[0]).To(Equal(&model.KVPair{
+			Key: v1WorkloadEndpointKey1,
+			Value: &model.WorkloadEndpoint{
+				State: "active",
+				Name:  iface1,
+				Ports: []model.EndpointPort{},
+				Labels: map[string]string{
+					"projectcalico.org/namespace":      ns1,
+					"projectcalico.org/orchestrator":   oid1,
+					"k1":                               "v1",
+					"projectcalico.org/serviceaccount": "test-serviceaccount-name",
 				},
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 			},

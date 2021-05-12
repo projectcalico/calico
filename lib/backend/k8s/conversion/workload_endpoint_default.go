@@ -126,7 +126,8 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	labels[apiv3.LabelNamespace] = pod.Namespace
 	labels[apiv3.LabelOrchestrator] = apiv3.OrchestratorKubernetes
 
-	if pod.Spec.ServiceAccountName != "" {
+	if pod.Spec.ServiceAccountName != "" && len(pod.Spec.ServiceAccountName) < 63 {
+		// For backwards compatibility, include the label if less than 63 characters.
 		labels[apiv3.LabelServiceAccount] = pod.Spec.ServiceAccountName
 	}
 
@@ -220,15 +221,16 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		GenerateName:      pod.GenerateName,
 	}
 	wep.Spec = apiv3.WorkloadEndpointSpec{
-		Orchestrator:  "k8s",
-		Node:          pod.Spec.NodeName,
-		Pod:           pod.Name,
-		Endpoint:      "eth0",
-		InterfaceName: interfaceName,
-		Profiles:      profiles,
-		IPNetworks:    ipNets,
-		Ports:         endpointPorts,
-		IPNATs:        floatingIPs,
+		Orchestrator:       "k8s",
+		Node:               pod.Spec.NodeName,
+		Pod:                pod.Name,
+		Endpoint:           "eth0",
+		InterfaceName:      interfaceName,
+		Profiles:           profiles,
+		IPNetworks:         ipNets,
+		Ports:              endpointPorts,
+		IPNATs:             floatingIPs,
+		ServiceAccountName: pod.Spec.ServiceAccountName,
 	}
 
 	// Embed the workload endpoint into a KVPair.

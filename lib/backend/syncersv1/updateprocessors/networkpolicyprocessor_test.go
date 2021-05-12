@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	"github.com/projectcalico/libcalico-go/lib/selector/parser"
 )
 
 var _ = Describe("Test the NetworkPolicy update processor", func() {
@@ -163,9 +164,9 @@ var np1 = networkingv1.NetworkPolicy{
 	Spec: networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		Egress: []networkingv1.NetworkPolicyEgressRule{
-			networkingv1.NetworkPolicyEgressRule{
+			{
 				Ports: []networkingv1.NetworkPolicyPort{
-					networkingv1.NetworkPolicyPort{
+					{
 						Protocol: &protocol,
 						Port:     &port,
 					},
@@ -179,7 +180,7 @@ var np1 = networkingv1.NetworkPolicy{
 // expected1 is the expected v1 KVPair representation of np1 from above.
 var tcp = numorstring.ProtocolFromStringV1("tcp")
 var expected1 = []*model.KVPair{
-	&model.KVPair{
+	{
 		Key: model.PolicyKey{Name: "default/knp.default.test.policy"},
 		Value: &model.Policy{
 			Namespace:      "default",
@@ -209,7 +210,7 @@ var np2 = networkingv1.NetworkPolicy{
 	Spec: networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		Ingress: []networkingv1.NetworkPolicyIngressRule{
-			networkingv1.NetworkPolicyIngressRule{
+			{
 				From: []networkingv1.NetworkPolicyPeer{
 					{
 						NamespaceSelector: &metav1.LabelSelector{},
@@ -221,7 +222,7 @@ var np2 = networkingv1.NetworkPolicy{
 	},
 }
 var expected2 = []*model.KVPair{
-	&model.KVPair{
+	{
 		Key: model.PolicyKey{Name: "default/knp.default.test.policy"},
 		Value: &model.Policy{
 			Namespace:      "default",
@@ -242,7 +243,7 @@ var expected2 = []*model.KVPair{
 	},
 }
 
-var _ = Describe("Test the NetworkPolicy update processor + conversion", func() {
+var _ = Describe("Test the Kubernetes NetworkPolicy end-to-end conversion and updateprocessor logic", func() {
 	up := updateprocessors.NewNetworkPolicyUpdateProcessor()
 
 	DescribeTable("NetworkPolicy update processor + conversion tests",
@@ -263,4 +264,243 @@ var _ = Describe("Test the NetworkPolicy update processor + conversion", func() 
 		Entry("should handle a NetworkPolicy with no rule selectors", np1, expected1),
 		Entry("should handle a NetworkPolicy with an empty ns selector", np2, expected2),
 	)
+})
+
+var _ = Describe("Test end-to-end pod and network policy processing", func() {
+
+	// Define processors to use in the test.
+	npProcessor := updateprocessors.NewNetworkPolicyUpdateProcessor()
+	wepProcessor := updateprocessors.NewWorkloadEndpointUpdateProcessor()
+
+	It("should handle a basic pod and network policy", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test-pod",
+				Namespace:       "default",
+				Labels:          map[string]string{"foo": "bar"},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName: "node-a",
+				Containers: []kapiv1.Container{
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+							{
+								Name:          "unkn-proto",
+								Protocol:      kapiv1.Protocol("unknown"),
+								ContainerPort: 567,
+							},
+						},
+					},
+				},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+		policy := apiv3.NewNetworkPolicy()
+		policy.Name = "test-policy"
+		policy.Namespace = "default"
+		policy.Spec.Selector = "all()"
+
+		// Send the pod through conversion and processing to imitate
+		// the pipeline executed when sending to Felix.
+
+		// Convert the pod to a WorkloadEndpoint.
+		c := conversion.NewConverter()
+		kvps, err := c.PodToWorkloadEndpoints(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+
+		// Process
+		kvps, err = wepProcessor.Process(kvps[0])
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+		wep := kvps[0].Value.(*model.WorkloadEndpoint)
+
+		// Send the NP through processing.
+		npkvp := &model.KVPair{
+			Key: model.ResourceKey{
+				Kind:      apiv3.KindNetworkPolicy,
+				Name:      policy.Name,
+				Namespace: policy.Namespace,
+			},
+			Value: policy,
+		}
+		kvps, err = npProcessor.Process(npkvp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+		np := kvps[0].Value.(*model.Policy)
+
+		// Expect that the NP matches the pod.
+		s, err := parser.Parse(np.Selector)
+		Expect(err).NotTo(HaveOccurred())
+		matches := s.Evaluate(wep.Labels)
+		Expect(matches).To(BeTrue(), fmt.Sprintf("%s does not match %+v", np.Selector, wep.Labels))
+	})
+
+	It("should not match pods in other namespaces", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test-pod",
+				Namespace:       "not-default",
+				Labels:          map[string]string{"foo": "bar"},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName: "node-a",
+				Containers: []kapiv1.Container{
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+							{
+								Name:          "unkn-proto",
+								Protocol:      kapiv1.Protocol("unknown"),
+								ContainerPort: 567,
+							},
+						},
+					},
+				},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+		policy := apiv3.NewNetworkPolicy()
+		policy.Name = "test-policy"
+		policy.Namespace = "default"
+		policy.Spec.Selector = "all()"
+
+		// Send the pod through conversion and processing to imitate
+		// the pipeline executed when sending to Felix.
+
+		// Convert the pod to a WorkloadEndpoint.
+		c := conversion.NewConverter()
+		kvps, err := c.PodToWorkloadEndpoints(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+
+		// Process
+		kvps, err = wepProcessor.Process(kvps[0])
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+		wep := kvps[0].Value.(*model.WorkloadEndpoint)
+
+		// Send the NP through processing.
+		npkvp := &model.KVPair{
+			Key: model.ResourceKey{
+				Kind:      apiv3.KindNetworkPolicy,
+				Name:      policy.Name,
+				Namespace: policy.Namespace,
+			},
+			Value: policy,
+		}
+		kvps, err = npProcessor.Process(npkvp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+		np := kvps[0].Value.(*model.Policy)
+
+		// Expect that the NP does NOT match the pod, since they are not in the same namespace.
+		s, err := parser.Parse(np.Selector)
+		Expect(err).NotTo(HaveOccurred())
+		matches := s.Evaluate(wep.Labels)
+		Expect(matches).To(BeFalse(), fmt.Sprintf("%s matches pod in other namespace %+v", np.Selector, wep.Labels))
+	})
+
+	It("should select service accounts by name in rules even when they are long", func() {
+		longName := "service-account-with-a-name-that-exceeds-the-character-limit-for-a-kubernetes-label"
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test-pod",
+				Namespace:       "default",
+				Labels:          map[string]string{"foo": "bar"},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:           "node-a",
+				ServiceAccountName: longName,
+				Containers: []kapiv1.Container{
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+							{
+								Name:          "unkn-proto",
+								Protocol:      kapiv1.Protocol("unknown"),
+								ContainerPort: 567,
+							},
+						},
+					},
+				},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+		policy := apiv3.NewNetworkPolicy()
+		policy.Name = "test-policy"
+		policy.Namespace = "default"
+		policy.Spec.Selector = "all()"
+		policy.Spec.Ingress = []apiv3.Rule{
+			{
+				Source: apiv3.EntityRule{
+					ServiceAccounts: &apiv3.ServiceAccountMatch{
+						Names: []string{longName},
+					},
+				},
+			},
+		}
+
+		// Send the pod through conversion and processing to imitate
+		// the pipeline executed when sending to Felix.
+
+		// Convert the pod to a WorkloadEndpoint.
+		c := conversion.NewConverter()
+		kvps, err := c.PodToWorkloadEndpoints(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+
+		// Expect the serviceaccount name to be set on the resulting WEP.
+		Expect(kvps[0].Value.(*apiv3.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal(longName))
+
+		// Process
+		kvps, err = wepProcessor.Process(kvps[0])
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+		wep := kvps[0].Value.(*model.WorkloadEndpoint)
+
+		// Send the NP through processing.
+		npkvp := &model.KVPair{
+			Key: model.ResourceKey{
+				Kind:      apiv3.KindNetworkPolicy,
+				Name:      policy.Name,
+				Namespace: policy.Namespace,
+			},
+			Value: policy,
+		}
+		kvps, err = npProcessor.Process(npkvp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(kvps)).To(Equal(1))
+		np := kvps[0].Value.(*model.Policy)
+		Expect(len(np.InboundRules)).To(Equal(1))
+
+		// Expect that the NP ingress rule matches the pod.
+		s, err := parser.Parse(np.InboundRules[0].SrcSelector)
+		Expect(err).NotTo(HaveOccurred())
+		matches := s.Evaluate(wep.Labels)
+		Expect(matches).To(BeTrue(), fmt.Sprintf("%s does not match %+v", np.Selector, wep.Labels))
+	})
+
 })

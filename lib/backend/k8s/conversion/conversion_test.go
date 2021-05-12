@@ -788,6 +788,80 @@ var _ = Describe("Test Pod conversion", func() {
 			apiv3.LabelServiceAccount:        "sa-test",
 		}
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal("sa-test"))
+
+		// Assert ResourceVersion is present.
+		Expect(wep.Revision).To(Equal("1234"))
+	})
+
+	It("should parse a Pod with long serviceaccount", func() {
+		longName := "serviceaccount-name-that-is-too-long-to-be-used-as-a-kubernetes-label-because-it-exceeds-the-character-limit"
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary": "annotation",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:           "nodeA",
+				ServiceAccountName: longName,
+				Containers: []kapiv1.Container{
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								ContainerPort: 5678,
+							},
+							{
+								Name:          "no-proto",
+								ContainerPort: 1234,
+							},
+						},
+					},
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+						},
+					},
+				},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure the type information is correct.
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).APIVersion).To(Equal(apiv3.GroupVersionCurrent))
+
+		// Assert key fields.
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
+		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
+		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
+
+		// Check for only values that are ServiceAccount related.
+		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Profiles)).To(Equal(2))
+		expectedLabels := map[string]string{
+			"labelA":                         "valueA",
+			"labelB":                         "valueB",
+			"projectcalico.org/namespace":    "default",
+			"projectcalico.org/orchestrator": "k8s",
+		}
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.ServiceAccountName).To(Equal(longName))
 
 		// Assert ResourceVersion is present.
 		Expect(wep.Revision).To(Equal("1234"))

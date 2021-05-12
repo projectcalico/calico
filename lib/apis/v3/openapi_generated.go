@@ -6394,6 +6394,13 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCa
 							Format:      "",
 						},
 					},
+					"serviceAccountName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceAccountName, if specified, is the name of the k8s ServiceAccount  for this pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"ipNetworks": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPNetworks is a list of subnets allocated to this endpoint. IP packets will only be allowed to leave this interface if they come from an address in one of these subnets. Currently only /32 for IPv4 and /128 for IPv6 networks are supported.",
