@@ -9,8 +9,8 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20210423202251-d6e6857e9fa1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210423182306-97bfa1a6a0b6
+	github.com/projectcalico/felix v0.0.0-20210511034636-be6bea166389
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210510231235-b758d2b2d314
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
