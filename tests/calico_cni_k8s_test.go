@@ -275,16 +275,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}))
 
 			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-				Pod:           name,
-				InterfaceName: interfaceName,
-				IPNetworks:    []string{result.IPs[0].Address.String()},
-				MAC:           mac.String(),
-				Profiles:      []string{"kns.test", "ksa.test.default"},
-				Node:          hostname,
-				Endpoint:      "eth0",
-				Workload:      "",
-				ContainerID:   containerID,
-				Orchestrator:  api.OrchestratorKubernetes,
+				Pod:                name,
+				InterfaceName:      interfaceName,
+				IPNetworks:         []string{result.IPs[0].Address.String()},
+				ServiceAccountName: "default",
+				MAC:                mac.String(),
+				Profiles:           []string{"kns.test", "ksa.test.default"},
+				Node:               hostname,
+				Endpoint:           "eth0",
+				Workload:           "",
+				ContainerID:        containerID,
+				Orchestrator:       api.OrchestratorKubernetes,
 			}))
 
 			// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
@@ -437,16 +438,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					"projectcalico.org/serviceaccount": "default",
 				}))
 				Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-					Pod:           name,
-					InterfaceName: interfaceName,
-					IPNetworks:    []string{result.IPs[0].Address.String()},
-					MAC:           mac.String(),
-					Profiles:      []string{"kns.test", "ksa.test.default"},
-					Node:          hostname,
-					Endpoint:      "eth0",
-					Workload:      "",
-					ContainerID:   containerID,
-					Orchestrator:  api.OrchestratorKubernetes,
+					Pod:                name,
+					InterfaceName:      interfaceName,
+					IPNetworks:         []string{result.IPs[0].Address.String()},
+					MAC:                mac.String(),
+					Profiles:           []string{"kns.test", "ksa.test.default"},
+					Node:               hostname,
+					ServiceAccountName: "default",
+					Endpoint:           "eth0",
+					Workload:           "",
+					ContainerID:        containerID,
+					Orchestrator:       api.OrchestratorKubernetes,
 					Ports: []api.EndpointPort{{
 						Name:     "anamedport",
 						Protocol: numorstring.ProtocolFromString("TCP"),
@@ -1654,16 +1656,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}))
 
 			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-				Pod:           name,
-				InterfaceName: interfaceName,
-				IPNetworks:    []string{assignIP.String() + "/32"},
-				MAC:           mac.String(),
-				Profiles:      []string{"kns.test", "ksa.test.default"},
-				Node:          hostname,
-				Endpoint:      "eth0",
-				Workload:      "",
-				ContainerID:   containerID,
-				Orchestrator:  api.OrchestratorKubernetes,
+				Pod:                name,
+				InterfaceName:      interfaceName,
+				IPNetworks:         []string{assignIP.String() + "/32"},
+				ServiceAccountName: "default",
+				MAC:                mac.String(),
+				Profiles:           []string{"kns.test", "ksa.test.default"},
+				Node:               hostname,
+				Endpoint:           "eth0",
+				Workload:           "",
+				ContainerID:        containerID,
+				Orchestrator:       api.OrchestratorKubernetes,
 			}))
 
 			// Delete the container.
@@ -1852,16 +1855,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}))
 
 			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-				Pod:           name,
-				InterfaceName: interfaceName,
-				IPNetworks:    []string{assignIP.String() + "/32"},
-				MAC:           mac.String(),
-				Profiles:      []string{"kns.test", "ksa.test.default"},
-				Node:          hostname,
-				Endpoint:      "eth0",
-				Workload:      "",
-				ContainerID:   containerID,
-				Orchestrator:  api.OrchestratorKubernetes,
+				Pod:                name,
+				InterfaceName:      interfaceName,
+				IPNetworks:         []string{assignIP.String() + "/32"},
+				ServiceAccountName: "default",
+				MAC:                mac.String(),
+				Profiles:           []string{"kns.test", "ksa.test.default"},
+				Node:               hostname,
+				Endpoint:           "eth0",
+				Workload:           "",
+				ContainerID:        containerID,
+				Orchestrator:       api.OrchestratorKubernetes,
 			}))
 
 			// Check the pod's IP annotations.
@@ -1983,14 +1987,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}))
 
 			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-				Pod:           name,
-				InterfaceName: interfaceName,
-				IPNetworks:    []string{podIPv4.String() + "/32", podIPv6.String() + "/128"},
-				MAC:           mac.String(),
-				Profiles:      []string{"kns.test", "ksa.test.default"},
-				Node:          hostname,
-				Endpoint:      "eth0",
-				Workload:      "",
+				Pod:                name,
+				InterfaceName:      interfaceName,
+				ServiceAccountName: "default",
+				IPNetworks:         []string{podIPv4.String() + "/32", podIPv6.String() + "/128"},
+				MAC:                mac.String(),
+				Profiles:           []string{"kns.test", "ksa.test.default"},
+				Node:               hostname,
+				Endpoint:           "eth0",
+				Workload:           "",
 				IPNATs: []api.IPNAT{
 					{
 						InternalIP: podIPv4.String(),
@@ -2764,16 +2769,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 			}))
 			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-				Pod:           name,
-				InterfaceName: interfaceName,
-				IPNetworks:    []string{result.IPs[0].Address.String()},
-				MAC:           mac.String(),
-				Profiles:      []string{"kns.test", "ksa.test." + saName},
-				Node:          hostname,
-				Endpoint:      "eth0",
-				Workload:      "",
-				ContainerID:   containerID,
-				Orchestrator:  api.OrchestratorKubernetes,
+				Pod:                name,
+				InterfaceName:      interfaceName,
+				IPNetworks:         []string{result.IPs[0].Address.String()},
+				MAC:                mac.String(),
+				Profiles:           []string{"kns.test", "ksa.test." + saName},
+				Node:               hostname,
+				Endpoint:           "eth0",
+				ServiceAccountName: saName,
+				Workload:           "",
+				ContainerID:        containerID,
+				Orchestrator:       api.OrchestratorKubernetes,
 				Ports: []api.EndpointPort{{
 					Name:     "anamedport",
 					Protocol: numorstring.ProtocolFromString("TCP"),
@@ -2917,16 +2923,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Let's just check that the Spec is good too.
 			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-				Pod:           name,
-				InterfaceName: interfaceName,
-				IPNetworks:    []string{result.IPs[0].Address.String()},
-				MAC:           mac.String(),
-				Profiles:      []string{"kns.test", "ksa.test.default"},
-				Node:          hostname,
-				Endpoint:      "eth0",
-				Workload:      "",
-				ContainerID:   containerID,
-				Orchestrator:  api.OrchestratorKubernetes,
+				Pod:                name,
+				InterfaceName:      interfaceName,
+				ServiceAccountName: "default",
+				IPNetworks:         []string{result.IPs[0].Address.String()},
+				MAC:                mac.String(),
+				Profiles:           []string{"kns.test", "ksa.test.default"},
+				Node:               hostname,
+				Endpoint:           "eth0",
+				Workload:           "",
+				ContainerID:        containerID,
+				Orchestrator:       api.OrchestratorKubernetes,
 				Ports: []api.EndpointPort{{
 					Name:     "anamedport",
 					Protocol: numorstring.ProtocolFromString("TCP"),

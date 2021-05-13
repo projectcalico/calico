@@ -178,6 +178,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	var ports []api.EndpointPort
 	var profiles []string
 	var generateName string
+	var serviceAccount string
 
 	// Only attempt to fetch the labels and annotations from Kubernetes
 	// if the policy type has been set to "k8s". This allows users to
@@ -190,7 +191,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		}
 		logger.WithField("NS Annotations", annotNS).Debug("Fetched K8s namespace annotations")
 
-		labels, annot, ports, profiles, generateName, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
+		labels, annot, ports, profiles, generateName, serviceAccount, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -353,6 +354,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	endpoint.Spec.Pod = epIDs.Pod
 	endpoint.Spec.Ports = ports
 	endpoint.Spec.IPNetworks = []string{}
+	endpoint.Spec.ServiceAccountName = serviceAccount
 
 	// Set the profileID according to whether Kubernetes policy is required.
 	// If it's not, then just use the network name (which is the normal behavior)
@@ -866,17 +868,17 @@ func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotation
 	return ns.Annotations, nil
 }
 
-func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, profiles []string, generateName string, err error) {
+func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, profiles []string, generateName, serviceAccount string, err error) {
 	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(context.Background(), podName, metav1.GetOptions{})
 	logrus.Debugf("pod info %+v", pod)
 	if err != nil {
-		return nil, nil, nil, nil, "", err
+		return nil, nil, nil, nil, "", "", err
 	}
 
 	c := k8sconversion.NewConverter()
 	kvps, err := c.PodToWorkloadEndpoints(pod)
 	if err != nil {
-		return nil, nil, nil, nil, "", err
+		return nil, nil, nil, nil, "", "", err
 	}
 
 	kvp := kvps[0]
@@ -884,8 +886,9 @@ func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (
 	labels = kvp.Value.(*api.WorkloadEndpoint).Labels
 	profiles = kvp.Value.(*api.WorkloadEndpoint).Spec.Profiles
 	generateName = kvp.Value.(*api.WorkloadEndpoint).GenerateName
+	serviceAccount = kvp.Value.(*api.WorkloadEndpoint).Spec.ServiceAccountName
 
-	return labels, pod.Annotations, ports, profiles, generateName, nil
+	return labels, pod.Annotations, ports, profiles, generateName, serviceAccount, nil
 }
 
 func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename string) (string, error) {
