@@ -32,9 +32,10 @@ import (
 // WorkloadEndpointData is an internal struct used to store the various bits
 // of information that the policy controller cares about on a workload endpoint.
 type WorkloadEndpointData struct {
-	PodName   string
-	Namespace string
-	Labels    map[string]string
+	PodName        string
+	Namespace      string
+	Labels         map[string]string
+	ServiceAccount string
 }
 
 type PodConverter interface {
@@ -52,9 +53,10 @@ func BuildWorkloadEndpointData(weps ...api.WorkloadEndpoint) []WorkloadEndpointD
 	var retWEPs []WorkloadEndpointData
 	for _, wep := range weps {
 		retWEPs = append(retWEPs, WorkloadEndpointData{
-			PodName:   wep.Spec.Pod,
-			Namespace: wep.Namespace,
-			Labels:    wep.Labels,
+			PodName:        wep.Spec.Pod,
+			Namespace:      wep.Namespace,
+			Labels:         wep.Labels,
+			ServiceAccount: wep.Spec.ServiceAccountName,
 		})
 	}
 
@@ -68,6 +70,7 @@ func MergeWorkloadEndpointData(wep *api.WorkloadEndpoint, upd WorkloadEndpointDa
 		log.Fatalf("Bad attempt to merge data for %s/%s into wep %s/%s", upd.PodName, upd.Namespace, wep.Name, wep.Namespace)
 	}
 	wep.Labels = upd.Labels
+	wep.Spec.ServiceAccountName = upd.ServiceAccount
 }
 
 // NewPodConverter Constructor for podConverter
