@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@ var (
 	v3Dot10Dot0 = versionparse.MustParseVersion("3.10.0")
 	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
 	v3Dot14Dot0 = versionparse.MustParseVersion("3.14.0")
+	// v5Dot7Dot0 contains a fix for checksum offloading.
+	v5Dot7Dot0 = versionparse.MustParseVersion("5.7.0")
 )
 
 type Features struct {
@@ -54,6 +56,10 @@ type Features struct {
 	// RestoreSupportsLock is true if the iptables-restore command supports taking the xtables lock and the
 	// associated -w and -W arguments.
 	RestoreSupportsLock bool
+	// ChecksumOffloadBroken is true for kernels that have broken checksum offload for packets with SNATted source
+	// ports. See https://github.com/projectcalico/calico/issues/3145.  On such kernels we disable checksum offload
+	// on our VXLAN device.
+	ChecksumOffloadBroken bool
 }
 
 type FeatureDetector struct {
@@ -102,9 +108,10 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 
 	// Calculate the features.
 	features := Features{
-		SNATFullyRandom:     iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		MASQFullyRandom:     iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		RestoreSupportsLock: iptV.Compare(v1Dot6Dot2) >= 0,
+		SNATFullyRandom:       iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		MASQFullyRandom:       iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		RestoreSupportsLock:   iptV.Compare(v1Dot6Dot2) >= 0,
+		ChecksumOffloadBroken: kerV.Compare(v5Dot7Dot0) < 0,
 	}
 
 	if value, ok := (d.featureOverride)["SNATFullyRandom"]; ok {

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,72 +39,90 @@ func TestFeatureDetection(t *testing.T) {
 			"iptables v1.6.2",
 			"Linux version 3.14.0",
 			Features{
-				RestoreSupportsLock: true,
-				SNATFullyRandom:     true,
-				MASQFullyRandom:     true,
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       true,
+				MASQFullyRandom:       true,
+				ChecksumOffloadBroken: true,
 			},
 		},
 		{
 			"iptables v1.6.1",
 			"Linux version 3.14.0",
 			Features{
-				RestoreSupportsLock: false,
-				SNATFullyRandom:     true,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   false,
+				SNATFullyRandom:       true,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 		{
 			"iptables v1.5.0",
 			"Linux version 3.14.0",
 			Features{
-				RestoreSupportsLock: false,
-				SNATFullyRandom:     false,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   false,
+				SNATFullyRandom:       false,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 		{
 			"iptables v1.6.2",
 			"Linux version 3.13.0",
 			Features{
-				RestoreSupportsLock: true,
-				SNATFullyRandom:     false,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       false,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 		{
 			"garbage",
 			"Linux version 3.14.0",
 			Features{
-				RestoreSupportsLock: false,
-				SNATFullyRandom:     false,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   false,
+				SNATFullyRandom:       false,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 		{
 			"iptables v1.6.2",
 			"garbage",
 			Features{
-				RestoreSupportsLock: true,
-				SNATFullyRandom:     false,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       false,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 		{
 			"error",
 			"Linux version 3.14.0",
 			Features{
-				RestoreSupportsLock: false,
-				SNATFullyRandom:     false,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   false,
+				SNATFullyRandom:       false,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 		},
 		{
 			"iptables v1.6.2",
 			"error",
 			Features{
-				RestoreSupportsLock: true,
-				SNATFullyRandom:     false,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       false,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
+			},
+		},
+		{
+			"iptables v1.8.4",
+			"Linux version 5.7.0",
+			Features{
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       true,
+				MASQFullyRandom:       true,
+				ChecksumOffloadBroken: false,
 			},
 		},
 	} {
@@ -146,9 +164,10 @@ func TestFeatureDetectionOverride(t *testing.T) {
 			"iptables v1.6.2",
 			"Linux version 3.14.0",
 			Features{
-				RestoreSupportsLock: true,
-				SNATFullyRandom:     true,
-				MASQFullyRandom:     true,
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       true,
+				MASQFullyRandom:       true,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{},
 		},
@@ -156,9 +175,10 @@ func TestFeatureDetectionOverride(t *testing.T) {
 			"iptables v1.6.1",
 			"Linux version 3.14.0",
 			Features{
-				RestoreSupportsLock: true,
-				SNATFullyRandom:     true,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       true,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{
 				"RestoreSupportsLock": "true",
@@ -168,9 +188,10 @@ func TestFeatureDetectionOverride(t *testing.T) {
 			"error",
 			"error",
 			Features{
-				RestoreSupportsLock: true,
-				SNATFullyRandom:     true,
-				MASQFullyRandom:     false,
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       true,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
 			},
 			map[string]string{
 				"RestoreSupportsLock": "true",
