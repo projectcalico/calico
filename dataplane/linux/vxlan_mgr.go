@@ -341,7 +341,11 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 // KeepVXLANDeviceInSync is a goroutine that configures the VXLAN tunnel device, then periodically
 // checks that it is still correctly configured.
 func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, xsumBroken bool, wait time.Duration) {
-	logrus.WithField("mtu", mtu).Info("VXLAN tunnel device thread started.")
+	logrus.WithFields(logrus.Fields{
+		"mtu": mtu,
+		"xsumBroken": xsumBroken,
+		"wait": wait,
+	}).Info("VXLAN tunnel device thread started.")
 	logNextSuccess := true
 	for {
 		localVTEP := m.getLocalVTEP()

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"io"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -66,6 +67,7 @@ type FeatureDetector struct {
 	lock            sync.Mutex
 	featureCache    *Features
 	featureOverride map[string]string
+	loggedOverrides bool
 
 	// Path to file with kernel version
 	GetKernelVersionReader func() (io.Reader, error)
@@ -114,27 +116,34 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		ChecksumOffloadBroken: kerV.Compare(v5Dot7Dot0) < 0,
 	}
 
-	if value, ok := (d.featureOverride)["SNATFullyRandom"]; ok {
-		ovr, err := strconv.ParseBool(value)
-		if err == nil {
-			log.WithField("override", ovr).Info("Override feature SNATFullyRandom")
-			features.SNATFullyRandom = ovr
+	for k, v := range d.featureOverride {
+		ovr, err := strconv.ParseBool(v)
+		logCxt := log.WithFields(log.Fields{
+			"flag":  k,
+			"value": v,
+		})
+		if err != nil {
+			if !d.loggedOverrides {
+				logCxt.Warn("Failed to parse value for feature detection override; ignoring")
+			}
+			continue
+		}
+		field := reflect.ValueOf(&features).Elem().FieldByName(k)
+		if field.IsValid() {
+			field.SetBool(ovr)
+		} else {
+			if !d.loggedOverrides {
+				logCxt.Warn("Unknown feature detection flag; ignoring")
+			}
+			continue
+		}
+
+		if !d.loggedOverrides {
+			logCxt.Info("Overriding feature detection flag")
 		}
 	}
-	if value, ok := (d.featureOverride)["MASQFullyRandom"]; ok {
-		ovr, err := strconv.ParseBool(value)
-		if err == nil {
-			log.WithField("override", ovr).Info("Override feature MASQFullyRandom")
-			features.MASQFullyRandom = ovr
-		}
-	}
-	if value, ok := (d.featureOverride)["RestoreSupportsLock"]; ok {
-		ovr, err := strconv.ParseBool(value)
-		if err == nil {
-			log.WithField("override", ovr).Info("Override feature RestoreSupportsLock")
-			features.RestoreSupportsLock = ovr
-		}
-	}
+	// Avoid logging all the override values every time through this function.
+	d.loggedOverrides = true
 
 	if d.featureCache == nil || *d.featureCache != features {
 		log.WithFields(log.Fields{
