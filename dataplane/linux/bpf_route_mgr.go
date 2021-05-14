@@ -20,17 +20,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/felix/ifacemonitor"
-
-	"github.com/projectcalico/felix/bpf/routes"
-	"github.com/projectcalico/felix/proto"
-
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
-
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type bpfRouteManager struct {
@@ -81,9 +79,12 @@ type bpfRouteManager struct {
 	hostIPsUpdateCB func([]net.IP)
 	routesUpdateCB  func(routes.Key, routes.Value)
 	routesDeleteCB  func(routes.Key)
+
+	opReporter logutils.OpRecorder
 }
 
-func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapContext) *bpfRouteManager {
+func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapContext,
+	opReporter logutils.OpRecorder) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New()
@@ -119,6 +120,8 @@ func newBPFRouteManager(myNodename string, externalCIDRs []string, mc *bpf.MapCo
 
 		dirtyRoutes:     set.New(),
 		resyncScheduled: true,
+
+		opReporter: opReporter,
 	}
 }
 
@@ -155,6 +158,7 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 
 	// Step 2: if required, load the state of the map from the dataplane so we can do efficient deltas.
 	if m.resyncScheduled {
+		m.opReporter.RecordOperation("resync-bpf-routes")
 		m.resyncWithDataplane()
 		m.resyncScheduled = false
 	}
@@ -164,11 +168,12 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 
 	duration := time.Since(startTime)
 	if numDels > 0 || numAdds > 0 {
+		m.opReporter.RecordOperation("update-bpf-routes")
 		log.WithFields(log.Fields{
 			"timeTaken": duration,
 			"numAdds":   numAdds,
 			"numDels":   numDels,
-		}).Info("Completed updates to BPF routes.")
+		}).Debug("Completed updates to BPF routes.")
 	}
 
 	return nil

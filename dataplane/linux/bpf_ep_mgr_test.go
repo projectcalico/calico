@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/logutils"
+
 	"github.com/projectcalico/felix/bpf"
 	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
 	"github.com/projectcalico/felix/bpf/polprog"
@@ -181,6 +183,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			ruleRenderer,
 			filterTableV4,
 			nil,
+			logutils.NewSummarizer("test"),
 		)
 		bpfEpMgr.dp = dp
 	})

@@ -566,7 +566,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
 		dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks))
-		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext)
+		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
@@ -617,6 +617,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ruleRenderer,
 			filterTableV4,
 			dp.reportHealth,
+			dp.loopSummarizer,
 		)
 		dp.RegisterManager(bpfEndpointManager)
 
@@ -1274,7 +1275,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		})
 
 		rawChains := []*iptables.Chain{{
-			Name: rules.ChainRawPrerouting,
+			Name:  rules.ChainRawPrerouting,
 			Rules: rawRules,
 		}}
 		t.UpdateChains(rawChains)
