@@ -39,6 +39,8 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/felix/logutils"
+
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/bpf"
@@ -153,6 +155,7 @@ type bpfEndpointManager struct {
 	dp bpfDataplane
 
 	ifaceToIpMap map[string]net.IP
+	opReporter   logutils.OpRecorder
 }
 
 type bpfAllowChainRenderer interface {
@@ -176,6 +179,7 @@ func newBPFEndpointManager(
 	iptablesRuleRenderer bpfAllowChainRenderer,
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
+	opReporter logutils.OpRecorder,
 ) *bpfEndpointManager {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -212,6 +216,7 @@ func newBPFEndpointManager(
 		onStillAlive:     livenessCallback,
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
+		opReporter:       opReporter,
 	}
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
@@ -510,6 +515,8 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			return set.RemoveItem
 		}
 
+		m.opReporter.RecordOperation("update-data-iface")
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -591,6 +598,8 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 		if !m.isWorkloadIface(ifaceName) {
 			return nil
 		}
+
+		m.opReporter.RecordOperation("update-workload-iface")
 
 		if err := sem.Acquire(context.Background(), 1); err != nil {
 			// Should only happen if the context finishes.

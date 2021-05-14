@@ -28,9 +28,10 @@ import (
 
 	"github.com/onsi/gomega/types"
 
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
