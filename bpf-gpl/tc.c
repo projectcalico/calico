@@ -360,7 +360,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 					   "but dest is not, need to SNAT.\n");
 				ctx.state->flags |= CALI_ST_NAT_OUTGOING;
 			}
-		} if (!(r->flags & CALI_RT_IN_POOL)) {
+		}
+		if (!(r->flags & CALI_RT_IN_POOL)) {
 			CALI_DEBUG("Source %x not in IP pool\n", bpf_ntohl(ctx.state->ip_src));
 			r = cali_rt_lookup(ctx.state->post_nat_ip_dst);
 			if (!r || !(r->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
