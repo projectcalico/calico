@@ -117,10 +117,6 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 			log.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
 		}
 
-		// Disable map repinning by default since BPF map names are global and we don't want our simulated instances to
-		// share maps.
-		envVars["FELIX_DebugBPFMapRepinEnabled"] = "false"
-
 		if CreateCgroupV2 {
 			envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
 		}
