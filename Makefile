@@ -57,9 +57,10 @@ GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
-gen-files: gen-crds fix
+gen-files: gen-crds
 	rm -rf $(GENERATED_FILES)
 	$(MAKE) $(GENERATED_FILES)
+	$(MAKE) fix
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds: bin/controller-gen
