@@ -40,6 +40,7 @@ function create-vm() {
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get update -y && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get install -y --no-install-recommends git make iproute2 docker.io wireguard && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo usermod -a -G docker ubuntu && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo modprobe ipip && \
   set +x && \
   echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
