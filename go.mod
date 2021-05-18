@@ -41,6 +41,7 @@ require (
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
 	k8s.io/kubernetes v1.21.0-rc.0
+	modernc.org/memory v1.0.4
 )
 
 replace (

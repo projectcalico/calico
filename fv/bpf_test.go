@@ -285,6 +285,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				for i, felix := range felixes {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("ip", "r")
+					felix.Exec("ip", "link")
+					felix.Exec("ip", "addr")
 					felix.Exec("ip", "route", "show", "cached")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
@@ -2172,7 +2174,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
 									case "wireguard":
-										hostW1SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedWireguardTunnelAddr)
 										hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
 									}
 
