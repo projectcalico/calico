@@ -98,6 +98,17 @@ var (
 func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 	log.Info("TearDownK8sInfra starting")
 	var wg sync.WaitGroup
+
+	if kds.etcdContainer != nil {
+		kds.etcdContainer.StopLogs()
+	}
+	if kds.k8sApiContainer != nil {
+		kds.k8sApiContainer.StopLogs()
+	}
+	if kds.k8sControllerManager != nil {
+		kds.k8sControllerManager.StopLogs()
+	}
+
 	if kds.etcdContainer != nil {
 		wg.Add(1)
 		go func() {
@@ -166,6 +177,7 @@ func runK8sApiserver(etcdIp string) *containers.Container {
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
 		utils.Config.K8sImage,
 		"kube-apiserver",
+		"--v=0",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=RBAC",
 		"--insecure-port=8080", // allow insecure connection from controller manager.
@@ -196,7 +208,7 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 		// they are enabled.
 		"--allocate-node-cidrs=false",
 		"--leader-elect=false",
-		"--v=3",
+		"--v=0",
 		"--service-account-private-key-file=/private.key",
 		"--concurrent-gc-syncs=50",
 	)
@@ -735,52 +747,52 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 func (kds *K8sDatastoreInfra) DumpErrorData() {
 	nsList, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err == nil {
-		utils.AddToTestOutput("Kubernetes Namespaces\n")
+		log.Info("DIAGS: Kubernetes Namespaces:")
 		for _, ns := range nsList.Items {
-			utils.AddToTestOutput(spew.Sdump(ns))
+			log.Info(spew.Sdump(ns))
 		}
 	}
 
 	profiles, err := kds.calicoClient.Profiles().List(context.Background(), options.ListOptions{})
 	if err == nil {
-		utils.AddToTestOutput("Calico Profiles\n")
+		log.Info("DIAGS: Calico Profiles:")
 		for _, profile := range profiles.Items {
-			utils.AddToTestOutput(spew.Sdump(profile))
+			log.Info(spew.Sdump(profile))
 		}
 	}
 	policies, err := kds.calicoClient.NetworkPolicies().List(context.Background(), options.ListOptions{})
 	if err == nil {
-		utils.AddToTestOutput("Calico NetworkPolicies\n")
+		log.Info("DIAGS: Calico NetworkPolicies:")
 		for _, policy := range policies.Items {
-			utils.AddToTestOutput(spew.Sdump(policy))
+			log.Info(spew.Sdump(policy))
 		}
 	}
 	gnps, err := kds.calicoClient.GlobalNetworkPolicies().List(context.Background(), options.ListOptions{})
 	if err == nil {
-		utils.AddToTestOutput("Calico GlobalNetworkPolicies\n")
+		log.Info("DIAGS: Calico GlobalNetworkPolicies:")
 		for _, gnp := range gnps.Items {
-			utils.AddToTestOutput(spew.Sdump(gnp))
+			log.Info(spew.Sdump(gnp))
 		}
 	}
 	workloads, err := kds.calicoClient.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
 	if err == nil {
-		utils.AddToTestOutput("Calico WorkloadEndpoints\n")
+		log.Info("DIAGS: Calico WorkloadEndpoints:")
 		for _, w := range workloads.Items {
-			utils.AddToTestOutput(spew.Sdump(w))
+			log.Info(spew.Sdump(w))
 		}
 	}
 	nodes, err := kds.calicoClient.Nodes().List(context.Background(), options.ListOptions{})
 	if err == nil {
-		utils.AddToTestOutput("Calico Nodes\n")
+		log.Info("DIAGS: Calico Nodes:")
 		for _, n := range nodes.Items {
-			utils.AddToTestOutput(spew.Sdump(n))
+			log.Info(spew.Sdump(n))
 		}
 	}
 	heps, err := kds.calicoClient.HostEndpoints().List(context.Background(), options.ListOptions{})
 	if err == nil {
-		utils.AddToTestOutput("Calico Host Endpoints\n")
+		log.Info("DIAGS: Calico Host Endpoints:")
 		for _, hep := range heps.Items {
-			utils.AddToTestOutput(spew.Sdump(hep))
+			log.Info(spew.Sdump(hep))
 		}
 	}
 }
