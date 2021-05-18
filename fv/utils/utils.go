@@ -84,14 +84,19 @@ func run(input []byte, checkNoError bool, command string, args ...string) error 
 	outputBytes, err := cmd.CombinedOutput()
 	output := string(outputBytes)
 	LastRunOutput = string(outputBytes)
+	formattedCmd := formatCommand(command, args)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"command": command,
-			"args":    args}).WithError(err).Warningf("Command failed:\n%s", output)
+		if len(output) == 0 {
+			log.WithError(err).Warningf("Command failed [%s]: <no output>", formattedCmd)
+		} else {
+			log.WithError(err).Warningf("Command failed [%s]:\n%s", formattedCmd, indent(output, "\t"))
+		}
 	} else {
-		log.WithFields(log.Fields{
-			"command": command,
-			"args":    args}).Infof("Command succeeded:\n%s", output)
+		if len(output) == 0 {
+			log.Infof("Command succeeded [%s]: <no output>", formattedCmd)
+		} else {
+			log.Infof("Command succeeded [%s]:\n%s", formattedCmd, indent(output, "\t"))
+		}
 	}
 	if checkNoError {
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
@@ -102,6 +107,28 @@ func run(input []byte, checkNoError bool, command string, args ...string) error 
 			command, args, string(outputBytes), err)
 	}
 	return nil
+}
+
+func indent(s string, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatCommand(command string, args []string) string {
+	out := command
+	for _, arg := range args {
+		// Only quote if there are actually some interesting characters in there, just to make it easier to read.
+		quoted := fmt.Sprintf("%q", arg)
+		if quoted == `"` + arg + `"` {
+			out += " " + arg
+		} else {
+			out += " " + quoted
+		}
+	}
+	return out
 }
 
 func GetCommandOutput(command string, args ...string) (string, error) {
@@ -118,10 +145,7 @@ func RunCommand(command string, args ...string) error {
 }
 
 func Command(name string, args ...string) *exec.Cmd {
-	log.WithFields(log.Fields{
-		"command":     name,
-		"commandArgs": args,
-	}).Debug("Creating Command.")
+	log.Debugf("Creating Command [%s].", formatCommand(name, args))
 
 	return exec.Command(name, args...)
 }
