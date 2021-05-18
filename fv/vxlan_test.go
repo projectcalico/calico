@@ -42,9 +42,17 @@ import (
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	for _, vxlanM := range []api.VXLANMode{api.VXLANModeCrossSubnet} {
 		vxlanMode := vxlanM
-		for _, routeSource := range []string{"CalicoIPAM", "WorkloadIPs"} {
-			routeSource := routeSource
-			Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s", vxlanMode, routeSource), func() {
+		type testConf struct {
+			RouteSource string
+			BrokenXSum  bool
+		}
+		for _, testConfig := range []testConf{
+			{"CalicoIPAM", true},
+			{"WorkloadIPs", false},
+		} {
+			routeSource := testConfig.RouteSource
+			brokenXSum := testConfig.BrokenXSum
+			Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s, brokenXSum: %v", vxlanMode, routeSource, brokenXSum), func() {
 				var (
 					infra   infrastructure.DatastoreInfra
 					felixes []*infrastructure.Felix
@@ -60,6 +68,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					topologyOptions.VXLANMode = vxlanMode
 					topologyOptions.IPIPEnabled = false
 					topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
+					// We force the broken checksum handling on or off so that we're not dependent on kernel version
+					// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
+					// tested but we can verify the state with ethtool.
+					topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 					felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 					// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -128,7 +140,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 					infra.Stop()
 				})
-
+				if brokenXSum {
+					It("should disable checksum offload", func() {
+						Eventually(func() string {
+							out, err := felixes[0].ExecOutput("ethtool", "-k", "vxlan.calico")
+							if err != nil {
+								return fmt.Sprintf("ERROR: %v", err)
+							}
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: off"))
+					})
+				} else {
+					It("should not disable checksum offload", func() {
+						Eventually(func() string {
+							out, err := felixes[0].ExecOutput("ethtool", "-k", "vxlan.calico")
+							if err != nil {
+								return fmt.Sprintf("ERROR: %v", err)
+							}
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: on"))
+					})
+				}
 				It("should use the --random-fully flag in the MASQUERADE rules", func() {
 					for _, felix := range felixes {
 						Eventually(func() string {

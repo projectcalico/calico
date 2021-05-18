@@ -79,6 +79,9 @@ blocks:
       - docker load -i /tmp/calico-felix.tar
       - rm /tmp/calico-felix.tar
       - touch bin/*
+      # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
+      # routing in that first felix container chooses different source IPs than the tests are expecting.
+      - sudo modprobe ipip
     jobs:
     - name: FV Test matrix
       commands:

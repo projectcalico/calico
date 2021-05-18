@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"io"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -44,6 +45,8 @@ var (
 	v3Dot10Dot0 = versionparse.MustParseVersion("3.10.0")
 	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
 	v3Dot14Dot0 = versionparse.MustParseVersion("3.14.0")
+	// v5Dot7Dot0 contains a fix for checksum offloading.
+	v5Dot7Dot0 = versionparse.MustParseVersion("5.7.0")
 )
 
 type Features struct {
@@ -54,12 +57,17 @@ type Features struct {
 	// RestoreSupportsLock is true if the iptables-restore command supports taking the xtables lock and the
 	// associated -w and -W arguments.
 	RestoreSupportsLock bool
+	// ChecksumOffloadBroken is true for kernels that have broken checksum offload for packets with SNATted source
+	// ports. See https://github.com/projectcalico/calico/issues/3145.  On such kernels we disable checksum offload
+	// on our VXLAN device.
+	ChecksumOffloadBroken bool
 }
 
 type FeatureDetector struct {
 	lock            sync.Mutex
 	featureCache    *Features
 	featureOverride map[string]string
+	loggedOverrides bool
 
 	// Path to file with kernel version
 	GetKernelVersionReader func() (io.Reader, error)
@@ -102,32 +110,40 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 
 	// Calculate the features.
 	features := Features{
-		SNATFullyRandom:     iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		MASQFullyRandom:     iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		RestoreSupportsLock: iptV.Compare(v1Dot6Dot2) >= 0,
+		SNATFullyRandom:       iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		MASQFullyRandom:       iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		RestoreSupportsLock:   iptV.Compare(v1Dot6Dot2) >= 0,
+		ChecksumOffloadBroken: kerV.Compare(v5Dot7Dot0) < 0,
 	}
 
-	if value, ok := (d.featureOverride)["SNATFullyRandom"]; ok {
-		ovr, err := strconv.ParseBool(value)
-		if err == nil {
-			log.WithField("override", ovr).Info("Override feature SNATFullyRandom")
-			features.SNATFullyRandom = ovr
+	for k, v := range d.featureOverride {
+		ovr, err := strconv.ParseBool(v)
+		logCxt := log.WithFields(log.Fields{
+			"flag":  k,
+			"value": v,
+		})
+		if err != nil {
+			if !d.loggedOverrides {
+				logCxt.Warn("Failed to parse value for feature detection override; ignoring")
+			}
+			continue
+		}
+		field := reflect.ValueOf(&features).Elem().FieldByName(k)
+		if field.IsValid() {
+			field.SetBool(ovr)
+		} else {
+			if !d.loggedOverrides {
+				logCxt.Warn("Unknown feature detection flag; ignoring")
+			}
+			continue
+		}
+
+		if !d.loggedOverrides {
+			logCxt.Info("Overriding feature detection flag")
 		}
 	}
-	if value, ok := (d.featureOverride)["MASQFullyRandom"]; ok {
-		ovr, err := strconv.ParseBool(value)
-		if err == nil {
-			log.WithField("override", ovr).Info("Override feature MASQFullyRandom")
-			features.MASQFullyRandom = ovr
-		}
-	}
-	if value, ok := (d.featureOverride)["RestoreSupportsLock"]; ok {
-		ovr, err := strconv.ParseBool(value)
-		if err == nil {
-			log.WithField("override", ovr).Info("Override feature RestoreSupportsLock")
-			features.RestoreSupportsLock = ovr
-		}
-	}
+	// Avoid logging all the override values every time through this function.
+	d.loggedOverrides = true
 
 	if d.featureCache == nil || *d.featureCache != features {
 		log.WithFields(log.Fields{

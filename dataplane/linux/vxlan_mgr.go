@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/projectcalico/felix/ethtool"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/rules"
@@ -339,8 +340,12 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 
 // KeepVXLANDeviceInSync is a goroutine that configures the VXLAN tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, wait time.Duration) {
-	logrus.WithField("mtu", mtu).Info("VXLAN tunnel device thread started.")
+func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, xsumBroken bool, wait time.Duration) {
+	logrus.WithFields(logrus.Fields{
+		"mtu": mtu,
+		"xsumBroken": xsumBroken,
+		"wait": wait,
+	}).Info("VXLAN tunnel device thread started.")
 	logNextSuccess := true
 	for {
 		localVTEP := m.getLocalVTEP()
@@ -362,13 +367,14 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, wait time.Duration) {
 			}
 		}
 
-		err := m.configureVXLANDevice(mtu, localVTEP)
+		err := m.configureVXLANDevice(mtu, localVTEP, xsumBroken)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed configure VXLAN tunnel device, retrying...")
 			logNextSuccess = true
 			time.Sleep(1 * time.Second)
 			continue
 		}
+
 		if logNextSuccess {
 			logrus.Info("VXLAN tunnel device configured")
 			logNextSuccess = false
@@ -400,7 +406,7 @@ func (m *vxlanManager) getParentInterface(localVTEP *proto.VXLANTunnelEndpointUp
 }
 
 // configureVXLANDevice ensures the VXLAN tunnel device is up and configured correctly.
-func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunnelEndpointUpdate) error {
+func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunnelEndpointUpdate, xsumBroken bool) error {
 	logCxt := logrus.WithFields(logrus.Fields{"device": m.vxlanDevice})
 	logCxt.Debug("Configuring VXLAN tunnel device")
 	parent, err := m.getParentInterface(localVTEP)
@@ -476,6 +482,13 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 	// Make sure the IP address is configured.
 	if err := m.ensureV4AddressOnLink(localVTEP.Ipv4Addr, link); err != nil {
 		return fmt.Errorf("failed to ensure address of interface: %s", err)
+	}
+
+	// If required, disable checksum offload.
+	if xsumBroken {
+		if err := ethtool.EthtoolTXOff(m.vxlanDevice); err != nil {
+			return fmt.Errorf("failed to disable checksum offload: %s", err)
+		}
 	}
 
 	// And the device is up.
