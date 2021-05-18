@@ -19,14 +19,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -76,8 +74,6 @@ func RunMayFail(command string, args ...string) error {
 	return run(nil, false, command, args...)
 }
 
-var currentTestOutput = []string{}
-
 var LastRunOutput string
 
 func run(input []byte, checkNoError bool, command string, args ...string) error {
@@ -86,14 +82,21 @@ func run(input []byte, checkNoError bool, command string, args ...string) error 
 		cmd.Stdin = bytes.NewReader(input)
 	}
 	outputBytes, err := cmd.CombinedOutput()
-	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
-	currentTestOutput = append(currentTestOutput, string(outputBytes))
+	output := string(outputBytes)
 	LastRunOutput = string(outputBytes)
+	formattedCmd := formatCommand(command, args)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"command": command,
-			"args":    args,
-			"output":  string(outputBytes)}).WithError(err).Warning("Command failed")
+		if len(output) == 0 {
+			log.WithError(err).Warningf("Command failed [%s]: <no output>", formattedCmd)
+		} else {
+			log.WithError(err).Warningf("Command failed [%s]:\n%s", formattedCmd, indent(output, "\t"))
+		}
+	} else {
+		if len(output) == 0 {
+			log.Infof("Command succeeded [%s]: <no output>", formattedCmd)
+		} else {
+			log.Infof("Command succeeded [%s]:\n%s", formattedCmd, indent(output, "\t"))
+		}
 	}
 	if checkNoError {
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
@@ -106,24 +109,27 @@ func run(input []byte, checkNoError bool, command string, args ...string) error 
 	return nil
 }
 
-func AddToTestOutput(args ...string) {
-	currentTestOutput = append(currentTestOutput, args...)
+func indent(s string, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
 
-var _ = BeforeEach(func() {
-	currentTestOutput = []string{}
-})
-
-var _ = AfterEach(func() {
-	if CurrentGinkgoTestDescription().Failed {
-		os.Stdout.WriteString(fmt.Sprintf("\n===== begin output from failed test %s =====\n",
-			CurrentGinkgoTestDescription().FullTestText))
-		for _, output := range currentTestOutput {
-			os.Stdout.WriteString(output)
+func formatCommand(command string, args []string) string {
+	out := command
+	for _, arg := range args {
+		// Only quote if there are actually some interesting characters in there, just to make it easier to read.
+		quoted := fmt.Sprintf("%q", arg)
+		if quoted == `"` + arg + `"` {
+			out += " " + arg
+		} else {
+			out += " " + quoted
 		}
-		os.Stdout.WriteString("===== end output from failed test =====\n\n")
 	}
-})
+	return out
+}
 
 func GetCommandOutput(command string, args ...string) (string, error) {
 	cmd := Command(command, args...)
@@ -139,10 +145,7 @@ func RunCommand(command string, args ...string) error {
 }
 
 func Command(name string, args ...string) *exec.Cmd {
-	log.WithFields(log.Fields{
-		"command":     name,
-		"commandArgs": args,
-	}).Info("Creating Command.")
+	log.Debugf("Creating Command [%s].", formatCommand(name, args))
 
 	return exec.Command(name, args...)
 }
