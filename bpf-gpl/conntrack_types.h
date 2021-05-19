@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -125,11 +125,11 @@ CALI_MAP(cali_v4_ct, 2,
 enum calico_ct_result_type {
 	/* CALI_CT_NEW means that the packet is not part of a known conntrack flow.
 	 * TCP SYN packets are always treated as NEW so they always go through policy. */
-	CALI_CT_NEW,
+	CALI_CT_NEW = 0,
 	/* CALI_CT_MID_FLOW_MISS indicates that the packet is known to be of a type that
 	 * cannot be the start of a flow but it also has no matching conntrack entry.  For
 	 * example, a TCP packet without SYN set. */
-	CALI_CT_MID_FLOW_MISS,
+	CALI_CT_MID_FLOW_MISS = 1,
 	/* CALI_CT_ESTABLISHED indicates the packet is part of a known flow, approved at "this"
 	 * side.  I.e. it's safe to let this packet through _this_ program.  If a packet is
 	 * ESTABLISHED but not ESTABLISHED_BYPASS then it has only been approved by _this_
@@ -137,29 +137,29 @@ enum calico_ct_result_type {
 	 * is a workload egress program then it implements egress policy for one workload. If
 	 * that workload communicates with another workload on the same host then the packet
 	 * needs to be approved by the ingress policy program attached to the other workload. */
-	CALI_CT_ESTABLISHED,
+	CALI_CT_ESTABLISHED = 2,
 	/* CALI_CT_ESTABLISHED_BYPASS indicates the packet is part of a known flow and *both*
 	 * legs of the conntrack entry have been approved.  Hence it is safe to set the bypass
 	 * mark bit on the traffic so that any downstream BPF programs let the packet through
 	 * automatically. */
-	CALI_CT_ESTABLISHED_BYPASS,
+	CALI_CT_ESTABLISHED_BYPASS = 3,
 	/* CALI_CT_ESTABLISHED_SNAT means the packet is a response packet on a NATted flow;
 	 * hence the packet needs to be SNATted. The new src IP and port are returned in
 	 * result.nat_ip and result.nat_port. */
-	CALI_CT_ESTABLISHED_SNAT,
+	CALI_CT_ESTABLISHED_SNAT = 4,
 	/* CALI_CT_ESTABLISHED_DNAT means the packet is a request packet on a NATted flow;
 	 * hence the packet needs to be DNATted. The new dst IP and port are returned in
 	 * result.nat_ip and result.nat_port. */
-	CALI_CT_ESTABLISHED_DNAT,
+	CALI_CT_ESTABLISHED_DNAT = 5,
 	/* CALI_CT_INVALID is returned for packets that cannot be parsed (e.g. invalid ICMP response)
 	 * or for packet that have a conntrack entry that is only approved by the other leg
 	 * (indicating that policy on this leg failed to allow the packet). */
-	CALI_CT_INVALID,
+	CALI_CT_INVALID = 6,
 };
 
-#define CALI_CT_RELATED		(1 << 8)
-#define CALI_CT_RPF_FAILED	(1 << 9)
-#define CALI_CT_TUN_SRC_CHANGED	(1 << 10)
+#define CALI_CT_RELATED         0x100
+#define CALI_CT_RPF_FAILED      0x200
+#define CALI_CT_TUN_SRC_CHANGED 0x400
 
 #define ct_result_rc(rc)		((rc) & 0xff)
 #define ct_result_flags(rc)		((rc) & ~0xff)
