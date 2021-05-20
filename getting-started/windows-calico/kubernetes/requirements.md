@@ -49,7 +49,7 @@ Earlier versions may work, but we do not actively test {{site.prodnameWindows}} 
 #### Linux platform 
 
 - At least one Linux Kubernetes worker node to run {{site.prodname}}'s cluster-wide components that meets [Linux system requirements]({{site.baseurl}}/getting-started/kubernetes/requirements), and is installed with {{site.prodname}} v3.12+.
-- VXLAN or BGP without encapsulation is supported if using Calico CNI. IPIP (Calico's default encapsulation mode) is not supported. Use the following command to turn off IPIP.
+- VXLAN or BGP without encapsulation is supported if using {{site.prodname}} CNI. IPIP ({{site.prodname}}'s default encapsulation mode) is not supported. Use the following command to turn off IPIP.
 ```bash
 calicoctl patch felixconfiguration default -p '{"spec":{"ipipEnabled":false}}'
 ```
