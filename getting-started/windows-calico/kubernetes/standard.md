@@ -206,7 +206,7 @@ Follow the steps below on each Windows node to install Kubernetes and {{site.pro
 
 **If using {{site.prodname}} BGP**
 
-Install the RemoteAccess service using the following Powershell commands:
+Install the RemoteAccess service using the following PowerShell commands:
 
 ```powershell
 Install-WindowsFeature RemoteAccess
