@@ -86,6 +86,8 @@ const (
 	ChainForwardCheck        = ChainNamePrefix + "forward-check"
 	ChainForwardEndpointMark = ChainNamePrefix + "forward-endpoint-mark"
 
+	ChainSetWireguardIncomingMark = ChainNamePrefix + "wireguard-incoming-mark"
+
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
 	WorkloadPfxSpecialAllow = "ALLOW"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"

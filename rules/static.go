@@ -15,6 +15,7 @@
 package rules
 
 import (
+	"fmt"
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/felix/iptables"
@@ -979,6 +980,7 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 		r.failsafeInChain("raw", ipVersion),
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawPreroutingChain(ipVersion),
+		r.StaticRawWireguardIncomingMarkChain(),
 		r.StaticRawOutputChain(),
 	}
 }
@@ -996,10 +998,8 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && r.RouteSource == "WorkloadIPs" {
 		log.Debug("Adding Wireguard iptables rule")
 		rules = append(rules, Rule{
-			Match: Match().Protocol("udp").
-				DestPorts(uint16(r.WireguardListeningPort)).
-				NotSrcAddrType(AddrTypeLocal, false),
-			Action: SetMarkAction{Mark: r.WireguardIptablesMark},
+			Match:  nil,
+			Action: JumpAction{Target: ChainSetWireguardIncomingMark},
 		})
 	}
 
@@ -1085,6 +1085,33 @@ func (r *DefaultRuleRenderer) allCalicoMarkBits() uint32 {
 		r.IptablesMarkPass |
 		r.IptablesMarkScratch0 |
 		r.IptablesMarkScratch1
+}
+
+func (r *DefaultRuleRenderer) StaticRawWireguardIncomingMarkChain() *Chain {
+	rules := []Rule{
+		{
+			Match:  Match().InInterface("lo"),
+			Action: ReturnAction{},
+		},
+		{
+			Match:  Match().InInterface(r.WireguardInterfaceName),
+			Action: ReturnAction{},
+		},
+	}
+
+	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
+		rules = append(rules, Rule{
+			Match:  Match().InInterface(fmt.Sprintf("%s+", ifacePrefix)),
+			Action: ReturnAction{},
+		})
+	}
+
+	rules = append(rules, Rule{Match: nil, Action: SetMarkAction{Mark: r.WireguardIptablesMark}})
+
+	return &Chain{
+		Name:  ChainSetWireguardIncomingMark,
+		Rules: rules,
+	}
 }
 
 func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
