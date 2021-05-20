@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,7 @@ package startup
 import (
 	"context"
 	cryptorand "crypto/rand"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"reflect"
@@ -28,7 +26,6 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	kapiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +36,6 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -48,8 +44,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 
 	"github.com/projectcalico/node/pkg/calicoclient"
-	"github.com/projectcalico/node/pkg/startup/autodetection"
-	"github.com/projectcalico/node/pkg/startup/autodetection/ipv4"
+	"github.com/projectcalico/node/pkg/lifecycle/startup/autodetection"
+	"github.com/projectcalico/node/pkg/lifecycle/startup/autodetection/ipv4"
+	"github.com/projectcalico/node/pkg/lifecycle/utils"
 )
 
 const (
@@ -78,9 +75,6 @@ const (
 // Version string, set during build.
 var VERSION string
 
-// For testing purposes we define an exit function that we can override.
-var exitFunction = os.Exit
-
 var (
 	// Default values, names for different configs.
 	defaultLogSeverity        = "Info"
@@ -99,7 +93,7 @@ func Run() {
 	ConfigureLogging()
 
 	// Determine the name for this node.
-	nodeName := determineNodeName()
+	nodeName := utils.DetermineNodeName()
 	log.Infof("Starting node %s with version %s", nodeName, VERSION)
 
 	// Create the Calico API cli.
@@ -192,8 +186,7 @@ func Run() {
 				k8sNodeName = nodeRef
 			}
 
-			log.Info("Setting NetworkUnavailable to False")
-			err := setNodeNetworkUnavailableFalse(*clientset, k8sNodeName)
+			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
 			if err != nil {
 				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
 			}
@@ -222,7 +215,7 @@ func Run() {
 	}
 
 	// Write config files now that we are ready to start other components.
-	writeNodeConfig(nodeName)
+	utils.WriteNodeConfig(nodeName)
 
 	// Tell the user what the name of the node is.
 	log.Infof("Using node name: %s", nodeName)
@@ -231,6 +224,10 @@ func Run() {
 		log.WithError(err).Errorf("Unable to ensure network for os")
 		terminate()
 	}
+
+	// Remove shutdownTS file when everything is done.
+	// This indicates Calico node started successfully.
+	_ = utils.RemoveShutdownTimestampFile()
 }
 
 func getMonitorPollInterval() time.Duration {
@@ -301,7 +298,7 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 func MonitorIPAddressSubnets() {
 	ctx := context.Background()
 	_, cli := calicoclient.CreateClient()
-	nodeName := determineNodeName()
+	nodeName := utils.DetermineNodeName()
 	node := getNode(ctx, cli, nodeName)
 
 	pollInterval := getMonitorPollInterval()
@@ -390,61 +387,6 @@ func ConfigureLogging() {
 	log.Infof("Early log level set to %v", logLevel)
 }
 
-// determineNodeName is called to determine the node name to use for this instance
-// of calico/node.
-func determineNodeName() string {
-	var nodeName string
-	var err error
-
-	// Determine the name of this node.  Precedence is:
-	// -  NODENAME
-	// -  Value stored in our nodename file.
-	// -  HOSTNAME (lowercase)
-	// -  os.Hostname (lowercase).
-	// We use the names.Hostname which lowercases and trims the name.
-	if nodeName = strings.TrimSpace(os.Getenv("NODENAME")); nodeName != "" {
-		log.Infof("Using NODENAME environment for node name %s", nodeName)
-	} else if nodeName = nodenameFromFile(); nodeName != "" {
-		log.Infof("Using stored node name %s from %s", nodeName, nodenameFileName())
-	} else if nodeName = strings.ToLower(strings.TrimSpace(os.Getenv("HOSTNAME"))); nodeName != "" {
-		log.Infof("Using HOSTNAME environment (lowercase) for node name %s", nodeName)
-	} else if nodeName, err = names.Hostname(); err != nil {
-		log.WithError(err).Error("Unable to determine hostname")
-		terminate()
-	} else {
-		log.Warn("Using auto-detected node name. It is recommended that an explicit value is supplied using " +
-			"the NODENAME environment variable.")
-	}
-	log.Infof("Determined node name: %s", nodeName)
-
-	return nodeName
-}
-
-func nodenameFileName() string {
-	fn := os.Getenv("CALICO_NODENAME_FILE")
-	if fn == "" {
-		return defaultNodenameFile
-	}
-	return fn
-}
-
-// nodenameFromFile reads the nodename file if it exists and
-// returns the nodename within.
-func nodenameFromFile() string {
-	filename := nodenameFileName()
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist, return empty string.
-			log.Debug("File does not exist: " + filename)
-			return ""
-		}
-		log.WithError(err).Error("Failed to read " + filename)
-		terminate()
-	}
-	return string(data)
-}
-
 // waitForConnection waits for the datastore to become accessible.
 func waitForConnection(ctx context.Context, c client.Interface) {
 	log.Info("Checking datastore connection")
@@ -472,18 +414,6 @@ func waitForConnection(ctx context.Context, c client.Interface) {
 		break
 	}
 	log.Info("Datastore connection verified")
-}
-
-// writeNodeConfig writes out the this node's configuration to disk for use by other components.
-// Specifically, it creates:
-// - nodenameFileName() - used to persist the determined node name to disk for future use.
-func writeNodeConfig(nodeName string) {
-	filename := nodenameFileName()
-	log.Debugf("Writing %s to "+filename, nodeName)
-	if err := ioutil.WriteFile(filename, []byte(nodeName), 0644); err != nil {
-		log.WithError(err).Error("Unable to write to " + filename)
-		terminate()
-	}
 }
 
 // getNode returns the current node configuration. If this node has not yet
@@ -1308,46 +1238,6 @@ func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) err
 	return nil
 }
 
-// Set Kubernetes NodeNetworkUnavailable to false when starting
-// https://kubernetes.io/docs/concepts/architecture/nodes/#condition
-func setNodeNetworkUnavailableFalse(clientset kubernetes.Clientset, nodeName string) error {
-	condition := kapiv1.NodeCondition{
-		Type:               kapiv1.NodeNetworkUnavailable,
-		Status:             kapiv1.ConditionFalse,
-		Reason:             "CalicoIsUp",
-		Message:            "Calico is running on this node",
-		LastTransitionTime: metav1.Now(),
-		LastHeartbeatTime:  metav1.Now(),
-	}
-	raw, err := json.Marshal(&[]kapiv1.NodeCondition{condition})
-	if err != nil {
-		return err
-	}
-	patch := []byte(fmt.Sprintf(`{"status":{"conditions":%s}}`, raw))
-	to := time.After(30 * time.Second)
-	for {
-		select {
-		case <-to:
-			err = fmt.Errorf("timed out patching node, last error was: %s", err.Error())
-			return err
-		default:
-			_, err = clientset.CoreV1().Nodes().PatchStatus(context.Background(), nodeName, patch)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to set NetworkUnavailable to False; will retry")
-			} else {
-				// Success!
-				return nil
-			}
-		}
-	}
-}
-
-// terminate prints a terminate message and exists with status 1.
-func terminate() {
-	log.Warn("Terminating")
-	exitFunction(1)
-}
-
 // extractKubeadmCIDRs looks through the config map and parses lines starting with 'podSubnet'.
 func extractKubeadmCIDRs(kubeadmConfig *v1.ConfigMap) (string, string, error) {
 	var v4, v6 string
@@ -1436,4 +1326,8 @@ func getLocalCIDR(ip string, version int, getInterfaces func([]string, []string,
 	// Even if no CIDR is found, it doesn't think it needs to throw an exception
 	log.Warnf("Unable to find matching host interface for IP %s", ip)
 	return ip, nil
+}
+
+func terminate() {
+	utils.Terminate()
 }
