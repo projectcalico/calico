@@ -180,7 +180,8 @@ var _ = Describe("Enable wireguard", func() {
 		rule.Family = netlink.FAMILY_V4
 		rule.Priority = rulePriority
 		rule.Table = tableIndex
-		rule.Mark = 0
+		rule.Invert = true
+		rule.Mark = firewallMark
 		rule.Mask = firewallMark
 	})
 
@@ -274,6 +275,7 @@ var _ = Describe("Enable wireguard", func() {
 
 			It("should delete invalid rules jumping to the wireguard table", func() {
 				incorrectRule := netlink.NewRule()
+				incorrectRule.Family = 2
 				incorrectRule.Priority = rulePriority + 10
 				incorrectRule.Table = tableIndex
 				incorrectRule.Mark = firewallMark + 10
@@ -1367,19 +1369,23 @@ var _ = Describe("Wireguard (disabled)", func() {
 				// Create a rule to route to the wireguard table.
 				rrDataplane.Rules = []netlink.Rule{
 					{
+						Family:   2,
 						Priority: 0,
 						Table:    255,
 					},
 					{
+						Family: 2,
 						Table:  tableIndex,
 						Mark:   firewallMark,
 						Invert: true,
 					},
 					{
+						Family:   2,
 						Priority: 32766,
 						Table:    254,
 					},
 					{
+						Family:   2,
 						Priority: 32767,
 						Table:    253,
 					},
@@ -1424,14 +1430,17 @@ var _ = Describe("Wireguard (disabled)", func() {
 				Expect(rrDataplane.NumRuleAddCalls).To(Equal(0))
 				Expect(rrDataplane.Rules).To(Equal([]netlink.Rule{
 					{
+						Family:   2,
 						Priority: 0,
 						Table:    255,
 					},
 					{
+						Family:   2,
 						Priority: 32766,
 						Table:    254,
 					},
 					{
+						Family:   2,
 						Priority: 32767,
 						Table:    253,
 					},

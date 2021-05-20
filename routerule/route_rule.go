@@ -238,6 +238,11 @@ func (r *RouteRules) Apply() error {
 		return ListFailed
 	}
 
+	// Set the Family onto the rules, the netlink lib does not populate this field.
+	for i := range nlRules {
+		nlRules[i].Family = r.netlinkFamily
+	}
+
 	// Work out two sets, rules to add and rules to remove.
 	toAdd := r.activeRules.Copy()
 	toRemove := set.New()
