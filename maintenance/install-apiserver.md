@@ -21,9 +21,9 @@ The API server provides a REST API for Calico, and allows management of `project
 
 ### Before you begin
 
-- Make sure you have a cluster with Calico installed using the Kubernetes API data store. If not, you can [migrate from etcd]({{site.baseurl}}/maintenacne/datastore-migration.md).
+- Make sure you have a cluster with Calico installed using the Kubernetes API data store. If not, you can [migrate from etcd]({{site.baseurl}}/maintenacne/datastore-migrationt).
 
-- Upgrade to Calico v3.20+ using the appropriate [upgrade instructions]({{site.baseurl}}/maintenance/upgrading.md).
+- Upgrade to Calico v3.20+ using the appropriate [upgrade instructions]({{site.baseurl}}/maintenance/upgrading).
 
 - For non-operator installations, you will need a machine with `openssl` installed.
 
@@ -154,11 +154,25 @@ You should see output that looks like this:
 
 #### Uninstall the Calico API server
 
-To uninstall, delete the API server manifest.
+To uninstall the API server, use the following instructions depending on your install method.
+
+{% tabs %}
+<label:Operator install,active:true>
+<%
+
+   ```
+   kubectl delete apiserver default
+   ```
+%>
+
+<label:Manifest install>
+<%
 
    ```
    kubectl delete -f {{ "/manifests/apiserver.yaml" | absolute_url }}
    ```
+%>
+{% endtabs %}
 
 Once removed, you will need to use calicoctl to manage projectcalico.org/v3 APIs.
 
