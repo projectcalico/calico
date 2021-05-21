@@ -632,8 +632,8 @@ github.com/projectcalico/cni-plugin v1.11.1-0.20210513232029-01d6406abfa0 h1:Bhh
 github.com/projectcalico/cni-plugin v1.11.1-0.20210513232029-01d6406abfa0/go.mod h1:ChjOcuXOjVWBnM0dSyanMLocBnjRn0AUP2cXLQVp50M=
 github.com/projectcalico/confd v1.0.1-0.20210513233336-af43293d7835 h1:MwnSZVbT0BAEaiSnAEwvvqvQ9iMVkFZNo8Rma2KzkIc=
 github.com/projectcalico/confd v1.0.1-0.20210513233336-af43293d7835/go.mod h1:k/xczHWUaEXrwOY7l+BDCtYpPAjIMvPrkz0oqe9OuVU=
-github.com/projectcalico/felix v0.0.0-20210514180456-c47545c56459 h1:HWyDqsu4AGnaqqRt8xubeEowGpYZ7Knd8w/eWCMyTjI=
-github.com/projectcalico/felix v0.0.0-20210514180456-c47545c56459/go.mod h1:v14Oq+TvTUKmRHYPSmHGZ59CU8OLUEGNf7nbd6r6cYA=
+github.com/projectcalico/felix v0.0.0-20210521123545-0e7ed6900dea h1:RV9XLnCgodLOWQiSZ2Spt/QSthcvI+LSUfTVCJxZbok=
+github.com/projectcalico/felix v0.0.0-20210521123545-0e7ed6900dea/go.mod h1:rq9n9KvjqPNlz7DyZw7/YrqK4MEX2uWbrrpK1Glo06k=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
@@ -683,6 +683,8 @@ github.com/quobyte/api v0.1.8/go.mod h1:jL7lIHrmqQ7yh05OJ+eEEdHr0u/kmT1Ff9iHd+4H
 github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0 h1:iXE9kmlAqhusXxzkXictdNgWS7p4ZBnmv9SdyMgTf6E=
 github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0/go.mod h1:4XHkfaUj+URzGO9sohoAgt2V9Y8nIW7fugpu0E6gShk=
 github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446/go.mod h1:uYEyJGbgTkfkS4+E/PavXkNJcbFIpEtjt2B0KDQ5+9M=
+github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 h1:OdAsTTz6OkFY5QxjkYwrChwuRruF69c169dPK26NUlk=
+github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/robfig/cron v1.1.0/go.mod h1:JGuDeoQd7Z6yL4zQhZ3OPEVHB7fL6Ka6skscFHfmt2k=
 github.com/rogpeppe/fastuuid v0.0.0-20150106093220-6724a57986af/go.mod h1:XWv6SoW27p1b0cqNHllgS5HIMJraePCO15w5zCzIWYg=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
@@ -1266,6 +1268,10 @@ k8s.io/utils v0.0.0-20201110183641-67b214c5f920/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=
 modernc.org/golex v1.0.0/go.mod h1:b/QX9oBD/LhixY6NDh+IdGv17hgB+51fET1i2kPSmvk=
 modernc.org/mathutil v1.0.0/go.mod h1:wU0vUrJsVWBZ4P6e7xtFJEhFSNsfRLJ8H458uRjg03k=
+modernc.org/mathutil v1.1.1 h1:FeylZSVX8S+58VsyJlkEj2bcpdytmp9MmDKZkKx8OIE=
+modernc.org/mathutil v1.1.1/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
+modernc.org/memory v1.0.4 h1:utMBrFcpnQDdNsmM6asmyH/FM9TqLPS7XF7otpJmrwM=
+modernc.org/memory v1.0.4/go.mod h1:nV2OApxradM3/OVbs2/0OsP6nPfakXpi50C7dcoHXlc=
 modernc.org/strutil v1.0.0/go.mod h1:lstksw84oURvj9y3tn8lGvRxyRC1S2+g5uuIzNfIOBs=
 modernc.org/xc v1.0.0/go.mod h1:mRNCo0bvLjGhHO9WsyuKVU4q0ceiDDDoEeWDJHrNx8I=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
