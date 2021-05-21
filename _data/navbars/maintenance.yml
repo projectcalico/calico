@@ -20,6 +20,8 @@ section:
   path: /maintenance/datastore-migration
 - title: Migrate Calico to an operator-managed installation
   path: /maintenance/operator-migration
+- title: Enable kubectl to manage Calico APIs
+  path: /maintenance/install-apiserver
 - title: The eBPF dataplane
   path: /maintenance/ebpf/
   section:
