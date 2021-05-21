@@ -28,27 +28,12 @@
 #
 ###############################################################################
 PACKAGE_NAME?=github.com/projectcalico/felix
-GO_BUILD_VER?=v0.51
+GO_BUILD_VER?=v0.53
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_FELIX_PROJECT_ID)
 
 SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PROJECT_ID) $(SEMAPHORE_KUBE_CONTROLLER_PROJECT_ID)
-
-###############################################################################
-# Download and include Makefile.common
-#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
-#   that variable is evaluated when we declare DOCKER_RUN and siblings.
-###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
@@ -66,18 +51,36 @@ $(LOCAL_BUILD_DEP):
 		-replace=github.com/projectcalico/pod2daemon=../pod2daemon
 endif
 
-include Makefile.common
+FELIX_IMAGE    ?=calico/felix
+BUILD_IMAGES   ?=$(FELIX_IMAGE)
+DEV_REGISTRIES ?=$(DOCKERHUB_REGISTRY) quay.io
+
+# All Felix go files.
+SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_FILES)
+FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
+EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
 
 ###############################################################################
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
 
-BUILD_IMAGE?=calico/felix
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/felix
-RELEASE_IMAGES?=
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH):
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
+
+include Makefile.common
 
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube-$(BUILDARCH):$(K8S_VERSION)
 FV_TYPHAIMAGE?=calico/typha:master-$(BUILDARCH)
-FV_FELIXIMAGE?=$(BUILD_IMAGE)-test:latest-$(BUILDARCH)
+FV_FELIXIMAGE?=$(FELIX_IMAGE)-test:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
@@ -118,11 +121,6 @@ LDFLAGS=-ldflags "\
 # depend on these, clean removes them.
 GENERATED_FILES=proto/felixbackend.pb.go bpf/asm/opcode_string.go
 
-# All Felix go files.
-SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_FILES)
-FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
-EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
-
 .PHONY: clean
 clean:
 	rm -rf bin \
@@ -143,8 +141,8 @@ clean:
 	find . -name "*.pyc" -type f -delete
 	$(DOCKER_GO_BUILD) make -C bpf-apache clean
 	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
-	-docker rmi $(BUILD_IMAGE)-wgtool:latest-amd64
-	-docker rmi $(BUILD_IMAGE)-wgtool:latest
+	-docker rmi $(FELIX_IMAGE)-wgtool:latest-amd64
+	-docker rmi $(FELIX_IMAGE)-wgtool:latest
 
 ###############################################################################
 # Automated pin updates
@@ -232,7 +230,7 @@ bpf/asm/opcode_string.go: bpf/asm/asm.go
 # Building the image
 ###############################################################################
 # Build the calico/felix docker image, which contains only Felix.
-.PHONY: $(BUILD_IMAGE) $(BUILD_IMAGE)-$(ARCH)
+.PHONY: $(FELIX_IMAGE) $(FELIX_IMAGE)-$(ARCH)
 
 # by default, build the image for the target architecture
 .PHONY: image-all
@@ -240,9 +238,9 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-image: $(BUILD_IMAGE)
-$(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
-$(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
+image: $(FELIX_IMAGE)
+$(FELIX_IMAGE): $(FELIX_IMAGE)-$(ARCH)
+$(FELIX_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
                         bin/calico-bpf \
                         build-bpf \
                         docker-image/calico-felix-wrapper \
@@ -259,9 +257,9 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bpf/bin
 	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
 	cp $(ALL_BPF_PROGS) docker-image/bpf/bin
-	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
+	docker build --pull -t $(FELIX_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image;
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
+	docker tag $(FELIX_IMAGE):latest-$(ARCH) $(FELIX_IMAGE):latest
 endif
 
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
@@ -271,15 +269,15 @@ FV_BINARY=calico-felix-amd64
 endif
 
 image-test: image fv/Dockerfile.test.amd64 bin/pktgen bin/test-workload bin/test-connection bin/$(FV_BINARY) image-wgtool
-	docker build -t $(BUILD_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin;
+	docker build -t $(FELIX_IMAGE)-test:latest-$(ARCH) --build-arg FV_BINARY=$(FV_BINARY) --file ./fv/Dockerfile.test.$(ARCH) bin;
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE)-test:latest-$(ARCH) $(BUILD_IMAGE)-test:latest
+	docker tag $(FELIX_IMAGE)-test:latest-$(ARCH) $(FELIX_IMAGE)-test:latest
 endif
 
 image-wgtool: fv/Dockerfile.wgtool.amd64
-	docker build -t $(BUILD_IMAGE)-wgtool:latest-$(ARCH) --file ./fv/Dockerfile.wgtool.$(ARCH) fv;
+	docker build -t $(FELIX_IMAGE)-wgtool:latest-$(ARCH) --file ./fv/Dockerfile.wgtool.$(ARCH) fv;
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE)-wgtool:latest-$(ARCH) $(BUILD_IMAGE)-wgtool:latest
+	docker tag $(FELIX_IMAGE)-wgtool:latest-$(ARCH) $(FELIX_IMAGE)-wgtool:latest
 endif
 
 
@@ -542,7 +540,7 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	for img in $(BUILD_IMAGE):$(VERSION)-$(ARCH) quay.io/$(BUILD_IMAGE):$(VERSION)-$(ARCH); do \
+	for img in $(FELIX_IMAGE):$(VERSION)-$(ARCH) quay.io/$(FELIX_IMAGE):$(VERSION)-$(ARCH); do \
 	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
 	  then \
 	    echo "Check successful. ($$img)"; \
@@ -591,7 +589,7 @@ release-publish: release-prereqs
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
 	# Check latest versions match.
-	for img in $(BUILD_IMAGE):latest-$(ARCH) quay.io/$(BUILD_IMAGE):latest-$(ARCH); do \
+	for img in $(FELIX_IMAGE):latest-$(ARCH) quay.io/$(FELIX_IMAGE):latest-$(ARCH); do \
 	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
 	  then \
 	    echo "Check successful. ($$img)"; \
