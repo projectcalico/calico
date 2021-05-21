@@ -54,6 +54,7 @@ type Container struct {
 	dataRaces     []string
 
 	logFinished sync.WaitGroup
+	dropAllLogs bool
 }
 
 type watch struct {
@@ -62,6 +63,17 @@ type watch struct {
 }
 
 var containerIdx = 0
+
+func (c *Container) StopLogs() {
+	if c == nil {
+		log.Info("StopLogs no-op because nil container")
+		return
+	}
+
+	c.mutex.Lock()
+	c.dropAllLogs = true
+	c.mutex.Unlock()
+}
 
 func (c *Container) Stop() {
 	if c == nil {
@@ -78,7 +90,7 @@ func (c *Container) Stop() {
 	}
 	c.mutex.Unlock()
 
-	logCxt.Info("Stop")
+	logCxt.Info("Stopping...")
 
 	// Ask docker to stop the container.
 	withTimeoutPanic(logCxt, 30*time.Second, c.execDockerStop)
@@ -347,7 +359,14 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, line)
+
+		// Check if we're dropping logs (e.g. because we're tearing down the container at the end of the test).
+		c.mutex.Lock()
+		droppingLogs := c.dropAllLogs
+		c.mutex.Unlock()
+		if !droppingLogs {
+			fmt.Fprintf(ginkgo.GinkgoWriter, "%v[%v] %v\n", c.Name, streamName, line)
+		}
 
 		// Capture data race warnings and log to file.
 		if strings.Contains(line, "WARNING: DATA RACE") {
@@ -392,7 +411,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 	}
 	logCxt := log.WithFields(log.Fields{
 		"name":   c.Name,
-		"stream": stream,
+		"stream": streamName,
 	})
 	if scanner.Err() != nil {
 		logCxt.WithError(scanner.Err()).Error("Non-EOF error reading container stream")

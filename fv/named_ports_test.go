@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -156,37 +156,37 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			profiles, err := client.Profiles().List(context.Background(), options.ListOptions{})
 			if err == nil {
-				utils.AddToTestOutput("Calico Profiles\n")
+				log.Info("DIAGS: Calico Profiles:")
 				for _, profile := range profiles.Items {
-					utils.AddToTestOutput(fmt.Sprintf("%v\n", profile))
+					log.Info(profile)
 				}
 			}
 			policies, err := client.NetworkPolicies().List(context.Background(), options.ListOptions{})
 			if err == nil {
-				utils.AddToTestOutput("Calico NetworkPolicies\n")
+				log.Info("DIAGS: Calico NetworkPolicies:")
 				for _, policy := range policies.Items {
-					utils.AddToTestOutput(fmt.Sprintf("%v\n", policy))
+					log.Info(policy)
 				}
 			}
 			gnps, err := client.GlobalNetworkPolicies().List(context.Background(), options.ListOptions{})
 			if err == nil {
-				utils.AddToTestOutput("Calico GlobalNetworkPolicies\n")
+				log.Info("DIAGS: Calico GlobalNetworkPolicies:")
 				for _, gnp := range gnps.Items {
-					utils.AddToTestOutput(fmt.Sprintf("%v\n", gnp))
+					log.Info(gnp)
 				}
 			}
 			workloads, err := client.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
 			if err == nil {
-				utils.AddToTestOutput("Calico WorkloadEndpoints\n")
+				log.Info("DIAGS: Calico WorkloadEndpoints:")
 				for _, w := range workloads.Items {
-					utils.AddToTestOutput(fmt.Sprintf("%v\n", w))
+					log.Info(w)
 				}
 			}
 			nodes, err := client.Nodes().List(context.Background(), options.ListOptions{})
 			if err == nil {
-				utils.AddToTestOutput("Calico Nodes\n")
+				log.Info("DIAGS: Calico Nodes:")
 				for _, n := range nodes.Items {
-					utils.AddToTestOutput(fmt.Sprintf("%v\n", n))
+					log.Info(n)
 				}
 			}
 

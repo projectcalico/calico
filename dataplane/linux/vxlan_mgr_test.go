@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -141,7 +141,7 @@ var _ = Describe("VXLANManager", func() {
 
 		manager.noEncapRouteTable = prt
 
-		err := manager.configureVXLANDevice(50, localVTEP)
+		err := manager.configureVXLANDevice(50, localVTEP, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(manager.myVTEP).NotTo(BeNil())
@@ -178,7 +178,7 @@ var _ = Describe("VXLANManager", func() {
 	})
 
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
-		go manager.KeepVXLANDeviceInSync(1400, 1*time.Second)
+		go manager.KeepVXLANDeviceInSync(1400, false, 1*time.Second)
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node2",
 			Mac:            "00:0a:95:9d:68:16",
@@ -213,7 +213,7 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := manager.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err = manager.configureVXLANDevice(50, localVTEP)
+		err = manager.configureVXLANDevice(50, localVTEP, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(prt.currentRoutes["eth0"]).To(HaveLen(0))
