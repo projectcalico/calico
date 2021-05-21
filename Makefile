@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/typha
-GO_BUILD_VER=v0.51
+GO_BUILD_VER=v0.53
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_TYPHA_PROJECT_ID)
@@ -7,12 +7,20 @@ SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_TYPHA_PROJECT_ID)
 # Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
 SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_FELIX_PROJECT_ID) $(SEMAPHORE_CONFD_PROJECT_ID)
 
-# This needs to be evaluated before the common makefile is included.
-# This var contains some default values that the common makefile may append to.
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/typha
+RELEASE_REGISTRIES    ?= gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
+RELEASE_BRANCH_PREFIX ?= release
+DEV_TAG_SUFFIX        ?= 0.dev
 
-BUILD_IMAGE=calico/typha
-RELEASE_IMAGES?=gcr.io/projectcalico-org/typha eu.gcr.io/projectcalico-org/typha asia.gcr.io/projectcalico-org/typha us.gcr.io/projectcalico-org/typha
+# If this is a release, also tag and push additional images.
+ifeq ($(RELEASE),true)
+TYPHA_IMAGE    ?=typha
+DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
+else
+TYPHA_IMAGE    ?=calico/typha
+DEV_REGISTRIES ?=quay.io registry.hub.docker.com
+endif
+
+BUILD_IMAGES   ?=$(TYPHA_IMAGE)
 
 ###############################################################################
 # Download and include Makefile.common
@@ -113,8 +121,8 @@ bin/typha-client-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 # Building the image
 ###############################################################################
 # Build the calico/typha docker image, which contains only typha.
-.PHONY: $(BUILD_IMAGE) $(BUILD_IMAGE)-$(ARCH)
-image: $(BUILD_IMAGE)
+.PHONY: $(TYPHA_IMAGE) $(TYPHA_IMAGE)-$(ARCH)
+image: $(BUILD_IMAGES)
 
 # Build the image for the target architecture
 .PHONY: image-all
@@ -123,15 +131,15 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 # Build the calico/typha docker image, which contains only Typha.
-.PHONY: image $(BUILD_IMAGE)
-$(BUILD_IMAGE): bin/calico-typha-$(ARCH) register
+.PHONY: image $(TYPHA_IMAGE)
+$(TYPHA_IMAGE): bin/calico-typha-$(ARCH) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image
+	docker build --pull -t $(TYPHA_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
+	docker tag $(TYPHA_IMAGE):latest-$(ARCH) $(TYPHA_IMAGE):latest
 endif
 
 ###############################################################################
@@ -147,7 +155,7 @@ ut combined.coverprofile: $(SRC_FILES)
 ###############################################################################
 .PHONY: cd ci version
 version: image
-	docker run --rm $(BUILD_IMAGE):latest-$(ARCH) calico-typha --version
+	docker run --rm $(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version
 
 ci: mod-download image-all version static-checks ut
 ifeq (,$(filter k8sfv-test, $(EXCEPT)))
@@ -162,7 +170,7 @@ fv: k8sfv-test
 k8sfv-test: image
 	cd .. && git clone https://github.com/projectcalico/felix.git && cd felix; \
 	[ ! -e ../typha/semaphore-felix-branch ] || git checkout $(cat ../typha/semaphore-felix-branch); \
-	JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=$(BUILD_IMAGE):latest TYPHA_VERSION=latest $(MAKE) k8sfv-test
+	JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=$(TYPHA_IMAGE):latest TYPHA_VERSION=latest $(MAKE) k8sfv-test
 
 st:
 	@echo "No STs available."
@@ -206,8 +214,8 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep $(VERSION) || ( echo "Reported version:" `docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm quay.io/$(BUILD_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/$(BUILD_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm $(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep $(VERSION) || ( echo "Reported version:" `docker run --rm $(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm quay.io/$(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/$(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
 
 	# TODO: Some sort of quick validation of the produced binaries.
 
@@ -241,8 +249,8 @@ release-publish: release-prereqs
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
 	# Check latest versions match.
-	if ! docker run $(BUILD_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run $(BUILD_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(BUILD_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run quay.io/$(BUILD_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run $(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run quay.io/$(TYPHA_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=latest
 
