@@ -1,18 +1,11 @@
-# Shortcut targets
-default: build
-
-## Build binary for current platform
-all: build
-
-## Run the tests for the current platform/architecture
-test: ut
+PACKAGE_NAME?=github.com/projectcalico/app-policy
+GO_BUILD_VER?=v0.53
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_APP_POLICY_PROJECT_ID)
 
 ###############################################################################
-GO_BUILD_VER?=v0.51
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
@@ -22,6 +15,49 @@ DIKASTES_GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 GIT_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
 ifeq ($(LOCAL_BUILD),true)
 	GIT_VERSION = $(shell git describe --tags --dirty --always --abbrev=12)-dev-build
+endif
+
+# Figure out the users UID/GID.  These are needed to run docker containers
+# as the current user and ensure that files built inside containers are
+# owned by the current user.
+LOCAL_USER_ID:=$(shell id -u)
+MY_GID:=$(shell id -g)
+
+SRC_FILES=$(shell find . -name '*.go' |grep -v vendor)
+
+# If local build is set, then always build the binary since we might not
+# detect when another local repository has been modified.
+ifeq ($(LOCAL_BUILD),true)
+.PHONY: $(SRC_FILES)
+endif
+
+RELEASE_REGISTRIES ?=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
+
+# If this is a release, also tag and push additional images.
+ifeq ($(RELEASE),true)
+DIKASTES_IMAGE ?=dikastes
+DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
+else
+DIKASTES_IMAGE ?=calico/dikastes
+DEV_REGISTRIES ?=quay.io registry.hub.docker.com
+endif
+
+BUILD_IMAGES ?= $(DIKASTES_IMAGE)
+
+GIT_USE_SSH?=true
+
+
+# Build mounts for running in "local build" mode. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+.PHONY:local_build
+
+ifdef LOCAL_BUILD
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
+local_build:
+	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
+else
+local_build:
+	@echo "Building app-policy"
 endif
 
 ##############################################################################
@@ -39,63 +75,27 @@ Makefile.common.$(MAKE_BRANCH):
 	rm -f Makefile.common.*
 	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
-# Figure out the users UID/GID.  These are needed to run docker containers
-# as the current user and ensure that files built inside containers are
-# owned by the current user.
-LOCAL_USER_ID:=$(shell id -u)
-MY_GID:=$(shell id -g)
-
-SRC_FILES=$(shell find . -name '*.go' |grep -v vendor)
-
-# If local build is set, then always build the binary since we might not
-# detect when another local repository has been modified.
-ifeq ($(LOCAL_BUILD),true)
-.PHONY: $(SRC_FILES)
-endif
-
-############################################################################
-BUILD_IMAGE?=calico/dikastes
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/dikastes
-RELEASE_IMAGES?=gcr.io/projectcalico-org/dikastes eu.gcr.io/projectcalico-org/dikastes asia.gcr.io/projectcalico-org/dikastes us.gcr.io/projectcalico-org/dikastes
-PACKAGE_NAME?=github.com/projectcalico/app-policy
-
-GIT_USE_SSH?=true
-
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
-PUSH_IMAGES+=$(RELEASE_IMAGES)
-endif
-
-# remove from the list to push to manifest any registries that do not support multi-arch
-EXCLUDE_MANIFEST_REGISTRIES ?= quay.io/
-PUSH_MANIFEST_IMAGES=$(PUSH_IMAGES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
-PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
-
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-.PHONY:local_build
-
-ifdef LOCAL_BUILD
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
-local_build:
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
-else
-local_build:
-	@echo "Building app-policy"
-endif
-
 include Makefile.common
+
+# Shortcut targets
+default: build
+
+## Build binary for current platform
+all: build
+
+## Run the tests for the current platform/architecture
+test: ut
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
 clean:
 	rm -rf .go-pkg-cache report vendor bin Makefile.common*
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
-	-docker rmi $(BUILD_IMAGE):latest-$(ARCH)
-	-docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH)
+	-docker rmi $(DIKASTES_IMAGE):latest-$(ARCH)
+	-docker rmi $(DIKASTES_IMAGE):$(VERSION)-$(ARCH)
 ifeq ($(ARCH),amd64)
-	-docker rmi $(BUILD_IMAGE):latest
-	-docker rmi $(BUILD_IMAGE):$(VERSION)
+	-docker rmi $(DIKASTES_IMAGE):latest
+	-docker rmi $(DIKASTES_IMAGE):$(VERSION)
 endif
 
 update-pins: update-libcalico-pin
@@ -164,17 +164,17 @@ proto/healthz.pb.go: proto/healthz.proto
 # Building the image
 ###############################################################################
 CONTAINER_CREATED=.dikastes.created-$(ARCH)
-.PHONY: image $(BUILD_IMAGE)
-image: $(BUILD_IMAGE)
+.PHONY: image $(DIKASTES_IMAGE)
+image: $(DIKASTES_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-$(BUILD_IMAGE): $(CONTAINER_CREATED)
+$(DIKASTES_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
-	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	docker build -t $(DIKASTES_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
+	docker tag $(DIKASTES_IMAGE):latest-$(ARCH) $(DIKASTES_IMAGE):latest
 endif
 	touch $@
 
@@ -252,8 +252,8 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) /dikastes --version | grep '^$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
+	if ! docker run $(DIKASTES_IMAGE):$(VERSION)-$(ARCH) /dikastes --version | grep '^$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run $(DIKASTES_IMAGE):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
 	  echo "Version check passed\n"; \
@@ -296,22 +296,3 @@ endif
 ifdef LOCAL_BUILD
 	$(error LOCAL_BUILD must not be set for a release)
 endif
-
-###############################################################################
-# Developer helper scripts (not used by build or test)
-###############################################################################
-.PHONY: help
-## Display this help text
-help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {				      \
-		nb = sub( /^## /, "", helpMsg );				\
-		if(nb == 0) {						   \
-			helpMsg = $$0;					      \
-			nb = sub( /^[^:]*:.* ## /, "", helpMsg );		   \
-		}							       \
-		if (nb)							 \
-			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
-	}								   \
-	{ helpMsg = $$0 }'						  \
-	width=20							    \
-	$(MAKEFILE_LIST)
