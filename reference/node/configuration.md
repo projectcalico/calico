@@ -40,6 +40,7 @@ exist in the cluster. The following options control the paramaters on the create
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | CALICO_IPV6POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv6 Pool created at start up. [Default: `all()`] | [selector]({{site.baseurl}}/reference/resources/ippool#node-selector) |
 | NO_DEFAULT_POOLS | Prevents  {{site.prodname}} from creating a default pool if one does not exist. [Default: `false`] | boolean |
+| ENABLE_BFD | Sets up BFD (Bidirectional Forwarding Detection) on the BGP protocols. Improves failure detection times. [Default: `false`] | boolean |
 
 ### Configuring BGP Networking
 
