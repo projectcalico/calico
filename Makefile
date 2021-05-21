@@ -1,8 +1,28 @@
 PACKAGE_NAME=github.com/projectcalico/kube-controllers
-GO_BUILD_VER=v0.51
+GO_BUILD_VER=v0.53
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_KUBE_CONTROLLERS_PROJECT_ID)
+
+# Makefile configuration options
+KUBE_CONTROLLERS_IMAGE  ?=calico/kube-controllers
+FLANNEL_MIGRATION_IMAGE ?=calico/flannel-migration-controller
+BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
+DEV_REGISTRIES          ?=registry.hub.docker.com quay.io
+
+# Build mounts for running in "local build" mode. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+ifdef LOCAL_BUILD
+PHONY: set-up-local-build
+LOCAL_BUILD_DEP:=set-up-local-build
+
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
+	-v $(CURDIR)/../felix:/go/src/github.com/projectcalico/felix:rw
+
+$(LOCAL_BUILD_DEP):
+	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
+		-replace=github.com/projectcalico/felix=../felix
+endif
 
 ###############################################################################
 # Download and include Makefile.common
@@ -19,29 +39,7 @@ Makefile.common.$(MAKE_BRANCH):
 	rm -f Makefile.common.*
 	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-ifdef LOCAL_BUILD
-PHONY: set-up-local-build
-LOCAL_BUILD_DEP:=set-up-local-build
-
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
-	-v $(CURDIR)/../felix:/go/src/github.com/projectcalico/felix:rw
-
-$(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
-		-replace=github.com/projectcalico/felix=../felix
-endif
-
-# Makefile configuration options
-BUILD_IMAGE?=calico/kube-controllers
-FLANNEL_MIGRATION_BUILD_IMAGE?=calico/flannel-migration-controller
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/$(BUILD_IMAGE) $(FLANNEL_MIGRATION_BUILD_IMAGE) quay.io/$(FLANNEL_MIGRATION_BUILD_IMAGE)
-RELEASE_IMAGES?=
-
 include Makefile.common
-
-###############################################################################
 
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
 ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
@@ -52,13 +50,15 @@ endif
 
 SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
 
+###############################################################################
+
 ## Removes all build artifacts.
 clean:
 	rm -rf .go-pkg-cache bin image.created-$(ARCH) build report/*.xml release-notes-*
-	-docker rmi $(BUILD_IMAGE)
-	-docker rmi $(BUILD_IMAGE):latest-amd64
-	-docker rmi $(FLANNEL_MIGRATION_BUILD_IMAGE)
-	-docker rmi $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-amd64
+	-docker rmi $(KUBE_CONTROLLERS_IMAGE)
+	-docker rmi $(KUBE_CONTROLLERS_IMAGE):latest-amd64
+	-docker rmi $(FLANNEL_MIGRATION_IMAGE)
+	-docker rmi $(FLANNEL_MIGRATION_IMAGE):latest-amd64
 	rm -f tests/fv/fv.test
 	rm -f report/*.xml
 	rm -f tests/crds.yaml
@@ -104,13 +104,13 @@ sub-image-%:
 
 image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH)
 	# Build the docker image for the policy controller.
-	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	docker build -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
 	# Build the docker image for the flannel migration controller.
-	docker build -t $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-images/flannel-migration/Dockerfile.$(ARCH) .
+	docker build -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-images/flannel-migration/Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
 	# Need amd64 builds tagged as :latest because Semaphore depends on that
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
-	docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(FLANNEL_MIGRATION_BUILD_IMAGE):latest
+	docker tag $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) $(KUBE_CONTROLLERS_IMAGE):latest
+	docker tag $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) $(FLANNEL_MIGRATION_IMAGE):latest
 endif
 	touch $@
 
@@ -120,29 +120,6 @@ remote-deps: mod-download
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
 		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd/* tests/crds/; \
 		chmod +w tests/crds/*'
-
-sub-single-tag-images-arch-%:
-	@if echo $* | grep -q "$(call escapefs,$(FLANNEL_MIGRATION_BUILD_IMAGE))"; then \
-		echo "docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))"; \
-		docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH)); \
-	else \
-		echo "docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))"; \
-		docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH)); \
-	fi
-
-# because some still do not support multi-arch manifest
-sub-single-tag-images-non-manifest-%:
-ifeq ($(ARCH),amd64)
-	@if echo $* | grep -q "$(call escapefs,$(FLANNEL_MIGRATION_BUILD_IMAGE))"; then \
-		echo "docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))"; \
-		docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)); \
-	else \
-		echo "docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))"; \
-		docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)); \
-	fi
-else
-	$(NOECHO) $(NOOP)
-endif
 
 ###############################################################################
 # Static checks
@@ -164,8 +141,8 @@ fv: remote-deps tests/fv/fv.test image
 	@echo Running Go FVs.
 	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) \
 		HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) \
-		CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) \
-		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) \
+		CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
+		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
 		CRDS=${PWD}/tests/crds \
 		GO111MODULE=on \
@@ -230,8 +207,8 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(BUILD_IMAGE):$(VERSION)-$(ARCH) --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(BUILD_IMAGE):$(VERSION)-$(ARCH) --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 ## Generates release notes based on commits in this version.
 release-notes: release-prereqs
@@ -261,8 +238,8 @@ release-publish: release-prereqs
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
 	# Check latest versions match.
-	if ! docker run $(BUILD_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(BUILD_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(BUILD_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(BUILD_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(KUBE_CONTROLLERS_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(KUBE_CONTROLLERS_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=latest
 
