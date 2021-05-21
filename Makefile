@@ -341,6 +341,21 @@ UPLOAD_DIR?=$(OUTPUT_DIR)/upload
 $(UPLOAD_DIR):
 	mkdir -p $(UPLOAD_DIR)
 
+# Define a multi-line string for the GitHub release body.
+# We need to export it as an env var to properly format it.
+# See here: https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile/5887751
+define RELEASE_BODY 
+Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/
+
+Attached to this release are the following artifacts:
+
+- `release-v$(CALICO_VER).tgz`: docker images and kubernetes manifests.
+- `calico-windows-v$(CALICO_VER).zip`: Calico for Windows.
+- `tigera-operator-v$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
+
+endef
+export RELEASE_BODY
+
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
@@ -352,7 +367,7 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
 	ghr -u projectcalico -r calico \
-		-b 'Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
+		-b "$$RELEASE_BODY" \
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(UPLOAD_DIR)
 
