@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 package client
 
 import (
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
@@ -87,7 +87,7 @@ func (w *workloadEndpoints) List(metadata api.WorkloadEndpointMetadata) (*api.Wo
 // setCreateDefaults sets any defaults on a newly created object WorkloadEndpoint.
 func (w *workloadEndpoints) setCreateDefaults(wep *api.WorkloadEndpoint) {
 	if wep.Metadata.Name == "" {
-		wep.Metadata.Name = uuid.NewV4().String()
+		wep.Metadata.Name = uuid.NewString()
 	}
 }
 

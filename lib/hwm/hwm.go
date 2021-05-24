@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ package hwm
 
 import (
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/tchap/go-patricia.v2/patricia"
+	"github.com/tchap/go-patricia/v2/patricia"
 )
 
 // HighWatermarkTracker: map that tracks the highest value seen for each key.
