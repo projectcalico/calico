@@ -132,7 +132,7 @@ type Config struct {
 	DebugBPFCgroupV2 string `config:"string;;local"`
 	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
 	// testing with multiple Felix instances running on one host.
-	DebugBPFMapRepinEnabled bool `config:"bool;true;local"`
+	DebugBPFMapRepinEnabled bool `config:"bool;false;local"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
