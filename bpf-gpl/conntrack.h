@@ -729,7 +729,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (TH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
-	} if (CALI_F_FROM_HOST) {
+	}
+	if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest whitelist. */
 		if (dst_to_src->whitelisted) {
 			// Packet was whitelisted by the policy attached to this endpoint.
