@@ -6,11 +6,11 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/data-plane-api v0.0.0-20210121155913-ffd420ef8a9a
 	github.com/gogo/googleapis v1.2.0
-	github.com/gogo/protobuf v1.3.2
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210423182314-3aa7a9eeb8ea
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210510231246-b2f91f5ac4d6
 	github.com/prometheus/client_golang v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
