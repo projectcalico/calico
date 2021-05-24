@@ -378,13 +378,14 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 
 ## Updates helm-index with the new release chart
 helm-index:
+	mkdir -p charts/$(CALICO_VER)/
 	cd charts/
-	mkdir -p $(CALICO_VER)/
 	cp $(RELEASE_HELM_CHART) $(CALICO_VER)/
-	mv index.yaml index.yaml.bak
+	wget https://s3.amazonaws.com/calico-public/index.html -O index.yaml.bak
 	helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
-	rm -rf $(CALICO_VER) index.yaml.bak
+	aws s3 cp index.html s3://calico-public/index.html
 	cd ..
+	rm -rf charts
 
 ## Generates release notes for the given version.
 release-notes: #release-prereqs
