@@ -76,7 +76,10 @@ curl -L https://github.com/song-jiang/kind/releases/download/dualstack-1.17.0/ki
 chmod +x ${KIND}
 
 echo "Create kind cluster"
-${KIND} create cluster --image songtjiang/kindnode-dualstack:1.17.0 --config - <<EOF
+
+set +e
+for attempt in 1 2 3; do
+    ${KIND} create cluster --image songtjiang/kindnode-dualstack:1.17.0 --config - <<EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 networking:
@@ -104,6 +107,16 @@ kubeadmConfigPatches:
     name: config
   mode: ipvs
 EOF
+    kind_rc=$?
+    if ${TEST_RETRY:-false} || test "${kind_rc}" != 0; then
+	${KIND} delete cluster
+	TEST_RETRY=false	# Only force a retry test once.
+	continue
+    fi
+    break
+done
+set -e
+test "${kind_rc}" = 0
 
 ${kubectl} get no -o wide
 ${kubectl} get po --all-namespaces -o wide
