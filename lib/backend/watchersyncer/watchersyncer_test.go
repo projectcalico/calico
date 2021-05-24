@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -776,8 +776,8 @@ func deleteEvent(key model.Key) api.WatchEvent {
 		Type: api.WatchDeleted,
 		Old: &model.KVPair{
 			Key:      key,
-			Value:    uuid.NewV4().String(),
-			Revision: uuid.NewV4().String(),
+			Value:    uuid.NewString(),
+			Revision: uuid.NewString(),
 		},
 	}
 }
@@ -789,8 +789,8 @@ func addEvent(key model.Key) api.WatchEvent {
 		Type: api.WatchAdded,
 		New: &model.KVPair{
 			Key:      key,
-			Value:    uuid.NewV4().String(),
-			Revision: uuid.NewV4().String(),
+			Value:    uuid.NewString(),
+			Revision: uuid.NewString(),
 		},
 	}
 }
@@ -802,8 +802,8 @@ func modifiedEvent(key model.Key) api.WatchEvent {
 		Type: api.WatchModified,
 		New: &model.KVPair{
 			Key:      key,
-			Value:    uuid.NewV4().String(),
-			Revision: uuid.NewV4().String(),
+			Value:    uuid.NewString(),
+			Revision: uuid.NewString(),
 		},
 	}
 }
