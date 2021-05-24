@@ -357,7 +357,7 @@ endef
 export RELEASE_BODY
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR)
+release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
@@ -377,7 +377,7 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	@echo ""
 
 ## Updates helm-index with the new release chart
-helm-index:
+helm-index: release-prereqs
 	mkdir -p charts/$(CALICO_VER)/
 	cd charts/
 	cp $(RELEASE_HELM_CHART) $(CALICO_VER)/
