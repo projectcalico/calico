@@ -122,7 +122,7 @@ func formatCommand(command string, args []string) string {
 	for _, arg := range args {
 		// Only quote if there are actually some interesting characters in there, just to make it easier to read.
 		quoted := fmt.Sprintf("%q", arg)
-		if quoted == `"` + arg + `"` {
+		if quoted == `"`+arg+`"` {
 			out += " " + arg
 		} else {
 			out += " " + quoted

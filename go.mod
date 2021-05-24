@@ -14,6 +14,7 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/google/gopacket v1.1.17
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
+	github.com/google/uuid v1.2.0
 	github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
@@ -27,7 +28,6 @@ require (
 	github.com/projectcalico/pod2daemon v0.0.0-20210421215417-6a02764eed37
 	github.com/projectcalico/typha v0.7.3-0.20210518155147-75c42c949f88
 	github.com/prometheus/client_golang v1.7.1
-	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/viper v1.7.0
