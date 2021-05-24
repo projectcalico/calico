@@ -3,6 +3,6 @@
 # process, which may cause wedges in the gate later.
 
 Babel!=2.4.0,>=2.3.4 # BSD
-eventlet!=0.18.3,!=0.20.1,!=0.21.0,!=0.23.0,>=0.18.2  # MIT
+eventlet>=0.31.0  # MIT
 six>=1.10.0 # MIT
 etcd3gw>=0.2.0 # Apache-2.0
