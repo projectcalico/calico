@@ -27,16 +27,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
-
 	"github.com/projectcalico/felix/fv/utils"
-
-	uuid "github.com/satori/go.uuid"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // ConnectivityChecker records a set of connectivity expectations and supports calculating the
@@ -290,7 +288,7 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 func NewRequest(payload string) Request {
 	return Request{
 		Timestamp: time.Now(),
-		ID:        uuid.NewV4().String(),
+		ID:        uuid.NewString(),
 		Payload:   payload,
 	}
 }

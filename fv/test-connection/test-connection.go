@@ -32,9 +32,9 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/docopt/docopt-go"
+	"github.com/google/uuid"
 	"github.com/ishidawataru/sctp"
 	reuse "github.com/libp2p/go-reuseport"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/cgroup"
@@ -327,7 +327,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 
 	log.Infof("%s connection established from %v to %v", connType, localAddr, remoteAddr)
 	return &testConn{
-		config:   connectivity.ConnConfig{ConnType: connType, ConnID: uuid.NewV4().String()},
+		config:   connectivity.ConnConfig{ConnType: connType, ConnID: uuid.NewString()},
 		protocol: driver,
 		duration: duration,
 		sendLen:  sendLen,
