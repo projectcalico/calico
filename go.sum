@@ -594,8 +594,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
-github.com/projectcalico/felix v0.0.0-20210521232729-f05cbef690c1 h1:Rg0XVkNnsMYXAVTkcuroTv1R2tPFJHOF6M9fKLUoKwI=
-github.com/projectcalico/felix v0.0.0-20210521232729-f05cbef690c1/go.mod h1:fs8HgbbqB2ZCGY1q489RToLz6gfeLmm0vbzyddFr8js=
+github.com/projectcalico/felix v0.0.0-20210524111919-2a1bbe78caa4 h1:KKmbZKJq0s+VyZRy3aiW4NIuxWOp0Yu4PyMf1vEzKvg=
+github.com/projectcalico/felix v0.0.0-20210524111919-2a1bbe78caa4/go.mod h1:Cp195Z1R9+BDFHQ52B5dKtejv41BRd9lutBbjOGndDg=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
