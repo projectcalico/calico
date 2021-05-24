@@ -1,0 +1,58 @@
+apiVersion: v1
+entries:
+  tigera-operator:
+  - apiVersion: v2
+    appVersion: v3.19.1
+    created: "2021-05-24T18:51:03.161455119+01:00"
+    description: Installs the Tigera operator for Calico
+    digest: cb72629183993eabd6ca3d66737046c4900ca19941e10a86267e056845c6e019
+    name: tigera-operator
+    urls:
+    - https://github.com/projectcalico/calico/releases/download/v3.19.1/tigera-operator-v3.19.1-1.tgz
+    version: v3.19.1-1
+  - apiVersion: v2
+    appVersion: v3.19.0
+    created: "2021-05-24T18:42:01.528521435+01:00"
+    description: Installs the Tigera operator for Calico
+    digest: b7f17f7920b5e419db5355105119648420a2bd7b31999eb0010786d239f311eb
+    name: tigera-operator
+    urls:
+    - https://github.com/projectcalico/calico/releases/download/v3.19.0/tigera-operator-v3.19.0-1.tgz
+    version: v3.19.0-1
+  - apiVersion: v2
+    appVersion: v3.18.3
+    created: "2021-05-24T18:42:01.527076894+01:00"
+    description: Installs the Tigera operator for Calico
+    digest: 03a32a8aa776b2be770b41356064c84a509a5b60eedc553a05dd44e9b60c820b
+    name: tigera-operator
+    urls:
+    - https://github.com/projectcalico/calico/releases/download/v3.18.3/tigera-operator-v3.18.3-1.tgz
+    version: v3.18.3-1
+  - apiVersion: v2
+    appVersion: v3.18.2
+    created: "2021-05-24T18:42:01.525657762+01:00"
+    description: Installs the Tigera operator for Calico
+    digest: cffcd4ce9b9ab51600ddd0fcf2402bccf366fbf841f65f21c4c3e6b44e3fa22a
+    name: tigera-operator
+    urls:
+    - https://github.com/projectcalico/calico/releases/download/v3.18.2/tigera-operator-v3.18.2-1.tgz
+    version: v3.18.2-1
+  - apiVersion: v2
+    appVersion: v3.18.1
+    created: "2021-05-24T18:42:01.523593342+01:00"
+    description: Installs the Tigera operator for Calico
+    digest: cf61c59f509af23423c4de7dc0fc3434f2910a745e16bf32dbcda9c624029623
+    name: tigera-operator
+    urls:
+    - https://github.com/projectcalico/calico/releases/download/v3.18.1/tigera-operator-v3.18.1-1.tgz
+    version: v3.18.1-1
+  - apiVersion: v2
+    appVersion: v3.18.0
+    created: "2021-05-24T18:42:01.522007024+01:00"
+    description: Installs the Tigera operator for Calico
+    digest: caa82506116e2b88d9e4f4c92dac44454831c23b0e07a0e89190bd8c9a6ef268
+    name: tigera-operator
+    urls:
+    - https://github.com/projectcalico/calico/releases/download/v3.18.0/tigera-operator-v3.18.0-1.tgz
+    version: v3.18.0-1
+generated: "2021-05-24T18:51:03.15960965+01:00"
