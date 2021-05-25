@@ -64,11 +64,11 @@
   '''
 
 # proxy redirect for Helm chart repo
-# [[redirects]]
-#    from = "/charts/*"
-#    to = "https://s3.amazonaws.com/calico-public/:splat"
-#    status = 200
-#    headers = {X-From = "Netlify"}
+[[redirects]]
+   from = "/charts/*"
+   to = "https://s3.amazonaws.com/calico-public/:splat"
+   status = 200
+   headers = {X-From = "Netlify"}
 
 # proxy redirects for website and manifests for v3.19
 [[redirects]]
