@@ -1,30 +1,23 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.51
-
-# These need to be defined before the common makefile is included due to the way
-# the common makefile expands certain variables. (If they are not pre-defined then
-# the variables won't expand correctly in pre-requisites.)
-BUILD_IMAGE?=calico/node
-RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node asia.gcr.io/projectcalico-org/node us.gcr.io/projectcalico-org/node
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/node
+GO_BUILD_VER?=v0.53
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_NODE_PROJECT_ID)
 
-###############################################################################
-# Download and include Makefile.common
-#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
-#   that variable is evaluated when we declare DOCKER_RUN and siblings.
-###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+RELEASE_REGISTRIES    ?=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
+RELEASE_BRANCH_PREFIX ?=release
+DEV_TAG_SUFFIX        ?=0.dev
 
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
+# If this is a release, also tag and push additional images.
+ifeq ($(RELEASE),true)
+NODE_IMAGE     ?=node
+DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
+else
+NODE_IMAGE     ?=calico/node
+DEV_REGISTRIES ?=quay.io registry.hub.docker.com
+endif
+
+BUILD_IMAGES ?=$(NODE_IMAGE)
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
@@ -43,6 +36,21 @@ $(LOCAL_BUILD_DEP):
 		-replace=github.com/projectcalico/typha=../typha \
 		-replace=github.com/kelseyhightower/confd=../confd
 endif
+
+###############################################################################
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH):
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
 include Makefile.common
 
@@ -158,7 +166,7 @@ clean:
 	rm -rf vendor
 	rm Makefile.common*
 	# Delete images that we built in this repo
-	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
+	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
 
 ###############################################################################
@@ -233,13 +241,13 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 # Building the image
 ###############################################################################
 ## Create the image for the current ARCH
-image: remote-deps $(BUILD_IMAGE)
+image: remote-deps $(NODE_IMAGE)
 ## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-$(BUILD_IMAGE): $(NODE_CONTAINER_CREATED)
+$(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
 ifeq ($(LOCAL_BUILD),true)
 	# If doing a local build, copy in local confd templates in case there are changes.
@@ -252,7 +260,7 @@ endif
 	docker run --rm -v $(CURDIR)/dist/bin:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calico-node-$(ARCH) -v;	 /go/bin/calico-node-$(ARCH) -v; \
 	"
-	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	touch $@
 
 # download BIRD source to include in image.
@@ -384,10 +392,10 @@ calico-node.tar: $(NODE_CONTAINER_CREATED)
 	# Check versions of the Calico binaries that will be in calico-node.tar.
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
-	docker run --rm $(BUILD_IMAGE):latest-$(ARCH) /bin/sh -c "\
+	docker run --rm $(NODE_IMAGE):latest-$(ARCH) /bin/sh -c "\
 	  echo bird --version;	 /bin/bird --version; \
 	"
-	docker save --output $@ $(BUILD_IMAGE):latest-$(ARCH)
+	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
 
 .PHONY: st-checks
 st-checks:
@@ -460,7 +468,7 @@ st: remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd
 		   -e HOST_CHECKOUT_DIR=$(CURDIR) \
 		   -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
-		   -e NODE_CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) \
+		   -e NODE_CONTAINER_NAME=$(NODE_IMAGE):latest-$(ARCH) \
 		   --rm -t \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
@@ -521,7 +529,7 @@ release-windows-archive $(WINDOWS_ARCHIVE): release-prereqs
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) versions | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 ## Generates release notes based on commits in this version.
 release-notes: release-prereqs
@@ -567,7 +575,7 @@ release-publish-latest: release-verify
 # Run docker-image acceptance tests
 node-test-at: release-prereqs
 	docker run -v $(PWD)/tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
-	  $(BUILD_IMAGE):$(VERSION) /bin/sh -c ' \
+	  $(NODE_IMAGE):$(VERSION) /bin/sh -c ' \
 	   apk --no-cache add wget ca-certificates && \
 	   wget -q -O /tmp/goss https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
 	   chmod +rx /tmp/goss && \
