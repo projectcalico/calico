@@ -86,6 +86,8 @@ const (
 	ChainForwardCheck        = ChainNamePrefix + "forward-check"
 	ChainForwardEndpointMark = ChainNamePrefix + "forward-endpoint-mark"
 
+	ChainSetWireguardIncomingMark = ChainNamePrefix + "wireguard-incoming-mark"
+
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
 	WorkloadPfxSpecialAllow = "ALLOW"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
@@ -222,6 +224,8 @@ type RuleRenderer interface {
 	DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*iptables.Chain
 	BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain
+
+	WireguardIncomingMarkChain() *iptables.Chain
 }
 
 type DefaultRuleRenderer struct {
