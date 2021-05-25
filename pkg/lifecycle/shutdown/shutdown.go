@@ -32,7 +32,9 @@ func Run() {
 	// Save shutdown timestamp immediately.
 	// Depends on how we configure termination grace period,
 	// the shutdown process can be killed at any given time.
-	_ = utils.SaveShutdownTimestamp()
+	if err := utils.SaveShutdownTimestamp(); err != nil {
+		log.WithError(err).Errorf("Unable to save shutdown timestamp")
+	}
 
 	// Determine the name for this node.
 	nodeName := utils.DetermineNodeName()
@@ -43,7 +45,7 @@ func Run() {
 	// If running under kubernetes with secrets to call k8s API
 	if config, err := rest.InClusterConfig(); err == nil {
 		// default timeout is 30 seconds, which isn't appropriate for this kind of
-		// startup action because network services, like kube-proxy might not be
+		// shutdown action because network services, like kube-proxy might not be
 		// running and we don't want to block the full 30 seconds if they are just
 		// a few seconds behind.
 		config.Timeout = 2 * time.Second

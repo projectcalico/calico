@@ -112,7 +112,7 @@ func Run() {
 	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
 		if err := ensureKDDMigrated(cfg, cli); err != nil {
 			log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
-			terminate()
+			utils.Terminate()
 		}
 	}
 
@@ -151,7 +151,7 @@ func Run() {
 				log.WithError(err).Info("Unauthorized to query kubeadm configmap, assuming not on kubeadm. CIDR detection will not occur.")
 			} else {
 				log.WithError(err).Error("failed to query kubeadm's config map")
-				terminate()
+				utils.Terminate()
 			}
 		}
 
@@ -166,7 +166,7 @@ func Run() {
 				log.WithError(err).Info("Unauthorized to query rancher configmap, assuming not on rancher. CIDR detection will not occur.")
 			} else {
 				log.WithError(err).Error("failed to query Rancher's cluster state config map")
-				terminate()
+				utils.Terminate()
 			}
 		}
 	}
@@ -202,7 +202,7 @@ func Run() {
 	// Apply the updated node resource.
 	if _, err := CreateOrUpdate(ctx, cli, node); err != nil {
 		log.WithError(err).Errorf("Unable to set node resource configuration")
-		terminate()
+		utils.Terminate()
 	}
 
 	// Configure IP Pool configuration.
@@ -211,7 +211,7 @@ func Run() {
 	// Set default configuration required for the cluster.
 	if err := ensureDefaultConfig(ctx, cfg, cli, node, getOSType(), kubeadmConfig, rancherState); err != nil {
 		log.WithError(err).Errorf("Unable to set global default configuration")
-		terminate()
+		utils.Terminate()
 	}
 
 	// Write config files now that we are ready to start other components.
@@ -222,12 +222,15 @@ func Run() {
 
 	if err := ensureNetworkForOS(ctx, cli, nodeName); err != nil {
 		log.WithError(err).Errorf("Unable to ensure network for os")
-		terminate()
+		utils.Terminate()
 	}
 
 	// Remove shutdownTS file when everything is done.
 	// This indicates Calico node started successfully.
-	_ = utils.RemoveShutdownTimestampFile()
+	if err := utils.RemoveShutdownTimestampFile(); err != nil {
+		log.WithError(err).Errorf("Unable to remove shutdown timestamp file")
+		utils.Terminate()
+	}
 }
 
 func getMonitorPollInterval() time.Duration {
@@ -258,14 +261,14 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 			clearNodeIPs(ctx, cli, node, clearv4, clearv6)
 		}
 
-		terminate()
+		utils.Terminate()
 	}
 
 	if node.Spec.BGP.IPv4Address == "" && node.Spec.BGP.IPv6Address == "" {
 		if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
 			log.Error("No IPv4 or IPv6 addresses configured or detected, required for Calico networking")
 			// Unrecoverable error, terminate to restart.
-			terminate()
+			utils.Terminate()
 		} else {
 			log.Warn("No IPv4 or IPv6 addresses configured or detected. Some features may not work properly.")
 			// Bail here setting BGPSpec to nil (if empty) to pass validation.
@@ -288,7 +291,7 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 			if node.ResourceVersion != "" {
 				clearNodeIPs(ctx, cli, node, clearv4, clearv6)
 			}
-			terminate()
+			utils.Terminate()
 		}
 	}
 
@@ -402,7 +405,7 @@ func waitForConnection(ctx context.Context, c client.Interface) {
 			switch err.(type) {
 			case cerrors.ErrorConnectionUnauthorized:
 				log.WithError(err).Warn("Connection to the datastore is unauthorized")
-				terminate()
+				utils.Terminate()
 			case cerrors.ErrorDatastoreError:
 				log.WithError(err).Info("Hit error connecting to datastore - retry")
 				time.Sleep(1000 * time.Millisecond)
@@ -424,7 +427,7 @@ func getNode(ctx context.Context, client client.Interface, nodeName string) *api
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			log.WithError(err).WithField("Name", nodeName).Info("Unable to query node configuration")
 			log.Warn("Unable to access datastore to query node configuration")
-			terminate()
+			utils.Terminate()
 		}
 
 		log.WithField("Name", nodeName).Info("Building new node resource")
@@ -540,7 +543,7 @@ func parseIPEnvironment(envName, envValue string, version int) string {
 	err := ip.UnmarshalJSON([]byte("\"" + envValue + "\""))
 	if err != nil || ip.Version() != version {
 		log.Warnf("Environment does not contain a valid IPv%d address: %s=%s", version, envName, envValue)
-		terminate()
+		utils.Terminate()
 	}
 	log.Infof("Using IPv%d address from environment: %s=%s", ip.Version(), envName, envValue)
 
@@ -558,7 +561,7 @@ func validateIP(ipn string) {
 	ipAddr, _, err := cnet.ParseCIDROrIP(ipn)
 	if err != nil {
 		log.WithError(err).Errorf("Failed to parse autodetected CIDR '%s'", ipn)
-		terminate()
+		utils.Terminate()
 	}
 
 	// Get a complete list of interfaces with their addresses and check if
@@ -566,7 +569,7 @@ func validateIP(ipn string) {
 	ifaces, err := autodetection.GetInterfaces(nil, nil, ipAddr.Version())
 	if err != nil {
 		log.WithError(err).Error("Unable to query host interfaces")
-		terminate()
+		utils.Terminate()
 	}
 	if len(ifaces) == 0 {
 		log.Info("No interfaces found for validating IP configuration")
@@ -587,7 +590,7 @@ func parseBlockSizeEnvironment(envValue string) int {
 	i, err := strconv.Atoi(envValue)
 	if err != nil {
 		log.WithError(err).Error("Unable to convert blocksize to int")
-		terminate()
+		utils.Terminate()
 	}
 	return i
 }
@@ -598,16 +601,16 @@ func validateBlockSize(version int, blockSize int) {
 	if version == 4 {
 		if blockSize < 20 || blockSize > 32 {
 			log.Errorf("Invalid blocksize %d for version %d", blockSize, version)
-			terminate()
+			utils.Terminate()
 		}
 	} else if version == 6 {
 		if blockSize < 116 || blockSize > 128 {
 			log.Errorf("Invalid blocksize %d for version %d", blockSize, version)
-			terminate()
+			utils.Terminate()
 		}
 	} else {
 		log.Errorf("Invalid ip version specified (%d) when validating blocksize", version)
-		terminate()
+		utils.Terminate()
 	}
 }
 
@@ -616,7 +619,7 @@ func validateNodeSelector(version int, s string) {
 	_, err := selector.Parse(s)
 	if err != nil {
 		log.Errorf("Invalid node selector '%s' for version %d: %s", s, version, err)
-		terminate()
+		utils.Terminate()
 	}
 }
 
@@ -686,7 +689,7 @@ func autoDetectCIDR(method string, version int) *cnet.IPNet {
 
 	// The autodetection method is not recognised and is required.  Exit.
 	log.Errorf("Invalid IP autodetection method: %s", method)
-	terminate()
+	utils.Terminate()
 	return nil
 }
 
@@ -771,7 +774,7 @@ func configureASNumber(node *api.Node) {
 	if asStr != "" {
 		if asNum, err := numorstring.ASNumberFromString(asStr); err != nil {
 			log.WithError(err).Errorf("The AS number specified in the environment (AS=%s) is not valid", asStr)
-			terminate()
+			utils.Terminate()
 		} else {
 			log.Infof("Using AS number specified in environment (AS=%s)", asNum)
 			node.Spec.BGP.ASNumber = &asNum
@@ -809,7 +812,7 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	if strings.ToLower(os.Getenv("NO_DEFAULT_POOLS")) == "true" {
 		if len(ipv4Pool) > 0 || len(ipv6Pool) > 0 {
 			log.Error("Invalid configuration with NO_DEFAULT_POOLS defined and CALICO_IPV4POOL_CIDR or CALICO_IPV6POOL_CIDR defined.")
-			terminate()
+			utils.Terminate()
 		}
 
 		log.Info("Skipping IP pool configuration")
@@ -864,7 +867,7 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	poolList, err := client.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
 		log.WithError(err).Error("Unable to fetch IP pool list")
-		terminate()
+		utils.Terminate()
 		return // not really needed but allows testing to function
 	}
 
@@ -899,7 +902,7 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	_, ipv4Cidr, err := cnet.ParseCIDR(ipv4Pool)
 	if err != nil || ipv4Cidr.Version() != 4 {
 		log.Errorf("Invalid CIDR specified in CALICO_IPV4POOL_CIDR '%s'", ipv4Pool)
-		terminate()
+		utils.Terminate()
 		return // not really needed but allows testing to function
 	}
 
@@ -908,13 +911,13 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 		ipv6Pool, err = GenerateIPv6ULAPrefix()
 		if err != nil {
 			log.Errorf("Failed to generate an IPv6 default pool")
-			terminate()
+			utils.Terminate()
 		}
 	}
 	_, ipv6Cidr, err := cnet.ParseCIDR(ipv6Pool)
 	if err != nil || ipv6Cidr.Version() != 6 {
 		log.Errorf("Invalid CIDR specified in CALICO_IPV6POOL_CIDR '%s'", ipv6Pool)
-		terminate()
+		utils.Terminate()
 		return // not really needed but allows testing to function
 	}
 
@@ -950,7 +953,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 		ipipMode = api.IPIPModeAlways
 	default:
 		log.Errorf("Unrecognized IPIP mode specified in CALICO_IPV4POOL_IPIP '%s'", ipipModeName)
-		terminate()
+		utils.Terminate()
 	}
 
 	// Parse the given VXLAN mode.
@@ -963,7 +966,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 		vxlanMode = api.VXLANModeAlways
 	default:
 		log.Errorf("Unrecognized VXLAN mode specified in CALICO_IPV4POOL_VXLAN'%s'", vxlanModeName)
-		terminate()
+		utils.Terminate()
 	}
 
 	pool := &api.IPPool{
@@ -987,7 +990,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 	if _, err := client.IPPools().Create(ctx, pool, options.SetOptions{}); err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 			log.WithError(err).Errorf("Failed to create default IPv%d IP pool: %s", version, cidr.String())
-			terminate()
+			utils.Terminate()
 		}
 	} else {
 		log.Infof("Created default IPv%d pool (%s) with NAT outgoing %t. IPIP mode: %s, VXLAN mode: %s",
@@ -1326,8 +1329,4 @@ func getLocalCIDR(ip string, version int, getInterfaces func([]string, []string,
 	// Even if no CIDR is found, it doesn't think it needs to throw an exception
 	log.Warnf("Unable to find matching host interface for IP %s", ip)
 	return ip, nil
-}
-
-func terminate() {
-	utils.Terminate()
 }

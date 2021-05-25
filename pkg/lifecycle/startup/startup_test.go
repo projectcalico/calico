@@ -127,7 +127,7 @@ var _ = Describe("Non-etcd related tests", func() {
 			oldExit := utils.GetExitFunction()
 			utils.SetExitFunction(fakeExitFunction)
 			defer utils.SetExitFunction(oldExit)
-			terminate()
+			utils.Terminate()
 			It("should have terminated", func() {
 				Expect(exitCode).To(Equal(1))
 			})

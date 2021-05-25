@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/node/pkg/lifecycle/utils"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -48,7 +49,7 @@ func ensureFilesystemAsExpected() {
 			// Create the runDir
 			if err = os.MkdirAll(runDir, os.ModeDir); err != nil {
 				log.Errorf("Unable to create '%s'", runDir)
-				terminate()
+				utils.Terminate()
 			}
 			log.Warnf("Expected %s to be mounted into the container but it wasn't present. 'calicoctl node status' may provide incomplete status information", runDir)
 		}
@@ -61,7 +62,7 @@ func ensureFilesystemAsExpected() {
 		// Create the libDir
 		if err = os.MkdirAll(libDir, os.ModeDir); err != nil {
 			log.Errorf("Unable to create '%s'", libDir)
-			terminate()
+			utils.Terminate()
 		}
 		log.Warnf("Expected %s to be mounted into the container but it wasn't present. Node name may not be detected properly", libDir)
 	}
@@ -74,7 +75,7 @@ func ensureFilesystemAsExpected() {
 			// Create the logDir
 			if err = os.MkdirAll(logDir, os.ModeDir); err != nil {
 				log.Errorf("Unable to create '%s'", logDir)
-				terminate()
+				utils.Terminate()
 			}
 			log.Warnf("Expected %s to be mounted into the container but it wasn't present. 'calicoctl node diags' will not be able to collect calico/node logs", logDir)
 		}
