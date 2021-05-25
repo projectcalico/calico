@@ -1,27 +1,31 @@
 ---
-title: Enable kubectl to manage Calico APIs (tech-preview)
+title: Enable kubectl to manage Calico APIs
 description: Install the Calico API server on an existing Calico cluster
 canonical_url: '/getting-started/kubernetes/quickstart'
 ---
 
 ### Big picture
 
-[ **Feature status**: Tech-preview in v3.19 ]
+[ **Feature status**: GA in Calico v3.20+ ]
 
 Install the Calico API server on an existing cluster to enable management of Calico APIs using kubectl.
 
-> **Warning!** The Calico API server is a tech preview feature and should not be used in production clusters. It has had limited testing and is liable to change in future releases. Please provide feedback and issue reports via GitHub.
-{: .alert .alert-danger }
-
 ### Value
 
-Normally, calicoctl is required in order to manage Calico APIs in the `projectcalico.org/v3` API group. The API server provides a REST API for Calico, and allows management of these APIs using kubectl instead.
+The API server provides a REST API for Calico, and allows management of `projectcalico.org/v3` APIs using kubectl without the need for calicoctl.
+
+> **Note:** Starting in Calico v3.20.0, new operator-based installations of Calico include the API server component by default, so the instructions 
+> in this document are not required.
+{:.alert .alert-info}
+
 
 ### Before you begin
 
-- A cluster with Calico installed using the Kubernetes API data store.
+- Make sure you have a cluster with Calico installed using the Kubernetes API data store. If not, you can [migrate from etcd]({{site.baseurl}}/maintenacne/datastore-migrationt).
 
-- A machine with `openssl` installed.
+- Upgrade to Calico v3.20+ using the appropriate [upgrade instructions]({{site.baseurl}}/maintenance/upgrading).
+
+- For non-operator installations, you will need a machine with `openssl` installed.
 
 ### Concepts
 
@@ -41,6 +45,37 @@ calicoctl is still required for the following subcommands:
 
 #### Install the API server
 
+Select the method below based on your installation method.
+
+{% tabs %}
+<label:Operator install,active:true>
+<%
+1. Create an instance of an `operator.tigera.io/APIServer` with the following contents.
+
+   ```yaml
+   apiVersion: operator.tigera.io/v1
+   kind: APIServer
+   metadata:
+     name: default
+   spec: {}
+   ```
+
+1. Confirm it appears as `Available` with the following command.
+
+   ```
+   kubectl get tigerastatus apiserver
+   ```
+
+   You should see the folowing output:
+
+   ```
+   NAME        AVAILABLE   PROGRESSING   DEGRADED   SINCE
+   apiserver   True        False         False      1m10s
+   ```
+ 
+%>
+<label:Manifest install>
+<%
 1. Create the following manifest, which will install the API server as a deployment in the `calico-apiserver` namespace.
 
    ```
@@ -72,8 +107,10 @@ calicoctl is still required for the following subcommands:
        "{\"spec\": {\"caBundle\": \"$(kubectl get secret -n calico-apiserver calico-apiserver-certs -o go-template='{{ index .data "apiserver.crt" }}')\"}}"
    ```
    {% endraw %}
+%>
+{% endtabs %}
 
-   You should see the API server pod become ready, and Calico API resources become available. You can check whether the APIs are available with the following command:
+After following the above steps, you should see the API server pod become ready, and Calico API resources become available. You can check whether the APIs are available with the following command:
 
    ```
    kubectl api-resources | grep '\sprojectcalico.org'
@@ -117,11 +154,25 @@ You should see output that looks like this:
 
 #### Uninstall the Calico API server
 
-To uninstall, delete the API server manifest.
+To uninstall the API server, use the following instructions depending on your install method.
+
+{% tabs %}
+<label:Operator install,active:true>
+<%
+
+   ```
+   kubectl delete apiserver default
+   ```
+%>
+
+<label:Manifest install>
+<%
 
    ```
    kubectl delete -f {{ "/manifests/apiserver.yaml" | absolute_url }}
    ```
+%>
+{% endtabs %}
 
 Once removed, you will need to use calicoctl to manage projectcalico.org/v3 APIs.
 
