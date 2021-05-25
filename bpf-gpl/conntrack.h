@@ -504,7 +504,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		k = ct_make_key(srcLTDest, ct_ctx->proto, ct_ctx->src, ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
 		v = cali_v4_ct_lookup_elem(&k);
 		if (!v) {
-			if (CALI_F_TO_HOST && ct_ctx->proto) {
+			if (CALI_F_TO_HOST && ct_ctx->proto == IPPROTO_TCP) {
 				// Miss for a related packet towards the host.  This may be part of a
 				// connection that predates the BPF program so we need to let it fall through
 				// to iptables.
