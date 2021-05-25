@@ -38,10 +38,10 @@ exposed via the Kubernetes API defined as a custom resource definition.
 
 #### Download the Helm chart
 
-1. [Download the chart for the latest release](https://github.com/projectcalico/calico/releases/download/{{site.data.versions[0].title}}/tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz) from the release artifacts.  
-**OR**   
-Go to the {{site.prodname}} [releases page](https://github.com/projectcalico/calico/releases) and find the release you want to install. The chart will be in the release artifacts and will have a name like: `tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz`
-
+1. Add the {{site.prodname}} helm repo:
+```
+helm repo add projectcalico https://docs.projectcalico.org/charts
+```
 #### Customize the Helm chart
 If you are installing on a cluster installed by EKS, GKE, AKS or Docker Enterprise, or you need to customize TLS certificates, you **must** customize this Helm chart by creating a `values.yaml` file.
 
@@ -62,11 +62,11 @@ echo '{installation.kubernetesProvider: EKS}' > values.yaml
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
 
    ```
-   helm install calico tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz 
+   helm install {{site.data.versions[0].title}} projectcalico/calico 
    ```
    or if you created a `values.yaml` above:
    ```
-   helm install calico tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz -f values.yaml
+   helm install {{site.data.versions[0].title}} projectcalico/calico -f values.yaml
    ```
 
 1. Confirm that all of the pods are running with the following command.
