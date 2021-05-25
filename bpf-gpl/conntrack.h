@@ -51,10 +51,8 @@ static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k)
 	CALI_VERB("CT-ALL   key B=%x:%d size=%d\n", bpf_ntohl(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ct_ctx,
-							struct calico_ct_key *k,
-							enum cali_ct_type type,
-							int nat)
+static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct_ctx,
+							struct calico_ct_key *k)
 {
 	__be32 ip_src = ct_ctx->src;
 	__be32 ip_dst = ct_ctx->dst;
@@ -115,12 +113,12 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ct_ctx,
 
 create:
 	now = bpf_ktime_get_ns();
-	CALI_DEBUG("CT-ALL Creating tracking entry type %d at %llu.\n", type, now);
+	CALI_DEBUG("CT-ALL Creating tracking entry type %d at %llu.\n", ct_ctx->type, now);
 
 	struct calico_ct_value ct_value = {
 		.created=now,
 		.last_seen=now,
-		.type = type,
+		.type = ct_ctx->type,
 		.orig_ip = orig_dst,
 		.orig_port = orig_dport,
 	};
@@ -128,7 +126,7 @@ create:
 	ct_value.flags = ct_ctx->flags;
 	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
-	if (type == CALI_CT_TYPE_NAT_REV && ct_ctx->tun_ip) {
+	if (ct_ctx->type == CALI_CT_TYPE_NAT_REV && ct_ctx->tun_ip) {
 		if (ct_ctx->flags & CALI_CT_FLAG_NP_FWD) {
 			CALI_DEBUG("CT-ALL nat tunneled to %x\n", bpf_ntohl(ct_ctx->tun_ip));
 		} else {
@@ -187,15 +185,15 @@ create:
 		/* src is the from the HEP, policy whitelisted this side */
 		src_to_dst->whitelisted = 1;
 
-		if (nat == CT_CREATE_NAT_FWD) {
+		if (ct_ctx->allow_return) {
 			/* When we do NAT and forward through the tunnel, we go through
 			 * a single policy, what we forward we also accept back,
 			 * whitelist both sides.
 			 */
 			dst_to_src->whitelisted = 1;
 		}
-		CALI_DEBUG("CT-ALL Whitelisted source side - from HEP tun fwd=%d\n",
-				nat == CT_CREATE_NAT_FWD);
+		CALI_DEBUG("CT-ALL Whitelisted source side - from HEP tun allow_return=%d\n",
+				ct_ctx->allow_return);
 	} else if (CALI_F_FROM_HOST) {
 		/* dst is to the EP, policy whitelisted this side */
 		dst_to_src->whitelisted = 1;
@@ -209,7 +207,7 @@ out:
 	return err;
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_ctx *ct_ctx,
+static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_ctx,
 						       struct calico_ct_key *rk)
 {
 	__u8 ip_proto = ct_ctx->proto;
@@ -247,29 +245,6 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_ctx *ct_ctx,
 	ct_value.nat_rev_key = *rk;
 	int err = cali_v4_ct_update_elem(&k, &ct_value, 0);
 	CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
-	return err;
-}
-
-static CALI_BPF_INLINE int calico_ct_v4_create(struct ct_ctx *ct_ctx)
-{
-	struct calico_ct_key k;
-
-	return calico_ct_v4_create_tracking(ct_ctx, &k, CALI_CT_TYPE_NORMAL, CT_CREATE_NORMAL);
-}
-
-static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ct_ctx, int nat)
-{
-	struct calico_ct_key k;
-	int err;
-
-	err = calico_ct_v4_create_tracking(ct_ctx, &k, CALI_CT_TYPE_NAT_REV, nat);
-	if (!err) {
-		err = calico_ct_v4_create_nat_fwd(ct_ctx, &k);
-		if (err) {
-			/* XXX we should clean up the tracking entry */
-		}
-	}
-
 	return err;
 }
 
@@ -817,19 +792,27 @@ out_invalid:
 }
 
 /* creates connection tracking for tracked protocols */
-static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_ctx * ct_ctx, int nat)
+static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_create_ctx *ct_ctx)
 {
+	struct calico_ct_key k;
+	int err;
+
 	// Workaround for verifier; make sure verifier sees the skb on all code paths.
 	ct_ctx->skb = ctx->skb;
 
-	switch (nat) {
-	case CT_CREATE_NORMAL:
-		return calico_ct_v4_create(ct_ctx);
-	case CT_CREATE_NAT:
-	case CT_CREATE_NAT_FWD:
-		return calico_ct_v4_create_nat(ct_ctx, nat);
+	err = calico_ct_v4_create_tracking(ct_ctx, &k);
+	if (err) {
+		return err;
 	}
-	return 0;
+
+	if (ct_ctx->type == CALI_CT_TYPE_NAT_REV) {
+		err = calico_ct_v4_create_nat_fwd(ct_ctx, &k);
+		if (err) {
+			/* XXX we should clean up the tracking entry */
+		}
+	}
+
+	return err;
 }
 
 #endif /* __CALI_CONNTRACK_H__ */

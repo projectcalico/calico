@@ -97,10 +97,6 @@ struct calico_ct_value {
 	};
 };
 
-#define CT_CREATE_NORMAL	0
-#define CT_CREATE_NAT		1
-#define CT_CREATE_NAT_FWD	2
-
 struct ct_ctx {
 	struct __sk_buff *skb;
 	__u8 proto;
@@ -115,6 +111,24 @@ struct ct_ctx {
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
 	__u8 flags;
+};
+
+struct ct_create_ctx {
+	struct __sk_buff *skb;
+	__u8 proto;
+	__be32 src;
+	__be32 orig_dst;
+	__be32 dst;
+	__u16 sport;
+	__u16 dport;
+	__u16 orig_dport;
+	struct tcphdr *tcp;
+	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
+			* It is also set on the first node when we create the
+			* initial CT entry for the tunneled traffic. */
+	__u8 flags;
+	enum cali_ct_type type;
+	bool allow_return;
 };
 
 CALI_MAP(cali_v4_ct, 2,
