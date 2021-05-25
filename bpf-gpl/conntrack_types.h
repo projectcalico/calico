@@ -97,20 +97,13 @@ struct calico_ct_value {
 	};
 };
 
-struct ct_ctx {
-	struct __sk_buff *skb;
+struct ct_lookup_ctx {
 	__u8 proto;
 	__be32 src;
-	__be32 orig_dst;
 	__be32 dst;
 	__u16 sport;
 	__u16 dport;
-	__u16 orig_dport;
 	struct tcphdr *tcp;
-	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
-			* It is also set on the first node when we create the
-			* initial CT entry for the tunneled traffic. */
-	__u8 flags;
 };
 
 struct ct_create_ctx {

@@ -253,7 +253,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
  * (due to packet too short, for example), it returns false and sets the RC in the cali_tc_ctx to
  * TC_ACT_SHOT.
  */
-static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct ct_ctx *ct_ctx)
+static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct ct_lookup_ctx *ct_ctx)
 {
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
@@ -375,16 +375,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	// code is a direct translation of the pre-tc_ctx code so it has some duplication (but it
 	// needs a bit more analysis to sort out because the ct_ctx gets modified in place in
 	// ways that might not make sense to expose through the tc_ctx.
-	struct ct_ctx ct_lookup_ctx = {
-		.skb = tc_ctx->skb,
+	struct ct_lookup_ctx ct_lookup_ctx = {
 		.proto	= tc_ctx->state->ip_proto,
 		.src	= tc_ctx->state->ip_src,
 		.sport	= tc_ctx->state->sport,
 		.dst	= tc_ctx->state->ip_dst,
 		.dport	= tc_ctx->state->dport,
-		.tun_ip = tc_ctx->state->tun_ip,
 	};
-	struct ct_ctx *ct_ctx = &ct_lookup_ctx;
+	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
 	if (tc_ctx->state->ip_proto == IPPROTO_TCP) {
 		if (skb_refresh_validate_ptrs(tc_ctx, TCP_SIZE)) {
 			tc_ctx->fwd.reason = CALI_REASON_SHORT;
@@ -565,9 +563,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		/* If we are on a HEP - where encap/decap can happen - and if the packet
 		 * arrived through a tunnel, check if the src IP of the packet is expected.
 		 */
-		if (CALI_F_FROM_HEP && ct_ctx->tun_ip && result.tun_ip && result.tun_ip != ct_ctx->tun_ip) {
+		if (CALI_F_FROM_HEP && tc_ctx->state->tun_ip && result.tun_ip && result.tun_ip != tc_ctx->state->tun_ip) {
 			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
-					bpf_ntohl(result.tun_ip), bpf_ntohl(ct_ctx->tun_ip));
+					bpf_ntohl(result.tun_ip), bpf_ntohl(tc_ctx->state->tun_ip));
 			ct_result_set_flag(result.rc, CALI_CT_TUN_SRC_CHANGED);
 		}
 
@@ -665,7 +663,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	}
 
 	int ret_from_tun = CALI_F_FROM_HEP &&
-				ct_ctx->tun_ip &&
+				tc_ctx->state->tun_ip &&
 				result.rc == CALI_CT_ESTABLISHED_DNAT &&
 				src_to_dst->whitelisted &&
 				result.flags & CALI_CT_FLAG_NP_FWD;
@@ -684,7 +682,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 	}
 
 	if (ret_from_tun) {
-		CALI_DEBUG("Packet returned from tunnel %x\n", bpf_ntohl(ct_ctx->tun_ip));
+		CALI_DEBUG("Packet returned from tunnel %x\n", bpf_ntohl(tc_ctx->state->tun_ip));
 	} else if (CALI_F_TO_HOST) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
@@ -729,7 +727,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		ct_tcp_entry_update(tcp_header, src_to_dst, dst_to_src);
 	}
 
-	__u32 ifindex = skb_ingress_ifindex(ct_ctx->skb);
+	__u32 ifindex = skb_ingress_ifindex(tc_ctx->skb);
 
 	if (src_to_dst->ifindex != ifindex) {
 		// Conntrack entry records a different ingress interface than the one the
