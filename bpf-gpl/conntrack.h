@@ -524,6 +524,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		tcp_header = ct_ctx->tcp;
 
 		related = true;
+
+		// We failed to look up the original flow, but it is an ICMP error and we
+		// _do_ have a CT entry for the packet inside the error.  ct_ctx has been
+		// updated to describe the inner packet.
 	}
 
 	__u64 now = bpf_ktime_get_ns();
