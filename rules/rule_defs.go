@@ -224,6 +224,8 @@ type RuleRenderer interface {
 	DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*iptables.Chain
 	BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain
+
+	WireguardIncomingMarkChain() *iptables.Chain
 }
 
 type DefaultRuleRenderer struct {

@@ -980,7 +980,7 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 		r.failsafeInChain("raw", ipVersion),
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawPreroutingChain(ipVersion),
-		r.StaticRawWireguardIncomingMarkChain(),
+		r.WireguardIncomingMarkChain(),
 		r.StaticRawOutputChain(),
 	}
 }
@@ -1087,7 +1087,7 @@ func (r *DefaultRuleRenderer) allCalicoMarkBits() uint32 {
 		r.IptablesMarkScratch1
 }
 
-func (r *DefaultRuleRenderer) StaticRawWireguardIncomingMarkChain() *Chain {
+func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *Chain {
 	rules := []Rule{
 		{
 			Match:  Match().InInterface("lo"),

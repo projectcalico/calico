@@ -1258,40 +1258,16 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		t.UpdateChains(rpfChain)
 
 		var rawRules []iptables.Rule
-		// Set a mark on encapsulated packets coming from WireGuard to ensure the RPF check allows it
 		if t.IPVersion == 4 && rulesConfig.WireguardEnabled && len(rulesConfig.WireguardInterfaceName) > 0 &&
 			rulesConfig.RouteSource == "WorkloadIPs" {
-			log.Debug("Adding Wireguard iptables rule")
+			// Set a mark on packets coming from any interface except for lo, wireguard, or pod veths to ensure the RPF
+			// check allows it.
+			log.Debug("Adding Wireguard iptables rule chain")
 			rawRules = append(rawRules, iptables.Rule{
 				Match:  nil,
 				Action: iptables.JumpAction{Target: rules.ChainSetWireguardIncomingMark},
 			})
-
-			wgRules := []iptables.Rule{
-				{
-					Match:  iptables.Match().InInterface("lo"),
-					Action: iptables.ReturnAction{}},
-				{
-					Match:  iptables.Match().InInterface(rulesConfig.WireguardInterfaceName),
-					Action: iptables.ReturnAction{}},
-			}
-
-			for _, ifacePrefix := range rulesConfig.WorkloadIfacePrefixes {
-				wgRules = append(wgRules, iptables.Rule{
-					Match:  iptables.Match().InInterface(fmt.Sprintf("%s+", ifacePrefix)),
-					Action: iptables.ReturnAction{}})
-			}
-
-			wgRules = append(wgRules, iptables.Rule{
-				Match:  nil,
-				Action: iptables.SetMarkAction{Mark: rulesConfig.WireguardIptablesMark},
-			})
-
-			setWireguardIncomingMarkChain := &iptables.Chain{
-				Name:  rules.ChainSetWireguardIncomingMark,
-				Rules: wgRules,
-			}
-			t.UpdateChain(setWireguardIncomingMarkChain)
+			t.UpdateChain(d.ruleRenderer.WireguardIncomingMarkChain())
 		}
 
 		rawRules = append(rawRules, iptables.Rule{
