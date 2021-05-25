@@ -74,10 +74,26 @@ func shutdownTimestampFileName() string {
 
 // RemoveShutdownTimestampFile removes shutdown timestamp file.
 func RemoveShutdownTimestampFile() error {
+	dataOK := true
 	filename := shutdownTimestampFileName()
-	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist
+			return nil
+		}
+		log.WithError(err).Error("Failed to read " + filename)
+		dataOK = false
+	}
+	if err := os.Remove(filename); err != nil {
 		log.WithError(err).Error("Failed to remove " + filename)
 		return err
+	}
+
+	if dataOK {
+		log.WithField("timestamp", string(data)).Info("removed shutdown timestamp")
+	} else {
+		log.Info("removed shutdown timestamp")
 	}
 	return nil
 }
