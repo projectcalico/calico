@@ -11,6 +11,11 @@ DOCS_PATH = (
 )
 RELEASE_STREAM = os.environ.get("RELEASE_STREAM")
 EXCLUDED_IMAGES = ["calico/pilot-webhook", "calico/upgrade", "quay.io/coreos/flannel"]
+OPERATOR_EXCLUDED_IMAGES = EXCLUDED_IMAGES + [
+    "calico/dikastes",
+    "calico/flannel-migration-controller",
+    "calico/ctl",
+]
 
 GCR_IMAGES = ["calico/node", "calico/cni", "calico/typha"]
 EXPECTED_ARCHS = ["amd64", "arm64", "ppc64le"]
@@ -161,12 +166,12 @@ def test_operator_images():
                 break
     if operator["version"] not in VERSIONS_WITHOUT_IMAGE_LIST:
         print("[INFO] getting image list from %s" % img)
-        cmd = 'docker pull %s' % img
+        cmd = "docker pull %s" % img
         req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         output = req.stdout.read()
         print("[INFO] Pulling operator image:\n%s" % output)
 
-        cmd = 'docker run --rm -t %s -print-images list' % img
+        cmd = "docker run --rm -t %s -print-images list" % img
         req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         output = req.stdout.read()
         image_list = output.splitlines()
@@ -176,9 +181,13 @@ def test_operator_images():
             images = yaml.safe_load(config)
             for image in images["imageNames"]:
                 image_name = images["imageNames"][image]
-                if image_name not in EXCLUDED_IMAGES:
+                if image_name.replace("docker.io/", "") not in OPERATOR_EXCLUDED_IMAGES:
                     this_image = "%s:%s" % (image_name, RELEASE_VERSION)
-                    print("[INFO] checking %s is in the operator image list" % this_image )
-                    assert this_image in image_list, "%s not found in operator image list" % this_image
+                    print(
+                        "[INFO] checking %s is in the operator image list" % this_image
+                    )
+                    assert this_image in image_list, (
+                        "%s not found in operator image list" % this_image
+                    )
     else:
         print("[INFO] This version of operator does not have an image list")
