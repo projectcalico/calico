@@ -1004,7 +1004,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 				felix.Exec("ip", "route", "show", "table", "all")
 				felix.Exec("ip", "route", "show", "cached")
 				felix.Exec("wg")
-				felix.Exec("iptables-save", "-t", "raw")
+				felix.Exec("iptables-save", "-c", "-t", "raw")
 				felix.Exec("iptables", "-L", "-vx")
 				felix.Exec("cat", "/proc/sys/net/ipv4/conf/all/src_valid_mark")
 			}
@@ -1073,6 +1073,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			Eventually(func() []string {
 				return strings.Split(getWireguardRouteEntry(felixes[i]), "\n")
 			}, "10s", "100ms").Should(ContainElements(matchers))
+		}
+
+		By("Checking the iptables raw chain cali-wireguard-incoming-mark exists")
+		for _, felix := range felixes {
+			Eventually(func() string {
+				s, _ := felix.ExecCombinedOutput("iptables", "-L", "cali-wireguard-incoming-mark", "-t", "raw")
+				return s
+			}, "10s", "100ms").Should(ContainSubstring("Chain cali-wireguard-incoming-mark"))
 		}
 
 		By("Checking the proc/sys src valid mark entries")
