@@ -505,7 +505,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		v = cali_v4_ct_lookup_elem(&k);
 		if (!v) {
 			if (CALI_F_FROM_HOST &&
-				proto_orig == IPPROTO_TCP &&
+				ct_ctx->proto == IPPROTO_TCP &&
 				(tc_ctx->skb->mark & CALI_SKB_MARK_CT_ESTABLISHED_MASK) == CALI_SKB_MARK_CT_ESTABLISHED) {
 				// Linux Conntrack has marked the packet as part of a known flow.
 				// TODO-HEP Create a tracking entry for uplifted flow so that we handle the reverse traffic more efficiently.
@@ -514,7 +514,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				return result;
 			}
 
-			if (CALI_F_TO_HOST && ct_ctx->proto) {
+			if (CALI_F_TO_HOST && ct_ctx->proto == IPPROTO_TCP) {
 				// Miss for a related packet towards the host.  This may be part of a
 				// connection that predates the BPF program so we need to let it fall through
 				// to iptables.
@@ -534,6 +534,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		tcp_header = ct_ctx->tcp;
 
 		related = true;
+
+		// We failed to look up the original flow, but it is an ICMP error and we
+		// _do_ have a CT entry for the packet inside the error.  ct_ctx has been
+		// updated to describe the inner packet.
 	}
 
 	__u64 now = bpf_ktime_get_ns();
