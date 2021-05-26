@@ -532,7 +532,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 	bool fib = false;
-	struct ct_ctx ct_ctx_nat = {};
+	struct ct_create_ctx ct_ctx_nat = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	__u32 seen_mark;
@@ -709,6 +709,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		ct_ctx_nat.dst = state->post_nat_ip_dst;
 		ct_ctx_nat.dport = state->post_nat_dport;
 		ct_ctx_nat.tun_ip = state->tun_ip;
+		ct_ctx_nat.type = CALI_CT_TYPE_NORMAL;
+		ct_ctx_nat.allow_return = false;
 		if (state->flags & CALI_ST_NAT_OUTGOING) {
 			ct_ctx_nat.flags |= CALI_CT_FLAG_NAT_OUT;
 		}
@@ -727,7 +729,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		// If we get here, we've passed policy.
 
 		if (nat_dest == NULL) {
-			if (conntrack_create(ctx, &ct_ctx_nat, CT_CREATE_NORMAL)) {
+			if (conntrack_create(ctx, &ct_ctx_nat)) {
 				CALI_DEBUG("Creating normal conntrack failed\n");
 
 				if ((CALI_F_FROM_HEP && rt_addr_is_local_host(ct_ctx_nat.dst)) ||
@@ -771,7 +773,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		 */
 		if (ct_rc == CALI_CT_NEW) {
 			struct cali_rt * rt;
-			int nat_type = CT_CREATE_NAT;
 
 			if (encap_needed) {
 				/* When we need to encap, we need to find out if the backend is
@@ -794,7 +795,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 						ct_ctx_nat.flags |= CALI_CT_FLAG_NP_FWD;
 					}
 
-					nat_type = CT_CREATE_NAT_FWD;
+					ct_ctx_nat.allow_return = true;
 					ct_ctx_nat.tun_ip = rt->next_hop;
 					state->ip_dst = rt->next_hop;
 				} else if (cali_rt_is_workload(rt) && state->ip_dst != state->post_nat_ip_dst) {
@@ -815,7 +816,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				}
 			}
 
-			if (conntrack_create(ctx, &ct_ctx_nat, nat_type)) {
+			ct_ctx_nat.type = CALI_CT_TYPE_NAT_REV;
+			if (conntrack_create(ctx, &ct_ctx_nat)) {
 				CALI_DEBUG("Creating NAT conntrack failed\n");
 				goto deny;
 			}
