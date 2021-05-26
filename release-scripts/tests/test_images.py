@@ -11,9 +11,31 @@ DOCS_PATH = (
 )
 RELEASE_STREAM = os.environ.get("RELEASE_STREAM")
 EXCLUDED_IMAGES = ["calico/pilot-webhook", "calico/upgrade", "quay.io/coreos/flannel"]
+OPERATOR_EXCLUDED_IMAGES = EXCLUDED_IMAGES + [
+    "calico/dikastes",
+    "calico/flannel-migration-controller",
+    "calico/ctl",
+]
 
 GCR_IMAGES = ["calico/node", "calico/cni", "calico/typha"]
 EXPECTED_ARCHS = ["amd64", "arm64", "ppc64le"]
+
+VERSIONS_WITHOUT_IMAGE_LIST = [
+    "v1.13",
+    "v1.12",
+    "v1.11",
+    "v1.10",
+    "v1.9",
+    "v1.8",
+    "v1.7",
+    "v1.6",
+    "v1.5",
+    "v1.4",
+    "v1.3",
+    "v1.2",
+    "v1.1",
+    "v1.0",
+]
 
 VERSIONS_WITHOUT_FLANNEL_MIGRATION = [
     "v3.8",
@@ -127,3 +149,45 @@ def test_docker_release_tag_present():
                     found_archs.append(platform["platform"]["architecture"])
 
                 assert EXPECTED_ARCHS.sort() == found_archs.sort()
+
+
+def test_operator_images():
+    with open("%s/_data/versions.yml" % DOCS_PATH) as versionsFile:
+        versions = yaml.safe_load(versionsFile)
+        for version in versions:
+            if version["title"] == RELEASE_VERSION:
+                # Found matching version. Perform the test.
+                operator = version["tigera-operator"]
+                img = "%s/%s:%s" % (
+                    operator["registry"],
+                    operator["image"],
+                    operator["version"],
+                )
+                break
+    if operator["version"] not in VERSIONS_WITHOUT_IMAGE_LIST:
+        print("[INFO] getting image list from %s" % img)
+        cmd = "docker pull %s" % img
+        req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        output = req.stdout.read()
+        print("[INFO] Pulling operator image:\n%s" % output)
+
+        cmd = "docker run --rm -t %s -print-images list" % img
+        req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        output = req.stdout.read()
+        image_list = output.splitlines()
+        print("[INFO] got image list:\n%s" % image_list)
+
+        with open("%s/_config.yml" % DOCS_PATH) as config:
+            images = yaml.safe_load(config)
+            for image in images["imageNames"]:
+                image_name = images["imageNames"][image]
+                if image_name.replace("docker.io/", "") not in OPERATOR_EXCLUDED_IMAGES:
+                    this_image = "%s:%s" % (image_name, RELEASE_VERSION)
+                    print(
+                        "[INFO] checking %s is in the operator image list" % this_image
+                    )
+                    assert this_image in image_list, (
+                        "%s not found in operator image list" % this_image
+                    )
+    else:
+        print("[INFO] This version of operator does not have an image list")

@@ -573,6 +573,7 @@ release-test-image:
 .PHONY: release-test
 release-test: release-test-image
 	docker run --rm \
+	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v $(PWD):/docs \
 	-e RELEASE_STREAM=$(RELEASE_STREAM) \
 	$(DOCS_TEST_CONTAINER) sh -c \
