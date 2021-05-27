@@ -2,7 +2,7 @@ version: v1.0
 name: node
 agent:
   machine:
-    type: e1-standard-4
+    type: e1-standard-2
     os_image: ubuntu1804
 execution_time_limit:
   minutes: 120
@@ -11,6 +11,14 @@ global_job_config:
   - name: docker-hub
   prologue:
     commands:
+      # make some room on the disk
+      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
+      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+      # how much we churn docker containers during the build.  Disable it.
+      - sudo systemctl stop docker
+      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+      - sudo systemctl start docker
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - checkout
       # Semaphore is doing shallow clone on a commit without tags.
@@ -18,51 +26,82 @@ global_job_config:
       - git fetch --unshallow
 
 blocks:
+  - name: "General Tests"
+    dependencies: []
+    task:
+      jobs:
+        - name: "Static Checks / UT and FV tests"
+          commands:
+            - make static-checks
+            - make ut
+            - make fv
 
-# Run the full set of tests. Each job can potentially be run in parallel,
-# provided Semaphore has enough boxes available.
-- name: "Tests"
-  execution_time_limit:
-    # Semaphore's default is 1 hour, and these tests take about that time or a little
-    # longer.
-    minutes: 90
-  dependencies: []
-  task:
-    jobs:
-    - name: "make ci"
-      commands:
-      - make ci
-    - name: "make k8s-test"
-      commands:
-      - make k8s-test
+  - name: "System Tests"
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - make mod-download
+      jobs:
+        - name: "BGP Tests"
+          commands:
+            - ST_TO_RUN=tests/st/bgp/ make st
+        - name: "CalicoCtl Tests"
+          commands:
+            - ST_TO_RUN=tests/st/calicoctl/ make st
+#        Config tests don't seem to work and seem like they were never run
+#        - name: "Config Tests"
+#          commands:
+#            - ST_TO_RUN=tests/st/config/ make st
+        - name: "IPAM Tests"
+          commands:
+            - ST_TO_RUN=tests/st/ipam/ make st
+        - name: "Policy Tests"
+          commands:
+            - ST_TO_RUN=tests/st/policy/ make st
+        - name: "Utils Tests"
+          commands:
+            - ST_TO_RUN=tests/st/utils/ make st
 
-# If tests passed, then build and push images.
-# We'll only do this on non-PR builds, where we have credentials to do so.
-- name: "Push images (non-PR builds only)"
-  skip:
-    # Only run on branches, not PRs.
-    when: "branch !~ '.+'"
-  dependencies: ["Tests"]
-  task:
-    secrets:
-    - name: quay-robot-calico+semaphoreci
-    - name: docker
-    jobs:
-    - name: "make cd"
-      commands:
-      - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-      - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
+  - name: "Specialized Tests"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: e1-standard-4
+          os_image: ubuntu1804
+      jobs:
+        - name: "Dual Stack Tests"
+          commands:
+            - make k8s-test
 
-- name: "build windows archive"
-  dependencies: []
-  task:
-    jobs:
-    - name: "build windows archive"
-      commands:
-      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-      - make release-windows-archive VERSION=${BRANCH_NAME}
+  # If tests passed, then build and push images.
+  # We'll only do this on non-PR builds, where we have credentials to do so.
+  - name: "Push images (non-PR builds only)"
+    skip:
+      # Only run on branches, not PRs.
+      when: "branch !~ '.+'"
+    dependencies: ["General Tests", "System Tests", "Specialized Tests"]
+    task:
+      secrets:
+      - name: quay-robot-calico+semaphoreci
+      - name: docker
+      jobs:
+      - name: "make cd"
+        commands:
+        - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
+
+  - name: "build windows archive"
+    dependencies: ["General Tests", "System Tests", "Specialized Tests"]
+    task:
+      jobs:
+      - name: "build windows archive"
+        commands:
+        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+        - make release-windows-archive VERSION=${BRANCH_NAME}
 
 promotions:
   # Run the pin update process in case there were a backlog of pin update requests
