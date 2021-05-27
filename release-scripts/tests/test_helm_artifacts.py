@@ -22,8 +22,8 @@ chart_version = versions[0]["chart"]["version"]
 print("[INFO] using calico/node version for Helm artifacts: %s" % version)
 print("[INFO] using chart version for Helm artifact: %s" % chart_version)
 chart_url = (
-    "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s-%s.tgz"
-    % (version, version, chart_version)
+    "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
+    % (version, version)
 )
 
 
@@ -32,6 +32,7 @@ def test_calico_release_has_helm_chart():
     assert req.status_code == 302
 
 
+# Note: this test is only valid for versions >= v3.19.3
 def test_calico_release_in_helm_index():
     req = requests.get("https://docs.projectcalico.org/charts/index.html")
     assert req.status_code == 200, "Could not get helm index"
@@ -42,8 +43,5 @@ def test_calico_release_in_helm_index():
         if entry["appVersion"] == version:
             break
     assert entry is not None, "Could not find this release in helm index"
-    assert entry["version"] == "%s-%s" % (
-        version,
-        chart_version,
-    ), "Chart version incorrect in helm index"
+    assert entry["version"] == version, "Chart version incorrect in helm index"
     assert entry["urls"][0] == chart_url, "Chart URL incorrect in helm index"
