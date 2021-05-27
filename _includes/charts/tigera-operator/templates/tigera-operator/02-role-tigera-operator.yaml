@@ -165,13 +165,16 @@ rules:
       - update
       - delete
       - watch
-  # For host network access.
+  # The following rule is only for operator certification purposes.
+  # The operator normally runs in a namespace with openshift.io/run-level=0 which bypasses SCC.
+  # However in certification tests, the operator is run in a normal namespace so this
+  # rule is needed for host networking and hostPath volume access.
   - apiGroups:
       - security.openshift.io
     resources:
       - securitycontextconstraints
     resourceNames:
-      - hostnetwork
+      - hostaccess
     verbs:
       - use
   # Need these permissions for the calicoctl init container.
