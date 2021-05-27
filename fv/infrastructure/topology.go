@@ -74,6 +74,35 @@ func DefaultTopologyOptions() TopologyOptions {
 	}
 }
 
+const (
+	DefaultIPPoolName = "test-pool"
+	DefaultIPPoolCIDR = "10.65.0.0/16"
+)
+
+func CreateDefaultIPPoolFromOpts(ctx context.Context, client client.Interface, opts TopologyOptions) (*api.IPPool, error) {
+	ipPool := api.NewIPPool()
+	ipPool.Name = DefaultIPPoolName
+	ipPool.Spec.CIDR = DefaultIPPoolCIDR
+	ipPool.Spec.NATOutgoing = opts.NATOutgoingEnabled
+	if opts.IPIPEnabled {
+		ipPool.Spec.IPIPMode = api.IPIPModeAlways
+	} else {
+		ipPool.Spec.IPIPMode = api.IPIPModeNever
+	}
+
+	ipPool.Spec.VXLANMode = opts.VXLANMode
+
+	return client.IPPools().Create(ctx, ipPool, options.SetOptions{})
+}
+
+func DeleteIPPoolByName(ctx context.Context, client client.Interface, name string) (*api.IPPool, error) {
+	return client.IPPools().Delete(ctx, name, options.DeleteOptions{})
+}
+
+func DeleteDefaultIPPool(ctx context.Context, client client.Interface) (*api.IPPool, error) {
+	return DeleteIPPoolByName(ctx, client, DefaultIPPoolName)
+}
+
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
 func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *containers.Container, calicoClient client.Interface, infra DatastoreInfra) {
@@ -166,19 +195,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if opts.UseIPPools {
-				ipPool := api.NewIPPool()
-				ipPool.Name = "test-pool"
-				ipPool.Spec.CIDR = "10.65.0.0/16"
-				ipPool.Spec.NATOutgoing = opts.NATOutgoingEnabled
-				if opts.IPIPEnabled {
-					ipPool.Spec.IPIPMode = api.IPIPModeAlways
-				} else {
-					ipPool.Spec.IPIPMode = api.IPIPModeNever
-				}
-
-				ipPool.Spec.VXLANMode = opts.VXLANMode
-
-				_, err = client.IPPools().Create(ctx, ipPool, options.SetOptions{})
+				_, err = CreateDefaultIPPoolFromOpts(ctx, client, opts)
 			}
 			return err
 		}).ShouldNot(HaveOccurred())
