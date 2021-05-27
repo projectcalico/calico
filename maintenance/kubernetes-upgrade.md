@@ -29,7 +29,7 @@ If you have installed {{site.prodname}} using the `calico.yaml` manifest, we rec
 ## Upgrading an installation that was installed using helm
 1. Run the helm upgrade:
    ```bash
-   helm upgrade {{site.prodname}} projectcalico/tigera-operator
+   helm upgrade {{site.prodname | downcase}} projectcalico/tigera-operator
    ```
 
 ## Upgrading an installation that uses the operator
