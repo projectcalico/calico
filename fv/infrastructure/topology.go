@@ -193,28 +193,38 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 
 	felixes = make([]*Felix, n)
 	var wg sync.WaitGroup
+
+	// Make a separate copy of TopologyOptions for each Felix that we will run.  This
+	// is because we need to modify ExtraEnvVars for some of them.  If we kept using
+	// the same copy, while starting Felixes, we could hit a concurrent map read/write
+	// problem.
+	optsPerFelix := make([]TopologyOptions, n)
 	for i := 0; i < n; i++ {
-		// Then start Felix and create a node for it.
-		opts.ExtraEnvVars["BPF_LOG_PFX"] = fmt.Sprintf("%d-", i)
-		// Arrange for only the first Felix to enable the BPF connect-time load balancer, as
-		// we get unpredictable behaviour if more than one Felix enables it on the same
-		// host.
-		optsFirstFelix := opts
-		opts.ExtraEnvVars = map[string]string{}
-		for k, v := range optsFirstFelix.ExtraEnvVars {
-			opts.ExtraEnvVars[k] = v
+		optsPerFelix[i] = opts
+		optsPerFelix[i].ExtraEnvVars = map[string]string{}
+		for k, v := range opts.ExtraEnvVars {
+			optsPerFelix[i].ExtraEnvVars[k] = v
 		}
-		opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
-		opts.ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
+
+		// Different log prefix for each Felix.
+		optsPerFelix[i].ExtraEnvVars["BPF_LOG_PFX"] = fmt.Sprintf("%d-", i)
+
+		// Only the first Felix enables the BPF connect-time load balancer, as
+		// we get unpredictable behaviour if more than one Felix enables it on the same
+		// host.  So, disable CTLB handling for subsequent Felixes.
+		if i > 0 {
+			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
+			optsPerFelix[i].ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
+		}
+	}
+
+	// Now start the Felixes.
+	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			defer ginkgo.GinkgoRecover()
-			if i == 0 {
-				felixes[i] = RunFelix(infra, i, optsFirstFelix)
-			} else {
-				felixes[i] = RunFelix(infra, i, opts)
-			}
+			felixes[i] = RunFelix(infra, i, optsPerFelix[i])
 		}(i)
 	}
 	wg.Wait()
