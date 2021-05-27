@@ -43,7 +43,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
+  test-workload [--protocol=<protocol>] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] [--mtu=<mtu>] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -67,6 +67,11 @@ func main() {
 	}
 	sidecarIptables := arguments["--sidecar-iptables"].(bool)
 	upLo := arguments["--up-lo"].(bool)
+	mtu := 1450
+	if arg, ok := arguments["--mtu"]; ok && arg != nil {
+		mtu, err = strconv.Atoi(arg.(string))
+		panicIfError(err)
+	}
 	panicIfError(err)
 
 	ports := strings.Split(portsStr, ",")
@@ -102,7 +107,7 @@ func main() {
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
 				Name: interfaceName,
-				MTU:  1450, // XXX tie it with felix configuration
+				MTU:  mtu,
 			},
 			PeerName: peerName,
 		}

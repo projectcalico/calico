@@ -16,6 +16,7 @@ package rules
 
 import (
 	"fmt"
+
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/felix/iptables"

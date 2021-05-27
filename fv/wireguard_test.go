@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +29,6 @@ import (
 
 	"github.com/onsi/gomega/types"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -52,7 +52,7 @@ import (
 
 const (
 	wireguardInterfaceNameDefault       = "wireguard.cali"
-	wireguardMTUDefault                 = 1420
+	wireguardMTUDefault                 = 1440 // Wireguard needs an overhead of 60 bytes for IPV4.
 	wireguardRoutingRulePriorityDefault = "99"
 	wireguardListeningPortDefault       = 51820
 	defaultWorkloadPort                 = "8055"
@@ -512,18 +512,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				return readPolicy(policy.Name, api.Allow)
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
 
-			cc.OnFail = func(msg string) {
-				log.WithField("msg", msg).Info("Connectivity Failed after 30seconds")
-				log.Info("Checking connectivity using ping between wls0 and wls1")
-
-				err, errstr := wls[0].SendPacketsTo(wls[1].IP, 5, 100)
-				log.Infof("wls0 to wls1: err=%v, errstr=%s", err, errstr)
-				err, errstr = wls[1].SendPacketsTo(wls[0].IP, 5, 100)
-				log.Infof("wls1 to wls0: err=%v, errstr=%s", err, errstr)
-			}
 			cc.ExpectSome(wls[0], wls[1])
 			cc.ExpectSome(wls[1], wls[0])
-			cc.CheckConnectivityWithTimeout(30 * time.Second)
+			cc.CheckConnectivity()
 
 			By("verifying tunnelled packet count is non-zero")
 			for i := range felixes {
@@ -994,6 +985,38 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		cc = &connectivity.Checker{}
+
+		// Ping other felix nodes from each node to trigger Wireguard handshakes.
+		for i, felix := range felixes {
+			for j, _ := range felixes {
+				if i != j {
+					felix.ExecMayFail("ping", "-c", "1", "-W", "1", "-s", "1", felixes[j].IP)
+				}
+			}
+		}
+
+		// Check felix nodes have performed Wireguard handshakes.
+		for i, felix := range felixes {
+			var matchers []types.GomegaMatcher
+			for j, _ := range felixes {
+				if i != j {
+					matchers = append(matchers, BeNumerically(">", 0))
+				}
+			}
+			Eventually(func() []int {
+				var handshakes []int
+				out, _ := felix.ExecOutput("wg", "show", wireguardInterfaceNameDefault, "latest-handshakes")
+				peers := strings.Split(out, "\n")
+				for _, peer := range peers {
+					parts := strings.Split(peer, "\t")
+					if len(parts) == 2 {
+						h, _ := strconv.Atoi(parts[1])
+						handshakes = append(handshakes, h)
+					}
+				}
+				return handshakes
+			}, "30s", "100ms").Should(ContainElements(matchers))
+		}
 	})
 
 	AfterEach(func() {
@@ -1115,7 +1138,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		By("verifying packets between felix-0 and felix-1 is encrypted")
 		cc.ExpectSome(wlsByHost[0][1], wlsByHost[1][0])
 		cc.ExpectSome(wlsByHost[1][0], wlsByHost[0][1])
-		cc.CheckConnectivityWithTimeout(30 * time.Second)
+		cc.CheckConnectivity()
+
 		for i := range []int{0, 1} {
 			numNonTunnelPacketsFelix0toFelix1Before := tcpdumps[i].MatchCount("numNonTunnelPacketsFelix0toFelix1")
 			numNonTunnelPacketsFelix1toFelix0Before := tcpdumps[i].MatchCount("numNonTunnelPacketsFelix1toFelix0")
@@ -1154,7 +1178,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		By("checking external node to pod connectivity")
 		cc.ExpectSome(externalClient, wlsByHost[0][0])
 
-		cc.CheckConnectivityWithTimeout(30 * time.Second)
+		cc.CheckConnectivity()
 	})
 })
 
@@ -1251,7 +1275,7 @@ func createWorkloadWithAssignedIP(
 	wlIP, wlName string,
 	felix *infrastructure.Felix) *workload.Workload {
 
-	wl := workload.Run(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp")
+	wl := workload.RunWithMTU(felix, wlName, "default", wlIP, defaultWorkloadPort, "tcp", wireguardMTUDefault)
 	wl.ConfigureInInfra(*infra)
 
 	if infraOpts.UseIPPools {
@@ -1270,7 +1294,7 @@ func createWorkloadWithAssignedIP(
 }
 
 func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix) *workload.Workload {
-	return workload.Run(felix, wlName, "default", felix.IP, defaultWorkloadPort, "tcp")
+	return workload.RunWithMTU(felix, wlName, "default", felix.IP, defaultWorkloadPort, "tcp", wireguardMTUDefault)
 }
 
 func k8sServiceWireguard(name, clusterIP string, w *workload.Workload, port,
