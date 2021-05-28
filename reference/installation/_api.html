@@ -180,7 +180,7 @@ all images will be pulled from this registry. If not specified then the default 
 will be used. A special case value, UseDefault, is supported to explicitly specify
 the default registries will be used.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -199,8 +199,27 @@ or empty, the default for each image will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image path will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePrefix</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePrefix allows for the prefix part of an image to be specified. If specified
+then the given value will be used as a prefix on each image. If not specified
+or empty, no prefix will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image prefix will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
 </td>
 </tr>
 <tr>
@@ -579,7 +598,8 @@ LinuxDataplaneOption
 <em>(Optional)</em>
 <p>LinuxDataplane is used to select the dataplane used for Linux nodes. In particular, it
 causes the operator to add required mounts and environment variables for the particular dataplane.
-If not specified, iptables mode is used.</p>
+If not specified, iptables mode is used.
+Default: Iptables</p>
 </td>
 </tr>
 <tr>
@@ -1099,7 +1119,7 @@ all images will be pulled from this registry. If not specified then the default 
 will be used. A special case value, UseDefault, is supported to explicitly specify
 the default registries will be used.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -1118,8 +1138,27 @@ or empty, the default for each image will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image path will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePrefix</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePrefix allows for the prefix part of an image to be specified. If specified
+then the given value will be used as a prefix on each image. If not specified
+or empty, no prefix will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image prefix will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
 </td>
 </tr>
 <tr>
@@ -1387,6 +1426,8 @@ InstallationSpec
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
 </p>
+<p>LinuxDataplaneOption controls which dataplane is to be used on Linux nodes.</p>
+<p>One of: Iptables, BPF</p>
 <h3 id="operator.tigera.io/v1.MultiInterfaceMode">MultiInterfaceMode
 (<code>string</code> alias)</h3>
 <p>
