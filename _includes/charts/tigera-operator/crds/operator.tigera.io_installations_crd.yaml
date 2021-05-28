@@ -394,9 +394,19 @@ spec:
                   the image path for each image. If not specified or empty, the default
                   for each image will be used. A special case value, UseDefault, is
                   supported to explicitly specify the default image path will be used
-                  for each image. \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                  for each image. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                   \n This option allows configuring the `<imagePath>` portion of the
                   above format."
+                type: string
+              imagePrefix:
+                description: "ImagePrefix allows for the prefix part of an image to
+                  be specified. If specified then the given value will be used as
+                  a prefix on each image. If not specified or empty, no prefix will
+                  be used. A special case value, UseDefault, is supported to explicitly
+                  specify the default image prefix will be used for each image. \n
+                  Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
+                  \n This option allows configuring the `<imagePrefix>` portion of
+                  the above format."
                 type: string
               imagePullSecrets:
                 description: ImagePullSecrets is an array of references to container
@@ -477,7 +487,7 @@ spec:
                   Docker images. If specified, all images will be pulled from this
                   registry. If not specified then the default registries will be used.
                   A special case value, UseDefault, is supported to explicitly specify
-                  the default registries will be used. \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                  the default registries will be used. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                   \n This option allows configuring the `<registry>` portion of the
                   above format."
                 type: string
@@ -976,8 +986,18 @@ spec:
                       used as the image path for each image. If not specified or empty,
                       the default for each image will be used. A special case value,
                       UseDefault, is supported to explicitly specify the default image
-                      path will be used for each image. \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                      path will be used for each image. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                       \n This option allows configuring the `<imagePath>` portion
+                      of the above format."
+                    type: string
+                  imagePrefix:
+                    description: "ImagePrefix allows for the prefix part of an image
+                      to be specified. If specified then the given value will be used
+                      as a prefix on each image. If not specified or empty, no prefix
+                      will be used. A special case value, UseDefault, is supported
+                      to explicitly specify the default image prefix will be used
+                      for each image. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
+                      \n This option allows configuring the `<imagePrefix>` portion
                       of the above format."
                     type: string
                   imagePullSecrets:
@@ -1061,7 +1081,7 @@ spec:
                       from this registry. If not specified then the default registries
                       will be used. A special case value, UseDefault, is supported
                       to explicitly specify the default registries will be used. \n
-                      Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                      Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                       \n This option allows configuring the `<registry>` portion of
                       the above format."
                     type: string
