@@ -13,7 +13,7 @@ ifneq ($(IMAGES_FILE),)
 	CONFIG:=$(CONFIG),/config_images.yml
 endif
 
-# Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown. 
+# Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown.
 # This is useful for comparing changes to templates & includes.
 ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
@@ -61,11 +61,11 @@ CONTAINERIZED_VALUES?=docker run --rm \
 _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
 	$(CONTAINERIZED_VALUES) ruby ./hack/gen_values_yml.rb --registry $(REGISTRY) --chart $* > $@
 
-# The following chunk of conditionals sets the Version of the helm chart. 
+# The following chunk of conditionals sets the Version of the helm chart.
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
 ifdef RELEASE_CHART
 # the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
-chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
+chartVersion:=$(CALICO_VER)
 appVersion:=$(CALICO_VER)
 else
 # otherwise, it's a nightly build.
@@ -305,7 +305,7 @@ update_canonical_urls:
 ###############################################################################
 
 ## Tags and builds a release from start to finish.
-release: release-prereqs	
+release: release-prereqs
 	$(MAKE) RELEASE_CHART=true release-tag
 	$(MAKE) RELEASE_CHART=true release-build
 	$(MAKE) RELEASE_CHART=true release-verify
@@ -344,7 +344,7 @@ $(UPLOAD_DIR):
 # Define a multi-line string for the GitHub release body.
 # We need to export it as an env var to properly format it.
 # See here: https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile/5887751
-define RELEASE_BODY 
+define RELEASE_BODY
 Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/
 
 Attached to this release are the following artifacts:
@@ -357,7 +357,7 @@ endef
 export RELEASE_BODY
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR)
+release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
@@ -375,6 +375,16 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
+
+## Updates helm-index with the new release chart
+helm-index: release-prereqs
+	rm -rf  charts
+	mkdir -p charts/$(CALICO_VER)/
+	cp $(RELEASE_HELM_CHART) charts/$(CALICO_VER)/
+	wget https://calico-public.s3.amazonaws.com/charts/index.yaml -O charts/index.yaml.bak
+	cd charts/ && helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
+	aws --profile helm s3 cp index.yaml s3://calico-public/charts/ --acl public-read
+	rm -rf charts
 
 ## Generates release notes for the given version.
 release-notes: #release-prereqs
