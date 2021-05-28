@@ -25,16 +25,17 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
 // WorkloadEndpointData is an internal struct used to store the various bits
 // of information that the policy controller cares about on a workload endpoint.
 type WorkloadEndpointData struct {
-	PodName   string
-	Namespace string
-	Labels    map[string]string
+	PodName        string
+	Namespace      string
+	Labels         map[string]string
+	ServiceAccount string
 }
 
 type PodConverter interface {
@@ -52,9 +53,10 @@ func BuildWorkloadEndpointData(weps ...api.WorkloadEndpoint) []WorkloadEndpointD
 	var retWEPs []WorkloadEndpointData
 	for _, wep := range weps {
 		retWEPs = append(retWEPs, WorkloadEndpointData{
-			PodName:   wep.Spec.Pod,
-			Namespace: wep.Namespace,
-			Labels:    wep.Labels,
+			PodName:        wep.Spec.Pod,
+			Namespace:      wep.Namespace,
+			Labels:         wep.Labels,
+			ServiceAccount: wep.Spec.ServiceAccountName,
 		})
 	}
 
@@ -68,6 +70,7 @@ func MergeWorkloadEndpointData(wep *api.WorkloadEndpoint, upd WorkloadEndpointDa
 		log.Fatalf("Bad attempt to merge data for %s/%s into wep %s/%s", upd.PodName, upd.Namespace, wep.Name, wep.Namespace)
 	}
 	wep.Labels = upd.Labels
+	wep.Spec.ServiceAccountName = upd.ServiceAccount
 }
 
 // NewPodConverter Constructor for podConverter
@@ -78,16 +81,9 @@ func NewPodConverter() PodConverter {
 func (p *podConverter) Convert(k8sObj interface{}) ([]WorkloadEndpointData, error) {
 	// Convert Pod into a workload endpoint.
 	c := conversion.NewConverter()
-	pod, ok := k8sObj.(*v1.Pod)
-	if !ok {
-		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			return nil, errors.New("couldn't get object from tombstone")
-		}
-		pod, ok = tombstone.Obj.(*v1.Pod)
-		if !ok {
-			return nil, errors.New("tombstone contained object that is not a Pod")
-		}
+	pod, err := ExtractPodFromUpdate(k8sObj)
+	if err != nil {
+		return nil, err
 	}
 
 	// The conversion logic always requires a node, but we don't always have one. We don't actually
@@ -129,4 +125,22 @@ func (p *podConverter) DeleteArgsFromKey(key string) (string, string) {
 	// to satisfy the interface.
 	log.Panicf("DeleteArgsFromKey call for WorkloadEndpoints is not allowed")
 	return "", ""
+}
+
+// ExtractPodFromUpdate takes an update as received from the informer and returns the pod object, if present.
+// some updates (particularly deletes) can include tombstone placeholders rather than an exact pod object. This
+// function should be called in order to safely handles those cases.
+func ExtractPodFromUpdate(obj interface{}) (*v1.Pod, error) {
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return nil, errors.New("couldn't get object from tombstone")
+		}
+		pod, ok = tombstone.Obj.(*v1.Pod)
+		if !ok {
+			return nil, errors.New("tombstone contained object that is not a Pod")
+		}
+	}
+	return pod, nil
 }

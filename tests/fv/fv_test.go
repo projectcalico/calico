@@ -944,6 +944,125 @@ var _ = Describe("kube-controllers FV tests", func() {
 				Expect(w.Spec.ContainerID).To(Equal("container-id-2"))
 			})
 		})
+
+		It("should update serviceaccount appropriately", func() {
+			longName := "long-service-account-name-that-exceeds-the-character-limit-for-kubernetes-labels"
+			podNamespace := "default"
+
+			// Create serviceaccount.
+			sa := &v1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      longName,
+					Namespace: podNamespace,
+				},
+			}
+			Eventually(func() error {
+				_, err := k8sClient.CoreV1().ServiceAccounts(podNamespace).Create(
+					context.Background(),
+					sa,
+					metav1.CreateOptions{},
+				)
+				return err
+			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
+
+			// Create a Pod
+			podName := fmt.Sprintf("pod-fv-container-id-%s", uuid.NewV4())
+			nodeName := "127.0.0.1"
+			pod := v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      podName,
+					Namespace: podNamespace,
+					Labels: map[string]string{
+						"foo": "label1",
+					},
+				},
+				Spec: v1.PodSpec{
+					NodeName:           nodeName,
+					ServiceAccountName: longName,
+					Containers: []v1.Container{
+						{
+							Name:    "container1",
+							Image:   "busybox",
+							Command: []string{"sleep", "3600"},
+						},
+					},
+				},
+			}
+
+			By("creating a Pod in the k8s API", func() {
+				Eventually(func() error {
+					_, err := k8sClient.CoreV1().Pods("default").Create(context.Background(),
+						&pod, metav1.CreateOptions{})
+					return err
+				}, "20s", "2s").ShouldNot(HaveOccurred())
+			})
+
+			By("updating the pod's status to be running", func() {
+				pod.Status.PodIP = "192.168.1.1"
+				pod.Status.Phase = v1.PodRunning
+				_, err := k8sClient.CoreV1().Pods("default").UpdateStatus(context.Background(),
+					&pod, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			// Mock the job of the CNI plugin by creating the wep in etcd, providing a container ID.
+			wepIDs := names.WorkloadEndpointIdentifiers{
+				Node:         pod.Spec.NodeName,
+				Orchestrator: "k8s",
+				Endpoint:     "eth0",
+				Pod:          pod.Name,
+			}
+			wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
+			Expect(err).NotTo(HaveOccurred())
+			wep := api.NewWorkloadEndpoint()
+			wep.Name = wepName
+			wep.Namespace = podNamespace
+			wep.Labels = map[string]string{
+				"foo":                            "label1",
+				"projectcalico.org/namespace":    podNamespace,
+				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+			}
+			wep.Spec = api.WorkloadEndpointSpec{
+				ContainerID:   "container-id-1",
+				Orchestrator:  "k8s",
+				Pod:           podName,
+				Node:          nodeName,
+				Endpoint:      "eth0",
+				IPNetworks:    []string{"192.168.1.1/32"},
+				InterfaceName: "testInterface",
+			}
+
+			By("creating a corresponding workload endpoint", func() {
+				_, err := calicoClient.WorkloadEndpoints().Create(context.Background(), wep, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("updating the pod's labels to trigger a cache update", func() {
+				// Definitively trigger a pod controller cache update by updating the pod's labels
+				// in the Kubernetes API. This ensures the controller has the cached WEP with container-id-1.
+				podNow, err := k8sClient.CoreV1().Pods("default").Get(context.Background(), podName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				pod = *podNow
+				pod.Labels["foo"] = "label2"
+				_, err = k8sClient.CoreV1().Pods("default").Update(context.Background(),
+					&pod, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("waiting for the new servcieaccount to appear on the WEP", func() {
+				Eventually(func() error {
+					w, err := calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, wep.Name, options.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					if w.Spec.ServiceAccountName != longName {
+						return fmt.Errorf("ServiceAccountName not updated. Current value: %s", w.Spec.ServiceAccountName)
+					}
+					return nil
+				}, 15*time.Second).ShouldNot(HaveOccurred())
+			})
+		})
 	})
 
 	It("should not create a workload endpoint when one does not already exist", func() {
@@ -960,7 +1079,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Spec: v1.PodSpec{
 				NodeName: "127.0.0.1",
 				Containers: []v1.Container{
-					v1.Container{
+					{
 						Name:    "container1",
 						Image:   "busybox",
 						Command: []string{"sleep", "3600"},
