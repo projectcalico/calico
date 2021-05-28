@@ -1,11 +1,29 @@
 PACKAGE_NAME?=github.com/projectcalico/pod2daemon
-GO_BUILD_VER?=v0.52
+GO_BUILD_VER?=v0.53
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_POD2DAEMON_PROJECT_ID)
 
 # Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
 SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PRIVATE_PROJECT_ID)
+
+FLEXVOL_IMAGE ?=calico/pod2daemon-flexvol
+BUILD_IMAGE   ?=$(FLEXVOL_IMAGE)
+
+RELEASE_REGISTRIES    ?= gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
+RELEASE_BRANCH_PREFIX ?= release
+DEV_TAG_SUFFIX        ?= 0.dev
+
+# If this is a release, also tag and push additional images.
+ifeq ($(RELEASE),true)
+FLEXVOL_IMAGE  ?=pod2daemon-flexvol
+DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
+else
+FLEXVOL_IMAGE  ?=calico/pod2daemon-flexvol
+DEV_REGISTRIES ?=quay.io registry.hub.docker.com
+endif
+
+BUILD_IMAGES ?=$(FLEXVOL_IMAGE)
 
 ###############################################################################
 # Download and include Makefile.common before anything else
@@ -20,10 +38,6 @@ Makefile.common.$(MAKE_BRANCH):
 	rm -f Makefile.common.*
 	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
-BUILD_IMAGE?=calico/pod2daemon-flexvol
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/pod2daemon-flexvol
-RELEASE_IMAGES?=
-
 include Makefile.common
 
 ###############################################################################
@@ -37,11 +51,11 @@ clean:
 	rm -rf report/
 	rm -rf bin/flexvol-$(ARCH)
 
-	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
-	docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH) || true
+	docker rmi $(FLEXVOL_IMAGE):latest-$(ARCH) || true
+	docker rmi $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) || true
 ifeq ($(ARCH),amd64)
-	docker rmi $(BUILD_IMAGE):latest || true
-	docker rmi $(BUILD_IMAGE):$(VERSION) || true
+	docker rmi $(FLEXVOL_IMAGE):latest || true
+	docker rmi $(FLEXVOL_IMAGE):$(VERSION) || true
 endif
 
 ###############################################################################
@@ -68,16 +82,16 @@ bin/flexvol-%: $(SRC_FILES)
 ###############################################################################
 CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
 .PHONY: image calico/pod2daemon-flexvol
-image: $(BUILD_IMAGE)
+image: $(FLEXVOL_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-$(BUILD_IMAGE): $(CONTAINER_CREATED)
+$(FLEXVOL_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
-	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+	docker build -t $(FLEXVOL_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
+	docker tag $(FLEXVOL_IMAGE):latest-$(ARCH) $(FLEXVOL_IMAGE):latest
 endif
 	touch $@
 
@@ -142,8 +156,8 @@ release-build: release-prereqs clean
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# TODO: Check the reported version is correct for each release artifact. Uncomment when binary supports version command.
-	# if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
-	#  echo "Reported version:" `docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
+	# if ! docker run $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
+	#  echo "Reported version:" `docker run --rm $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
 	#  false; \
 	# else \
 	#   echo "Version check passed\n"; \
