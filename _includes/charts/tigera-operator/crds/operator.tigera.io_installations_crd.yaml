@@ -394,9 +394,19 @@ spec:
                   the image path for each image. If not specified or empty, the default
                   for each image will be used. A special case value, UseDefault, is
                   supported to explicitly specify the default image path will be used
-                  for each image. \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                  for each image. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                   \n This option allows configuring the `<imagePath>` portion of the
                   above format."
+                type: string
+              imagePrefix:
+                description: "ImagePrefix allows for the prefix part of an image to
+                  be specified. If specified then the given value will be used as
+                  a prefix on each image. If not specified or empty, no prefix will
+                  be used. A special case value, UseDefault, is supported to explicitly
+                  specify the default image prefix will be used for each image. \n
+                  Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
+                  \n This option allows configuring the `<imagePrefix>` portion of
+                  the above format."
                 type: string
               imagePullSecrets:
                 description: ImagePullSecrets is an array of references to container
@@ -477,7 +487,7 @@ spec:
                   Docker images. If specified, all images will be pulled from this
                   registry. If not specified then the default registries will be used.
                   A special case value, UseDefault, is supported to explicitly specify
-                  the default registries will be used. \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                  the default registries will be used. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                   \n This option allows configuring the `<registry>` portion of the
                   above format."
                 type: string
@@ -587,6 +597,110 @@ spec:
                           - weight
                           type: object
                         type: array
+                      requiredDuringSchedulingIgnoredDuringExecution:
+                        description: 'WARNING: Please note that if the affinity requirements
+                          specified by this field are not met at scheduling time,
+                          the pod will NOT be scheduled onto the node. There is no
+                          fallback to another affinity rules with this setting. This
+                          may cause networking disruption or even catastrophic failure!
+                          PreferredDuringSchedulingIgnoredDuringExecution should be
+                          used for affinity unless there is a specific well understood
+                          reason to use RequiredDuringSchedulingIgnoredDuringExecution
+                          and you can guarantee that the RequiredDuringSchedulingIgnoredDuringExecution
+                          will always have sufficient nodes to satisfy the requirement.
+                          NOTE: RequiredDuringSchedulingIgnoredDuringExecution is
+                          set by default for AKS nodes, to avoid scheduling Typhas
+                          on virtual-nodes. If the affinity requirements specified
+                          by this field cease to be met at some point during pod execution
+                          (e.g. due to an update), the system may or may not try to
+                          eventually evict the pod from its node.'
+                        properties:
+                          nodeSelectorTerms:
+                            description: Required. A list of node selector terms.
+                              The terms are ORed.
+                            items:
+                              description: A null or empty node selector term matches
+                                no objects. The requirements of them are ANDed. The
+                                TopologySelectorTerm type implements a subset of the
+                                NodeSelectorTerm.
+                              properties:
+                                matchExpressions:
+                                  description: A list of node selector requirements
+                                    by node's labels.
+                                  items:
+                                    description: A node selector requirement is a
+                                      selector that contains values, a key, and an
+                                      operator that relates the key and values.
+                                    properties:
+                                      key:
+                                        description: The label key that the selector
+                                          applies to.
+                                        type: string
+                                      operator:
+                                        description: Represents a key's relationship
+                                          to a set of values. Valid operators are
+                                          In, NotIn, Exists, DoesNotExist. Gt, and
+                                          Lt.
+                                        type: string
+                                      values:
+                                        description: An array of string values. If
+                                          the operator is In or NotIn, the values
+                                          array must be non-empty. If the operator
+                                          is Exists or DoesNotExist, the values array
+                                          must be empty. If the operator is Gt or
+                                          Lt, the values array must have a single
+                                          element, which will be interpreted as an
+                                          integer. This array is replaced during a
+                                          strategic merge patch.
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                matchFields:
+                                  description: A list of node selector requirements
+                                    by node's fields.
+                                  items:
+                                    description: A node selector requirement is a
+                                      selector that contains values, a key, and an
+                                      operator that relates the key and values.
+                                    properties:
+                                      key:
+                                        description: The label key that the selector
+                                          applies to.
+                                        type: string
+                                      operator:
+                                        description: Represents a key's relationship
+                                          to a set of values. Valid operators are
+                                          In, NotIn, Exists, DoesNotExist. Gt, and
+                                          Lt.
+                                        type: string
+                                      values:
+                                        description: An array of string values. If
+                                          the operator is In or NotIn, the values
+                                          array must be non-empty. If the operator
+                                          is Exists or DoesNotExist, the values array
+                                          must be empty. If the operator is Gt or
+                                          Lt, the values array must have a single
+                                          element, which will be interpreted as an
+                                          integer. This array is replaced during a
+                                          strategic merge patch.
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                              type: object
+                            type: array
+                        required:
+                        - nodeSelectorTerms
+                        type: object
                     type: object
                 type: object
               typhaMetricsPort:
@@ -976,8 +1090,18 @@ spec:
                       used as the image path for each image. If not specified or empty,
                       the default for each image will be used. A special case value,
                       UseDefault, is supported to explicitly specify the default image
-                      path will be used for each image. \n Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                      path will be used for each image. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                       \n This option allows configuring the `<imagePath>` portion
+                      of the above format."
+                    type: string
+                  imagePrefix:
+                    description: "ImagePrefix allows for the prefix part of an image
+                      to be specified. If specified then the given value will be used
+                      as a prefix on each image. If not specified or empty, no prefix
+                      will be used. A special case value, UseDefault, is supported
+                      to explicitly specify the default image prefix will be used
+                      for each image. \n Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
+                      \n This option allows configuring the `<imagePrefix>` portion
                       of the above format."
                     type: string
                   imagePullSecrets:
@@ -1061,7 +1185,7 @@ spec:
                       from this registry. If not specified then the default registries
                       will be used. A special case value, UseDefault, is supported
                       to explicitly specify the default registries will be used. \n
-                      Image format:    `<registry>/<imagePath>/<imageName>:<image-tag>`
+                      Image format:    `<registry>/<imagePath>/<imagePrefix><imageName>:<image-tag>`
                       \n This option allows configuring the `<registry>` portion of
                       the above format."
                     type: string
@@ -1175,6 +1299,115 @@ spec:
                               - weight
                               type: object
                             type: array
+                          requiredDuringSchedulingIgnoredDuringExecution:
+                            description: 'WARNING: Please note that if the affinity
+                              requirements specified by this field are not met at
+                              scheduling time, the pod will NOT be scheduled onto
+                              the node. There is no fallback to another affinity rules
+                              with this setting. This may cause networking disruption
+                              or even catastrophic failure! PreferredDuringSchedulingIgnoredDuringExecution
+                              should be used for affinity unless there is a specific
+                              well understood reason to use RequiredDuringSchedulingIgnoredDuringExecution
+                              and you can guarantee that the RequiredDuringSchedulingIgnoredDuringExecution
+                              will always have sufficient nodes to satisfy the requirement.
+                              NOTE: RequiredDuringSchedulingIgnoredDuringExecution
+                              is set by default for AKS nodes, to avoid scheduling
+                              Typhas on virtual-nodes. If the affinity requirements
+                              specified by this field cease to be met at some point
+                              during pod execution (e.g. due to an update), the system
+                              may or may not try to eventually evict the pod from
+                              its node.'
+                            properties:
+                              nodeSelectorTerms:
+                                description: Required. A list of node selector terms.
+                                  The terms are ORed.
+                                items:
+                                  description: A null or empty node selector term
+                                    matches no objects. The requirements of them are
+                                    ANDed. The TopologySelectorTerm type implements
+                                    a subset of the NodeSelectorTerm.
+                                  properties:
+                                    matchExpressions:
+                                      description: A list of node selector requirements
+                                        by node's labels.
+                                      items:
+                                        description: A node selector requirement is
+                                          a selector that contains values, a key,
+                                          and an operator that relates the key and
+                                          values.
+                                        properties:
+                                          key:
+                                            description: The label key that the selector
+                                              applies to.
+                                            type: string
+                                          operator:
+                                            description: Represents a key's relationship
+                                              to a set of values. Valid operators
+                                              are In, NotIn, Exists, DoesNotExist.
+                                              Gt, and Lt.
+                                            type: string
+                                          values:
+                                            description: An array of string values.
+                                              If the operator is In or NotIn, the
+                                              values array must be non-empty. If the
+                                              operator is Exists or DoesNotExist,
+                                              the values array must be empty. If the
+                                              operator is Gt or Lt, the values array
+                                              must have a single element, which will
+                                              be interpreted as an integer. This array
+                                              is replaced during a strategic merge
+                                              patch.
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - key
+                                        - operator
+                                        type: object
+                                      type: array
+                                    matchFields:
+                                      description: A list of node selector requirements
+                                        by node's fields.
+                                      items:
+                                        description: A node selector requirement is
+                                          a selector that contains values, a key,
+                                          and an operator that relates the key and
+                                          values.
+                                        properties:
+                                          key:
+                                            description: The label key that the selector
+                                              applies to.
+                                            type: string
+                                          operator:
+                                            description: Represents a key's relationship
+                                              to a set of values. Valid operators
+                                              are In, NotIn, Exists, DoesNotExist.
+                                              Gt, and Lt.
+                                            type: string
+                                          values:
+                                            description: An array of string values.
+                                              If the operator is In or NotIn, the
+                                              values array must be non-empty. If the
+                                              operator is Exists or DoesNotExist,
+                                              the values array must be empty. If the
+                                              operator is Gt or Lt, the values array
+                                              must have a single element, which will
+                                              be interpreted as an integer. This array
+                                              is replaced during a strategic merge
+                                              patch.
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - key
+                                        - operator
+                                        type: object
+                                      type: array
+                                  type: object
+                                type: array
+                            required:
+                            - nodeSelectorTerms
+                            type: object
                         type: object
                     type: object
                   typhaMetricsPort:

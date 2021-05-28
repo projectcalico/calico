@@ -180,7 +180,7 @@ all images will be pulled from this registry. If not specified then the default 
 will be used. A special case value, UseDefault, is supported to explicitly specify
 the default registries will be used.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -199,8 +199,27 @@ or empty, the default for each image will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image path will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePrefix</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePrefix allows for the prefix part of an image to be specified. If specified
+then the given value will be used as a prefix on each image. If not specified
+or empty, no prefix will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image prefix will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
 </td>
 </tr>
 <tr>
@@ -579,7 +598,8 @@ LinuxDataplaneOption
 <em>(Optional)</em>
 <p>LinuxDataplane is used to select the dataplane used for Linux nodes. In particular, it
 causes the operator to add required mounts and environment variables for the particular dataplane.
-If not specified, iptables mode is used.</p>
+If not specified, iptables mode is used.
+Default: Iptables</p>
 </td>
 </tr>
 <tr>
@@ -1099,7 +1119,7 @@ all images will be pulled from this registry. If not specified then the default 
 will be used. A special case value, UseDefault, is supported to explicitly specify
 the default registries will be used.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
 </td>
 </tr>
@@ -1118,8 +1138,27 @@ or empty, the default for each image will be used.
 A special case value, UseDefault, is supported to explicitly specify the default
 image path will be used for each image.</p>
 <p>Image format:
-<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
 <p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePrefix</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePrefix allows for the prefix part of an image to be specified. If specified
+then the given value will be used as a prefix on each image. If not specified
+or empty, no prefix will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image prefix will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
 </td>
 </tr>
 <tr>
@@ -1387,6 +1426,8 @@ InstallationSpec
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
 </p>
+<p>LinuxDataplaneOption controls which dataplane is to be used on Linux nodes.</p>
+<p>One of: Iptables, BPF</p>
 <h3 id="operator.tigera.io/v1.MultiInterfaceMode">MultiInterfaceMode
 (<code>string</code> alias)</h3>
 <p>
@@ -1485,14 +1526,13 @@ one of the provided CIDRs.</p>
 </tr>
 </tbody>
 </table>
-<h3 id="operator.tigera.io/v1.PreferredNodeAffinity">PreferredNodeAffinity
+<h3 id="operator.tigera.io/v1.NodeAffinity">NodeAffinity
 </h3>
 <p>
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.TyphaAffinity">TyphaAffinity</a>)
 </p>
-<p>PreferredNodeAffinity is similar to an affinity except it only exposes the Preferred scheduling option,
-which ensures a pod will still be scheduled even when all the nodes it matches are unschedulable.</p>
+<p>NodeAffinity is similar to *v1.NodeAffinity, but allows us to limit available schedulers.</p>
 <table>
 <thead>
 <tr>
@@ -1517,8 +1557,38 @@ the affinity expressions specified by this field, but it may choose
 a node that violates one or more of the expressions.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>requiredDuringSchedulingIgnoredDuringExecution</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#nodeselector-v1-core">
+Kubernetes core/v1.NodeSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>WARNING: Please note that if the affinity requirements specified by this field are not met at
+scheduling time, the pod will NOT be scheduled onto the node.
+There is no fallback to another affinity rules with this setting.
+This may cause networking disruption or even catastrophic failure!
+PreferredDuringSchedulingIgnoredDuringExecution should be used for affinity
+unless there is a specific well understood reason to use RequiredDuringSchedulingIgnoredDuringExecution and
+you can guarantee that the RequiredDuringSchedulingIgnoredDuringExecution will always have sufficient nodes to satisfy the requirement.
+NOTE: RequiredDuringSchedulingIgnoredDuringExecution is set by default for AKS nodes,
+to avoid scheduling Typhas on virtual-nodes.
+If the affinity requirements specified by this field cease to be met
+at some point during pod execution (e.g. due to an update), the system
+may or may not try to eventually evict the pod from its node.</p>
+</td>
+</tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.OIDCType">OIDCType
+(<code>string</code> alias)</h3>
+<p>OIDCType defines how OIDC is configured for Tigera Enterprise. Dex should be the best option for most use-cases.
+The Tigera option can help in specific use-cases, for instance, when you are unable to configure a client secret.
+One of: Dex, Tigera</p>
 <h3 id="operator.tigera.io/v1.ProductVariant">ProductVariant
 (<code>string</code> alias)</h3>
 <p>
@@ -1683,8 +1753,8 @@ Available, Progressing, or Degraded.</p>
 <td>
 <code>nodeAffinity</code><br>
 <em>
-<a href="#operator.tigera.io/v1.PreferredNodeAffinity">
-PreferredNodeAffinity
+<a href="#operator.tigera.io/v1.NodeAffinity">
+NodeAffinity
 </a>
 </em>
 </td>
