@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -107,7 +107,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		log.SetLevel(log.InfoLevel)
 		hostname, _ = names.Hostname()
 		ctx = context.Background()
-		calicoClient, err = client.NewFromEnv()
+		for i := 1; i <= 3; i++ {
+			calicoClient, err = client.NewFromEnv()
+			if err != nil {
+				log.WithError(err).Errorf("Failed to create calico client (attempt %d)", i)
+				continue
+			}
+			break
+		}
 		if err != nil {
 			panic(err)
 		}
