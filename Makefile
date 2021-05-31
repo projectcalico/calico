@@ -142,7 +142,7 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 DATE:=$(shell date -u +'%FT%T%z')
 
 LDFLAGS=-ldflags "\
-	-X $(PACKAGE_NAME)/pkg/startup.VERSION=$(GIT_VERSION) \
+	-X $(PACKAGE_NAME)/pkg/lifecycle/startup.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
 	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT)"
@@ -286,7 +286,7 @@ fv: run-k8s-apiserver
 	-e GO111MODULE=on \
 	--net=host \
 	-w /go/src/$(PACKAGE_NAME) \
-	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/startup pkg/allocateip $(GINKGO_ARGS)
+	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
 
 # etcd is used by the STs
 .PHONY: run-etcd
