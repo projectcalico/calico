@@ -124,7 +124,7 @@ Felix must reprogram the HNS ACL policy attached to the pod. This reprogramming 
 
 ### Service ClusterIPs incompatible with selectors/pod IPs in network policy
 
-**Windows 1809 and 1903 prior to build 18317**
+**Windows 1809 prior to build 17763.1432**
 
 On Windows nodes, kube-proxy unconditionally applies source NAT to traffic from local pods to service ClusterIPs. This means that, at the destination pod, where policy is applied, the traffic appears to come from the source host rather than the source pod. In turn, this means that a network policy with a source selector matching the source pod will not match the expected traffic.
 

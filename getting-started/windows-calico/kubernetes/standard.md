@@ -155,7 +155,7 @@ See the README in the same directory for more details. Feel free to modify the s
 - With the correct HNS network name used by the active CNI plugin. kube-proxy reads the HNS network name from an environment variable KUBE_NETWORK
   - With default configuration, {{site.prodname}} uses network name "{{site.prodname}}"
 - For VXLAN, with the source VIP for the pod subnet allocated to the node. This is the IP that kube-proxy uses when it does SNAT for a NodePort. For {{site.prodname}}, the source VIP should be the second IP address in the subnet chosen for the host. For example, if {{site.prodname}} chooses an IP block 10.0.0.0/26 then the source VIP should be 10.0.0.2. The script below will automatically wait for the block to be chosen and configure kube-proxy accordingly.
-- For {{site.prodname}} policy to function correctly with Kubernetes services, the WinDSR feature gate must be enabled. This requires Windows 1903 build 18317 or greater and Kubernetes v1.14 or greater.
+- For {{site.prodname}} policy to function correctly with Kubernetes services, the WinDSR feature gate must be enabled. This requires Windows Server build 17763.1432 or greater and Kubernetes v1.14 or greater.
 
 kube-proxy should be started via a script that waits for the Calico HNS network to be provisioned. The {{site.prodname}} package contains a suitable script for use with {{site.prodname}} networking at `{{site.rootDirWindows}}\kubernetes\kube-proxy-service.ps1`. The script:
 

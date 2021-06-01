@@ -65,9 +65,8 @@ calicoctl ipam configure --strictaffinity=true
 
 - Windows versions:
   - Windows Server 1809 (build Build 17763.1432 or greater)
-  - Windows Server 1903 (AKA 19H1 build 18362.1049 or greater)
-  - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater)
-  - Windows Server 2004 (AKA 20H2 build)
+  - Windows Server 2004 (build 19041)
+  - Windows Server 20H2 (build 19042)
 - PowerShell for the installer
 - Make sure {% include open-new-window.html text='Docker' url='https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server' %} or {% include open-new-window.html text='containerd' url='https://kubernetes.io/docs/setup/production-environment/container-runtimes/#containerd' %} is installed and running.
 - If you are using {{site.prodname}} BGP networking, the RemoteAccess service must be installed for the Windows BGP Router.
