@@ -127,9 +127,9 @@ you want to install the binary.
 <label:Windows>
 <%
 
-1. Use the following powershell command to download the `calicoctl` binary.
+1. Use the following PowerShell command to download the `calicoctl` binary.
 
-   > **Tip**: Consider runing powershell as administraor and navigating 
+   > **Tip**: Consider runing PowerShell as administrator and navigating
    > to a location that's in your `PATH`. For example, `C:\Windows`.
    {: .alert .alert-success}
 
@@ -255,9 +255,9 @@ you want to install the binary.
 <label:Windows>
 <%
 
-1. Use the following powershell command to download the `calicoctl` binary.
+1. Use the following PowerShell command to download the `calicoctl` binary.
 
-   > **Tip**: Consider runing powershell as administraor and navigating 
+   > **Tip**: Consider runing PowerShell as administrator and navigating
    > to a location that's in your `PATH`. For example, `C:\Windows`.
    {: .alert .alert-success}
 

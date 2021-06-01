@@ -409,7 +409,7 @@ kubectl apply -f policy-demo-windows.yaml
 >**Note**: Launching the Windows pods is going to take some time depending on your network download speed.
 {: .alert .alert-info}
 
-1. Open a powershell window.
+1. Open a PowerShell window.
 1. Using `kubectl` to list the pods in the `calico-demo` namespace.
 
 ```powershell
