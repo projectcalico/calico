@@ -25,10 +25,9 @@ Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Window
 
 **Windows node requirements**
 - Versions:
-  - Windows Server 1809 (build Build 17763.1432 or greater)
-  - Windows Server 1903 (AKA 19H1 build 18362.1049 or greater)
-  - Windows Server 1909 (AKA 19H2 build 18362.1049 or greater)
-  - Windows Server 2004 (AKA 20H2 build)
+  - Windows Server 1809 (build 17763.1432 or greater)
+  - Windows Server 2004 (build 19041)
+  - Windows Server 20H2 (build 19042)
 
   > **Note**: Windows Server version support differs for each Kubernetes version. Review the {% include open-new-window.html text='Windows OS Version Support' url='https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#windows-os-version-support' %} table for the Windows Server versions supported by each Kubernetes version.
   {: .alert .alert-info}
