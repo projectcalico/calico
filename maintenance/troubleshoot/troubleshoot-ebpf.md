@@ -112,34 +112,52 @@ The parts of the log are explained below:
     
 * `Final result=ALLOW (-1). Program execution time: 7366ns` is the message.  In this case, logging the final result of 
   the program.  Note that the timestamp is massively distorted by the time spent logging.
-  
+
 ## The `calico-bpf` tool
 
 Since BPF maps contain binary data, the {{site.prodname}} team wrote a tool to examine {{site.prodname}}'s BPF maps.
-We haven't packaged the tool up yet but it can be built from the felix repository on github.  To build the tool, you
-will need `git`, `docker` and GNU `make` installed on a Linux system (Ubuntu 20.04 recommended).  Then:
+The tool is embedded in the {{site.nodecontainer}} container image. To run the tool:
 
-* Clone the repo:
+* Find the name of the {{site.nodecontainer}} Pod on the host of interest using
+  ```bash
+  kubectl get pod -o wide -n calico-system
   ```
-  git clone https://github.com/projectcalico/felix.git
+  for example, `calico-node-abcdef`
+
+* Run the tool as follows:
+  ```bash
+  kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf ...
   ```
-* Check out the tag matching the release that you are using; for example:
-  ```
-  git checkout v3.16.1
-  ```
-* Build the tool:
-  ```
-  make bin/calico-bpf
-  ```
+  For example, to show the tool's help:
+  ```bash
+  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf help
+   
+  Usage:
+    calico-bpf [command]
   
-You can then copy the tool to the node you want to inspect and use one of its subcommands to dump the map of interest.
-For example, the following command will dump the conntrack table:
-```
-calico-bpf conntrack dump
-```
+  Available Commands:
+    arp          Manipulates arp
+    connect-time Manipulates connect-time load balancing programs
+    conntrack    Manipulates connection tracking
+    help         Help about any command
+    ipsets       Manipulates ipsets
+    nat          Nanipulates network address translation (nat)
+    routes       Manipulates routes
+    version      Prints the version and exits
+  
+  Flags:
+    --config string   config file (default is $HOME/.calico-bpf.yaml)
+    -h, --help            help for calico-bpf
+    -t, --toggle          Help message for toggle
+  ```
+  (Since the tool is embedded in the main `calico-node` binary the `--help` option is not available, but running
+  `calico-node -bpf help` does work.)
 
-> **Tip**: If you find yourself needing to dive this deep, please reach out on the [Calico Users slack](https://slack.projectcalico.org/); we're always happy to help.
-{: .alert .alert-success}
+  To dump the BPF conntrack table:
+  ```
+  $ kubectl exec -n calico-system calico-node-abcdef -- calico-node -bpf conntrack dump
+  ...
+  ```
 
 ## Poor performance
 
