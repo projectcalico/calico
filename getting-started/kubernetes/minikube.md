@@ -90,14 +90,14 @@ kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
 You can verify {{site.prodname}} installation in your cluster by issuing the following command.
 
 ```bash
-watch kubectl get pods -l k8s-app=calico-node -n kube-system
+watch kubectl get pods -l k8s-app=calico-node -A
 ```
 
-You should see a result similar to
+You should see a result similar to the below. Note that the namespace might be different, depending on the method you followed.
 
 ```
-NAME                READY   STATUS    RESTARTS   AGE
-calico-node-85s5b   1/1     Running   0          3m31s
+NAMESPACE     NAME                READY   STATUS    RESTARTS   AGE
+kube-system   calico-node-mlqvs   1/1     Running   0          5m18s
 ```
 
 Use `ctrl+c` to break out of watch.
