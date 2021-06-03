@@ -391,6 +391,10 @@ spec:
 {{- end }}
             periodSeconds: 10
           volumeMounts:
+            # For maintaining CNI plugin API credentials.
+            - mountPath: /host/etc/cni/net.d
+              name: cni-net-dir
+              readOnly: false
             - mountPath: /lib/modules
               name: lib-modules
               readOnly: true

@@ -105,7 +105,7 @@ configuration used on the cluster.
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
 | USE_POD_CIDR | Use the Kubernetes `Node.Spec.PodCIDR` field when using host-local IPAM. Requires Kubernetes API datastore. This field is required when using the Kubernetes API datastore with host-local IPAM. [Default: false] | boolean |
-| CALICO_MANAGE_CNI | Tells Calico to update the kubeconfig file at /host/etc/cni/net.d/calico-kubeconfig on credentials change. [Default: false] | boolean |
+| CALICO_MANAGE_CNI | Tells Calico to update the kubeconfig file at /host/etc/cni/net.d/calico-kubeconfig on credentials change. [Default: true] | boolean |
 
 ### Other Environment Variables
 
