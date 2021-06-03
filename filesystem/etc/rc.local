@@ -67,8 +67,8 @@ case "$CALICO_NETWORKING_BACKEND" in
 	;;
 esac
 
-if [ "$CALICO_MANAGE_CNI" = "true" ]; then
-	# Enable management of the CNI configuration.
+if [ "$CALICO_MANAGE_CNI" != "false" ]; then
+	# Enable management of the CNI configuration unless otherwise instructed.
 	cp -a /etc/service/available/cni  /etc/service/enabled/
 fi
 
