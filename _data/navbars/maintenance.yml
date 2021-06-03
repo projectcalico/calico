@@ -11,11 +11,13 @@ section:
     path: /maintenance/openshift-upgrade
   - title: OpenStack
     path: /maintenance/openstack-upgrade
-- title: Deploy image options
+- title: Calico image source options
   path: /maintenance/image-options/
   section:
-  - title: Deploy images by digest
+  - title: Install images by registry digest
     path: /maintenance/image-options/imageset
+  - title: Install images using an alternate registry
+    path: /maintenance/image-options/alternate-registry
 - title: Migrate datastore from etcd to Kubernetes
   path: /maintenance/datastore-migration
 - title: Migrate Calico to an operator-managed installation
