@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -183,7 +184,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		}
 
 		// Process IPAM blocks that aren't associated to a single or /32 local workload
-		if msg.Type == proto.RouteType_LOCAL_WORKLOAD && msg.IpPoolType == proto.IPPoolType_VXLAN && !msg.LocalWorkload {
+		if routeIsLocalVXLANBlock(msg) {
 			logrus.WithField("msg", msg).Debug("VXLAN data plane received route update for IPAM block")
 			m.localIPAMBlocks[msg.Dst] = msg
 			m.routesDirty = true
@@ -214,6 +215,30 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		m.routesDirty = true
 		m.vtepsDirty = true
 	}
+}
+
+func routeIsLocalVXLANBlock(msg *proto.RouteUpdate) bool {
+	// RouteType_LOCAL_WORKLOAD means "local IPAM block _or_ /32 of workload"
+	if msg.Type != proto.RouteType_LOCAL_WORKLOAD {
+		return false
+	}
+	// Only care about VXLAN blocks.
+	if msg.IpPoolType != proto.IPPoolType_VXLAN {
+		return false
+	}
+	// Ignore routes that we know are from local workload endpoints.
+	if msg.LocalWorkload {
+		return false
+	}
+	// Ignore /32 routes in any case for two reasons:
+	// * If we have a /32 block then our blackhole route would stop the CNI plugin from programming its /32 for a
+	//   newly added workload.
+	// * If this isn't a /32 block then it must be a borrowed /32 from another block.  In that case, we know we're
+	//   racing with CNI, adding a new workload.  We've received the borrowed IP but not the workload endpoint yet.
+	if strings.HasSuffix(msg.Dst, "/32") {
+		return false
+	}
+	return true
 }
 
 func (m *vxlanManager) deleteRoute(dst string) {

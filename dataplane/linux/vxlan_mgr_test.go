@@ -180,6 +180,16 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
+		// Borrowed /32 should not be programmed as blackhole.
+		manager.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "172.0.0.1/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.8.8.7",
+			SameSubnet:  true,
+		})
+
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
