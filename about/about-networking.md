@@ -119,7 +119,7 @@ the downsides of:
 
 ### DNS
 
-While the underlying network packet flow across a the network is determined using IP addresses, users and applications
+While the underlying network packet flow across the network is determined using IP addresses, users and applications
 typically want to use well known names to identify network destinations that remain consistent over time, even if the
 underlying IP addresses change. For example, to map `google.com` to `216.58.210.46`. This translation from name to IP
 address is handled by {% include open-new-window.html text='DNS' url='https://en.wikipedia.org/wiki/Domain_Name_System'
