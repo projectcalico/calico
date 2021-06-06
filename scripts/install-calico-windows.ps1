@@ -54,9 +54,8 @@ Param(
 
 function DownloadFiles()
 {
-    Write-Host "Downloading CNI binaries"
+    Write-Host "Creating CNI directory"
     md $BaseDir\cni\config -ErrorAction Ignore
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
 
     Write-Host "Downloading Windows Kubernetes scripts"
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
