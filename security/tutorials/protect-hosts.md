@@ -35,6 +35,10 @@ policy, because:
    Our policy therefore needs to take effect _before_ that DNAT - and that
    means that it must be a pre-DNAT policy.
 
+> Note: This tutorial is intended to be used with named host endpoints, i.e. host endpoints with `interfaceName` set to a specific interface name.
+> This tutorial does not work, as-is, with host endpoints with `interfaceName: "*"`.
+{: .alert .alert-info }
+
 Here is the pre-DNAT policy that we need to disallow incoming external traffic
 in general:
 
