@@ -12,7 +12,7 @@ require (
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210524102741-3503e05cfaa8
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/net v0.0.0-20210224082022-3d97a244fca7
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
 	google.golang.org/grpc v1.27.1
 )
 
