@@ -1,56 +1,55 @@
 ---
 title: About non-cluster hosts
-description: Secure hosts not in a cluster by installing Calico with networking and/or networking policy enabled.
+description: Install Calico on hosts not in a cluster with network policy, or networking and network policy.
 canonical_url: '/getting-started/bare-metal/about'
 ---
 
 ### Big picture
 
-Secure hosts not in a cluster by installing {{site.prodname}} with networking and/or networking policy enabled.
+Secure non-cluster hosts by installing {{site.prodname}} for networking and/or networking policy.
 
 ### Value
 
-Not all hosts in your environment run virtualized workloads (i.e. containers managed by Kubernetes or OpenShift, or VMs managed by OpenStack). There may be physical machines or legacy applications that you cannot move into an orchestrated cluster that need to communicate securely with workloads in your cluster. Whether you have a thousand machines or ten, {{site.prodname}} lets you enforce policy on them using the same robust {{site.prodname}} network policy that is used for workloads. 
-
+Not all hosts in your environment run pods/workloads. You may have physical machines or legacy applications that you cannot move into a Kubernetes cluster, but still need to securely communicate with pods in your cluster. {{site.prodname}} lets you enforce policy on these **non-cluster hosts** using the same robust {{site.prodname}} network policy that you use for pods.
 
 ### Concepts
 
-#### Workloads and Hosts
+#### Non-cluster hosts and host endpoints
 
-We use the term workload to mean a pod or VM running as a guest on a computer with {{site.prodname}} installed. If your cluster is a Kubernetes or OpenShift cluster, workloads are pods, if your cluster is an OpenStack cluster, workloads are VMs. 
+A **non-cluster host** is a computer that is running an application that is *not part of a Kubernetes cluster*. Using {{site.prodname}} network policy, you can secure these host interfaces using **host endpoints**. Host endpoints can have labels, and work the same as labels on pods/workload endpoints. 
 
-We use the term host to mean a computer where {{site.prodname}} is installed. These include computers that are part of a cluster and “host” workloads, as well as computers that are not part of the cluster and run applications directly, which we call "non-cluster" hosts.  {{site.prodname}} does not handle the networking from host to host ({{site.prodname}} assumes this is set up), but it can be used to handle networking between hosts and workloads.  {{site.prodname}} can also provide network policy for hosts, regardless of whether or not the hosts run any workloads.  This guide focuses on non-cluster hosts.
+The advantage is, you can write network policy rules to apply to both workload endpoints and host endpoints using label selectors; where each selector can refer to the either type (or be a mix of the two). For example, you can write a cluster-wide policy for non-cluster hosts that is immediately applied to every host. To learn how to restrict traffic to/from hosts using {{site.prodname}} network policy see, [Protect hosts]({{site.baseurl}}/security/protect-hosts). 
 
-#### {{site.prodname}} networking on non-cluster hosts
+If you are using the etcd3 database, you can also install {{site.prodname}} with networking as described below.
 
-When {{site.prodname}} networking is enabled, {{site.prodname}} provides the virtual networking for the workloads in your cluster, allowing them to communicate with one another. It is also responsible for setting up networking so that hosts can communicate with workloads and vice versa.  {{site.prodname}} does not handle networking for host to host communications.
+#### Install options for non-cluster hosts
 
-When {{site.prodname}} networking is enabled...
+| Install {{site.prodname}} with... | Requires                         | Use case                                                     | Supported install methods                      |
+| --------------------------------- | -------------------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| Policy only                       | An etcd3 or Kubernetes datastore | Use {{site.prodname}} network policy to control firewalls on non-cluster hosts. | Binary install with/ without a package manager |
+| Networking and network policy     | An etcd3 datastore               | **Networking**<br />Use {{site.prodname}} networking (BGP, or overlay with VXLAN or IP-in-IP) to handle these communications:<br />- pod ↔ pod<br />- pod ↔ host<br /><br />**Note**: {{site.prodname}} does not handle host ↔ host networking; your underlying network must already be set up to handle this. <br /><br />**Policy**<br />Use {{site.prodname}} network policy to control firewalls on your non-cluster hosts. | Docker container                               |
 
-| Communication type   | Handled by         |
-|----------------------|--------------------|
-| Workload ↔ Workload  | {{site.prodname}}  |
-| Workload ↔ Host      | {{site.prodname}}  |
-| Host ↔ Host          | Underlying network |
+### Before you begin
 
-This means that if you are using {{site.prodname}} networking in your cluster, and you want the non-cluster hosts to be able to communicate with workloads in the cluster, you will need to install {{site.prodname}} for networking on your non-cluster hosts.  If you are not using {{site.prodname}} for networking in your cluster (e.g. are using {{site.prodname}} in policy-only mode), or don't need your non-cluster hosts to communicate directly with workloads, you can install {{site.prodname}} in policy-only mode on your non-cluster hosts.
+**Supported**
 
-#### {{site.prodname}} policy on non-cluster hosts
+- All platforms in this release, except Windows  
 
-{{site.prodname}} policy allows you to control firewalls on your non-cluster hosts using the same controls powerful controls as in your cluster.  {{site.prodname}} must be running on each non-cluster host you want to control.
+**Required**
 
-Using {{site.prodname}}, you can secure network interfaces of the host; these interfaces are called **host endpoints** (to distinguish them from **workload endpoints**). Host endpoints can have labels, which work the same as labels on workload endpoints. This allows you to create {{site.prodname}} network policy for either host or workload endpoints, where each selector can refer to the either type (or be a mix of the two) using labels.
+- Non-cluster host meets [system requirements](./requirements) for {{site.prodname}}. If you want to use a package manager for installation, the non-cluster host must be a system derived from Ubuntu or RedHat.
+- Set up a datastore; if {{site.prodname}} is installed on a cluster, you already have a datastore
+- Install `kubectl` or [`calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/). (`kubectl` works only with the Kubernetes datastore.)
 
+### Next steps
 
-### Before you begin...
+Select an install method.
 
-1. Check that your hosts meet the [system requirements](./requirements) for {{site.prodname}}
-1. Set up a datastore (if you have installed {{site.prodname}} on a cluster you will already have this)
-1. [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/)
-1. Choose an install method and whether to use {{site.prodname}} for networking & policy, or policy-only
+>**Note**: {{site.prodname}} must be installed on each non-cluster host that you want to control with networking and/or policy. 
+ {: .alert .alert-info}
 
-| Install method                                                       | Networking | Policy |
-|----------------------------------------------------------------------|------------|--------|
-| [Docker container](./installation/container)                         | ✓          | ✓      |
-| [Binary install with package manager](./installation/binary-mgr)     |            | ✓      |
-| [Binary install without package manager](./installation/binary)      |            | ✓      |
+| Install method                                               | Networking | Policy |
+| ------------------------------------------------------------ | ---------- | ------ |
+| [Docker container](./installation/container)                 | ✓          | ✓      |
+| [Binary install with package manager](./installation/binary-mgr) |            | ✓      |
+| [Binary install without package manager](./installation/binary) |            | ✓      |
