@@ -141,8 +141,6 @@ bin/healthz-%: local_build proto $(SRC_FILES)
 # google/rpc (aka googleapis).
 PROTOC_IMPORTS =  -I proto\
 		  -I ./
-# Also remap the output modules to gogo versions of google/protobuf and google/rpc
-PROTOC_MAPPINGS = Menvoy/api/v2/core/address.proto=github.com/envoyproxy/data-plane-api/envoy/api/v2/core,Menvoy/api/v2/core/base.proto=github.com/envoyproxy/data-plane-api/envoy/api/v2/core,Menvoy/type/http_status.proto=github.com/envoyproxy/data-plane-api/envoy/type,Menvoy/type/percent.proto=github.com/envoyproxy/data-plane-api/envoy/type,Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc,Menvoy/service/auth/v2/external_auth.proto=github.com/envoyproxy/data-plane-api/envoy/service/auth/v2
 
 proto: proto/felixbackend.pb.go proto/healthz.pb.go
 
@@ -151,14 +149,14 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
-		      --gogofast_out=plugins=grpc,$(PROTOC_MAPPINGS):proto
+		      --gogofast_out=plugins=grpc:proto
 
 proto/healthz.pb.go: proto/healthz.proto
 	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
-		      --gogofast_out=plugins=grpc,$(PROTOC_MAPPINGS):proto
+		      --gogofast_out=plugins=grpc:proto
 
 
 # Building the image

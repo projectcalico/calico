@@ -18,9 +18,9 @@ import (
 	"context"
 	"testing"
 
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
-	"github.com/gogo/googleapis/google/rpc"
+	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	. "github.com/onsi/gomega"
+	"google.golang.org/genproto/googleapis/rpc/status"
 
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
@@ -73,5 +73,5 @@ func TestCheckStore(t *testing.T) {
 		Expect(err).ToNot(HaveOccurred())
 		return rsp
 	}
-	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &rpc.Status{Code: OK}}))
+	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &status.Status{Code: OK}}))
 }

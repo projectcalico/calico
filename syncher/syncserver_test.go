@@ -29,7 +29,7 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/app-policy/uds"
 
-	envoyapi "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
+	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
 )
 
@@ -40,7 +40,7 @@ const addr3Ip = "2.2.2.2"
 var addr1 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
 		Address:  addr1Ip,
-		Protocol: envoyapi.TCP,
+		Protocol: envoyapi.SocketAddress_TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 5429,
 		},
@@ -49,7 +49,7 @@ var addr1 = &envoyapi.Address{
 var addr2 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
 		Address:  addr2Ip,
-		Protocol: envoyapi.TCP,
+		Protocol: envoyapi.SocketAddress_TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 6632,
 		},
@@ -58,7 +58,7 @@ var addr2 = &envoyapi.Address{
 var addr3 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
 		Address:  addr3Ip,
-		Protocol: envoyapi.TCP,
+		Protocol: envoyapi.SocketAddress_TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 2222,
 		},

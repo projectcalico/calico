@@ -20,7 +20,7 @@ import (
 
 	"github.com/projectcalico/app-policy/proto"
 
-	envoyapi "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
+	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 func makeAddr(ip string, protocol envoyapi.SocketAddress_Protocol, port uint32) envoyapi.Address {
@@ -84,7 +84,7 @@ func TestAddIpAndPort(t *testing.T) {
 	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
-	addr := makeAddr("2.2.2.2", envoyapi.TCP, 2222)
+	addr := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
 
 	uut.AddString("2.2.2.2,tcp:2222")
 	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
@@ -102,7 +102,7 @@ func TestRemoveIpAndPort(t *testing.T) {
 	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
-	addr := makeAddr("2.2.2.2", envoyapi.TCP, 2222)
+	addr := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
 
 	uut.RemoveString("2.2.2.2,tcp:2222")
 	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
@@ -123,10 +123,10 @@ func TestIpPortContainsAddress(t *testing.T) {
 	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
-	addrTCP := makeAddr("2.2.2.2", envoyapi.TCP, 2222)
-	addrUDP := makeAddr("2.2.2.2", envoyapi.UDP, 2222)
-	addrPort := makeAddr("2.2.2.2", envoyapi.TCP, 2223)
-	addrIp := makeAddr("2.2.2.3", envoyapi.TCP, 2222)
+	addrTCP := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
+	addrUDP := makeAddr("2.2.2.2", envoyapi.SocketAddress_UDP, 2222)
+	addrPort := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2223)
+	addrIp := makeAddr("2.2.2.3", envoyapi.SocketAddress_TCP, 2222)
 
 	// Different protocol
 	uut.AddString("2.2.2.2,udp:2222")

@@ -19,7 +19,7 @@ import (
 	"regexp"
 	"sync"
 
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/app-policy/policystore"

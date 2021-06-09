@@ -23,8 +23,8 @@ import (
 
 	"fmt"
 
-	core "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 )
 
