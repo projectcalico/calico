@@ -181,7 +181,7 @@ spec:
   ingress:
   - action: Allow
     source:
-      serviceAccount:
+      serviceAccounts:
         names: ["api", "search"]
       namespaceSelector: app == 'microblog'
     protocol: TCP
@@ -219,7 +219,7 @@ Things to notice in this example:
 
   <pre>
   source:
-    serviceAccount:
+    serviceAccounts:
       names: ["api", "search"]
   </pre> 
   {:.no-select-button} 
@@ -230,7 +230,7 @@ Things to notice in this example:
 
   <pre>
   source:
-    serviceAccount:
+    serviceAccounts:
       names: ["api", "search"]
     namespaceSelector: app == 'microblog'
   </pre>
@@ -266,7 +266,7 @@ spec:
   ingress:
   - action: Allow
     source:
-      serviceAccount:
+      serviceAccounts:
         selector: svc-post == 'access'
       namespaceSelector: app == 'microblog'
     protocol: TCP
