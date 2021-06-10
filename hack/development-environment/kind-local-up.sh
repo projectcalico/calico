@@ -23,11 +23,6 @@ function check() {
 	fi
 }
 
-if [[ "$ROOT_CALICO_REPOS_DIR" == "" ]] ;  then
-    echo "found input var for ROOT_CALICO_REPOS_DIR =  $ROOT_CALICO_REPOS_DIR"
-else
-    ROOT_CALICO_REPOS_DIR?="~/calico_all/"
-fi
 echo "calico source ---> $ROOT_CALICO_REPOS_DIR"
 
 echo "$ROOT_CALICO_REPOS_DIR is the input dir for calico sources"
