@@ -143,7 +143,7 @@ LOCAL_BUILD=true
 ## Build a local version of Calico based on the checked out codebase.
 dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
 $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
-	@cd $< && export TAG=$$($(TAG_COMMAND)); make image tag-images \
+	@cd $< && export TAG=$$($(TAG_COMMAND)); make image tag-images-all \
 		BUILD_IMAGE=$(REGISTRY)/$* \
 		PUSH_IMAGES=$(REGISTRY)/$* \
 		LOCAL_BUILD=$(LOCAL_BUILD) \
