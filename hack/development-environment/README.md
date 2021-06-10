@@ -24,22 +24,22 @@ Options:
 Example:
 
 ```
-	git clone https://github.com/projectcalico/calico.git
-	git clone https://github.com/projectcalico/app-policy
-	git clone https://github.com/projectcalico/libcalico-go.git 
-	git clone https://github.com/projectcalico/kube-controllers 
-	git clone https://github.com/projectcalico/felix 
-	git clone https://github.com/projectcalico/node
-	git clone https://github.com/projectcalico/api 
-	git clone https://github.com/projectcalico/node
-        git clone https://github.com/projectcalico/calicoctl
-        git clone https://github.com/projectcalico/cni-plugin
-        git clone https://github.com/projectcalico/pod2daemon
-	git clone https://github.com/projectcalico/typha
-	
-	ROOT_CALICO_REPOS_DIR=~/calico_all/ BUILD_CALICO=true ./kind-local-up.sh
-	echo "play with your cluster for a while"
-	kind delete cluster calico-test
+git clone https://github.com/projectcalico/calico.git
+git clone https://github.com/projectcalico/app-policy
+git clone https://github.com/projectcalico/libcalico-go.git 
+git clone https://github.com/projectcalico/kube-controllers 
+git clone https://github.com/projectcalico/felix 
+git clone https://github.com/projectcalico/node
+git clone https://github.com/projectcalico/api 
+git clone https://github.com/projectcalico/node
+git clone https://github.com/projectcalico/calicoctl
+git clone https://github.com/projectcalico/cni-plugin
+git clone https://github.com/projectcalico/pod2daemon
+git clone https://github.com/projectcalico/typha
+
+ROOT_CALICO_REPOS_DIR=~/calico_all/ BUILD_CALICO=true ./kind-local-up.sh
+echo "play with your cluster for a while"
+kind delete cluster calico-test
 ```
 
 
