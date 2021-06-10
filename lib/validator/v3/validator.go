@@ -29,10 +29,11 @@ import (
 
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -190,14 +191,14 @@ func init() {
 	registerStructValidator(validate, validateProtoPort, api.ProtoPort{})
 	registerStructValidator(validate, validatePort, numorstring.Port{})
 	registerStructValidator(validate, validateEndpointPort, api.EndpointPort{})
-	registerStructValidator(validate, validateIPNAT, api.IPNAT{})
+	registerStructValidator(validate, validateIPNAT, libapi.IPNAT{})
 	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
-	registerStructValidator(validate, validateNodeSpec, api.NodeSpec{})
+	registerStructValidator(validate, validateNodeSpec, libapi.NodeSpec{})
 	registerStructValidator(validate, validateObjectMeta, metav1.ObjectMeta{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
 	registerStructValidator(validate, validateFelixConfigSpec, api.FelixConfigurationSpec{})
-	registerStructValidator(validate, validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
+	registerStructValidator(validate, validateWorkloadEndpointSpec, libapi.WorkloadEndpointSpec{})
 	registerStructValidator(validate, validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validate, validateRule, api.Rule{})
 	registerStructValidator(validate, validateEntityRule, api.EntityRule{})
@@ -666,7 +667,7 @@ func validatePort(structLevel validator.StructLevel) {
 }
 
 func validateIPNAT(structLevel validator.StructLevel) {
-	i := structLevel.Current().Interface().(api.IPNAT)
+	i := structLevel.Current().Interface().(libapi.IPNAT)
 	log.Debugf("Internal IP: %s; External IP: %s", i.InternalIP, i.ExternalIP)
 
 	iip, _, err := cnet.ParseCIDROrIP(i.InternalIP)
@@ -757,7 +758,7 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 }
 
 func validateWorkloadEndpointSpec(structLevel validator.StructLevel) {
-	w := structLevel.Current().Interface().(api.WorkloadEndpointSpec)
+	w := structLevel.Current().Interface().(libapi.WorkloadEndpointSpec)
 
 	// The configured networks only support /32 (for IPv4) and /128 (for IPv6) at present.
 	for _, netw := range w.IPNetworks {
@@ -1066,10 +1067,10 @@ func validateEntityRule(structLevel validator.StructLevel) {
 }
 
 func validateNodeSpec(structLevel validator.StructLevel) {
-	ns := structLevel.Current().Interface().(api.NodeSpec)
+	ns := structLevel.Current().Interface().(libapi.NodeSpec)
 
 	if ns.BGP != nil {
-		if reflect.DeepEqual(*ns.BGP, api.NodeBGPSpec{}) {
+		if reflect.DeepEqual(*ns.BGP, libapi.NodeBGPSpec{}) {
 			structLevel.ReportError(reflect.ValueOf(ns.BGP), "BGP", "",
 				reason("Spec.BGP should not be empty"), "")
 		}

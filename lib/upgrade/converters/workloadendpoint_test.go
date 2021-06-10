@@ -22,12 +22,13 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 )
 
@@ -76,12 +77,12 @@ var wepTable = []TableEntry{
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		apiv3.WorkloadEndpoint{
+		libapiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: makeLabelsV3(),
 			},
-			Spec: apiv3.WorkloadEndpointSpec{
+			Spec: libapiv3.WorkloadEndpointSpec{
 				Orchestrator:  "k8s",
 				Node:          "testnode",
 				Pod:           "frontend-5gs43",
@@ -145,19 +146,19 @@ var wepTable = []TableEntry{
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		apiv3.WorkloadEndpoint{
+		libapiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: makeLabelsV3(),
 			},
-			Spec: apiv3.WorkloadEndpointSpec{
+			Spec: libapiv3.WorkloadEndpointSpec{
 				Orchestrator: "k8s",
 				Node:         "testnode",
 				Pod:          "frontend-5gs43",
 				ContainerID:  "1337495556942031415926535",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"10.0.0.1/32"},
-				IPNATs: []apiv3.IPNAT{{
+				IPNATs: []libapiv3.IPNAT{{
 					InternalIP: "10.0.0.1",
 					ExternalIP: "172.0.0.1",
 				}},
@@ -216,19 +217,19 @@ var wepTable = []TableEntry{
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		apiv3.WorkloadEndpoint{
+		libapiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: makeLabelsV3(),
 			},
-			Spec: apiv3.WorkloadEndpointSpec{
+			Spec: libapiv3.WorkloadEndpointSpec{
 				Orchestrator: "k8s",
 				Node:         "testnode",
 				Pod:          "frontend-5gs43",
 				ContainerID:  "133749555694203141592653c",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"2001::/128"},
-				IPNATs: []apiv3.IPNAT{{
+				IPNATs: []libapiv3.IPNAT{{
 					InternalIP: "2001::",
 					ExternalIP: "2002::",
 				}},
@@ -284,12 +285,12 @@ var wepTable = []TableEntry{
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		apiv3.WorkloadEndpoint{
+		libapiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: map[string]string{},
 			},
-			Spec: apiv3.WorkloadEndpointSpec{
+			Spec: libapiv3.WorkloadEndpointSpec{
 				Orchestrator:  "k8s",
 				Node:          "testnode",
 				Pod:           "frontend-5gs43",
@@ -309,7 +310,7 @@ var wepTable = []TableEntry{
 }
 
 var _ = DescribeTable("v1->v3 workload endpoint conversion tests",
-	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API apiv3.WorkloadEndpoint) {
+	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API libapiv3.WorkloadEndpoint) {
 		w := converters.WorkloadEndpoint{}
 
 		// Test and assert v1 API to v1 backend logic.
@@ -327,9 +328,9 @@ var _ = DescribeTable("v1->v3 workload endpoint conversion tests",
 		// Test and assert v1 backend to v3 API logic.
 		v3APIResult, err := w.BackendV1ToAPIV3(v1KVP)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(v3APIResult.(*apiv3.WorkloadEndpoint).ObjectMeta.Name).To(Equal(v3API.ObjectMeta.Name))
-		Expect(v3APIResult.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(v3API.ObjectMeta.Labels))
-		Expect(v3APIResult.(*apiv3.WorkloadEndpoint).Spec).To(Equal(v3API.Spec))
+		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).ObjectMeta.Name).To(Equal(v3API.ObjectMeta.Name))
+		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(v3API.ObjectMeta.Labels))
+		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).Spec).To(Equal(v3API.Spec))
 	},
 	wepTable...,
 )
@@ -416,8 +417,8 @@ func makeIPv6NATKvp() []model.IPNAT {
 	return ipv6NAT
 }
 
-func makeIPNATv3() []apiv3.IPNAT {
-	return []apiv3.IPNAT{
+func makeIPNATv3() []libapiv3.IPNAT {
+	return []libapiv3.IPNAT{
 		{
 			InternalIP: "10.0.0.1",
 			ExternalIP: "172.0.0.1",

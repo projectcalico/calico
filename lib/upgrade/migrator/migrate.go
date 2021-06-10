@@ -27,12 +27,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
@@ -677,7 +678,7 @@ func (m *migrationHelper) queryAndConvertV1ToV3Nodes(data *MigrationData) error 
 	// resources and modify any node that has a corresponding tunnel address (it's a pointer
 	// so we can adjust the in-situ resource).
 	for _, r := range data.Resources {
-		if nr, ok := r.(*apiv3.Node); ok {
+		if nr, ok := r.(*libapiv3.Node); ok {
 			addr := addrs[nr.Name]
 			if addr == "" || nr.Spec.BGP == nil {
 				continue

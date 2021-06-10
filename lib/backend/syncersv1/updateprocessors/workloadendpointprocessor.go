@@ -21,7 +21,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
@@ -32,7 +33,7 @@ import (
 // Create a new SyncerUpdateProcessor to sync WorkloadEndpoint data in v1 format for
 // consumption by Felix.
 func NewWorkloadEndpointUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv3.KindWorkloadEndpoint, convertWorkloadEndpointV2ToV1Key, convertWorkloadEndpointV2ToV1Value)
+	return NewSimpleUpdateProcessor(libapiv3.KindWorkloadEndpoint, convertWorkloadEndpointV2ToV1Key, convertWorkloadEndpointV2ToV1Value)
 }
 
 func convertWorkloadEndpointV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
@@ -50,7 +51,7 @@ func convertWorkloadEndpointV2ToV1Key(v3key model.ResourceKey) (model.Key, error
 }
 
 func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
-	v3res, ok := val.(*apiv3.WorkloadEndpoint)
+	v3res, ok := val.(*libapiv3.WorkloadEndpoint)
 	if !ok {
 		return nil, errors.New("Value is not a valid WorkloadEndpoint resource value")
 	}
@@ -169,7 +170,7 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 	return v1value, nil
 }
 
-func ConvertV2ToV1IPNAT(ipnat apiv3.IPNAT) *model.IPNAT {
+func ConvertV2ToV1IPNAT(ipnat libapiv3.IPNAT) *model.IPNAT {
 	internalip := cnet.ParseIP(ipnat.InternalIP)
 	externalip := cnet.ParseIP(ipnat.ExternalIP)
 	if internalip != nil && externalip != nil {

@@ -24,15 +24,16 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/resources"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -156,16 +157,16 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			}
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
-			var node *apiv3.Node
+			var node *libapiv3.Node
 			wip := net.MustParseIP("192.168.12.34")
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
 				By("Configuring a node with an IP address and tunnel MAC address")
 				var (
 					oldValuesSaved        bool
-					oldBGPSpec            *apiv3.NodeBGPSpec
+					oldBGPSpec            *libapiv3.NodeBGPSpec
 					oldVXLANTunnelMACAddr string
-					oldWireguardSpec      *apiv3.NodeWireguardSpec
+					oldWireguardSpec      *libapiv3.NodeWireguardSpec
 					oldWireguardPublicKey string
 				)
 				for i := 0; i < 5; i++ {
@@ -189,16 +190,16 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						oldWireguardPublicKey = node.Status.WireguardPublicKey
 						oldValuesSaved = true
 					}
-					node.Spec.BGP = &apiv3.NodeBGPSpec{
+					node.Spec.BGP = &libapiv3.NodeBGPSpec{
 						IPv4Address:        "1.2.3.4/24",
 						IPv6Address:        "aa:bb::cc/120",
 						IPv4IPIPTunnelAddr: "10.10.10.1",
 					}
 					node.Spec.VXLANTunnelMACAddr = "66:cf:23:df:22:07"
-					node.Spec.Wireguard = &apiv3.NodeWireguardSpec{
+					node.Spec.Wireguard = &libapiv3.NodeWireguardSpec{
 						InterfaceIPv4Address: "192.168.12.34",
 					}
-					node.Status = apiv3.NodeStatus{
+					node.Status = libapiv3.NodeStatus{
 						WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
 					}
 					node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
@@ -241,20 +242,20 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				By("Creating a node with an IP address")
 				node, err = c.Nodes().Create(
 					ctx,
-					&apiv3.Node{
+					&libapiv3.Node{
 						ObjectMeta: metav1.ObjectMeta{Name: "127.0.0.1"},
-						Spec: apiv3.NodeSpec{
-							BGP: &apiv3.NodeBGPSpec{
+						Spec: libapiv3.NodeSpec{
+							BGP: &libapiv3.NodeBGPSpec{
 								IPv4Address:        "1.2.3.4/24",
 								IPv6Address:        "aa:bb::cc/120",
 								IPv4IPIPTunnelAddr: "10.10.10.1",
 							},
 							VXLANTunnelMACAddr: "66:cf:23:df:22:07",
-							Wireguard: &apiv3.NodeWireguardSpec{
+							Wireguard: &libapiv3.NodeWireguardSpec{
 								InterfaceIPv4Address: "192.168.12.34",
 							},
 						},
-						Status: apiv3.NodeStatus{
+						Status: libapiv3.NodeStatus{
 							WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
 						},
 					},

@@ -26,7 +26,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -45,13 +46,13 @@ func NewIPAMHandleClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourc
 		name:            IPAMHandleCRDName,
 		resource:        IPAMHandleResourceName,
 		description:     "Calico IPAM handles",
-		k8sResourceType: reflect.TypeOf(apiv3.IPAMHandle{}),
+		k8sResourceType: reflect.TypeOf(libapiv3.IPAMHandle{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindIPAMHandle,
+			Kind:       libapiv3.KindIPAMHandle,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.IPAMHandleList{}),
-		resourceKind: apiv3.KindIPAMHandle,
+		k8sListType:  reflect.TypeOf(libapiv3.IPAMHandleList{}),
+		resourceKind: libapiv3.KindIPAMHandle,
 	}
 
 	return &ipamHandleClient{rc: rc}
@@ -67,9 +68,9 @@ type ipamHandleClient struct {
 }
 
 func (c ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
-	handle := kvpv3.Value.(*apiv3.IPAMHandle).Spec.HandleID
-	block := kvpv3.Value.(*apiv3.IPAMHandle).Spec.Block
-	del := kvpv3.Value.(*apiv3.IPAMHandle).Spec.Deleted
+	handle := kvpv3.Value.(*libapiv3.IPAMHandle).Spec.HandleID
+	block := kvpv3.Value.(*libapiv3.IPAMHandle).Spec.Block
+	del := kvpv3.Value.(*libapiv3.IPAMHandle).Spec.Deleted
 	return &model.KVPair{
 		Key: model.IPAMHandleKey{
 			HandleID: handle,
@@ -102,11 +103,11 @@ func (c ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
-			Kind: apiv3.KindIPAMHandle,
+			Kind: libapiv3.KindIPAMHandle,
 		},
-		Value: &apiv3.IPAMHandle{
+		Value: &libapiv3.IPAMHandle{
 			TypeMeta: metav1.TypeMeta{
-				Kind:       apiv3.KindIPAMHandle,
+				Kind:       libapiv3.KindIPAMHandle,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
@@ -114,7 +115,7 @@ func (c ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				ResourceVersion: kvpv1.Revision,
 				UID:             uid,
 			},
-			Spec: apiv3.IPAMHandleSpec{
+			Spec: libapiv3.IPAMHandleSpec{
 				HandleID: handle,
 				Block:    block,
 				Deleted:  del,
@@ -153,7 +154,7 @@ func (c *ipamHandleClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 	}
 
 	// Now actually delete the object.
-	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMHandle}
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMHandle}
 	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
@@ -172,7 +173,7 @@ func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision s
 
 func (c *ipamHandleClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	name := c.parseKey(key)
-	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMHandle}
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMHandle}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func (c *ipamHandleClient) Get(ctx context.Context, key model.Key, revision stri
 }
 
 func (c *ipamHandleClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	l := model.ResourceListOptions{Kind: apiv3.KindIPAMHandle}
+	l := model.ResourceListOptions{Kind: libapiv3.KindIPAMHandle}
 	v3list, err := c.rc.List(ctx, l, revision)
 	if err != nil {
 		return nil, err

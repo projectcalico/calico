@@ -24,7 +24,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -43,13 +44,13 @@ func NewIPAMConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourc
 			name:            IPAMConfigCRDName,
 			resource:        IPAMConfigResourceName,
 			description:     "Calico IPAM configuration",
-			k8sResourceType: reflect.TypeOf(apiv3.IPAMConfig{}),
+			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
 			k8sResourceTypeMeta: metav1.TypeMeta{
-				Kind:       apiv3.KindIPAMConfig,
+				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: apiv3.GroupVersionCurrent,
 			},
-			k8sListType:  reflect.TypeOf(apiv3.IPAMConfigList{}),
-			resourceKind: apiv3.KindIPAMConfig}}
+			k8sListType:  reflect.TypeOf(libapiv3.IPAMConfigList{}),
+			resourceKind: libapiv3.KindIPAMConfig}}
 }
 
 // ipamConfigClient implements the api.Client interface for IPAMConfig objects. It
@@ -64,7 +65,7 @@ type ipamConfigClient struct {
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	v3obj := kvpv3.Value.(*apiv3.IPAMConfig)
+	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
 	return &model.KVPair{
 		Key: model.IPAMConfigKey{},
 		Value: &model.IPAMConfig{
@@ -73,7 +74,7 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 			MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
 		},
 		Revision: kvpv3.Revision,
-		UID:      &kvpv3.Value.(*apiv3.IPAMConfig).UID,
+		UID:      &kvpv3.Value.(*libapiv3.IPAMConfig).UID,
 	}, nil
 }
 
@@ -84,18 +85,18 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: model.IPAMConfigGlobalName,
-			Kind: apiv3.KindIPAMConfig,
+			Kind: libapiv3.KindIPAMConfig,
 		},
-		Value: &apiv3.IPAMConfig{
+		Value: &libapiv3.IPAMConfig{
 			TypeMeta: metav1.TypeMeta{
-				Kind:       apiv3.KindIPAMConfig,
+				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            model.IPAMConfigGlobalName,
 				ResourceVersion: kvpv1.Revision,
 			},
-			Spec: apiv3.IPAMConfigSpec{
+			Spec: libapiv3.IPAMConfigSpec{
 				StrictAffinity:     v1obj.StrictAffinity,
 				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
 				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
@@ -138,7 +139,7 @@ func (c *ipamConfigClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: apiv3.KindIPAMConfig,
+		Kind: libapiv3.KindIPAMConfig,
 	}
 	kvp, err := c.rc.Delete(ctx, k, revision, uid)
 	if err != nil {
@@ -155,7 +156,7 @@ func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision stri
 	log.Debug("Received Get request on IPAMConfig type")
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: apiv3.KindIPAMConfig,
+		Kind: libapiv3.KindIPAMConfig,
 	}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {

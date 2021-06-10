@@ -16,6 +16,8 @@ package v3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 const (
@@ -68,7 +70,7 @@ func NewIPAMBlock() *IPAMBlock {
 	return &IPAMBlock{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindIPAMBlock,
-			APIVersion: GroupVersionCurrent,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
 }
@@ -79,7 +81,7 @@ func NewIPAMBlockList() *IPAMBlockList {
 	return &IPAMBlockList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindIPAMBlockList,
-			APIVersion: GroupVersionCurrent,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
 }

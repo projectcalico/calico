@@ -26,11 +26,12 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 type defaultWorkloadEndpointConverter struct{}
@@ -132,7 +133,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	}
 
 	// Pull out floating IP annotation
-	var floatingIPs []apiv3.IPNAT
+	var floatingIPs []libapiv3.IPNAT
 	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(podIPNets) > 0 {
 
 		// Parse Annotation data
@@ -163,14 +164,14 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		for _, ip := range ips {
 			if strings.Contains(ip, ":") {
 				if podnetV6 != nil {
-					floatingIPs = append(floatingIPs, apiv3.IPNAT{
+					floatingIPs = append(floatingIPs, libapiv3.IPNAT{
 						InternalIP: podnetV6.IP.String(),
 						ExternalIP: ip,
 					})
 				}
 			} else {
 				if podnetV4 != nil {
-					floatingIPs = append(floatingIPs, apiv3.IPNAT{
+					floatingIPs = append(floatingIPs, libapiv3.IPNAT{
 						InternalIP: podnetV4.IP.String(),
 						ExternalIP: ip,
 					})
@@ -211,7 +212,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	}
 
 	// Create the workload endpoint.
-	wep := apiv3.NewWorkloadEndpoint()
+	wep := libapiv3.NewWorkloadEndpoint()
 	wep.ObjectMeta = metav1.ObjectMeta{
 		Name:              wepName,
 		Namespace:         pod.Namespace,
@@ -220,7 +221,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Labels:            labels,
 		GenerateName:      pod.GenerateName,
 	}
-	wep.Spec = apiv3.WorkloadEndpointSpec{
+	wep.Spec = libapiv3.WorkloadEndpointSpec{
 		Orchestrator:       "k8s",
 		Node:               pod.Spec.NodeName,
 		Pod:                pod.Name,
@@ -238,7 +239,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Key: model.ResourceKey{
 			Name:      wepName,
 			Namespace: pod.Namespace,
-			Kind:      apiv3.KindWorkloadEndpoint,
+			Kind:      libapiv3.KindWorkloadEndpoint,
 		},
 		Value:    wep,
 		Revision: pod.ResourceVersion,

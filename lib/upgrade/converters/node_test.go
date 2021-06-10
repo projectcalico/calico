@@ -20,12 +20,12 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 var asn, _ = numorstring.ASNumberFromString("1")
@@ -64,12 +64,12 @@ var nodeTable = []TableEntry{
 				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
-		apiv3.Node{
+		libapiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
-			Spec: apiv3.NodeSpec{
-				BGP: &apiv3.NodeBGPSpec{
+			Spec: libapiv3.NodeSpec{
+				BGP: &libapiv3.NodeBGPSpec{
 					ASNumber:    &asn,
 					IPv4Address: ipv4String,
 					IPv6Address: ipv6String,
@@ -102,12 +102,12 @@ var nodeTable = []TableEntry{
 				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
-		apiv3.Node{
+		libapiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "mynode.here",
 			},
-			Spec: apiv3.NodeSpec{
-				BGP: &apiv3.NodeBGPSpec{
+			Spec: libapiv3.NodeSpec{
+				BGP: &libapiv3.NodeBGPSpec{
 					ASNumber:    &asn,
 					IPv4Address: ipv4String,
 					IPv6Address: ipv6String,
@@ -135,12 +135,12 @@ var nodeTable = []TableEntry{
 				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
-		apiv3.Node{
+		libapiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
-			Spec: apiv3.NodeSpec{
-				BGP: &apiv3.NodeBGPSpec{
+			Spec: libapiv3.NodeSpec{
+				BGP: &libapiv3.NodeBGPSpec{
 					IPv6Address: ipv6String,
 				},
 			},
@@ -166,12 +166,12 @@ var nodeTable = []TableEntry{
 				BGPIPv4Net:  ipv4IPNetMask,
 			},
 		},
-		apiv3.Node{
+		libapiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
-			Spec: apiv3.NodeSpec{
-				BGP: &apiv3.NodeBGPSpec{
+			Spec: libapiv3.NodeSpec{
+				BGP: &libapiv3.NodeBGPSpec{
 					IPv4Address: ipv4String,
 				},
 			},
@@ -205,15 +205,15 @@ var nodeTable = []TableEntry{
 				},
 			},
 		},
-		apiv3.Node{
+		libapiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
-			Spec: apiv3.NodeSpec{
-				BGP: &apiv3.NodeBGPSpec{
+			Spec: libapiv3.NodeSpec{
+				BGP: &libapiv3.NodeBGPSpec{
 					IPv4Address: ipv4String,
 				},
-				OrchRefs: []apiv3.OrchRef{
+				OrchRefs: []libapiv3.OrchRef{
 					{Orchestrator: "orch1"},
 					{Orchestrator: "orch2", NodeName: "orch2NodeName"},
 				},
@@ -223,7 +223,7 @@ var nodeTable = []TableEntry{
 }
 
 var _ = DescribeTable("v1->v3 Node conversion tests",
-	func(v1API *apiv1.Node, v1KVP *model.KVPair, v3API apiv3.Node) {
+	func(v1API *apiv1.Node, v1KVP *model.KVPair, v3API libapiv3.Node) {
 		p := Node{}
 		// Check v1API->v1KVP.
 		convertedKvp, err := p.APIV1ToBackendV1(v1API)
@@ -235,8 +235,8 @@ var _ = DescribeTable("v1->v3 Node conversion tests",
 		// Check v1KVP->v3API.
 		convertedv3, err := p.BackendV1ToAPIV3(v1KVP)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(convertedv3.(*apiv3.Node).ObjectMeta).To(Equal(v3API.ObjectMeta))
-		Expect(convertedv3.(*apiv3.Node).Spec).To(Equal(v3API.Spec))
+		Expect(convertedv3.(*libapiv3.Node).ObjectMeta).To(Equal(v3API.ObjectMeta))
+		Expect(convertedv3.(*libapiv3.Node).Spec).To(Equal(v3API.Spec))
 	},
 
 	nodeTable...,
@@ -313,12 +313,12 @@ var nodeKVtoV3Table = []TableEntry{
 				BGPIPv6Addr: &ipv6IP,
 			},
 		},
-		apiv3.Node{
+		libapiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
-			Spec: apiv3.NodeSpec{
-				BGP: &apiv3.NodeBGPSpec{
+			Spec: libapiv3.NodeSpec{
+				BGP: &libapiv3.NodeBGPSpec{
 					ASNumber:    &asn,
 					IPv4Address: "192.168.1.1/32",
 					// Note this is /128 instead of /64
@@ -336,23 +336,23 @@ var nodeKVtoV3Table = []TableEntry{
 				BGPASNumber: &asn,
 			},
 		},
-		apiv3.Node{
+		libapiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
-			Spec: apiv3.NodeSpec{},
+			Spec: libapiv3.NodeSpec{},
 		},
 	),
 }
 
 var _ = DescribeTable("KVP v1->v3 Node conversion tests",
-	func(v1KVP *model.KVPair, v3API apiv3.Node) {
+	func(v1KVP *model.KVPair, v3API libapiv3.Node) {
 		p := Node{}
 		// Check v1KVP->v3API.
 		convertedv3, err := p.BackendV1ToAPIV3(v1KVP)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(convertedv3.(*apiv3.Node).ObjectMeta).To(Equal(v3API.ObjectMeta))
-		Expect(convertedv3.(*apiv3.Node).Spec).To(Equal(v3API.Spec))
+		Expect(convertedv3.(*libapiv3.Node).ObjectMeta).To(Equal(v3API.ObjectMeta))
+		Expect(convertedv3.(*libapiv3.Node).Spec).To(Equal(v3API.Spec))
 	},
 
 	nodeKVtoV3Table...,
