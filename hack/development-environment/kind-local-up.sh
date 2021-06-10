@@ -13,25 +13,21 @@ nodes:
 EOF
 
 # Where all your source lives...
-ROOT_CALICO_REPOS_DIR="${ROOT_CALICO_REPOS_DIR:-/home/$USER/calico_all}"
+
 function check() {
-	if [[ ! -v ROOT_CALICO_REPOS_DIR ]] ;  then
+	if [[ "$ROOT_CALICO_REPOS_DIR" == "" ]] ;  then
 	    echo "Need to specify ROOT_CALICO_REPOS_DIR = "
 	fi
-	if [[ ! -v BUILD_CALICO ]] ; then 
+	if [[ "$BUILD_CALICO" == "" ]] ; then 
             BUILD_CALICO="true"
 	fi
 }
 
-if [[ -v ROOT_CALICO_REPOS_DIR ]] ;  then
-    echo "found input var for ROOT_CALICO_REPOS_DIR =  $ROOT_CALICO_REPOS_DIR"
-else
-    ROOT_CALICO_REPOS_DIR?="~/calico_all/"
-fi
 echo "calico source ---> $ROOT_CALICO_REPOS_DIR"
 
 echo "$ROOT_CALICO_REPOS_DIR is the input dir for calico sources"
-if [ ! -d $ROOT_CALICO_REPOS_DIR/node ]; then
+set +x
+if [ ! -d ${ROOT_CALICO_REPOS_DIR}/node ]; then
     ls -altrh $ROOT_CALICO_REPOS_DIR
     echo "clone down all the calico repos before starting/"
     exit 1
