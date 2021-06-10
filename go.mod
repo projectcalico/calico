@@ -17,7 +17,7 @@ require (
 	k8s.io/api v0.21.0-rc.0
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
-	k8s.io/code-generator v0.0.0-00010101000000-000000000000 // indirect
+	k8s.io/code-generator v0.21.0-rc.0
 	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
 )
 
