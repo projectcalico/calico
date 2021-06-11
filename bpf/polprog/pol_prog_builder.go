@@ -100,7 +100,6 @@ var (
 	stateOffPostNATDstPort int16 = stateEventHdrSize + 30
 	stateOffIPProto        int16 = stateEventHdrSize + 32
 	stateOffFlags          int16 = stateEventHdrSize + 33
-	stateOffIPSize         int16 = stateEventHdrSize + 34
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
