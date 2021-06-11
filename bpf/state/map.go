@@ -42,6 +42,7 @@ const (
 //    __u16 post_nat_dport;30
 //    __u8 ip_proto;31
 //    __u8 pad;
+//    __be16 ip_size;
 //    struct calico_ct_result ct_result;
 //    struct calico_nat_dest nat_dest;
 //    __u64 prog_start_time;
@@ -59,6 +60,7 @@ type State struct {
 	PostNATDstPort      uint16
 	IPProto             uint8
 	Flags               uint8
+	IPSize              uint16
 	ConntrackRCFlags    uint32
 	ConntrackNATIPPort  uint64
 	ConntrackTunIP      uint32

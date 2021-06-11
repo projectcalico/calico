@@ -77,6 +77,8 @@ struct cali_tc_state {
 	__u8 ip_proto;
 	/* Flags from enum cali_state_flags. */
 	__u8 flags;
+	/* Packet size filled from iphdr->tot_len in tc_state_fill_from_iphdr(). */
+	__be16 ip_size;
 
 	/* Result of the conntrack lookup. */
 	struct calico_ct_result ct_result;

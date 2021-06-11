@@ -48,6 +48,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_state *state
 	state->ip_src = ip->saddr;
 	state->ip_dst = ip->daddr;
 	state->ip_proto = ip->protocol;
+	state->ip_size = ip->tot_len;
 }
 
 /* Add new values to the end as these are program indices */
