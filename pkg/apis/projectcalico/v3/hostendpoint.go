@@ -89,3 +89,14 @@ type EndpointPort struct {
 	Protocol numorstring.Protocol `json:"protocol"`
 	Port     uint16               `json:"port" validate:"gt=0"`
 }
+
+// NewHostEndpoint creates a new (zeroed) HostEndpoint struct with the TypeMetadata initialised to the current
+// version.
+func NewHostEndpoint() *HostEndpoint {
+	return &HostEndpoint{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindHostEndpoint,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

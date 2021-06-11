@@ -120,3 +120,14 @@ type IPIPConfiguration struct {
 	// originating node.  The default value (if not specified) is "always".
 	Mode EncapMode `json:"mode,omitempty" validate:"ipIpMode"`
 }
+
+// NewIPPool creates a new (zeroed) IPPool struct with the TypeMetadata initialised to the current
+// version.
+func NewIPPool() *IPPool {
+	return &IPPool{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindIPPool,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

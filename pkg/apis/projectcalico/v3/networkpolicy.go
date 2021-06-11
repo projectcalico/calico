@@ -101,3 +101,14 @@ type NetworkPolicySpec struct {
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
 }
+
+// NewNetworkPolicy creates a new (zeroed) NetworkPolicy struct with the TypeMetadata initialised to the current
+// version.
+func NewNetworkPolicy() *NetworkPolicy {
+	return &NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindNetworkPolicy,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

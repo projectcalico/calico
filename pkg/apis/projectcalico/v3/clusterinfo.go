@@ -59,3 +59,14 @@ type ClusterInformationSpec struct {
 	// Variant declares which variant of Calico should be active.
 	Variant string `json:"variant,omitempty"`
 }
+
+// New ClusterInformation creates a new (zeroed) ClusterInformation struct with the TypeMetadata
+// initialized to the current version.
+func NewClusterInformation() *ClusterInformation {
+	return &ClusterInformation{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindClusterInformation,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

@@ -116,3 +116,14 @@ type GlobalNetworkPolicySpec struct {
 	// NamespaceSelector is an optional field for an expression used to select a pod based on namespaces.
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"selector"`
 }
+
+// NewGlobalNetworkPolicy creates a new (zeroed) GlobalNetworkPolicy struct with the TypeMetadata initialised to the current
+// version.
+func NewGlobalNetworkPolicy() *GlobalNetworkPolicy {
+	return &GlobalNetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindGlobalNetworkPolicy,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}
