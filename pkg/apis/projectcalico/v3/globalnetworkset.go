@@ -50,3 +50,14 @@ type GlobalNetworkSetSpec struct {
 	// The list of IP networks that belong to this set.
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
 }
+
+// NewGlobalNetworkSet creates a new (zeroed) NetworkSet struct with the TypeMetadata initialised to the current
+// version.
+func NewGlobalNetworkSet() *GlobalNetworkSet {
+	return &GlobalNetworkSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindGlobalNetworkSet,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

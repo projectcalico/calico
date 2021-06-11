@@ -396,3 +396,14 @@ type ProtoPort struct {
 	// +optional
 	Net string `json:"net"`
 }
+
+// New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata
+// initialized to the current version.
+func NewFelixConfiguration() *FelixConfiguration {
+	return &FelixConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindFelixConfiguration,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

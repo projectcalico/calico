@@ -119,3 +119,14 @@ type PrefixAdvertisement struct {
 	// Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.
 	Communities []string `json:"communities,omitempty" validate:"required"`
 }
+
+// New BGPConfiguration creates a new (zeroed) BGPConfiguration struct with the TypeMetadata
+// initialized to the current version.
+func NewBGPConfiguration() *BGPConfiguration {
+	return &BGPConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindBGPConfiguration,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

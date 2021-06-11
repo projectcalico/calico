@@ -58,3 +58,14 @@ type ProfileSpec struct {
 	// labels inherited from the profile, the endpoint label values take precedence.
 	LabelsToApply map[string]string `json:"labelsToApply,omitempty" validate:"omitempty,labels"`
 }
+
+// NewProfile creates a new (zeroed) Profile struct with the TypeMetadata initialised to the current
+// version.
+func NewProfile() *Profile {
+	return &Profile{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindProfile,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

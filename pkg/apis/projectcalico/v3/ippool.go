@@ -73,7 +73,7 @@ type IPPoolSpec struct {
 
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
-	IPIP IPIPConfiguration `json:"ipip,omitempty" validate:"omitempty,mustBeNil"`
+	IPIP *IPIPConfiguration `json:"ipip,omitempty" validate:"omitempty,mustBeNil"`
 
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
@@ -119,4 +119,15 @@ type IPIPConfiguration struct {
 	// tunneling when the destination node is on a different subnet to the
 	// originating node.  The default value (if not specified) is "always".
 	Mode EncapMode `json:"mode,omitempty" validate:"ipIpMode"`
+}
+
+// NewIPPool creates a new (zeroed) IPPool struct with the TypeMetadata initialised to the current
+// version.
+func NewIPPool() *IPPool {
+	return &IPPool{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindIPPool,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
 }

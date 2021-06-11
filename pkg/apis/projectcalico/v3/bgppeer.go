@@ -107,3 +107,14 @@ type BGPPassword struct {
 	// Selects a key of a secret in the node pod's namespace.
 	SecretKeyRef *k8sv1.SecretKeySelector `json:"secretKeyRef,omitempty"`
 }
+
+// NewBGPPeer creates a new (zeroed) BGPPeer struct with the TypeMetadata initialised to the current
+// version.
+func NewBGPPeer() *BGPPeer {
+	return &BGPPeer{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindBGPPeer,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}

@@ -140,3 +140,14 @@ type KubeControllersConfigurationStatus struct {
 	// the RunningConfig.
 	EnvironmentVars map[string]string `json:"environmentVars,omitempty"`
 }
+
+// New KubeControllersConfiguration creates a new (zeroed) KubeControllersConfiguration struct with
+// the TypeMetadata initialized to the current version.
+func NewKubeControllersConfiguration() *KubeControllersConfiguration {
+	return &KubeControllersConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       KindKubeControllersConfiguration,
+			APIVersion: GroupVersionCurrent,
+		},
+	}
+}
