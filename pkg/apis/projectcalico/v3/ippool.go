@@ -73,7 +73,7 @@ type IPPoolSpec struct {
 
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
-	IPIP IPIPConfiguration `json:"ipip,omitempty" validate:"omitempty,mustBeNil"`
+	IPIP *IPIPConfiguration `json:"ipip,omitempty" validate:"omitempty,mustBeNil"`
 
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
