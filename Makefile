@@ -152,7 +152,7 @@ $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
 		BUILD_IMAGE=$(REGISTRY)/$* \
 		PUSH_IMAGES=$(REGISTRY)/$* \
 		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG \
+		IMAGETAG=$$TAG 
 
 ## Push locally built images.
 dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
