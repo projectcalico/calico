@@ -24,6 +24,7 @@ Options:
 Example:
 
 ```
+git clone https://github.com/projectcalico/confd.git
 git clone https://github.com/projectcalico/calico.git
 git clone https://github.com/projectcalico/app-policy
 git clone https://github.com/projectcalico/libcalico-go.git 

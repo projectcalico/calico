@@ -142,12 +142,17 @@ LOCAL_BUILD=true
 .PHONY: dev-image dev-test dev-clean
 ## Build a local version of Calico based on the checked out codebase.
 dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
+
+# Dynamically declare new make targets for all calico subprojects...
 $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
-	@cd $< && export TAG=$$($(TAG_COMMAND)); make image tag-images \
+	echo "TARGET:"
+	echo $< 
+	@cd $< && export TAG=$$($(TAG_COMMAND)); make image retag-build-images-with-registries \
+		ARCHES=amd64 \
 		BUILD_IMAGE=$(REGISTRY)/$* \
 		PUSH_IMAGES=$(REGISTRY)/$* \
 		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG
+		IMAGETAG=$$TAG 
 
 ## Push locally built images.
 dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
