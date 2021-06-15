@@ -2062,6 +2062,11 @@ func (in *NodeControllerConfig) DeepCopyInto(out *NodeControllerConfig) {
 		*out = new(AutoHostEndpointConfig)
 		**out = **in
 	}
+	if in.LeakGracePeriod != nil {
+		in, out := &in.LeakGracePeriod, &out.LeakGracePeriod
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	return
 }
 

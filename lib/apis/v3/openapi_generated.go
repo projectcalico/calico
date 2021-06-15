@@ -5534,6 +5534,12 @@ func schema_libcalico_go_lib_apis_v3_NodeControllerConfig(ref common.ReferenceCa
 							Ref:         ref("github.com/projectcalico/libcalico-go/lib/apis/v3.AutoHostEndpointConfig"),
 						},
 					},
+					"leakGracePeriod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LeakGracePeriod is the period used by the controller to determine if an IP address has been leaked. Set to 0 to disable IP garbage collection. [Default: 15m]",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},

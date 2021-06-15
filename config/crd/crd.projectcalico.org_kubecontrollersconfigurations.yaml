@@ -59,6 +59,11 @@ spec:
                               host endpoints for every node. [Default: Disabled]'
                             type: string
                         type: object
+                      leakGracePeriod:
+                        description: 'LeakGracePeriod is the period used by the controller
+                          to determine if an IP address has been leaked. Set to 0
+                          to disable IP garbage collection. [Default: 15m]'
+                        type: string
                       reconcilerPeriod:
                         description: 'ReconcilerPeriod is the period to perform reconciliation
                           with the Calico datastore. [Default: 5m]'
@@ -159,6 +164,12 @@ spec:
                                   of host endpoints for every node. [Default: Disabled]'
                                 type: string
                             type: object
+                          leakGracePeriod:
+                            description: 'LeakGracePeriod is the period used by the
+                              controller to determine if an IP address has been leaked.
+                              Set to 0 to disable IP garbage collection. [Default:
+                              15m]'
+                            type: string
                           reconcilerPeriod:
                             description: 'ReconcilerPeriod is the period to perform
                               reconciliation with the Calico datastore. [Default:

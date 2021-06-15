@@ -84,6 +84,11 @@ type NodeControllerConfig struct {
 
 	// HostEndpoint controls syncing nodes to host endpoints. Disabled by default, set to nil to disable.
 	HostEndpoint *AutoHostEndpointConfig `json:"hostEndpoint,omitempty"`
+
+	// LeakGracePeriod is the period used by the controller to determine if an IP address has been leaked.
+	// Set to 0 to disable IP garbage collection. [Default: 15m]
+	// +optional
+	LeakGracePeriod *metav1.Duration `json:"leakGracePeriod,omitempty"`
 }
 
 type AutoHostEndpointConfig struct {
