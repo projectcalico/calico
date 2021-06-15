@@ -33,6 +33,8 @@ var _ = Describe("Constructor test", func() {
 	var configParams *config.Config
 	var dpConfig intdataplane.Config
 	var healthAggregator *health.HealthAggregator
+	var kubernetesProvider = config.ProviderNone
+	var routeSource = "CalicoIPAM"
 
 	JustBeforeEach(func() {
 		configParams = config.New()
@@ -84,6 +86,9 @@ var _ = Describe("Constructor test", func() {
 			LookPathOverride: func(file string) (string, error) {
 				return file, nil
 			},
+
+			KubernetesProvider: kubernetesProvider,
+			RouteSource:        routeSource,
 		}
 	})
 
@@ -101,6 +106,32 @@ var _ = Describe("Constructor test", func() {
 		It("should be constructable", func() {
 			var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
 			Expect(dp).ToNot(BeNil())
+		})
+	})
+
+	Context("with Wireguard on AKS", func() {
+
+		BeforeEach(func() {
+			kubernetesProvider = config.ProviderAKS
+			routeSource = "WorkloadIPs"
+		})
+
+		It("should set the correct MTU", func() {
+			intdataplane.ConfigureDefaultMTUs(1500, &dpConfig)
+			Expect(dpConfig.Wireguard.MTU).To(Equal(1340))
+		})
+	})
+
+	Context("with Wireguard on non-managed provider", func() {
+
+		BeforeEach(func() {
+			kubernetesProvider = config.ProviderNone
+			routeSource = "CalicoIPAM"
+		})
+
+		It("should set the correct MTU", func() {
+			intdataplane.ConfigureDefaultMTUs(1500, &dpConfig)
+			Expect(dpConfig.Wireguard.MTU).To(Equal(1440))
 		})
 	})
 })

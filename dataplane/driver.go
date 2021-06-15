@@ -353,6 +353,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			FeatureDetectOverrides: configParams.FeatureDetectOverride,
 
 			RouteSource: configParams.RouteSource,
+
+			KubernetesProvider: configParams.KubernetesProvider(),
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {
