@@ -2602,7 +2602,6 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					"ipip": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Deprecated: this field is only used for APIv1 backwards compatibility. Setting this field is not allowed, this field is for internal use only.",
-							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration"),
 						},
 					},
@@ -3134,6 +3133,12 @@ func schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref common.ReferenceC
 						SchemaProps: spec.SchemaProps{
 							Description: "HostEndpoint controls syncing nodes to host endpoints. Disabled by default, set to nil to disable.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.AutoHostEndpointConfig"),
+						},
+					},
+					"leakGracePeriod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LeakGracePeriod is the period used by the controller to determine if an IP address has been leaked. Set to 0 to disable IP garbage collection. [Default: 15m]",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 				},
