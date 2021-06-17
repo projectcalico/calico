@@ -156,7 +156,7 @@ spec:
   - action: Allow
     destination:
       nets:
-      - 127.0.0.1/32
+      - 127.0.0.0/8
   # This rule is required in multi-master clusters where etcd pods are colocated with the masters.
   # Allow the etcd pods on the masters to communicate with each other. 2380 is the etcd peer port.
   # This rule also allows the masters to access the kubelet API on other masters (including itself).
@@ -198,7 +198,7 @@ spec:
   - action: Allow
     destination:
       nets:
-      - 127.0.0.1/32
+      - 127.0.0.0/8
   # Allow only the masters access to the nodes kubelet API.
   - action: Allow
     protocol: TCP
