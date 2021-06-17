@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,8 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -119,8 +120,8 @@ var (
 	}
 	v3Node = api.Update{
 		KVPair: model.KVPair{
-			Key: model.ResourceKey{Name: "node1", Kind: v3.KindNode},
-			Value: &v3.Node{
+			Key: model.ResourceKey{Name: "node1", Kind: libapiv3.KindNode},
+			Value: &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					ResourceVersion: "1237",
 				},
@@ -131,8 +132,8 @@ var (
 	}
 	v3BGPPeer = api.Update{
 		KVPair: model.KVPair{
-			Key: model.ResourceKey{Name: "peer1", Kind: v3.KindBGPPeer},
-			Value: &v3.BGPPeer{
+			Key: model.ResourceKey{Name: "peer1", Kind: apiv3.KindBGPPeer},
+			Value: &apiv3.BGPPeer{
 				ObjectMeta: metav1.ObjectMeta{
 					ResourceVersion: "1238",
 				},
