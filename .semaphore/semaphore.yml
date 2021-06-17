@@ -2,7 +2,7 @@ version: v1.0
 name: Kube Controllers
 
 execution_time_limit:
-  minutes: 45
+  hours: 4
 
 agent:
   machine:
@@ -30,6 +30,8 @@ global_job_config:
 
 blocks:
   - name: 'Build'
+    execution_time_limit:
+      minutes: 20
     dependencies: []
     task:
       jobs:
@@ -41,6 +43,8 @@ blocks:
             - 'cache store go-mod-cache-${SEMAPHORE_GIT_SHA} ${HOME}/go/pkg/mod/cache'
 
   - name: 'Static Checks'
+    execution_time_limit:
+      minutes: 10
     dependencies: ["Build"]
     task:
       jobs:
@@ -49,6 +53,8 @@ blocks:
             - make static-checks
 
   - name: 'UT'
+    execution_time_limit:
+      minutes: 45
     dependencies: ["Build"]
     task:
       jobs:
@@ -57,6 +63,8 @@ blocks:
             - make ut
 
   - name: 'FV'
+    execution_time_limit:
+      minutes: 45
     dependencies: ["Build"]
     task:
       jobs:
@@ -65,6 +73,8 @@ blocks:
             - make fv
 
   - name: 'Push Images (non-PR builds only)'
+    execution_time_limit:
+      minutes: 15
     dependencies: ["Static Checks", "UT", "FV"]
     skip:
       # Only run on branches, not PRs.
