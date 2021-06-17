@@ -2,7 +2,7 @@ version: v1.0
 name: CNIPlugin
 
 execution_time_limit:
-  hours: 2
+  hours: 4
 
 agent:
   machine:
@@ -47,6 +47,8 @@ global_job_config:
 
 blocks:
   - name: Unit Tests
+    execution_time_limit:
+      minutes: 60
     dependencies: []
     task:
       prologue:
@@ -64,6 +66,8 @@ blocks:
             - make test-install-cni
 
   - name: Static Checks
+    execution_time_limit:
+      minutes: 15
     dependencies: []
     task:
       prologue:
@@ -78,6 +82,8 @@ blocks:
             - make static-checks
 
   - name: Windows FV - docker
+    execution_time_limit:
+      minutes: 60
     dependencies: []
     task:
       secrets:
@@ -122,6 +128,8 @@ blocks:
             - ./.semaphore/run-win-fv.sh
 
   - name: Windows FV - containerd
+    execution_time_limit:
+      minutes: 60
     dependencies: []
     task:
       secrets:
@@ -170,6 +178,8 @@ blocks:
             - ./.semaphore/run-win-fv.sh
 
   - name: 'Push Images (non-PR builds only)'
+    execution_time_limit:
+      minutes: 15
     dependencies: ["Unit Tests", "Static Checks", "Windows FV - docker", "Windows FV - containerd"]
     skip:
       # Only run on branches, not PRs.
@@ -198,6 +208,8 @@ blocks:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi
 
   - name: Trigger pin updates
+    execution_time_limit:
+      minutes: 5
     dependencies: []
     skip:
       when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
