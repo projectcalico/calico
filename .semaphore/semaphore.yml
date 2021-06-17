@@ -1,7 +1,9 @@
 version: v1.0
 name: libcalico-go
+
 execution_time_limit:
-  hours: 2
+  hours: 4
+
 agent:
   machine:
     type: e1-standard-2
@@ -15,6 +17,8 @@ global_job_config:
 
 blocks:
   - name: Build
+    execution_time_limit:
+      minutes: 120
     dependencies: []
     task:
       jobs:
@@ -24,6 +28,8 @@ blocks:
             - make ci
 
   - name: Trigger pin updates
+    execution_time_limit:
+      minutes: 5
     dependencies: []
     skip:
       when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
