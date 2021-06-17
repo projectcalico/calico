@@ -2,7 +2,7 @@ version: v1.0
 name: App Policy
 
 execution_time_limit:
-  minutes: 30
+  hours: 4
 
 agent:
   machine:
@@ -25,6 +25,8 @@ global_job_config:
 
 blocks:
   - name: 'CI'
+    execution_time_limit:
+      minutes: 30
     dependencies: []
     task:
       jobs:
@@ -36,6 +38,8 @@ blocks:
             - 'cache store go-mod-cache-${SEMAPHORE_GIT_SHA} ${HOME}/go/pkg/mod/cache'
 
   - name: 'Push Images (non-PR builds only)'
+    execution_time_limit:
+      minutes: 15
     dependencies: ["CI"]
     skip:
       # Only run on branches, not PRs.
