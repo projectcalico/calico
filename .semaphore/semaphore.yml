@@ -2,7 +2,7 @@ version: v1.0
 name: Typha
 
 execution_time_limit:
-  hours: 2
+  hours: 4
 
 agent:
   machine:
@@ -27,6 +27,8 @@ global_job_config:
 
 blocks:
   - name: 'Build'
+    execution_time_limit:
+      minutes: 30
     dependencies: []
     task:
       jobs:
@@ -38,6 +40,8 @@ blocks:
             - 'cache store go-mod-cache-${SEMAPHORE_GIT_SHA} ${HOME}/go/pkg/mod/cache'
 
   - name: 'UTs'
+    execution_time_limit:
+      minutes: 120
     dependencies: ["Build"]
     task:
       jobs:
@@ -46,6 +50,8 @@ blocks:
             - make ci EXCEPT=k8sfv-test
 
   - name: 'FVs'
+    execution_time_limit:
+      minutes: 120
     dependencies: ["Build"]
     task:
       jobs:
@@ -56,6 +62,8 @@ blocks:
             - JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=calico/typha:latest TYPHA_VERSION=latest make k8sfv-test
 
   - name: 'Foss Checks'
+    execution_time_limit:
+      minutes: 30
     dependencies: ["Build"]
     task:
       secrets:
@@ -66,6 +74,8 @@ blocks:
             - if [ -z "${PULL_REQUEST_NUMBER}" ]; then make foss-checks; fi
 
   - name: 'Push Images (non-PR builds only)'
+    execution_time_limit:
+      minutes: 15
     dependencies: ["UTs", "FVs", "Foss Checks"]
     skip:
       # Only run on branches, not PRs.
@@ -85,6 +95,8 @@ blocks:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
 
   - name: Trigger pin updates
+    execution_time_limit:
+      minutes: 5
     dependencies: []
     skip:
       when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
