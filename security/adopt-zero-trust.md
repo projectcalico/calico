@@ -118,7 +118,7 @@ The instructions include a “demo” install of Istio for quickly testing out f
 
 Our eventual goal is to write access control policy that authorizes individual expected network flows. We want these flows to be scoped as tightly as practical.  In a {{site.prodname}} Zero Trust Network, the cryptographic identities are Kubernetes Service Accounts. Istio handles crypto-key management for you so that each workload can assert its Service Account identity in a secure manner.
 
-You have some flexibility in how you assign identities for the purpose of your Zero Trust Network policy. The right balance for most people is to use a unique identity for each Kubernetes Service in your application (or Deployment if you have workloads that don’t accept any incoming connections). Assigning identity to entire applications or namespaces is probably too granular, since applications usually consist of multiple services (or dozens of microservices) with different actual access needs.
+You have some flexibility in how you assign identities for the purpose of your Zero Trust Network policy. The right balance for most people is to use a unique identity for each Kubernetes Service in your application (or Deployment if you have workloads that don’t accept any incoming connections). Assigning identity to entire applications or namespaces is probably too coarse, since applications usually consist of multiple services (or dozens of microservices) with different actual access needs.
 
 You should assign unique identities to microservices even if you happen to know that they access the same things. Your policy will be more readable if the identities correspond to logical components of the application. You can grant them the same permissions easily, and if in the future they need different permissions it will be easier to handle.
 
@@ -181,7 +181,7 @@ spec:
   ingress:
   - action: Allow
     source:
-      serviceAccount:
+      serviceAccounts:
         names: ["api", "search"]
       namespaceSelector: app == 'microblog'
     protocol: TCP
@@ -219,7 +219,7 @@ Things to notice in this example:
 
   <pre>
   source:
-    serviceAccount:
+    serviceAccounts:
       names: ["api", "search"]
   </pre> 
   {:.no-select-button} 
@@ -230,7 +230,7 @@ Things to notice in this example:
 
   <pre>
   source:
-    serviceAccount:
+    serviceAccounts:
       names: ["api", "search"]
     namespaceSelector: app == 'microblog'
   </pre>
@@ -266,7 +266,7 @@ spec:
   ingress:
   - action: Allow
     source:
-      serviceAccount:
+      serviceAccounts:
         selector: svc-post == 'access'
       namespaceSelector: app == 'microblog'
     protocol: TCP
