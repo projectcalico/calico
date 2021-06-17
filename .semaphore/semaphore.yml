@@ -2,7 +2,7 @@ version: v1.0
 name: Pod2Daemon
 
 execution_time_limit:
-  hours: 2
+  hours: 4
 
 agent:
   machine:
@@ -19,6 +19,8 @@ global_job_config:
 
 blocks:
   - name: 'CI'
+    execution_time_limit:
+      minutes: 120
     dependencies: []
     task:
       jobs:
@@ -27,6 +29,8 @@ blocks:
             - make ci
 
   - name: 'CD'
+    execution_time_limit:
+      minutes: 15
     dependencies: ["CI"]
     skip:
       # Only run on branches, not PRs.
@@ -48,7 +52,7 @@ blocks:
   - name: Trigger pin updates
     dependencies: []
     skip:
-      when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
+      when: "(branch != 'master')"
     task:
       secrets:
         - name: semaphore-api
