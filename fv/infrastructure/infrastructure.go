@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2019,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,9 @@ package infrastructure
 import (
 	. "github.com/onsi/gomega"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/felix/fv/utils"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
@@ -62,9 +63,9 @@ type DatastoreInfra interface {
 	AddNode(felix *Felix, idx int, needBGP bool)
 	// AddWorkload will take the appropriate steps to create a workload in the
 	// datastore with the passed in wep values. If this succeeds then the
-	// *api.WorkloadEndpoint will be returned, otherwise an error will be
+	// *libapi.WorkloadEndpoint will be returned, otherwise an error will be
 	// returned.
-	AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error)
+	AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error)
 	// RemoveWorkload reverses the effect of AddWorkload.
 	RemoveWorkload(ns string, name string) error
 	// AddDefaultAllow will ensure that the datastore is configured so that

@@ -30,7 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	log "github.com/sirupsen/logrus"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
