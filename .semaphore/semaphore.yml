@@ -4,8 +4,10 @@ agent:
   machine:
     type: e1-standard-2
     os_image: ubuntu1804
+
 execution_time_limit:
-  minutes: 120
+  hours: 4
+
 global_job_config:
   secrets:
   - name: docker-hub
@@ -27,6 +29,8 @@ global_job_config:
 
 blocks:
   - name: "General Tests"
+    execution_time_limit:
+      minutes: 120
     dependencies: []
     task:
       jobs:
@@ -37,6 +41,8 @@ blocks:
             - make fv
 
   - name: "System Tests"
+    execution_time_limit:
+      minutes: 120
     dependencies: []
     task:
       prologue:
@@ -64,6 +70,8 @@ blocks:
             - ST_TO_RUN=tests/st/utils/ make st
 
   - name: "Specialized Tests"
+    execution_time_limit:
+      minutes: 120
     dependencies: []
     task:
       agent:
@@ -78,6 +86,8 @@ blocks:
   # If tests passed, then build and push images.
   # We'll only do this on non-PR builds, where we have credentials to do so.
   - name: "Push images (non-PR builds only)"
+    execution_time_limit:
+      minutes: 15
     skip:
       # Only run on branches, not PRs.
       when: "branch !~ '.+'"
@@ -95,6 +105,8 @@ blocks:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
 
   - name: "build windows archive"
+    execution_time_limit:
+      minutes: 120
     dependencies: ["General Tests", "System Tests", "Specialized Tests"]
     task:
       jobs:
