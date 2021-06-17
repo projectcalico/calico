@@ -1,5 +1,9 @@
 version: v1.0
 name: Trigger Pin Updates
+
+execution_time_limit:
+  minutes: 120
+
 agent:
   machine:
     type: e1-standard-2
@@ -25,11 +29,16 @@ global_job_config:
 
 blocks:
   - name: 'Auto pin update'
+    execution_time_limit:
+      minutes: 10
     task:
       secrets:
         - name: marvin-github-token
       jobs:
         - name: 'Auto pin update'
+          priority:
+            - value: 40
+              when: true
           commands:
             - CONFIRM=true make git-config
             - CONFIRM=true GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN} make trigger-auto-pin-update-process

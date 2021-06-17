@@ -2,7 +2,7 @@ version: v1.0
 name: Confd
 
 execution_time_limit:
-  hours: 2
+  hours: 4
 
 agent:
   machine:
@@ -19,6 +19,8 @@ global_job_config:
 
 blocks:
   - name: 'CI'
+    execution_time_limit:
+      minutes: 60
     dependencies: []
     task:
       jobs:
@@ -27,6 +29,8 @@ blocks:
             - make ci
 
   - name: Trigger pin updates
+    execution_time_limit:
+      minutes: 5
     dependencies: []
     skip:
       when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
