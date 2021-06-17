@@ -1,14 +1,29 @@
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package allocateip
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // makeNode creates an api.Node with some BGPSpec info populated.
-func makeNode(ipv4 string, ipv6 string) *api.Node {
+func makeNode(ipv4 string, ipv6 string) *libapi.Node {
 	ip4, ip4net, _ := net.ParseCIDR(ipv4)
 	ip4net.IP = ip4.IP
 
@@ -22,13 +37,13 @@ func makeNode(ipv4 string, ipv6 string) *api.Node {
 		ip6Addr = ip6net.String()
 	}
 
-	n := &api.Node{
-		Spec: api.NodeSpec{
-			BGP: &api.NodeBGPSpec{
+	n := &libapi.Node{
+		Spec: libapi.NodeSpec{
+			BGP: &libapi.NodeBGPSpec{
 				IPv4Address: ip4net.String(),
 				IPv6Address: ip6Addr,
 			},
-			Wireguard: &api.NodeWireguardSpec{},
+			Wireguard: &libapi.NodeWireguardSpec{},
 		},
 	}
 	return n

@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -67,14 +68,14 @@ func allocateIPDescribe(description string, tunnelType []string, body func(tunne
 	return true
 }
 
-func setTunnelAddressForNode(tunnelType string, n *api.Node, addr string) {
+func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
 	if tunnelType == ipam.AttributeTypeIPIP {
 		n.Spec.BGP.IPv4IPIPTunnelAddr = addr
 	} else if tunnelType == ipam.AttributeTypeVXLAN {
 		n.Spec.IPv4VXLANTunnelAddr = addr
 	} else if tunnelType == ipam.AttributeTypeWireguard {
 		if addr != "" {
-			n.Spec.Wireguard = &api.NodeWireguardSpec{
+			n.Spec.Wireguard = &libapi.NodeWireguardSpec{
 				InterfaceIPv4Address: addr,
 			}
 		} else {
@@ -798,7 +799,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("IPIP tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := api.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -831,7 +832,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("VXLAN tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := api.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -861,7 +862,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 		It("should match ip-pool-1 but not ip-pool-2 for VXLANMode CrossSubnet", func() {
 			// Mock out the node and ip pools
-			n := api.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
@@ -894,9 +895,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 	Context("Wireguard tests", func() {
 		It("node has public key - should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
-			n := api.Node{
+			n := libapi.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}},
-				Status:     api.NodeStatus{WireguardPublicKey: "abcde"},
+				Status:     libapi.NodeStatus{WireguardPublicKey: "abcde"},
 			}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
@@ -925,7 +926,7 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 		})
 		It("node has no public key - should match no pools", func() {
 			// Mock out the node and ip pools
-			n := api.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
 			pl := api.IPPoolList{
 				Items: []api.IPPool{
 					{
