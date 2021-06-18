@@ -19,18 +19,16 @@ global_job_config:
 
 blocks:
   - name: 'CI'
-    execution_time_limit:
-      minutes: 120
     dependencies: []
     task:
       jobs:
         - name: Run CI
+          execution_time_limit:
+            minutes: 120
           commands:
             - make ci
 
   - name: 'CD'
-    execution_time_limit:
-      minutes: 15
     dependencies: ["CI"]
     skip:
       # Only run on branches, not PRs.
@@ -45,6 +43,8 @@ blocks:
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       jobs:
         - name: Run CD
+          execution_time_limit:
+            minutes: 15
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi
@@ -58,6 +58,8 @@ blocks:
         - name: semaphore-api
       jobs:
         - name: Trigger pin updates
+          execution_time_limit:
+            minutes: 5
           commands:
             - checkout
             - make semaphore-run-auto-pin-update-workflows
