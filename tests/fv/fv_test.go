@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -462,20 +463,52 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Expect(w).To(BeNil())
 
 			// Check that the wep's IP was released
-			ips, _ := calicoClient.IPAM().IPsByHandle(context.Background(), handle)
-			Expect(ips).Should(BeNil())
+			Eventually(func() error {
+				ips, err := calicoClient.IPAM().IPsByHandle(context.Background(), handle)
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok && err != nil {
+					return err
+				}
+				if len(ips) != 0 {
+					return fmt.Errorf("IP not GC'd: %s", ips)
+				}
+				return nil
+			}, 5*time.Second).ShouldNot(HaveOccurred())
 
 			// Check that the orphaned IP was released
-			ips, _ = calicoClient.IPAM().IPsByHandle(context.Background(), handle2)
-			Expect(ips).Should(BeNil())
+			Eventually(func() error {
+				ips, err := calicoClient.IPAM().IPsByHandle(context.Background(), handle2)
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok && err != nil {
+					return err
+				}
+				if len(ips) != 0 {
+					return fmt.Errorf("IP not GC'd: %s", ips)
+				}
+				return nil
+			}, 5*time.Second).ShouldNot(HaveOccurred())
 
 			// Check that the IP in the orphaned block was released.
-			ips, _ = calicoClient.IPAM().IPsByHandle(context.Background(), handle3)
-			Expect(ips).Should(BeNil())
+			Eventually(func() error {
+				ips, err := calicoClient.IPAM().IPsByHandle(context.Background(), handle3)
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok && err != nil {
+					return err
+				}
+				if len(ips) != 0 {
+					return fmt.Errorf("IP not GC'd: %s", ips)
+				}
+				return nil
+			}, 5*time.Second).ShouldNot(HaveOccurred())
 
 			// Check that the borrowed address was released.
-			ips, _ = calicoClient.IPAM().IPsByHandle(context.Background(), handle4)
-			Expect(ips).Should(BeNil())
+			Eventually(func() error {
+				ips, err := calicoClient.IPAM().IPsByHandle(context.Background(), handle4)
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok && err != nil {
+					return err
+				}
+				if len(ips) != 0 {
+					return fmt.Errorf("IP not GC'd: %s", ips)
+				}
+				return nil
+			}, 5*time.Second).ShouldNot(HaveOccurred())
 
 			// Check that the host affinity was released.
 			be := testutils.GetBackendClient(etcd.IP)

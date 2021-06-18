@@ -230,9 +230,9 @@ var _ = Describe("KubeControllersConfiguration tests", func() {
 				return kcc.Status.EnvironmentVars
 			}, time.Second*10, time.Millisecond*500).Should(Equal(map[string]string{"ENABLED_CONTROLLERS": "node"}))
 
-			// set node & policy controller to enabled on API
-			kcc.Spec.Controllers.Node = &v3.NodeControllerConfig{}
+			// Enable the policy controller, which isn't specified in the ENABLED_CONTROLLERS env.
 			kcc.Spec.Controllers.Policy = &v3.PolicyControllerConfig{}
+
 			// Also delete the status so we can see it is reset
 			kcc.Status = v3.KubeControllersConfigurationStatus{}
 			var err error
@@ -243,7 +243,7 @@ var _ = Describe("KubeControllersConfiguration tests", func() {
 			// the controller should not restart
 			Consistently(uut.Stopped, time.Second*10, time.Millisecond*500).Should(BeFalse())
 
-			// Should have recreated status
+			// Should have recreated status with only the node controller enabled.
 			kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kcc.Status.EnvironmentVars).To(Equal(map[string]string{"ENABLED_CONTROLLERS": "node"}))

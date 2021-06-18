@@ -52,6 +52,7 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		kconfigfile       *os.File
 	)
 
 	BeforeEach(func() {
@@ -62,7 +63,8 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
+		var err error
+		kconfigfile, err = ioutil.TempFile("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)

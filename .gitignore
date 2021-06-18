@@ -20,3 +20,5 @@ st-kubeconfig.yaml
 Makefile.common*
 tests/crds.yaml
 tests/crds
+tests/fv/data-races.log
+pkg/report/

@@ -33,7 +33,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -56,7 +55,7 @@ type podController struct {
 }
 
 // NewPodController returns a controller which manages Pod objects.
-func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig) controller.Controller {
+func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface, cfg config.GenericControllerConfig, informer cache.SharedIndexInformer) controller.Controller {
 	podConverter := converter.NewPodConverter()
 
 	// Function returns map of key->WorkloadEndpointData from the Calico datastore.
@@ -99,12 +98,9 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 	resourceCache := rcache.NewResourceCache(cacheArgs)
 	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]api.WorkloadEndpoint)}
 
-	// Create a Pod watcher.
-	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "pods", "", fields.Everything())
-
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	_, informer := cache.NewIndexerInformer(listWatcher, &v1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 			if err != nil {
@@ -212,7 +208,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 			}
 
 		},
-	}, cache.Indexers{})
+	})
 
 	return &podController{informer, resourceCache, c, &workloadEndpointCache, ctx, cfg}
 }
@@ -234,8 +230,7 @@ func (c *podController) Run(stopCh chan struct{}) {
 		time.Sleep(5 * time.Second)
 	}
 
-	// Wait till k8s cache is synced
-	go c.informer.Run(stopCh)
+	// Wait till k8s cache is synced.
 	log.Debug("Waiting to sync with Kubernetes API (Pods)")
 	for !c.informer.HasSynced() {
 	}

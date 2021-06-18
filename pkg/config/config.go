@@ -35,18 +35,6 @@ type Config struct {
 	// Minimum log level to emit.
 	LogLevel string `default:"info" split_words:"true"`
 
-	// Period to perform reconciliation with the Calico datastore.
-	// DEPRECATED see mergeConfig()
-	//ReconcilerPeriod string `default:"5m" split_words:"true"`
-
-	// etcdv3 compaction period. Set to 0 to disable the compactor.
-	// DEPRECATED see mergeConfig()
-	//CompactionPeriod string `default:"10m" split_words:"true"`
-
-	// Which controllers to run.
-	// DEPRECATED see mergeConfig()
-	//EnabledControllers string `default:"node,policy,namespace,workloadendpoint,serviceaccount" split_words:"true"`
-
 	// Number of workers to run for each controller.
 	WorkloadEndpointWorkers int `default:"1" split_words:"true"`
 	ProfileWorkers          int `default:"1" split_words:"true"`
@@ -55,18 +43,6 @@ type Config struct {
 
 	// Path to a kubeconfig file to use for accessing the k8s API.
 	Kubeconfig string `default:"" split_words:"false"`
-
-	// Enable healthchecks
-	// DEPRECATED see mergeConfig()
-	//HealthEnabled bool `default:"true"`
-
-	// Enable syncing of node labels
-	// DEPRECATED see mergeConfig()
-	//SyncNodeLabels bool `default:"true" split_words:"true"`
-
-	// Enable creating hostendpoints for nodes
-	// DEPRECATED see mergeConfig()
-	//AutoHostEndpoints string `default:"disabled" split_words:"true"`
 
 	// etcdv3 or kubernetes
 	DatastoreType string `default:"etcdv3" split_words:"true"`

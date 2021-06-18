@@ -31,7 +31,9 @@ import (
 	"go.etcd.io/etcd/pkg/srv"
 	"go.etcd.io/etcd/pkg/transport"
 	"k8s.io/apiserver/pkg/storage/etcd3"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 
@@ -122,6 +124,7 @@ func main() {
 		ctx:         ctx,
 		controllers: make(map[string]controller.Controller),
 		stop:        stop,
+		informers:   make([]cache.SharedIndexInformer, 0),
 	}
 
 	var runCfg config.RunConfig
@@ -386,12 +389,20 @@ type controllerControl struct {
 	controllers map[string]controller.Controller
 	stop        chan struct{}
 	restart     <-chan config.RunConfig
+	informers   []cache.SharedIndexInformer
 }
 
 func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {
+	// Create a shared informer factory to allow cache sharing between controllers monitoring the
+	// same resource.
+	factory := informers.NewSharedInformerFactory(k8sClientset, 0)
+	podInformer := factory.Core().V1().Pods().Informer()
+	nodeInformer := factory.Core().V1().Nodes().Informer()
+
 	if cfg.Controllers.WorkloadEndpoint != nil {
-		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint)
+		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint, podInformer)
 		cc.controllers["Pod"] = podController
+		cc.registerInformers(podInformer)
 	}
 
 	if cfg.Controllers.Namespace != nil {
@@ -403,8 +414,9 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer)
 		cc.controllers["Node"] = nodeController
+		cc.registerInformers(podInformer, nodeInformer)
 	}
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
@@ -412,8 +424,32 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	}
 }
 
+// registerInformers registers the given informers, if not already registered. Registered informers
+// will be started in RunControllers().
+func (cc *controllerControl) registerInformers(infs ...cache.SharedIndexInformer) {
+	for _, inf := range infs {
+		alreadyRegistered := false
+		for _, registeredInf := range cc.informers {
+			if inf == registeredInf {
+				alreadyRegistered = true
+			}
+		}
+
+		if !alreadyRegistered {
+			cc.informers = append(cc.informers, inf)
+		}
+	}
+}
+
 // Runs all the controllers and blocks until we get a restart.
 func (cc *controllerControl) RunControllers() {
+	// Start any registered informers.
+	for _, inf := range cc.informers {
+		log.WithField("informer", inf).Info("Starting informer")
+		go inf.Run(cc.stop)
+	}
+
+	// Start the controllers.
 	for controllerType, c := range cc.controllers {
 		log.WithField("ControllerType", controllerType).Info("Starting controller")
 		go c.Run(cc.stop)
