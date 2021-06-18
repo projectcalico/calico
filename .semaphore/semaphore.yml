@@ -29,20 +29,18 @@ global_job_config:
 
 blocks:
   - name: "General Tests"
-    execution_time_limit:
-      minutes: 120
     dependencies: []
     task:
       jobs:
         - name: "Static Checks / UT and FV tests"
+          execution_time_limit:
+            minutes: 120
           commands:
             - make static-checks
             - make ut
             - make fv
 
   - name: "System Tests"
-    execution_time_limit:
-      minutes: 120
     dependencies: []
     task:
       prologue:
@@ -50,9 +48,13 @@ blocks:
           - make mod-download
       jobs:
         - name: "BGP Tests"
+          execution_time_limit:
+            minutes: 120
           commands:
             - ST_TO_RUN=tests/st/bgp/ make st
         - name: "CalicoCtl Tests"
+          execution_time_limit:
+            minutes: 120
           commands:
             - ST_TO_RUN=tests/st/calicoctl/ make st
 #        Config tests don't seem to work and seem like they were never run
@@ -60,18 +62,22 @@ blocks:
 #          commands:
 #            - ST_TO_RUN=tests/st/config/ make st
         - name: "IPAM Tests"
+          execution_time_limit:
+            minutes: 120
           commands:
             - ST_TO_RUN=tests/st/ipam/ make st
         - name: "Policy Tests"
+          execution_time_limit:
+            minutes: 120
           commands:
             - ST_TO_RUN=tests/st/policy/ make st
         - name: "Utils Tests"
+          execution_time_limit:
+            minutes: 120
           commands:
             - ST_TO_RUN=tests/st/utils/ make st
 
   - name: "Specialized Tests"
-    execution_time_limit:
-      minutes: 120
     dependencies: []
     task:
       agent:
@@ -80,14 +86,14 @@ blocks:
           os_image: ubuntu1804
       jobs:
         - name: "Dual Stack Tests"
+          execution_time_limit:
+            minutes: 120
           commands:
             - make k8s-test
 
   # If tests passed, then build and push images.
   # We'll only do this on non-PR builds, where we have credentials to do so.
   - name: "Push images (non-PR builds only)"
-    execution_time_limit:
-      minutes: 15
     skip:
       # Only run on branches, not PRs.
       when: "branch !~ '.+'"
@@ -98,6 +104,8 @@ blocks:
       - name: docker
       jobs:
       - name: "make cd"
+        execution_time_limit:
+          minutes: 15
         commands:
         - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
@@ -105,12 +113,12 @@ blocks:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
 
   - name: "build windows archive"
-    execution_time_limit:
-      minutes: 120
     dependencies: ["General Tests", "System Tests", "Specialized Tests"]
     task:
       jobs:
       - name: "build windows archive"
+        execution_time_limit:
+          minutes: 120
         commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
         - make release-windows-archive VERSION=${BRANCH_NAME}
