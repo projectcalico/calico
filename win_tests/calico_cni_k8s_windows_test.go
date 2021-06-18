@@ -28,16 +28,17 @@ import (
 
 	"github.com/Microsoft/hcsshim"
 	"github.com/containernetworking/cni/pkg/types/current"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/names"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -126,7 +127,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		if os.Getenv("DATASTORE_TYPE") != "kubernetes" {
 			// Since we're not running the startup script, we need to create a Calico Node, as required by our
 			// IPAM plugin.
-			caliNode := api.NewNode()
+			caliNode := libapi.NewNode()
 			caliNode.Name = hostname
 			caliNode, err := calicoClient.Nodes().Create(context.Background(), caliNode, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create Calico Node resource")
@@ -1056,7 +1057,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var nc types.NetConf
 		var netconf string
 		var workloadName, containerID, name string
-		var endpointSpec api.WorkloadEndpointSpec
+		var endpointSpec libapi.WorkloadEndpointSpec
 		var result *current.Result
 
 		checkIPAMReservation := func() {
