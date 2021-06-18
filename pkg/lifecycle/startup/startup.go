@@ -32,12 +32,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
@@ -248,7 +249,7 @@ func getMonitorPollInterval() time.Duration {
 	return interval
 }
 
-func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface, node *api.Node) bool {
+func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface, node *libapi.Node) bool {
 	// Configure and verify the node IP addresses and subnets.
 	checkConflicts, err := configureIPsAndSubnets(node)
 	if err != nil {
@@ -272,7 +273,7 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 		} else {
 			log.Warn("No IPv4 or IPv6 addresses configured or detected. Some features may not work properly.")
 			// Bail here setting BGPSpec to nil (if empty) to pass validation.
-			if reflect.DeepEqual(node.Spec.BGP, &api.NodeBGPSpec{}) {
+			if reflect.DeepEqual(node.Spec.BGP, &libapi.NodeBGPSpec{}) {
 				node.Spec.BGP = nil
 			}
 			return checkConflicts
@@ -327,7 +328,7 @@ func MonitorIPAddressSubnets() {
 
 // configureNodeRef will attempt to discover the cluster type it is running on, check to ensure we
 // have not already set it on this Node, and set it if need be.
-func configureNodeRef(node *api.Node) {
+func configureNodeRef(node *libapi.Node) {
 	orchestrator := "k8s"
 	nodeRef := ""
 
@@ -336,12 +337,12 @@ func configureNodeRef(node *api.Node) {
 		return
 	}
 
-	node.Spec.OrchRefs = []api.OrchRef{{NodeName: nodeRef, Orchestrator: orchestrator}}
+	node.Spec.OrchRefs = []libapi.OrchRef{{NodeName: nodeRef, Orchestrator: orchestrator}}
 }
 
 // CreateOrUpdate creates the Node if ResourceVersion is not specified,
 // or Update if it's specified.
-func CreateOrUpdate(ctx context.Context, client client.Interface, node *api.Node) (*api.Node, error) {
+func CreateOrUpdate(ctx context.Context, client client.Interface, node *libapi.Node) (*libapi.Node, error) {
 	if node.ResourceVersion != "" {
 		return client.Nodes().Update(ctx, node, options.SetOptions{})
 	}
@@ -349,7 +350,7 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, node *api.Node
 	return client.Nodes().Create(ctx, node, options.SetOptions{})
 }
 
-func clearNodeIPs(ctx context.Context, client client.Interface, node *api.Node, clearv4, clearv6 bool) {
+func clearNodeIPs(ctx context.Context, client client.Interface, node *libapi.Node, clearv4, clearv6 bool) {
 	if clearv4 {
 		log.WithField("IP", node.Spec.BGP.IPv4Address).Info("Clearing out-of-date IPv4 address from this node")
 		node.Spec.BGP.IPv4Address = ""
@@ -360,7 +361,7 @@ func clearNodeIPs(ctx context.Context, client client.Interface, node *api.Node, 
 	}
 
 	// If the BGP spec is empty, then set it to nil.
-	if node.Spec.BGP != nil && reflect.DeepEqual(*node.Spec.BGP, api.NodeBGPSpec{}) {
+	if node.Spec.BGP != nil && reflect.DeepEqual(*node.Spec.BGP, libapi.NodeBGPSpec{}) {
 		node.Spec.BGP = nil
 	}
 
@@ -421,7 +422,7 @@ func waitForConnection(ctx context.Context, c client.Interface) {
 
 // getNode returns the current node configuration. If this node has not yet
 // been created, it returns a blank node resource.
-func getNode(ctx context.Context, client client.Interface, nodeName string) *api.Node {
+func getNode(ctx context.Context, client client.Interface, nodeName string) *libapi.Node {
 	node, err := client.Nodes().Get(ctx, nodeName, options.GetOptions{})
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -431,7 +432,7 @@ func getNode(ctx context.Context, client client.Interface, nodeName string) *api
 		}
 
 		log.WithField("Name", nodeName).Info("Building new node resource")
-		node = api.NewNode()
+		node = libapi.NewNode()
 		node.Name = nodeName
 	}
 
@@ -440,13 +441,13 @@ func getNode(ctx context.Context, client client.Interface, nodeName string) *api
 
 // configureIPsAndSubnets updates the supplied node resource with IP and Subnet
 // information to use for BGP.  This returns true if we detect a change in Node IP address.
-func configureIPsAndSubnets(node *api.Node) (bool, error) {
+func configureIPsAndSubnets(node *libapi.Node) (bool, error) {
 	// If the node resource currently has no BGP configuration, add an empty
 	// set of configuration as it makes the processing below easier, and we
 	// must end up configuring some BGP fields before we complete.
 	if node.Spec.BGP == nil {
 		log.Info("Initialize BGP data")
-		node.Spec.BGP = &api.NodeBGPSpec{}
+		node.Spec.BGP = &libapi.NodeBGPSpec{}
 	}
 
 	oldIpv4 := node.Spec.BGP.IPv4Address
@@ -768,7 +769,7 @@ func autoDetectCIDRBySkipInterface(ifaceRegexes []string, version int) *cnet.IPN
 
 // configureASNumber configures the Node resource with the AS number specified
 // in the environment, or is a no-op if not specified.
-func configureASNumber(node *api.Node) {
+func configureASNumber(node *libapi.Node) {
 	// Extract the AS number from the environment
 	asStr := os.Getenv("AS")
 	if asStr != "" {
@@ -1000,9 +1001,9 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 
 // checkConflictingNodes checks whether any other nodes have been configured
 // with the same IP addresses.
-func checkConflictingNodes(ctx context.Context, client client.Interface, node *api.Node) (v4conflict, v6conflict bool, retErr error) {
+func checkConflictingNodes(ctx context.Context, client client.Interface, node *libapi.Node) (v4conflict, v6conflict bool, retErr error) {
 	// Get the full set of nodes.
-	var nodes []api.Node
+	var nodes []libapi.Node
 	if nodeList, err := client.Nodes().List(ctx, options.ListOptions{}); err != nil {
 		log.WithError(err).Errorf("Unable to query node configuration")
 		retErr = err
@@ -1081,7 +1082,7 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 
 // ensureDefaultConfig ensures all of the required default settings are
 // configured.
-func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node, osType string, kubeadmConfig, rancherState *v1.ConfigMap) error {
+func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *libapi.Node, osType string, kubeadmConfig, rancherState *v1.ConfigMap) error {
 	// Ensure the ClusterInformation is populated.
 	// Get the ClusterType from ENV var. This is set from the manifest.
 	clusterType := os.Getenv("CLUSTER_TYPE")
