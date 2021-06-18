@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 
 package main_test
 
@@ -20,12 +20,13 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	grpc_dataplane "github.com/projectcalico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/linux"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -43,7 +44,7 @@ var _ = Describe("CalicoCni", func() {
 		testutils.WipeDatastore()
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var err error
-		n := api.NewNode()
+		n := libapiv3.NewNode()
 		n.Name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
 		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
@@ -95,8 +96,8 @@ var _ = Describe("CalicoCni", func() {
 			profile, err := calicoClient.Profiles().Get(ctx, "net1", options.GetOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(profile.Spec.LabelsToApply).Should(Equal(map[string]string{"net1": ""}))
-			Expect(profile.Spec.Egress).Should(Equal([]api.Rule{{Action: "Allow"}}))
-			Expect(profile.Spec.Ingress).Should(Equal([]api.Rule{{Action: "Allow", Source: api.EntityRule{Selector: "has(net1)"}}}))
+			Expect(profile.Spec.Egress).Should(Equal([]apiv3.Rule{{Action: "Allow"}}))
+			Expect(profile.Spec.Ingress).Should(Equal([]apiv3.Rule{{Action: "Allow", Source: apiv3.EntityRule{Selector: "has(net1)"}}}))
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -119,7 +120,7 @@ var _ = Describe("CalicoCni", func() {
 
 			mac := contVeth.Attrs().HardwareAddr
 
-			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+			Expect(endpoints.Items[0].Spec).Should(Equal(libapiv3.WorkloadEndpointSpec{
 				InterfaceName: fmt.Sprintf("cali%s", containerID),
 				IPNetworks:    []string{result.IPs[0].Address.String()},
 				MAC:           mac.String(),
@@ -702,7 +703,7 @@ var _ = Describe("CalicoCni", func() {
 
 		var containerID string
 		var workloadName string
-		var endpointSpec api.WorkloadEndpointSpec
+		var endpointSpec libapiv3.WorkloadEndpointSpec
 		var contNs ns.NetNS
 		var result *current.Result
 

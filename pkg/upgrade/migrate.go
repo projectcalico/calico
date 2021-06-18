@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -124,7 +125,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 					return fmt.Errorf("failed to get calico node resource: %s", err)
 				}
 				if node.Spec.BGP == nil {
-					node.Spec.BGP = &v3.NodeBGPSpec{}
+					node.Spec.BGP = &libapiv3.NodeBGPSpec{}
 				}
 				node.Spec.BGP.IPv4IPIPTunnelAddr = tunIp.String()
 				if _, err = c.Nodes().Update(ctxt, node, options.SetOptions{}); err != nil {
@@ -177,7 +178,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 
 	// Disable cni by setting DatastoreReady to false.
 	log.Info("setting datastore readiness to false")
-	var clusterInfo *v3.ClusterInformation
+	var clusterInfo *apiv3.ClusterInformation
 	for i := uint(0); i < 5; i++ {
 		clusterInfo, err = c.ClusterInformation().Get(ctxt, "default", options.GetOptions{})
 		if err != nil {
