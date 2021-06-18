@@ -24,6 +24,7 @@ spec:
   controllers:
     node:
       reconcilerPeriod: 5m
+      leakGracePeriod: 15m
       syncLabels: Enabled
       hostEndpoint:
         autoCreate: Disabled
@@ -77,6 +78,7 @@ The node controller automatically cleans up configuration for nodes that no long
 | reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | | [Duration string][parse-duration] | 5m |
 | syncLabels | When enabled, Kubernetes node labels will be copied to {{site.prodname}} node objects. | Enabled, Disabled | string | Enabled |
 | hostEndpoint | Controls allocation of host endpoints | | [HostEndpoint](#hostendpoint) | |
+| leakGracePeriod | Grace period to use when garbage collecting suspected leaked IP addresses. | | [Duration string][parse-duration] | 15m |
 
 #### HostEndpoint
 
