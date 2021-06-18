@@ -30,8 +30,9 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
@@ -2265,7 +2266,7 @@ var _ = DescribeTable("determinePools tests IPV4",
 		ic := NewIPAMClient(nil, ipPools)
 
 		// Create a node object for the test.
-		node := v3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
 
 		// Prep input data
 		reqPools := []cnet.IPNet{}
@@ -2334,7 +2335,7 @@ var _ = DescribeTable("determinePools tests IPV6",
 		ic := NewIPAMClient(nil, ipPools)
 
 		// Create a node object for the test.
-		node := v3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
 
 		// Prep input data
 		reqPools := []cnet.IPNet{}
@@ -2467,10 +2468,10 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 	} else {
 		// Otherwise, create it in Calico.
 		_, err := c.Apply(context.Background(), &model.KVPair{
-			Key: model.ResourceKey{Name: host, Kind: v3.KindNode},
-			Value: v3.Node{
+			Key: model.ResourceKey{Name: host, Kind: libapiv3.KindNode},
+			Value: libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: v3.NodeSpec{OrchRefs: []v3.OrchRef{
+				Spec: libapiv3.NodeSpec{OrchRefs: []libapiv3.OrchRef{
 					{Orchestrator: "k8s", NodeName: host},
 				}},
 			},
@@ -2486,6 +2487,6 @@ func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 	if kc != nil {
 		kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
 	} else {
-		c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: v3.KindNode}, "")
+		c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")
 	}
 }

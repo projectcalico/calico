@@ -22,10 +22,10 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	v3 "github.com/projectcalico/libcalico-go/lib/validator/v3"
 )
 
@@ -170,7 +170,7 @@ func init() {
 
 		// (API) WorkloadEndpointSpec.
 		Entry("should accept WorkloadEndpointSpec with a port (m)",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
 				Ports: []api.EndpointPort{
 					{
@@ -183,7 +183,7 @@ func init() {
 			true,
 		),
 		Entry("should reject WorkloadEndpointSpec with an unnamed port (m)",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
 				Ports: []api.EndpointPort{
 					{
@@ -195,7 +195,7 @@ func init() {
 			false,
 		),
 		Entry("should accept WorkloadEndpointSpec with name-clashing ports (m)",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
 				Ports: []api.EndpointPort{
 					{
@@ -568,11 +568,11 @@ func init() {
 		),
 
 		// (API) Interface.
-		Entry("should accept a valid interface", api.WorkloadEndpointSpec{InterfaceName: "Valid_Iface.0-9"}, true),
-		Entry("should reject an interface that is too long", api.WorkloadEndpointSpec{InterfaceName: "interfaceTooLong"}, false),
-		Entry("should reject & in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid&Intface"}, false),
-		Entry("should reject # in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid#Intface"}, false),
-		Entry("should reject : in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
+		Entry("should accept a valid interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Valid_Iface.0-9"}, true),
+		Entry("should reject an interface that is too long", libapiv3.WorkloadEndpointSpec{InterfaceName: "interfaceTooLong"}, false),
+		Entry("should reject & in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid&Intface"}, false),
+		Entry("should reject # in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid#Intface"}, false),
+		Entry("should reject : in an interface", libapiv3.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
 
 		// (API) FelixConfiguration.
 		Entry("should accept a valid DefaultEndpointToHostAction value", api.FelixConfigurationSpec{DefaultEndpointToHostAction: "Drop"}, true),
@@ -663,102 +663,102 @@ func init() {
 
 		// (API) IPNAT
 		Entry("should accept valid IPNAT IPv4",
-			api.IPNAT{
+			libapiv3.IPNAT{
 				InternalIP: ipv4_1,
 				ExternalIP: ipv4_2,
 			}, true),
 		Entry("should accept valid IPNAT IPv6",
-			api.IPNAT{
+			libapiv3.IPNAT{
 				InternalIP: ipv6_1,
 				ExternalIP: ipv6_2,
 			}, true),
 		Entry("should reject IPNAT mixed IPv4 (int) and IPv6 (ext)",
-			api.IPNAT{
+			libapiv3.IPNAT{
 				InternalIP: ipv4_1,
 				ExternalIP: ipv6_1,
 			}, false),
 		Entry("should reject IPNAT mixed IPv6 (int) and IPv4 (ext)",
-			api.IPNAT{
+			libapiv3.IPNAT{
 				InternalIP: ipv6_1,
 				ExternalIP: ipv4_1,
 			}, false),
 
 		// (API) WorkloadEndpointSpec
 		Entry("should accept workload endpoint with interface only",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 			}, true),
 		Entry("should accept workload endpoint with networks and no nats",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1, netv4_2, netv6_1, netv6_2},
 			}, true),
 		Entry("should accept workload endpoint with IPv4 NAT covered by network",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1},
-				IPNATs:        []api.IPNAT{{InternalIP: ipv4_1, ExternalIP: ipv4_2}},
+				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv4_1, ExternalIP: ipv4_2}},
 			}, true),
 		Entry("should accept workload endpoint with IPv6 NAT covered by network",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv6_1},
-				IPNATs:        []api.IPNAT{{InternalIP: ipv6_1, ExternalIP: ipv6_2}},
+				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv6_1, ExternalIP: ipv6_2}},
 			}, true),
 		Entry("should accept workload endpoint with IPv4 and IPv6 NAT covered by network",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1, netv6_1},
-				IPNATs: []api.IPNAT{
+				IPNATs: []libapiv3.IPNAT{
 					{InternalIP: ipv4_1, ExternalIP: ipv4_2},
 					{InternalIP: ipv6_1, ExternalIP: ipv6_2},
 				},
 			}, true),
 		Entry("should accept workload endpoint with mixed-case ContainerID",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				ContainerID:   "Cath01234-G",
 			}, true),
-		Entry("should reject workload endpoint with no config", api.WorkloadEndpointSpec{}, false),
+		Entry("should reject workload endpoint with no config", libapiv3.WorkloadEndpointSpec{}, false),
 		Entry("should reject workload endpoint with IPv4 networks that contain >1 address",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_3},
 			}, false),
 		Entry("should reject workload endpoint with IPv6 networks that contain >1 address",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv6_3},
 			}, false),
 		Entry("should reject workload endpoint with nats and no networks",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
-				IPNATs:        []api.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
+				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
 			}, false),
 		Entry("should reject workload endpoint with IPv4 NAT not covered by network",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv4_1},
-				IPNATs:        []api.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
+				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
 			}, false),
 		Entry("should reject workload endpoint with IPv6 NAT not covered by network",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv6_1},
-				IPNATs:        []api.IPNAT{{InternalIP: ipv6_2, ExternalIP: ipv6_1}},
+				IPNATs:        []libapiv3.IPNAT{{InternalIP: ipv6_2, ExternalIP: ipv6_1}},
 			}, false),
 		Entry("should reject workload endpoint containerID that starts with a dash",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali0134",
 				ContainerID:   "-abcdefg",
 			}, false),
 		Entry("should reject workload endpoint containerID that ends with a dash",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali0134",
 				ContainerID:   "abcdeSg-",
 			}, false),
 		Entry("should reject workload endpoint containerID that contains a period",
-			api.WorkloadEndpointSpec{
+			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "cali0134",
 				ContainerID:   "abcde-j.g",
 			}, false),
@@ -894,7 +894,7 @@ func init() {
 		// (API) IPIP APIv1 backwards compatibility. Read-only field IPIP
 		Entry("should accept a nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: nil}, true),
 		Entry("should accept it when the IPIP field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
-		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &apiv1.IPIPConfiguration{Enabled: true, Mode: encap.Always}}, false),
+		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &api.IPIPConfiguration{Enabled: true, Mode: encap.Always}}, false),
 
 		// (API) NatOutgoing APIv1 backwards compatibility. Read-only field NatOutgoingV1
 		Entry("should accept NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: false}, true),
@@ -1413,37 +1413,37 @@ func init() {
 		}, false),
 
 		// (API) NodeSpec
-		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: netv4_1}}, true),
-		Entry("should accept node with IPv6 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: netv6_1}}, true),
-		Entry("should accept node with tunnel IP in BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4IPIPTunnelAddr: "10.0.0.1"}}, true),
-		Entry("should accept node with no BGP", api.NodeSpec{}, true),
-		Entry("should reject node with an empty BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{}}, false),
-		Entry("should reject node with IPv6 address in IPv4 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: netv6_1}}, false),
-		Entry("should reject node with IPv4 address in IPv6 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: netv4_1}}, false),
-		Entry("should reject node with bad RR cluster ID #1", api.NodeSpec{BGP: &api.NodeBGPSpec{
+		Entry("should accept node with IPv4 BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv4Address: netv4_1}}, true),
+		Entry("should accept node with IPv6 BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv6Address: netv6_1}}, true),
+		Entry("should accept node with tunnel IP in BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv4IPIPTunnelAddr: "10.0.0.1"}}, true),
+		Entry("should accept node with no BGP", libapiv3.NodeSpec{}, true),
+		Entry("should reject node with an empty BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{}}, false),
+		Entry("should reject node with IPv6 address in IPv4 field", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv4Address: netv6_1}}, false),
+		Entry("should reject node with IPv4 address in IPv6 field", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv6Address: netv4_1}}, false),
+		Entry("should reject node with bad RR cluster ID #1", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{
 			IPv4Address:             netv4_1,
 			RouteReflectorClusterID: "abcdef",
 		}}, false),
-		Entry("should reject node with bad RR cluster ID #2", api.NodeSpec{BGP: &api.NodeBGPSpec{
+		Entry("should reject node with bad RR cluster ID #2", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{
 			IPv4Address:             netv4_1,
 			RouteReflectorClusterID: "300.34.3.1",
 		}}, false),
-		Entry("should accept node with good RR cluster ID", api.NodeSpec{BGP: &api.NodeBGPSpec{
+		Entry("should accept node with good RR cluster ID", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{
 			IPv4Address:             netv4_1,
 			RouteReflectorClusterID: "245.0.0.1",
 		}}, true),
 
 		// Wireguard config field tests
-		Entry("should allow valid Wireguard public-key", api.NodeStatus{
+		Entry("should allow valid Wireguard public-key", libapiv3.NodeStatus{
 			WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
 		}, true),
-		Entry("should allow valid IP address on Wireguard config", api.NodeSpec{Wireguard: &api.NodeWireguardSpec{
+		Entry("should allow valid IP address on Wireguard config", libapiv3.NodeSpec{Wireguard: &libapiv3.NodeWireguardSpec{
 			InterfaceIPv4Address: ipv4_1,
 		}}, true),
-		Entry("should reject invalid IP address on Wireguard config", api.NodeSpec{Wireguard: &api.NodeWireguardSpec{
+		Entry("should reject invalid IP address on Wireguard config", libapiv3.NodeSpec{Wireguard: &libapiv3.NodeWireguardSpec{
 			InterfaceIPv4Address: "foo.bar",
 		}}, false),
-		Entry("should reject invalid Wireguard public-key", api.NodeStatus{
+		Entry("should reject invalid Wireguard public-key", libapiv3.NodeStatus{
 			WireguardPublicKey: "foobar",
 		}, false),
 

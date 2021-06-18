@@ -27,7 +27,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -48,13 +49,13 @@ func NewIPAMBlockClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResource
 		name:            IPAMBlockCRDName,
 		resource:        IPAMBlockResourceName,
 		description:     "Calico IPAM blocks",
-		k8sResourceType: reflect.TypeOf(apiv3.IPAMBlock{}),
+		k8sResourceType: reflect.TypeOf(libapiv3.IPAMBlock{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindIPAMBlock,
+			Kind:       libapiv3.KindIPAMBlock,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.IPAMBlockList{}),
-		resourceKind: apiv3.KindIPAMBlock,
+		k8sListType:  reflect.TypeOf(libapiv3.IPAMBlockList{}),
+		resourceKind: libapiv3.KindIPAMBlock,
 	}
 
 	return &ipamBlockClient{rc: rc}
@@ -69,13 +70,13 @@ type ipamBlockClient struct {
 }
 
 func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	cidrStr := kvpv3.Value.(*apiv3.IPAMBlock).Spec.CIDR
+	cidrStr := kvpv3.Value.(*libapiv3.IPAMBlock).Spec.CIDR
 	_, cidr, err := net.ParseCIDR(cidrStr)
 	if err != nil {
 		return nil, err
 	}
 
-	ab := kvpv3.Value.(*apiv3.IPAMBlock)
+	ab := kvpv3.Value.(*libapiv3.IPAMBlock)
 
 	// Convert attributes.
 	attrs := []model.AllocationAttribute{}
@@ -115,9 +116,9 @@ func (c ipamBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	ab := kvpv1.Value.(*model.AllocationBlock)
 
 	// Convert attributes.
-	attrs := []apiv3.AllocationAttribute{}
+	attrs := []libapiv3.AllocationAttribute{}
 	for _, a := range ab.Attributes {
-		attrs = append(attrs, apiv3.AllocationAttribute{
+		attrs = append(attrs, libapiv3.AllocationAttribute{
 			AttrPrimary:   a.AttrPrimary,
 			AttrSecondary: a.AttrSecondary,
 		})
@@ -126,18 +127,18 @@ func (c ipamBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
-			Kind: apiv3.KindIPAMBlock,
+			Kind: libapiv3.KindIPAMBlock,
 		},
-		Value: &apiv3.IPAMBlock{
+		Value: &libapiv3.IPAMBlock{
 			TypeMeta: metav1.TypeMeta{
-				Kind:       apiv3.KindIPAMBlock,
+				Kind:       libapiv3.KindIPAMBlock,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,
 				ResourceVersion: kvpv1.Revision,
 			},
-			Spec: apiv3.IPAMBlockSpec{
+			Spec: libapiv3.IPAMBlockSpec{
 				CIDR:        cidr,
 				Allocations: ab.Allocations,
 				Unallocated: ab.Unallocated,
@@ -187,7 +188,7 @@ func (c *ipamBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*mo
 	}
 
 	// Now actually delete the object.
-	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMBlock}
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
 	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
@@ -207,7 +208,7 @@ func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision st
 func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	// Get the object.
 	name, _ := c.parseKey(key)
-	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMBlock}
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
@@ -232,7 +233,7 @@ func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision strin
 }
 
 func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	l := model.ResourceListOptions{Kind: apiv3.KindIPAMBlock}
+	l := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
 	v3list, err := c.rc.List(ctx, l, revision)
 	if err != nil {
 		return nil, err
@@ -250,7 +251,7 @@ func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, re
 }
 
 func (c *ipamBlockClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	resl := model.ResourceListOptions{Kind: apiv3.KindIPAMBlock}
+	resl := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
 	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {

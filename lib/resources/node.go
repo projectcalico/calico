@@ -17,13 +17,13 @@ package resources
 import (
 	log "github.com/sirupsen/logrus"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // FindNodeAddress returns node address of the specified type. Type can be one of
 // CalicoNodeIP, InternalIP or ExternalIP
-func FindNodeAddress(node *apiv3.Node, ipType string) (*cnet.IP, *cnet.IPNet) {
+func FindNodeAddress(node *libapiv3.Node, ipType string) (*cnet.IP, *cnet.IPNet) {
 	for _, addr := range node.Spec.Addresses {
 		if addr.Type == ipType {
 			ip, cidr, err := cnet.ParseCIDROrIP(addr.Address)

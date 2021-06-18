@@ -21,8 +21,10 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
@@ -31,7 +33,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
@@ -101,13 +102,13 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/bgpconfigurations/default")
 
-			var node *apiv3.Node
+			var node *libapiv3.Node
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
 				By("Configuring a node with BGP configuration")
 				node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				node.Spec.BGP = &apiv3.NodeBGPSpec{
+				node.Spec.BGP = &libapiv3.NodeBGPSpec{
 					IPv4Address: "1.2.3.4/24",
 					IPv6Address: "aa:bb::cc/120",
 				}
@@ -119,10 +120,10 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				By("Creating a node with BGP configuration")
 				node, err = c.Nodes().Create(
 					ctx,
-					&apiv3.Node{
+					&libapiv3.Node{
 						ObjectMeta: metav1.ObjectMeta{Name: "127.0.0.1"},
-						Spec: apiv3.NodeSpec{
-							BGP: &apiv3.NodeBGPSpec{
+						Spec: libapiv3.NodeSpec{
+							BGP: &libapiv3.NodeBGPSpec{
 								IPv4Address: "1.2.3.4/24",
 								IPv6Address: "aa:bb::cc/120",
 							},
@@ -232,7 +233,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				// The syncer only monitors affine blocks for one host, so IP allocations for a different
 				// host should not result in updates.
 				hostname := "not-this-host"
-				node, err = c.Nodes().Create(ctx, &apiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: hostname}}, options.SetOptions{})
+				node, err = c.Nodes().Create(ctx, &libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: hostname}}, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				expectedCacheSize += 1
 				syncTester.ExpectCacheSize(expectedCacheSize)

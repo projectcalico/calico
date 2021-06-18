@@ -23,10 +23,12 @@ import (
 	"strings"
 	"time"
 
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -265,17 +267,17 @@ func KeyFromDefaultPath(path string) Key {
 		return k
 	} else if k := (BlockListOptions{}).KeyFromDefaultPath(path); k != nil {
 		return k
-	} else if k := (ResourceListOptions{Kind: v3.KindNode}).KeyFromDefaultPath(path); k != nil {
+	} else if k := (ResourceListOptions{Kind: libapiv3.KindNode}).KeyFromDefaultPath(path); k != nil {
 		return k
-	} else if k := (ResourceListOptions{Kind: v3.KindBGPPeer}).KeyFromDefaultPath(path); k != nil {
+	} else if k := (ResourceListOptions{Kind: apiv3.KindBGPPeer}).KeyFromDefaultPath(path); k != nil {
 		return k
-	} else if k := (ResourceListOptions{Kind: v3.KindBGPConfiguration}).KeyFromDefaultPath(path); k != nil {
+	} else if k := (ResourceListOptions{Kind: apiv3.KindBGPConfiguration}).KeyFromDefaultPath(path); k != nil {
 		return k
-	} else if k := (ResourceListOptions{Kind: v3.KindNetworkPolicy}).KeyFromDefaultPath(path); k != nil {
+	} else if k := (ResourceListOptions{Kind: apiv3.KindNetworkPolicy}).KeyFromDefaultPath(path); k != nil {
 		return k
-	} else if k := (ResourceListOptions{Kind: v3.KindIPPool}).KeyFromDefaultPath(path); k != nil {
+	} else if k := (ResourceListOptions{Kind: apiv3.KindIPPool}).KeyFromDefaultPath(path); k != nil {
 		return k
-	} else if k := (ResourceListOptions{Kind: v3.KindProfile}).KeyFromDefaultPath(path); k != nil {
+	} else if k := (ResourceListOptions{Kind: apiv3.KindProfile}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else if k := (HostEndpointStatusListOptions{}).KeyFromDefaultPath(path); k != nil {
 		return k

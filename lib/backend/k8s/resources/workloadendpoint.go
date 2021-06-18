@@ -31,7 +31,7 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -86,7 +86,7 @@ func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revi
 // We store the IP addresses in annotations because patching the PodStatus directly races with changes that
 // kubelet makes so kubelet can undo our changes.
 func (c *WorkloadEndpointClient) patchInPodIPs(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
+	ips := kvp.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks
 	if len(ips) == 0 {
 		return kvp, nil
 	}
@@ -203,7 +203,7 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 
 	// Find the WorkloadEndpoint that has a name matching the name in the given key
 	for _, kvp := range kvps {
-		wep := kvp.Value.(*apiv3.WorkloadEndpoint)
+		wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
 		if wep.Name == key.(model.ResourceKey).Name {
 			return kvp, nil
 		}
@@ -268,7 +268,7 @@ func (c *WorkloadEndpointClient) listUsingName(ctx context.Context, listOptions 
 		}
 		// Find the WorkloadEndpoint that has a name matching the name in the given key
 		for _, kvp := range kvps {
-			wep := kvp.Value.(*apiv3.WorkloadEndpoint)
+			wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
 			if wep.Name == wepName {
 				tmpKVPs = []*model.KVPair{kvp}
 				break

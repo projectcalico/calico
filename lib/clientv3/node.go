@@ -21,7 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -33,11 +33,11 @@ import (
 
 // NodeInterface has methods to work with Node resources.
 type NodeInterface interface {
-	Create(ctx context.Context, res *apiv3.Node, opts options.SetOptions) (*apiv3.Node, error)
-	Update(ctx context.Context, res *apiv3.Node, opts options.SetOptions) (*apiv3.Node, error)
-	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.Node, error)
-	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.Node, error)
-	List(ctx context.Context, opts options.ListOptions) (*apiv3.NodeList, error)
+	Create(ctx context.Context, res *libapiv3.Node, opts options.SetOptions) (*libapiv3.Node, error)
+	Update(ctx context.Context, res *libapiv3.Node, opts options.SetOptions) (*libapiv3.Node, error)
+	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.Node, error)
+	Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.Node, error)
+	List(ctx context.Context, opts options.ListOptions) (*libapiv3.NodeList, error)
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
 
@@ -48,7 +48,7 @@ type nodes struct {
 
 // Create takes the representation of a Node and creates it.  Returns the stored
 // representation of the Node, and an error, if there is any.
-func (r nodes) Create(ctx context.Context, res *apiv3.Node, opts options.SetOptions) (*apiv3.Node, error) {
+func (r nodes) Create(ctx context.Context, res *libapiv3.Node, opts options.SetOptions) (*libapiv3.Node, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -60,29 +60,29 @@ func (r nodes) Create(ctx context.Context, res *apiv3.Node, opts options.SetOpti
 	if err != nil {
 		return nil, err
 	}
-	out, err := r.client.resources.Create(ctx, opts, apiv3.KindNode, res)
+	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindNode, res)
 	if out != nil {
-		return out.(*apiv3.Node), err
+		return out.(*libapiv3.Node), err
 	}
 	return nil, err
 }
 
 // Update takes the representation of a Node and updates it. Returns the stored
 // representation of the Node, and an error, if there is any.
-func (r nodes) Update(ctx context.Context, res *apiv3.Node, opts options.SetOptions) (*apiv3.Node, error) {
+func (r nodes) Update(ctx context.Context, res *libapiv3.Node, opts options.SetOptions) (*libapiv3.Node, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 
-	out, err := r.client.resources.Update(ctx, opts, apiv3.KindNode, res)
+	out, err := r.client.resources.Update(ctx, opts, libapiv3.KindNode, res)
 	if out != nil {
-		return out.(*apiv3.Node), err
+		return out.(*libapiv3.Node), err
 	}
 	return nil, err
 }
 
 // Delete takes name of the Node and deletes it. Returns an error if one occurs.
-func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.Node, error) {
+func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.Node, error) {
 	pname, err := names.WorkloadEndpointIdentifiers{Node: name}.CalculateWorkloadEndpointName(true)
 	if err != nil {
 		return nil, err
@@ -231,27 +231,27 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 	}
 
 	// Delete the node.
-	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindNode, noNamespace, name)
+	out, err := r.client.resources.Delete(ctx, opts, libapiv3.KindNode, noNamespace, name)
 	if out != nil {
-		return out.(*apiv3.Node), err
+		return out.(*libapiv3.Node), err
 	}
 	return nil, err
 }
 
 // Get takes name of the Node, and returns the corresponding Node object,
 // and an error if there is any.
-func (r nodes) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.Node, error) {
-	out, err := r.client.resources.Get(ctx, opts, apiv3.KindNode, noNamespace, name)
+func (r nodes) Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.Node, error) {
+	out, err := r.client.resources.Get(ctx, opts, libapiv3.KindNode, noNamespace, name)
 	if out != nil {
-		return out.(*apiv3.Node), err
+		return out.(*libapiv3.Node), err
 	}
 	return nil, err
 }
 
 // List returns the list of Node objects that match the supplied options.
-func (r nodes) List(ctx context.Context, opts options.ListOptions) (*apiv3.NodeList, error) {
-	res := &apiv3.NodeList{}
-	if err := r.client.resources.List(ctx, opts, apiv3.KindNode, apiv3.KindNodeList, res); err != nil {
+func (r nodes) List(ctx context.Context, opts options.ListOptions) (*libapiv3.NodeList, error) {
+	res := &libapiv3.NodeList{}
+	if err := r.client.resources.List(ctx, opts, libapiv3.KindNode, libapiv3.KindNodeList, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -260,5 +260,5 @@ func (r nodes) List(ctx context.Context, opts options.ListOptions) (*apiv3.NodeL
 // Watch returns a watch.Interface that watches the Nodes that match the
 // supplied options.
 func (r nodes) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindNode, nil)
+	return r.client.resources.Watch(ctx, opts, libapiv3.KindNode, nil)
 }

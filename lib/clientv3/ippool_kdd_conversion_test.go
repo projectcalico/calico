@@ -22,9 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -67,7 +66,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				NATOutgoing:  true,
 				NodeSelector: "all()",
 				VXLANMode:    apiv3.VXLANModeNever,
-				IPIP: &apiv1.IPIPConfiguration{
+				IPIP: &apiv3.IPIPConfiguration{
 					Enabled: true,
 					Mode:    encap.CrossSubnet,
 				},
@@ -104,7 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				BlockSize:    122,
 				NodeSelector: "all()",
 				VXLANMode:    apiv3.VXLANModeNever,
-				IPIP: &apiv1.IPIPConfiguration{
+				IPIP: &apiv3.IPIPConfiguration{
 					Enabled: false,
 				},
 			},
@@ -136,7 +135,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				CIDR:      "1.1.1.0/24",
 				Disabled:  false,
 				VXLANMode: apiv3.VXLANModeNever,
-				IPIP: &apiv1.IPIPConfiguration{
+				IPIP: &apiv3.IPIPConfiguration{
 					Enabled: true,
 				},
 				BlockSize:    26,
@@ -170,7 +169,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				CIDR:      "1.2.3.0/24",
 				Disabled:  false,
 				VXLANMode: apiv3.VXLANModeNever,
-				IPIP: &apiv1.IPIPConfiguration{
+				IPIP: &apiv3.IPIPConfiguration{
 					Enabled: true,
 					Mode:    encap.Always,
 				},

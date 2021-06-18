@@ -13,7 +13,11 @@
 // limitations under the License.
 package ipam
 
-import v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+import (
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/selector"
+)
 
 // Interface used to access the enabled IPPools.
 type PoolAccessorInterface interface {
@@ -21,4 +25,20 @@ type PoolAccessorInterface interface {
 	GetEnabledPools(ipVersion int) ([]v3.IPPool, error)
 	// Returns a list of all pools sorted in alphanumeric name order.
 	GetAllPools() ([]v3.IPPool, error)
+}
+
+// SelectsNode determines whether or not the IPPool's nodeSelector
+// matches the labels on the given node.
+func SelectsNode(pool v3.IPPool, n libapiv3.Node) (bool, error) {
+	// No node selector means that the pool matches the node.
+	if len(pool.Spec.NodeSelector) == 0 {
+		return true, nil
+	}
+	// Check for valid selector syntax.
+	sel, err := selector.Parse(pool.Spec.NodeSelector)
+	if err != nil {
+		return false, err
+	}
+	// Return whether or not the selector matches.
+	return sel.Evaluate(n.Labels), nil
 }

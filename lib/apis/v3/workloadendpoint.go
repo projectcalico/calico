@@ -14,7 +14,11 @@
 
 package v3
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+)
 
 const (
 	KindWorkloadEndpoint     = "WorkloadEndpoint"
@@ -73,7 +77,7 @@ type WorkloadEndpointSpec struct {
 	// MAC is the MAC address of the endpoint interface.
 	MAC string `json:"mac,omitempty" validate:"omitempty,mac"`
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
-	Ports []EndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
+	Ports []apiv3.EndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
 }
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.
@@ -100,7 +104,7 @@ func NewWorkloadEndpoint() *WorkloadEndpoint {
 	return &WorkloadEndpoint{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindWorkloadEndpoint,
-			APIVersion: GroupVersionCurrent,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
 }
@@ -111,7 +115,7 @@ func NewWorkloadEndpointList() *WorkloadEndpointList {
 	return &WorkloadEndpointList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindWorkloadEndpointList,
-			APIVersion: GroupVersionCurrent,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
 }

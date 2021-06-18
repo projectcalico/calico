@@ -30,7 +30,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -51,13 +52,13 @@ func NewBlockAffinityClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 		name:            BlockAffinityCRDName,
 		resource:        BlockAffinityResourceName,
 		description:     "Calico IPAM block affinities",
-		k8sResourceType: reflect.TypeOf(apiv3.BlockAffinity{}),
+		k8sResourceType: reflect.TypeOf(libapiv3.BlockAffinity{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindBlockAffinity,
+			Kind:       libapiv3.KindBlockAffinity,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.BlockAffinityList{}),
-		resourceKind: apiv3.KindBlockAffinity,
+		k8sListType:  reflect.TypeOf(libapiv3.BlockAffinityList{}),
+		resourceKind: libapiv3.KindBlockAffinity,
 	}
 
 	return &blockAffinityClient{rc: rc}
@@ -76,15 +77,15 @@ type blockAffinityClient struct {
 // which can be passed to the IPAM code.
 func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	// Parse the CIDR into a struct.
-	_, cidr, err := net.ParseCIDR(kvpv3.Value.(*apiv3.BlockAffinity).Spec.CIDR)
+	_, cidr, err := net.ParseCIDR(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.CIDR)
 	if err != nil {
 		log.WithField("cidr", cidr).WithError(err).Error("failed to parse cidr")
 		return nil, err
 	}
-	state := model.BlockAffinityState(kvpv3.Value.(*apiv3.BlockAffinity).Spec.State)
+	state := model.BlockAffinityState(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.State)
 
 	// Determine deleted status.
-	deletedString := kvpv3.Value.(*apiv3.BlockAffinity).Spec.Deleted
+	deletedString := kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Deleted
 	del := false
 	if deletedString != "" {
 		del, err = strconv.ParseBool(deletedString)
@@ -96,14 +97,14 @@ func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	return &model.KVPair{
 		Key: model.BlockAffinityKey{
 			CIDR: *cidr,
-			Host: kvpv3.Value.(*apiv3.BlockAffinity).Spec.Node,
+			Host: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
 		},
 		Value: &model.BlockAffinity{
 			State:   state,
 			Deleted: del,
 		},
 		Revision: kvpv3.Revision,
-		UID:      &kvpv3.Value.(*apiv3.BlockAffinity).UID,
+		UID:      &kvpv3.Value.(*libapiv3.BlockAffinity).UID,
 	}, nil
 }
 
@@ -141,18 +142,18 @@ func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
-			Kind: apiv3.KindBlockAffinity,
+			Kind: libapiv3.KindBlockAffinity,
 		},
-		Value: &apiv3.BlockAffinity{
+		Value: &libapiv3.BlockAffinity{
 			TypeMeta: metav1.TypeMeta{
-				Kind:       apiv3.KindBlockAffinity,
+				Kind:       libapiv3.KindBlockAffinity,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,
 				ResourceVersion: kvpv1.Revision,
 			},
-			Spec: apiv3.BlockAffinitySpec{
+			Spec: libapiv3.BlockAffinitySpec{
 				State:   string(state),
 				Node:    host,
 				CIDR:    cidr,
@@ -200,7 +201,7 @@ func (c *blockAffinityClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) 
 	}
 
 	// Now actually delete the object.
-	k := model.ResourceKey{Name: name, Kind: apiv3.KindBlockAffinity}
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
 	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
@@ -220,7 +221,7 @@ func (c *blockAffinityClient) Delete(ctx context.Context, key model.Key, revisio
 func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	// Get the object.
 	name, _, _ := c.parseKey(key)
-	k := model.ResourceKey{Name: name, Kind: apiv3.KindBlockAffinity}
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
@@ -245,7 +246,7 @@ func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision s
 }
 
 func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	l := model.ResourceListOptions{Kind: apiv3.KindBlockAffinity}
+	l := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
 	v3list, err := c.rc.List(ctx, l, revision)
 	if err != nil {
 		return nil, err
@@ -273,7 +274,7 @@ func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface
 }
 
 func (c *blockAffinityClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	resl := model.ResourceListOptions{Kind: apiv3.KindBlockAffinity}
+	resl := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
 	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {

@@ -16,6 +16,8 @@ package v3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 const (
@@ -62,7 +64,7 @@ func NewBlockAffinity() *BlockAffinity {
 	return &BlockAffinity{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindBlockAffinity,
-			APIVersion: GroupVersionCurrent,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
 }
@@ -73,7 +75,7 @@ func NewBlockAffinityList() *BlockAffinityList {
 	return &BlockAffinityList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindBlockAffinityList,
-			APIVersion: GroupVersionCurrent,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
 }

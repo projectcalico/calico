@@ -25,8 +25,9 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
@@ -157,7 +158,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv3.KindNode,
+		libapiv3.KindNode,
 		resources.NewNodeClient(cs, ca.K8sUsePodCIDR),
 	)
 	kubeClient.registerResourceClient(
@@ -175,7 +176,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv3.KindWorkloadEndpoint,
+		libapiv3.KindWorkloadEndpoint,
 		resources.NewWorkloadEndpointClient(cs),
 	)
 	kubeClient.registerResourceClient(
@@ -191,25 +192,25 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.BlockAffinityKey{}),
 			reflect.TypeOf(model.BlockAffinityListOptions{}),
-			apiv3.KindBlockAffinity,
+			libapiv3.KindBlockAffinity,
 			resources.NewBlockAffinityClient(cs, crdClientV1),
 		)
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.BlockKey{}),
 			reflect.TypeOf(model.BlockListOptions{}),
-			apiv3.KindIPAMBlock,
+			libapiv3.KindIPAMBlock,
 			resources.NewIPAMBlockClient(cs, crdClientV1),
 		)
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.IPAMHandleKey{}),
 			reflect.TypeOf(model.IPAMHandleListOptions{}),
-			apiv3.KindIPAMHandle,
+			libapiv3.KindIPAMHandle,
 			resources.NewIPAMHandleClient(cs, crdClientV1),
 		)
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.IPAMConfigKey{}),
 			nil,
-			apiv3.KindIPAMConfig,
+			libapiv3.KindIPAMConfig,
 			resources.NewIPAMConfigClient(cs, crdClientV1),
 		)
 	}
@@ -411,11 +412,11 @@ func (c *KubeClient) Clean() error {
 	}
 
 	// Get a list of Nodes and remove all BGP configuration from the nodes.
-	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, ""); err != nil {
+	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, ""); err != nil {
 		log.Warning("Failed to list Nodes")
 	} else {
 		for _, nodeKvp := range nodes.KVPairs {
-			node := nodeKvp.Value.(*apiv3.Node)
+			node := nodeKvp.Value.(*libapiv3.Node)
 			node.Spec.BGP = nil
 			if _, err := c.Update(ctx, nodeKvp); err != nil {
 				log.WithField("Node", node.Name).Warning("Failed to remove Calico config from node")
@@ -484,14 +485,14 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 					&apiv3.NetworkSetList{},
 					&apiv3.HostEndpoint{},
 					&apiv3.HostEndpointList{},
-					&apiv3.BlockAffinity{},
-					&apiv3.BlockAffinityList{},
-					&apiv3.IPAMBlock{},
-					&apiv3.IPAMBlockList{},
-					&apiv3.IPAMHandle{},
-					&apiv3.IPAMHandleList{},
-					&apiv3.IPAMConfig{},
-					&apiv3.IPAMConfigList{},
+					&libapiv3.BlockAffinity{},
+					&libapiv3.BlockAffinityList{},
+					&libapiv3.IPAMBlock{},
+					&libapiv3.IPAMBlockList{},
+					&libapiv3.IPAMHandle{},
+					&libapiv3.IPAMHandleList{},
+					&libapiv3.IPAMConfig{},
+					&libapiv3.IPAMConfigList{},
 					&apiv3.KubeControllersConfiguration{},
 					&apiv3.KubeControllersConfigurationList{},
 				)

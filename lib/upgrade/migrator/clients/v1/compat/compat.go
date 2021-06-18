@@ -19,10 +19,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients/v1/etcdv2"
 )
 

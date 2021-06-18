@@ -52,8 +52,7 @@ clean:
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
 	./lib/apis/v3/openapi_generated.go \
-	./lib/apis/v1/openapi_generated.go \
-	./lib/numorstring/openapi_generated.go
+	./lib/apis/v1/openapi_generated.go
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
@@ -73,9 +72,9 @@ gen-crds: bin/controller-gen
 $(BINDIR)/controller-gen:
 	# Download a version of controller-gen that has been hacked to support additional types (e.g., float).
 	# We can remove this once we update the Calico v3 APIs to use only types which are supported by the upstream controller-gen
-	# tooling. Some examples: float, all the types in the numorstring package, etc.
+	# tooling. Example: float, all the types in the numorstring package, etc.
 	mkdir -p bin
-	wget -O $@ https://github.com/caseydavenport/controller-tools/releases/download/float-support/controller-gen && chmod +x $@
+	wget -O $@ https://github.com/projectcalico/controller-tools/releases/download/calico/controller-gen && chmod +x $@
 
 $(BINDIR)/openapi-gen: 
 	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/openapi-gen"
@@ -105,25 +104,15 @@ $(BINDIR)/deepcopy-gen:
            sh -c '$(BINDIR)/openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-                --input-dirs "$(PACKAGE_NAME)/lib/apis/v3,$(PACKAGE_NAME)/lib/apis/v1,$(PACKAGE_NAME)/lib/numorstring" \
+                --input-dirs "$(PACKAGE_NAME)/lib/apis/v3,$(PACKAGE_NAME)/lib/apis/v1" \
                 --output-package "$(PACKAGE_NAME)/lib/apis/v3"'
 
 	$(DOCKER_GO_BUILD) \
            sh -c '$(BINDIR)/openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-                --input-dirs "$(PACKAGE_NAME)/lib/apis/v1,$(PACKAGE_NAME)/lib/numorstring" \
+                --input-dirs "$(PACKAGE_NAME)/lib/apis/v1" \
                 --output-package "$(PACKAGE_NAME)/lib/apis/v1"'
-
-	$(DOCKER_GO_BUILD) \
-           sh -c '$(BINDIR)/openapi-gen \
-                --v 1 --logtostderr \
-                --go-header-file "./docs/boilerplate.go.txt" \
-                --input-dirs "$(PACKAGE_NAME)/lib/numorstring" \
-                --output-package "$(PACKAGE_NAME)/lib/numorstring"; \
-                sed -i "/numorstring /d" ./lib/numorstring/openapi_generated.go'
-                # Above 'sed' to workaround a bug in openapi-gen which ends up
-                # importing "numorstring github.com/.../lib/numorstring" causing eventual build error
 
 ###############################################################################
 # Static checks

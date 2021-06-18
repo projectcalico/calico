@@ -26,8 +26,9 @@ import (
 
 	"context"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -988,7 +989,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 
 			// Create test node
 			host := "host-test"
-			_, err = c.Nodes().Create(ctx, &apiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
+			_, err = c.Nodes().Create(ctx, &libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Allocate an IP so that a block is allocated
@@ -1063,7 +1064,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			Expect(err).NotTo(HaveOccurred())
 
 			host := "host-test"
-			_, err = c.Nodes().Create(ctx, &apiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
+			_, err = c.Nodes().Create(ctx, &libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Allocate an IP so that a block is allocated

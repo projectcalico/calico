@@ -22,7 +22,7 @@ import (
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
@@ -100,12 +100,12 @@ func (_ Node) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 		return nil, fmt.Errorf("Key is not a valid NodeKey resource: %v", d.Value)
 	}
 
-	apiNode := apiv3.NewNode()
+	apiNode := libapiv3.NewNode()
 
 	apiNode.ObjectMeta.Name = ConvertNodeName(bk.Hostname)
 
 	if bv.BGPIPv4Addr != nil || bv.BGPIPv6Addr != nil {
-		apiNode.Spec.BGP = &apiv3.NodeBGPSpec{
+		apiNode.Spec.BGP = &libapiv3.NodeBGPSpec{
 			ASNumber: bv.BGPASNumber,
 		}
 
@@ -139,7 +139,7 @@ func (_ Node) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 	}
 
 	for _, orchref := range bv.OrchRefs {
-		apiNode.Spec.OrchRefs = append(apiNode.Spec.OrchRefs, apiv3.OrchRef{
+		apiNode.Spec.OrchRefs = append(apiNode.Spec.OrchRefs, libapiv3.OrchRef{
 			NodeName:     orchref.NodeName,
 			Orchestrator: orchref.Orchestrator,
 		})

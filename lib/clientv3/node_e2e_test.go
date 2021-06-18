@@ -27,8 +27,9 @@ import (
 
 	"fmt"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -62,7 +63,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 		// Add a label and check it gets written.
 		By("Adding a label to the node")
 		node.Labels = map[string]string{"test-label": "foo"}
-		node.Spec.BGP = &apiv3.NodeBGPSpec{IPv4Address: "10.0.0.1"}
+		node.Spec.BGP = &libapiv3.NodeBGPSpec{IPv4Address: "10.0.0.1"}
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -102,7 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 
 		// Update the BGP spec.
 		By("Updating the BGP spec")
-		node.Spec.BGP = &apiv3.NodeBGPSpec{}
+		node.Spec.BGP = &libapiv3.NodeBGPSpec{}
 		node.Spec.BGP.IPv4IPIPTunnelAddr = "192.168.1.1"
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -170,7 +171,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 
 		// Update the Wireguard spec.
 		By("Updating the Wireguard spec")
-		node.Spec.Wireguard = &apiv3.NodeWireguardSpec{}
+		node.Spec.Wireguard = &libapiv3.NodeWireguardSpec{}
 		node.Spec.Wireguard.InterfaceIPv4Address = "192.168.1.1"
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -189,13 +190,13 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 	ctx := context.Background()
 	name1 := "node-1"
 	name2 := "node-2"
-	spec1 := apiv3.NodeSpec{
+	spec1 := libapiv3.NodeSpec{
 		IPv4VXLANTunnelAddr: "192.168.50.5",
-		BGP: &apiv3.NodeBGPSpec{
+		BGP: &libapiv3.NodeBGPSpec{
 			IPv4Address:        "1.2.3.4",
 			IPv4IPIPTunnelAddr: "192.168.50.6",
 		},
-		OrchRefs: []apiv3.OrchRef{
+		OrchRefs: []libapiv3.OrchRef{
 			{
 				Orchestrator: "k8s",
 				NodeName:     "node1",
@@ -205,16 +206,16 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 				NodeName:     "node1",
 			},
 		},
-		Wireguard: &apiv3.NodeWireguardSpec{
+		Wireguard: &libapiv3.NodeWireguardSpec{
 			InterfaceIPv4Address: "192.168.50.7",
 		},
 	}
-	spec2 := apiv3.NodeSpec{
-		BGP: &apiv3.NodeBGPSpec{
+	spec2 := libapiv3.NodeSpec{
+		BGP: &libapiv3.NodeBGPSpec{
 			IPv4Address: "10.20.30.40",
 			IPv6Address: "aa:bb:cc::ff",
 		},
-		OrchRefs: []apiv3.OrchRef{
+		OrchRefs: []libapiv3.OrchRef{
 			{
 				Orchestrator: "k8s",
 				NodeName:     "node2",
@@ -225,7 +226,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			},
 		},
 	}
-	status := apiv3.NodeStatus{
+	status := libapiv3.NodeStatus{
 		WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
 	}
 
@@ -239,7 +240,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			be.Clean()
 
 			// Create a node.
-			n, err := c.Nodes().Create(ctx, &apiv3.Node{
+			n, err := c.Nodes().Create(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -296,12 +297,12 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			wep := apiv3.WorkloadEndpoint{
+			wep := libapiv3.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node--1-k8s-mypod-mywep",
 					Namespace: "default",
 				},
-				Spec: apiv3.WorkloadEndpointSpec{
+				Spec: libapiv3.WorkloadEndpointSpec{
 					InterfaceName: "eth0",
 					Pod:           "mypod",
 					Endpoint:      "mywep",
@@ -432,7 +433,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 	})
 
 	DescribeTable("Node e2e CRUD tests",
-		func(name1, name2 string, spec1, spec2 apiv3.NodeSpec, status apiv3.NodeStatus) {
+		func(name1, name2 string, spec1, spec2 libapiv3.NodeSpec, status libapiv3.NodeStatus) {
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -441,7 +442,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			be.Clean()
 
 			By("Updating the Node before it is created")
-			_, outError := c.Nodes().Update(ctx, &apiv3.Node{
+			_, outError := c.Nodes().Update(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-node"},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -449,7 +450,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new Node with name1/spec1 and a non-empty ResourceVersion")
-			_, outError = c.Nodes().Create(ctx, &apiv3.Node{
+			_, outError = c.Nodes().Create(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -457,18 +458,18 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
 			By("Creating a new Node with name1/spec1")
-			res1, outError := c.Nodes().Create(ctx, &apiv3.Node{
+			res1, outError := c.Nodes().Create(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res1).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same Node with name1 but with spec2")
-			_, outError = c.Nodes().Create(ctx, &apiv3.Node{
+			_, outError = c.Nodes().Create(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec2,
 			}, options.SetOptions{})
@@ -478,7 +479,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Getting Node (name1) and comparing the output against spec1")
 			res, outError := c.Nodes().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting Node (name2) before it is created")
@@ -490,39 +491,39 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			outList, outError := c.Nodes().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
+				testutils.Resource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
 			))
 
 			By("Creating a new Node with name2/spec2")
-			res2, outError := c.Nodes().Create(ctx, &apiv3.Node{
+			res2, outError := c.Nodes().Create(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name2},
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2))
 
 			By("Getting Node (name2) and comparing the output against spec2")
 			res, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the Nodes, expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.Nodes().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
-				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2),
+				testutils.Resource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
+				testutils.Resource(libapiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
 			By("Updating Node name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.Nodes().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(res1).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
 
 			By("Attempting to update the Node without a Creation Timestamp")
-			res, outError = c.Nodes().Update(ctx, &apiv3.Node{
+			res, outError = c.Nodes().Update(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: "test-fail-workload-endpoint"},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -531,7 +532,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(outError.Error()).To(Equal("error with field Metadata.CreationTimestamp = '0001-01-01 00:00:00 +0000 UTC' (field must be set for an Update request)"))
 
 			By("Attempting to update the Node without a UID")
-			res, outError = c.Nodes().Update(ctx, &apiv3.Node{
+			res, outError = c.Nodes().Update(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now()},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -559,28 +560,28 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Getting Node (name1) with the original resource version and comparing the output against spec1")
 			res, outError = c.Nodes().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting Node (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.Nodes().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(res).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			By("Listing Nodes with the original resource version and checking for a single result with name1/spec1")
 			outList, outError = c.Nodes().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
+				testutils.Resource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
 			))
 
 			By("Listing Nodes with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError = c.Nodes().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2),
-				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2),
+				testutils.Resource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2),
+				testutils.Resource(libapiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
 			By("Deleting Node (name1) with the old resource version")
@@ -591,7 +592,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Deleting Node (name1) with the new resource version")
 			dres, outError := c.Nodes().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(dres).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(dres).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
 
 			By("Updating Node name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Nodes().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
@@ -605,7 +606,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Creating Node name2 with a 2s TTL and waiting for the entry to be deleted")
-			_, outError = c.Nodes().Create(ctx, &apiv3.Node{
+			_, outError = c.Nodes().Create(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name2},
 				Spec:       spec2,
 			}, options.SetOptions{TTL: 2 * time.Second})
@@ -634,7 +635,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Setting status no node resource")
-			res1, outError = c.Nodes().Create(ctx, &apiv3.Node{
+			res1, outError = c.Nodes().Create(ctx, &libapiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -642,12 +643,12 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			res1.Status = status
 			res, outError = c.Nodes().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).ToNot(HaveOccurred())
-			Expect(res).To(MatchResourceWithStatus(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1, status))
+			Expect(res).To(MatchResourceWithStatus(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1, status))
 
 			By("Getting resource and verifying status is present")
 			res, outError = c.Nodes().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).ToNot(HaveOccurred())
-			Expect(res).To(MatchResourceWithStatus(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1, status))
+			Expect(res).To(MatchResourceWithStatus(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1, status))
 
 		},
 
@@ -673,7 +674,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Configuring a Node name1/spec1 and storing the response")
 			outRes1, err := c.Nodes().Create(
 				ctx,
-				&apiv3.Node{
+				&libapiv3.Node{
 					ObjectMeta: metav1.ObjectMeta{Name: name1},
 					Spec:       spec1,
 				},
@@ -684,7 +685,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Configuring a Node name2/spec2 and storing the response")
 			outRes2, err := c.Nodes().Create(
 				ctx,
-				&apiv3.Node{
+				&libapiv3.Node{
 					ObjectMeta: metav1.ObjectMeta{Name: name2},
 					Spec:       spec2,
 				},
@@ -702,7 +703,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking for two events, create res2 and delete re1")
-			testWatcher1.ExpectEvents(apiv3.KindNode, []watch.Event{
+			testWatcher1.ExpectEvents(libapiv3.KindNode, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes2,
@@ -723,14 +724,14 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Modifying res2")
 			outRes3, err := c.Nodes().Update(
 				ctx,
-				&apiv3.Node{
+				&libapiv3.Node{
 					ObjectMeta: outRes2.ObjectMeta,
 					Spec:       spec1,
 				},
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher2.ExpectEvents(apiv3.KindNode, []watch.Event{
+			testWatcher2.ExpectEvents(libapiv3.KindNode, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,
@@ -758,7 +759,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 				Expect(err).NotTo(HaveOccurred())
 				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 				defer testWatcher2_1.Stop()
-				testWatcher2_1.ExpectEvents(apiv3.KindNode, []watch.Event{
+				testWatcher2_1.ExpectEvents(libapiv3.KindNode, []watch.Event{
 					{
 						Type:   watch.Added,
 						Object: outRes1,
@@ -776,7 +777,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
-			testWatcher3.ExpectEvents(apiv3.KindNode, []watch.Event{
+			testWatcher3.ExpectEvents(libapiv3.KindNode, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes3,
@@ -787,7 +788,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Configuring Node name1/spec1 again and storing the response")
 			outRes1, err = c.Nodes().Create(
 				ctx,
-				&apiv3.Node{
+				&libapiv3.Node{
 					ObjectMeta: metav1.ObjectMeta{Name: name1},
 					Spec:       spec1,
 				},
@@ -799,7 +800,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
-			testWatcher4.ExpectEventsAnyOrder(apiv3.KindNode, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(libapiv3.KindNode, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,
@@ -812,7 +813,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
 			be.Clean()
-			testWatcher4.ExpectEvents(apiv3.KindNode, []watch.Event{
+			testWatcher4.ExpectEvents(libapiv3.KindNode, []watch.Event{
 				{
 					Type:     watch.Deleted,
 					Previous: outRes1,

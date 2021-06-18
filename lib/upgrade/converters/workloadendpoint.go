@@ -21,9 +21,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -138,13 +139,13 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 	ipNats := convertIPNATs(wepValue.IPv4NAT)
 	ipNats = append(ipNats, convertIPNATs(wepValue.IPv6NAT)...)
 
-	wep := apiv3.NewWorkloadEndpoint()
+	wep := libapiv3.NewWorkloadEndpoint()
 
 	wep.ObjectMeta = v1.ObjectMeta{
 		Namespace: namespace,
 		Labels:    labels,
 	}
-	wep.Spec = apiv3.WorkloadEndpointSpec{
+	wep.Spec = libapiv3.WorkloadEndpointSpec{
 		Orchestrator:  convertName(wepKey.OrchestratorID),
 		Workload:      workload,
 		Node:          ConvertNodeName(wepKey.Hostname),
@@ -226,10 +227,10 @@ func convertIPNetworks(ipNetworks []net.IPNet) []string {
 }
 
 // convertIPNATs updates the type of IPNAT struct used.
-func convertIPNATs(v1IPNATs []model.IPNAT) []apiv3.IPNAT {
-	var ipNATs []apiv3.IPNAT
+func convertIPNATs(v1IPNATs []model.IPNAT) []libapiv3.IPNAT {
+	var ipNATs []libapiv3.IPNAT
 	for _, ipNAT := range v1IPNATs {
-		ipNATs = append(ipNATs, apiv3.IPNAT{
+		ipNATs = append(ipNATs, libapiv3.IPNAT{
 			InternalIP: ipNAT.IntIP.String(),
 			ExternalIP: ipNAT.ExtIP.String(),
 		})

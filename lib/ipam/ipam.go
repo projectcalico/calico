@@ -25,7 +25,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -235,7 +236,7 @@ func detectOS(ctx context.Context) string {
 // If no pools are requested, all enabled pools are returned.
 // Also applies selector logic on node labels to determine if the pool is a match.
 // Returns the set of matching pools as well as the full set of ip pools.
-func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node v3.Node, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
+func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node libapiv3.Node, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
 	// Get all the enabled IP pools from the datastore.
 	enabledPools, err = c.pools.GetEnabledPools(version)
 	if err != nil {
@@ -296,7 +297,7 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	// selector.
 	for _, pool := range enabledPools {
 		var matches bool
-		matches, err = pool.SelectsNode(node)
+		matches, err = SelectsNode(pool, node)
 		if err != nil {
 			log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
 			return
@@ -323,14 +324,14 @@ func (c ipamClient) prepareAffinityBlocksForHost(
 	host string,
 	rsvdAttr *HostReservedAttr) ([]v3.IPPool, []net.IPNet, error) {
 	// Retrieve node for given hostname to use for ip pool node selection
-	node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
+	node, err := c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
 	if err != nil {
 		log.WithError(err).WithField("node", host).Error("failed to get node for host")
 		return nil, nil, err
 	}
 
 	// Make sure the returned value is OK.
-	v3n, ok := node.Value.(*v3.Node)
+	v3n, ok := node.Value.(*libapiv3.Node)
 	if !ok {
 		return nil, nil, fmt.Errorf("Datastore returned malformed node object")
 	}
@@ -373,7 +374,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(
 		}
 
 		// Determine if the pool selects the current node, refusing to release this particular block affinity if so.
-		blockSelectsNode, err := pool.SelectsNode(*v3n)
+		blockSelectsNode, err := SelectsNode(*pool, *v3n)
 		if err != nil {
 			logCtx.WithError(err).WithField("pool", pool).Error("Failed to determine if node matches pool, skipping")
 			continue
@@ -1754,7 +1755,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	// we should release the block's affinity to this node so it can be
 	// used elsewhere.
 	logCtx.Debugf("Looking up node labels for host affinity")
-	node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
+	node, err := c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			logCtx.WithError(err).WithField("node", host).Error("Failed to get node for host")
@@ -1765,7 +1766,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	}
 
 	// Make sure the returned value is a valid node.
-	v3n, ok := node.Value.(*v3.Node)
+	v3n, ok := node.Value.(*libapiv3.Node)
 	if !ok {
 		return fmt.Errorf("Datastore returned malformed node object")
 	}
@@ -1779,7 +1780,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	if pool == nil {
 		logCtx.Debug("No pools own this block")
 		return nil
-	} else if sel, err := pool.SelectsNode(*v3n); err != nil {
+	} else if sel, err := SelectsNode(*pool, *v3n); err != nil {
 		logCtx.WithField("selector", pool.Spec.NodeSelector).WithError(err).Error("Failed to determine node selection")
 		return err
 	} else if sel {
