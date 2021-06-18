@@ -23,7 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
@@ -125,7 +126,7 @@ func (eds *EtcdDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
 	if err != nil {
 		panic(err)
 	}
-	node.Spec.Addresses = []api.NodeAddress{}
+	node.Spec.Addresses = []libapi.NodeAddress{}
 	_, err = eds.GetCalicoClient().Nodes().Update(utils.Ctx, node, utils.NoOptions)
 	if err != nil {
 		panic(err)
@@ -133,16 +134,16 @@ func (eds *EtcdDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
 }
 
 func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
-	felixNode := api.NewNode()
+	felixNode := libapi.NewNode()
 	felixNode.Name = felix.Hostname
 	felixNode.Spec.IPv4VXLANTunnelAddr = felix.ExpectedVXLANTunnelAddr
 	if needBGP {
-		felixNode.Spec.BGP = &api.NodeBGPSpec{
+		felixNode.Spec.BGP = &libapi.NodeBGPSpec{
 			IPv4Address:        fmt.Sprintf("%s/%s", felix.IP, felix.IPPrefix),
 			IPv4IPIPTunnelAddr: felix.ExpectedIPIPTunnelAddr,
 		}
 	}
-	nodeAddress := api.NodeAddress{Address: felix.IP, Type: api.InternalIP}
+	nodeAddress := libapi.NodeAddress{Address: felix.IP, Type: libapi.InternalIP}
 	felixNode.Spec.Addresses = append(felixNode.Spec.Addresses, nodeAddress)
 	Eventually(func() error {
 		_, err := eds.GetCalicoClient().Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
@@ -153,7 +154,7 @@ func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	}, "10s", "500ms").ShouldNot(HaveOccurred())
 }
 
-func (eds *EtcdDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
+func (eds *EtcdDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
 	return eds.GetCalicoClient().WorkloadEndpoints().Create(utils.Ctx, wep, utils.NoOptions)
 }
 

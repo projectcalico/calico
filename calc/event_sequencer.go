@@ -21,12 +21,12 @@ import (
 
 	"fmt"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/felix/multidict"
 	"github.com/projectcalico/felix/proto"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/set"

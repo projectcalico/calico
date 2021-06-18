@@ -33,10 +33,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/felix/fv/containers"
@@ -377,7 +378,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			l, err := client.Nodes().List(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			// Now remove the BGP configuration for felixes[0]
-			var prevBGPSpec api.NodeBGPSpec
+			var prevBGPSpec libapi.NodeBGPSpec
 			for _, node := range l.Items {
 				log.Infof("node: %v", node)
 				if node.Name == felixes[0].Name {
