@@ -6,21 +6,14 @@ canonical_url: '/getting-started/windows-calico/limitations'
 
 ### Calico for Windows feature limitations
 
-| **Feature** | **Not supported**                                            |
-| ----------- | ------------------------------------------------------------ |
-| Install     | Operator install                                             |
-|             | GKE, IKS, OpenStack                                          |
-|             | K3 clusters                                                  |
-|             | Typha component for scaling (Linux-based feature)            |
-|             | eBPF (Linux-based feature)                                   |
-| Security    | Non-cluster hosts, including automatic host endpoints        |
-|             | Application layer policy (ALP) for Istio                     |
-|             | Encryption with Wireguard                                    |
-| Networking  | Overlay mode with BGP peering                            |
-|             | IP in IP overlay with BPG routing                            |
-|             | Cross-subnet support and MTU setting for VXLAN               |
-|             | Service IP advertisement                                     |
-|             | IPv6 and dual stack                                          |
+| Feature             |                                                              |
+| ------------------- | ------------------------------------------------------------ |
+| Distributions       | **Supported:**<br />- EKS ([non-production only](#service-clusterips-incompatible-with-selectors-on-pod-ips-in-network-policy))<br />- AKS<br />- AWS<br />- GCE<br />- Azure<br />- Kubernetes on-premises<br />- Kubernetes on DigitalOcean<br />- OpenShift<br />- Rancher RKE<br /><br />**Not supported**:<br />- GKE<br />- IKS<br />- OpenStack<br />- K3 clusters |
+| Install and upgrade | **Supported**: Manifest with manual upgrade<br /><br />**Not supported**: <br />- Operator install<br />- Non-cluster hosts<br />- Typha component for scaling (Linux-based feature) |
+| Networking          | **Supported**:<br />- Calico VXLAN, no cross-subnet or VXLAN MTU settings with [limitations](#vxlan-networking-limitations)<br />- Calico non-overlay mode with BGP peering with [limitations](#bgp-networking-limitations)<br />- IPv4<br /><br />**Not supported**: <br />- Overlay mode with BGP peering<br />- IP in IP overlay with BPG routing<br />- Cross-subnet support and MTU setting for VXLAN<br />- IPv6 and dual stack<br />- Service advertisement |
+| Security            | **Not supported**: <br />- Application Layer Policy (ALP) for Istio<br />- Policy for hosts (host endpoints, including automatic host endpoints)<br />- Encryption with WireGuard |
+| Metrics             | **Not supported**: Prometheus monitoring                     |
+| eBPF                | **Not supported**: (Linux-based feature)                     |
 
 ### {{site.prodname}} BGP networking limitations 
 
@@ -92,7 +85,7 @@ Because of differences between the Linux and Windows dataplane feature sets, the
 
 If you create a Windows host with a cloud provider (AWS for example), the creation of the vSwitch at {{site.prodname}} install time can remove the cloud provider's metadata route. If your application relies on the metadata service, you may need to examine the routing table before and after installing {{site.prodname}} in order to reinstate any lost routes.
 
-**VXLAN limitations**
+### VXLAN limitations
 
 **VXLAN support**
 
