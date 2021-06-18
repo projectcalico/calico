@@ -30,12 +30,12 @@ global_job_config:
 
 blocks:
   - name: 'Build'
-    execution_time_limit:
-      minutes: 20
     dependencies: []
     task:
       jobs:
         - name: Build
+          execution_time_limit:
+            minutes: 20
           commands:
             - make build
             - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
@@ -43,32 +43,32 @@ blocks:
             - 'cache store go-mod-cache-${SEMAPHORE_GIT_SHA} ${HOME}/go/pkg/mod/cache'
 
   - name: 'Static Checks'
-    execution_time_limit:
-      minutes: 10
     dependencies: ["Build"]
     task:
       jobs:
         - name: Static Checks
+          execution_time_limit:
+            minutes: 10
           commands:
             - make static-checks
 
   - name: 'UT'
-    execution_time_limit:
-      minutes: 45
     dependencies: ["Build"]
     task:
       jobs:
         - name: Run UT
+          execution_time_limit:
+            minutes: 45
           commands:
             - make ut
 
   - name: 'FV'
-    execution_time_limit:
-      minutes: 45
     dependencies: ["Build"]
     task:
       jobs:
         - name: Run FV
+          execution_time_limit:
+            minutes: 45
           commands:
             - make fv
 
@@ -89,6 +89,8 @@ blocks:
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       jobs:
         - name: Run CD
+          execution_time_limit:
+            minutes: 15
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
