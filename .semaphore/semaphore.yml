@@ -25,12 +25,12 @@ global_job_config:
 
 blocks:
   - name: 'CI'
-    execution_time_limit:
-      minutes: 30
     dependencies: []
     task:
       jobs:
         - name: CI
+          execution_time_limit:
+            minutes: 30
           commands:
             - make ci
             - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
@@ -38,8 +38,6 @@ blocks:
             - 'cache store go-mod-cache-${SEMAPHORE_GIT_SHA} ${HOME}/go/pkg/mod/cache'
 
   - name: 'Push Images (non-PR builds only)'
-    execution_time_limit:
-      minutes: 15
     dependencies: ["CI"]
     skip:
       # Only run on branches, not PRs.
@@ -54,6 +52,8 @@ blocks:
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       jobs:
         - name: Run CD
+          execution_time_limit:
+            minutes: 15
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi

@@ -2,7 +2,7 @@ version: v1.0
 name: Trigger Pin Updates
 
 execution_time_limit:
-  minutes: 120
+  hours: 4
 
 agent:
   machine:
@@ -29,13 +29,13 @@ global_job_config:
 
 blocks:
   - name: 'Auto pin update'
-    execution_time_limit:
-      minutes: 10
     task:
       secrets:
         - name: marvin-github-token
       jobs:
         - name: 'Auto pin update'
+          execution_time_limit:
+            minutes: 10
           priority:
             - value: 40
               when: true
