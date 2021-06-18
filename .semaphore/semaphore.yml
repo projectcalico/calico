@@ -19,18 +19,16 @@ global_job_config:
 
 blocks:
   - name: 'CI'
-    execution_time_limit:
-      minutes: 60
     dependencies: []
     task:
       jobs:
         - name: CI
+          execution_time_limit:
+            minutes: 60
           commands:
             - make ci
 
   - name: Trigger pin updates
-    execution_time_limit:
-      minutes: 5
     dependencies: []
     skip:
       when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
@@ -39,6 +37,8 @@ blocks:
         - name: semaphore-api
       jobs:
         - name: Trigger pin updates
+          execution_time_limit:
+            minutes: 5
           commands:
             - checkout
             - make semaphore-run-auto-pin-update-workflows
