@@ -1,0 +1,10 @@
+{{- if .Values.apiHost -}}
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
+data:
+  KUBERNETES_SERVICE_HOST: {{.Values.apiHost}}
+  KUBERNETES_SERVICE_PORT: "443"
+{{- end -}}

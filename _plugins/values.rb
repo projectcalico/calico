@@ -3,6 +3,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
     versionsYml = <<~EOF
     imagePullSecrets: {}
 
+    # Manually specify Kubernetes API endpoint IP or hostname. Needed when running in BPF mode.
+    apiHost: ""
+
     installation:
       enabled: true
       kubernetesProvider: ""
