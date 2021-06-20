@@ -233,7 +233,7 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: kubernetes-services-endpoint
-  namespace: calico-system
+  namespace: tigera-operator
 data:
   KUBERNETES_SERVICE_HOST: "<API server host>"
   KUBERNETES_SERVICE_PORT: "443"
