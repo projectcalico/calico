@@ -111,31 +111,24 @@ blocks:
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
       - export ZONE=europe-west3-c
-      - export VM_NAME=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${SEMAPHORE_JOB_INDEX:-ut}
-      - echo VM_NAME=${VM_NAME}
+      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
+      - echo VM_PREFIX=${VM_PREFIX}
       - export REPO_NAME=$(basename $(pwd))
+      - export NUM_FV_BATCHES=8
       - mkdir artifacts
-      - ./.semaphore/create-test-vm ${VM_NAME}
+      - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
-    - name: UT and Wireguard non-BPF FV on newer kernel
+    - name: UT/FV tests on new kernel
       execution_time_limit:
         minutes: 120
       commands:
-      - ./.semaphore/on-test-vm make --directory=${REPO_NAME} ut-bpf
-      - ./.semaphore/on-test-vm make --directory=${REPO_NAME} check-wireguard
-    - name: FV on newer kernel
-      execution_time_limit:
-        minutes: 120
-      commands:
-      - ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
-      parallelism: 8
+      - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
     epilogue:
       always:
         commands:
-        - ./.semaphore/on-test-vm ${REPO_NAME}/.semaphore/collect-artifacts
-        - gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${VM_NAME}:${REPO_NAME}/artifacts" ./ --recurse
+        - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
         - ./.semaphore/publish-artifacts
-        - gcloud --quiet compute instances delete ${VM_NAME} --zone=${ZONE}
+        - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
     - name: google-service-account-for-gce
 - name: Static checks on e1-standard-8
