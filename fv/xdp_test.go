@@ -291,6 +291,7 @@ var _ = infrastructure.DatastoreDescribe("XDP tests with initialized Felix", []a
 				expectAllAllowed(ccTCP)
 				expectAllAllowed(ccUDP)
 			})
+			// NJ: this is odd; no blacklist testing here.
 		})
 
 		Context("blocking full IP", func() {
