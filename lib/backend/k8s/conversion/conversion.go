@@ -23,6 +23,7 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	discovery "k8s.io/api/discovery/v1beta1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -55,6 +56,7 @@ type Converter interface {
 	HasIPAddress(pod *kapiv1.Pod) bool
 	StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string
 	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
+	EndpointSliceToKVP(svc *discovery.EndpointSlice) (*model.KVPair, error)
 	ProfileNameToNamespace(profileName string) (string, error)
 	ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error)
 	ProfileNameToServiceAccount(profileName string) (ns, sa string, err error)
@@ -226,6 +228,19 @@ func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 // StagedKubernetesNetworkPolicyToStagedName converts a StagedKubernetesNetworkPolicy name into a StagedNetworkPolicy name
 func (c converter) StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string {
 	return fmt.Sprintf(K8sNetworkPolicyNamePrefix + stagedK8sName)
+}
+
+// EndpointSliceToKVP converts a k8s EndpointSlice to a model.KVPair.
+func (c converter) EndpointSliceToKVP(slice *discovery.EndpointSlice) (*model.KVPair, error) {
+	return &model.KVPair{
+		Key: model.ResourceKey{
+			Name:      slice.Name,
+			Namespace: slice.Namespace,
+			Kind:      model.KindKubernetesEndpointSlice,
+		},
+		Value:    slice,
+		Revision: slice.ResourceVersion,
+	}, nil
 }
 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.

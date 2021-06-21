@@ -149,6 +149,12 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		dstServiceAcctMatch = *ar.Destination.ServiceAccounts
 	}
 
+	var service, serviceNS string
+	if ar.Destination.Services != nil {
+		service = ar.Destination.Services.Name
+		serviceNS = ar.Destination.Services.Namespace
+	}
+
 	r := model.Rule{
 		Action:      ruleActionAPIV2ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
@@ -159,12 +165,14 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		NotICMPCode: notICMPCode,
 		NotICMPType: notICMPType,
 
-		SrcNets:     ConvertStringsToNets(ar.Source.Nets),
-		SrcSelector: sourceSelector,
-		SrcPorts:    ar.Source.Ports,
-		DstNets:     NormalizeIPNets(ar.Destination.Nets),
-		DstSelector: destSelector,
-		DstPorts:    ar.Destination.Ports,
+		SrcNets:             ConvertStringsToNets(ar.Source.Nets),
+		SrcSelector:         sourceSelector,
+		SrcPorts:            ar.Source.Ports,
+		DstNets:             NormalizeIPNets(ar.Destination.Nets),
+		DstSelector:         destSelector,
+		DstPorts:            ar.Destination.Ports,
+		DstService:          service,
+		DstServiceNamespace: serviceNS,
 
 		NotSrcNets:     ConvertStringsToNets(ar.Source.NotNets),
 		NotSrcSelector: ar.Source.NotSelector,
