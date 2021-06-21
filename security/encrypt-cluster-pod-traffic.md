@@ -26,7 +26,7 @@ This how-to guide uses the following {{site.prodname}} features:
     - Set `IP_AUTODETECTION_METHOD` (or `IP6_AUTODETECTION_METHOD`) to an appropriate value. If there are multiple interfaces on a node, set the value to detect the IP address of the primary interface.
 
 > **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. Also, encryption using WireGuard is not supported on managed Kubernetes platforms which don't use Calico CNI (e.g. managed Kubernetes platforms EKS, and GKE).
-> Wirguard is supported when using Azure CNI on AKS, and on this platform will encrypt not just pod-to-pod traffic but host-to-host traffic as well.
+> WireGuard is supported when using Azure CNI on AKS, and on this platform will encrypt not just pod-to-pod traffic but host-to-host traffic as well.
 {: .alert .alert-info}
 
 ### How to
