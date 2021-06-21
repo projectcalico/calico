@@ -37,7 +37,7 @@ To ensure auto-detection of MTU works correctly, make sure that the correct enca
 
 For help on using IP in IP and/or VXLAN overlays, see [Configure overlay networking]({{ site.baseurl }}/networking/vxlan-ipip).
 
-For help on using WireGuard encryption, see [Configure WireGuard encryption]({{ site.baseurl }}/security/encrypt-cluster-pod-traffic.md).
+For help on using WireGuard encryption, see [Configure WireGuard encryption]({{ site.baseurl }}/security/encrypt-cluster-pod-traffic).
 
 ### How to
 
