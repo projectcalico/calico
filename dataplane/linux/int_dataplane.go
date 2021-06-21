@@ -459,6 +459,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			} else {
 				dp.xdpState = st
 				dp.xdpState.PopulateCallbacks(callbacks)
+				dp.RegisterManager(st)
 				log.Info("XDP acceleration enabled.")
 			}
 		}
@@ -510,7 +511,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if !config.BPFEnabled {
 		// BPF mode disabled, create the iptables-only managers.
-		ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks)
+		ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize)
 		dp.RegisterManager(ipsetsManager)
 		dp.ipsetsSourceV4 = ipsetsManager
 		// TODO Connect host IP manager to BPF
@@ -559,7 +560,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
-		dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks))
+		dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
 		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
@@ -794,7 +795,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer)
 
 		if !config.BPFEnabled {
-			dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
+			dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
 			dp.RegisterManager(newHostIPManager(
 				config.RulesConfig.WorkloadIfacePrefixes,
 				rules.IPSetIDThisHostIPs,

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,6 @@ import (
 type callbacks struct {
 	UpdatePolicyV4           *UpdatePolicyDataFuncs
 	RemovePolicyV4           *RemovePolicyDataFuncs
-	AddMembersIPSetV4        *AddMembersIPSetFuncs
-	RemoveMembersIPSetV4     *RemoveMembersIPSetFuncs
-	ReplaceIPSetV4           *ReplaceIPSetFuncs
-	RemoveIPSetV4            *RemoveIPSetFuncs
 	AddInterfaceV4           *AddInterfaceFuncs
 	RemoveInterfaceV4        *RemoveInterfaceFuncs
 	UpdateInterfaceV4        *UpdateInterfaceFuncs
@@ -40,10 +36,6 @@ func newCallbacks() *callbacks {
 	return &callbacks{
 		UpdatePolicyV4:           &UpdatePolicyDataFuncs{},
 		RemovePolicyV4:           &RemovePolicyDataFuncs{},
-		AddMembersIPSetV4:        &AddMembersIPSetFuncs{},
-		RemoveMembersIPSetV4:     &RemoveMembersIPSetFuncs{},
-		ReplaceIPSetV4:           &ReplaceIPSetFuncs{},
-		RemoveIPSetV4:            &RemoveIPSetFuncs{},
 		AddInterfaceV4:           &AddInterfaceFuncs{},
 		RemoveInterfaceV4:        &RemoveInterfaceFuncs{},
 		UpdateInterfaceV4:        &UpdateInterfaceFuncs{},
