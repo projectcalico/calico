@@ -47,8 +47,6 @@ global_job_config:
 
 blocks:
   - name: Unit Tests
-    execution_time_limit:
-      minutes: 60
     dependencies: []
     task:
       prologue:
@@ -59,15 +57,17 @@ blocks:
           - git fetch --unshallow
       jobs:
         - name: Test Version
+          execution_time_limit:
+            minutes: 60
           commands:
             - make test-cni-versions
         - name: Test Install
+          execution_time_limit:
+            minutes: 60
           commands:
             - make test-install-cni
 
   - name: Static Checks
-    execution_time_limit:
-      minutes: 15
     dependencies: []
     task:
       prologue:
@@ -78,12 +78,12 @@ blocks:
           - git fetch --unshallow
       jobs:
         - name: Static Checks
+          execution_time_limit:
+            minutes: 15
           commands:
             - make static-checks
 
   - name: Windows FV - docker
-    execution_time_limit:
-      minutes: 60
     dependencies: []
     task:
       secrets:
@@ -124,12 +124,12 @@ blocks:
           value: 1.17.2
       jobs:
         - name: FV Test matrix
+          execution_time_limit:
+            minutes: 60
           commands:
             - ./.semaphore/run-win-fv.sh
 
   - name: Windows FV - containerd
-    execution_time_limit:
-      minutes: 60
     dependencies: []
     task:
       secrets:
@@ -174,12 +174,12 @@ blocks:
           value: 1.4.4
       jobs:
         - name: FV Test matrix
+          execution_time_limit:
+            minutes: 60
           commands:
             - ./.semaphore/run-win-fv.sh
 
   - name: 'Push Images (non-PR builds only)'
-    execution_time_limit:
-      minutes: 15
     dependencies: ["Unit Tests", "Static Checks", "Windows FV - docker", "Windows FV - containerd"]
     skip:
       # Only run on branches, not PRs.
@@ -203,13 +203,13 @@ blocks:
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       jobs:
         - name: Run CD
+          execution_time_limit:
+            minutes: 15
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi
 
   - name: Trigger pin updates
-    execution_time_limit:
-      minutes: 5
     dependencies: []
     skip:
       when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
@@ -218,6 +218,8 @@ blocks:
         - name: semaphore-api
       jobs:
         - name: Trigger pin updates
+          execution_time_limit:
+            minutes: 5
           commands:
             - checkout
             - make semaphore-run-auto-pin-update-workflows
