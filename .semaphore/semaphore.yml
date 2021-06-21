@@ -11,9 +11,9 @@ agent:
 
 auto_cancel:
   running:
-    when: "branch != 'master'"
+    when: "true"
   queued:
-    when: "branch != 'master'"
+    when: "true"
 
 promotions:
 - name: Cleanup
