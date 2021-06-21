@@ -11,9 +11,9 @@ agent:
 
 auto_cancel:
   running:
-    when: "branch != 'master'"
+    when: "true"
   queued:
-    when: "branch != 'master'"
+    when: "true"
 
 promotions:
 - name: Cleanup
@@ -47,7 +47,7 @@ blocks:
         type: e1-standard-4
         os_image: ubuntu1804
     jobs:
-    - name: Build
+    - name: Build and run UT, k8sfv
       execution_time_limit:
         minutes: 20
       commands:
@@ -55,13 +55,16 @@ blocks:
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
       - >-
-        make image fv/fv.test bin/test-workload bin/test-connection
+        make image-all fv/fv.test bin/test-workload bin/test-connection
         bin/calico-felix
       - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
       - cache store go-pkg-cache .go-pkg-cache
       - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
       - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
       - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
+      - make ut
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 - name: FV Tests
   dependencies: ["Build"]
   task:
@@ -135,7 +138,7 @@ blocks:
         - gcloud --quiet compute instances delete ${VM_NAME} --zone=${ZONE}
     secrets:
     - name: google-service-account-for-gce
-- name: Static checks
+- name: Static checks on e1-standard-8
   dependencies: []
   task:
     agent:
@@ -154,35 +157,6 @@ blocks:
         minutes: 15
       commands:
       - make static-checks
-- name: Multi-arch builds, UT, k8sfv-tests
-  dependencies: []
-  task:
-    prologue:
-      commands:
-      - checkout
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
-    jobs:
-    - name: Build All
-      execution_time_limit:
-        minutes: 60
-      commands:
-        - make image-all
-    - name: UT
-      execution_time_limit:
-        minutes: 60
-      commands:
-        - make ut
-    - name: K8sfv with Typha
-      execution_time_limit:
-        minutes: 60
-      commands:
-        - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-    - name: K8sfv without Typha
-      execution_time_limit:
-        minutes: 60
-      commands:
-        - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 - name: Trigger pin updates
   dependencies: []
   skip:
