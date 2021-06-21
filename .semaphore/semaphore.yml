@@ -15,18 +15,6 @@ auto_cancel:
   queued:
     when: "true"
 
-queue:
-  # Run PR builds in parallel excluding automated pin updates from being classed as PRs.
-  - when: "pull_request =~ '.+' AND branch !~ 'semaphore-auto.*'"
-    name: "PRs"
-    processing: parallel
-
-  # Run everything else serially on a second queue.  This means that master and release branch builds
-  # will be queued with automated pin updates.
-  - when: "true"
-    name: "Automated builds"
-    processing: serialized
-
 promotions:
 - name: Cleanup
   pipeline_file: cleanup.yml
@@ -115,7 +103,7 @@ blocks:
         - ./.semaphore/collect-artifacts
         - ./.semaphore/publish-artifacts
 - name: BPF UT/FV tests on new kernel
-  dependencies: ["Build"]
+  dependencies: []
   task:
     prologue:
       commands:
@@ -151,7 +139,7 @@ blocks:
     secrets:
     - name: google-service-account-for-gce
 - name: Static checks on e1-standard-8
-  dependencies: ["Build"]
+  dependencies: []
   task:
     agent:
       machine:
