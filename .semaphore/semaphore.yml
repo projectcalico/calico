@@ -15,6 +15,18 @@ auto_cancel:
   queued:
     when: "true"
 
+queue:
+  # Run PR builds in parallel excluding automated pin updates from being classed as PRs.
+  - when: "pull_request =~ '.+' AND branch !~ 'semaphore-auto.*'"
+    name: "PRs"
+    processing: parallel
+
+  # Run everything else serially on a second queue.  This means that master and release branch builds
+  # will be queued with automated pin updates.
+  - when: "true"
+    name: "Automated builds"
+    processing: serialized
+
 promotions:
 - name: Cleanup
   pipeline_file: cleanup.yml
