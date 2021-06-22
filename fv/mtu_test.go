@@ -44,7 +44,6 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			topologyOptions := infrastructure.DefaultTopologyOptions()
 			topologyOptions.VXLANMode = api.VXLANModeAlways
 			topologyOptions.IPIPEnabled = false
-			topologyOptions.FelixLogSeverity = "debug"
 
 			// Configure the interface pattern so that it doesn't match any host interfaces.
 			topologyOptions.ExtraEnvVars["FELIX_MTUIFACEPATTERN"] = "foo"

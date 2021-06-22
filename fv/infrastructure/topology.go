@@ -17,6 +17,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"sync"
 	"time"
@@ -60,8 +61,13 @@ type TopologyOptions struct {
 }
 
 func DefaultTopologyOptions() TopologyOptions {
+	felixLogLevel := "info"
+	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
+		log.WithField("level", envLogLevel).Info("FV_FELIX_LOG_LEVEL env var set; overriding felix log level")
+		felixLogLevel = envLogLevel
+	}
 	return TopologyOptions{
-		FelixLogSeverity:  "info",
+		FelixLogSeverity:  felixLogLevel,
 		EnableIPv6:        true,
 		ExtraEnvVars:      map[string]string{},
 		ExtraVolumes:      map[string]string{},
