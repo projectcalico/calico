@@ -354,7 +354,7 @@ fv fv/latency.log fv/data-races.log: $(REMOTE_DEPS) image-test bin/iptables-lock
 	  FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
-	  FELIX_FV_FELIX_LOG_LEVEL="$(FELIX_FV_FELIX_LOG_LEVEL)" \
+	  FV_FELIX_LOG_LEVEL="$(FV_FELIX_LOG_LEVEL)" \
 	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
