@@ -19,6 +19,14 @@ set -x
 
 my_dir="$(dirname "$0")"
 repo_dir="$my_dir/.."
+skip_binaries=false
+
+for arg in "$@"; do
+  if [ "$arg" = "--skip-binaries" ]; then
+    echo "Skipping collecting binaries."
+    skip_binaries=true
+  fi
+done
 
 cd "$repo_dir" || exit 1
 
@@ -36,5 +44,7 @@ if [ -s fv/data-races.log ]; then
   # Only save the log if it's non-empty.
   xz < fv/data-races.log > artifacts/data-races.log.xz
 fi
-tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
+if ! $skip_binaries; then
+  tar -cJf artifacts/binaries.tar.xz bin/calico-felix-amd64 bin/calico-bpf bin/test-*
+fi
 exit 0
