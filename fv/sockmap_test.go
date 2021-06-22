@@ -143,7 +143,6 @@ func unmarshalBpfToolSockhashDumpOutput(output string) []mapEntry {
 func getSockmapOpts() infrastructure.TopologyOptions {
 	opts := infrastructure.DefaultTopologyOptions()
 	opts.EnableIPv6 = false
-	opts.FelixLogSeverity = "debug"
 	opts.ExtraEnvVars["FELIX_XDPENABLED"] = "0"
 	opts.ExtraEnvVars["FELIX_SIDECARACCELERATIONENABLED"] = "1"
 	return opts
