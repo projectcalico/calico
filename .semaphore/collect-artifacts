@@ -20,6 +20,7 @@ set -x
 my_dir="$(dirname "$0")"
 repo_dir="$my_dir/.."
 skip_binaries=false
+
 for arg in "$@"; do
   if [ "$arg" = "--skip-binaries" ]; then
     echo "Skipping collecting binaries."
