@@ -49,7 +49,7 @@ for batch in "${batches[@]}"; do
   prefix="[batch=${batch} pid=${pid}]"
   echo "$prefix Monitoring $log_file in background for Failure/Success messages..."
   (
-    tail -f $log_file | grep --line-buffered \
+    tail -F $log_file | grep --line-buffered \
       -e "Failure" \
       -e "SUCCESS" \
       -e "Parallel test node" \
