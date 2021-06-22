@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -984,6 +984,8 @@ func (b *BPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []stri
 
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
+	log.Debugf("out:\n%v", string(output))
+
 	if err != nil {
 		if removeErr := os.Remove(progPath); removeErr != nil {
 			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s (also failed to remove the pinned program: %s)\n%s", progPath, ifName, err, removeErr, output)
@@ -1800,6 +1802,8 @@ func (b *BPFLib) loadBPF(objPath, progPath, progType string, mapArgs []string) e
 
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
+	log.Debugf("out:\n%v", string(output))
+
 	if err != nil {
 		// FIXME: for some reason this function was called several times for a
 		// particular XDP program, just assume the map is loaded if the pinned
