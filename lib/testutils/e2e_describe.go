@@ -26,10 +26,11 @@ type DatastoreType int
 const (
 	DatastoreEtcdV3 DatastoreType = 1 << iota
 	DatastoreK8s
-	DatastoreK8sInline
 
-	DatastoreAll   = DatastoreEtcdV3 | DatastoreK8s
-	k8sAPIEndpoint = "http://localhost:8080"
+	DatastoreAll = DatastoreEtcdV3 | DatastoreK8s
+
+	// Mounted in to the test container during test-setup.
+	kubeconfig = "/kubeconfig.yaml"
 )
 
 // E2eDatastoreDescribe is a replacement for ginkgo.Describe which invokes Describe
@@ -62,38 +63,7 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 					Spec: apiconfig.CalicoAPIConfigSpec{
 						DatastoreType: apiconfig.Kubernetes,
 						KubeConfig: apiconfig.KubeConfig{
-							K8sAPIEndpoint: k8sAPIEndpoint,
-						},
-					},
-				})
-			})
-	}
-
-	if datastores&DatastoreK8sInline != 0 {
-		Describe(fmt.Sprintf("%s [Datastore] (kubernetes inline backend)", description),
-			func() {
-				body(apiconfig.CalicoAPIConfig{
-					Spec: apiconfig.CalicoAPIConfigSpec{
-						DatastoreType: apiconfig.Kubernetes,
-						KubeConfig: apiconfig.KubeConfig{
-							KubeconfigInline: fmt.Sprintf(`
-apiVersion: v1
-clusters:
-- cluster:
-    insecure-skip-tls-verify: true
-    server: %s
-  name: cluster-local
-contexts:
-- context:
-    cluster: cluster-local
-    user: ""
-  name: cluster-local
-current-context: cluster-local
-kind: Config
-preferences: {}
-`,
-								k8sAPIEndpoint,
-							),
+							Kubeconfig: kubeconfig,
 						},
 					},
 				})

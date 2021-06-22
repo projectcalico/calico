@@ -5,7 +5,7 @@ apiVersion: v1
 metadata:
   name: "127.0.0.1"
 spec:
-  podCIDR: "10.10.10.0/24"
+  podCIDR: "192.168.0.0/24"
 status:
   addresses:
   - type: NodeInternalIP

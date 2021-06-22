@@ -17,6 +17,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"sync"
 	"time"
@@ -358,7 +359,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		log.SetLevel(log.DebugLevel)
 
 		// Create a Kubernetes client, callbacks, and a syncer.
-		cfg := apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
+		cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
 		c, cb, syncer = CreateClientAndSyncer(cfg)
 
 		// Start the syncer.
@@ -400,6 +401,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, p := range pods.Items {
+			// Skip kube-system pods.
+			if p.Namespace == "kube-system" {
+				continue
+			}
 			err = c.ClientSet.CoreV1().Pods(p.Namespace).Delete(ctx, p.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -1630,7 +1635,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Expecting a Syncer snapshot to include the update with type 'KVNew'", func() {
 			// Create a new syncer / callback pair so that it performs a snapshot.
-			cfg := apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
+			cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
 			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
@@ -2306,7 +2311,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Not syncing Nodes when K8sDisableNodePoll is enabled", func() {
-			cfg := apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080", K8sDisableNodePoll: true}
+			cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml", K8sDisableNodePoll: true}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
 			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
@@ -2321,7 +2326,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Syncing HostConfig for a Node on Syncer start", func() {
-			cfg := apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080", K8sDisableNodePoll: true}
+			cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml", K8sDisableNodePoll: true}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
 			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
@@ -2976,7 +2981,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 	})
 })
 
-var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testutils.DatastoreK8sInline, func(cfg apiconfig.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c *KubeClient
 	)
@@ -2984,8 +2989,18 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 	ctx := context.Background()
 
 	BeforeEach(func() {
-		Expect(cfg.Spec.KubeConfig.KubeconfigInline).NotTo(BeEmpty())
-		// Create a client
+		// Load kubeconfig file that was mounted in to the test.
+		conf, err := ioutil.ReadFile("/kubeconfig.yaml")
+		Expect(err).NotTo(HaveOccurred())
+
+		// Override the provided config to use inline configuration.
+		cfg.Spec = apiconfig.CalicoAPIConfigSpec{
+			KubeConfig: apiconfig.KubeConfig{
+				KubeconfigInline: string(conf),
+			},
+		}
+
+		// Create a client using the config.
 		client, err := NewKubeClient(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		c = client.(*KubeClient)

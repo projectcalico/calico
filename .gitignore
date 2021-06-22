@@ -13,3 +13,4 @@ checkouts
 /release
 Makefile.common*
 *.test
+kubeconfig.yaml

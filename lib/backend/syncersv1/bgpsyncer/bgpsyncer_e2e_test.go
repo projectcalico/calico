@@ -70,6 +70,12 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			syncTester.ExpectStatusUpdate(api.ResyncInProgress)
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				expectedCacheSize += 1
+
+				if config.Spec.DatastoreType == apiconfig.Kubernetes {
+					// Should have two nodes from kind. However in etcd mode
+					// Nodes are created by calico/node, which we don't run here.
+					expectedCacheSize += 1
+				}
 			}
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectStatusUpdate(api.InSync)
@@ -78,6 +84,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			// For Kubernetes test one entry already in the cache for the node.
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/nodes/127.0.0.1")
+				syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/nodes/kind-control-plane")
 			}
 
 			By("Disabling node to node mesh and adding a default ASNumber")

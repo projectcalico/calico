@@ -20,11 +20,14 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -47,6 +50,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 	var syncTester *testutils.SyncerTester
 	var err error
 	var datamodelCleanups []func()
+	var cs kubernetes.Interface
 
 	addCleanup := func(cleanup func()) {
 		datamodelCleanups = append(datamodelCleanups, cleanup)
@@ -63,6 +67,11 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 		be, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
 		be.Clean()
+
+		// build k8s clientset.
+		cfg, err := clientcmd.BuildConfigFromFlags("", "/kubeconfig.yaml")
+		Expect(err).NotTo(HaveOccurred())
+		cs = kubernetes.NewForConfigOrDie(cfg)
 
 		// Create a SyncerTester to receive the BGP syncer callback events and to allow us
 		// to assert state.
@@ -95,7 +104,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			expectedProfile := resources.DefaultAllowProfile()
 			syncTester.ExpectData(*expectedProfile)
 			expectedCacheSize += 1
-
 			syncTester.ExpectData(model.KVPair{
 				Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "projectcalico-default-allow"}},
 				Value: &model.ProfileRules{
@@ -108,51 +116,99 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Kubernetes will have a profile for each of the namespaces that is configured.
 			// We expect:  default, kube-system, kube-public, namespace-1, namespace-2
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				// Add one for the node resource.
+				// Add one for each node resource.
+				nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				expectedCacheSize += len(nodes.Items)
+
+				// Add one for the hostIPKey for the control-plane node.
 				expectedCacheSize += 1
 
 				// Add resources for the namespaces we expect in the cluster.
-				for _, ns := range []string{"default", "kube-public", "kube-system", "namespace-1", "namespace-2", "kube-node-lease"} {
+				namespaces, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				for _, ns := range namespaces.Items {
+					name := "kns." + ns.Name
+
 					// Expect profile rules for each namespace providing default allow behavior.
 					syncTester.ExpectData(model.KVPair{
-						Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns." + ns}},
+						Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: name}},
 						Value: &model.ProfileRules{
 							InboundRules:  []model.Rule{{Action: "allow"}},
 							OutboundRules: []model.Rule{{Action: "allow"}},
 						},
 					})
+					expectedCacheSize += 1
 
 					// Expect profile labels for each namespace as well. The labels should include the name
 					// of the namespace.
 					syncTester.ExpectData(model.KVPair{
-						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: "kns." + ns}},
+						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
 						Value: map[string]string{
-							"pcns.projectcalico.org/name": ns,
+							"pcns.projectcalico.org/name": ns.Name,
 						},
 					})
+					expectedCacheSize += 1
 
-					// Expect profile rules for the default serviceaccount in each namespace.
+					// And expect a v3 profile for each namespace.
+					prof := v3.Profile{
+						TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
+						ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
+						Spec: v3.ProfileSpec{
+							LabelsToApply: map[string]string{
+								"pcns.projectcalico.org/name": ns.Name,
+							},
+							Ingress: []v3.Rule{{Action: v3.Allow}},
+							Egress:  []v3.Rule{{Action: v3.Allow}},
+						},
+					}
 					syncTester.ExpectData(model.KVPair{
-						Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "ksa." + ns + ".default"}},
-						Value: &model.ProfileRules{
-							InboundRules:  nil,
-							OutboundRules: nil,
-						},
+						Key:   model.ResourceKey{Kind: "Profile", Name: name},
+						Value: &prof,
 					})
+					expectedCacheSize += 1
 
-					// Expect profile labels for each default serviceaccount as well. The labels should include the name
-					// of the service account.
-					syncTester.ExpectData(model.KVPair{
-						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: "ksa." + ns + ".default"}},
-						Value: map[string]string{
-							"pcsa.projectcalico.org/name": "default",
-						},
-					})
+					serviceAccounts, err := cs.CoreV1().ServiceAccounts(ns.Name).List(context.Background(), metav1.ListOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					for _, sa := range serviceAccounts.Items {
+						name := "ksa." + ns.Name + "." + sa.Name
 
-					// Increase expected cache size based on per-namespace
-					// resources.  (The 4 as above, plus two v3 Profile
-					// resources, one kns. and one ksa.)
-					expectedCacheSize += 6
+						// Expect profile rules for the serviceaccounts in each namespace.
+						syncTester.ExpectData(model.KVPair{
+							Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: name}},
+							Value: &model.ProfileRules{
+								InboundRules:  nil,
+								OutboundRules: nil,
+							},
+						})
+						expectedCacheSize += 1
+
+						// Expect profile labels for each default serviceaccount as well. The labels should include the name
+						// of the service account.
+						syncTester.ExpectData(model.KVPair{
+							Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
+							Value: map[string]string{
+								"pcsa.projectcalico.org/name": sa.Name,
+							},
+						})
+						expectedCacheSize += 1
+
+						//  We also expect one v3 Profile to be present for each ServiceAccount.
+						prof := v3.Profile{
+							TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
+							ObjectMeta: metav1.ObjectMeta{Name: name, UID: sa.UID, CreationTimestamp: sa.CreationTimestamp},
+							Spec: v3.ProfileSpec{
+								LabelsToApply: map[string]string{
+									"pcsa.projectcalico.org/name": sa.Name,
+								},
+							},
+						}
+						syncTester.ExpectData(model.KVPair{
+							Key:   model.ResourceKey{Kind: "Profile", Name: name},
+							Value: &prof,
+						})
+						expectedCacheSize += 1
+					}
 				}
 			}
 			syncTester.ExpectCacheSize(expectedCacheSize)
@@ -193,7 +249,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					node.Spec.BGP = &libapiv3.NodeBGPSpec{
 						IPv4Address:        "1.2.3.4/24",
 						IPv6Address:        "aa:bb::cc/120",
-						IPv4IPIPTunnelAddr: "10.10.10.1",
+						IPv4IPIPTunnelAddr: "192.168.0.1",
 					}
 					node.Spec.VXLANTunnelMACAddr = "66:cf:23:df:22:07"
 					node.Spec.Wireguard = &libapiv3.NodeWireguardSpec{
@@ -226,7 +282,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
-					Value: "10.10.10.1",
+					Value: "192.168.0.1",
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "VXLANTunnelMACAddr"},
@@ -248,7 +304,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 							BGP: &libapiv3.NodeBGPSpec{
 								IPv4Address:        "1.2.3.4/24",
 								IPv6Address:        "aa:bb::cc/120",
-								IPv4IPIPTunnelAddr: "10.10.10.1",
+								IPv4IPIPTunnelAddr: "192.168.0.1",
 							},
 							VXLANTunnelMACAddr: "66:cf:23:df:22:07",
 							Wireguard: &libapiv3.NodeWireguardSpec{
@@ -274,7 +330,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				)
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
-					Value: "10.10.10.1",
+					Value: "192.168.0.1",
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "VXLANTunnelMACAddr"},
@@ -545,7 +601,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (KDD only)", testutil
 		// Expect a felix config for the IPIP tunnel address, generated from the podCIDR.
 		syncTester.ExpectData(model.KVPair{
 			Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
-			Value: "10.10.10.1",
+			Value: "192.168.0.1",
 		})
 
 		// Expect to be in-sync.

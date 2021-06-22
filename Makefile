@@ -152,9 +152,11 @@ ut:
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
-fv: run-etcd run-etcd-tls run-kubernetes-master run-coredns
-	$(DOCKER_RUN) --privileged --dns \
-		$(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
+fv: run-etcd run-etcd-tls cluster-create run-coredns
+	$(DOCKER_RUN) --privileged \
+		-e KUBECONFIG=/kubeconfig.yaml \
+		-v $(PWD)/$(KUBECONFIG):/kubeconfig.yaml \
+		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 	$(MAKE) stop-etcd-tls
 
@@ -189,73 +191,44 @@ run-etcd: stop-etcd
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
-## Run a local kubernetes master with API via hyperkube
-run-kubernetes-master: stop-kubernetes-master
-	# Run a Kubernetes apiserver using Docker.
-	docker run \
-		--net=host --name st-apiserver \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-apiserver \
-			--bind-address=0.0.0.0 \
-			--insecure-bind-address=0.0.0.0 \
-	        	--etcd-servers=http://127.0.0.1:2379 \
-			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
-			--service-cluster-ip-range=10.101.0.0/16 \
-			--v=10 \
-			--logtostderr=true
+## Create a local kind dual stack cluster.
+KUBECONFIG?=kubeconfig.yaml
+cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
+	# First make sure any previous cluster is deleted
+	make cluster-destroy
 
-	# Wait until the apiserver is accepting requests.
-	while ! docker exec st-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+	# Create a kind cluster.
+	$(BINDIR)/kind create cluster \
+		--config ./test/kind-config.yaml \
+		--kubeconfig $(KUBECONFIG) \
+		--image kindest/node:$(K8S_VERSION)
 
-	# And run the controller manager.
-	docker run \
-		--net=host --name st-controller-manager \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-controller-manager \
-                        --master=127.0.0.1:8080 \
-                        --min-resync-period=3m \
-                        --allocate-node-cidrs=true \
-                        --cluster-cidr=10.10.0.0/16 \
-                        --v=5
+	# Deploy resources needed in test env.
+	$(MAKE) deploy-test-resources
 
-	# Create CustomResourceDefinition (CRD) for Calico resources.
-	while ! docker run \
-	    --net=host \
-	    --rm \
-		-v  $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:8080 \
-		apply -f /manifests/config/crd; do echo "Waiting for CRDs to apply..."; sleep 2; done
+	# Wait for controller manager to be running and healthy.
+	while ! KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
 
-	# Create a Node in the API for the tests to use.
-	docker run \
-	    --net=host \
-	    --rm \
-		-v  $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:8080 \
-		apply -f /manifests/test/mock-node.yaml
 
-	# Create Namespaces required by namespaced Calico `NetworkPolicy`
-	# tests from the manifests namespaces.yaml.
-	docker run \
-	    --net=host \
-	    --rm \
-		-v  $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://localhost:8080 \
-		apply -f /manifests/test/namespaces.yaml
+## Deploy resources needed for UTs.
+deploy-test-resources: $(BINDIR)/kubectl
+	@export KUBECONFIG=$(KUBECONFIG) && \
+		./$(BINDIR)/kubectl create -f config/crd && \
+		./$(BINDIR)/kubectl create -f test/mock-node.yaml && \
+		./$(BINDIR)/kubectl create -f test/namespaces.yaml
 
-	# Wait until some resources we expect to exist are present.
-	while ! docker exec st-apiserver kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
+## Destroy local kind cluster
+cluster-destroy: $(BINDIR)/kind
+	-$(BINDIR)/kind delete cluster
+	rm -f $(KUBECONFIG)
 
-## Stop the local kubernetes master
-stop-kubernetes-master:
-	# Delete the cluster role binding.
-	-docker exec st-apiserver kubectl delete clusterrolebinding anonymous-admin
+$(BINDIR)/kind:
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
 
-	# Stop master components.
-	-docker rm -f st-apiserver st-controller-manager
+$(BINDIR)/kubectl:
+	mkdir -p $(BINDIR)
+	curl -L https://storage.googleapis.com/kubernetes-release/release/v1.17.0/bin/linux/amd64/kubectl -o $@
+	chmod +x $(BINDIR)/kubectl
 
 ## Stop the etcd container (calico-etcd)
 stop-etcd:
