@@ -19,8 +19,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/kube-controllers/pkg/config"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -61,10 +62,10 @@ var _ = Describe("IPAM controller UTs", func() {
 		c.Start(make(chan struct{}))
 
 		calicoNodeName := "cname"
-		key := model.ResourceKey{Name: calicoNodeName, Kind: apiv3.KindNode}
-		n := apiv3.Node{}
+		key := model.ResourceKey{Name: calicoNodeName, Kind: libapiv3.KindNode}
+		n := libapiv3.Node{}
 		n.Name = calicoNodeName
-		n.Spec.OrchRefs = []apiv3.OrchRef{
+		n.Spec.OrchRefs = []libapiv3.OrchRef{
 			{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes},
 		}
 		kvp := model.KVPair{
@@ -314,9 +315,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should clean up leaked IP addresses", func() {
 		// Add a new block with one allocation - on a valid node but no corresponding pod.
-		n := apiv3.Node{}
+		n := libapiv3.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []apiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -384,9 +385,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should handle blocks losing their affinity", func() {
 		// Create Calico and k8s nodes for the test.
-		n := apiv3.Node{}
+		n := libapiv3.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []apiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		kn := v1.Node{}
@@ -546,9 +547,9 @@ var _ = Describe("IPAM controller UTs", func() {
 		c.config.LeakGracePeriod = &metav1.Duration{Duration: 0 * time.Second}
 
 		// Add a new block with one allocation - on a valid node but no corresponding pod.
-		n := apiv3.Node{}
+		n := libapiv3.Node{}
 		n.Name = "cnode"
-		n.Spec.OrchRefs = []apiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 

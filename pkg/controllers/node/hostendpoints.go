@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import (
 	"reflect"
 	"time"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/kube-controllers/pkg/config"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -41,7 +41,7 @@ func NewAutoHEPController(c config.NodeControllerConfig, client client.Interface
 		rl:        workqueue.DefaultControllerRateLimiter(),
 		config:    c,
 		client:    client,
-		nodeCache: make(map[string]*api.Node),
+		nodeCache: make(map[string]*libapi.Node),
 	}
 	return ctrl
 }
@@ -50,7 +50,7 @@ type autoHostEndpointController struct {
 	rl         workqueue.RateLimiter
 	config     config.NodeControllerConfig
 	client     client.Interface
-	nodeCache  map[string]*api.Node
+	nodeCache  map[string]*libapi.Node
 	syncStatus bapi.SyncStatus
 }
 
@@ -77,8 +77,8 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 	// failed validation in the syncer, and we want to treat those as deletes.
 	if update.Value != nil {
 		switch update.KVPair.Value.(type) {
-		case *apiv3.Node:
-			n := update.KVPair.Value.(*apiv3.Node)
+		case *libapi.Node:
+			n := update.KVPair.Value.(*libapi.Node)
 			if c.config.AutoHostEndpoints {
 				// Cache all updated nodes.
 				c.nodeCache[n.Name] = n
@@ -98,7 +98,7 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 		switch update.KVPair.Key.(type) {
 		case model.ResourceKey:
 			switch update.KVPair.Key.(model.ResourceKey).Kind {
-			case apiv3.KindNode:
+			case libapi.KindNode:
 				// Try to perform unmapping based on resource name (calico node name).
 				nodeName := update.KVPair.Key.(model.ResourceKey).Name
 				if c.config.AutoHostEndpoints && c.syncStatus == bapi.InSync {
@@ -180,7 +180,7 @@ func (c *autoHostEndpointController) syncAllAutoHostendpoints(ctx context.Contex
 }
 
 // syncAutoHostendpoint syncs the auto hostendpoint for the given node.
-func (c *autoHostEndpointController) syncAutoHostendpoint(ctx context.Context, node *api.Node) error {
+func (c *autoHostEndpointController) syncAutoHostendpoint(ctx context.Context, node *libapi.Node) error {
 	hepName := c.generateAutoHostendpointName(node.Name)
 	log.Debugf("syncing hostendpoint %q from node %+v", hepName, node)
 
@@ -206,7 +206,7 @@ func (c *autoHostEndpointController) syncAutoHostendpoint(ctx context.Context, n
 
 // syncAutoHostendpointWithRetries syncs the auto hostendpoint for the given
 // node, retrying a few times if needed.
-func (c *autoHostEndpointController) syncAutoHostendpointWithRetries(ctx context.Context, node *api.Node) error {
+func (c *autoHostEndpointController) syncAutoHostendpointWithRetries(ctx context.Context, node *libapi.Node) error {
 	for n := 1; n <= 5; n++ {
 		log.Debugf("syncing hostendpoint for node %q. attempt #%v", node.Name, n)
 		if err := c.syncAutoHostendpoint(ctx, node); err != nil {
@@ -280,7 +280,7 @@ func isAutoHostendpoint(h *api.HostEndpoint) bool {
 }
 
 // createAutoHostendpoint creates an auto hostendpoint for the specified node.
-func (c *autoHostEndpointController) createAutoHostendpoint(ctx context.Context, n *api.Node) (*api.HostEndpoint, error) {
+func (c *autoHostEndpointController) createAutoHostendpoint(ctx context.Context, n *libapi.Node) (*api.HostEndpoint, error) {
 	hep := c.generateAutoHostendpointFromNode(n)
 
 	time.Sleep(c.rl.When(RateLimitCalicoCreate))
@@ -300,7 +300,7 @@ func (c *autoHostEndpointController) generateAutoHostendpointName(nodeName strin
 
 // getAutoHostendpointExpectedIPs returns all of the known IPs on the node resource
 // that should set on the auto hostendpoint.
-func (c *autoHostEndpointController) getAutoHostendpointExpectedIPs(node *api.Node) []string {
+func (c *autoHostEndpointController) getAutoHostendpointExpectedIPs(node *libapi.Node) []string {
 	expectedIPs := []string{}
 	if node.Spec.BGP != nil {
 		// BGP IPv4 and IPv6 addresses are CIDRs.
@@ -327,7 +327,7 @@ func (c *autoHostEndpointController) getAutoHostendpointExpectedIPs(node *api.No
 
 // generateAutoHostendpointFromNode returns the expected auto hostendpoint to be
 // created from the given node.
-func (c *autoHostEndpointController) generateAutoHostendpointFromNode(node *api.Node) *api.HostEndpoint {
+func (c *autoHostEndpointController) generateAutoHostendpointFromNode(node *libapi.Node) *api.HostEndpoint {
 	hepLabels := make(map[string]string, len(node.Labels)+1)
 	for k, v := range node.Labels {
 		hepLabels[k] = v

@@ -1,4 +1,4 @@
-// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -40,7 +41,7 @@ import (
 
 type WorkloadEndpointCache struct {
 	sync.RWMutex
-	m map[string]api.WorkloadEndpoint
+	m map[string]libapi.WorkloadEndpoint
 }
 
 // podController implements the Controller interface for managing Kubernetes pods
@@ -96,7 +97,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 	}
 
 	resourceCache := rcache.NewResourceCache(cacheArgs)
-	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]api.WorkloadEndpoint)}
+	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]libapi.WorkloadEndpoint)}
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
