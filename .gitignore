@@ -16,3 +16,7 @@
 .go-pkg-cache/
 Makefile.common*
 bin/
+
+# IDE files
+/.idea/
+/.vscode/
