@@ -10,7 +10,7 @@ Configure BGP (Border Gateway Protocol) between Calico nodes or peering with net
 
 ### Value
 
-{{site.prodname}} nodes can exchange routing information over BGP to enable reachability for {{site.prodname}} networked workloads (Kubernetes pods or OpenStack VMs). In an on-premises deployment this allows you to make your workloads first-class citizen across the rest of your network. In public cloud deployments, it provides an efficient way of distributing routing information within your cluster, and is often used in conjunction with IPIP overlay or cross-subnet modes.
+{{site.prodname}} nodes can exchange routing information over BGP to enable reachability for {{site.prodname}} networked workloads (Kubernetes pods or OpenStack VMs). In an on-premises deployment this allows you to make your workloads first-class citizens across the rest of your network. In public cloud deployments, it provides an efficient way of distributing routing information within your cluster, and is often used in conjunction with IPIP overlay or cross-subnet modes.
 
 ### Features
 
