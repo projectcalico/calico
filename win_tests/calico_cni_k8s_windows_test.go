@@ -2099,9 +2099,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			_, err = testutils.GetTimestampValue(utils.PodDeletedKey, containerID2)
 			Expect(err).Should(HaveOccurred())
-
-			_, err = testutils.GetTimestampValue(utils.PodDeletedKey, containerID3)
-			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
 })
