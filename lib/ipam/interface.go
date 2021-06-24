@@ -36,7 +36,7 @@ type Interface interface {
 	// which is useful for dataplanes that need to know the subnet (such as Windows).
 	//
 	// In case of error, returns the IPs allocated so far along with the error.
-	AutoAssign(ctx context.Context, args AutoAssignArgs) ([]cnet.IPNet, []cnet.IPNet, error)
+	AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMAssignments, *IPAMAssignments, error)
 
 	// ReleaseIPs releases any of the given IP addresses that are currently assigned,
 	// so that they are available to be used in another assignment.

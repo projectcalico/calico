@@ -215,12 +215,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						applyNode(bc, kc, testhost, nil)
 						defer deleteNode(bc, kc, testhost)
 
-						ips, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil)
+						ia, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0, nil)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
 						}
-						if len(ips) != 1 {
+						if len(ia.IPs) != 1 {
 							// All hosts should get an IP, although some will be from non-affine blocks.
 							log.WithError(err).Errorf("No IPs assigned for host %s", testhost)
 							testErr = fmt.Errorf("No IPs assigned to %s", testhost)
@@ -303,12 +303,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					go func() {
 						defer GinkgoRecover()
 
-						ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil)
+						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
 						}
-						if len(ips) != 1 {
+						if len(ia.IPs) != 1 {
 							log.WithError(err).Errorf("No IPs assigned for host %s", testhost)
 							testErr = fmt.Errorf("No IPs assigned to %s", testhost)
 						}
@@ -716,13 +716,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
-				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
 
 				// Should return a single IP.
-				Expect(len(ips)).To(Equal(1))
+				Expect(len(ia.IPs)).To(Equal(1))
 			})
 
 			By("checking that the other host has the affinity", func() {
@@ -746,13 +746,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to claim another address", func() {
-				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil)
+				ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA, 0, nil)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
 
 				// Should return a single IP.
-				Expect(len(ips)).To(Equal(1))
+				Expect(len(ia.IPs)).To(Equal(1))
 			})
 
 			By("checking that the pending affinity was cleaned up", func() {
@@ -1019,10 +1019,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				pools:             p,
 				blockReaderWriter: rw,
 			}
-			ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr)
+			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr)
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(len(ips)).To(Equal(1))
-			Expect(ips[0].String()).To(Equal("10.0.0.2/30"))
+			Expect(len(ia.IPs)).To(Equal(1))
+			Expect(ia.IPs[0].String()).To(Equal("10.0.0.2/30"))
 
 		})
 	})

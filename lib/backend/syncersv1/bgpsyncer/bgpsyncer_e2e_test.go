@@ -210,16 +210,17 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			var blockAffinityKeyV1 model.BlockAffinityKey
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Allocating an IP address and checking that we get an allocation block")
-				ipV4Nets1, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+				v4ia1, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 					Num4:     1,
 					Hostname: "127.0.0.1",
 				})
+				Expect(v4ia1).ToNot(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 
 				var ips1 []net.IP
-				for _, ipnet := range ipV4Nets1 {
+				for _, ipnet := range v4ia1.IPs {
 					ips1 = append(ips1, net.IP{ipnet.IP})
 				}
-				Expect(err).NotTo(HaveOccurred())
 
 				// Allocating an IP will create an affinity block that we should be notified of.  Not sure
 				// what CIDR will be chosen, so search the cached entries.
@@ -245,17 +246,18 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				expectedCacheSize += 1
 				syncTester.ExpectCacheSize(expectedCacheSize)
 
-				ipV4Nets2, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+				v4ia2, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 					Num4:     1,
 					Hostname: hostname,
 				})
+				Expect(v4ia2).ToNot(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 
 				var ips2 []net.IP
-				for _, ipnet := range ipV4Nets2 {
+				for _, ipnet := range v4ia2.IPs {
 					ips2 = append(ips2, net.IP{ipnet.IP})
 				}
 
-				Expect(err).NotTo(HaveOccurred())
 				syncTester.ExpectCacheSize(expectedCacheSize)
 
 				By("Releasing the IP addresses and checking for no updates")
