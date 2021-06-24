@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ package resourcemgr
 import (
 	"context"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
@@ -25,7 +27,7 @@ import (
 func init() {
 	registerResource(
 		api.NewBGPPeer(),
-		api.NewBGPPeerList(),
+		newBGPPeerList(),
 		false,
 		[]string{"bgppeer", "bgppeers", "bgpp", "bgpps", "bp", "bps"},
 		[]string{"NAME", "PEERIP", "NODE", "ASN"},
@@ -57,4 +59,15 @@ func init() {
 			return client.BGPPeers().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
+}
+
+// newBGPPeerList creates a new (zeroed) BGPPeerList struct with the TypeMetadata initialised to the current
+// version.
+func newBGPPeerList() *api.BGPPeerList {
+	return &api.BGPPeerList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       api.KindBGPPeerList,
+			APIVersion: api.GroupVersionCurrent,
+		},
+	}
 }

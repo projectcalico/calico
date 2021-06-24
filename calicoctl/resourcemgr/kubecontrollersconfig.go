@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ package resourcemgr
 import (
 	"context"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
@@ -25,7 +27,7 @@ import (
 func init() {
 	registerResource(
 		api.NewKubeControllersConfiguration(),
-		api.NewKubeControllersConfigurationList(),
+		newKubeControllersConfigurationList(),
 		false,
 		[]string{"kubecontrollersconfiguration", "kubecontrollersconfigurations", "kubecontrollersconfig", "kubecontrollersconfigs"},
 		[]string{"NAME"},
@@ -54,4 +56,15 @@ func init() {
 			return client.KubeControllersConfiguration().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
+}
+
+// newKubeControllersConfigurationList creates a new (zeroed) KubeControllersConfigurationList struct with the TypeMetadata
+// initialized to the current version.
+func newKubeControllersConfigurationList() *api.KubeControllersConfigurationList {
+	return &api.KubeControllersConfigurationList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       api.KindKubeControllersConfigurationList,
+			APIVersion: api.GroupVersionCurrent,
+		},
+	}
 }
