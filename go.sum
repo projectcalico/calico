@@ -648,8 +648,8 @@ github.com/projectcalico/cni-plugin v1.11.1-0.20210621230247-02308c048080 h1:i8R
 github.com/projectcalico/cni-plugin v1.11.1-0.20210621230247-02308c048080/go.mod h1:J+tHjIjoenfGQ3WTK+qv9OMpg61/xMfFjO2T0ozVNnk=
 github.com/projectcalico/confd v1.0.1-0.20210622213342-1c37cc557fdc h1:1/q6XCxfYkjlRsnjsWAuwO01jwnWbnqUhZtDGxqqK7c=
 github.com/projectcalico/confd v1.0.1-0.20210622213342-1c37cc557fdc/go.mod h1:CIA+LXTysdrDptNXhoMWGytfGV40UgmifeFbOetVk00=
-github.com/projectcalico/felix v0.0.0-20210622230522-91f2dbe2dd6c h1:k2x92rwfs+DLbChWh3IsbNyJkWymZwM6tYZ/njD8T5k=
-github.com/projectcalico/felix v0.0.0-20210622230522-91f2dbe2dd6c/go.mod h1:4RqeUlS4KgT9NddkfsQSEt0+wTKBn08CCmfVwkehIIQ=
+github.com/projectcalico/felix v0.0.0-20210624125149-68fb4eb7310b h1:LO5Ap4v3Vt8i9pSGA9dZ2qS25N6Rl8Hxg9CELpBh+cQ=
+github.com/projectcalico/felix v0.0.0-20210624125149-68fb4eb7310b/go.mod h1:4RqeUlS4KgT9NddkfsQSEt0+wTKBn08CCmfVwkehIIQ=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
