@@ -34,8 +34,8 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang
-LD := llc
+CC := clang-11
+LD := llc-11
 
 C_FILES:=filter.c redir.c sockops.c
 OBJS:=$(addprefix bin/,$(C_FILES:.c=.o))
