@@ -109,6 +109,8 @@ func (d *grpcDataplane) DoNetworking(
 			Name:     p.Name,
 			Protocol: p.Protocol.String(),
 			Port:     uint32(p.Port),
+			HostPort: uint32(p.HostPort),
+			HostIp:   p.HostIP,
 		})
 	}
 
