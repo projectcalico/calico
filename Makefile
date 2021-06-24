@@ -1,7 +1,9 @@
 PACKAGE_NAME=github.com/projectcalico/libcalico-go
-GO_BUILD_VER=v0.51
+GO_BUILD_VER=v0.53
 
 ORGANIZATION=projectcalico
+SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_LIBCALICO_GO_PROJECT_ID)
+
 # Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
 SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_TYPHA_PROJECT_ID) $(SEMAPHORE_KUBE_CONTROLLERS_PROJECT_ID) \
 	$(SEMAPHORE_CALICOCTL_PROJECT_ID) $(SEMAPHORE_CNI_PROJECT_ID) $(SEMAPHORE_API_SERVER_OSS_PROJECT_ID) \
@@ -255,3 +257,9 @@ st:
 .PHONY: ci
 ## Run what CI runs
 ci: clean static-checks test
+
+###############################################################################
+# Updating pins
+###############################################################################
+update-pins: update-api-pin
+
