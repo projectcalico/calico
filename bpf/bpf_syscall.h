@@ -141,10 +141,12 @@ int bpf_map_load_multi(__u32 map_fd,
                        void *values_out) {
    int count = 0;
    union bpf_attr attr = {};
+   __u64 last_good_key = (__u64)(unsigned long)current_key;
    attr.map_fd = map_fd;
-   attr.key = (__u64)(unsigned long)current_key;
+   attr.key = last_good_key;
    for (int i = 0; i < max_num; i++) {
      // Load the next key from the map.
+   get_next_key:
      attr.value = (__u64)(unsigned long)keys_out;
      int rc = syscall(SYS_bpf, BPF_MAP_GET_NEXT_KEY, &attr, sizeof(attr));
      if (rc != 0) {
@@ -159,8 +161,15 @@ int bpf_map_load_multi(__u32 map_fd,
 
      rc = syscall(SYS_bpf, BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr));
      if (rc != 0) {
+       if (errno == ENOENT) {
+         // Expected next entry has just been deleted.  We need
+         // to BPF_MAP_GET_NEXT_KEY again from the previous key.
+         attr.key = last_good_key;
+         goto get_next_key;
+       }
        return -errno;
      }
+     last_good_key = attr.key;
 
      keys_out+=key_stride;
      values_out+=value_stride;
