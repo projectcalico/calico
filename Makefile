@@ -147,7 +147,7 @@ clean:
 ###############################################################################
 # Automated pin updates
 ###############################################################################
-update-pins: update-libcalico-pin update-typha-pin update-pod2daemon-pin
+update-pins: update-api-pin update-libcalico-pin update-typha-pin update-pod2daemon-pin
 
 POD2DAEMON_BRANCH?=$(PIN_BRANCH)
 POD2DAEMON_REPO?=github.com/projectcalico/pod2daemon
