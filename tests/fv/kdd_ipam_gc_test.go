@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,11 +28,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	backend "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -114,9 +113,9 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 		// Set the leak grace period to a short duration to speed up the test.
 		By("shortening the leak grace period for the test", func() {
-			kcc := v3.NewKubeControllersConfiguration()
+			kcc := api.NewKubeControllersConfiguration()
 			kcc.Name = "default"
-			kcc.Spec.Controllers.Node = &v3.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second}}
+			kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second}}
 			_, err = calicoClient.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 		})

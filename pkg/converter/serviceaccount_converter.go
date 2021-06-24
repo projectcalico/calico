@@ -17,7 +17,7 @@ package converter
 import (
 	"fmt"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 
 	"k8s.io/api/core/v1"

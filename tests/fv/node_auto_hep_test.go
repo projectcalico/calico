@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,10 +28,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
@@ -170,7 +171,7 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
-		cn.Spec.Wireguard = &api.NodeWireguardSpec{
+		cn.Spec.Wireguard = &libapi.NodeWireguardSpec{
 			InterfaceIPv4Address: "192.168.100.1",
 		}
 		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
@@ -183,7 +184,7 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		// Delete the Kubernetes node.
 		err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		Eventually(func() *api.Node {
+		Eventually(func() *libapi.Node {
 			node, _ := c.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 			return node
 		}, time.Second*2, 500*time.Millisecond).Should(BeNil())
@@ -315,16 +316,16 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create a Calico node with a reference to it.
-		cn := api.NewNode()
+		cn := libapi.NewNode()
 		cn.Name = cNodeName
 		cn.Labels = map[string]string{"calico-label": "calico-value"}
-		cn.Spec = api.NodeSpec{
-			BGP: &api.NodeBGPSpec{
+		cn.Spec = libapi.NodeSpec{
+			BGP: &libapi.NodeBGPSpec{
 				IPv4Address:        "172.16.1.1/24",
 				IPv6Address:        "fe80::1",
 				IPv4IPIPTunnelAddr: "192.168.100.1",
 			},
-			OrchRefs: []api.OrchRef{
+			OrchRefs: []libapi.OrchRef{
 				{
 					NodeName:     kNodeName,
 					Orchestrator: "k8s",
@@ -357,17 +358,17 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 	})
 })
 
-func calicoNode(c client.Interface, name string, k8sNodeName string, labels map[string]string) *api.Node {
+func calicoNode(c client.Interface, name string, k8sNodeName string, labels map[string]string) *libapi.Node {
 	// Create a Calico node with a reference to it.
-	node := api.NewNode()
+	node := libapi.NewNode()
 	node.Name = name
 	node.Labels = make(map[string]string)
 	for k, v := range labels {
 		node.Labels[k] = v
 	}
 
-	node.Spec = api.NodeSpec{
-		BGP: &api.NodeBGPSpec{
+	node.Spec = libapi.NodeSpec{
+		BGP: &libapi.NodeBGPSpec{
 			IPv4Address:        "172.16.1.1/24",
 			IPv6Address:        "fe80::1",
 			IPv4IPIPTunnelAddr: "192.168.100.1",
@@ -376,7 +377,7 @@ func calicoNode(c client.Interface, name string, k8sNodeName string, labels map[
 
 	// Add in the orchRef if a k8s node was provided.
 	if k8sNodeName != "" {
-		node.Spec.OrchRefs = []api.OrchRef{{NodeName: k8sNodeName, Orchestrator: "k8s"}}
+		node.Spec.OrchRefs = []libapi.OrchRef{{NodeName: k8sNodeName, Orchestrator: "k8s"}}
 	}
 	return node
 }

@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	kdd "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"

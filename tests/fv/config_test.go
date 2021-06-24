@@ -21,8 +21,8 @@ import (
 	"os"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

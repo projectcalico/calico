@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,10 +34,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
@@ -190,10 +191,10 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}
 			_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			cn := api.NewNode()
+			cn := libapi.NewNode()
 			cn.Name = cNodeName
-			cn.Spec = api.NodeSpec{
-				OrchRefs: []api.OrchRef{
+			cn.Spec = libapi.NodeSpec{
+				OrchRefs: []libapi.OrchRef{
 					{
 						NodeName:     kNodeName,
 						Orchestrator: "k8s",
@@ -206,7 +207,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(func() *api.Node {
+			Eventually(func() *libapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*2, 500*time.Millisecond).Should(BeNil())
@@ -221,12 +222,12 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			cn := &api.Node{
+			cn := &libapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cNodeName,
 				},
-				Spec: api.NodeSpec{
-					OrchRefs: []api.OrchRef{
+				Spec: libapi.NodeSpec{
+					OrchRefs: []libapi.OrchRef{
 						{
 							NodeName:     kNodeName,
 							Orchestrator: "mesos",
@@ -239,7 +240,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			Consistently(func() *api.Node {
+			Consistently(func() *libapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
@@ -250,16 +251,16 @@ var _ = Describe("kube-controllers FV tests", func() {
 		})
 
 		It("should not be removed if orchrefs are nil.", func() {
-			cn := &api.Node{
+			cn := &libapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cNodeName,
 				},
-				Spec: api.NodeSpec{},
+				Spec: libapi.NodeSpec{},
 			}
 			_, err := calicoClient.Nodes().Create(context.Background(), cn, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			Consistently(func() *api.Node {
+			Consistently(func() *libapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
@@ -276,12 +277,12 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create the node object in Calico's datastore.
-			cn := &api.Node{
+			cn := &libapi.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cNodeName,
 				},
-				Spec: api.NodeSpec{
-					OrchRefs: []api.OrchRef{
+				Spec: libapi.NodeSpec{
+					OrchRefs: []libapi.OrchRef{
 						{
 							NodeName:     kNodeName,
 							Orchestrator: "k8s",
@@ -329,12 +330,12 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create the WEP, using the address.
-			wep := api.WorkloadEndpoint{
+			wep := libapi.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "caliconodename-k8s-mypod-mywep",
 					Namespace: "default",
 				},
-				Spec: api.WorkloadEndpointSpec{
+				Spec: libapi.WorkloadEndpointSpec{
 					InterfaceName: "eth0",
 					Pod:           "mypod",
 					Endpoint:      "mywep",
@@ -452,7 +453,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check that the node is removed from Calico
-			Eventually(func() *api.Node {
+			Eventually(func() *libapi.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
 			}, time.Second*2, 500*time.Millisecond).Should(BeNil())
@@ -875,7 +876,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}
 			wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
-			wep := api.NewWorkloadEndpoint()
+			wep := libapi.NewWorkloadEndpoint()
 			wep.Name = wepName
 			wep.Namespace = podNamespace
 			wep.Labels = map[string]string{
@@ -883,7 +884,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 				"projectcalico.org/namespace":    podNamespace,
 				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 			}
-			wep.Spec = api.WorkloadEndpointSpec{
+			wep.Spec = libapi.WorkloadEndpointSpec{
 				ContainerID:   "container-id-1",
 				Orchestrator:  "k8s",
 				Pod:           podName,
@@ -926,7 +927,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			By("updating the workload endpoint's container ID", func() {
 				var err error
-				var gwep *api.WorkloadEndpoint
+				var gwep *libapi.WorkloadEndpoint
 				for i := 0; i < 5; i++ {
 					// This emulates a scenario in which the CNI plugin can be called for the same Kubernetes
 					// Pod multiple times with a different container ID.
@@ -958,7 +959,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			var w *api.WorkloadEndpoint
+			var w *libapi.WorkloadEndpoint
 			By("waiting for the labels to appear in the datastore", func() {
 				Eventually(func() error {
 					var err error
@@ -1047,7 +1048,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}
 			wepName, err := wepIDs.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
-			wep := api.NewWorkloadEndpoint()
+			wep := libapi.NewWorkloadEndpoint()
 			wep.Name = wepName
 			wep.Namespace = podNamespace
 			wep.Labels = map[string]string{
@@ -1055,7 +1056,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 				"projectcalico.org/namespace":    podNamespace,
 				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 			}
-			wep.Spec = api.WorkloadEndpointSpec{
+			wep.Spec = libapi.WorkloadEndpointSpec{
 				ContainerID:   "container-id-1",
 				Orchestrator:  "k8s",
 				Pod:           podName,
