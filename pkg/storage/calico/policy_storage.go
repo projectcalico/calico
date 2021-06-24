@@ -14,9 +14,9 @@ import (
 	etcd "k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	aapi "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	libcalicoapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -29,7 +29,7 @@ func NewNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, factory
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.NetworkPolicy)
+		res := obj.(*api.NetworkPolicy)
 		if strings.HasPrefix(res.Name, conversion.K8sNetworkPolicyNamePrefix) {
 			return nil, cerrors.ErrorOperationNotSupported{
 				Operation:  "create or apply",
@@ -41,7 +41,7 @@ func NewNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, factory
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.NetworkPolicy)
+		res := obj.(*api.NetworkPolicy)
 		if strings.HasPrefix(res.Name, conversion.K8sNetworkPolicyNamePrefix) {
 			return nil, cerrors.ErrorOperationNotSupported{
 				Operation:  "update or apply",
@@ -80,8 +80,8 @@ func NewNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, factory
 		versioner:         APIObjectVersioner{&etcd.APIObjectVersioner{}},
 		aapiType:          reflect.TypeOf(aapi.NetworkPolicy{}),
 		aapiListType:      reflect.TypeOf(aapi.NetworkPolicyList{}),
-		libCalicoType:     reflect.TypeOf(libcalicoapi.NetworkPolicy{}),
-		libCalicoListType: reflect.TypeOf(libcalicoapi.NetworkPolicyList{}),
+		libCalicoType:     reflect.TypeOf(api.NetworkPolicy{}),
+		libCalicoListType: reflect.TypeOf(api.NetworkPolicyList{}),
 		isNamespaced:      true,
 		create:            createFn,
 		update:            updateFn,
@@ -100,17 +100,17 @@ type NetworkPolicyConverter struct {
 
 func (rc NetworkPolicyConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
 	aapiPolicy := aapiObj.(*aapi.NetworkPolicy)
-	lcgPolicy := &libcalicoapi.NetworkPolicy{}
+	lcgPolicy := &api.NetworkPolicy{}
 	lcgPolicy.TypeMeta = aapiPolicy.TypeMeta
 	lcgPolicy.ObjectMeta = aapiPolicy.ObjectMeta
-	lcgPolicy.Kind = libcalicoapi.KindNetworkPolicy
-	lcgPolicy.APIVersion = libcalicoapi.GroupVersionCurrent
+	lcgPolicy.Kind = api.KindNetworkPolicy
+	lcgPolicy.APIVersion = api.GroupVersionCurrent
 	lcgPolicy.Spec = aapiPolicy.Spec
 	return lcgPolicy
 }
 
 func (rc NetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
-	lcgPolicy := libcalicoObject.(*libcalicoapi.NetworkPolicy)
+	lcgPolicy := libcalicoObject.(*api.NetworkPolicy)
 	aapiPolicy := aapiObj.(*aapi.NetworkPolicy)
 	aapiPolicy.Spec = lcgPolicy.Spec
 	aapiPolicy.TypeMeta = lcgPolicy.TypeMeta
@@ -118,7 +118,7 @@ func (rc NetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObject, a
 }
 
 func (rc NetworkPolicyConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
-	lcgPolicyList := libcalicoListObject.(*libcalicoapi.NetworkPolicyList)
+	lcgPolicyList := libcalicoListObject.(*api.NetworkPolicyList)
 	aapiPolicyList := aapiListObj.(*aapi.NetworkPolicyList)
 	if libcalicoListObject == nil {
 		aapiPolicyList.Items = []aapi.NetworkPolicy{}

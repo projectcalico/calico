@@ -4,8 +4,8 @@ go 1.15
 
 require (
 	github.com/go-openapi/spec v0.19.5
-	github.com/google/gofuzz v1.2.0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210524102741-3503e05cfaa8
+	github.com/projectcalico/api v0.0.0-20210615230555-586917f350df
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210618103937-d18c73c16a40
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
@@ -17,7 +17,6 @@ require (
 	k8s.io/code-generator v0.21.0-rc.0
 	k8s.io/component-base v0.21.0-rc.0
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
 	k8s.io/kubernetes v1.21.0-rc.0
 )
 

@@ -28,7 +28,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/util/interrupt"
 
-	v3 "github.com/projectcalico/apiserver/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/spf13/cobra"
 	"k8s.io/klog"

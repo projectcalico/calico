@@ -39,8 +39,8 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 
+	"github.com/projectcalico/api/pkg/openapi"
 	"github.com/projectcalico/apiserver/pkg/apiserver"
-	"github.com/projectcalico/apiserver/pkg/openapi"
 )
 
 // CalicoServerOptions contains the aggregation of configuration structs for

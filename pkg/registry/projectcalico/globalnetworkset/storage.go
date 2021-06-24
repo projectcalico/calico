@@ -21,7 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 
-	calico "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/apiserver/pkg/registry/projectcalico/server"
 )
 

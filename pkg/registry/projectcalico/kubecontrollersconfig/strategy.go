@@ -28,9 +28,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 	apivalidation "k8s.io/kubernetes/pkg/apis/core/validation"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-
-	calico "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 type apiServerStrategy struct {
@@ -50,7 +48,7 @@ func (apiServerStrategy) NamespaceScoped() bool {
 // PrepareForCreate clears the Status
 func (apiServerStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
 	kubeControllersConfig := obj.(*calico.KubeControllersConfiguration)
-	kubeControllersConfig.Status = v3.KubeControllersConfigurationStatus{}
+	kubeControllersConfig.Status = calico.KubeControllersConfigurationStatus{}
 }
 
 // PrepareForUpdate copies the Status from old to obj

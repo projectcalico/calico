@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	calico "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/libcalico-go/lib/options"
 

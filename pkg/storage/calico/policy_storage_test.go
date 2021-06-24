@@ -18,8 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog"
 
-	calico "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
-	calicov3 "github.com/projectcalico/apiserver/pkg/apis/projectcalico/v3"
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -40,7 +39,6 @@ var codecs = serializer.NewCodecFactory(scheme)
 func init() {
 	metav1.AddToGroupVersion(scheme, metav1.SchemeGroupVersion)
 	calico.AddToScheme(scheme)
-	calicov3.AddToScheme(scheme)
 }
 
 func TestNetworkPolicyCreate(t *testing.T) {
@@ -595,7 +593,7 @@ func TestNetworkPolicyList(t *testing.T) {
 }
 
 func testSetup(t *testing.T) (context.Context, *resourceStore, *resourceStore) {
-	codec := apitesting.TestCodec(codecs, calicov3.SchemeGroupVersion)
+	codec := apitesting.TestCodec(codecs, calico.SchemeGroupVersion)
 	cfg, err := apiconfig.LoadClientConfig("")
 	if err != nil {
 		klog.Errorf("Failed to load client config: %q", err)

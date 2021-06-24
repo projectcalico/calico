@@ -13,9 +13,9 @@ import (
 	etcd "k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	aapi "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	libcalicoapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -26,12 +26,12 @@ func NewGlobalNetworkSetStorage(opts Options) (registry.DryRunnableStorage, fact
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.GlobalNetworkSet)
+		res := obj.(*api.GlobalNetworkSet)
 		return c.GlobalNetworkSets().Create(ctx, res, oso)
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.GlobalNetworkSet)
+		res := obj.(*api.GlobalNetworkSet)
 		return c.GlobalNetworkSets().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -57,8 +57,8 @@ func NewGlobalNetworkSetStorage(opts Options) (registry.DryRunnableStorage, fact
 		versioner:         etcd.APIObjectVersioner{},
 		aapiType:          reflect.TypeOf(aapi.GlobalNetworkSet{}),
 		aapiListType:      reflect.TypeOf(aapi.GlobalNetworkSetList{}),
-		libCalicoType:     reflect.TypeOf(libcalicoapi.GlobalNetworkSet{}),
-		libCalicoListType: reflect.TypeOf(libcalicoapi.GlobalNetworkSetList{}),
+		libCalicoType:     reflect.TypeOf(api.GlobalNetworkSet{}),
+		libCalicoListType: reflect.TypeOf(api.GlobalNetworkSetList{}),
 		isNamespaced:      false,
 		create:            createFn,
 		update:            updateFn,
@@ -77,17 +77,17 @@ type GlobalNetworkSetConverter struct {
 
 func (gc GlobalNetworkSetConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
 	aapiGlobalNetworkSet := aapiObj.(*aapi.GlobalNetworkSet)
-	lcgGlobalNetworkSet := &libcalicoapi.GlobalNetworkSet{}
+	lcgGlobalNetworkSet := &api.GlobalNetworkSet{}
 	lcgGlobalNetworkSet.TypeMeta = aapiGlobalNetworkSet.TypeMeta
 	lcgGlobalNetworkSet.ObjectMeta = aapiGlobalNetworkSet.ObjectMeta
-	lcgGlobalNetworkSet.Kind = libcalicoapi.KindGlobalNetworkSet
-	lcgGlobalNetworkSet.APIVersion = libcalicoapi.GroupVersionCurrent
+	lcgGlobalNetworkSet.Kind = api.KindGlobalNetworkSet
+	lcgGlobalNetworkSet.APIVersion = api.GroupVersionCurrent
 	lcgGlobalNetworkSet.Spec = aapiGlobalNetworkSet.Spec
 	return lcgGlobalNetworkSet
 }
 
 func (gc GlobalNetworkSetConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
-	lcgGlobalNetworkSet := libcalicoObject.(*libcalicoapi.GlobalNetworkSet)
+	lcgGlobalNetworkSet := libcalicoObject.(*api.GlobalNetworkSet)
 	aapiGlobalNetworkSet := aapiObj.(*aapi.GlobalNetworkSet)
 	aapiGlobalNetworkSet.Spec = lcgGlobalNetworkSet.Spec
 	aapiGlobalNetworkSet.TypeMeta = lcgGlobalNetworkSet.TypeMeta
@@ -95,7 +95,7 @@ func (gc GlobalNetworkSetConverter) convertToAAPI(libcalicoObject resourceObject
 }
 
 func (gc GlobalNetworkSetConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
-	lcgGlobalNetworkSetList := libcalicoListObject.(*libcalicoapi.GlobalNetworkSetList)
+	lcgGlobalNetworkSetList := libcalicoListObject.(*api.GlobalNetworkSetList)
 	aapiGlobalNetworkSetList := aapiListObj.(*aapi.GlobalNetworkSetList)
 	if libcalicoListObject == nil {
 		aapiGlobalNetworkSetList.Items = []aapi.GlobalNetworkSet{}

@@ -13,9 +13,9 @@ import (
 	etcd "k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	aapi "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	libcalicoapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -26,12 +26,12 @@ func NewNetworkSetStorage(opts Options) (registry.DryRunnableStorage, factory.De
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.NetworkSet)
+		res := obj.(*api.NetworkSet)
 		return c.NetworkSets().Create(ctx, res, oso)
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.NetworkSet)
+		res := obj.(*api.NetworkSet)
 		return c.NetworkSets().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -57,8 +57,8 @@ func NewNetworkSetStorage(opts Options) (registry.DryRunnableStorage, factory.De
 		versioner:         etcd.APIObjectVersioner{},
 		aapiType:          reflect.TypeOf(aapi.NetworkSet{}),
 		aapiListType:      reflect.TypeOf(aapi.NetworkSetList{}),
-		libCalicoType:     reflect.TypeOf(libcalicoapi.NetworkSet{}),
-		libCalicoListType: reflect.TypeOf(libcalicoapi.NetworkSetList{}),
+		libCalicoType:     reflect.TypeOf(api.NetworkSet{}),
+		libCalicoListType: reflect.TypeOf(api.NetworkSetList{}),
 		isNamespaced:      true,
 		create:            createFn,
 		update:            updateFn,
@@ -77,17 +77,17 @@ type NetworkSetConverter struct {
 
 func (gc NetworkSetConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
 	aapiNetworkSet := aapiObj.(*aapi.NetworkSet)
-	lcgNetworkSet := &libcalicoapi.NetworkSet{}
+	lcgNetworkSet := &api.NetworkSet{}
 	lcgNetworkSet.TypeMeta = aapiNetworkSet.TypeMeta
 	lcgNetworkSet.ObjectMeta = aapiNetworkSet.ObjectMeta
-	lcgNetworkSet.Kind = libcalicoapi.KindNetworkSet
-	lcgNetworkSet.APIVersion = libcalicoapi.GroupVersionCurrent
+	lcgNetworkSet.Kind = api.KindNetworkSet
+	lcgNetworkSet.APIVersion = api.GroupVersionCurrent
 	lcgNetworkSet.Spec = aapiNetworkSet.Spec
 	return lcgNetworkSet
 }
 
 func (gc NetworkSetConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
-	lcgNetworkSet := libcalicoObject.(*libcalicoapi.NetworkSet)
+	lcgNetworkSet := libcalicoObject.(*api.NetworkSet)
 	aapiNetworkSet := aapiObj.(*aapi.NetworkSet)
 	aapiNetworkSet.Spec = lcgNetworkSet.Spec
 	aapiNetworkSet.TypeMeta = lcgNetworkSet.TypeMeta
@@ -95,7 +95,7 @@ func (gc NetworkSetConverter) convertToAAPI(libcalicoObject resourceObject, aapi
 }
 
 func (gc NetworkSetConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
-	lcgNetworkSetList := libcalicoListObject.(*libcalicoapi.NetworkSetList)
+	lcgNetworkSetList := libcalicoListObject.(*api.NetworkSetList)
 	aapiNetworkSetList := aapiListObj.(*aapi.NetworkSetList)
 	if libcalicoListObject == nil {
 		aapiNetworkSetList.Items = []aapi.NetworkSet{}
