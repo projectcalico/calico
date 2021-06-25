@@ -679,6 +679,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.PrometheusWireGuardMetricsEnabled != nil {
+		in, out := &in.PrometheusWireGuardMetricsEnabled, &out.PrometheusWireGuardMetricsEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.FailsafeInboundHostPorts != nil {
 		in, out := &in.FailsafeInboundHostPorts, &out.FailsafeInboundHostPorts
 		*out = new([]ProtoPort)
