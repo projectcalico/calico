@@ -46,9 +46,10 @@ The Vector Packet Processor (VPP) is a high-performance, open-source userspace n
 
 This guide details two ways to install {{site.prodname}} with the VPP dataplane:
 - On a managed EKS cluster. This is the option that requires the least configuration
+- On a managed EKS cluster with the DPDK interface driver. This options is more complex to setup but provides better performance
 - On any Kubernetes cluster
 
-In both cases, here are the details of what you will get:
+In all cases, here are the details of what you will get:
 
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
 
@@ -82,7 +83,6 @@ Before you get started, make sure you have downloaded and configured the {% incl
 
 1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
-   Standard install:
    ```bash
    kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp-eks.yaml
    ```
@@ -98,56 +98,62 @@ Before you get started, make sure you have downloaded and configured the {% incl
    {: .alert .alert-success}
 
 
-#### Provision and configure DPDK based cluster
+%>
+<label:Install on EKS with DPDK>
+<%
 
-DPDK provides better performance compared to the standard install but it requires some additional customisations (hugepages, for instance) in the EKS worker instances. We have created a bash script, `create_eks_cluster.sh`, which automates the whole process right from customising the EKS worker instances(using cloud-init/userdata) to creating the cluster and the worker nodegroup. The script has been tested on MacOS and Linux.
+### Install Calico with the VPP dataplane on an EKS cluster with the DPDK driver
 
-1. Download the script using wget or curl
+#### Requirements
 
-```bash
-curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/scripts/create_eks_cluster.sh -o create_eks_cluster.sh
-```
-
-or
-
-```bash
-wget https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/scripts/create_eks_cluster.sh
-```
-
-2. Either execute the script after filling in the `CONFIG PARAMS` section in the script
+These instructions require that `eksctl` (>= 0.51) and the `aws` (version 2) CLI are installed on your system to provision the cluster.
 
 
-```bash
-###############################################################################
-#                           CONFIG PARAMS                                     #
-###############################################################################
-### Config params; replace with appropriate values
-CLUSTER_NAME=                           # cluster name (MANDATORY)
-REGION=                                 # cluster region (MANDATORY)
-NODEGROUP_NAME=$CLUSTER_NAME-nodegroup  # managed nodegroup name
-LT_NAME=$CLUSTER_NAME-lt                # EC2 launch template name
-KEYNAME=                                # keypair name for ssh access to worker nodes
-SSH_SECURITY_GROUP_NAME="$CLUSTER_NAME-ssh-allow"
-SSH_ALLOW_CIDR="0.0.0.0/0"              # source IP from which ssh access is allowed
-INSTANCE_TYPE=m5.large                  # EC2 instance type
-INSTANCE_NUM=2                          # Number of instances in cluster
-## Calico/VPP deployment yaml; could be url or local file
-CALICO_VPP_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-eks-dpdk.yaml
-#CALICO_VPP_YAML=<full path>/calico-vpp-eks-dpdk.yaml
-## init_eks.sh script location; could be url or local file
-INIT_EKS_SCRIPT=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/scripts/init_eks.sh
-#INIT_EKS_SCRIPT=<full path>/init_eks.sh
-###############################################################################
-```
+#### Provision the cluster and configure it for DPDK
 
-or execute the script with command-line options as follows
+DPDK provides better performance compared to the standard install but it requires some additional customisations (hugepages, for instance) in the EKS worker instances. We have created a bash script, `create_eks_cluster.sh`, which automates the whole process right from customising the EKS worker instances (using cloud-init) to creating the cluster and the worker nodegroup. The script has been tested on MacOS and Linux.
+
+1. Download the helper script
+
+   ```bash
+   curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/scripts/create_eks_cluster.sh -o create_eks_cluster.sh
+   ```
 
 
-```bash
-bash create_eks_cluster.sh <cluster name> -r <region-name> [-k <keyname>] [-t <instance type>] [-n <number of instances>] [-f <calico/vpp config yaml file>]
-```
+1. Either execute the script after filling in the `CONFIG PARAMS` section in the script
 
-`CLUSTER_NAME` and `REGION` are MANDATORY.  Note that command-line options override the `CONFIG PARAMS` options. In case you want to enable ssh access to the EKS worker instances specify the `KEYNAME` option. For details on ssh access refer to {% include open-new-window.html text='# Amazon EC2 key pairs and  Linux  instances' url='https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html' %}
+
+   ```bash
+   ###############################################################################
+   #                           CONFIG PARAMS                                     #
+   ###############################################################################
+   ### Config params; replace with appropriate values
+   CLUSTER_NAME=                           # cluster name (MANDATORY)
+   REGION=                                 # cluster region (MANDATORY)
+   NODEGROUP_NAME=$CLUSTER_NAME-nodegroup  # managed nodegroup name
+   LT_NAME=$CLUSTER_NAME-lt                # EC2 launch template name
+   KEYNAME=                                # keypair name for ssh access to worker nodes
+   SSH_SECURITY_GROUP_NAME="$CLUSTER_NAME-ssh-allow"
+   SSH_ALLOW_CIDR="0.0.0.0/0"              # source IP from which ssh access is allowed when KEYNAME is specified
+   INSTANCE_TYPE=m5.large                  # EC2 instance type
+   INSTANCE_NUM=2                          # Number of instances in cluster
+   ## Calico/VPP deployment yaml; could be url or local file
+   CALICO_VPP_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/generated/calico-vpp-eks-dpdk.yaml
+   #CALICO_VPP_YAML=<full path>/calico-vpp-eks-dpdk.yaml
+   ## init_eks.sh script location; could be url or local file
+   INIT_EKS_SCRIPT=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/scripts/init_eks.sh
+   #INIT_EKS_SCRIPT=<full path>/init_eks.sh
+   ###############################################################################
+   ```
+
+   or execute the script with command-line options as follows
+
+
+   ```bash
+   bash create_eks_cluster.sh <cluster name> -r <region-name> [-k <keyname>] [-t <instance type>] [-n <number of instances>] [-f <calico/vpp config yaml file>]
+   ```
+
+   `CLUSTER_NAME` and `REGION` are MANDATORY.  Note that command-line options override the `CONFIG PARAMS` options. In case you want to enable ssh access to the EKS worker instances specify the name of an existing SSH key in EC2 in the `KEYNAME` option. For details on ssh access refer to {% include open-new-window.html text='Amazon EC2 key pairs and  Linux  instances' url='https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html' %}
 
 
 
@@ -156,21 +162,21 @@ bash create_eks_cluster.sh <cluster name> -r <region-name> [-k <keyname>] [-t <i
 
 1. The following creates a cluster named "test" in region "us-east-2" consisting of 2 x m5.large worker instances
 
-```bash
-bash create_eks_cluster.sh test -r us-east-2
-```
+   ```bash
+   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2
+   ```
 
-2. To create a cluster with 3 x t3.large worker instances
+1. To create a cluster with 3 x t3.large worker instances
 
-```bash
-bash create_eks_cluster.sh test -r us-east-2 -t t3.large -n 3
-```
+   ```bash
+   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2 -t t3.large -n 3
+   ```
 
-3. To enable ssh access to the worker instances
+1. To enable ssh access to the worker instances
 
-```bash
-bash create_eks_cluster.sh test -r us-east-2 -k my_keyname
-```
+   ```bash
+   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2 -k my_ec2_keyname
+   ```
 
 %>
 <label:Install on any cluster>
