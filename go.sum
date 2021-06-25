@@ -644,10 +644,10 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
 github.com/projectcalico/api v0.0.0-20210615230555-586917f350df h1:0NGoa0ELdPGeYNc2uEWdaV37nwHft7Rj5IWjfoqAeEo=
 github.com/projectcalico/api v0.0.0-20210615230555-586917f350df/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210621230247-02308c048080 h1:i8Ri2Z5LtVr39jnCecYNT2fUuXCarl3SAs18aR641v4=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210621230247-02308c048080/go.mod h1:J+tHjIjoenfGQ3WTK+qv9OMpg61/xMfFjO2T0ozVNnk=
-github.com/projectcalico/confd v1.0.1-0.20210622213342-1c37cc557fdc h1:1/q6XCxfYkjlRsnjsWAuwO01jwnWbnqUhZtDGxqqK7c=
-github.com/projectcalico/confd v1.0.1-0.20210622213342-1c37cc557fdc/go.mod h1:CIA+LXTysdrDptNXhoMWGytfGV40UgmifeFbOetVk00=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210625003027-a4210843abb4 h1:4fpotMWd+7gd8uhbSaB0MOxLdjRs6Lqj9p+srcp9hW0=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210625003027-a4210843abb4/go.mod h1:J+tHjIjoenfGQ3WTK+qv9OMpg61/xMfFjO2T0ozVNnk=
+github.com/projectcalico/confd v1.0.1-0.20210625000100-fa4d3f9be840 h1:ksOSop2B5o4SKj65Y98wzs2Nd+9EZoaETI0G6ZNxQC4=
+github.com/projectcalico/confd v1.0.1-0.20210625000100-fa4d3f9be840/go.mod h1:CIA+LXTysdrDptNXhoMWGytfGV40UgmifeFbOetVk00=
 github.com/projectcalico/felix v0.0.0-20210624164005-5b29e35c2035 h1:jo9ga5yvlX2osOGtGI86hugQ/Rto1yRJbM3/KgK/6AA=
 github.com/projectcalico/felix v0.0.0-20210624164005-5b29e35c2035/go.mod h1:4RqeUlS4KgT9NddkfsQSEt0+wTKBn08CCmfVwkehIIQ=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
