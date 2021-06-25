@@ -172,7 +172,7 @@ clean:
 ###############################################################################
 # Updating pins
 ###############################################################################
-update-pins: update-libcalico-pin update-felix-pin update-confd-pin update-cni-plugin-pin
+update-pins: update-api-pin update-libcalico-pin update-felix-pin update-confd-pin update-cni-plugin-pin
 
 ###############################################################################
 # Building the binary
