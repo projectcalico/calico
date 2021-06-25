@@ -9,7 +9,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20210615230555-586917f350df
 	github.com/projectcalico/cni-plugin v1.11.1-0.20210625003027-a4210843abb4
-	github.com/projectcalico/felix v0.0.0-20210624164005-5b29e35c2035
+	github.com/projectcalico/felix v0.0.0-20210625010613-189712a3a2f4
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210622210430-b3e61c0c512d
 	github.com/projectcalico/typha v0.7.3-0.20210622212412-9b611cc43752
 	github.com/sirupsen/logrus v1.7.0
