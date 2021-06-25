@@ -84,7 +84,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp-eks.yaml
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.15.0-calicov3.19.1/yaml/generated/calico-vpp-eks.yaml
    ```
 
 
@@ -163,19 +163,19 @@ DPDK provides better performance compared to the standard install but it require
 1. The following creates a cluster named "test" in region "us-east-2" consisting of 2 x m5.large worker instances
 
    ```bash
-   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2
+   bash create_eks_cluster.sh vpp-test-cluster -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.15.0-calicov3.19.1/yaml/generated/calico-vpp-eks-dpdk.yaml -r us-east-2
    ```
 
 1. To create a cluster with 3 x t3.large worker instances
 
    ```bash
-   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2 -t t3.large -n 3
+   bash create_eks_cluster.sh vpp-test-cluster -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.15.0-calicov3.19.1/yaml/generated/calico-vpp-eks-dpdk.yaml -r us-east-2 -t t3.large -n 3
    ```
 
 1. To enable ssh access to the worker instances
 
    ```bash
-   bash create_eks_cluster.sh vpp-test-cluster -r us-east-2 -k my_ec2_keyname
+   bash create_eks_cluster.sh vpp-test-cluster -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.15.0-calicov3.19.1/yaml/generated/calico-vpp-eks-dpdk.yaml -r us-east-2 -k my_ec2_keyname
    ```
 
 %>
@@ -212,11 +212,11 @@ For some hardware, the following hugepages configuration may enable VPP to use m
 Start by getting the appropriate yaml manifest for the {{ site.prodname }} VPP dataplane:
 ```bash
 # If you have configured hugepages on your machines
-curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp.yaml
+curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.15.0-calicov3.19.1/yaml/generated/calico-vpp.yaml
 ```
 ```bash
 # If not, or if you're unsure
-curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.14.0-calicov3.19.0/yaml/generated/calico-vpp-nohuge.yaml
+curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.15.0-calicov3.19.1/yaml/generated/calico-vpp-nohuge.yaml
 ```
 
 Then configure these parameters in the `calico-vpp-config` ConfigMap in the yaml manifest.
