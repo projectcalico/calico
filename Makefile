@@ -69,7 +69,7 @@ clean:
 ###############################################################################
 # Updating pins
 ###############################################################################
-update-pins: update-libcalico-pin update-felix-pin
+update-pins: update-api-pin update-libcalico-pin update-felix-pin
 
 ###############################################################################
 # Building the binary
