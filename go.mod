@@ -7,7 +7,7 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20210625160534-c8e3233a0587
+	github.com/projectcalico/api v0.0.0-20210625205943-fd2597b409f4
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210625163244-dc98a263c76b
 	github.com/projectcalico/typha v0.7.3-0.20210625164342-14aa41b1b98c
 	github.com/sirupsen/logrus v1.4.2
