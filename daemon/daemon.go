@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/projectcalico/felix/wireguard"
 	"math/rand"
 	"net"
 	"net/http"
@@ -37,8 +38,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -651,8 +652,8 @@ func servePrometheusMetrics(configParams *config.Config) {
 		"host": configParams.PrometheusMetricsHost,
 		"port": configParams.PrometheusMetricsPort,
 	}).Info("Starting prometheus metrics endpoint")
-	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled {
-		log.Info("Including Golang & Process metrics")
+	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled && configParams.PrometheusWireGuardMetricsEnabled {
+		log.Info("Including Golang, Process and WireGuard metrics")
 	} else {
 		if !configParams.PrometheusGoMetricsEnabled {
 			log.Info("Discarding Golang metrics")
@@ -661,6 +662,10 @@ func servePrometheusMetrics(configParams *config.Config) {
 		if !configParams.PrometheusProcessMetricsEnabled {
 			log.Info("Discarding process metrics")
 			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+		}
+		if !configParams.PrometheusWireGuardMetricsEnabled {
+			log.Info("Discarding WireGuard metrics")
+			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}
 	}
 	http.Handle("/metrics", promhttp.Handler())

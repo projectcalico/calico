@@ -23,6 +23,7 @@ import (
 type Wireguard interface {
 	Close() error
 	DeviceByName(name string) (*wgtypes.Device, error)
+	Devices() ([]*wgtypes.Device, error)
 	ConfigureDevice(name string, cfg wgtypes.Config) error
 }
 
@@ -38,6 +39,10 @@ func NewRealWireguard() (Wireguard, error) {
 
 func (c *realWireguardClient) Close() error {
 	return c.client.Close()
+}
+
+func (c *realWireguardClient) Devices() ([]*wgtypes.Device, error) {
+	return c.client.Devices()
 }
 
 func (c *realWireguardClient) DeviceByName(name string) (*wgtypes.Device, error) {
