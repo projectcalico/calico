@@ -15,7 +15,7 @@ Install {{site.prodname}} directly when a package manager isn't available, or yo
 1. Ensure the {{site.prodname}} datastore is up and accessible from the host
 1. Ensure the host meets the minimum [system requirements](../requirements)
 1. If you want to install {{site.prodname}} with networking (so that you can communicate with cluster workloads), you should choose the [container install method](./container)
-1. [Install and configure `calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/)
+1. Install `kubectl` (for Kubernetes datastore) or [Install and configure `calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/) for etcd3 datastore.
 
 ### How to
 
