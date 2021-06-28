@@ -19,12 +19,18 @@ package dataplane
 import (
 	"math/bits"
 	"net"
+	"net/http"
 	"os/exec"
 	"runtime/debug"
+	"strconv"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/felix/aws"
@@ -382,4 +388,35 @@ func StartDataplaneDriver(configParams *config.Config,
 
 func SupportsBPF() error {
 	return bpf.SupportsBPFDataplane()
+}
+
+func ServePrometheusMetrics(configParams *config.Config) {
+	log.WithFields(log.Fields{
+		"host": configParams.PrometheusMetricsHost,
+		"port": configParams.PrometheusMetricsPort,
+	}).Info("Starting prometheus metrics endpoint")
+	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled && configParams.PrometheusWireGuardMetricsEnabled {
+		log.Info("Including Golang, Process and WireGuard metrics")
+	} else {
+		if !configParams.PrometheusGoMetricsEnabled {
+			log.Info("Discarding Golang metrics")
+			prometheus.Unregister(prometheus.NewGoCollector())
+		}
+		if !configParams.PrometheusProcessMetricsEnabled {
+			log.Info("Discarding process metrics")
+			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+		}
+		if !configParams.PrometheusWireGuardMetricsEnabled {
+			log.Info("Discarding WireGuard metrics")
+			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
+		}
+	}
+	http.Handle("/metrics", promhttp.Handler())
+	addr := net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort))
+	for {
+		err := http.ListenAndServe(addr, nil)
+		log.WithError(err).Error(
+			"Prometheus metrics endpoint failed, trying to restart it...")
+		time.Sleep(1 * time.Second)
+	}
 }

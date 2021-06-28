@@ -18,22 +18,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/projectcalico/felix/wireguard"
 	"math/rand"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -636,7 +631,7 @@ configRetry:
 		})
 		gaugeHost.Set(1)
 		prometheus.MustRegister(gaugeHost)
-		go servePrometheusMetrics(configParams)
+		go dp.ServePrometheusMetrics(configParams)
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.
@@ -645,37 +640,6 @@ configRetry:
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
-}
-
-func servePrometheusMetrics(configParams *config.Config) {
-	log.WithFields(log.Fields{
-		"host": configParams.PrometheusMetricsHost,
-		"port": configParams.PrometheusMetricsPort,
-	}).Info("Starting prometheus metrics endpoint")
-	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled && configParams.PrometheusWireGuardMetricsEnabled {
-		log.Info("Including Golang, Process and WireGuard metrics")
-	} else {
-		if !configParams.PrometheusGoMetricsEnabled {
-			log.Info("Discarding Golang metrics")
-			prometheus.Unregister(prometheus.NewGoCollector())
-		}
-		if !configParams.PrometheusProcessMetricsEnabled {
-			log.Info("Discarding process metrics")
-			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-		}
-		if !configParams.PrometheusWireGuardMetricsEnabled {
-			log.Info("Discarding WireGuard metrics")
-			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
-		}
-	}
-	http.Handle("/metrics", promhttp.Handler())
-	addr := net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort))
-	for {
-		err := http.ListenAndServe(addr, nil)
-		log.WithError(err).Error(
-			"Prometheus metrics endpoint failed, trying to restart it...")
-		time.Sleep(1 * time.Second)
-	}
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
