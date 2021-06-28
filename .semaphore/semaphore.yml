@@ -65,6 +65,16 @@ blocks:
       - make ut
       - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+
+- name: "build windows binary"
+  dependencies: []
+  task:
+    jobs:
+    - name: "build windows binary"
+      commands:
+      - checkout
+      - make bin/calico-felix.exe
+
 - name: FV Tests
   dependencies: ["Build"]
   task:
