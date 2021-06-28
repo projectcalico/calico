@@ -31,6 +31,20 @@ section:
     path: /maintenance/ebpf/ebpf-and-eks
   - title: Troubleshooting
     path: /maintenance/troubleshoot/troubleshoot-ebpf
+- title: calicoctl
+  path: /maintenance/clis/calicoctl/
+  section:
+  - title: Install calicoctl
+    path: /maintenance/clis/calicoctl/install
+  - title: Configure calicoctl
+    path: /maintenance/clis/calicoctl/configure/
+    section:
+    - title: Overview
+      path: /maintenance/clis/calicoctl/configure/overview
+    - title: Configure calicoctl to connect to an etcd datastore
+      path: /maintenance/clis/calicoctl/configure/etcd
+    - title: Configure calicoctl to connect to the Kubernetes API datastore
+      path: /maintenance/clis/calicoctl/configure/kdd
 - title: Monitor
   path: /maintenance/monitor/
   section: 
