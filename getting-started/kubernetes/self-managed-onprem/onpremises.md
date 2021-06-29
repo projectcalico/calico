@@ -36,7 +36,10 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Determine your datastore
 
-{{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is recommended for on-premises deployments, and supports only Kubernetes workloads; **etcd** is the best datastore for hybrid deployments. An example of a hybrid deployment is running Calico as the network plugin for both Kubernetes and OpenStack.
+The **Kubernetes API datastore** is the recommended datastore for Kubernetes workloads.
+
+>**Note**: The **etcd** database is not recommended for new installs. However, it is an option if you are running {{site.prodname}} as the network plugin for both OpenStack and Kubernetes.
+{: .alert .alert-info}
 
 #### Install Calico on nodes
 
@@ -111,6 +114,9 @@ The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}
 
 ##### Install Calico with etcd datastore
+
+>**Note**: The **etcd** database is not recommended for new installs. However, it is an option if you are running {{site.prodname}} as the network plugin for both OpenStack and Kubernetes.
+{: .alert .alert-info}
 
 1. Download the {{site.prodname}} networking manifest for etcd.
 
