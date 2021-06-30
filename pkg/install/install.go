@@ -169,14 +169,6 @@ func Install() error {
 		}
 	}
 
-	// Copy install to calico and calico-ipam
-	if err := copyFileAndPermissions("/opt/cni/bin/install", "/opt/cni/bin/calico"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to copy install to calico")
-	}
-	if err := copyFileAndPermissions("/opt/cni/bin/install", "/opt/cni/bin/calico-ipam"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to copy install to calico-ipam")
-	}
-
 	// Place the new binaries if the directory is writeable.
 	dirs := []string{"/host/opt/cni/bin", "/host/secondary-bin-dir"}
 	for _, d := range dirs {
@@ -193,11 +185,6 @@ func Install() error {
 		for _, binary := range files {
 			target := fmt.Sprintf("%s/%s", d, binary.Name())
 			source := fmt.Sprintf("/opt/cni/bin/%s", binary.Name())
-			if strings.Contains(binary.Name(), "calico") {
-				// For Calico binaries, we copy over the install binary. It includes the code
-				// for each, and the name of the binary determined which is executed.
-				source = "/opt/cni/bin/install"
-			}
 			if c.skipBinary(binary.Name()) {
 				continue
 			}
