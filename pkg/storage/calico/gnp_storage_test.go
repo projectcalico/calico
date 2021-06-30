@@ -8,9 +8,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	calico "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func TestInvalidFieldError(t *testing.T) {

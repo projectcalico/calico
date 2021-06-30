@@ -32,13 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 
-	calico "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
-	"github.com/projectcalico/apiserver/pkg/apis/projectcalico"
-	_ "github.com/projectcalico/apiserver/pkg/apis/projectcalico/install"
-	v3 "github.com/projectcalico/apiserver/pkg/apis/projectcalico/v3"
-	calicoclient "github.com/projectcalico/apiserver/pkg/client/clientset_generated/clientset"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 )
 
 // TestGroupVersion is trivial.
@@ -46,7 +43,7 @@ func TestGroupVersion(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.NetworkPolicy{}
+				return &v3.NetworkPolicy{}
 			})
 			defer shutdownServer()
 			if err := testGroupVersion(client); err != nil {
@@ -62,7 +59,7 @@ func TestGroupVersion(t *testing.T) {
 
 func testGroupVersion(client calicoclient.Interface) error {
 	gv := client.ProjectcalicoV3().RESTClient().APIVersion()
-	if gv.Group != projectcalico.GroupName {
+	if gv.Group != v3.GroupName {
 		return fmt.Errorf("we should be testing the servicecatalog group, not %s", gv.Group)
 	}
 	return nil
@@ -113,7 +110,7 @@ func TestNoName(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.NetworkPolicy{}
+				return &v3.NetworkPolicy{}
 			})
 			defer shutdownServer()
 			if err := testNoName(client); err != nil {
@@ -146,7 +143,7 @@ func TestNetworkPolicyClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.NetworkPolicy{}
+				return &v3.NetworkPolicy{}
 			})
 			defer shutdownServer()
 			if err := testNetworkPolicyClient(client, name); err != nil {
@@ -239,7 +236,7 @@ func TestGlobalNetworkPolicyClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.GlobalNetworkPolicy{}
+				return &v3.GlobalNetworkPolicy{}
 			})
 			defer shutdownServer()
 			if err := testGlobalNetworkPolicyClient(client, name); err != nil {
@@ -307,7 +304,7 @@ func TestGlobalNetworkSetClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.GlobalNetworkSet{}
+				return &v3.GlobalNetworkSet{}
 			})
 			defer shutdownServer()
 			if err := testGlobalNetworkSetClient(client, name); err != nil {
@@ -373,7 +370,7 @@ func TestNetworkSetClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.NetworkSet{}
+				return &v3.NetworkSet{}
 			})
 			defer shutdownServer()
 			if err := testNetworkSetClient(client, name); err != nil {
@@ -466,7 +463,7 @@ func TestHostEndpointClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.HostEndpoint{}
+				return &v3.HostEndpoint{}
 			})
 			defer shutdownServer()
 			if err := testHostEndpointClient(client, name); err != nil {
@@ -586,7 +583,7 @@ func TestIPPoolClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.IPPool{}
+				return &v3.IPPool{}
 			})
 			defer shutdownServer()
 			if err := testIPPoolClient(client, name); err != nil {
@@ -604,7 +601,7 @@ func testIPPoolClient(client calicoclient.Interface, name string) error {
 	ippoolClient := client.ProjectcalicoV3().IPPools()
 	ippool := &v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: calico.IPPoolSpec{
+		Spec: v3.IPPoolSpec{
 			CIDR: "192.168.0.0/16",
 		},
 	}
@@ -655,7 +652,7 @@ func TestBGPConfigurationClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.BGPConfiguration{}
+				return &v3.BGPConfiguration{}
 			})
 			defer shutdownServer()
 			if err := testBGPConfigurationClient(client, name); err != nil {
@@ -674,7 +671,7 @@ func testBGPConfigurationClient(client calicoclient.Interface, name string) erro
 	resName := "bgpconfig-test"
 	bgpConfig := &v3.BGPConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: resName},
-		Spec: calico.BGPConfigurationSpec{
+		Spec: v3.BGPConfigurationSpec{
 			LogSeverityScreen: "Info",
 		},
 	}
@@ -716,7 +713,7 @@ func TestBGPPeerClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.BGPPeer{}
+				return &v3.BGPPeer{}
 			})
 			defer shutdownServer()
 			if err := testBGPPeerClient(client, name); err != nil {
@@ -735,7 +732,7 @@ func testBGPPeerClient(client calicoclient.Interface, name string) error {
 	resName := "bgppeer-test"
 	bgpPeer := &v3.BGPPeer{
 		ObjectMeta: metav1.ObjectMeta{Name: resName},
-		Spec: calico.BGPPeerSpec{
+		Spec: v3.BGPPeerSpec{
 			Node:     "node1",
 			PeerIP:   "10.0.0.1",
 			ASNumber: numorstring.ASNumber(6512),
@@ -781,7 +778,7 @@ func TestProfileClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.Profile{}
+				return &v3.Profile{}
 			})
 			defer shutdownServer()
 			if err := testProfileClient(client, name); err != nil {
@@ -799,7 +796,7 @@ func testProfileClient(client calicoclient.Interface, name string) error {
 	profileClient := client.ProjectcalicoV3().Profiles()
 	profile := &v3.Profile{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: calico.ProfileSpec{
+		Spec: v3.ProfileSpec{
 			LabelsToApply: map[string]string{
 				"aa": "bb",
 			},
@@ -846,7 +843,7 @@ func TestFelixConfigurationClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.FelixConfiguration{}
+				return &v3.FelixConfiguration{}
 			})
 			defer shutdownServer()
 			if err := testFelixConfigurationClient(client, name); err != nil {
@@ -866,7 +863,7 @@ func testFelixConfigurationClient(client calicoclient.Interface, name string) er
 	ptrInt := 1432
 	felixConfig := &v3.FelixConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: calico.FelixConfigurationSpec{
+		Spec: v3.FelixConfigurationSpec{
 			UseInternalDataplaneDriver: &ptrTrue,
 			DataplaneDriver:            "test-dataplane-driver",
 			MetadataPort:               &ptrInt,
@@ -919,7 +916,7 @@ func TestKubeControllersConfigurationClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.KubeControllersConfiguration{}
+				return &v3.KubeControllersConfiguration{}
 			})
 			defer shutdownServer()
 			if err := testKubeControllersConfigurationClient(client); err != nil {
@@ -937,11 +934,11 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 	kubeControllersConfigClient := client.ProjectcalicoV3().KubeControllersConfigurations()
 	kubeControllersConfig := &v3.KubeControllersConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Status: calico.KubeControllersConfigurationStatus{
-			RunningConfig: calico.KubeControllersConfigurationSpec{
-				Controllers: calico.ControllersConfig{
-					Node: &calico.NodeControllerConfig{
-						SyncLabels: calico.Enabled,
+		Status: v3.KubeControllersConfigurationStatus{
+			RunningConfig: v3.KubeControllersConfigurationSpec{
+				Controllers: v3.ControllersConfig{
+					Node: &v3.NodeControllerConfig{
+						SyncLabels: v3.Enabled,
 					},
 				},
 			},
@@ -965,7 +962,7 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 	if kubeControllersConfigServer.Name != "default" {
 		return fmt.Errorf("didn't get the same kubeControllersConfig back from the server \n%+v\n%+v", kubeControllersConfig, kubeControllersConfigServer)
 	}
-	if !reflect.DeepEqual(kubeControllersConfigServer.Status, calico.KubeControllersConfigurationStatus{}) {
+	if !reflect.DeepEqual(kubeControllersConfigServer.Status, v3.KubeControllersConfigurationStatus{}) {
 		return fmt.Errorf("status was set on create to %#v", kubeControllersConfigServer.Status)
 	}
 
@@ -987,7 +984,7 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 	}
 
 	kubeControllersConfigUpdate := kubeControllersConfigServer.DeepCopy()
-	kubeControllersConfigUpdate.Spec.HealthChecks = calico.Enabled
+	kubeControllersConfigUpdate.Spec.HealthChecks = v3.Enabled
 	kubeControllersConfigUpdate.Status.EnvironmentVars = map[string]string{"FOO": "bar"}
 	kubeControllersConfigServer, err = kubeControllersConfigClient.Update(ctx, kubeControllersConfigUpdate, metav1.UpdateOptions{})
 	if err != nil {
@@ -1075,7 +1072,7 @@ func TestClusterInformationClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
-				return &projectcalico.ClusterInformation{}
+				return &v3.ClusterInformation{}
 			})
 			defer shutdownServer()
 			if err := testClusterInformationClient(client, name); err != nil {

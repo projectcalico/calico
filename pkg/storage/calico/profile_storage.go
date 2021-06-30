@@ -12,12 +12,12 @@ import (
 	etcd "k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	libcalicoapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 
-	aapi "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // NewProfileStorage creates a new libcalico-based storage.Interface implementation for Profiles
@@ -25,12 +25,12 @@ func NewProfileStorage(opts Options) (registry.DryRunnableStorage, factory.Destr
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.Profile)
+		res := obj.(*api.Profile)
 		return c.Profiles().Create(ctx, res, oso)
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libcalicoapi.Profile)
+		res := obj.(*api.Profile)
 		return c.Profiles().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -56,8 +56,8 @@ func NewProfileStorage(opts Options) (registry.DryRunnableStorage, factory.Destr
 		versioner:         etcd.APIObjectVersioner{},
 		aapiType:          reflect.TypeOf(aapi.Profile{}),
 		aapiListType:      reflect.TypeOf(aapi.ProfileList{}),
-		libCalicoType:     reflect.TypeOf(libcalicoapi.Profile{}),
-		libCalicoListType: reflect.TypeOf(libcalicoapi.ProfileList{}),
+		libCalicoType:     reflect.TypeOf(api.Profile{}),
+		libCalicoListType: reflect.TypeOf(api.ProfileList{}),
 		isNamespaced:      false,
 		create:            createFn,
 		update:            updateFn,
@@ -76,17 +76,17 @@ type ProfileConverter struct {
 
 func (gc ProfileConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
 	aapiProfile := aapiObj.(*aapi.Profile)
-	lcgProfile := &libcalicoapi.Profile{}
+	lcgProfile := &api.Profile{}
 	lcgProfile.TypeMeta = aapiProfile.TypeMeta
 	lcgProfile.ObjectMeta = aapiProfile.ObjectMeta
-	lcgProfile.Kind = libcalicoapi.KindProfile
-	lcgProfile.APIVersion = libcalicoapi.GroupVersionCurrent
+	lcgProfile.Kind = api.KindProfile
+	lcgProfile.APIVersion = api.GroupVersionCurrent
 	lcgProfile.Spec = aapiProfile.Spec
 	return lcgProfile
 }
 
 func (gc ProfileConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
-	lcgProfile := libcalicoObject.(*libcalicoapi.Profile)
+	lcgProfile := libcalicoObject.(*api.Profile)
 	aapiProfile := aapiObj.(*aapi.Profile)
 	aapiProfile.Spec = lcgProfile.Spec
 	aapiProfile.TypeMeta = lcgProfile.TypeMeta
@@ -94,7 +94,7 @@ func (gc ProfileConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj
 }
 
 func (gc ProfileConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
-	lcgProfileList := libcalicoListObject.(*libcalicoapi.ProfileList)
+	lcgProfileList := libcalicoListObject.(*api.ProfileList)
 	aapiProfileList := aapiListObj.(*aapi.ProfileList)
 	if libcalicoListObject == nil {
 		aapiProfileList.Items = []aapi.Profile{}

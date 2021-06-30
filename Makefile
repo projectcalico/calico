@@ -108,89 +108,6 @@ guard-ssh-forwarding-bug:
 update-pins: guard-ssh-forwarding-bug update-libcalico-pin
 
 ###############################################################################
-# This section contains the code generation stuff
-###############################################################################
-.generate_execs: lint-cache-dir\
-	$(BINDIR)/defaulter-gen \
-	$(BINDIR)/deepcopy-gen \
-	$(BINDIR)/conversion-gen \
-	$(BINDIR)/client-gen \
-	$(BINDIR)/lister-gen \
-	$(BINDIR)/informer-gen \
-	$(BINDIR)/openapi-gen 
-	touch $@
-
-$(BINDIR)/deepcopy-gen:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/deepcopy-gen"
-
-$(BINDIR)/client-gen:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/client-gen"
-
-$(BINDIR)/lister-gen:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/lister-gen"
-
-$(BINDIR)/informer-gen:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/informer-gen"
-
-$(BINDIR)/defaulter-gen: 
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/defaulter-gen"
-
-$(BINDIR)/conversion-gen: 
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/conversion-gen"
-
-$(BINDIR)/openapi-gen:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/openapi-gen"
-
-# Regenerate all files if the gen exes changed or any "types.go" files changed
-.PHONY: gen-files
-gen-files .generate_files: lint-cache-dir .generate_execs clean-generated
-	# Generate defaults
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BINDIR)/defaulter-gen \
-		--v 1 --logtostderr \
-		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
-		--extra-peer-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico" \
-		--extra-peer-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
-		--output-file-base "zz_generated.defaults"'
-	# Generate deep copies
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BINDIR)/deepcopy-gen \
-		--v 1 --logtostderr \
-		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
-		--bounding-dirs $(PACKAGE_NAME) \
-		--output-file-base zz_generated.deepcopy'
-	# Generate conversions
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BINDIR)/conversion-gen \
-		--v 1 --logtostderr \
-		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
-		--output-file-base zz_generated.conversion'
-	# generate all pkg/client contents
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/update-client-gen.sh'
-	# generate openapi
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BINDIR)/openapi-gen \
-		--v 1 --logtostderr \
-		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3,k8s.io/api/core/v1,k8s.io/api/networking/v1,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/version,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr,github.com/projectcalico/libcalico-go/lib/apis/v3,github.com/projectcalico/libcalico-go/lib/apis/v1,github.com/projectcalico/libcalico-go/lib/numorstring" \
-		--output-package "$(PACKAGE_NAME)/pkg/openapi"'
-	touch .generate_files
-	$(MAKE) fix
-
-.PHONY: gen-swagger
-gen-swagger: $(BINDIR)/apiserver run-kubernetes-server
-	$(BINDIR)/apiserver --secure-port 5443 \
-		--print-swagger \
-		--kubeconfig test/test-apiserver-kubeconfig.conf --swagger-file-path artifacts/swagger
-
-###############################################################################
 # Static checks
 ###############################################################################
 ## Perform static checks on the code.
@@ -202,26 +119,16 @@ LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,inef
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean check-generated-files static-checks calico/apiserver fv ut
+ci: clean static-checks calico/apiserver fv ut
 
 ## Deploys images to registry
 cd: image-all cd-common
-
-## Check if generated files are out of date
-.PHONY: check-generated-files
-check-generated-files: .generate_files
-	if (git describe --tags --dirty | grep -c dirty >/dev/null); then \
-	  echo "Generated files are out of date."; \
-	  false; \
-	else \
-	  echo "Generated files are up to date."; \
-	fi
 
 # This section builds the output binaries.
 # Some will have dedicated targets to make it easier to type, for example
 # "apiserver" instead of "$(BINDIR)/apiserver".
 #########################################################################
-$(BINDIR)/apiserver: .generate_files $(K8SAPISERVER_GO_FILES)
+$(BINDIR)/apiserver: $(K8SAPISERVER_GO_FILES)
 ifndef RELEASE_BUILD
 	$(eval LDFLAGS:=$(RELEASE_LDFLAGS))
 else
@@ -270,7 +177,7 @@ endif
 
 # Build the calico/apiserver docker image.
 .PHONY: calico/apiserver
-calico/apiserver: .generate_files $(BINDIR)/apiserver $(BINDIR)/filecheck
+calico/apiserver: $(BINDIR)/apiserver $(BINDIR)/filecheck
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/apiserver docker-image/bin/
@@ -419,16 +326,8 @@ clean: clean-bin clean-build-image clean-hack-lib
 clean-build-image:
 	docker rmi -f calico/apiserver > /dev/null 2>&1 || true
 
-clean-generated:
-	rm -f .generate_files
-	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
-	# rollback changes to the generated clientset directories
-	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated
-
 clean-bin:
 	rm -rf $(BINDIR) \
-	    .generate_execs \
 	    docker-image/bin
 
 clean-hack-lib:

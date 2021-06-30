@@ -7,13 +7,13 @@ import (
 
 	"k8s.io/klog"
 
-	libcalicoapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage"
 
-	aapi "github.com/projectcalico/apiserver/pkg/apis/projectcalico"
+	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func aapiError(err error, key string) error {
@@ -33,63 +33,63 @@ func aapiError(err error, key string) error {
 // This is common code. Refactor this workflow.
 func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 	switch libcalicoObject.(type) {
-	case *libcalicoapi.NetworkPolicy:
-		lcgPolicy := libcalicoObject.(*libcalicoapi.NetworkPolicy)
+	case *api.NetworkPolicy:
+		lcgPolicy := libcalicoObject.(*api.NetworkPolicy)
 		aapiPolicy := &aapi.NetworkPolicy{}
 		NetworkPolicyConverter{}.convertToAAPI(lcgPolicy, aapiPolicy)
 		return aapiPolicy
-	case *libcalicoapi.GlobalNetworkPolicy:
-		lcgPolicy := libcalicoObject.(*libcalicoapi.GlobalNetworkPolicy)
+	case *api.GlobalNetworkPolicy:
+		lcgPolicy := libcalicoObject.(*api.GlobalNetworkPolicy)
 		aapiPolicy := &aapi.GlobalNetworkPolicy{}
 		GlobalNetworkPolicyConverter{}.convertToAAPI(lcgPolicy, aapiPolicy)
 		return aapiPolicy
-	case *libcalicoapi.GlobalNetworkSet:
-		lcgNetworkSet := libcalicoObject.(*libcalicoapi.GlobalNetworkSet)
+	case *api.GlobalNetworkSet:
+		lcgNetworkSet := libcalicoObject.(*api.GlobalNetworkSet)
 		aapiNetworkSet := &aapi.GlobalNetworkSet{}
 		GlobalNetworkSetConverter{}.convertToAAPI(lcgNetworkSet, aapiNetworkSet)
 		return aapiNetworkSet
-	case *libcalicoapi.NetworkSet:
-		lcgNetworkSet := libcalicoObject.(*libcalicoapi.NetworkSet)
+	case *api.NetworkSet:
+		lcgNetworkSet := libcalicoObject.(*api.NetworkSet)
 		aapiNetworkSet := &aapi.NetworkSet{}
 		NetworkSetConverter{}.convertToAAPI(lcgNetworkSet, aapiNetworkSet)
 		return aapiNetworkSet
-	case *libcalicoapi.HostEndpoint:
-		lcg := libcalicoObject.(*libcalicoapi.HostEndpoint)
+	case *api.HostEndpoint:
+		lcg := libcalicoObject.(*api.HostEndpoint)
 		aapi := &aapi.HostEndpoint{}
 		HostEndpointConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *libcalicoapi.IPPool:
-		lcg := libcalicoObject.(*libcalicoapi.IPPool)
+	case *api.IPPool:
+		lcg := libcalicoObject.(*api.IPPool)
 		aapi := &aapi.IPPool{}
 		IPPoolConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *libcalicoapi.BGPConfiguration:
-		lcg := libcalicoObject.(*libcalicoapi.BGPConfiguration)
+	case *api.BGPConfiguration:
+		lcg := libcalicoObject.(*api.BGPConfiguration)
 		aapi := &aapi.BGPConfiguration{}
 		BGPConfigurationConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *libcalicoapi.BGPPeer:
-		lcg := libcalicoObject.(*libcalicoapi.BGPPeer)
+	case *api.BGPPeer:
+		lcg := libcalicoObject.(*api.BGPPeer)
 		aapi := &aapi.BGPPeer{}
 		BGPPeerConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *libcalicoapi.Profile:
-		lcg := libcalicoObject.(*libcalicoapi.Profile)
+	case *api.Profile:
+		lcg := libcalicoObject.(*api.Profile)
 		aapi := &aapi.Profile{}
 		ProfileConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *libcalicoapi.FelixConfiguration:
-		lcg := libcalicoObject.(*libcalicoapi.FelixConfiguration)
+	case *api.FelixConfiguration:
+		lcg := libcalicoObject.(*api.FelixConfiguration)
 		aapi := &aapi.FelixConfiguration{}
 		FelixConfigurationConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *libcalicoapi.KubeControllersConfiguration:
-		lcg := libcalicoObject.(*libcalicoapi.KubeControllersConfiguration)
+	case *api.KubeControllersConfiguration:
+		lcg := libcalicoObject.(*api.KubeControllersConfiguration)
 		aapi := &aapi.KubeControllersConfiguration{}
 		KubeControllersConfigurationConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
-	case *libcalicoapi.ClusterInformation:
-		lcg := libcalicoObject.(*libcalicoapi.ClusterInformation)
+	case *api.ClusterInformation:
+		lcg := libcalicoObject.(*api.ClusterInformation)
 		aapi := &aapi.ClusterInformation{}
 		ClusterInformationConverter{}.convertToAAPI(lcg, aapi)
 		return aapi

@@ -5,6 +5,8 @@ package apiserver
 import (
 	"time"
 
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -13,18 +15,18 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/apiserver/pkg/apis/projectcalico"
-	"github.com/projectcalico/apiserver/pkg/apis/projectcalico/install"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicorest "github.com/projectcalico/apiserver/pkg/registry/projectcalico/rest"
 )
 
 var (
-	Scheme = runtime.NewScheme()
-	Codecs = serializer.NewCodecFactory(Scheme)
+	Scheme    = runtime.NewScheme()
+	Codecs    = serializer.NewCodecFactory(Scheme)
+	GroupName = v3.GroupName
 )
 
 func init() {
-	install.Install(Scheme)
+	install(Scheme)
 
 	// we need to add the options to empty v1
 	// TODO fix the server code to avoid this
@@ -89,7 +91,7 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 		return nil, err
 	}
 
-	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(projectcalico.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	apiGroupInfo.NegotiatedSerializer = newProtocolShieldSerializer(&Codecs)
 
 	// TODO: Make the storage type configurable
@@ -109,4 +111,10 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 	}
 
 	return s, nil
+}
+
+// install registers the API group and adds types to a scheme
+func install(scheme *runtime.Scheme) {
+	utilruntime.Must(v3.AddToScheme(scheme))
+	utilruntime.Must(scheme.SetVersionPriority(v3.SchemeGroupVersion))
 }
