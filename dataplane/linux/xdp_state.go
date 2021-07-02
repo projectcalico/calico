@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1775,12 +1775,15 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 		for _, mode := range allXDPModes {
 			if err := memberCache.bpfLib.RemoveXDP(iface, mode); err != nil {
 				removeErrs = append(removeErrs, err)
-			} else {
-				removeErrs = nil
-				break
 			}
+			// Note: keep trying to remove remaining possible modes, even if that one
+			// appeared to succeed.  With current kernel and iproute2, RemoveXDP reports
+			// success if there _wasn't_ any XDP program attached in the specified mode.
+			// So, if we stop after the first mode that reports success, we won't remove
+			// the XDP program in the mode that is actually in use!
 		}
-		if removeErrs != nil {
+		// Only report an error if _all_ of the mode-specific removals failed.
+		if len(removeErrs) == len(allXDPModes) {
 			opErr = fmt.Errorf("failed to remove XDP program from %s: %v", iface, removeErrs)
 			return set.StopIteration
 		}
