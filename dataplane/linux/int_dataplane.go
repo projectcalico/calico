@@ -520,7 +520,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rules.IPSetIDThisHostIPs,
 			ipSetsV4,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
+		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4))
 
 		// Clean up any leftover BPF state.
 		err := nat.RemoveConnectTimeLoadBalancer("")
@@ -801,7 +801,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				rules.IPSetIDThisHostIPs,
 				ipSetsV6,
 				config.MaxIPSetSize))
-			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, callbacks))
+			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
 		}
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,

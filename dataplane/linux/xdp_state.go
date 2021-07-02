@@ -133,6 +133,12 @@ func (x *xdpState) OnUpdate(protoBufMsg interface{}) {
 	case *proto.IPSetRemove:
 		log.WithField("ipSetId", msg.Id).Debug("IP set remove")
 		x.ipV4State.removeIPSet(msg.Id)
+	case *proto.ActivePolicyUpdate:
+		log.WithField("id", msg.Id).Debug("Updating policy chains")
+		x.ipV4State.updatePolicy(*msg.Id, msg.Policy)
+	case *proto.ActivePolicyRemove:
+		log.WithField("id", msg.Id).Debug("Removing policy chains")
+		x.ipV4State.removePolicy(*msg.Id)
 	}
 }
 
@@ -143,8 +149,6 @@ func (x *xdpState) CompleteDeferredWork() error {
 func (x *xdpState) PopulateCallbacks(cbs *callbacks) {
 	if x.ipV4State != nil {
 		cbIDs := []*CbID{
-			cbs.UpdatePolicyV4.Append(x.ipV4State.updatePolicy),
-			cbs.RemovePolicyV4.Append(x.ipV4State.removePolicy),
 			cbs.AddInterfaceV4.Append(x.ipV4State.addInterface),
 			cbs.RemoveInterfaceV4.Append(x.ipV4State.removeInterface),
 			cbs.UpdateInterfaceV4.Append(x.ipV4State.updateInterface),
