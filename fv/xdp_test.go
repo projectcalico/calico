@@ -424,8 +424,11 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 					err := utils.RunMayFail("docker", "exec", felixes[1].Name, "ip", "link", "set", "dev", "eth0", "xdp", "off")
 					Expect(err).NotTo(HaveOccurred())
 
-					utils.Run("docker", "exec", felixes[1].Name, "ip", "addr", "show", "eth0")
-					Expect(utils.LastRunOutput).NotTo(ContainSubstring("xdp"))
+					// Note: we can't reliably check the following here, because
+					// resync may have happened _immediately_ following the
+					// previous "xdp off" command.
+					// utils.Run("docker", "exec", felixes[1].Name, "ip", "addr", "show", "eth0")
+					// Expect(utils.LastRunOutput).NotTo(ContainSubstring("xdp"))
 
 					// wait for resync
 					time.Sleep(resyncPeriod)
