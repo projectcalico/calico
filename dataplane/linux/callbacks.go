@@ -16,8 +16,6 @@ package intdataplane
 
 import (
 	"github.com/projectcalico/felix/proto"
-
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type callbacks struct {
@@ -51,110 +49,6 @@ func (c *callbacks) Drop(id *CbID) {
 
 type CbID struct {
 	dropper func()
-}
-
-type AddMembersIPSetFunc func(setID string, members set.Set)
-
-type AddMembersIPSetFuncs struct {
-	fs AddMembersIPSetFunc
-}
-
-func (fs *AddMembersIPSetFuncs) Invoke(setID string, members set.Set) {
-	if fs.fs != nil {
-		fs.fs(setID, members)
-	}
-}
-
-func (fs *AddMembersIPSetFuncs) Append(f AddMembersIPSetFunc) *CbID {
-	if f == nil {
-		return &CbID{
-			dropper: func() {},
-		}
-	}
-	fs.fs = f
-	return &CbID{
-		dropper: func() {
-			fs.fs = nil
-		},
-	}
-}
-
-type RemoveMembersIPSetFunc func(setID string, members set.Set)
-
-type RemoveMembersIPSetFuncs struct {
-	fs RemoveMembersIPSetFunc
-}
-
-func (fs *RemoveMembersIPSetFuncs) Invoke(setID string, members set.Set) {
-	if fs.fs != nil {
-		fs.fs(setID, members)
-	}
-}
-
-func (fs *RemoveMembersIPSetFuncs) Append(f RemoveMembersIPSetFunc) *CbID {
-	if f == nil {
-		return &CbID{
-			dropper: func() {},
-		}
-	}
-	fs.fs = f
-	return &CbID{
-		dropper: func() {
-			fs.fs = nil
-		},
-	}
-}
-
-type ReplaceIPSetFunc func(setID string, members set.Set)
-
-type ReplaceIPSetFuncs struct {
-	fs ReplaceIPSetFunc
-}
-
-func (fs *ReplaceIPSetFuncs) Invoke(setID string, members set.Set) {
-	if fs.fs != nil {
-		fs.fs(setID, members)
-	}
-}
-
-func (fs *ReplaceIPSetFuncs) Append(f ReplaceIPSetFunc) *CbID {
-	if f == nil {
-		return &CbID{
-			dropper: func() {},
-		}
-	}
-	fs.fs = f
-	return &CbID{
-		dropper: func() {
-			fs.fs = nil
-		},
-	}
-}
-
-type RemoveIPSetFunc func(setID string)
-
-type RemoveIPSetFuncs struct {
-	fs RemoveIPSetFunc
-}
-
-func (fs *RemoveIPSetFuncs) Invoke(setID string) {
-	if fs.fs != nil {
-		fs.fs(setID)
-	}
-}
-
-func (fs *RemoveIPSetFuncs) Append(f RemoveIPSetFunc) *CbID {
-	if f == nil {
-		return &CbID{
-			dropper: func() {},
-		}
-	}
-	fs.fs = f
-	return &CbID{
-		dropper: func() {
-			fs.fs = nil
-		},
-	}
 }
 
 type AddInterfaceFunc func(ifaceName string, hostEPID proto.HostEndpointID)
