@@ -41,7 +41,7 @@ for batch in "${batches[@]}"; do
     pid=$!
     pids+=( $pid )
   elif [ $batch = "xdp" ]; then
-    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv GINKGO_FOCUS="XDP tests" >& "$log_file" &
+    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv GINKGO_FOCUS=XDP >& "$log_file" &
     pid=$!
     pids+=( $pid )
   else
