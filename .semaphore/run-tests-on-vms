@@ -20,7 +20,7 @@ vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
 num_fv_batches=${NUM_FV_BATCHES:-8}
-batches=(ut $(seq 1 ${num_fv_batches}))
+batches=(ut xdp $(seq 1 ${num_fv_batches}))
 my_dir="$(dirname $0)"
 repo_dir="."
 artifacts_dir="$repo_dir/artifacts"
@@ -38,6 +38,10 @@ for batch in "${batches[@]}"; do
   log_files+=( $log_file )
   if [ $batch = "ut" ]; then
     VM_NAME=$vm_name $my_dir/on-test-vm make --directory=${REPO_NAME} ut-bpf check-wireguard >& "$log_file" &
+    pid=$!
+    pids+=( $pid )
+  elif [ $batch = "xdp" ]; then
+    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv GINKGO_FOCUS="XDP tests" >& "$log_file" &
     pid=$!
     pids+=( $pid )
   else
