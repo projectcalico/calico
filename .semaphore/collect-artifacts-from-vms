@@ -16,6 +16,8 @@
 
 set -e
 
+source .semaphore/new-kernel-common.sh
+
 vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
@@ -25,8 +27,6 @@ artifacts_dir="$repo_dir/artifacts"
 
 echo "Collecting artifacts..."
 
-num_fv_batches=${NUM_FV_BATCHES:-8}
-batches=(ut $(seq 1 ${num_fv_batches}))
 pids=()
 log_files=()
 for batch in "${batches[@]}"; do
