@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017, 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,60 +22,17 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type ipSetsManagerCallbacks struct {
-	addMembersIPSet    *AddMembersIPSetFuncs
-	removeMembersIPSet *RemoveMembersIPSetFuncs
-	replaceIPSet       *ReplaceIPSetFuncs
-	removeIPSet        *RemoveIPSetFuncs
-}
-
-func newIPSetsManagerCallbacks(callbacks *callbacks, ipFamily ipsets.IPFamily) ipSetsManagerCallbacks {
-	if ipFamily == ipsets.IPFamilyV4 {
-		return ipSetsManagerCallbacks{
-			addMembersIPSet:    callbacks.AddMembersIPSetV4,
-			removeMembersIPSet: callbacks.RemoveMembersIPSetV4,
-			replaceIPSet:       callbacks.ReplaceIPSetV4,
-			removeIPSet:        callbacks.RemoveIPSetV4,
-		}
-	} else {
-		return ipSetsManagerCallbacks{
-			addMembersIPSet:    &AddMembersIPSetFuncs{},
-			removeMembersIPSet: &RemoveMembersIPSetFuncs{},
-			replaceIPSet:       &ReplaceIPSetFuncs{},
-			removeIPSet:        &RemoveIPSetFuncs{},
-		}
-	}
-}
-
-func (c *ipSetsManagerCallbacks) InvokeAddMembersIPSet(setID string, members set.Set) {
-	c.addMembersIPSet.Invoke(setID, members)
-}
-
-func (c *ipSetsManagerCallbacks) InvokeRemoveMembersIPSet(setID string, members set.Set) {
-	c.removeMembersIPSet.Invoke(setID, members)
-}
-
-func (c *ipSetsManagerCallbacks) InvokeReplaceIPSet(setID string, members set.Set) {
-	c.replaceIPSet.Invoke(setID, members)
-}
-
-func (c *ipSetsManagerCallbacks) InvokeRemoveIPSet(setID string) {
-	c.removeIPSet.Invoke(setID)
-}
-
 // ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
 // dataplane layer.
 type ipSetsManager struct {
 	ipsetsDataplane ipsetsDataplane
 	maxSize         int
-	callbacks       ipSetsManagerCallbacks
 }
 
-func newIPSetsManager(ipsets_ ipsetsDataplane, maxIPSetSize int, callbacks *callbacks) *ipSetsManager {
+func newIPSetsManager(ipsets_ ipsetsDataplane, maxIPSetSize int) *ipSetsManager {
 	return &ipSetsManager{
 		ipsetsDataplane: ipsets_,
 		maxSize:         maxIPSetSize,
-		callbacks:       newIPSetsManagerCallbacks(callbacks, ipsets_.GetIPFamily()),
 	}
 }
 
@@ -93,9 +50,7 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	case *proto.IPSetDeltaUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set delta update")
 		m.ipsetsDataplane.AddMembers(msg.Id, msg.AddedMembers)
-		m.callbacks.InvokeAddMembersIPSet(msg.Id, membersToSet(msg.AddedMembers))
 		m.ipsetsDataplane.RemoveMembers(msg.Id, msg.RemovedMembers)
-		m.callbacks.InvokeRemoveMembersIPSet(msg.Id, membersToSet(msg.RemovedMembers))
 	case *proto.IPSetUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set update")
 		var setType ipsets.IPSetType
@@ -115,11 +70,9 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 			MaxSize: m.maxSize,
 		}
 		m.ipsetsDataplane.AddOrReplaceIPSet(metadata, msg.Members)
-		m.callbacks.InvokeReplaceIPSet(msg.Id, membersToSet(msg.Members))
 	case *proto.IPSetRemove:
 		log.WithField("ipSetId", msg.Id).Debug("IP set remove")
 		m.ipsetsDataplane.RemoveIPSet(msg.Id)
-		m.callbacks.InvokeRemoveIPSet(msg.Id)
 	}
 }
 
