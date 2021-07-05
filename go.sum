@@ -642,12 +642,10 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
-github.com/projectcalico/api v0.0.0-20210625160534-c8e3233a0587 h1:fF5VW6bgTPxnnQm6AZpquyxXTlCMBIZY58WlmHxIr4o=
-github.com/projectcalico/api v0.0.0-20210625160534-c8e3233a0587/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
 github.com/projectcalico/api v0.0.0-20210625205943-fd2597b409f4 h1:H3dDJsY91bn3GV81vMP8GR802Atg6EUN9vABSbkhjWk=
 github.com/projectcalico/api v0.0.0-20210625205943-fd2597b409f4/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210630221047-ec23ed209f01 h1:gNoU9zMctg0KiJBSZsYIxc30a1/BksFjH+U0SyprXko=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210630221047-ec23ed209f01/go.mod h1:vtWKMuFeHd+/RZ+jLwntGUlFcy6rTyLXvon1q0J5FyE=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210705180405-d20f24867eb3 h1:a1k2/wrr+/eOznsEBXJ/uWmZRPviuhqpvwPuurGoF2Y=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210705180405-d20f24867eb3/go.mod h1:W2Ton9DP3NznUpp7qVXgeblkrpDjjlSmAyTB1ugi0I8=
 github.com/projectcalico/confd v1.0.1-0.20210628234627-045f2e60aacf h1:pdao8WAL/t3o4KGNv77uKA+WdepYdtzHFwcg9eNTPhg=
 github.com/projectcalico/confd v1.0.1-0.20210628234627-045f2e60aacf/go.mod h1:tnIvfqYxUC3xh5WkOBseoejEaThYXdePEu9xt+iBthI=
 github.com/projectcalico/felix v0.0.0-20210705102911-d04ee2c303fd h1:eCqs6cgQMGr2tJImL7qcrR2zcSKrA3dZ9Y9f8Bod47E=
@@ -658,7 +656,6 @@ github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:J
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/hcsshim v0.8.9-calico h1:aRrOWouDTzKwaIoRGMV/I1QikR+ikwj1G9T9h3wD090=
 github.com/projectcalico/hcsshim v0.8.9-calico/go.mod h1:5692vkUqntj1idxauYlpoINNKeqCiG6Sg38RRsjT5y8=
-github.com/projectcalico/libcalico-go v1.7.2-0.20210625163244-dc98a263c76b/go.mod h1:062Z2pmL6wbDMmOpFaj8FNvKOE3zMoYG8KDkB9lQ1ms=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210626085404-b893bd8ebf1d h1:YNPE1LRbkeOxr3yT+8vJpyijNzhsgEEIM0ZK8cxxeRc=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210626085404-b893bd8ebf1d/go.mod h1:mZ7sYUg6ebz4+Tgqgj9isZzW7Wb8C6VmFEbya31iUgw=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
