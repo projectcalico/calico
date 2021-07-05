@@ -761,11 +761,17 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Format:      "",
 						},
 					},
+					"maxRestartTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Time to allow for software restart.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD defaults of 120s is used.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
