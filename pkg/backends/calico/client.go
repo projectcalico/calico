@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"regexp"
@@ -413,6 +414,7 @@ type bgpPeer struct {
 	SourceAddr  string               `json:"source_addr"`
 	Port        uint16               `json:"port"`
 	KeepNextHop bool                 `json:"keep_next_hop"`
+	RestartTime string               `json:"restart_time"`
 }
 
 type bgpPrefix struct {
@@ -1554,6 +1556,9 @@ func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv
 	for _, peer := range peers {
 		peer.Password = password
 		peer.SourceAddr = withDefault(string(v3res.Spec.SourceAddress), string(apiv3.SourceAddressUseNodeIP))
+		if v3res.Spec.MaxRestartTime != nil {
+			peer.RestartTime = fmt.Sprintf("%v", int(math.Round(v3res.Spec.MaxRestartTime.Duration.Seconds())))
+		}
 	}
 }
 
