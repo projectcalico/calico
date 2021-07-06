@@ -225,7 +225,7 @@ In this example, you would use `d881b853ae9313e00302a84f1e346a77.gr7.us-west-2.e
 and `443` (the default for HTTPS) for `KUBERNETES_SERVICE_PORT` when creating the config map.
 
 Since we used the operator to install {{site.prodname}}, create the following config map in the 
-`calico-system` namespace using the host and port determined above:
+`tigera-operator` namespace using the host and port determined above:
 
 ```
 kubectl apply -f - <<EOF
@@ -233,7 +233,7 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: kubernetes-services-endpoint
-  namespace: calico-system
+  namespace: tigera-operator
 data:
   KUBERNETES_SERVICE_HOST: "<API server host>"
   KUBERNETES_SERVICE_PORT: "443"
