@@ -14,6 +14,8 @@ If you are using {{site.prodname}} in etcd mode on a Kubernetes cluster, we reco
 If you have installed {{site.prodname}} using the `calico.yaml` manifest, we recommend upgrading to the {{site.prodname}} operator, [as discussed here]({{site.baseurl}}/maintenance/operator-migration).
 
 
+- [Upgrading an installation that was installed using Helm](#upgrading-an-installation-that-was-installed-using-helm)
+
 - [Upgrading an installation that uses the operator](#upgrading-an-installation-that-uses-the-operator)
 
 - [Upgrading an installation that uses manifests and the Kubernetes API datastore](#upgrading-an-installation-that-uses-manifests-and-the-kubernetes-api-datastore)
