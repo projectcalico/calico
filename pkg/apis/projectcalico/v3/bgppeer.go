@@ -93,6 +93,9 @@ type BGPPeerSpec struct {
 	// this BGPPeer resource.  Default value "UseNodeIP" means to configure the node IP as the
 	// source address.  "None" means not to configure a source address.
 	SourceAddress SourceAddress `json:"sourceAddress,omitempty" validate:"omitempty,sourceAddress"`
+	// Time to allow for software restart.  When specified, this is configured as the graceful
+	// restart timeout.  When not specified, the BIRD default of 120s is used.
+	MaxRestartTime *metav1.Duration `json:"maxRestartTime,omitempty"`
 }
 
 type SourceAddress string
