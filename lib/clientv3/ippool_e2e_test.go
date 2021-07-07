@@ -993,12 +993,13 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			Expect(err).NotTo(HaveOccurred())
 
 			// Allocate an IP so that a block is allocated
-			assignedV4, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1, Hostname: host})
+			v4ia, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1, Hostname: host})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4ia).ToNot(BeNil())
 			var assigned []cnet.IP
-			for _, ipnet := range assignedV4 {
+			for _, ipnet := range v4ia.IPs {
 				assigned = append(assigned, cnet.IP{ipnet.IP})
 			}
-			Expect(err).NotTo(HaveOccurred())
 			Expect(assigned).To(HaveLen(1))
 
 			// Delete the pool
@@ -1068,9 +1069,10 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			Expect(err).NotTo(HaveOccurred())
 
 			// Allocate an IP so that a block is allocated
-			assigned, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1, Hostname: host})
+			v4ia, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1, Hostname: host})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(assigned).To(HaveLen(1))
+			Expect(v4ia).ToNot(BeNil())
+			Expect(v4ia.IPs).To(HaveLen(1))
 
 			By("creating a pool with a different cidr and block size")
 			p2, err := c.IPPools().Create(ctx, &apiv3.IPPool{
@@ -1084,9 +1086,10 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 
 			// Allocate an IP so that a block is allocated
 			pool2 := []cnet.IPNet{cnet.MustParseCIDR(p2.Spec.CIDR)}
-			assigned, _, err = c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{IPv4Pools: pool2, Num4: 1, Hostname: host})
+			v4ia, _, err = c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{IPv4Pools: pool2, Num4: 1, Hostname: host})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(assigned).To(HaveLen(1))
+			Expect(v4ia).ToNot(BeNil())
+			Expect(v4ia.IPs).To(HaveLen(1))
 
 			By("modifying the second IP pool")
 			p2.Spec.NATOutgoing = true
