@@ -1412,6 +1412,11 @@ func init() {
 			SourceAddress: api.SourceAddress("rubbish"),
 		}, false),
 
+		// BGPPeer MaxRestartTime
+		Entry("BGPPeer with valid MaxRestartTime", api.BGPPeerSpec{
+			MaxRestartTime: &v1.Duration{10 * time.Second},
+		}, true),
+
 		// (API) NodeSpec
 		Entry("should accept node with IPv4 BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv4Address: netv4_1}}, true),
 		Entry("should accept node with IPv6 BGP", libapiv3.NodeSpec{BGP: &libapiv3.NodeBGPSpec{IPv6Address: netv6_1}}, true),
