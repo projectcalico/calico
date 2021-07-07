@@ -233,7 +233,7 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 // R6 = program context
 // R9 = pointer to state map
 func (p *Builder) writeProgramHeader() {
-	// Pre-amble to the policy program.
+	// Preamble to the policy program.
 	p.b.LabelNextInsn("start")
 	p.b.Mov64(R6, R1) // Save R1 (context) in R6.
 	// Zero-out the map key
