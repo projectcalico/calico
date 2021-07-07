@@ -30,7 +30,6 @@ import (
 	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
 	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/state"
-	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
@@ -56,11 +55,10 @@ func newMockDataplane() *mockDataplane {
 func (m *mockDataplane) ensureStarted() {
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap *tc.AttachPoint, polDirection PolDirection) (bpf.MapFD, error) {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	suffixes := []string{"-I", "-E"}
-	key := ap.Iface + suffixes[int(polDirection)]
+	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
 	if fd, exists := m.fds[key]; exists {
 		return bpf.MapFD(fd), nil
 	}
@@ -278,26 +276,26 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			var eth0I, eth0E, caliI, caliE *polprog.Rules
 
 			// Check eth0 ingress.
-			Eventually(dp.setAndReturn(&eth0I, "eth0-I")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&eth0I, "eth0:tc-ingress")).ShouldNot(BeNil())
 			Expect(eth0I.ForHostInterface).To(BeTrue())
 			Expect(eth0I.HostNormalTiers).To(HaveLen(1))
 			Expect(eth0I.HostNormalTiers[0].Policies).To(HaveLen(1))
 			Expect(eth0I.SuppressNormalHostPolicy).To(BeFalse())
 
 			// Check eth0 egress.
-			Eventually(dp.setAndReturn(&eth0E, "eth0-E")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&eth0E, "eth0:tc-egress")).ShouldNot(BeNil())
 			Expect(eth0E.ForHostInterface).To(BeTrue())
 			Expect(eth0E.HostNormalTiers).To(HaveLen(1))
 			Expect(eth0E.HostNormalTiers[0].Policies).To(HaveLen(1))
 			Expect(eth0E.SuppressNormalHostPolicy).To(BeFalse())
 
 			// Check workload ingress.
-			Eventually(dp.setAndReturn(&caliI, "cali12345-I")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&caliI, "cali12345:tc-egress")).ShouldNot(BeNil())
 			Expect(caliI.ForHostInterface).To(BeFalse())
 			Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
 
 			// Check workload egress.
-			Eventually(dp.setAndReturn(&caliE, "cali12345-E")).ShouldNot(BeNil())
+			Eventually(dp.setAndReturn(&caliE, "cali12345:tc-ingress")).ShouldNot(BeNil())
 			Expect(caliE.ForHostInterface).To(BeFalse())
 			Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 		})
@@ -311,12 +309,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				var caliI, caliE *polprog.Rules
 
 				// Check workload ingress.
-				Eventually(dp.setAndReturn(&caliI, "cali12345-I")).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&caliI, "cali12345:tc-egress")).ShouldNot(BeNil())
 				Expect(caliI.ForHostInterface).To(BeFalse())
 				Expect(caliI.SuppressNormalHostPolicy).To(BeTrue())
 
 				// Check workload egress.
-				Eventually(dp.setAndReturn(&caliE, "cali12345-E")).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&caliE, "cali12345:tc-ingress")).ShouldNot(BeNil())
 				Expect(caliE.ForHostInterface).To(BeFalse())
 				Expect(caliE.HostNormalTiers).To(HaveLen(1))
 				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
@@ -344,13 +342,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				var eth0I, eth0E *polprog.Rules
 
 				// Check ingress rules.
-				Eventually(dp.setAndReturn(&eth0I, "eth0-I")).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&eth0I, "eth0:tc-ingress")).ShouldNot(BeNil())
 				Expect(eth0I.ForHostInterface).To(BeTrue())
 				Expect(eth0I.HostPreDnatTiers).To(HaveLen(1))
 				Expect(eth0I.HostPreDnatTiers[0].Policies).To(HaveLen(1))
 
 				// Check egress rules.
-				Eventually(dp.setAndReturn(&eth0E, "eth0-E")).ShouldNot(BeNil())
+				Eventually(dp.setAndReturn(&eth0E, "eth0:tc-egress")).ShouldNot(BeNil())
 				Expect(eth0E.ForHostInterface).To(BeTrue())
 				Expect(eth0E.HostPreDnatTiers).To(BeNil())
 			})

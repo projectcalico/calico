@@ -454,3 +454,36 @@ func RemoveQdisc(ifaceName string) error {
 	}
 	return nil
 }
+
+func (ap *AttachPoint) ProgramID() (string, error) {
+	logCtx := log.WithField("iface", ap.Iface)
+	logCtx.Debug("Finding TC program ID")
+	out, err := ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
+	if err != nil {
+		return "", fmt.Errorf("failed to find TC filter for interface %v: %w", ap.Iface, err)
+	}
+
+	progName := ap.ProgramName()
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, progName) {
+			re := regexp.MustCompile(`id (\d+)`)
+			m := re.FindStringSubmatch(line)
+			if len(m) > 0 {
+				return m[1], nil
+			}
+			return "", fmt.Errorf("failed to process TC output: %v", line)
+		}
+	}
+
+	return "", errors.New("failed to find TC program")
+}
+
+// Return a key that uniquely identifies this attach point, amongst all of the possible attach
+// points associated with a single given interface.
+func (ap *AttachPoint) JumpMapFDMapKey() string {
+	return "tc-" + string(ap.Hook)
+}
+
+func (ap *AttachPoint) IfaceName() string {
+	return ap.Iface
+}
