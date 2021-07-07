@@ -10,7 +10,7 @@ Install {{site.prodname}} on a Kubernetes cluster using Helm 3.
 
 ### Value
 
-Helm charts are a way to package up an application for Kubernetes (similar to `apt` or `yum` for operating systems). Helm is also used by tools like ArgoCD to manage applications in a cluster, taking care of install, upgrade (and rollback if needed), etc.
+Helm charts are a way to package up an application for Kubernetes (similar to `apt` or `yum` for operating systems). 
 
 Helm is also used by tools like ArgoCD to manage applications in a cluster, taking care of install, upgrade (and rollback if needed), etc. 
 
