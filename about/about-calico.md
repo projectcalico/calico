@@ -12,7 +12,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <h3 id="what-is" style="margin-top: 5px">What is {{site.prodname}}?</h3>
-    <p>{{site.prodname}} is an open source networking and network security solution for containers, virtual machines, and native host-based workloads. {{site.prodname}} supports a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services.</p>
+    <p>{{site.prodname}} is an open source networking and network security solution for containers, virtual machines, and native host-based workloads. {{site.prodname}} supports a broad range of platforms including Kubernetes, OpenShift, Mirantis Kubernetes Engine (MKE), OpenStack, and bare metal services.</p>
     <p>Whether you opt to use {{site.prodname}}'s eBPF data plane or Linux’s standard networking pipeline, {{site.prodname}} delivers blazing fast performance with true cloud-native scalability. {{site.prodname}} provides developers and cluster operators with a consistent experience and set of capabilities whether running in public cloud or on-prem, on a single node, or across a multi-thousand node cluster.</p>
   </div>
 </div>

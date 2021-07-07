@@ -43,11 +43,11 @@ exposed via the Kubernetes API defined as a custom resource definition.
 helm repo add projectcalico https://docs.projectcalico.org/charts
 ```
 #### Customize the Helm chart
-If you are installing on a cluster installed by EKS, GKE, AKS or Docker Enterprise, or you need to customize TLS certificates, you **must** customize this Helm chart by creating a `values.yaml` file.
+If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), or you need to customize TLS certificates, you **must** customize this Helm chart by creating a `values.yaml` file.
 
 Otherwise, you can skip this step.
 
-1. If you are installing on a cluster installed by EKS, GKE, AKS or Docker Enterprise, set the `kubernetesProvider` as described in the [Installation reference](../../reference/installation/api#operator.tigera.io/v1.Provider).  For example:
+1. If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), set the `kubernetesProvider` as described in the [Installation reference](../../reference/installation/api#operator.tigera.io/v1.Provider).  For example:
 ```
 echo '{installation.kubernetesProvider: EKS}' > values.yaml
 ```
