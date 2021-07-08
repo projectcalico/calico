@@ -66,8 +66,13 @@ static CALI_BPF_INLINE void *skb_end_ptr(struct __sk_buff *skb) {
  * Fresh values are loaded using skb_start/end_ptr.
  */
 static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
-	ctx->data_start = skb_start_ptr(ctx->skb);
-	ctx->data_end = skb_end_ptr(ctx->skb);
+	if (CALI_F_XDP) {
+		ctx->data_start = (void *)(long)ctx->xdp->data;
+		ctx->data_end = (void *)(long)ctx->xdp->data_end;
+	} else {
+		ctx->data_start = skb_start_ptr(ctx->skb);
+		ctx->data_end = skb_end_ptr(ctx->skb);
+	}
 }
 
 /* skb_iphdr_offset returns the expected offset of the IP header for this type of program.
@@ -118,12 +123,19 @@ static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx)
  * - ctx->data_start/end
  * - ctx->eth (if this BPF program has access to the L2 header)
  * - ctx->ip_header
- * - ctx->nh/tcp_header/udp_header/icp_header.
+ * - ctx->nh/tcp_header/udp_header/icmp_header.
  */
 static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
 	int min_size = skb_iphdr_offset(ctx->skb) + IP_SIZE;
 	skb_refresh_start_end(ctx);
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
+		// This is an XDP program and there is not enough data for next header.
+		if (CALI_F_XDP) {
+			CALI_DEBUG("Too short to have %d bytes for next header\n",
+							min_size + nh_len);
+			return -2;
+		}
+
 		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
 		// minimum we've been asked for.
 		if (nh_len > TCP_SIZE || bpf_skb_pull_data(ctx->skb, min_size + TCP_SIZE)) {

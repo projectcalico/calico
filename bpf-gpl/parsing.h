@@ -19,7 +19,28 @@
 #define __CALI_PARSING_H__
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
-	switch (bpf_htons(ctx->skb->protocol)) {
+	__u16 protocol = 0;
+
+	/* We need to make a decision based on Ethernet protocol, however,
+	 * the protocol number is not available to XDP programs like TC ones.
+	 * In TC programs protocol number is available via skb->protocol.
+	 * For that, in XDP programs we need to parse at least up to Ethernet
+	 * first, before making any decision. But in TC programs we can make
+	 * an initial decision based on Ethernet protocol before parsing packet
+	 * for more headers.
+	 */
+	if (CALI_F_XDP) {
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}
+		protocol = bpf_ntohs(ctx->eth->h_proto);
+	} else {
+		protocol = bpf_ntohs(ctx->skb->protocol);
+	}
+
+	switch (protocol) {
 	case ETH_P_IP:
 		break;
 	case ETH_P_ARP:
@@ -36,19 +57,23 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		}
 	default:
 		if (CALI_F_WEP) {
-			CALI_DEBUG("Unknown ethertype (%x), drop\n", bpf_ntohs(ctx->skb->protocol));
+			CALI_DEBUG("Unknown ethertype (%x), drop\n", protocol);
 			goto deny;
 		} else {
 			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n",
-								bpf_ntohs(ctx->skb->protocol));
+									protocol);
 			goto allow_no_fib;
 		}
 	}
 
-	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-		ctx->fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
-		goto deny;
+	// In TC programs, parse packet and validate its size. This is
+	// already done for XDP programs at the beginning of the function.
+	if (!CALI_F_XDP) {
+		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+			ctx->fwd.reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}
 	}
 
 	// Drop malformed IP packets
@@ -72,12 +97,9 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	return 0;
 
 allow_no_fib:
-	fwd_fib_set(&ctx->fwd, false);
-	ctx->fwd.res = TC_ACT_UNSPEC;
 	return -1;
 deny:
-	ctx->fwd.res = TC_ACT_SHOT;
-	return -1;
+	return -2;
 }
 
 #endif /* __CALI_PARSING_H__ */

@@ -115,6 +115,7 @@ struct fwd {
 
 struct cali_tc_ctx {
   struct __sk_buff *skb;
+  struct xdp_md *xdp;
 
   /* Our single copies of the data start/end pointers loaded from the skb. */
   union {

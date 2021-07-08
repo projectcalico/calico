@@ -137,8 +137,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
 	 * is large enough for UDP. */
-	if (parse_packet_ip(&ctx)) {
-		// Either a problem or a packet that we automatically let through.
+	switch (parse_packet_ip(&ctx)) {
+	case -1:
+		// A packet that we automatically let through
+		fwd_fib_set(&ctx.fwd, false);
+		ctx.fwd.res = TC_ACT_UNSPEC;
+		goto finalize;
+	case -2:
+		// A malformed packet or a packet we don't support
+		CALI_DEBUG("Drop malformed or unsupported packet\n");
+		ctx.fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
 

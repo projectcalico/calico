@@ -68,6 +68,8 @@ struct bpf_map_def_extended {
 #define CALI_TC_DSR		(1<<4)
 // CALI_TC_WIREGUARD is set for the programs attached to the wireguard interface.
 #define CALI_TC_WIREGUARD	(1<<5)
+// CALI_XDP_PROG is set for programs attached to the XDP hook
+#define CALI_XDP_PROG 	(1<<6)
 
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
 #define CALI_DROP_WORKLOAD_TO_HOST false
@@ -84,6 +86,8 @@ struct bpf_map_def_extended {
 #define CALI_F_WEP     	 (!CALI_F_HEP)
 #define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
 #define CALI_F_WIREGUARD ((CALI_COMPILE_FLAGS) & CALI_TC_WIREGUARD)
+
+#define CALI_F_XDP ((CALI_COMPILE_FLAGS) & CALI_XDP_PROG)
 
 #define CALI_F_FROM_HEP (CALI_F_HEP && CALI_F_INGRESS)
 #define CALI_F_TO_HEP   (CALI_F_HEP && !CALI_F_INGRESS)
@@ -122,7 +126,7 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 	COMPILE_TIME_ASSERT(
 		CALI_COMPILE_FLAGS == 0 ||
 		!!(CALI_COMPILE_FLAGS & CALI_CGROUP) !=
-		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_TUNNEL | CALI_TC_DSR))
+		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_TUNNEL | CALI_TC_DSR | CALI_XDP_PROG))
 	);
 	COMPILE_TIME_ASSERT(!CALI_F_DSR || (CALI_F_DSR && CALI_F_FROM_WEP) || (CALI_F_DSR && CALI_F_HEP));
 	COMPILE_TIME_ASSERT(CALI_F_TO_HOST || CALI_F_FROM_HOST);
