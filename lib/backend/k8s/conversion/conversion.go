@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -156,9 +156,13 @@ const (
 
 func IsFinished(pod *kapiv1.Pod) bool {
 	if pod.DeletionTimestamp != nil {
-		// Pod is Terminating, check if it still has its IPs.
-		if pod.Annotations[AnnotationPodIP] == "" {
-			log.Debug("Pod is being deleted and IPs have been removed.")
+		// Pod is being deleted but it may still be in its termination grace period.  If Calico CNI
+		// was used, then we use AnnotationPodIP to signal the moment that the pod actually loses its
+		// IP by setting the annotation to "".  (Otherwise, just fall back on the status of the pod.)
+		if ip, ok := pod.Annotations[AnnotationPodIP]; ok && ip == "" {
+			// AnnotationPodIP is explicitly set to empty string, Calico CNI has removed the network
+			// from the pod.
+			log.Debug("Pod is being deleted and IPs have been removed by Calico CNI.")
 			return true
 		}
 	}
