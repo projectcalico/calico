@@ -12,8 +12,6 @@ Install {{site.prodname}} on a Kubernetes cluster using Helm 3.
 
 Helm charts are a way to package up an application for Kubernetes (similar to `apt` or `yum` for operating systems). Helm is also used by tools like ArgoCD to manage applications in a cluster, taking care of install, upgrade (and rollback if needed), etc.
 
-Helm is also used by tools like ArgoCD to manage applications in a cluster, taking care of install, upgrade (and rollback if needed), etc. 
-
 ### Before you begin
 **Required**
 
@@ -31,8 +29,7 @@ Helm is also used by tools like ArgoCD to manage applications in a cluster, taki
 
 #### Operator based installation
 
-In this guide, you install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm 3 chart. The Tigera operator provides lifecycle management for {{site.prodname}} exposed via the Kubernetes API.
-exposed via the Kubernetes API defined as a custom resource definition.
+In this guide, you install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm 3 chart. The Tigera operator provides lifecycle management for {{site.prodname}} exposed via the Kubernetes API defined as a custom resource definition.
 
 ### How to
 
@@ -42,10 +39,9 @@ exposed via the Kubernetes API defined as a custom resource definition.
 ```
 helm repo add projectcalico https://docs.projectcalico.org/charts
 ```
-#### Customize the Helm chart
-If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), or you need to customize TLS certificates, you **must** customize this Helm chart by creating a `values.yaml` file.
 
-Otherwise, you can skip this step.
+#### Customize the Helm chart
+If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), or you need to customize TLS certificates, you **must** customize this Helm chart by creating a `values.yaml` file. Otherwise, you can skip this step.
 
 1. If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), set the `kubernetesProvider` as described in the [Installation reference](../../reference/installation/api#operator.tigera.io/v1.Provider).  For example:
 ```
@@ -53,7 +49,7 @@ echo '{installation.kubernetesProvider: EKS}' > values.yaml
 ```
 1. Add any other customizations you require to `values.yaml`.  You might like to refer to the [helm docs](https://helm.sh/docs/) or run 
    ```
-   helm show values tigera-operator-{{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}.tgz
+   helm show values projectcalico/tigera-operator --version {{site.data.versions[0].title}}
    ``` 
    to see the values that can be customized in the chart.
 
@@ -62,11 +58,11 @@ echo '{installation.kubernetesProvider: EKS}' > values.yaml
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
 
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator 
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}}
    ```
    or if you created a `values.yaml` above:
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator -f values.yaml
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} -f values.yaml
    ```
 
 1. Confirm that all of the pods are running with the following command.
