@@ -263,7 +263,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) ([]cnet.IPNet, []cnet.IPNet, error) {
+		autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
 			// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
 			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
 			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
@@ -272,19 +272,26 @@ func cmdAdd(args *skel.CmdArgs) error {
 			defer unlock()
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 		}
-		assignedV4, assignedV6, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
-		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", assignedV4, assignedV6)
+		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
+		var v4ips, v6ips []cnet.IPNet
+		if v4Assignments != nil {
+			v4ips = v4Assignments.IPs
+		}
+		if v6Assignments != nil {
+			v6ips = v6Assignments.IPs
+		}
+		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4ips, v6ips)
 		if err != nil {
 			return err
 		}
 
 		// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
-		if num4 == 1 && len(assignedV4) != num4 {
-			if num6 == 1 && len(assignedV6) != 0 {
-				logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(assignedV6))
+		if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) < num4 {
+			if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) > 0 {
+				logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(v6Assignments.IPs))
 				// Free the assigned IPv6 addresses when v4 address assignment fails.
 				v6IPs := []cnet.IP{}
-				for _, v6 := range assignedV6 {
+				for _, v6 := range v6Assignments.IPs {
 					v6IPs = append(v6IPs, *cnet.ParseIP(v6.IP.String()))
 				}
 				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs)
@@ -295,12 +302,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		// Check if IPv6 address assignment fails but IPv4 address assignment succeeds. Release IPs for the successful IPv4 address assignment.
-		if num6 == 1 && len(assignedV6) != num6 {
-			if num4 == 1 && len(assignedV4) != 0 {
-				logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(assignedV4))
+		if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) < num6 {
+			if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) > 0 {
+				logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(v4Assignments.IPs))
 				// Free the assigned IPv4 addresses when v4 address assignment fails.
 				v4IPs := []cnet.IP{}
-				for _, v4 := range assignedV4 {
+				for _, v4 := range v4Assignments.IPs {
 					v4IPs = append(v4IPs, *cnet.ParseIP(v4.IP.String()))
 				}
 				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs)
@@ -311,10 +318,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		if num4 == 1 {
-			if len(assignedV4) != num4 {
-				return fmt.Errorf("failed to request %d IPv4 addresses. IPAM allocated only %d", num4, len(assignedV4))
+			if err := v4Assignments.PartialFulfillmentError(); err != nil {
+				return fmt.Errorf("failed to request IPv4 addresses: %w", err)
 			}
-			ipV4Network := net.IPNet{IP: assignedV4[0].IP, Mask: assignedV4[0].Mask}
+			ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &current.IPConfig{
 				Version: "4",
 				Address: ipV4Network,
@@ -322,10 +329,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		if num6 == 1 {
-			if len(assignedV6) != num6 {
-				return fmt.Errorf("failed to request %d IPv6 addresses. IPAM allocated only %d", num6, len(assignedV6))
+			if err := v6Assignments.PartialFulfillmentError(); err != nil {
+				return fmt.Errorf("failed to request IPv6 addresses: %w", err)
 			}
-			ipV6Network := net.IPNet{IP: assignedV6[0].IP, Mask: assignedV6[0].Mask}
+			ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &current.IPConfig{
 				Version: "6",
 				Address: ipV6Network,
