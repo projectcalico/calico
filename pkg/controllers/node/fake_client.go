@@ -200,7 +200,7 @@ func (f *fakeIPAMClient) AssignIP(ctx context.Context, args ipam.AssignIPArgs) e
 // which is useful for dataplanes that need to know the subnet (such as Windows).
 //
 // In case of error, returns the IPs allocated so far along with the error.
-func (f *fakeIPAMClient) AutoAssign(ctx context.Context, args ipam.AutoAssignArgs) ([]cnet.IPNet, []cnet.IPNet, error) {
+func (f *fakeIPAMClient) AutoAssign(ctx context.Context, args ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
 	panic("not implemented") // TODO: Implement
 }
 
