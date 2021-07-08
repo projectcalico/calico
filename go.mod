@@ -10,7 +10,7 @@ require (
 	github.com/onsi/gomega v1.10.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/projectcalico/api v0.0.0-20210706154750-8686d6f77130
-	github.com/projectcalico/felix v0.0.0-20210706181105-ed2bec95201f
+	github.com/projectcalico/felix v0.0.0-20210708102616-4614bbc7741d
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210707205620-dad54d60f894
 	github.com/prometheus/client_golang v1.7.1
 	github.com/satori/go.uuid v1.2.0
