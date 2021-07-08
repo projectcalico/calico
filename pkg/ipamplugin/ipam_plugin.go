@@ -263,7 +263,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) (*ipam.Assignments, *ipam.Assignments, error) {
+		autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
 			// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
 			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
 			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
