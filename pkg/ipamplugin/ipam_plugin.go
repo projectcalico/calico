@@ -273,7 +273,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 		}
 		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
-		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4Assignments, v6Assignments)
+		var v4ips, v6ips []net.IPNet
+		if v4Assignments != nil {
+			v4ips = v4Assignments.IPs
+		}
+		if v6Assignments != nil {
+			v6ips = v6Assignments.IPs
+		}
+		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4ips, v6ips)
 		if err != nil {
 			return err
 		}
