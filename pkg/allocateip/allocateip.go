@@ -430,17 +430,17 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		IPv4Pools: cidrs,
 	}
 
-	ipv4Addrs, _, err := c.IPAM().AutoAssign(ctx, args)
+	v4Assignments, _, err := c.IPAM().AutoAssign(ctx, args)
 	if err != nil {
 		logCtx.WithError(err).Fatal("Unable to autoassign an address")
 	}
 
-	if len(ipv4Addrs) == 0 {
-		logCtx.Fatal("Unable to autoassign an address - pools are likely exhausted.")
+	if err := v4Assignments.PartialFulfillmentError(); err != nil {
+		logCtx.WithError(err).Fatal("Unable to autoassign an address")
 	}
 
 	// Update the node object with the assigned address.
-	ip := ipv4Addrs[0].IP.String()
+	ip := v4Assignments.IPs[0].IP.String()
 	if err = updateNodeWithAddress(ctx, c, nodename, ip, attrType); err != nil {
 		// We hit an error, so release the IP address before exiting.
 		err := c.IPAM().ReleaseByHandle(ctx, handle)
