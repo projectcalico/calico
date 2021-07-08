@@ -1143,7 +1143,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Allocate all the addresses in the IP pool.
 			handle := "test-handle"
-			v4s, _, err := calicoClient.IPAM().AutoAssign(
+			v4ia, _, err := calicoClient.IPAM().AutoAssign(
 				context.Background(),
 				ipam.AutoAssignArgs{
 					Num4:      256,
@@ -1152,7 +1152,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(v4s)).To(Equal(256))
+			Expect(v4ia).ToNot(BeNil())
+			Expect(len(v4ia.IPs)).To(Equal(256))
 
 			// Expect an error when invoking the CNI plugin.
 			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testNS, "")
@@ -1199,7 +1200,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Allocate all the addresses in the first IP pool.
 			handle := "test-handle"
-			v4s, _, err := calicoClient.IPAM().AutoAssign(
+			v4ia, _, err := calicoClient.IPAM().AutoAssign(
 				context.Background(),
 				ipam.AutoAssignArgs{
 					Num4:      256,
@@ -1208,7 +1209,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(v4s)).To(Equal(256))
+			Expect(v4ia).ToNot(BeNil())
+			Expect(len(v4ia.IPs)).To(Equal(256))
 
 			// Invoke the CNI plugin.
 			_, r, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testNS, "")
