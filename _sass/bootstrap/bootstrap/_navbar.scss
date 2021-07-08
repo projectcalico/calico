@@ -176,6 +176,18 @@
     display: block;
   }
 
+  &__tigera-logo {
+    width: 130px;
+    height: 27px;
+    margin-top: 14px;
+  }
+
+  &__calico-logo {
+    width: 130px;
+    height: 42px;
+    margin-top: 5px;
+  }
+
   @media (min-width: $grid-float-breakpoint) {
     .navbar > .container &,
     .navbar > .container-fluid & {

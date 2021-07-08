@@ -8,7 +8,7 @@
 @import "../css/search";
 @import "../css/plugins/offcanvas";
 
-$header-height: 75px;
+$header-height: 150px;
 $sticky-top: $header-height + $navbar-margin-bottom;
 
 // By default bootstrap doesn't apply many styles to table elements
@@ -182,13 +182,24 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     line-height: normal;
 }
 
+.tigera-navbar-footer-container {
+  background-color: #326DE6;
+  background: linear-gradient(to right, #326DE6, #08A2C4);
+}
 
-#tigera-navbar {
+#tigera-navbar-header .nav,
+#tigera-navbar-footer .nav {
+  margin-left: 44px;
+}
+
+#tigera-navbar-header,
+#tigera-navbar-footer {
   // Constrains nav menu height when in hamburger mode
   max-height: 355px;
 }
 
-#tigera-navbar ul.nav {
+#tigera-navbar-header ul.nav,
+#tigera-navbar-footer ul.nav {
   @media (min-width: $screen-sm-min) {
     margin-top: 11px;
   }    
@@ -196,7 +207,8 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 15px 0 0 0;
 }
   
-#tigera-navbar ul.nav li {
+#tigera-navbar-header ul.nav li,
+#tigera-navbar-footer ul.nav li {
   margin: 0 0 0 0;
   @media (min-width: $screen-sm-min) {
     // When displaying in full size mode we must extend to the bottom of the nav-bar otherwise sub-menu disappears as move mouse towards it
@@ -209,7 +221,8 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   height: auto;
 }
   
-#tigera-navbar ul.nav li a {
+#tigera-navbar-header ul.nav li a,
+#tigera-navbar-footer ul.nav li a {
   // Shrink as we approach hamburger mode
   @media (min-width: $screen-sm-min) and (max-width: 900px) {
     padding: 0 6px;
@@ -221,38 +234,49 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
   padding: 0 20px;
   font-family: "Poppins", Poppins;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;    
-  color: #2a302f;
   transition: .4s;    
   -webkit-font-smoothing: antialiased;        
 }
 
-#tigera-navbar ul.nav li a:hover {
+#tigera-navbar-footer ul.nav li a {
+  color: white;
+}
+
+#tigera-navbar-header ul.nav li a {
+  color: black;
+}
+
+#tigera-navbar-header ul.nav li a:hover,
+#tigera-navbar-footer ul.nav li a:hover {
   color: #ff9e16;
 }
 
 // Indent submenu items for hamburger mode
 @media (max-width: $screen-xs-max) {
-  #tigera-navbar ul.nav li ul li {
+  #tigera-navbar-header ul.nav li ul li,
+  #tigera-navbar-footer ul.nav li ul li {
     padding: 20px 0 0 20px;
   }
 }
 
 // Submenu handling for full size mode
 @media (min-width: $screen-sm-min) {
-  #tigera-navbar ul.nav li ul {
+  #tigera-navbar-header ul.nav li ul,
+  #tigera-navbar-footer ul.nav li ul {
     padding: 13px 0 0 0;
-    background: #09287d;
+    background: white;
 
     li {
       min-height: 24px !important;
       padding: 13px 20px;
 
       a {
-        color: #fff;
+        color: #041A57;
         padding: 0;
         white-space: nowrap;
+        font-size: 14px;
       }
 
       a:hover {
@@ -263,12 +287,14 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     }
   }
 
-  #tigera-navbar ul.nav li:hover ul {
+  #tigera-navbar-header ul.nav li:hover ul,
+  #tigera-navbar-footer ul.nav li:hover ul {
    display: block;
   }
 }
 
-#tigera-navbar .sub-arrow {
+#tigera-navbar-header .sub-arrow,
+#tigera-navbar-footer .sub-arrow {
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
     width: 14px;
     padding: 10px 0 10px 3px;
@@ -277,12 +303,12 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   font-size: 11px;
   line-height: 1;
   width: 21px;
-  padding: 10px 0 10px 10px;
+  padding: 10px 0 10px 5px;
   margin-top: -10px;
   margin-bottom: -10px;
 }
 
-#tigera-navbar .free-training {
+#tigera-navbar-footer .get-certified {
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
       padding: 6px 10px !important;
       margin: -8px 0px 0px 0px;
@@ -295,13 +321,17 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   border-width: 2px;
   border-style: solid;
   border-color: #ff9e16;
+  border-radius: 5px;
 }
 
-#tigera-navbar .free-training:hover {
+#tigera-navbar-footer .get-certified:hover {
   color: #ff9e16 !important;
   background-color: white;
 }
 
+.tigera-navbar-item-icon {
+  margin-right: 5px;
+}
 
 .panel-heading.free-training {
   background-color: #ff9e16;
