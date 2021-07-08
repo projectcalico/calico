@@ -101,39 +101,101 @@ The code is a little roundabout for a few reasons:
         <div class="container-fluid">
           <div class="navbar-header">
             <!-- Hamburger menu for mobile -->
-            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#tigera-navbar" aria-expanded="false" aria-controls="tigera-navbar">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#tigera-navbar-header" aria-expanded="false" aria-controls="tigera-navbar-header">
               <span class="sr-only">Toggle navigation</span>
               <span class="icon-bar"></span>
               <span class="icon-bar"></span>
               <span class="icon-bar"></span>
             </button>
             <!-- Left brand image -->
-            <a class="navbar-brand" href="https://projectcalico.org/">
-              <img alt="Calico" src="{{site.baseurl}}/images/brand.png">
+            <a class="navbar-brand" href="https://www.tigera.io/">
+              <img alt="Tigera" src="{{site.baseurl}}/images/tigera-logo.png" class="navbar-brand__tigera-logo">
             </a>
           </div>
-          <div id="tigera-navbar" class="navbar-collapse collapse">
-            <ul class="nav navbar-nav navbar-right">
-              <li><a data-proofer-ignore href="/releases">Releases</a></li>
-              <li><a href="https://www.projectcalico.org/community">Community</a></li>
-              <li class="dropdown"
-                ><a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span>Support</span><span class="glyphicon glyphicon-triangle-bottom sub-arrow" aria-hidden="true"></span></a>
+          <div id="tigera-navbar-header" class="navbar-collapse collapse">
+            <ul class="nav navbar-nav navbar-left">
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                  <span>About</span>
+                  <span class="glyphicon glyphicon-menu-down sub-arrow" aria-hidden="true"></span>
+                </a>
                 <ul class="dropdown-menu dropdown-menu-left">
-                    <!-- <li><a data-proofer-ignore href="/latest/getting-started/"><i class="fa fa-tachometer" aria-hidden="true"></i> &nbsp; Getting Started</a></li> -->
-                    <!-- <li><a href="{{site.baseurl}}"><i class="fa fa-book" aria-hidden="true"></i> &nbsp; Documentation</a></li> -->
-                    <!--<li><a href="https://www.projectcalico.org/tutorials"><i class="fa fa-file-code-o" aria-hidden="true"></i> &nbsp; Tutorials &amp; Examples</a></li>
-                    <li><a href=""><i class="fa fa-paper-plane-o" aria-hidden="true"></i> &nbsp; Online Workshops</a></li>-->
-                    <li><a href="https://www.projectcalico.org/community">Community Support</a></li>
-                    <li><a href="https://www.tigera.io/tigera-products/calico-essentials/" target="_blank" rel="noopener noreferrer">Commercial Support</a></li>
-                    <li><a href="https://www.tigera.io/training/" target="_blank" rel="noopener noreferrer">Training</a></li>
-                    <li><a href="https://www.projectcalico.org/security-bulletins">Security Bulletins</a></li>
-                    <li><a href="https://www.projectcalico.org/vulnerability-disclosure">Report Security Issue</a></li>
+                    <li><a href="https://www.tigera.io/about/" target="_blank" rel="noopener noreferrer">About</a></li>
+                    <li><a href="https://www.tigera.io/tigera-products/why-calico/" target="_blank" rel="noopener noreferrer">Why Calico?</a></li>
                 </ul>
               </li>
-              <li><a href="https://www.projectcalico.org/blog">Blog</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="container-fluid tigera-navbar-footer-container">
+          <div class="navbar-header">
+            <!-- Hamburger menu for mobile -->
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#tigera-navbar-footer" aria-expanded="false" aria-controls="tigera-navbar-footer">
+              <span class="sr-only">Toggle navigation</span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+            </button>
+            <!-- Left brand image -->
+            <a class="navbar-brand" href="https://www.tigera.io/project-calico/">
+              <img alt="Calico" src="{{site.baseurl}}/images/brand.png" class="navbar-brand__calico-logo">
+            </a>
+          </div>
+          <div id="tigera-navbar-footer" class="navbar-collapse collapse">
+            <ul class="nav navbar-nav navbar-left">
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                  <span>Editions</span>
+                  <span class="glyphicon glyphicon-menu-down sub-arrow" aria-hidden="true"></span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-left">
+                    <li>
+                      <a href="https://www.tigera.io/tigera-products/calico/" target="_blank" rel="noopener noreferrer">
+                        <img alt="Calico Open Source" src="{{site.baseurl}}/images/icon-calico-os.png" class="tigera-navbar-item-icon">
+                        <span>Calico Open Source</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a href="https://www.tigera.io/tigera-products/calico-cloud/" target="_blank" rel="noopener noreferrer">
+                        <img alt="Calico Cloud" src="{{site.baseurl}}/images/icon-calico-cloud.png" class="tigera-navbar-item-icon">
+                        <span>Calico Cloud</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a href="https://www.tigera.io/tigera-products/calico-enterprise/" target="_blank" rel="noopener noreferrer">
+                        <img alt="Calico Enterprise" src="{{site.baseurl}}/images/icon-calico-enterprise.png" class="tigera-navbar-item-icon">
+                        <span>Calico Enterprise</span>
+                      </a>
+                    </li>
+                </ul>
+              </li>
+              <li><a data-proofer-ignore href="/releases">Releases</a></li>
+              <li><a href="https://www.tigera.io/project-calico/community/" target="_blank" rel="noopener noreferrer">Community</a></li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                  <span>Support</span>
+                  <span class="glyphicon glyphicon-menu-down sub-arrow" aria-hidden="true"></span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-left">
+                    <li><a href="https://www.tigera.io/project-calico/community/" target="_blank" rel="noopener noreferrer">Community Support</a></li>
+                    <li><a href="https://www.tigera.io/security-bulletins/" target="_blank" rel="noopener noreferrer">Security Bulletins</a></li>
+                    <li><a href="https://www.tigera.io/vulnerability-disclosure/" target="_blank" rel="noopener noreferrer">Report Security Issue</a></li>
+                </ul>
+              </li>
+              <li><a href="https://www.tigera.io/blog/" target="_blank" rel="noopener noreferrer">Blog</a></li>
               <li><a href="https://github.com/projectcalico/calico" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-              <li><a href="{{site.baseurl}}/calico-enterprise/">Enterprise</a></li>
-              <li><a href="https://www.tigera.io/free-training-resources" class="free-training">Free training</a></li>              
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                  <span>Learn</span>
+                  <span class="glyphicon glyphicon-menu-down sub-arrow" aria-hidden="true"></span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-left">
+                    <li><a href="https://www.tigera.io/lp/calico-certification/" target="_blank" rel="noopener noreferrer">Certification</a></li>
+                    <li><a href="https://www.tigera.io/events/" target="_blank" rel="noopener noreferrer">Events</a></li>
+                    <li><a href="https://www.tigera.io/resources/" target="_blank" rel="noopener noreferrer">Resources</a></li>
+                </ul>
+              </li>
+              <li><a href="https://www.tigera.io/lp/calico-certification" class="get-certified" target="_blank" rel="noopener noreferrer">Get Certified</a></li>              
             </ul>
             <form class="navbar-form visible-xs">
               <ul class="nav navbar-nav navbar-right">
