@@ -279,7 +279,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4Assignments, v6Assignments)
 
 		// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
-		if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) < v4Assignments.NumRequested {
+		if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) < num4 {
 			if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) > 0 {
 				logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(v6Assignments.IPs))
 				// Free the assigned IPv6 addresses when v4 address assignment fails.
@@ -295,7 +295,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		// Check if IPv6 address assignment fails but IPv4 address assignment succeeds. Release IPs for the successful IPv4 address assignment.
-		if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) < v6Assignments.NumRequested {
+		if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) < num6 {
 			if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) > 0 {
 				logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(v4Assignments.IPs))
 				// Free the assigned IPv4 addresses when v4 address assignment fails.
@@ -314,9 +314,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if err := v4Assignments.PartialFulfillmentError(); err != nil {
 				return fmt.Errorf("failed to request IPv4 addresses: %w", err)
 			}
-			if len(v4Assignments.IPs) < num4 {
-				return fmt.Errorf("failed to request %d IPv4 addresses. IPAM allocated only %d", num4, len(v4Assignments.IPs))
-			}
 			ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &current.IPConfig{
 				Version: "4",
@@ -327,9 +324,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if num6 == 1 {
 			if err := v6Assignments.PartialFulfillmentError(); err != nil {
 				return fmt.Errorf("failed to request IPv6 addresses: %w", err)
-			}
-			if len(v6Assignments.IPs) != num6 {
-				return fmt.Errorf("failed to request %d IPv6 addresses. IPAM allocated only %d", num6, len(v6Assignments.IPs))
 			}
 			ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
 			r.IPs = append(r.IPs, &current.IPConfig{
