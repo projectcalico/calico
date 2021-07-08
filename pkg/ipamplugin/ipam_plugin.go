@@ -273,7 +273,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 		}
 		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
-		var v4ips, v6ips []net.IPNet
+		var v4ips, v6ips []cnet.IPNet
 		if v4Assignments != nil {
 			v4ips = v4Assignments.IPs
 		}
