@@ -27,6 +27,7 @@ execute_test_suite() {
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
         run_extra_test test_bgp_password
+        run_extra_test test_bgp_sourceaddr_gracefulrestart
         run_extra_test test_node_deletion
         run_extra_test test_idle_peers
         run_extra_test test_router_id_hash
@@ -834,4 +835,90 @@ test_router_id_hash() {
     run_individual_test_oneshot 'mesh/hash'
     export -n CALICO_ROUTER_ID
     unset CALICO_ROUTER_ID
+}
+
+test_bgp_sourceaddr_gracefulrestart() {
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=node1 BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off.
+    turn_mesh_off
+
+    # Create 2 nodes with IPs directly on a local subnet, and a
+    # peering between them.
+    calicoctl apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node1
+spec:
+  bgp:
+    ipv4Address: 172.17.0.5/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node2
+spec:
+  bgp:
+    ipv4Address: 172.17.0.6/24
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  node: node1
+  peerIP: 172.17.0.6
+  asNumber: 64512
+EOF
+
+    # Expect a "direct" peering.
+    test_confd_templates sourceaddr_gracefulrestart/step1
+
+    # Change the peering to omit source address.
+    calicoctl apply -f - <<EOF
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  node: node1
+  peerIP: 172.17.0.6
+  asNumber: 64512
+  sourceAddress: None
+EOF
+
+    # Expect direct peering without source address.
+    test_confd_templates sourceaddr_gracefulrestart/step2
+
+    # Change the peering to specify max restart time.
+    calicoctl apply -f - <<EOF
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  node: node1
+  peerIP: 172.17.0.6
+  asNumber: 64512
+  sourceAddress: None
+  maxRestartTime: 10s
+EOF
+
+    # Expect "graceful restart time 10".
+    test_confd_templates sourceaddr_gracefulrestart/step3
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    calicoctl delete node node1
+    calicoctl delete node node2
 }
