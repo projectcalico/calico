@@ -218,7 +218,7 @@ func newBPFEndpointManager(
 		ruleRenderer:            iptablesRuleRenderer,
 		iptablesFilterTable:     iptablesFilterTable,
 		mapCleanupRunner: ratelimited.NewRunner(jumpMapCleanupInterval, func(ctx context.Context) {
-			log.Debug("Jump map cleanup triggered.")
+			log.Info("Jump map cleanup triggered.")
 			tc.CleanUpJumpMaps()
 		}),
 		onStillAlive:     livenessCallback,
@@ -246,7 +246,7 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 
 	var zeroIface bpfInterface
 	if reflect.DeepEqual(iface, zeroIface) {
-		logCtx.Debug("Interface info is now empty.")
+		logCtx.Info("Interface info is now empty.")
 		delete(m.nameToIface, ifaceName)
 	} else {
 		// Always store the result (rather than checking the dirty flag) because dirty only covers the info..
@@ -259,7 +259,7 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 		return
 	}
 
-	logCtx.Debug("Marking iface dirty.")
+	logCtx.Info("Marking iface dirty.")
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
@@ -316,7 +316,7 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	defer m.ifacesLock.Unlock()
 
 	if update.Addrs != nil && update.Addrs.Len() > 0 {
-		log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
+		log.Infof("Interface %+v received address update %+v", update.Name, update.Addrs)
 		update.Addrs.Iter(func(item interface{}) error {
 			ip := net.ParseIP(item.(string))
 			if ip.To4() != nil {
@@ -345,7 +345,7 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 }
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
-	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
+	log.Infof("Interface update for %v, state %v", update.Name, update.State)
 
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
@@ -353,7 +353,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	defer m.ifacesLock.Unlock()
 
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) {
-		log.WithField("update", update).Debug("Ignoring interface that's neither data nor workload.")
+		log.WithField("update", update).Info("Ignoring interface that's neither data nor workload.")
 		return
 	}
 
@@ -364,13 +364,13 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 		// already stored and mapped as needed.
 		if iface.info.ifaceIsUp {
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
-				log.Debugf("Map host-* endpoint for %v", update.Name)
+				log.Infof("Map host-* endpoint for %v", update.Name)
 				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
 				m.hostIfaceToEpMap[update.Name] = m.wildcardHostEndpoint
 			}
 		} else {
 			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
-				log.Debugf("Unmap host-* endpoint for %v", update.Name)
+				log.Infof("Unmap host-* endpoint for %v", update.Name)
 				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
@@ -382,7 +382,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 // onWorkloadEndpointUpdate adds/updates the workload in the cache along with the index from active policy to
 // workloads using that policy.
 func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpointUpdate) {
-	log.WithField("wep", msg.Endpoint).Debug("Workload endpoint update")
+	log.WithField("wep", msg.Endpoint).Info("Workload endpoint update")
 	wlID := *msg.Id
 	oldWEP := m.allWEPs[wlID]
 	m.removeWEPFromIndexes(wlID, oldWEP)
@@ -399,7 +399,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 // onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
 func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpointRemove) {
 	wlID := *msg.Id
-	log.WithField("id", wlID).Debug("Workload endpoint removed")
+	log.WithField("id", wlID).Info("Workload endpoint removed")
 	oldWEP := m.allWEPs[wlID]
 	m.removeWEPFromIndexes(wlID, oldWEP)
 	delete(m.allWEPs, wlID)
@@ -418,7 +418,7 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
 func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	polID := *msg.Id
-	log.WithField("id", polID).Debug("Policy update")
+	log.WithField("id", polID).Info("Policy update")
 	m.policies[polID] = msg.Policy
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 }
@@ -427,7 +427,7 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 // The latter should be a no-op due to the ordering guarantees of the calc graph.
 func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	polID := *msg.Id
-	log.WithField("id", polID).Debug("Policy removed")
+	log.WithField("id", polID).Info("Policy removed")
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	delete(m.policies, polID)
 	delete(m.policiesToWorkloads, polID)
@@ -436,7 +436,7 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 // onProfileUpdate stores the profile in the cache and marks any endpoints that use it as dirty.
 func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 	profID := *msg.Id
-	log.WithField("id", profID).Debug("Profile update")
+	log.WithField("id", profID).Info("Profile update")
 	m.profiles[profID] = msg.Profile
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 }
@@ -445,7 +445,7 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 // The latter should be a no-op due to the ordering guarantees of the calc graph.
 func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 	profID := *msg.Id
-	log.WithField("id", profID).Debug("Profile removed")
+	log.WithField("id", profID).Info("Profile removed")
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	delete(m.profiles, profID)
 	delete(m.profilesToWorkloads, profID)
@@ -464,12 +464,12 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set, kind string) {
 			if id == allInterfaces {
 				for ifaceName := range m.nameToIface {
 					if m.isWorkloadIface(ifaceName) {
-						log.Debugf("Mark WEP iface dirty, for host-* endpoint %v change", kind)
+						log.Infof("Mark WEP iface dirty, for host-* endpoint %v change", kind)
 						m.dirtyIfaceNames.Add(ifaceName)
 					}
 				}
 			} else {
-				log.Debugf("Mark host iface dirty, for host %v change", kind)
+				log.Infof("Mark host iface dirty, for host %v change", kind)
 				m.dirtyIfaceNames.Add(id)
 			}
 		}
@@ -514,12 +514,12 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	m.dirtyIfaceNames.Iter(func(item interface{}) error {
 		iface := item.(string)
 		if !m.isDataIface(iface) {
-			log.WithField("iface", iface).Debug(
+			log.WithField("iface", iface).Info(
 				"Ignoring interface that doesn't match the host data interface regex")
 			return nil
 		}
 		if !m.ifaceIsUp(iface) {
-			log.WithField("iface", iface).Debug("Ignoring interface that is down")
+			log.WithField("iface", iface).Info("Ignoring interface that is down")
 			return set.RemoveItem
 		}
 
@@ -577,7 +577,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	m.dirtyIfaceNames.Iter(func(item interface{}) error {
 		iface := item.(string)
 		if !m.isDataIface(iface) {
-			log.WithField("iface", iface).Debug(
+			log.WithField("iface", iface).Info(
 				"Ignoring interface that doesn't match the host data interface regex")
 			return nil
 		}
@@ -587,7 +587,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			return set.RemoveItem
 		}
 		if isLinkNotFoundError(err) {
-			log.WithField("iface", iface).Debug(
+			log.WithField("iface", iface).Info(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
 			return set.RemoveItem
@@ -670,7 +670,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			}
 		}
 		if isLinkNotFoundError(err) {
-			log.WithField("wep", wlID).Debug(
+			log.WithField("wep", wlID).Info(
 				"Tried to apply BPF program to interface but the interface wasn't present.  " +
 					"Will retry if it shows up.")
 			return set.RemoveItem
@@ -695,7 +695,7 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 		ifaceUp = iface.info.ifaceIsUp
 		endpointID = iface.info.endpointID
 		if !ifaceUp {
-			log.WithField("iface", ifaceName).Debug("Interface is down/gone, closing jump maps.")
+			log.WithField("iface", ifaceName).Info("Interface is down/gone, closing jump maps.")
 			for _, fd := range iface.dpState.jumpMapFDs {
 				if err := fd.Close(); err != nil {
 					log.WithError(err).Error("Failed to close jump map.")
@@ -709,7 +709,7 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 
 	if !ifaceUp {
 		// Interface is gone, nothing to do.
-		log.WithField("ifaceName", ifaceName).Debug(
+		log.WithField("ifaceName", ifaceName).Info(
 			"Ignoring request to program interface that is not present.")
 		return nil
 	}
@@ -723,7 +723,7 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	if err != nil {
 		if isLinkNotFoundError(err) {
 			// Interface is gone, nothing to do.
-			log.WithField("ifaceName", ifaceName).Debug(
+			log.WithField("ifaceName", ifaceName).Info(
 				"Ignoring request to program interface that is not present.")
 			return nil
 		}
@@ -798,7 +798,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, endpoint *p
 			tier = endpoint.Tiers[0]
 		}
 	} else {
-		log.WithField("name", ifaceName).Debug(
+		log.WithField("name", ifaceName).Info(
 			"Workload interface with no endpoint in datastore, installing default-drop program.")
 	}
 
@@ -864,7 +864,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 	ip, err := m.getInterfaceIP(ifaceName)
 	if err != nil {
-		log.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
+		log.Infof("Error getting IP for interface %+v: %+v", ifaceName, err)
 		ap.IntfIP = m.hostIP
 	} else {
 		ap.IntfIP = *ip
@@ -1165,7 +1165,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 		return
 	}
 
-	log.Debugf("HEP update from generic endpoint manager: %v", hostIfaceToEpMap)
+	log.Infof("HEP update from generic endpoint manager: %v", hostIfaceToEpMap)
 
 	// Pre-process the map for the host-* endpoint: if there is a host-* endpoint, any host
 	// interface without its own HEP should use the host-* endpoint's policy.
@@ -1206,7 +1206,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 	for ifaceName, existingEp := range m.hostIfaceToEpMap {
 		newEp, stillExists := hostIfaceToEpMap[ifaceName]
 		if stillExists && reflect.DeepEqual(newEp, existingEp) {
-			log.Debugf("No change to host endpoint for ifaceName=%v", ifaceName)
+			log.Infof("No change to host endpoint for ifaceName=%v", ifaceName)
 		} else {
 			m.removeHEPFromIndexes(ifaceName, &existingEp)
 			if stillExists {
@@ -1406,7 +1406,7 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD) error {
 
 func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
 	logCtx := log.WithField("progID", progIDStr).WithField("iface", ifaceName)
-	logCtx.Debug("Looking up jump map.")
+	logCtx.Infof("Looking up jump map")
 	bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
 	output, err := bpftool.Output()
 	if err != nil {
@@ -1439,7 +1439,7 @@ func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
 			return 0, fmt.Errorf("failed to get map info: %w", err)
 		}
 		if mapInfo.Type == unix.BPF_MAP_TYPE_PROG_ARRAY {
-			logCtx.WithField("fd", mapFD).Debug("Found jump map")
+			logCtx.WithField("fd", mapFD).Info("Found jump map")
 			return mapFD, nil
 		}
 		err = mapFD.Close()
