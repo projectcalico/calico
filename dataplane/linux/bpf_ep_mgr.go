@@ -552,7 +552,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}()
 			go func() {
 				defer parallelWG.Done()
-				xdpErr = m.attachXDPProgram(iface, hepPtr)
+				//xdpErr = m.attachXDPProgram(iface, hepPtr)
 			}()
 			err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress)
 			parallelWG.Wait()
