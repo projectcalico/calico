@@ -1414,8 +1414,8 @@ func FindJumpMap(progIDStr, ifaceName string) (mapFD bpf.MapFD, err error) {
 		if _, err := os.Stat(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s", ifaceName)); os.IsNotExist(err) {
 			return 0, tc.ErrDeviceNotFound
 		}
-
-		return 0, fmt.Errorf("failed to get map metadata: %w", err)
+		//time.Sleep(time.Hour)
+		return 0, fmt.Errorf("failed to get map metadata: %w out=\n%v", err, string(output))
 	}
 	var prog struct {
 		MapIDs []int `json:"map_ids"`
