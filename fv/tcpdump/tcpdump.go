@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,13 +59,14 @@ func Attach(containerName, netns, iface string) *TCPDump {
 }
 
 // AttachUnavailable use if tcpdump is not available in the container
-func AttachUnavailable(containerName, containerID, iface string) *TCPDump {
+func AttachUnavailable(containerID, iface string) *TCPDump {
+	containerName := "tcpdump-" + containerID + "-" + iface
 	t := Attach(containerName, "", iface)
 
 	t.args = []string{"run",
 		"--rm",
+		"--name", containerName,
 		fmt.Sprintf("--network=container:%s", containerID),
-		"--privileged",
 		"corfr/tcpdump", "-nli", iface}
 
 	return t
@@ -164,9 +165,14 @@ func (t *TCPDump) Start(expr ...string) {
 }
 
 func (t *TCPDump) Stop() {
-	err := t.cmd.Process.Kill()
+	var err error
+	if t.args[0] == "run" {
+		err = exec.Command("docker", "stop", t.contName).Run()
+	} else {
+		err = t.cmd.Process.Kill()
+	}
 	if err != nil {
-		logrus.WithError(err).Error("Failed to kill tcp dump; maybe it failed to start?")
+		logrus.WithError(err).Error("Failed to kill tcpdump; maybe it failed to start?")
 	}
 }
 
