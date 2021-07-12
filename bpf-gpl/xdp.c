@@ -65,11 +65,39 @@ int calico_xdp(struct xdp_md *xdp_ctx) {
 	}
 
 	// Parse packets and drop malformed and unsupported ones
-	if (parse_packet_ip(&ctx) == -2) {
-		return XDP_DROP;
+	switch (parse_packet_ip(&ctx)) {
+	case -1:
+		ctx.fwd.res = XDP_DROP;
+		goto deny;
+	case -2:
+		ctx.fwd.res = XDP_PASS;
+		goto allow;
 	}
 
+	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
+
+	switch(parse_packet_nextheader(&ctx)) {
+	case -1:
+		ctx.fwd.res = XDP_DROP;
+		goto deny;
+	case -2:
+		ctx.fwd.res = XDP_PASS;
+		goto allow;
+	}
+
+	if (is_failsafe_in(ctx.state->ip_proto, ctx.state->dport, ctx.state->ip_src)) {
+		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->post_nat_dport);
+		ctx.state->pol_rc = CALI_POL_ALLOW;
+		goto allow;
+	}
+
+	return XDP_DROP;
+
+allow:
 	return XDP_PASS;
+
+deny:
+	return XDP_DROP;
 }
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";
