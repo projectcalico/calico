@@ -136,6 +136,8 @@ static CALI_BPF_INLINE int parse_packet_nextheader(struct cali_tc_ctx *ctx) {
 		}
 		break;
 	case IPPROTO_ICMP:
+		ctx->state->icmp_type = ctx->icmp_header->type;
+		ctx->state->icmp_code = ctx->icmp_header->code;
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
 				ctx->icmp_header->type, ctx->icmp_header->code);
 		break;
