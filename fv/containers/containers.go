@@ -695,7 +695,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity
 
 // AttachTCPDump returns tcpdump attached to the container
 func (c *Container) AttachTCPDump(iface string) *tcpdump.TCPDump {
-	return tcpdump.AttachUnavailable(c.Name, c.GetID(), iface)
+	return tcpdump.AttachUnavailable(c.GetID(), iface)
 }
 
 // NumTCBPFProgs Returns the number of TC BPF programs attached to the given interface.  Only direct-action
