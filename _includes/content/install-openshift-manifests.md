@@ -1,6 +1,7 @@
 Download the {{site.prodname}} manifests for OpenShift and add them to the generated manifests directory:
 
 ```bash
+curl {{ "/manifests/ocp/crds/01-crd-apiserver.yaml" | absolute_url }} -o manifests/01-crd-apiserver.yaml
 curl {{ "/manifests/ocp/crds/01-crd-installation.yaml" | absolute_url }} -o manifests/01-crd-installation.yaml
 curl {{ "/manifests/ocp/crds/01-crd-imageset.yaml" | absolute_url }} -o manifests/01-crd-imageset.yaml
 curl {{ "/manifests/ocp/crds/01-crd-tigerastatus.yaml" | absolute_url }} -o manifests/01-crd-tigerastatus.yaml
