@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -600,6 +600,122 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.2/32"))
+	})
+
+	It("should treat running pod with empty podIP annotation and no deletion timestamp as Running", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                   "annotation",
+					"cni.projectcalico.org/podIP": "",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+				Phase: kapiv1.PodRunning,
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(IsFinished(&pod)).To(BeFalse())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
+	})
+
+	It("should treat running pod with empty podIP with a deletion timestamp as finished", func() {
+		now := metav1.Now()
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "podA",
+				Namespace:         "default",
+				DeletionTimestamp: &now,
+				Annotations: map[string]string{
+					"arbitrary":                   "annotation",
+					"cni.projectcalico.org/podIP": "",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+				Phase: kapiv1.PodRunning,
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(IsFinished(&pod)).To(BeTrue())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(BeEmpty())
+	})
+
+	It("should treat running pod with no podIP annoation with a deletion timestamp as running", func() {
+		now := metav1.Now()
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "podA",
+				Namespace:         "default",
+				DeletionTimestamp: &now,
+				Annotations: map[string]string{
+					"arbitrary": "annotation",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+				Phase: kapiv1.PodRunning,
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(IsFinished(&pod)).To(BeFalse())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
+	})
+
+	It("should treat finished pod with no podIP annoation with a deletion timestamp as finished", func() {
+		now := metav1.Now()
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "podA",
+				Namespace:         "default",
+				DeletionTimestamp: &now,
+				Annotations: map[string]string{
+					"arbitrary": "annotation",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+				Phase: kapiv1.PodSucceeded,
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(IsFinished(&pod)).To(BeTrue())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks).To(BeEmpty())
 	})
 
 	DescribeTable("PodToDefaultWorkloadEndpoint reject/accept phase tests",
