@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 from tests.st.test_base import TestBase
-from tests.st.utils.utils import calicoctl
+from tests.st.utils.data import node_name1_rev1
+from tests.st.utils.utils import calicoctl, name, set_cluster_version
 
 class TestCalicoctlCLIFlags(TestBase):
     """
@@ -33,8 +35,35 @@ class TestCalicoctlCLIFlags(TestBase):
         """
         # no -m flag
         rc = calicoctl("-m")
-        rc.assert_error(text="Invalid option: '-m'.")
+        rc.assert_error(text="Invalid or incomplete arguments: '--allow-version-mismatch -m'.")
         # no --unknown-flag flag
         rc = calicoctl("--unknown-flag")
-        rc.assert_error(text="Invalid option: '--unknown-flag'.")
+        rc.assert_error(text="Invalid or incomplete arguments: '--allow-version-mismatch --unknown-flag'.")
 
+    def test_version_mismatch(self):
+        """
+        Test version mismatch verification
+        """
+        # Create a Node, this should also trigger auto-creation of a cluster info
+        rc = calicoctl("create", data=node_name1_rev1)
+        rc.assert_no_error()
+
+        # The "datastore migrate import" command bypasses version mismatch checking
+        rc = calicoctl("datastore migrate import -f a", allowVersionMismatch=False)
+        # Assert that the error is not "version mismatch"
+        rc.assert_error("Invalid datastore type")
+
+        rc = calicoctl("version", allowVersionMismatch=False)
+        rc.assert_error("Version mismatch.")
+
+        output = set_cluster_version()
+        output.assert_no_error()
+
+        rc = calicoctl("version", allowVersionMismatch=False)
+        rc.assert_no_error()
+
+        output = set_cluster_version("v0.0.0.1.2.3")
+        output.assert_no_error()
+
+        rc = calicoctl("version", allowVersionMismatch=False)
+        rc.assert_error("Version mismatch.")
