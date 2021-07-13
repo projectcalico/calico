@@ -845,6 +845,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.WireguardHostEncryptionEnabled != nil {
+		in, out := &in.WireguardHostEncryptionEnabled, &out.WireguardHostEncryptionEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.AWSSrcDstCheck != nil {
 		in, out := &in.AWSSrcDstCheck, &out.AWSSrcDstCheck
 		*out = new(AWSSrcDstCheckOption)

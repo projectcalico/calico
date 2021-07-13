@@ -763,7 +763,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					},
 					"maxRestartTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Time to allow for software restart.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD defaults of 120s is used.",
+							Description: "Time to allow for software restart.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD default of 120s is used.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
@@ -1839,6 +1839,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "WireguardMTU controls the MTU on the Wireguard interface. See Configuring MTU [Default: 1420]",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"wireguardHostEncryptionEnabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardHostEncryptionEnabled controls whether Wireguard host-to-host encryption is enabled. [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 					"awsSrcDstCheck": {
