@@ -123,9 +123,14 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 		v6More = v6MoreAssignments.IPs
 	}
 
+	// Set Calico version in ClusterInformation in etcd
+	out, err := SetCalicoVersion(false)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(out).To(ContainSubstring("Calico version set to"))
+
 	// Migrate the data
 	// Lock the etcd datastore
-	out := Calicoctl(false, "datastore", "migrate", "lock")
+	out = Calicoctl(false, "datastore", "migrate", "lock")
 	Expect(out).To(Equal("Datastore locked.\n"))
 
 	// Export the data
