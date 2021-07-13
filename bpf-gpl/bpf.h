@@ -45,10 +45,6 @@ struct bpf_map_def_extended {
 #endif
 };
 
-#ifndef CALI_ENTRYPOINT_NAME
-#define CALI_ENTRYPOINT_NAME calico_entrypoint
-#endif
-
 /* These constants must be kept in sync with the calculate-flags script. */
 
 // CALI_TC_HOST_EP is set for all host interfaces including tunnels.

@@ -1076,6 +1076,10 @@ deny:
 	return TC_ACT_SHOT;
 }
 
+#ifndef CALI_ENTRYPOINT_NAME
+#define CALI_ENTRYPOINT_NAME calico_entrypoint
+#endif
+
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
 // because the name is exposed by bpftool et al.
 __attribute__((section(XSTR(CALI_ENTRYPOINT_NAME))))
