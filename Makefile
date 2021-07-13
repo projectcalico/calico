@@ -57,7 +57,7 @@ include Makefile.common
 ###############################################################################
 
 # Versions and location of dependencies used in the build.
-BIRD_VERSION=v0.3.3-180-g670b09e3
+BIRD_VERSION=v0.3.3-182-g4b493986
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
