@@ -428,7 +428,6 @@ auto_allow:
 	return -2;
 
 deny:
-	ctx->fwd.res = TC_ACT_SHOT;
 	return -1;
 }
 

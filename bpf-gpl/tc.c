@@ -158,6 +158,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		switch (vxlan_attempt_decap(&ctx)) {
 		case -1:
 			/* Problem decoding the packet. */
+			ctx.fwd.res = TC_ACT_SHOT;
 			goto deny;
 		case -2:
 			/* Non-BPF VXLAN packet from another Calico node. */
@@ -313,25 +314,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 		}
 	}
-
-	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
-	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
-	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
-/*	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
-		goto deny;
-	}
-*/
-	/* icmp_type and icmp_code share storage with the ports; now we've used
-	 * the ports set to 0 to do the conntrack lookup, we can set the ICMP fields
-	 * for policy.
-	 */
-/*	if (ctx.state->ip_proto == IPPROTO_ICMP) {
-		ctx.state->icmp_type = ctx.icmp_header->type;
-		ctx.state->icmp_code = ctx.icmp_header->code;
-	}
-*/
 
 	ctx.state->pol_rc = CALI_POL_NO_MATCH;
 	if (ctx.nat_dest) {
@@ -1093,10 +1075,6 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 deny:
 	return TC_ACT_SHOT;
 }
-
-#ifndef CALI_ENTRYPOINT_NAME
-#define CALI_ENTRYPOINT_NAME calico_entrypoint
-#endif
 
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
 // because the name is exposed by bpftool et al.

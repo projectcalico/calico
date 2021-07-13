@@ -41,8 +41,10 @@
 #include "failsafe.h"
 #include "jump.h"
 
-SEC("prog")
-int calico_xdp(struct xdp_md *xdp_ctx) {
+/* calico_xdp is the main function used in all of the xdp programs */
+static CALI_BPF_INLINE calico_xdp(struct xdp_md *xdp_ctx) {
+
+	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
@@ -98,6 +100,14 @@ allow:
 
 deny:
 	return XDP_DROP;
+}
+
+// Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
+// because the name is exposed by bpftool et al.
+__attribute__((section(XSTR(CALI_ENTRYPOINT_NAME))))
+int xdp_calico_entry(struct xdp_md *xdp_ctx)
+{
+	return calico_xdp(xdp_ctx);
 }
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";
