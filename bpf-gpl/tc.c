@@ -169,10 +169,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	/* Copy fields that are needed by downstream programs from the packet to the state. */
-	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
+	tc_state_fill_from_iphdr(&ctx);
 
 	/* Parse out the source/dest ports (or type/code for ICMP). */
-	switch (parse_packet_nextheader(&ctx)) {
+	switch (tc_state_fill_from_nextheader(&ctx)) {
 	case -1:
 		goto deny;
 	case -2:
@@ -1069,7 +1069,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
+	tc_state_fill_from_iphdr(&ctx);
 	ctx.state->sport = ctx.state->dport = 0;
 	return forward_or_drop(&ctx);
 deny:

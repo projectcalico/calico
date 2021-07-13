@@ -44,7 +44,6 @@
 /* calico_xdp is the main function used in all of the xdp programs */
 static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 {
-	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
@@ -76,9 +75,9 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 		goto allow;
 	}
 
-	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
+	tc_state_fill_from_iphdr(&ctx);
 
-	switch(parse_packet_nextheader(&ctx)) {
+	switch(tc_state_fill_from_nextheader(&ctx)) {
 	case -1:
 		ctx.fwd.res = XDP_DROP;
 		goto deny;
@@ -87,13 +86,25 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 		goto allow;
 	}
 
+	// Allow a packet if it hits an entry in the failsafe map
 	if (is_failsafe_in(ctx.state->ip_proto, ctx.state->dport, ctx.state->ip_src)) {
 		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->post_nat_dport);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow;
 	}
 
-	return XDP_DROP;
+	// Jump to the policy program
+	CALI_DEBUG("About to jump to policy program.\n");
+	bpf_tail_call(xdp_ctx, &cali_jump, PROG_INDEX_POLICY);
+	if (CALI_F_HEP) {
+		CALI_DEBUG("HEP with no policy, allow.\n");
+		ctx.state->pol_rc = CALI_POL_ALLOW;
+		goto allow;
+	} else {
+		/* should not reach here */
+		CALI_DEBUG("WEP with no policy, deny.\n");
+		goto deny;
+	}
 
 allow:
 	return XDP_PASS;

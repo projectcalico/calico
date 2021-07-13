@@ -102,7 +102,16 @@ deny:
 	return -1;
 }
 
-static CALI_BPF_INLINE int parse_packet_nextheader(struct cali_tc_ctx *ctx) {
+static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
+{
+	ctx->state->ip_src = ctx->ip_header->saddr;
+	ctx->state->ip_dst = ctx->ip_header->daddr;
+	ctx->state->ip_proto = ctx->ip_header->protocol;
+	ctx->state->ip_size = ctx->ip_header->tot_len;
+}
+
+static CALI_BPF_INLINE int tc_state_fill_from_nextheader(struct cali_tc_ctx *ctx)
+{
 	switch (ctx->state->ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
