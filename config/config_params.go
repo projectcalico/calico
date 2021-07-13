@@ -159,11 +159,12 @@ type Config struct {
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
 	// Wireguard configuration
-	WireguardEnabled             bool   `config:"bool;false"`
-	WireguardListeningPort       int    `config:"int;51820"`
-	WireguardRoutingRulePriority int    `config:"int;99"`
-	WireguardInterfaceName       string `config:"iface-param;wireguard.cali;non-zero"`
-	WireguardMTU                 int    `config:"int;0"`
+	WireguardEnabled               bool   `config:"bool;false"`
+	WireguardListeningPort         int    `config:"int;51820"`
+	WireguardRoutingRulePriority   int    `config:"int;99"`
+	WireguardInterfaceName         string `config:"iface-param;wireguard.cali;non-zero"`
+	WireguardMTU                   int    `config:"int;0"`
+	WireguardHostEncryptionEnabled bool   `config:"bool;false"`
 
 	BPFEnabled                         bool           `config:"bool;false"`
 	BPFDisableUnprivileged             bool           `config:"bool;true"`
@@ -284,15 +285,15 @@ type Config struct {
 
 	DisableConntrackInvalidCheck bool `config:"bool;false"`
 
-	HealthEnabled                   bool   `config:"bool;false"`
-	HealthPort                      int    `config:"int(0,65535);9099"`
-	HealthHost                      string `config:"host-address;localhost"`
-	PrometheusMetricsEnabled        bool   `config:"bool;false"`
-	PrometheusMetricsHost           string `config:"host-address;"`
-	PrometheusMetricsPort           int    `config:"int(0,65535);9091"`
-	PrometheusGoMetricsEnabled      bool   `config:"bool;true"`
-	PrometheusProcessMetricsEnabled bool   `config:"bool;true"`
-	PrometheusWireGuardMetricsEnabled bool `config:"bool;true"`
+	HealthEnabled                     bool   `config:"bool;false"`
+	HealthPort                        int    `config:"int(0,65535);9099"`
+	HealthHost                        string `config:"host-address;localhost"`
+	PrometheusMetricsEnabled          bool   `config:"bool;false"`
+	PrometheusMetricsHost             string `config:"host-address;"`
+	PrometheusMetricsPort             int    `config:"int(0,65535);9091"`
+	PrometheusGoMetricsEnabled        bool   `config:"bool;true"`
+	PrometheusProcessMetricsEnabled   bool   `config:"bool;true"`
+	PrometheusWireGuardMetricsEnabled bool   `config:"bool;true"`
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
