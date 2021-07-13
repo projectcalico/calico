@@ -471,7 +471,7 @@ func EnsureNetworkExists(networkName string, subNet *net.IPNet, logger *logrus.E
 	return hnsNetwork, err
 }
 
-func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet, conf types.NetConf) error {
+func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet, networkName string) error {
 	logrus.Debug("Checking the node's VXLAN tunnel address")
 	var updateRequired bool
 	node, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
@@ -483,13 +483,6 @@ func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interf
 	if node.Spec.IPv4VXLANTunnelAddr != expectedIP {
 		logrus.WithField("ip", expectedIP).Debug("VXLAN tunnel IP to be updated")
 		updateRequired = true
-	}
-
-	var networkName string
-	if conf.WindowsUseSingleNetwork {
-		networkName = conf.Name
-	} else {
-		networkName = CreateNetworkName(conf.Name, ipNet)
 	}
 
 	mac, err := GetDRMACAddr(networkName, ipNet)

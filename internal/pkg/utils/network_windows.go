@@ -47,8 +47,8 @@ func updateHostLocalIPAMDataForOS(subnet string, ipamData map[string]interface{}
 	return UpdateHostLocalIPAMDataForWindows(subnet, ipamData)
 }
 
-func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet, conf types.NetConf) error {
-	return windows.EnsureVXLANTunnelAddr(ctx, calicoClient, nodeName, ipNet, conf)
+func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet, networkName string) error {
+	return windows.EnsureVXLANTunnelAddr(ctx, calicoClient, nodeName, ipNet, networkName)
 }
 
 func networkApplicationContainer(args *skel.CmdArgs) error {
