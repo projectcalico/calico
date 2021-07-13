@@ -575,6 +575,8 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
 github.com/projectcalico/api v0.0.0-20210706154750-8686d6f77130 h1:XbWIFiBucZRo9x9SYB3mI8otANghCJfqAP8rc1OegwY=
 github.com/projectcalico/api v0.0.0-20210706154750-8686d6f77130/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
+github.com/projectcalico/api v0.0.0-20210713142641-eb76b6b20ac1 h1:i+R5JU05PX5/DgDfmkbns2yDbL50ZtkxK6efMRDlhiA=
+github.com/projectcalico/api v0.0.0-20210713142641-eb76b6b20ac1/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
 github.com/projectcalico/felix v0.0.0-20210712174943-268ada454952 h1:/81GGDOptU7TcJKDTXESt8dfFycLUA9OKPZNyPw63Hg=
 github.com/projectcalico/felix v0.0.0-20210712174943-268ada454952/go.mod h1:8GgOWXR0QlJsJ42fxhyezGG32fj/hsU3u1E448NkxQg=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
@@ -583,6 +585,8 @@ github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:J
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210712155928-719c24d19752 h1:EqRBp+MbEOKEVRZ6UNftf9n1Qy+mEHd036kOwa6l06o=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210712155928-719c24d19752/go.mod h1:MAPmOmAdMf/8okDUVPEnVAhUvXdZZqbksGedHkIhv+Y=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210713191420-8e9b91bd573a h1:oeigVwVo/8IAC/G5EcNesT/mge5XFktS97FbGeGo12Y=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210713191420-8e9b91bd573a/go.mod h1:ZrRrdG9Dzc8MrGPS4wiXag1IJXQv07qfSVuFWHLaIdQ=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20210618180306-4763e2755cba/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
