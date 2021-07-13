@@ -21,7 +21,7 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/projectcalico/api v0.0.0-20210706154750-8686d6f77130
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210707205620-dad54d60f894
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210712155928-719c24d19752
 	github.com/prometheus/common v0.9.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
