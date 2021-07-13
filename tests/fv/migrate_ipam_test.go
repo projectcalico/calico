@@ -27,9 +27,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	. "github.com/projectcalico/calicoctl/v3/tests/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
@@ -109,9 +109,14 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
+	// Set Calico version in ClusterInformation in etcd
+	out, err := SetCalicoVersion(false)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(out).To(ContainSubstring("Calico version set to"))
+
 	// Migrate the data
 	// Lock the etcd datastore
-	out := Calicoctl(false, "datastore", "migrate", "lock")
+	out = Calicoctl(false, "datastore", "migrate", "lock")
 	Expect(out).To(Equal("Datastore locked.\n"))
 
 	// Export the data

@@ -75,8 +75,13 @@ func TestIPAM(t *testing.T) {
 	_, err = client.Nodes().Create(ctx, node, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
+	// Set Calico version in ClusterInformation
+	out, err := SetCalicoVersion(false)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(out).To(ContainSubstring("Calico version set to"))
+
 	// ipam show with specific unallocated IP.
-	out := Calicoctl(false, "ipam", "show", "--ip=10.65.0.2")
+	out = Calicoctl(false, "ipam", "show", "--ip=10.65.0.2")
 	Expect(out).To(ContainSubstring("10.65.0.2 is not assigned"))
 
 	// ipam show, with no allocations yet.
