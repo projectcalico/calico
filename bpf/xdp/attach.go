@@ -14,8 +14,21 @@
 
 package xdp
 
+import (
+	"fmt"
+	"os/exec"
+	"path"
+	"strconv"
+	"strings"
+
+	"github.com/projectcalico/felix/bpf"
+	log "github.com/sirupsen/logrus"
+)
+
 type AttachPoint struct {
-	Iface string
+	Iface    string
+	LogLevel string
+	Modes    []bpf.XDPMode
 }
 
 func (ap *AttachPoint) IfaceName() string {
@@ -26,66 +39,64 @@ func (ap *AttachPoint) JumpMapFDMapKey() string {
 	return "xdp"
 }
 
-func (ap *AttachPoint) IsAttached() (bool, error) {
-	return false, nil
+func (ap *AttachPoint) FileName() string {
+	logLevel := strings.ToLower(ap.LogLevel)
+	if logLevel == "off" {
+		logLevel = "no_log"
+	}
+	return "xdp_" + logLevel + ".o"
+}
+
+func (ap *AttachPoint) SectionName() string {
+	return "calico_entrypoint_xdp"
 }
 
 func (ap *AttachPoint) AttachProgram() error {
-	//func (b *BPFLib) LoadXDPAuto(ifName string, mode XDPMode) error {
-	//	return b.LoadXDP(xdpFilename, ifName, mode)
-	//}
+	objPath := path.Join(bpf.ObjectDir, ap.FileName())
+	sectionName := ap.SectionName()
+	var errs []error
+	for _, mode := range ap.Modes {
+		log.Debugf("Attempt XDP attach for %v with mode %v", ap.Iface, mode)
+		cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", objPath, "section", sectionName)
+		log.Debugf("Running: %v %v", cmd.Path, cmd.Args)
+		out, err := cmd.CombinedOutput()
+		log.Debugf("Result: err=%v out=\n%v", err, string(out))
+		if err == nil {
+			log.Debugf("Successful attachment with mode %v", mode)
+			return nil
+		}
+		errs = append(errs, err)
+	}
+	return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", objPath, sectionName, ap.Iface, ap.Modes, errs)
+}
 
-	//func (b *BPFLib) LoadXDP(objPath, ifName string, mode XDPMode) error {
-	//	mapArgs, err := b.getMapArgs(ifName)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	return b.loadXDPRaw(objPath, ifName, mode, mapArgs)
-	//}
-
-	//func (b *BPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []string) error {
-	//	objPath = path.Join(b.binDir, objPath)
-	//
-	//	if _, err := os.Stat(objPath); os.IsNotExist(err) {
-	//		return fmt.Errorf("cannot find XDP object %q", objPath)
-	//	}
-	//
-	//	progName := getProgName(ifName)
-	//	progPath := filepath.Join(b.xdpDir, progName)
-	//
-	//	if err := b.loadBPF(objPath, progPath, "xdp", mapArgs); err != nil {
-	//		return err
-	//	}
-	//
-	//	prog := "ip"
-	//	args := []string{
-	//		"link",
-	//		"set",
-	//		"dev",
-	//		ifName,
-	//		mode.String(),
-	//		"pinned",
-	//		progPath}
-	//
-	//	printCommand(prog, args...)
-	//	output, err := exec.Command(prog, args...).CombinedOutput()
-	//	log.Debugf("out:\n%v", string(output))
-	//
-	//	if err != nil {
-	//		if removeErr := os.Remove(progPath); removeErr != nil {
-	//			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s (also failed to remove the pinned program: %s)\n%s", progPath, ifName, err, removeErr, output)
-	//		} else {
-	//			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s\n%s", progPath, ifName, err, output)
-	//		}
-	//	}
-	//
-	//	return nil
-	//}
-
-	return nil
+func (ap *AttachPoint) IsAttached() (bool, error) {
+	progID, err := ap.ProgramID()
+	return err == nil, err
 }
 
 func (ap *AttachPoint) ProgramID() (string, error) {
-	return "", nil
+	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
+	log.Debugf("Running: %v %v", cmd.Path, cmd.Args)
+	out, err := cmd.CombinedOutput()
+	log.Debugf("Result: err=%v out=\n%v", err, string(out))
+	if err != nil {
+		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %v", ap.Iface, err)
+	}
+	s := strings.Fields(string(output))
+	for i := range s {
+		// Example of output:
+		//
+		// 196: test_A@test_B: <BROADCAST,MULTICAST> mtu 1500 xdpgeneric qdisc noop state DOWN mode DEFAULT group default qlen 1000
+		//    link/ether 1a:d0:df:a5:12:59 brd ff:ff:ff:ff:ff:ff
+		//    prog/xdp id 175 tag 5199fa060702bbff jited
+		if s[i] == "prog/xdp" && len(s) > i+2 && s[i+1] == "id" {
+			id, err := strconv.Atoi(s[i+2])
+			if err != nil {
+				return "", fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%v out=\n%v", err, string(output))
+			}
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' err=%v out=\n%v", err, string(output))
 }

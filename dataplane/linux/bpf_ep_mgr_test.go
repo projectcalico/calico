@@ -165,17 +165,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
 		bpfEpMgr = newBPFEndpointManager(
-			"info", // config.BPFLogLevel,
-			"uthost",
+			&Config{
+				Hostname:              "uthost",
+				BPFLogLevel:           "info",
+				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
+				VXLANMTU:              vxlanMTU,
+				VXLANPort:             rrConfigNormal.VXLANPort,
+				BPFNodePortDSREnabled: nodePortDSR,
+				RulesConfig: rules.Config{
+					EndpointToHostAction: endpointToHostAction,
+				},
+				BPFExtToServiceConnmark: 0,
+			},
 			fibLookupEnabled,
-			endpointToHostAction,
-			regexp.MustCompile(dataIfacePattern),
 			regexp.MustCompile(workloadIfaceRegex),
 			ipSetIDAllocator,
-			vxlanMTU,
-			uint16(rrConfigNormal.VXLANPort),
-			nodePortDSR,
-			0,
 			ipSetsMap,
 			stateMap,
 			ruleRenderer,

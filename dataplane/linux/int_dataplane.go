@@ -596,17 +596,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		bpfEndpointManager = newBPFEndpointManager(
-			config.BPFLogLevel,
-			config.Hostname,
+			&config,
 			fibLookupEnabled,
-			config.RulesConfig.EndpointToHostAction,
-			config.BPFDataIfacePattern,
 			workloadIfaceRegex,
 			ipSetIDAllocator,
-			config.VXLANMTU,
-			uint16(config.VXLANPort),
-			config.BPFNodePortDSREnabled,
-			config.BPFExtToServiceConnmark,
 			ipSetsMap,
 			stateMap,
 			ruleRenderer,

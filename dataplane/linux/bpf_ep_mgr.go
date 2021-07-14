@@ -164,6 +164,9 @@ type bpfEndpointManager struct {
 
 	ifaceToIpMap map[string]net.IP
 	opReporter   logutils.OpRecorder
+
+	// XDP
+	xdpModes []bpf.XDPMode
 }
 
 type bpfAllowChainRenderer interface {
@@ -171,17 +174,10 @@ type bpfAllowChainRenderer interface {
 }
 
 func newBPFEndpointManager(
-	bpfLogLevel string,
-	hostname string,
+	config *Config,
 	fibLookupEnabled bool,
-	epToHostAction string,
-	dataIfaceRegex *regexp.Regexp,
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
-	vxlanMTU int,
-	vxlanPort uint16,
-	dsrEnabled bool,
-	bpfExtToServiceConnmark int,
 	ipSetMap bpf.Map,
 	stateMap bpf.Map,
 	iptablesRuleRenderer bpfAllowChainRenderer,
@@ -202,17 +198,17 @@ func newBPFEndpointManager(
 		policiesToWorkloads:     map[proto.PolicyID]set.Set{},
 		profilesToWorkloads:     map[proto.ProfileID]set.Set{},
 		dirtyIfaceNames:         set.New(),
-		bpfLogLevel:             bpfLogLevel,
-		hostname:                hostname,
+		bpfLogLevel:             config.BPFLogLevel,
+		hostname:                config.Hostname,
 		fibLookupEnabled:        fibLookupEnabled,
-		dataIfaceRegex:          dataIfaceRegex,
+		dataIfaceRegex:          config.BPFDataIfacePattern,
 		workloadIfaceRegex:      workloadIfaceRegex,
 		ipSetIDAlloc:            ipSetIDAlloc,
-		epToHostAction:          epToHostAction,
-		vxlanMTU:                vxlanMTU,
-		vxlanPort:               vxlanPort,
-		dsrEnabled:              dsrEnabled,
-		bpfExtToServiceConnmark: bpfExtToServiceConnmark,
+		epToHostAction:          config.RulesConfig.EndpointToHostAction,
+		vxlanMTU:                config.VXLANMTU,
+		vxlanPort:               uint16(config.VXLANPort),
+		dsrEnabled:              config.BPFNodePortDSREnabled,
+		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		ipSetMap:                ipSetMap,
 		stateMap:                stateMap,
 		ruleRenderer:            iptablesRuleRenderer,
@@ -225,6 +221,15 @@ func newBPFEndpointManager(
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
 		opReporter:       opReporter,
+	}
+
+	// Calculate allowed XDP attachment modes.
+	m.xdpModes = []bpf.XDPMode{
+		bpf.XDPOffload,
+		bpf.XDPDriver,
+	}
+	if config.XDPAllowGeneric {
+		m.xdpModes = append(m.xdpModes, bpf.XDPGeneric)
 	}
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
@@ -888,7 +893,9 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 
 func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint) error {
 	ap := xdp.AttachPoint{
-		Iface: ifaceName,
+		Iface:    ifaceName,
+		LogLevel: m.bpfLogLevel,
+		Modes:    m.xdpModes,
 	}
 
 	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
