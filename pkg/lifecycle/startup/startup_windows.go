@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -90,6 +91,19 @@ func ensureNetworkForOS(ctx context.Context, c client.Interface, nodeName string
 			}
 			_, err = windows.SetupVxlanNetwork(networkName, subnet, uint64(vni), logrus.WithField("subnet", subnet.String()))
 			if err != nil {
+				return err
+			}
+			for attempts := 3; attempts > 0; attempts-- {
+				err = windows.EnsureVXLANTunnelAddr(ctx, c, nodeName, subnet, networkName)
+				if err != nil {
+					logrus.WithError(err).Warn("Failed to set node's VXLAN tunnel IP, node may not receive traffic.  May retry...")
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				break
+			}
+			if err != nil {
+				logrus.WithError(err).Error("Failed to set node's VXLAN tunnel IP after retries, node may not receive traffic.")
 				return err
 			}
 		} else {
