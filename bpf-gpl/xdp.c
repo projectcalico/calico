@@ -77,7 +77,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 
 	tc_state_fill_from_iphdr(&ctx);
 
-	switch(tc_state_fill_from_nextheader(&ctx)) {
+	switch(tc_state_fill_from_nexthdr(&ctx)) {
 	case -1:
 		ctx.fwd.res = XDP_DROP;
 		goto deny;

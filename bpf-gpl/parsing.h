@@ -110,7 +110,9 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
 	ctx->state->ip_size = ctx->ip_header->tot_len;
 }
 
-static CALI_BPF_INLINE int tc_state_fill_from_nextheader(struct cali_tc_ctx *ctx)
+/* Continue parsing packet based on the IP protocol and fill in relevant fields
+ * in the state (struct cali_tc_state). */
+static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 {
 	switch (ctx->state->ip_proto) {
 	case IPPROTO_TCP:
