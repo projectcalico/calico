@@ -38,18 +38,16 @@ See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tuto
 
 - [{{site.prodname}} is installed]({{site.baseurl}}/getting-started/kubernetes/)
 - [calicoctl is installed and configured]({{site.baseurl}}/getting-started/clis/calicoctl/install)
-- Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
-See this [issue](https://github.com/projectcalico/calico/issues/2943){:target="_blank"} for details and workaround.
 
 **Istio support**
 
 Following Istio versions have been verified to work with application layer policies:
-- Istio v1.7.4
-- Istio v1.6.13
+- Istio v1.10.2
+- Istio v1.9.6
 
-Istio v1.5.x is **not** supported.
+Istio v1.6.x and lower are **not** supported.
 
-Although we expect future minor versions to work with the corresponding manifest below (for example, v1.6.14 or v1.7.5), manifest compatibility depends entirely on the upstream changes in the respective Istio release.
+Although we expect future minor versions to work with the corresponding manifest below (for example, v1.9.7 or v1.10.3), manifest compatibility depends entirely on the upstream changes in the respective Istio release.
 
 ### How to
 
@@ -73,19 +71,12 @@ calicoctl patch FelixConfiguration default --patch \
 #### Install Istio
 
 1. Verify [application layer policy requirements]({{site.baseurl}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
-1. Install Istio using {% include open-new-window.html text='installation guide in the project documentation' url='https://istio.io/v1.6/docs/setup/install/' %}.
+1. Install Istio using {% include open-new-window.html text='installation guide in the project documentation' url='https://istio.io/v1.9/docs/setup/install/' %}.
 
 ```bash
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.7.4 sh -
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.10.2 sh -
 cd $(ls -d istio-* --color=never)
-```
-
-Istio can be installed in both strict mode or permissive mode. Application layer policies work with both Istio in strict or permissive mode. When dealing with mTLS traffic, {{site.prodname}} will cryptographically verify identity while making an authorization decision. When {{site.prodname}} receives plain-text instead, it will fall back on using IP addresses to verify identity.
-
-Strict mode is strongly suggested when creating a new cluster. For example, to install Istio in strict mode:
-
-```bash
-./bin/istioctl install --set values.global.controlPlaneSecurityEnabled=true
+./bin/istioctl install
 ```
 
 next, create the following {% include open-new-window.html text='PeerAuthentication' url='https://istio.io/latest/docs/reference/config/security/peer_authentication/' %} policy.
@@ -109,23 +100,23 @@ EOF
 
 The sidecar injector automatically modifies pods as they are created to work with Istio. This step modifies the injector configuration to add Dikastes (a {{site.prodname}} component), as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection){:target="_blank"} to install the sidecar injector and enable it in your chosen namespace(s).
+1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.9/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection){:target="_blank"} to install the sidecar injector and enable it in your chosen namespace(s).
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
 
 {% tabs %}
-<label:Istio v1.7.x,active:true>
+<label:Istio v1.10.x,active:true>
 <%
 ```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.7.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+curl {{ "/manifests/alp/istio-inject-configmap-1.10.yaml" | absolute_url }} -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 
-[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.7.yaml" | absolute_url }}){:target="_blank"}
+[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.10.yaml" | absolute_url }}){:target="_blank"}
 %>
-<label:Istio v1.6.x>
+<label:Istio v1.9.x>
 <%
 ```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.6.yaml" | absolute_url }} -o istio-inject-configmap.yaml
+curl {{ "/manifests/alp/istio-inject-configmap-1.9.yaml" | absolute_url }} -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 %>
@@ -135,21 +126,10 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 
 Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions.
 
-{% tabs %}
-<label:Istio v1.7.x,active:true>
-<%
 ```bash
-kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-v1.7.yaml" | absolute_url }}
+kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}
 ```
-[View sample manifest]({{ "/manifests/alp/istio-app-layer-policy-v1.7.yaml" | absolute_url }}){:target="_blank"}
-%>
-<label:Istio v1.6.x>
-<%
-```bash
-kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-v1.6.yaml" | absolute_url }}
-```
-%>
-{% endtabs %}
+[View sample manifest]({{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}){:target="_blank"}
 
 #### Add namespace labels
 
