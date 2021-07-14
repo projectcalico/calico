@@ -59,6 +59,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 		CALI_DEBUG("State map lookup failed: PASS\n");
 		return XDP_PASS; // TODO: Adjust base on the design
 	}
+
 	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
@@ -111,6 +112,32 @@ allow:
 
 deny:
 	return XDP_DROP;
+}
+
+__attribute__((section("1/1")))
+int calico_xdp_accepted_entrypoint(struct xdp_md *xdp_ctx)
+{
+	CALI_DEBUG("Entring calico_xdp_accepted_entrypoint\n");
+	/* Initialise the context, which is stored on the stack, and the state, which
+	 * we use to pass data from one program to the next via tail calls. */
+	struct cali_tc_ctx ctx = {
+		.state = state_get(),
+		.xdp = xdp_ctx,
+		.fwd = {
+			.res = XDP_PASS,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+	};
+
+	if (!ctx.state) {
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		return XDP_DROP;
+	}
+
+	// TODO: Share with TC that the packet is already accepted,
+	// and accept it there too.
+
+	return XDP_PASS;
 }
 
 #ifndef CALI_ENTRYPOINT_NAME_XDP
