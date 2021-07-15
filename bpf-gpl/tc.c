@@ -314,6 +314,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		}
 	}
 
+	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
+	 * dding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
+	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+		ctx.fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+
 	ctx.state->pol_rc = CALI_POL_NO_MATCH;
 	if (ctx.nat_dest) {
 		ctx.state->nat_dest.addr = ctx.nat_dest->addr;
