@@ -166,7 +166,8 @@ type bpfEndpointManager struct {
 	opReporter   logutils.OpRecorder
 
 	// XDP
-	xdpModes []bpf.XDPMode
+	xdpEnabled bool
+	xdpModes   []bpf.XDPMode
 }
 
 type bpfAllowChainRenderer interface {
@@ -221,6 +222,7 @@ func newBPFEndpointManager(
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
 		opReporter:       opReporter,
+		xdpEnabled:       config.XDPEnabled,
 	}
 
 	// Calculate allowed XDP attachment modes.
@@ -550,15 +552,18 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 
 			var parallelWG sync.WaitGroup
 			var ingressErr, xdpErr error
-			parallelWG.Add(2)
+			parallelWG.Add(1)
 			go func() {
 				defer parallelWG.Done()
 				ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress)
 			}()
-			go func() {
-				defer parallelWG.Done()
-				xdpErr = m.attachXDPProgram(iface, hepPtr)
-			}()
+			if m.xdpEnabled {
+				parallelWG.Add(1)
+				go func() {
+					defer parallelWG.Done()
+					xdpErr = m.attachXDPProgram(iface, hepPtr)
+				}()
+			}
 			err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress)
 			parallelWG.Wait()
 			if err == nil {

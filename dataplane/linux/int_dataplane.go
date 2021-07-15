@@ -449,10 +449,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	callbacks := newCallbacks()
 	dp.callbacks = callbacks
-	if !config.BPFEnabled && config.XDPEnabled {
+	if config.XDPEnabled {
 		if err := bpf.SupportsXDP(); err != nil {
 			log.WithError(err).Warn("Can't enable XDP acceleration.")
-		} else {
+			config.XDPEnabled = false
+		} else if !config.BPFEnabled {
 			st, err := NewXDPState(config.XDPAllowGeneric)
 			if err != nil {
 				log.WithError(err).Warn("Can't enable XDP acceleration.")
@@ -467,7 +468,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("XDP acceleration disabled.")
 	}
 
-	// TODO Integrate XDP and BPF infra.
+	// TODO Support cleaning up non-BPF XDP state from a previous Felix run, when BPF mode has just been enabled.
 	if !config.BPFEnabled && dp.xdpState == nil {
 		xdpState, err := NewXDPState(config.XDPAllowGeneric)
 		if err == nil {
