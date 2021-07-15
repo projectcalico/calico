@@ -85,6 +85,11 @@ elif [[ "${filename}" =~ .*wep.* ]]; then
   # Workload endpoint; recognised by CALI_TC_HOST_EP bit being 0.
   ep_type="workload"
   args+=("-DCALI_LOG_PFX=CALICOLO")
+elif [[ "${filename}" =~ .*xdp.* ]]; then
+  # XDP, so host endpoint.
+  ((flags |= CALI_TC_HOST_EP))
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  ep_type="host"
 else
   echo "Can't recognise endpoint type"
   exit 2
@@ -96,7 +101,7 @@ if [[ "${filename}" =~ to.* ]]; then
     ((flags |= CALI_TC_INGRESS))
   fi
   from_or_to="to"
-elif [[ "${filename}" =~ from.* ]]; then
+elif [[ "${filename}" =~ (from|xdp).* ]]; then
   if ((flags & CALI_TC_HOST_EP)); then
     # Host endpoint.
     ((flags |= CALI_TC_INGRESS))
