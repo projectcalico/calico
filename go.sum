@@ -630,8 +630,8 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
 github.com/projectcalico/cni-plugin v1.11.1-0.20210714230209-43dd395e91f1 h1:bhP7R1aSZ4GSMGmuQuDDVW1rBEICek987ynK94BDUpE=
 github.com/projectcalico/cni-plugin v1.11.1-0.20210714230209-43dd395e91f1/go.mod h1:u5D/jYqp+Lpk33x9q/HrErb5i4TsinHyIIKE9iGCO40=
-github.com/projectcalico/confd v1.0.1-0.20210513233336-af43293d7835 h1:MwnSZVbT0BAEaiSnAEwvvqvQ9iMVkFZNo8Rma2KzkIc=
-github.com/projectcalico/confd v1.0.1-0.20210513233336-af43293d7835/go.mod h1:k/xczHWUaEXrwOY7l+BDCtYpPAjIMvPrkz0oqe9OuVU=
+github.com/projectcalico/confd v1.0.1-0.20210715011600-32ae4df1d168 h1:3COZeOL5AR708wN5pB6wFcyc2UnNmRFSB3Brtsgiza0=
+github.com/projectcalico/confd v1.0.1-0.20210715011600-32ae4df1d168/go.mod h1:CRErlOv+So/NfgVJhfWmhfKSgevGJHDi52gXSdRbtc8=
 github.com/projectcalico/felix v0.0.0-20210521123545-0e7ed6900dea h1:RV9XLnCgodLOWQiSZ2Spt/QSthcvI+LSUfTVCJxZbok=
 github.com/projectcalico/felix v0.0.0-20210521123545-0e7ed6900dea/go.mod h1:rq9n9KvjqPNlz7DyZw7/YrqK4MEX2uWbrrpK1Glo06k=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
@@ -644,6 +644,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20210513174936-6ccf0906db1d h1:DL
 github.com/projectcalico/libcalico-go v1.7.2-0.20210513174936-6ccf0906db1d/go.mod h1:CA54aw5b1PXwBWsl4k98ovXcLg8lw2X7OxiEqjjexFM=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210712175406-9041b53c6f24 h1:ewlLJ8gMrzzFsp9yfNBi7vq1j6K8okh7gyH0ESq1NB0=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210712175406-9041b53c6f24/go.mod h1:CA54aw5b1PXwBWsl4k98ovXcLg8lw2X7OxiEqjjexFM=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210714231326-408f9354c22d h1:0C8ZHSF4M5PGScqDIerfQxn4p8Oy32E7s+CxsBKmekI=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210714231326-408f9354c22d/go.mod h1:CA54aw5b1PXwBWsl4k98ovXcLg8lw2X7OxiEqjjexFM=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20210416195010-6f2d574230b3 h1:FI93O4ZOPDZTySj971ayBc0ygGF/7/lEX4qciQcNjcs=
