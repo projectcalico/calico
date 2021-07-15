@@ -71,7 +71,7 @@ defaults:
       show_title: true
       show_read_time: true
       show_toc: true
-      version: master
+      version: v3.20
       sitemap: true
       registry:
       # A lookup map for imageNames based on component names.
