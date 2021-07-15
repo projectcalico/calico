@@ -71,7 +71,7 @@ func (ap *AttachPoint) AttachProgram() error {
 }
 
 func (ap *AttachPoint) IsAttached() (bool, error) {
-	progID, err := ap.ProgramID()
+	_, err := ap.ProgramID()
 	return err == nil, err
 }
 
@@ -83,7 +83,7 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %v", ap.Iface, err)
 	}
-	s := strings.Fields(string(output))
+	s := strings.Fields(string(out))
 	for i := range s {
 		// Example of output:
 		//
@@ -91,12 +91,12 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 		//    link/ether 1a:d0:df:a5:12:59 brd ff:ff:ff:ff:ff:ff
 		//    prog/xdp id 175 tag 5199fa060702bbff jited
 		if s[i] == "prog/xdp" && len(s) > i+2 && s[i+1] == "id" {
-			id, err := strconv.Atoi(s[i+2])
+			_, err := strconv.Atoi(s[i+2])
 			if err != nil {
-				return "", fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%v out=\n%v", err, string(output))
+				return "", fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%v out=\n%v", err, string(out))
 			}
-			return id, nil
+			return s[i+2], nil
 		}
 	}
-	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' err=%v out=\n%v", err, string(output))
+	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' err=%v out=\n%v", err, string(out))
 }
