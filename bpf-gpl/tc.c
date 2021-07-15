@@ -138,15 +138,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
 	 * is large enough for UDP. */
 	switch (parse_packet_ip(&ctx)) {
-	case -1:
-		// A packet that we automatically let through
-		fwd_fib_set(&ctx.fwd, false);
-		ctx.fwd.res = TC_ACT_UNSPEC;
-		goto finalize;
-	case -2:
+	case PARSING_ERROR:
 		// A malformed packet or a packet we don't support
 		CALI_DEBUG("Drop malformed or unsupported packet\n");
 		ctx.fwd.res = TC_ACT_SHOT;
+		goto finalize;
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		// A packet that we automatically let through
+		fwd_fib_set(&ctx.fwd, false);
+		ctx.fwd.res = TC_ACT_UNSPEC;
 		goto finalize;
 	}
 
@@ -168,79 +168,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	/* Copy fields that are needed by downstream programs from the packet to the state. */
-	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
+	tc_state_fill_from_iphdr(&ctx);
 
 	/* Parse out the source/dest ports (or type/code for ICMP). */
-	switch (ctx.state->ip_proto) {
-	case IPPROTO_TCP:
-		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (skb_refresh_validate_ptrs(&ctx, TCP_SIZE)) {
-			ctx.fwd.reason = CALI_REASON_SHORT;
-			CALI_DEBUG("Too short\n");
-			goto deny;
-		}
-		ctx.state->sport = bpf_ntohs(ctx.tcp_header->source);
-		ctx.state->dport = bpf_ntohs(ctx.tcp_header->dest);
-		CALI_DEBUG("TCP; ports: s=%d d=%d\n", ctx.state->sport, ctx.state->dport);
-		break;
-	case IPPROTO_UDP:
-		ctx.state->sport = bpf_ntohs(ctx.udp_header->source);
-		ctx.state->dport = bpf_ntohs(ctx.udp_header->dest);
-		CALI_DEBUG("UDP; ports: s=%d d=%d\n", ctx.state->sport, ctx.state->dport);
-		if (ctx.state->dport == VXLAN_PORT) {
-			/* CALI_F_FROM_HEP case is handled in vxlan_attempt_decap above since it already decoded
-			 * the header. */
-			if (CALI_F_TO_HEP) {
-				if (rt_addr_is_remote_host(ctx.state->ip_dst) &&
-						rt_addr_is_local_host(ctx.state->ip_src)) {
-					CALI_DEBUG("VXLAN packet to known Calico host, allow.\n");
-					goto allow;
-				} else {
-					/* Unlike IPIP, the user can be using VXLAN on a different VNI so we don't
-					 * simply drop it. */
-					CALI_DEBUG("VXLAN packet to unknown dest, fall through to policy.\n");
-				}
-			}
-		}
-		break;
-	case IPPROTO_ICMP:
-		CALI_DEBUG("ICMP; type=%d code=%d\n",
-				ctx.icmp_header->type, ctx.icmp_header->code);
-		break;
-	case 4:
-		// IPIP
-		if (CALI_F_TUNNEL | CALI_F_WIREGUARD) {
-			// IPIP should never be sent down the tunnel.
-			CALI_DEBUG("IPIP traffic to/from tunnel: drop\n");
-			ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
-			goto deny;
-		}
-		if (CALI_F_FROM_HEP) {
-			if (rt_addr_is_remote_host(ctx.state->ip_src)) {
-				CALI_DEBUG("IPIP packet from known Calico host, allow.\n");
-				goto allow;
-			} else {
-				CALI_DEBUG("IPIP packet from unknown source, drop.\n");
-				ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
-				goto deny;
-			}
-		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD) {
-			if (rt_addr_is_remote_host(ctx.state->ip_dst)) {
-				CALI_DEBUG("IPIP packet to known Calico host, allow.\n");
-				goto allow;
-			} else {
-				CALI_DEBUG("IPIP packet to unknown dest, drop.\n");
-				ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
-				goto deny;
-			}
-		}
-		if (CALI_F_FROM_WEP) {
-			CALI_DEBUG("IPIP traffic from workload: drop\n");
-			ctx.fwd.reason = CALI_REASON_UNAUTH_SOURCE;
-			goto deny;
-		}
-	default:
-		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)ctx.state->ip_proto);
+	switch (tc_state_fill_from_nexthdr(&ctx)) {
+	case PARSING_ERROR:
+		goto deny;
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		goto allow;
 	}
 
 	ctx.state->pol_rc = CALI_POL_NO_MATCH;
@@ -378,25 +313,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			}
 		}
 	}
-
-	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
-	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
-	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
-	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
-		goto deny;
-	}
-
-	/* icmp_type and icmp_code share storage with the ports; now we've used
-	 * the ports set to 0 to do the conntrack lookup, we can set the ICMP fields
-	 * for policy.
-	 */
-	if (ctx.state->ip_proto == IPPROTO_ICMP) {
-		ctx.state->icmp_type = ctx.icmp_header->type;
-		ctx.state->icmp_code = ctx.icmp_header->code;
-	}
-
 
 	ctx.state->pol_rc = CALI_POL_NO_MATCH;
 	if (ctx.nat_dest) {
@@ -1152,7 +1068,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	tc_state_fill_from_iphdr(ctx.state, ctx.ip_header);
+	tc_state_fill_from_iphdr(&ctx);
 	ctx.state->sport = ctx.state->dport = 0;
 	return forward_or_drop(&ctx);
 deny:
