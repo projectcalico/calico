@@ -907,6 +907,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		rules := polprog.Rules{
 			ForHostInterface: true,
 			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
+			ForXDP:           true,
 		}
 		return m.dp.updatePolicyProgram(jumpMapFD, rules)
 	} else {

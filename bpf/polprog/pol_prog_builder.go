@@ -158,6 +158,11 @@ type Rules struct {
 	HostForwardTiers []Tier
 	HostNormalTiers  []Tier
 	HostProfiles     []Profile
+
+	// True when building a policy program for XDP, as opposed to for TC.  This also means that
+	// we are implementing untracked policy (provided in the HostNormalTiers field) and that
+	// traffic is allowed to continue if not explicitly allowed or denied.
+	ForXDP bool
 }
 
 type Profile = Policy
@@ -186,7 +191,9 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	// When rules.SuppressNormalHostPolicy is true, we also skip normal host policy; this is
 	// the case when we're building the policy program for workload -> host and
 	// DefaultEndpointToHostAction is ACCEPT or DROP; or for host -> workload.
-	if rules.SuppressNormalHostPolicy {
+	if rules.ForXDP {
+		p.b.Jump("to_or_from_host")
+	} else if rules.SuppressNormalHostPolicy {
 		p.writeJumpIfToOrFromHost("allowed_by_host_policy")
 	} else {
 		p.writeJumpIfToOrFromHost("to_or_from_host")
@@ -210,7 +217,11 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 		// "Normal" host policy, i.e. for non-forwarded traffic.
 		p.b.LabelNextInsn("to_or_from_host")
 		p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
-		p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
+		if rules.ForXDP {
+			p.b.Jump("pass")
+		} else {
+			p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
+		}
 	}
 
 	// End of host policy.
@@ -225,7 +236,7 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 		p.writeProfiles(rules.Profiles, "allow")
 	}
 
-	p.writeProgramFooter()
+	p.writeProgramFooter(rules.ForXDP)
 	return p.b.Assemble()
 }
 
@@ -274,11 +285,21 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 }
 
 // writeProgramFooter emits the program exit jump targets.
-func (p *Builder) writeProgramFooter() {
+func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Fall through here if there's no match.  Also used when we hit an error or if policy rejects packet.
 	p.b.LabelNextInsn("deny")
-	p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+	if forXDP {
+		p.b.MovImm64(R0, 1 /* XDP_DROP */)
+	} else {
+		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+	}
 	p.b.Exit()
+
+	if forXDP {
+		p.b.LabelNextInsn("pass")
+		p.b.MovImm64(R0, 2 /* XDP_PASS */)
+		p.b.Exit()
+	}
 
 	if p.b.TargetIsUsed("allow") {
 		p.b.LabelNextInsn("allow")
