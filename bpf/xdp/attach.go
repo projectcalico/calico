@@ -56,13 +56,13 @@ func (ap *AttachPoint) AttachProgram() error {
 	sectionName := ap.SectionName()
 	var errs []error
 	for _, mode := range ap.Modes {
-		log.Debugf("Attempt XDP attach for %v with mode %v", ap.Iface, mode)
+		log.Infof("Attempt XDP attach for %v with mode %v", ap.Iface, mode)
 		cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", objPath, "section", sectionName)
-		log.Debugf("Running: %v %v", cmd.Path, cmd.Args)
+		log.Infof("Running: %v %v", cmd.Path, cmd.Args)
 		out, err := cmd.CombinedOutput()
-		log.Debugf("Result: err=%v out=\n%v", err, string(out))
+		log.Infof("Result: err=%v out=\n%v", err, string(out))
 		if err == nil {
-			log.Debugf("Successful attachment with mode %v", mode)
+			log.Infof("Successful attachment with mode %v", mode)
 			return nil
 		}
 		errs = append(errs, err)
@@ -77,9 +77,9 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 
 func (ap *AttachPoint) ProgramID() (string, error) {
 	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
-	log.Debugf("Running: %v %v", cmd.Path, cmd.Args)
+	log.Infof("Running: %v %v", cmd.Path, cmd.Args)
 	out, err := cmd.CombinedOutput()
-	log.Debugf("Result: err=%v out=\n%v", err, string(out))
+	log.Infof("Result: err=%v out=\n%v", err, string(out))
 	if err != nil {
 		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %v", ap.Iface, err)
 	}
