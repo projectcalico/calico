@@ -68,10 +68,10 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 
 	// Parse packets and drop malformed and unsupported ones
 	switch (parse_packet_ip(&ctx)) {
-	case -1:
+	case PARSING_ERROR:
 		ctx.fwd.res = XDP_DROP;
 		goto deny;
-	case -2:
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		ctx.fwd.res = XDP_PASS;
 		goto allow;
 	}
@@ -79,17 +79,17 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 	tc_state_fill_from_iphdr(&ctx);
 
 	switch(tc_state_fill_from_nexthdr(&ctx)) {
-	case -1:
+	case PARSING_ERROR:
 		ctx.fwd.res = XDP_DROP;
 		goto deny;
-	case -2:
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		ctx.fwd.res = XDP_PASS;
 		goto allow;
 	}
 
 	// Allow a packet if it hits an entry in the failsafe map
 	if (is_failsafe_in(ctx.state->ip_proto, ctx.state->dport, ctx.state->ip_src)) {
-		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->post_nat_dport);
+		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->dport);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow;
 	}
@@ -97,15 +97,6 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 	// Jump to the policy program
 	CALI_DEBUG("About to jump to policy program.\n");
 	bpf_tail_call(xdp_ctx, &cali_jump, PROG_INDEX_POLICY);
-	if (CALI_F_HEP) {
-		CALI_DEBUG("HEP with no policy, allow.\n");
-		ctx.state->pol_rc = CALI_POL_ALLOW;
-		goto allow;
-	} else {
-		/* should not reach here */
-		CALI_DEBUG("WEP with no policy, deny.\n");
-		goto deny;
-	}
 
 allow:
 	return XDP_PASS;

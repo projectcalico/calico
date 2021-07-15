@@ -138,12 +138,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* Parse the packet as far as the IP header; as a side-effect this validates the packet size
 	 * is large enough for UDP. */
 	switch (parse_packet_ip(&ctx)) {
-	case -1:
+	case PARSING_ERROR:
 		// A malformed packet or a packet we don't support
 		CALI_DEBUG("Drop malformed or unsupported packet\n");
 		ctx.fwd.res = TC_ACT_SHOT;
 		goto finalize;
-	case -2:
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		// A packet that we automatically let through
 		fwd_fib_set(&ctx.fwd, false);
 		ctx.fwd.res = TC_ACT_UNSPEC;
@@ -158,7 +158,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		switch (vxlan_attempt_decap(&ctx)) {
 		case -1:
 			/* Problem decoding the packet. */
-			ctx.fwd.res = TC_ACT_SHOT;
 			goto deny;
 		case -2:
 			/* Non-BPF VXLAN packet from another Calico node. */
@@ -173,9 +172,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Parse out the source/dest ports (or type/code for ICMP). */
 	switch (tc_state_fill_from_nexthdr(&ctx)) {
-	case -1:
+	case PARSING_ERROR:
 		goto deny;
-	case -2:
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
 		goto allow;
 	}
 

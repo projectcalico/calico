@@ -18,6 +18,10 @@
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
+#define PARSING_OK 0
+#define PARSING_ERROR -1
+#define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY -2
+
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
 
@@ -94,12 +98,13 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		goto allow_no_fib;
 	}
 
-	return 0;
+	return PARSING_OK;
 
 allow_no_fib:
-	return -2;
+	return PARSING_ALLOW_WITHOUT_ENFORCING_POLICY;
+
 deny:
-	return -1;
+	return PARSING_ERROR;
 }
 
 static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
@@ -188,13 +193,13 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 					(int)ctx->state->ip_proto);
 	}
 
-	return 0;
+	return PARSING_OK;
 
 allow:
-	return -2;
+	return PARSING_ALLOW_WITHOUT_ENFORCING_POLICY;
 
 deny:
-	return -1;
+	return PARSING_ERROR;
 }
 
 #endif /* __CALI_PARSING_H__ */
