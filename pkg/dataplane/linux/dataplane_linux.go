@@ -38,6 +38,7 @@ import (
 type linuxDataplane struct {
 	allowIPForwarding bool
 	mtu               int
+	queues            int
 	logger            *logrus.Entry
 }
 
@@ -45,6 +46,7 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane
 	return &linuxDataplane{
 		allowIPForwarding: conf.ContainerSettings.AllowIPForwarding,
 		mtu:               conf.MTU,
+		queues:            conf.NumQueues,
 		logger:            logger,
 	}
 }
@@ -76,8 +78,10 @@ func (d *linuxDataplane) DoNetworking(
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
-				Name: contVethName,
-				MTU:  d.mtu,
+				Name:        contVethName,
+				MTU:         d.mtu,
+				NumTxQueues: d.queues,
+				NumRxQueues: d.queues,
 			},
 			PeerName: hostVethName,
 		}
