@@ -8,7 +8,7 @@
 @import "../css/search";
 @import "../css/plugins/offcanvas";
 
-$header-height: 75px;
+$header-height: 150px;
 $sticky-top: $header-height + $navbar-margin-bottom;
 
 // By default bootstrap doesn't apply many styles to table elements
@@ -182,13 +182,82 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     line-height: normal;
 }
 
+.tigera-navbar-footer-container {
+  background-color: #326DE6;
+  background: linear-gradient(to right, #326DE6, #08A2C4);
+}
 
-#tigera-navbar {
+.tigera-navbar-header-container,
+.tigera-navbar-footer-container {
+  @media (min-width: $screen-sm-min) {
+      display: flex;
+  }
+  display: block;
+}
+
+#tigera-navbar-footer,
+#tigera-navbar-footer > ul.nav.navbar-nav.navbar-left {
+  width: 100%;
+}
+
+#tigera-navbar-footer > ul.nav.navbar-nav.navbar-left > li:last-child {
+  @media (min-width: $screen-sm-min) {
+    float: right;
+  }
+  float: left;
+}
+
+#tigera-navbar-footer > ul.nav.navbar-nav.navbar-left > li > a:hover, 
+#tigera-navbar-footer > ul.nav.navbar-nav.navbar-left > li > a:focus {
+  background-color: transparent;
+}
+
+#tigera-navbar-header ul.dropdown-menu.dropdown-menu-left,
+#tigera-navbar-footer ul.dropdown-menu.dropdown-menu-left {
+  left: -50%;
+  right: -50%;
+  margin-top: -10px;
+}
+
+#tigera-navbar-header ul.dropdown-menu.dropdown-menu-left::before,
+#tigera-navbar-footer ul.dropdown-menu.dropdown-menu-left::before {
+  @media (min-width: $screen-sm-min) {
+    content: '';
+    position: absolute;
+    background-color: white;
+    left: calc(50% - 7.5px);
+    bottom: calc(100% - 6.5px);
+    width: 15px;
+    height: 15px;
+    transform: rotate(45deg);
+    border-top: 1px solid rgba(0, 0, 0, 0.15);
+    border-left: 1px solid rgba(0, 0, 0, 0.15);
+  }
+  content: none;
+}
+
+.glyphicon.glyphicon-menu-down.sub-arrow {
+  transition: all 0.1s ease;
+}
+
+.dropdown-toggle:hover .glyphicon.glyphicon-menu-down.sub-arrow {
+  transform: rotateZ(-180deg);
+}
+
+#tigera-navbar-header .nav,
+#tigera-navbar-footer .nav {
+  margin-left: 44px;
+}
+
+#tigera-navbar,
+#tigera-navbar-header,
+#tigera-navbar-footer {
   // Constrains nav menu height when in hamburger mode
   max-height: 355px;
 }
-
-#tigera-navbar ul.nav {
+#tigera-navbar ul.nav,
+#tigera-navbar-header ul.nav,
+#tigera-navbar-footer ul.nav {
   @media (min-width: $screen-sm-min) {
     margin-top: 11px;
   }    
@@ -196,7 +265,9 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 15px 0 0 0;
 }
   
-#tigera-navbar ul.nav li {
+#tigera-navbar ul.nav li,
+#tigera-navbar-header ul.nav li,
+#tigera-navbar-footer ul.nav li {
   margin: 0 0 0 0;
   @media (min-width: $screen-sm-min) {
     // When displaying in full size mode we must extend to the bottom of the nav-bar otherwise sub-menu disappears as move mouse towards it
@@ -208,7 +279,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 0 0 25px 0;
   height: auto;
 }
-  
+
 #tigera-navbar ul.nav li a {
   // Shrink as we approach hamburger mode
   @media (min-width: $screen-sm-min) and (max-width: 900px) {
@@ -223,18 +294,49 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   font-family: "Poppins", Poppins;
   font-size: 16px;
   font-weight: 600;    
-  color: #2a302f;
+  color: #2a302f;    
   transition: .4s;    
   -webkit-font-smoothing: antialiased;        
 }
 
-#tigera-navbar ul.nav li a:hover {
+#tigera-navbar-header ul.nav li a,
+#tigera-navbar-footer ul.nav li a {
+  // Shrink as we approach hamburger mode
+  @media (min-width: $screen-sm-min) and (max-width: 900px) {
+    padding: 0 6px;
+    font-size: 13px;
+  }
+  @media (min-width: 901px) and (max-width: 1100px) {
+    padding: 0 10px;
+  }
+
+  padding: 0 20px;
+  font-family: "Poppins", Poppins;
+  font-size: 14px;
+  font-weight: 700;    
+  transition: .4s;    
+  -webkit-font-smoothing: antialiased;        
+}
+
+#tigera-navbar-footer ul.nav li a {
+  color: white;
+}
+
+#tigera-navbar-header ul.nav li a {
+  color: black;
+}
+
+#tigera-navbar ul.nav li a:hover,
+#tigera-navbar-header ul.nav li a:hover,
+#tigera-navbar-footer ul.nav li a:hover {
   color: #ff9e16;
 }
 
 // Indent submenu items for hamburger mode
 @media (max-width: $screen-xs-max) {
-  #tigera-navbar ul.nav li ul li {
+  #tigera-navbar ul.nav li ul li,
+  #tigera-navbar-header ul.nav li ul li,
+  #tigera-navbar-footer ul.nav li ul li {
     padding: 20px 0 0 20px;
   }
 }
@@ -263,12 +365,40 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     }
   }
 
-  #tigera-navbar ul.nav li:hover ul {
+  #tigera-navbar-header ul.nav li ul,
+  #tigera-navbar-footer ul.nav li ul {
+    padding: 13px 0 0 0;
+    background: white;
+
+    li {
+      min-height: 24px !important;
+      padding: 13px 20px;
+
+      a {
+        color: #041A57;
+        padding: 0;
+        white-space: nowrap;
+        font-size: 14px;
+      }
+
+      a:hover {
+        color: $navbar-default-link-hover-color !important;
+        background-color: transparent;
+        text-decoration: none;
+      }
+    }
+  }
+
+  #tigera-navbar ul.nav li:hover ul,
+  #tigera-navbar-header ul.nav li:hover ul,
+  #tigera-navbar-footer ul.nav li:hover ul {
    display: block;
   }
 }
 
-#tigera-navbar .sub-arrow {
+#tigera-navbar .sub-arrow,
+#tigera-navbar-header .sub-arrow,
+#tigera-navbar-footer .sub-arrow {
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
     width: 14px;
     padding: 10px 0 10px 3px;
@@ -277,9 +407,13 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   font-size: 11px;
   line-height: 1;
   width: 21px;
-  padding: 10px 0 10px 10px;
+  padding: 10px 0 10px 5px;
   margin-top: -10px;
   margin-bottom: -10px;
+}
+
+#tigera-navbar .sub-arrow {
+  padding-left: 10px;
 }
 
 #tigera-navbar .free-training {
@@ -297,11 +431,70 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   border-color: #ff9e16;
 }
 
-#tigera-navbar .free-training:hover {
+#tigera-navbar-footer .get-certified {
+  @media (max-width: $screen-sm-min) {
+    margin: 0px 0px 0px 20px;
+  }
+
+  @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+      padding: 6px 10px !important;
+      margin: -8px 78px 0px 0px;
+  }
+
+  color: white !important;
+  background-color: #ff9e16;
+  padding: 9px 15px !important;
+  margin: -11px 78px 0px 0px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #ff9e16;
+  border-radius: 5px;
+}
+
+#tigera-navbar .free-training:hover,
+#tigera-navbar-footer .get-certified:hover {
   color: #ff9e16 !important;
   background-color: white;
 }
 
+#tigera-navbar-footer ul.nav li.dropdown ul li a {
+  display: flex;
+  align-items: center;
+}
+
+.icon-calico-os {
+  background-image: url(/images/icon-calico-os.svg);
+}
+
+#tigera-navbar-footer ul.nav li.dropdown ul li a:hover .icon-calico-os {
+  background-image: url(/images/icon-calico-os-hover.svg);
+}
+
+.icon-calico-cloud {
+  background-image: url(/images/icon-calico-cloud.svg);
+}
+
+#tigera-navbar-footer ul.nav li.dropdown ul li a:hover .icon-calico-cloud {
+  background-image: url(/images/icon-calico-cloud-hover.svg);
+}
+
+.icon-calico-enterprise {
+  background-image: url(/images/icon-calico-enterprise.svg);
+}
+
+#tigera-navbar-footer ul.nav li.dropdown ul li a:hover .icon-calico-enterprise {
+  background-image: url(/images/icon-calico-enterprise-hover.svg);
+}
+
+.tigera-navbar-item-icon {
+  @media (max-width: $screen-sm-min) {
+    filter: brightness(0) invert(1);
+  }
+
+  height: 24px;
+  width: 32px;
+  margin-right: 15px;
+}
 
 .panel-heading.free-training {
   background-color: #ff9e16;
