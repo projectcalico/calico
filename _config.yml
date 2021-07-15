@@ -23,7 +23,7 @@ rootDirWindows: C:\CalicoWindows
 nodecontainer: calico/node
 noderunning: calico-node
 
-open_source: false
+open_source: true
 
 # DEPRECATED: use imageNames stored in per-directory defaults, e.g. 'page.imageNames'
 imageNames:

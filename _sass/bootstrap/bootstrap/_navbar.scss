@@ -423,14 +423,16 @@
     color: $navbar-default-color;
   }
 
-  .navbar-form {
-    .navbar-nav {
-      > .active > a {
-        &,
-        &:hover,
-        &:focus {
-          color: $navbar-default-link-active-color;
-          background-color: transparent;
+  .navbar-os {
+    .navbar-form {
+      .navbar-nav {
+        > .active > a {
+          &,
+          &:hover,
+          &:focus {
+            color: $navbar-default-link-active-color;
+            background-color: transparent;
+          }
         }
       }
     }

@@ -249,12 +249,13 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   margin-left: 44px;
 }
 
+#tigera-navbar,
 #tigera-navbar-header,
 #tigera-navbar-footer {
   // Constrains nav menu height when in hamburger mode
   max-height: 355px;
 }
-
+#tigera-navbar ul.nav,
 #tigera-navbar-header ul.nav,
 #tigera-navbar-footer ul.nav {
   @media (min-width: $screen-sm-min) {
@@ -264,6 +265,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 15px 0 0 0;
 }
   
+#tigera-navbar ul.nav li,
 #tigera-navbar-header ul.nav li,
 #tigera-navbar-footer ul.nav li {
   margin: 0 0 0 0;
@@ -277,7 +279,26 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 0 0 25px 0;
   height: auto;
 }
-  
+
+#tigera-navbar ul.nav li a {
+  // Shrink as we approach hamburger mode
+  @media (min-width: $screen-sm-min) and (max-width: 900px) {
+    padding: 0 6px;
+    font-size: 13px;
+  }
+  @media (min-width: 901px) and (max-width: 1100px) {
+    padding: 0 10px;
+  }
+
+  padding: 0 20px;
+  font-family: "Poppins", Poppins;
+  font-size: 16px;
+  font-weight: 600;    
+  color: #2a302f;    
+  transition: .4s;    
+  -webkit-font-smoothing: antialiased;        
+}
+
 #tigera-navbar-header ul.nav li a,
 #tigera-navbar-footer ul.nav li a {
   // Shrink as we approach hamburger mode
@@ -305,6 +326,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   color: black;
 }
 
+#tigera-navbar ul.nav li a:hover,
 #tigera-navbar-header ul.nav li a:hover,
 #tigera-navbar-footer ul.nav li a:hover {
   color: #ff9e16;
@@ -312,6 +334,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
 // Indent submenu items for hamburger mode
 @media (max-width: $screen-xs-max) {
+  #tigera-navbar ul.nav li ul li,
   #tigera-navbar-header ul.nav li ul li,
   #tigera-navbar-footer ul.nav li ul li {
     padding: 20px 0 0 20px;
@@ -320,6 +343,28 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
 // Submenu handling for full size mode
 @media (min-width: $screen-sm-min) {
+  #tigera-navbar ul.nav li ul {
+    padding: 13px 0 0 0;
+    background: #09287d;
+
+    li {
+      min-height: 24px !important;
+      padding: 13px 20px;
+
+      a {
+        color: #fff;
+        padding: 0;
+        white-space: nowrap;
+      }
+
+      a:hover {
+        color: $navbar-default-link-hover-color !important;
+        background-color: transparent;
+        text-decoration: none;
+      }
+    }
+  }
+
   #tigera-navbar-header ul.nav li ul,
   #tigera-navbar-footer ul.nav li ul {
     padding: 13px 0 0 0;
@@ -344,12 +389,14 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     }
   }
 
+  #tigera-navbar ul.nav li:hover ul,
   #tigera-navbar-header ul.nav li:hover ul,
   #tigera-navbar-footer ul.nav li:hover ul {
    display: block;
   }
 }
 
+#tigera-navbar .sub-arrow,
 #tigera-navbar-header .sub-arrow,
 #tigera-navbar-footer .sub-arrow {
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
@@ -363,6 +410,25 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 10px 0 10px 5px;
   margin-top: -10px;
   margin-bottom: -10px;
+}
+
+#tigera-navbar .sub-arrow {
+  padding-left: 10px;
+}
+
+#tigera-navbar .free-training {
+  @media (min-width: $screen-sm-min) and (max-width: 1100px) {
+      padding: 6px 10px !important;
+      margin: -8px 0px 0px 0px;
+  }
+
+  color: white !important;
+  background-color: #ff9e16;
+  padding: 9px 15px !important;
+  margin: -11px 38px 0px 0px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: #ff9e16;
 }
 
 #tigera-navbar-footer .get-certified {
@@ -385,6 +451,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   border-radius: 5px;
 }
 
+#tigera-navbar .free-training:hover,
 #tigera-navbar-footer .get-certified:hover {
   color: #ff9e16 !important;
   background-color: white;

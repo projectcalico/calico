@@ -97,11 +97,11 @@ The code is a little roundabout for a few reasons:
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5FQ2QV4" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     <section>
-      {{ if site.open_source }}
-      {% include "open_source_navbar.html" %}
-      {{ else }}
-      {% include "enterprise_navbar.html %}
-      {{ endif }}
+      {% if site.open_source %}
+      {% include open_source_navbar.html %}
+      {% else %}
+      {% include enterprise_navbar.html %}
+      {% endif %}
       <div class="container-fluid">
         <div class="row-offcanvas row-offcanvas-left main-content {% unless page.show_toc %}no-toc{% endunless  %}">
           <div class="sidebar-container sidebar-offcanvas">
