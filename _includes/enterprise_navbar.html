@@ -1,0 +1,50 @@
+<nav id="toplevel-nav" class="navbar navbar-default navbar-fixed-top">
+	<div class="container-fluid">
+		<div class="navbar-header">
+			<!-- Hamburger menu for mobile -->
+			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#tigera-navbar" aria-expanded="false" aria-controls="tigera-navbar">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<!-- Left brand image -->
+			<a class="navbar-brand" href="https://projectcalico.org/">
+				<img alt="Calico" src="{{site.baseurl}}/images/brand.png">
+			</a>
+		</div>
+		<div id="tigera-navbar" class="navbar-collapse collapse">
+			<ul class="nav navbar-nav navbar-right">
+				<li><a data-proofer-ignore href="/releases">Releases</a></li>
+				<li><a href="https://www.projectcalico.org/community">Community</a></li>
+				<li class="dropdown"
+					><a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><span>Support</span><span class="glyphicon glyphicon-triangle-bottom sub-arrow" aria-hidden="true"></span></a>
+					<ul class="dropdown-menu dropdown-menu-left">
+							<!-- <li><a data-proofer-ignore href="/latest/getting-started/"><i class="fa fa-tachometer" aria-hidden="true"></i> &nbsp; Getting Started</a></li> -->
+							<!-- <li><a href="{{site.baseurl}}"><i class="fa fa-book" aria-hidden="true"></i> &nbsp; Documentation</a></li> -->
+							<!--<li><a href="https://www.projectcalico.org/tutorials"><i class="fa fa-file-code-o" aria-hidden="true"></i> &nbsp; Tutorials &amp; Examples</a></li>
+							<li><a href=""><i class="fa fa-paper-plane-o" aria-hidden="true"></i> &nbsp; Online Workshops</a></li>-->
+							<li><a href="https://www.projectcalico.org/community">Community Support</a></li>
+							<li><a href="https://www.tigera.io/tigera-products/calico-essentials/" target="_blank" rel="noopener noreferrer">Commercial Support</a></li>
+							<li><a href="https://www.tigera.io/training/" target="_blank" rel="noopener noreferrer">Training</a></li>
+							<li><a href="https://www.projectcalico.org/security-bulletins">Security Bulletins</a></li>
+							<li><a href="https://www.projectcalico.org/vulnerability-disclosure">Report Security Issue</a></li>
+					</ul>
+				</li>
+				<li><a href="https://www.projectcalico.org/blog">Blog</a></li>
+				<li><a href="https://github.com/projectcalico/calico" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+				<li><a href="{{site.baseurl}}/calico-enterprise/">Enterprise</a></li>
+				<li><a href="https://www.tigera.io/free-training-resources" class="free-training">Free training</a></li>              
+			</ul>
+			<form class="navbar-form visible-xs">
+				<ul class="nav navbar-nav navbar-right">
+					{% for navbar in navbars %}
+						<li {% if this_pages_navbar == navbar %} class="active"{% endif %}>
+							<a href="{{site.baseurl}}{{navbar.path}}">{{ navbar.title }}</a>
+						</li>
+					{% endfor %}
+				</ul>
+			</form>
+		</div>
+	</div>
+</nav>
