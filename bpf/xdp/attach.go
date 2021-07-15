@@ -51,18 +51,26 @@ func (ap *AttachPoint) SectionName() string {
 	return "calico_entrypoint_xdp"
 }
 
+func (ap *AttachPoint) Log() *log.Entry {
+	return log.WithFields(log.Fields{
+		"iface":    ap.Iface,
+		"modes":    ap.Modes,
+		"logLevel": ap.LogLevel,
+	})
+}
+
 func (ap *AttachPoint) AttachProgram() error {
 	objPath := path.Join(bpf.ObjectDir, ap.FileName())
 	sectionName := ap.SectionName()
 	var errs []error
 	for _, mode := range ap.Modes {
-		log.Infof("Attempt XDP attach for %v with mode %v", ap.Iface, mode)
+		ap.Log().Infof("Attempt XDP attach with mode %v", mode)
 		cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", objPath, "section", sectionName)
-		log.Infof("Running: %v %v", cmd.Path, cmd.Args)
+		ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
 		out, err := cmd.CombinedOutput()
-		log.Infof("Result: err=%v out=\n%v", err, string(out))
+		ap.Log().WithField("mode", mode).Infof("Result: err=%v out=\n%v", err, string(out))
 		if err == nil {
-			log.Infof("Successful attachment with mode %v", mode)
+			ap.Log().Infof("Successful attachment with mode %v", mode)
 			return nil
 		}
 		errs = append(errs, err)
@@ -77,9 +85,9 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 
 func (ap *AttachPoint) ProgramID() (string, error) {
 	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
-	log.Infof("Running: %v %v", cmd.Path, cmd.Args)
+	ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
 	out, err := cmd.CombinedOutput()
-	log.Infof("Result: err=%v out=\n%v", err, string(out))
+	ap.Log().Infof("Result: err=%v out=\n%v", err, string(out))
 	if err != nil {
 		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %v", ap.Iface, err)
 	}
