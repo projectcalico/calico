@@ -1409,7 +1409,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polp
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
 	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
 	if err != nil {
-		return fmt.Errorf("failed to update jump map: %w", err)
+		return fmt.Errorf("failed to update %v=%v in jump map %v: %w", k, v, jumpMapFD, err)
 	}
 	return nil
 }
