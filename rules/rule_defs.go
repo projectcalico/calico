@@ -166,6 +166,7 @@ type RuleRenderer interface {
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATPostroutingChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
+	StaticRawEgressChains(ipVersion uint8) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 	StaticFilterForwardAppendRules() []iptables.Rule
 
@@ -204,6 +205,10 @@ type RuleRenderer interface {
 		egressPolicyNames []string,
 		profileIDs []string,
 	) []*iptables.Chain
+	HostEndpointToRawEgressChain(
+		ifaceName string,
+		egressPolicyNames []string,
+	) *iptables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
 		ingressPolicyNames []string,

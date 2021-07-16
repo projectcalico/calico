@@ -986,6 +986,13 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	}
 }
 
+func (r *DefaultRuleRenderer) StaticRawEgressChains(ipVersion uint8) []*Chain {
+	return []*Chain{
+		r.failsafeOutChain("raw", ipVersion),
+		r.StaticRawOutputChain(),
+	}
+}
+
 func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	rules := []Rule{}
 
