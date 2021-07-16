@@ -18,6 +18,9 @@ calico_enterprise: true
     </tr>
   </thead>
   <tbody>
+    <tr class="table-header">
+      <th colspan="3">Networking</th>
+    </tr>
     <tr>
       <td>High performance scalable pod networking</td>
       <td style="text-align: center">✓</td>
@@ -29,69 +32,98 @@ calico_enterprise: true
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Kubernetes network policy</td>
+      <td>Direct infrastructure peering without the overlay</td>
       <td style="text-align: center">✓</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Advanced network policies</td>
+      <td>eBPF Dataplane</td>
       <td style="text-align: center">✓</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>L7 rules in policy integrated with Istio/Envoy</td>
+      <td>Windows Dataplane</td>
+      <td style="text-align: center">✓</td>
+      <td style="text-align: center">✓</td>
+    </tr>
+    <tr class="table-header">
+      <th colspan="3">Security</th>
+    </tr>
+    <tr>
+      <td>Security policy enforcement</td>
       <td style="text-align: center">✓</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Direct infrastructure peering without overlay</td>
+      <td>Data-in-transit encryption</td>
       <td style="text-align: center">✓</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Hierarchical network policy</td>
+      <td>Hierarchical tiers</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>FQDN / DNS based network policy</td>
+      <td>FQDN / DNS based policy</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Rich graphical user interface</td>
+      <td>Microsegmentation across Host/VMs/Containers</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Network visualization and troubleshooting</td>
+      <td>Security policy preview, staging, and recommendation</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Network policy recommendations</td>
+      <td>Compliance reporting & alertse</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Network policy preview and staging</td>
+      <td>Intrusion detection & prevention (IDS / IPS) for Kubernetes</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>RBAC controls with audit trail &amp; continuous compliance</td>
+      <td>SIEM Integrations</td>
+      <td style="text-align: center">&nbsp;</td>
+      <td style="text-align: center">✓</td>
+    </tr>
+    <tr class="table-header">
+      <th colspan="3">Observability</th>
+    </tr>
+    <tr>
+      <td>Dynamic Service Graph</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Monitoring with alerting on security violations</td>
+      <td>Application Layer Observability</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Threat defense (suspicious activity, anomaly detection)</td>
+      <td>Dynamic Packet Capture</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
+    </tr>
+    <tr>
+      <td>DNS Dashboards</td>
+      <td style="text-align: center">&nbsp;</td>
+      <td style="text-align: center">✓</td>
+    </tr>
+    <tr>
+      <td>Flow visualizer</td>
+      <td style="text-align: center">&nbsp;</td>
+      <td style="text-align: center">✓</td>
+    </tr>
+    <tr class="table-header">
+      <th colspan="3">Management</th>
     </tr>
     <tr>
       <td>Multi cluster, multi-cloud & hybrid cloud networking</td>
