@@ -1359,7 +1359,7 @@ func (m *bpfEndpointManager) getJumpMapFD(ap attachPoint) (fd bpf.MapFD) {
 	defer m.ifacesLock.Unlock()
 	m.withIface(ap.IfaceName(), func(iface *bpfInterface) bool {
 		if iface.dpState.jumpMapFDs != nil {
-			fd, _ = iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey()]
+			fd = iface.dpState.jumpMapFDs[ap.JumpMapFDMapKey()]
 		}
 		return false
 	})
