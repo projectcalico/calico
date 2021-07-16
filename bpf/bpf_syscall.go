@@ -82,10 +82,10 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string, forXDP bool) (fd P
 		// and the fact that the log cannot overflow.
 		fd, err = tryLoadBPFProgramFromInsns(insns, license, 0, forXDP)
 		if err == nil {
-			log.WithField("fd", fd).Debug("Loaded program successfully")
+			log.WithField("fd", fd).Info("Loaded program successfully")
 			return fd, nil
 		}
-		log.WithError(err).Debug("Error loading BPF program; will retry.")
+		log.WithError(err).Info("Error loading BPF program; will retry.")
 		time.Sleep(backoff)
 		backoff *= 2
 	}
@@ -140,7 +140,7 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, f
 
 	if errno != 0 && errno != unix.ENOSPC /* log buffer too small */ {
 		goLog := strings.TrimSpace(C.GoString((*C.char)(logBuf)))
-		log.WithError(errno).Debug("BPF_PROG_LOAD failed")
+		log.WithError(errno).Info("BPF_PROG_LOAD failed")
 		if len(goLog) > 0 {
 			for _, l := range strings.Split(goLog, "\n") {
 				log.Error("BPF Verifier:    ", l)
@@ -218,7 +218,7 @@ func PinBPFProgram(fd ProgFD, filename string) error {
 }
 
 func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
-	log.Debugf("UpdateMapEntry(%v, %v, %v)", mapFD, k, v)
+	log.Infof("UpdateMapEntry(%v, %v, %v)", mapFD, k, v)
 
 	err := checkMapIfDebug(mapFD, len(k), len(v))
 	if err != nil {
