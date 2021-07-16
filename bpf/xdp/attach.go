@@ -65,9 +65,17 @@ func (ap *AttachPoint) AttachProgram() error {
 	var errs []error
 	for _, mode := range ap.Modes {
 		ap.Log().Infof("Attempt XDP attach with mode %v", mode)
-		cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", objPath, "section", sectionName)
+
+		// First remove any existing program.
+		cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "off")
 		ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
 		out, err := cmd.CombinedOutput()
+		ap.Log().WithField("mode", mode).Infof("Result: err=%v out=\n%v", err, string(out))
+
+		// Now attach the program we want.
+		cmd = exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", objPath, "section", sectionName)
+		ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
+		out, err = cmd.CombinedOutput()
 		ap.Log().WithField("mode", mode).Infof("Result: err=%v out=\n%v", err, string(out))
 		if err == nil {
 			ap.Log().Infof("Successful attachment with mode %v", mode)
