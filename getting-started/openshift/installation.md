@@ -126,6 +126,8 @@ EOF
 ```
 
 Next, you will create a Subscription to the operator. By subscribing to the operator package, the {{site.prodname}} operator will be managed by OLM.
+{% assign operator_version = site.data.versions.first.tigera-operator.version %}
+{% assign operator_version_parts = operator_version | split: "." %}
 
 ```bash
 oc apply -f - <<EOF
@@ -135,12 +137,12 @@ metadata:
   name: tigera-operator
   namespace: tigera-operator
 spec:
-  channel: stable
+  channel: release-{{operator_version_parts[0]}}.{{operator_version_parts[1]}}
   installPlanApproval: Manual
   name: tigera-operator
   source: certified-operators
   sourceNamespace: openshift-marketplace
-  startingCSV: tigera-operator.{{site.data.versions.first.tigera-operator.version}}
+  startingCSV: tigera-operator.{{operator_version}}
 EOF
 ```
 
