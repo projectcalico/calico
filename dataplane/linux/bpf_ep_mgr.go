@@ -82,6 +82,7 @@ type attachPoint interface {
 	IsAttached() (bool, error)
 	AttachProgram() error
 	ProgramID() (string, error)
+	Log() *log.Entry
 }
 
 type bpfDataplane interface {
@@ -909,11 +910,13 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
+		ap.Log().Infof("Building program for untracked policy hep=%v jumpMapFD=%v", ep.Name, jumpMapFD)
 		rules := polprog.Rules{
 			ForHostInterface: true,
 			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
 			ForXDP:           true,
 		}
+		ap.Log().Debugf("Rules: %v", rules)
 		return m.dp.updatePolicyProgram(jumpMapFD, rules)
 	} else {
 		return m.dp.removePolicyProgram(jumpMapFD)
@@ -1311,6 +1314,7 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) error {
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
 	jumpMapFD := m.getJumpMapFD(ap)
 	if jumpMapFD != 0 {
+		ap.Log().Infof("Known jump map fd=%v", jumpMapFD)
 		if attached, err := ap.IsAttached(); err != nil {
 			return jumpMapFD, fmt.Errorf("failed to check if interface %s had BPF program; %w", ap.IfaceName(), err)
 		} else if !attached {
@@ -1328,6 +1332,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 	}
 
 	if jumpMapFD == 0 {
+		ap.Log().Info("Need to attach program")
 		// We don't have a program attached to this interface yet, attach one now.
 		err := ap.AttachProgram()
 		if err != nil {
@@ -1377,6 +1382,7 @@ func (m *bpfEndpointManager) setJumpMapFD(ap attachPoint, fd bpf.MapFD) {
 				iface.dpState.jumpMapFDs = nil
 			}
 		}
+		ap.Log().Infof("Jump map now %v fd=%v", iface.dpState.jumpMapFDs, fd)
 		return false
 	})
 }

@@ -61,6 +61,14 @@ var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
+func (ap AttachPoint) Log() *log.Entry {
+	return log.WithFields(log.Fields{
+		"iface": ap.Iface,
+		"type":  ap.Type,
+		"hook":  ap.Hook,
+	})
+}
+
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap AttachPoint) AttachProgram() error {
 	logCxt := log.WithField("attachPoint", ap)
