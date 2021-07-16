@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -55,10 +56,10 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 	}
 
 	// In BPF mode, start BPF logging.
-	//if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-	//	eds.bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
-	//		"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
-	//}
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		eds.bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
+			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
+	}
 
 	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)
 	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.etcdContainer.IP)

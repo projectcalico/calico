@@ -64,7 +64,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_GENERICXDPENABLED":  "1",
 			"FELIX_XDPREFRESHINTERVAL": "10",
-			"FELIX_LOGSEVERITYSCREEN":  "info",
+			"FELIX_LOGSEVERITYSCREEN":  "debug",
 		}
 		felixes, client = infrastructure.StartNNodeTopology(4, opts, infra)
 

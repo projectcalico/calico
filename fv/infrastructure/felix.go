@@ -95,7 +95,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
-		"FELIX_BPFLOGLEVEL":              "info",
+		"FELIX_BPFLOGLEVEL":              "debug",
 		"FELIX_USAGEREPORTINGENABLED":    "false",
 		"FELIX_IPV6SUPPORT":              ipv6Enabled,
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
