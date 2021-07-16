@@ -103,16 +103,16 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 
 		By("checking that the healthCheckNodePort is accessable", func() {
-			Eventually(func() bool {
+			Eventually(func() error {
 				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
 				if err != nil {
-					return false
+					return err
 				}
 				if result.StatusCode != 503 {
-					return false
+					return fmt.Errorf("Unexpected status code %d; expected 503", result.StatusCode)
 				}
-				return true
-			}).Should(BeTrue())
+				return nil
+			}, "5s", "200ms").Should(Succeed())
 		})
 
 		By("checking that there is no local endpoint", func() {
@@ -160,13 +160,13 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 
 		By("checking that there is a local endpoint", func() {
-			Eventually(func() bool {
+			Eventually(func() error {
 				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
 				if err != nil {
-					return false
+					return err
 				}
 				if result.StatusCode != 200 {
-					return false
+					return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
 				}
 
 				var status map[string]interface{}
@@ -174,11 +174,15 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 				decoder := json.NewDecoder(result.Body)
 				err = decoder.Decode(&status)
 				if err != nil {
-					return false
+					return err
 				}
 
-				return int(status["localEndpoints"].(float64)) == 1
-			}).Should(BeTrue())
+				if int(status["localEndpoints"].(float64)) != 1 {
+					return fmt.Errorf("Expected 1 endpoint no %d", int(status["localEndpoints"].(float64)))
+				}
+
+				return nil
+			}, "5s", "200ms").Should(Succeed())
 
 			By("making non-local a local endpoint", func() {
 				err := k8s.Tracker().Update(v1.SchemeGroupVersion.WithResource("endpoints"),
@@ -210,13 +214,13 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			})
 
 			By("checking that there is a local endpoint", func() {
-				Eventually(func() bool {
+				Eventually(func() error {
 					result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
 					if err != nil {
-						return false
+						return err
 					}
 					if result.StatusCode != 200 {
-						return false
+						return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
 					}
 
 					var status map[string]interface{}
@@ -224,11 +228,15 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 					decoder := json.NewDecoder(result.Body)
 					err = decoder.Decode(&status)
 					if err != nil {
-						return false
+						return err
 					}
 
-					return int(status["localEndpoints"].(float64)) == 2
-				}).Should(BeTrue())
+					if int(status["localEndpoints"].(float64)) != 2 {
+						return fmt.Errorf("Expected 1 endpoint no %d", int(status["localEndpoints"].(float64)))
+					}
+
+					return nil
+				}, "5s", "200ms").Should(Succeed())
 			})
 		})
 	})
