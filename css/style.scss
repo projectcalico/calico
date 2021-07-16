@@ -713,3 +713,8 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
 .general-tab-header {
   margin-bottom: 1em;
 }
+
+.table-header {
+  background-color: #e6e6e6;
+  color: #666;
+}
