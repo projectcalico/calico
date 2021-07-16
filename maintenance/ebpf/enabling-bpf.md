@@ -133,6 +133,31 @@ This section explains how to make sure your cluster is suitable for eBPF mode.
 
    If you see no output, then the BPF filesystem is not mounted; consult the documentation for your OS distribution to see how to make sure the file system is mounted at boot in its standard location  /sys/fs/bpf.  This may involve editing `/etc/fstab` or adding a `systemd` unit, depending on your distribution. If the file system is not mounted on the host then eBPF mode will work normally until {{site.prodname}} is restarted, at which point workload networking will be disrupted for several seconds.
 
+   If your distribution uses `systemd`, you can refer to the following settings:
+
+   ```
+   cat <<EOF | sudo tee /etc/systemd/system/sys-fs-bpf.mount
+   [Unit]
+   Description=BPF mounts
+   DefaultDependencies=no
+   Before=local-fs.target umount.target
+   After=swap.target
+
+   [Mount]
+   What=bpffs
+   Where=/sys/fs/bpf
+   Type=bpf
+   Options=rw,nosuid,nodev,noexec,relatime,mode=700
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+
+   systemctl daemon-reload
+   systemctl start sys-fs-bpf.mount
+   systemctl enable sys-fs-bpf.mount
+   ```
+
 #### Configure {{site.prodname}} to talk directly to the API server
 
 In eBPF mode, {{site.prodname}} implements Kubernetes service networking directly (rather than relying on `kube-proxy`).  This means that, like `kube-proxy`,  {{site.prodname}} must connect _directly_ to the Kubernetes API server rather than via the API server's ClusterIP.
