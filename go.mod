@@ -9,7 +9,7 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/projectcalico/api v0.0.0-20210715003201-f67780b60cd8
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210715020751-e8f55ad31ddc
-	github.com/projectcalico/typha v0.7.3-0.20210715003630-d7ab4fd42584
+	github.com/projectcalico/typha v0.7.3-0.20210716225025-b86bc09c4aa3
 	github.com/sirupsen/logrus v1.4.2
 	k8s.io/api v0.21.0-rc.0
 	k8s.io/apimachinery v0.21.0-rc.0
