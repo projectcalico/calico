@@ -21,6 +21,8 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -232,6 +234,37 @@ var _ = DescribeTable(
 		LastStatusReportKey{Hostname: "h1", RegionString: "region-Europe"},
 		false,
 	),
+	Entry(
+		"Global resource",
+		"/calico/resources/v3/projectcalico.org/felixconfigurations/default",
+		ResourceKey{
+			Kind: "FelixConfiguration",
+			Name: "default",
+		},
+		false,
+	),
+	Entry(
+		"Invalid global resource",
+		"/calico/resources/v3/projectcalico.org/networkpolicies",
+		nil,
+		true,
+	),
+	Entry(
+		"Namespaced resource",
+		"/calico/resources/v3/projectcalico.org/networkpolicies/default/my-network-policy",
+		ResourceKey{
+			Kind:      "NetworkPolicy",
+			Namespace: "default",
+			Name:      "my-network-policy",
+		},
+		false,
+	),
+	Entry(
+		"Invalid namespaced resource",
+		"/calico/resources/v3/projectcalico.org/felixconfigurations/default/my-network-policy",
+		nil,
+		true,
+	),
 )
 
 var _ = DescribeTable(
@@ -285,6 +318,19 @@ var _ = DescribeTable(
 		},
 		`{}`,
 		&BlockAffinity{},
+	),
+	Entry(
+		"BGPPeer",
+		ResourceKey{
+			Kind: apiv3.KindBGPPeer,
+			Name: "my-peer",
+		},
+		`{"spec":{"node": "node"}}`,
+		&apiv3.BGPPeer{
+			Spec: apiv3.BGPPeerSpec{
+				Node: "node",
+			},
+		},
 	),
 )
 
