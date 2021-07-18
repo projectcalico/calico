@@ -25,14 +25,14 @@
 /* A struct to share information between TC and XDP programs.
  * The struct must be 4 byte aligned, based on
  * samples/bpf/xdp2skb_meta_kern.c code in the Kernel source. */
-struct parsing_meta_info {
+struct parsing_metadata {
 	__u32  flags;
 }__attribute__((aligned(4)));
 
 // Set metadata to be received by TC programs.
 static CALI_BPF_INLINE int xdp2tc_set_metadata(struct xdp_md *xdp, __u32 flags) {
 	if (CALI_F_XDP) {
-		struct parsing_meta_info *metadata;
+		struct parsing_metadata *metadata;
 		// Reserve space in-front of xdp_md.meta for metadata.
 		// Drivers not supporting data_meta will fail here.
 		int ret = bpf_xdp_adjust_meta(xdp, -(int)sizeof(*metadata));
@@ -41,7 +41,7 @@ static CALI_BPF_INLINE int xdp2tc_set_metadata(struct xdp_md *xdp, __u32 flags) 
 			return PARSING_ERROR;
 		}
 
-		if (xdp->data_meta + sizeof(struct parsing_meta_info) > xdp->data) {
+		if (xdp->data_meta + sizeof(struct parsing_metadata) > xdp->data) {
 			CALI_DEBUG("No enough space for metadata\n");
 			return PARSING_ERROR;
 		}
@@ -60,9 +60,9 @@ static CALI_BPF_INLINE int xdp2tc_set_metadata(struct xdp_md *xdp, __u32 flags) 
 // Fetch metadata set by XDP program. If not set or on error return 0.
 static CALI_BPF_INLINE __u32 xdp2tc_get_metadata(struct __sk_buff *skb) {
 	if (CALI_F_FROM_HEP && !CALI_F_XDP) {
-		struct parsing_meta_info *metadata = (void *)(unsigned long)skb->data_meta;
+		struct parsing_metadata *metadata = (void *)(unsigned long)skb->data_meta;
 
-		if (skb->data_meta + sizeof(struct parsing_meta_info) > skb->data) {
+		if (skb->data_meta + sizeof(struct parsing_metadata) > skb->data) {
 			CALI_DEBUG("No metadata is shared by XDP\n");
 			return 0;
 		}
