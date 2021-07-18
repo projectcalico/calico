@@ -92,20 +92,13 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 
 	// MAZDAK: This is just for test. Remove it later
 	// Share with TC the packet is already accepted and accept it there too.
-	//if (xdp2tc_set_metadata(&ctx, CALI_ST_ACCEPTED_BY_XDP)) {
-	//	CALI_DEBUG("Failed to set metadata for TC\n");
-	//}
-
-	/*
-	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		ctx.fwd.reason = CALI_REASON_SHORT;
-		CALI_DEBUG("Too short\n");
-		goto deny;
-	}*/
+	if (xdp2tc_set_metadata(xdp, CALI_ST_ACCEPTED_BY_XDP)) {
+		CALI_DEBUG("Failed to set metadata for TC\n");
+	}
 
 	// Jump to the policy program
 	CALI_DEBUG("About to jump to policy program.\n");
-	bpf_tail_call(xdp_ctx, &cali_jump, PROG_INDEX_POLICY);
+	bpf_tail_call(xdp, &cali_jump, PROG_INDEX_POLICY);
 
 allow:
 	return XDP_PASS;
