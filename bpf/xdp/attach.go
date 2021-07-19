@@ -127,9 +127,9 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 
 func (ap *AttachPoint) ProgramID() (string, error) {
 	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
-	ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
+	ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
 	out, err := cmd.CombinedOutput()
-	ap.Log().Infof("Result: err=%v out=\n%v", err, string(out))
+	ap.Log().Debugf("Result: err=%v out=\n%v", err, string(out))
 	if err != nil {
 		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %v", ap.Iface, err)
 	}
