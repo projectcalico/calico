@@ -16,6 +16,8 @@ package xdp
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
 	"path"
 	"strconv"
@@ -60,8 +62,24 @@ func (ap *AttachPoint) Log() *log.Entry {
 }
 
 func (ap *AttachPoint) AttachProgram() error {
-	objPath := path.Join(bpf.ObjectDir, ap.FileName())
+	preCompiledBinary := path.Join(bpf.ObjectDir, ap.FileName())
 	sectionName := ap.SectionName()
+
+	// Patch the binary so that its log prefix is like "eth0------X".
+	tempDir, err := ioutil.TempDir("", "calico-tc")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
+	tempBinary := path.Join(tempDir, ap.FileName())
+	err = ap.patchBinary(preCompiledBinary, tempBinary)
+	if err != nil {
+		ap.Log().WithError(err).Error("Failed to patch binary")
+		return err
+	}
+
 	var errs []error
 	for _, mode := range ap.Modes {
 		ap.Log().Infof("Attempt XDP attach with mode %v", mode)
@@ -73,7 +91,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		ap.Log().WithField("mode", mode).Infof("Result: err=%v out=\n%v", err, string(out))
 
 		// Now attach the program we want.
-		cmd = exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", objPath, "section", sectionName)
+		cmd = exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", tempBinary, "section", sectionName)
 		ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
 		out, err = cmd.CombinedOutput()
 		ap.Log().WithField("mode", mode).Infof("Result: err=%v out=\n%v", err, string(out))
@@ -83,7 +101,23 @@ func (ap *AttachPoint) AttachProgram() error {
 		}
 		errs = append(errs, err)
 	}
-	return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", objPath, sectionName, ap.Iface, ap.Modes, errs)
+	return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
+}
+
+func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
+	b, err := bpf.BinaryFromFile(ifile)
+	if err != nil {
+		return fmt.Errorf("failed to read pre-compiled BPF binary: %w", err)
+	}
+
+	b.PatchLogPrefix(ap.Iface)
+
+	err = b.WriteToFile(ofile)
+	if err != nil {
+		return fmt.Errorf("failed to write pre-compiled BPF binary: %w", err)
+	}
+
+	return nil
 }
 
 func (ap *AttachPoint) IsAttached() (bool, error) {
