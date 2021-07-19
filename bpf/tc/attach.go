@@ -93,10 +93,10 @@ func (ap AttachPoint) AttachProgram() error {
 
 	// Using the RLock allows multiple attach calls to proceed in parallel unless
 	// CleanUpJumpMaps() (which takes the writer lock) is running.
-	logCxt.Info("AttachProgram waiting for lock...")
+	logCxt.Debug("AttachProgram waiting for lock...")
 	tcLock.RLock()
 	defer tcLock.RUnlock()
-	logCxt.Info("AttachProgram got lock.")
+	logCxt.Debug("AttachProgram got lock.")
 
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
@@ -114,7 +114,7 @@ func (ap AttachPoint) AttachProgram() error {
 	// Success: clean up the old programs.
 	var progErrs []error
 	for _, p := range progsToClean {
-		log.WithField("prog", p).Info("Cleaning up old calico program")
+		log.WithField("prog", p).Debug("Cleaning up old calico program")
 		attemptCleanup := func() error {
 			_, err := ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
 			return err
@@ -122,7 +122,7 @@ func (ap AttachPoint) AttachProgram() error {
 		err = attemptCleanup()
 		if errors.Is(err, ErrInterrupted) {
 			// This happens if the interface is deleted in the middle of calling tc.
-			log.Info("First cleanup hit 'Dump was interrupted', retrying (once).")
+			log.Debug("First cleanup hit 'Dump was interrupted', retrying (once).")
 			err = attemptCleanup()
 		}
 		if errors.Is(err, ErrDeviceNotFound) {
@@ -210,7 +210,7 @@ func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 				pref:   sm[1],
 				handle: sm[2],
 			}
-			log.WithField("prog", p).Info("Found old calico program")
+			log.WithField("prog", p).Debug("Found old calico program")
 			progsToClean = append(progsToClean, p)
 		}
 	}
@@ -223,7 +223,7 @@ func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error 
 		return fmt.Errorf("failed to read pre-compiled BPF binary: %w", err)
 	}
 
-	logCtx.WithField("ip", ap.HostIP).Info("Patching in IP")
+	logCtx.WithField("ip", ap.HostIP).Debug("Patching in IP")
 	err = b.PatchIPv4(ap.HostIP)
 	if err != nil {
 		return fmt.Errorf("failed to patch IPv4 into BPF binary: %w", err)
@@ -284,10 +284,10 @@ var tcDirRegex = regexp.MustCompile(`[0-9a-f]{40}`)
 // our BPF programs.
 func CleanUpJumpMaps() {
 	// So that we serialise with AttachProgram()
-	log.Info("CleanUpJumpMaps waiting for lock...")
+	log.Debug("CleanUpJumpMaps waiting for lock...")
 	tcLock.Lock()
 	defer tcLock.Unlock()
-	log.Info("CleanUpJumpMaps got lock, cleaning up...")
+	log.Debug("CleanUpJumpMaps got lock, cleaning up...")
 
 	// Find the maps we care about by walking the BPF filesystem.
 	mapIDToPath := make(map[int]string)
@@ -296,13 +296,13 @@ func CleanUpJumpMaps() {
 			return err
 		}
 		if strings.HasPrefix(info.Name(), "cali_jump") {
-			log.WithField("path", p).Info("Examining map")
+			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
 			if err != nil {
 				log.WithError(err).Panic("Failed to show map")
 			}
-			log.WithField("dump", string(out)).Info("Map show before deletion")
+			log.WithField("dump", string(out)).Debug("Map show before deletion")
 			idStr := string(bytes.Split(out, []byte(":"))[0])
 			id, err := strconv.Atoi(idStr)
 			if err != nil {
@@ -326,7 +326,7 @@ func CleanUpJumpMaps() {
 	if err != nil {
 		log.WithError(err).Panic("Failed to list attached bpf programs")
 	}
-	log.WithField("dump", string(out)).Info("Attached BPF programs")
+	log.WithField("dump", string(out)).Debug("Attached BPF programs")
 
 	var attached []struct {
 		TC []struct {
@@ -346,11 +346,11 @@ func CleanUpJumpMaps() {
 	}
 	attachedProgs := set.New()
 	for _, prog := range attached[0].TC {
-		log.WithField("prog", prog).Info("Adding TC prog to attached set")
+		log.WithField("prog", prog).Debug("Adding TC prog to attached set")
 		attachedProgs.Add(prog.ID)
 	}
 	for _, prog := range attached[0].XDP {
-		log.WithField("prog", prog).Info("Adding XDP prog to attached set")
+		log.WithField("prog", prog).Debug("Adding XDP prog to attached set")
 		attachedProgs.Add(prog.ID)
 	}
 
@@ -372,18 +372,18 @@ func CleanUpJumpMaps() {
 	}
 	for _, p := range progs {
 		if !attachedProgs.Contains(p.ID) {
-			log.WithField("prog", p).Info("Prog is not in the attached set, skipping")
+			log.WithField("prog", p).Debug("Prog is not in the attached set, skipping")
 			continue
 		}
 		for _, id := range p.Maps {
-			log.WithField("mapID", id).WithField("prog", p).Info("Map is still in use")
+			log.WithField("mapID", id).WithField("prog", p).Debug("Map is still in use")
 			delete(mapIDToPath, id)
 		}
 	}
 
 	// Remove the pins.
 	for id, p := range mapIDToPath {
-		log.WithFields(log.Fields{"id": id, "path": p}).Info("Removing stale BPF map pin.")
+		log.WithFields(log.Fields{"id": id, "path": p}).Debug("Removing stale BPF map pin.")
 		err := os.Remove(p)
 		if err != nil {
 			log.WithError(err).Warn("Removed stale BPF map pin.")
@@ -399,12 +399,12 @@ func CleanUpJumpMaps() {
 		}
 		if info.IsDir() && tcDirRegex.MatchString(info.Name()) {
 			p := path.Clean(p)
-			log.WithField("path", p).Info("Found tc auto-created dir.")
+			log.WithField("path", p).Debug("Found tc auto-created dir.")
 			emptyAutoDirs.Add(p)
 		} else {
 			dirPath := path.Clean(path.Dir(p))
 			if emptyAutoDirs.Contains(dirPath) {
-				log.WithField("path", dirPath).Info("tc dir is not empty.")
+				log.WithField("path", dirPath).Debug("tc dir is not empty.")
 				emptyAutoDirs.Discard(dirPath)
 			}
 		}
@@ -420,7 +420,7 @@ func CleanUpJumpMaps() {
 
 	emptyAutoDirs.Iter(func(item interface{}) error {
 		p := item.(string)
-		log.WithField("path", p).Info("Removing empty dir.")
+		log.WithField("path", p).Debug("Removing empty dir.")
 		err := os.Remove(p)
 		if err != nil {
 			log.WithError(err).Error("Error while removing empty dir.")
@@ -436,7 +436,7 @@ func EnsureQdisc(ifaceName string) error {
 		return err
 	}
 	if hasQdisc {
-		log.WithField("iface", ifaceName).Info("Already have a clsact qdisc on this interface")
+		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return nil
 	}
 	_, err = ExecTC("qdisc", "add", "dev", ifaceName, "clsact")
