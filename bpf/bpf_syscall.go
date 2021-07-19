@@ -72,7 +72,7 @@ const defaultLogSize = 1024 * 1024
 const maxLogSize = 128 * 1024 * 1024
 
 func LoadBPFProgramFromInsns(insns asm.Insns, license string, forXDP bool) (fd ProgFD, err error) {
-	log.Infof("LoadBPFProgramFromInsns(%v, %v)", insns, license)
+	log.Debugf("LoadBPFProgramFromInsns(%v, %v)", insns, license)
 	increaseLockedMemoryQuota()
 
 	// Occasionally see retryable errors here, retry silently a few times before going into log-collection mode.
@@ -114,7 +114,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string, forXDP bool) (fd P
 }
 
 func tryLoadBPFProgramFromInsns(insns asm.Insns, license string, logSize uint, forXDP bool) (ProgFD, error) {
-	log.Infof("tryLoadBPFProgramFromInsns(..., %v, %v)", license, logSize)
+	log.Debugf("tryLoadBPFProgramFromInsns(..., %v, %v)", license, logSize)
 	bpfAttr := C.bpf_attr_alloc()
 	defer C.free(unsafe.Pointer(bpfAttr))
 
