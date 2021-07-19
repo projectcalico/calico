@@ -42,13 +42,13 @@
 #include "jump.h"
 
 /* calico_xdp is the main function used in all of the xdp programs */
-static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
+static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 {
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.xdp = xdp_ctx,
+		.xdp = xdp,
 		.fwd = {
 			.res = XDP_PASS, // TODO: Adjust based on the design
 			.reason = CALI_REASON_UNKNOWN,
@@ -69,10 +69,8 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 	// Parse packets and drop malformed and unsupported ones
 	switch (parse_packet_ip(&ctx)) {
 	case PARSING_ERROR:
-		ctx.fwd.res = XDP_DROP;
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
-		ctx.fwd.res = XDP_PASS;
 		goto allow;
 	}
 
@@ -80,10 +78,8 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 
 	switch(tc_state_fill_from_nexthdr(&ctx)) {
 	case PARSING_ERROR:
-		ctx.fwd.res = XDP_DROP;
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
-		ctx.fwd.res = XDP_PASS;
 		goto allow;
 	}
 
@@ -96,7 +92,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp_ctx)
 
 	// Jump to the policy program
 	CALI_DEBUG("About to jump to policy program.\n");
-	bpf_tail_call(xdp_ctx, &cali_jump, PROG_INDEX_POLICY);
+	bpf_tail_call(xdp, &cali_jump, PROG_INDEX_POLICY);
 
 allow:
 	return XDP_PASS;
@@ -106,27 +102,16 @@ deny:
 }
 
 __attribute__((section("1/1")))
-int calico_xdp_accepted_entrypoint(struct xdp_md *xdp_ctx)
+int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entring calico_xdp_accepted_entrypoint\n");
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
-	struct cali_tc_ctx ctx = {
-		.state = state_get(),
-		.xdp = xdp_ctx,
-		.fwd = {
-			.res = XDP_PASS,
-			.reason = CALI_REASON_UNKNOWN,
-		},
-	};
 
-	if (!ctx.state) {
-		CALI_DEBUG("State map lookup failed: DROP\n");
-		return XDP_DROP;
+	// Share with TC the packet is already accepted and accept it there too.
+	if (xdp2tc_set_metadata(xdp, CALI_ST_ACCEPTED_BY_XDP)) {
+		CALI_DEBUG("Failed to set metadata for TC\n");
 	}
-
-	// TODO: Share with TC that the packet is already accepted,
-	// and accept it there too.
 
 	return XDP_PASS;
 }
@@ -138,9 +123,9 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp_ctx)
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
 // because the name is exposed by bpftool et al.
 __attribute__((section(XSTR(CALI_ENTRYPOINT_NAME_XDP))))
-int xdp_calico_entry(struct xdp_md *xdp_ctx)
+int xdp_calico_entry(struct xdp_md *xdp)
 {
-	return calico_xdp(xdp_ctx);
+	return calico_xdp(xdp);
 }
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";

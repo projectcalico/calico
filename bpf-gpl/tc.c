@@ -69,6 +69,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		return TC_ACT_UNSPEC;
 	}
 
+	/* Optimisation: if XDP program has already accepted the packet,
+	 * skip all processing. */
+	if (CALI_F_FROM_HEP) {
+		if (xdp2tc_get_metadata(skb) & CALI_ST_ACCEPTED_BY_XDP) {
+			CALI_INFO("Final result=ALLOW (%d). Accepted by XDP.\n", CALI_REASON_ACCEPTED_BY_XDP);
+			return TC_ACT_UNSPEC;
+		}
+	}
+
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
@@ -312,6 +321,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				ctx.state->flags |= CALI_ST_SKIP_FIB;
 			}
 		}
+	}
+
+	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
+	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
+	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
+	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
+		ctx.fwd.reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
 	}
 
 	ctx.state->pol_rc = CALI_POL_NO_MATCH;

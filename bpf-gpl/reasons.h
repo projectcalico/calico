@@ -38,6 +38,7 @@ enum calico_reason {
 	CALI_REASON_IP_MALFORMED = 0xec,
 	CALI_REASON_UNAUTH_SOURCE = 0xed,
 	CALI_REASON_RT_UNKNOWN = 0xdead,
+	CALI_REASON_ACCEPTED_BY_XDP = 0xd9,
 };
 
 #endif /* __CALI_REASONS_H__ */
