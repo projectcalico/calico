@@ -77,6 +77,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceClusterIPBlock":              schema_pkg_apis_projectcalico_v3_ServiceClusterIPBlock(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceExternalIPBlock":             schema_pkg_apis_projectcalico_v3_ServiceExternalIPBlock(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceLoadBalancerIPBlock":         schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceMatch":                       schema_pkg_apis_projectcalico_v3_ServiceMatch(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Port":                                     schema_api_pkg_lib_numorstring_Port(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Protocol":                                 schema_api_pkg_lib_numorstring_Protocol(ref),
@@ -1050,9 +1051,15 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 					},
 					"namespaceSelector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NamespaceSelector is an optional field that contains a selector expression. Only traffic that originates from (or terminates at) endpoints within the selected namespaces will be matched. When both NamespaceSelector and Selector are defined on the same rule, then only workload endpoints that are matched by both selectors will be selected by the rule.\n\nFor NetworkPolicy, an empty NamespaceSelector implies that the Selector is limited to selecting only workload endpoints in the same namespace as the NetworkPolicy.\n\nFor NetworkPolicy, `global()` NamespaceSelector implies that the Selector is limited to selecting only GlobalNetworkSet or HostEndpoint.\n\nFor GlobalNetworkPolicy, an empty NamespaceSelector implies the Selector applies to workload endpoints across all namespaces.",
+							Description: "NamespaceSelector is an optional field that contains a selector expression. Only traffic that originates from (or terminates at) endpoints within the selected namespaces will be matched. When both NamespaceSelector and another selector are defined on the same rule, then only workload endpoints that are matched by both selectors will be selected by the rule.\n\nFor NetworkPolicy, an empty NamespaceSelector implies that the Selector is limited to selecting only workload endpoints in the same namespace as the NetworkPolicy.\n\nFor NetworkPolicy, `global()` NamespaceSelector implies that the Selector is limited to selecting only GlobalNetworkSet or HostEndpoint.\n\nFor GlobalNetworkPolicy, an empty NamespaceSelector implies the Selector applies to workload endpoints across all namespaces.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"services": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Services is an optional field that contains options for matching Kubernetes Services. If specified, only traffic that originates from or terminates at endpoints within the selected service(s) will be matched, and only to/from each endpoint's port.\n\nServices cannot be specified on the same rule as Selector, NotSelector, NamespaceSelector, Ports, NotPorts, Nets, NotNets or ServiceAccounts.\n\nOnly valid on egress rules.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceMatch"),
 						},
 					},
 					"ports": {
@@ -1115,7 +1122,7 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountMatch", "github.com/projectcalico/api/pkg/lib/numorstring.Port"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountMatch", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceMatch", "github.com/projectcalico/api/pkg/lib/numorstring.Port"},
 	}
 }
 
@@ -3647,6 +3654,32 @@ func schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref common.Refe
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
 							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_ServiceMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name specifies the name of a Kubernetes Service to match.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace specifies the namespace of the given Service. If left empty, the rule will match within this policy's namespace.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
