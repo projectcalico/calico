@@ -40,6 +40,7 @@
 #include "parsing.h"
 #include "failsafe.h"
 #include "jump.h"
+#include "metadata.h"
 
 /* calico_xdp is the main function used in all of the xdp programs */
 static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
@@ -109,7 +110,7 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 	 * we use to pass data from one program to the next via tail calls. */
 
 	// Share with TC the packet is already accepted and accept it there too.
-	if (xdp2tc_set_metadata(xdp, CALI_ST_ACCEPTED_BY_XDP)) {
+	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
 		CALI_DEBUG("Failed to set metadata for TC\n");
 	}
 

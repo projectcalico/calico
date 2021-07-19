@@ -101,8 +101,6 @@ enum cali_state_flags {
 	/* CALI_ST_SRC_IS_HOST is set if the packet is heading away from the host namespace and the source
 	 * belongs to the host. */
 	CALI_ST_SRC_IS_HOST	  = 0x08,
-	/* CALI_ST_ACCEPTED_BY_XDP is set if the packet is already accepted by XDP */
-	CALI_ST_ACCEPTED_BY_XDP 	= 0x10,
 };
 
 struct fwd {
