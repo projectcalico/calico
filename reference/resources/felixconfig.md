@@ -115,6 +115,8 @@ spec:
 | routeSource                        | Where Felix gets is routing information from for VXLAN and the BPF dataplane. The CalicoIPAM setting is more efficient because it supports route aggregation, but it only works when Calico's IPAM or host-local IPAM is in use. Use the WorkloadIPs setting if you are using Calico's VXLAN or BPF dataplane and not using Calico IPAM or host-local IPAM. | CalicoIPAM,WorkloadIPs | string | `CalicoIPAM` |
 | mtuIfacePattern                    | Pattern used to discover the host's interface for MTU auto-detection. | regex | string | `^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)` |
 
+<br>
+
 `genericXDPEnabled` and `xdpRefreshInterval` are only relevant when `bpfEnabled` is `false` and
 `xdpEnabled` is `true`; in other words when XDP is being used to accelerate denial-of-service
 preventation policies in the iptables dataplane.
