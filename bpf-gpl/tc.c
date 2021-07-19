@@ -48,6 +48,7 @@
 #include "policy_program.h"
 #include "parsing.h"
 #include "failsafe.h"
+#include "metadata.h"
 
 /* calico_tc is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -72,7 +73,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	/* Optimisation: if XDP program has already accepted the packet,
 	 * skip all processing. */
 	if (CALI_F_FROM_HEP) {
-		if (xdp2tc_get_metadata(skb) & CALI_ST_ACCEPTED_BY_XDP) {
+		if (xdp2tc_get_metadata(skb) & CALI_META_ACCEPTED_BY_XDP) {
 			CALI_INFO("Final result=ALLOW (%d). Accepted by XDP.\n", CALI_REASON_ACCEPTED_BY_XDP);
 			return TC_ACT_UNSPEC;
 		}
