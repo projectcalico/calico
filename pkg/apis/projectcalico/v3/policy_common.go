@@ -131,7 +131,7 @@ type EntityRule struct {
 
 	// NamespaceSelector is an optional field that contains a selector expression. Only traffic
 	// that originates from (or terminates at) endpoints within the selected namespaces will be
-	// matched. When both NamespaceSelector and Selector are defined on the same rule, then only
+	// matched. When both NamespaceSelector and another selector are defined on the same rule, then only
 	// workload endpoints that are matched by both selectors will be selected by the rule.
 	//
 	// For NetworkPolicy, an empty NamespaceSelector implies that the Selector is limited to selecting
@@ -143,6 +143,16 @@ type EntityRule struct {
 	// For GlobalNetworkPolicy, an empty NamespaceSelector implies the Selector applies to workload
 	// endpoints across all namespaces.
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
+
+	// Services is an optional field that contains options for matching Kubernetes Services.
+	// If specified, only traffic that originates from or terminates at endpoints within the selected
+	// service(s) will be matched, and only to/from each endpoint's port.
+	//
+	// Services cannot be specified on the same rule as Selector, NotSelector, NamespaceSelector, Ports,
+	// NotPorts, Nets, NotNets or ServiceAccounts.
+	//
+	// Only valid on egress rules.
+	Services *ServiceMatch `json:"services,omitempty" validate:"omitempty"`
 
 	// Ports is an optional field that restricts the rule to only apply to traffic that has a
 	// source (destination) port that matches one of these ranges/values. This value is a
@@ -167,6 +177,15 @@ type EntityRule struct {
 	// ServiceAccounts is an optional field that restricts the rule to only apply to traffic that originates from (or
 	// terminates at) a pod running as a matching service account.
 	ServiceAccounts *ServiceAccountMatch `json:"serviceAccounts,omitempty" validate:"omitempty"`
+}
+
+type ServiceMatch struct {
+	// Name specifies the name of a Kubernetes Service to match.
+	Name string `json:"name,omitempty" validate:"omitempty"`
+
+	// Namespace specifies the namespace of the given Service. If left empty, the rule
+	// will match within this policy's namespace.
+	Namespace string `json:"namespace,omitempty" validate:"omitempty"`
 }
 
 type ServiceAccountMatch struct {
