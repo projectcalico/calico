@@ -104,16 +104,14 @@ func StartDataplaneDriver(configParams *config.Config,
 		// The accept bit is a long-lived bit used to communicate between chains.
 		var markAccept, markPass, markScratch0, markScratch1, markWireguard, markEndpointNonCaliEndpoint uint32
 		markAccept, _ = markBitsManager.NextSingleBitMark()
-		if !configParams.BPFEnabled {
-			// The pass bit is used to communicate from a policy chain up to the endpoint chain.
-			markPass, _ = markBitsManager.NextSingleBitMark()
-		}
+
+		// The pass bit is used to communicate from a policy chain up to the endpoint chain.
+		markPass, _ = markBitsManager.NextSingleBitMark()
 
 		// Scratch bits are short-lived bits used for calculating multi-rule results.
 		markScratch0, _ = markBitsManager.NextSingleBitMark()
-		if !configParams.BPFEnabled {
-			markScratch1, _ = markBitsManager.NextSingleBitMark()
-		}
+		markScratch1, _ = markBitsManager.NextSingleBitMark()
+
 		if configParams.WireguardEnabled {
 			log.Info("Wireguard enabled, allocating a mark bit")
 			markWireguard, _ = markBitsManager.NextSingleBitMark()
@@ -126,7 +124,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		}
 
 		// markPass and the scratch-1 bits are only used in iptables mode.
-		if markAccept == 0 || markScratch0 == 0 || !configParams.BPFEnabled && (markPass == 0 || markScratch1 == 0) {
+		if markAccept == 0 || markScratch0 == 0 || markPass == 0 || markScratch1 == 0 {
 			log.WithFields(log.Fields{
 				"Name":     "felix-iptables",
 				"MarkMask": allowedMarkBits,
