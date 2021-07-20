@@ -35,4 +35,9 @@ watch oc get tigerastatus
 If you were upgrading from a version of Calico prior to v3.14 and followed the pre-upgrade steps for host endpoints above, review traffic logs from the temporary policy,
 add any global network policies needed to allow traffic, and delete the temporary network policy **allow-all-upgrade**.
 
+#### Optionally install the API server
+
+{% include content/install-apiserver-cr-openshift.md %}
+
 {% include content/auto-hostendpoints-migrate.md orch="OpenShift" %}
+

@@ -115,6 +115,10 @@ Next, [install calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/instal
 calicoctl ipam configure --strictaffinity=true
 ```
 
+#### Optionally install the API server
+
+{% include content/install-apiserver-cr-openshift.md %}
+
 #### Add Windows nodes to the cluster
 
 Download the latest {% include open-new-window.html text='Windows Node Installer (WNI)' url='https://github.com/openshift/windows-machine-config-bootstrapper/releases' %} binary `wni` that matches your OpenShift minor version.

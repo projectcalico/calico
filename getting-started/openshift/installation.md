@@ -152,6 +152,10 @@ Finally, log in to the OpenShift console, navigate to the Installed Operators se
 
 The OpenShift console provides an interface for editing the operator installation, viewing the operator's status, and more.
 
+#### Optionally install the API server
+
+{% include content/install-apiserver-cr-openshift.md %}
+
 ### Next steps 
 
 **Required**
