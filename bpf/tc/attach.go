@@ -333,12 +333,6 @@ func CleanUpJumpMaps() {
 			DevName string `json:"devname"`
 			ID      int    `json:"id"`
 		} `json:"tc"`
-		XDP []struct {
-			DevName string `json:"devname"`
-			IfIndex int    `json:"ifindex"`
-			Mode    string `json:"mode"`
-			ID      int    `json:"id"`
-		} `json:"xdp"`
 	}
 	err = json.Unmarshal(out, &attached)
 	if err != nil {
@@ -346,11 +340,7 @@ func CleanUpJumpMaps() {
 	}
 	attachedProgs := set.New()
 	for _, prog := range attached[0].TC {
-		log.WithField("prog", prog).Debug("Adding TC prog to attached set")
-		attachedProgs.Add(prog.ID)
-	}
-	for _, prog := range attached[0].XDP {
-		log.WithField("prog", prog).Debug("Adding XDP prog to attached set")
+		log.WithField("prog", prog).Debug("Adding prog to attached set")
 		attachedProgs.Add(prog.ID)
 	}
 
