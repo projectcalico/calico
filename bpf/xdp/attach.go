@@ -82,21 +82,21 @@ func (ap *AttachPoint) AttachProgram() error {
 
 	var errs []error
 	for _, mode := range ap.Modes {
-		ap.Log().Infof("Attempt XDP attach with mode %v", mode)
+		ap.Log().Debugf("Attempt XDP attach with mode %v", mode)
 
 		// First remove any existing program.
 		cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "off")
-		ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
+		ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
 		out, err := cmd.CombinedOutput()
-		ap.Log().WithField("mode", mode).Infof("Result: err=%v out=\n%v", err, string(out))
+		ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
 
 		// Now attach the program we want.
 		cmd = exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", tempBinary, "section", sectionName)
-		ap.Log().Infof("Running: %v %v", cmd.Path, cmd.Args)
+		ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
 		out, err = cmd.CombinedOutput()
-		ap.Log().WithField("mode", mode).Infof("Result: err=%v out=\n%v", err, string(out))
+		ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
 		if err == nil {
-			ap.Log().Infof("Successful attachment with mode %v", mode)
+			ap.Log().Infof("Successful XDP attachment with mode %v", mode)
 			return nil
 		}
 		errs = append(errs, err)
