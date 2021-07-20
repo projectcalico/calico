@@ -80,28 +80,65 @@ func (ap *AttachPoint) AttachProgram() error {
 		return err
 	}
 
+	// Note that there are a few considerations here.
+	//
+	// Firstly, we use -force when attaching, so as to minimise any flap in the XDP program when
+	// restarting or upgrading Felix.
+	//
+	// Secondly, we need to consider any other XDP programs that might be there at start of day.
+	// (Either 3rd party, or maybe some earlier version of Felix.)  We fundamentally have to
+	// clean those up, as our XDP usage can coexist with anyone else's.
+	//
+	// Thirdly, for a given host interface, is it possible for our best attachment mode to
+	// change, other than at start of day?  In principle it's possible if we do a patch that
+	// alters some conditionally included code.  We don't have that for XDP right now, but we
+	// conceivably could in future.  So safest to assume it's possible for the attachment mode
+	// to improve, which means needing to do `off` for subsequent modes.
+	//
+	// Hence this logic:
+	// - Loop through the modes.
+	//   - If we haven't yet successfully attached (for this loop), do the attachment (with
+	//     -force).
+	//   - If that failed, or we attached with an earlier mode, do `off` to remove any existing
+	//     program with this mode.
+	//   - Continue through remaining modes even if attachment already successful.
 	var errs []error
+	attachmentSucceeded := false
 	for _, mode := range ap.Modes {
-		ap.Log().Debugf("Attempt XDP attach with mode %v", mode)
+		ap.Log().Debugf("XDP remove/attach with mode %v", mode)
 
-		// First remove any existing program.
-		cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "off")
-		ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
-		out, err := cmd.CombinedOutput()
-		ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
+		// We will need to do "ip link set dev <dev> xdp off" if we've successfully attached
+		// with an earlier mode, or if we fail to attach with this mode.  So we only _don't_
+		// need "off" if we successfully attach in this iteration.
+		offNeeded := true
 
-		// Now attach the program we want.
-		cmd = exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "object", tempBinary, "section", sectionName)
-		ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
-		out, err = cmd.CombinedOutput()
-		ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
-		if err == nil {
-			ap.Log().Infof("Successful XDP attachment with mode %v", mode)
-			return nil
+		if !attachmentSucceeded {
+			// Try to attach our XDP program in this mode.
+			cmd := exec.Command("ip", "-force", "link", "set", "dev", ap.Iface, mode.String(), "object", tempBinary, "section", sectionName)
+			ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
+			out, err := cmd.CombinedOutput()
+			ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
+			if err == nil {
+				ap.Log().Infof("Successful XDP attachment with mode %v", mode)
+				attachmentSucceeded = true
+				offNeeded = false
+			} else {
+				errs = append(errs, err)
+			}
 		}
-		errs = append(errs, err)
+
+		if offNeeded {
+			// Remove any existing program for this mode.
+			cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "off")
+			ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
+			out, err := cmd.CombinedOutput()
+			ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
+		}
 	}
-	return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
+	if !attachmentSucceeded {
+		return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
+	}
+	return nil
 }
 
 func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
