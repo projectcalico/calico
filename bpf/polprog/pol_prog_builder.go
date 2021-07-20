@@ -179,6 +179,12 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	p.b = NewBlock()
 	p.writeProgramHeader()
 
+	if rules.ForXDP {
+		// For an XDP program HostNormalTiers continues the untracked policy to enforce;
+		// other fields are unused.
+		goto normalPolicy
+	}
+
 	// Pre-DNAT policy: on a host interface, or host-* policy on a workload interface.  Traffic
 	// is allowed to continue if there is no applicable pre-DNAT policy.
 	p.writeTiers(rules.HostPreDnatTiers, legDestPreNAT, "allowed_by_host_policy")
@@ -191,9 +197,7 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	// When rules.SuppressNormalHostPolicy is true, we also skip normal host policy; this is
 	// the case when we're building the policy program for workload -> host and
 	// DefaultEndpointToHostAction is ACCEPT or DROP; or for host -> workload.
-	if rules.ForXDP {
-		p.b.Jump("to_or_from_host")
-	} else if rules.SuppressNormalHostPolicy {
+	if rules.SuppressNormalHostPolicy {
 		p.writeJumpIfToOrFromHost("allowed_by_host_policy")
 	} else {
 		p.writeJumpIfToOrFromHost("to_or_from_host")
@@ -213,6 +217,7 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	// Now skip over normal host policy and jump to where we apply possible workload policy.
 	p.b.Jump("allowed_by_host_policy")
 
+normalPolicy:
 	if !rules.SuppressNormalHostPolicy {
 		// "Normal" host policy, i.e. for non-forwarded traffic.
 		p.b.LabelNextInsn("to_or_from_host")
