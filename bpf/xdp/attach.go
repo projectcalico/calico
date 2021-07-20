@@ -66,7 +66,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	sectionName := ap.SectionName()
 
 	// Patch the binary so that its log prefix is like "eth0------X".
-	tempDir, err := ioutil.TempDir("", "calico-tc")
+	tempDir, err := ioutil.TempDir("", "calico-xdp")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary directory: %w", err)
 	}
