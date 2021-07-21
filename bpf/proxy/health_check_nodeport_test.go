@@ -178,7 +178,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 				}
 
 				if int(status["localEndpoints"].(float64)) != 1 {
-					return fmt.Errorf("Expected 1 endpoint no %d", int(status["localEndpoints"].(float64)))
+					return fmt.Errorf("Expected 1 endpoint got %d", int(status["localEndpoints"].(float64)))
 				}
 
 				return nil
@@ -232,7 +232,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 					}
 
 					if int(status["localEndpoints"].(float64)) != 2 {
-						return fmt.Errorf("Expected 1 endpoint no %d", int(status["localEndpoints"].(float64)))
+						return fmt.Errorf("Expected 1 endpoint got %d", int(status["localEndpoints"].(float64)))
 					}
 
 					return nil
