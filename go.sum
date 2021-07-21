@@ -386,6 +386,8 @@ github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:J
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210719201741-620090001809 h1:MpR794dw6MfOhNzw6+2txDMELxR4fKDffh3i9GW5ZDE=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210719201741-620090001809/go.mod h1:ZSjk5qLlsWC3mThaM3uoBYpWOClOWADxIKQbBMCuleA=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210721000212-38e370d2e209 h1:0EsMQu/c1zhuVA4VB2ApvjtFhqKwdnCyeglDn3NW2NM=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210721000212-38e370d2e209/go.mod h1:ZSjk5qLlsWC3mThaM3uoBYpWOClOWADxIKQbBMCuleA=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/typha v0.7.3-0.20210719203818-dcc7ff67d9d9 h1:g7qbUWQPsbc+kBQG/1YJbEzGRuMpMLRaj1W2sZSAwBQ=
