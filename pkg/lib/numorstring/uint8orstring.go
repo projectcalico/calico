@@ -78,3 +78,13 @@ func (i Uint8OrString) NumValue() (uint8, error) {
 	}
 	return i.NumVal, nil
 }
+
+// OpenAPISchemaType is used by the kube-openapi generator when constructing
+// the OpenAPI spec of this type.
+// See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
+func (_ Uint8OrString) OpenAPISchemaType() []string { return []string{"string"} }
+
+// OpenAPISchemaFormat is used by the kube-openapi generator when constructing
+// the OpenAPI spec of this type.
+// See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
+func (_ Uint8OrString) OpenAPISchemaFormat() string { return "int-or-string" }
