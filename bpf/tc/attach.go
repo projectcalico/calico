@@ -376,7 +376,7 @@ func CleanUpJumpMaps() {
 			continue
 		}
 		for _, id := range p.Maps {
-			log.WithField("mapID", id).WithField("prog", p).Debug("Map is still in use")
+			log.WithField("mapID", id).WithField("prog", p).Debugf("Map is still in use: %v", mapIDToPath[id])
 			delete(mapIDToPath, id)
 		}
 	}
