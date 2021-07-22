@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -61,6 +61,8 @@
 #define CALI_LOG_FLAG(flags, fmt, ...) do { \
 	if ((flags) & CALI_CGROUP) { \
 		CALI_LOG(XSTR(CALI_LOG_PFX) "-C: " fmt, ## __VA_ARGS__); \
+	} else if ((flags) & CALI_XDP_PROG) { \
+		CALI_LOG(XSTR(CALI_LOG_PFX) "-X: " fmt, ## __VA_ARGS__); \
 	} else if (((flags) & CALI_TC_HOST_EP) && ((flags) & CALI_TC_INGRESS)) { \
 		CALI_LOG(XSTR(CALI_LOG_PFX) "-I: " fmt, ## __VA_ARGS__); \
 	} else if ((flags) & CALI_TC_HOST_EP) { \
