@@ -45,8 +45,9 @@ type healthRecord struct {
 }
 
 type healthRecorder struct {
-	lock    sync.Mutex
-	reports []healthRecord
+	expectedName string
+	lock         sync.Mutex
+	reports      []healthRecord
 }
 
 func (r *healthRecorder) RegisterReporter(name string, reports *health.HealthReport, timeout time.Duration) {
@@ -56,6 +57,9 @@ func (r *healthRecorder) RegisterReporter(name string, reports *health.HealthRep
 func (r *healthRecorder) Report(name string, report *health.HealthReport) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
+	if name != r.expectedName {
+		return
+	}
 	r.reports = append(r.reports, healthRecord{
 		time:         time.Now(),
 		HealthReport: *report,
@@ -97,11 +101,12 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 	BeforeEach(func() {
 		log.SetLevel(log.InfoLevel)
-		mockHealth = &healthRecorder{}
+		mockHealth = &healthRecorder{expectedName: "my-cache"}
 		cacheConfig = snapcache.Config{
 			MaxBatchSize:     10,
 			WakeUpInterval:   10 * time.Second,
 			HealthAggregator: mockHealth,
+			HealthName:       "my-cache",
 		}
 		cache = snapcache.New(cacheConfig)
 		cxt, cancel = context.WithCancel(context.Background())
