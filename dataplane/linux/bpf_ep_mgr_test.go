@@ -67,6 +67,10 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error)
 	return bpf.MapFD(m.lastFD), nil
 }
 
+func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
+	return nil
+}
+
 func (m *mockDataplane) ensureQdisc(iface string) error {
 	return nil
 }
