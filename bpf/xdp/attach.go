@@ -89,7 +89,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	//
 	// Secondly, we need to consider any other XDP programs that might be there at start of day.
 	// (Either 3rd party, or maybe some earlier version of Felix.)  We fundamentally have to
-	// clean those up, as our XDP usage can coexist with anyone else's.
+	// clean those up, as our XDP usage cannot coexist with anyone else's.
 	//
 	// Thirdly, for a given host interface, is it possible for our best attachment mode to
 	// change, other than at start of day?  In principle it's possible if we do a patch that
