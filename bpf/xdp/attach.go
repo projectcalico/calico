@@ -138,7 +138,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		}
 	}
 	if !attachmentSucceeded {
-		return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
+		return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%w", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
 	}
 	return nil
 }
@@ -239,7 +239,7 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 	out, err := cmd.CombinedOutput()
 	ap.Log().Debugf("Result: err=%v out=\n%v", err, string(out))
 	if err != nil {
-		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %v", ap.Iface, err)
+		return "", fmt.Errorf("Couldn't check for XDP program on iface %v: %w", ap.Iface, err)
 	}
 	s := strings.Fields(string(out))
 	for i := range s {
@@ -251,7 +251,7 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 		if s[i] == "prog/xdp" && len(s) > i+2 && s[i+1] == "id" {
 			_, err := strconv.Atoi(s[i+2])
 			if err != nil {
-				return "", fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%v out=\n%v", err, string(out))
+				return "", fmt.Errorf("Couldn't parse ID following 'prog/xdp' err=%w out=\n%v", err, string(out))
 			}
 			return s[i+2], nil
 		}
