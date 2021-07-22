@@ -510,10 +510,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
+	ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize)
+	dp.RegisterManager(ipsetsManager)
+
 	if !config.BPFEnabled {
 		// BPF mode disabled, create the iptables-only managers.
-		ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize)
-		dp.RegisterManager(ipsetsManager)
 		dp.ipsetsSourceV4 = ipsetsManager
 		// TODO Connect host IP manager to BPF
 		dp.RegisterManager(newHostIPManager(
