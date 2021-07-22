@@ -529,6 +529,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
 		}
 		tc.CleanUpProgramsAndPins()
+	} else {
+		// In BPF mode we still use iptables for raw egress policy.
+		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
