@@ -17,6 +17,7 @@ package fv
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/projectcalico/felix/fv/connectivity"
@@ -190,6 +191,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 		expectNoConnectivity(ccTCP)
 	})
 
+	xdpProgramAttached := func(felix *infrastructure.Felix, iface string) bool {
+		out, err := felix.ExecCombinedOutput("ip", "link", "show", "dev", iface)
+		Expect(err).NotTo(HaveOccurred())
+		return strings.Contains(out, "prog/xdp id")
+	}
+
+	xdpProgramAttached_felix1_eth0 := func() bool {
+		return xdpProgramAttached(felixes[1], "eth0")
+	}
+
+	Context("with no untracked policy", func() {
+
+		It("should not have XDP program attached", func() {
+			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeFalse())
+			Consistently(xdpProgramAttached_felix1_eth0, "2s", "1s").Should(BeFalse())
+		})
+	})
+
 	Context("with XDP blacklist on felix[1] blocking felixes[0]", func() {
 		BeforeEach(func() {
 			order := float64(20)
@@ -253,6 +272,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblacklisttcp", options.DeleteOptions{})
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
+		})
+
+		It("should have XDP program attached", func() {
+			Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeTrue())
+			Consistently(xdpProgramAttached_felix1_eth0, "2s", "1s").Should(BeTrue())
+		})
+
+		Context("with untracked policies deleted again", func() {
+			BeforeEach(func() {
+				time.Sleep(time.Second)
+				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-t", options.DeleteOptions{})
+				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter-u", options.DeleteOptions{})
+			})
+
+			It("should not have XDP program attached", func() {
+				Eventually(xdpProgramAttached_felix1_eth0, "10s", "1s").Should(BeFalse())
+				Consistently(xdpProgramAttached_felix1_eth0, "2s", "1s").Should(BeFalse())
+			})
 		})
 
 		applyGlobalNetworkSets := func(name string, ip string, cidrToHexSuffix string, update bool) (hexCIDR []string) {
