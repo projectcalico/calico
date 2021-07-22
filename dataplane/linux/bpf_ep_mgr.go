@@ -169,8 +169,7 @@ type bpfEndpointManager struct {
 	opReporter   logutils.OpRecorder
 
 	// XDP
-	xdpEnabled bool
-	xdpModes   []bpf.XDPMode
+	xdpModes []bpf.XDPMode
 }
 
 type bpfAllowChainRenderer interface {
@@ -225,13 +224,13 @@ func newBPFEndpointManager(
 		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		ifaceToIpMap:     map[string]net.IP{},
 		opReporter:       opReporter,
-		xdpEnabled:       config.XDPEnabled,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
-	// to preserve the semantics of untracked ingress policy.  Therefore we are also saying here
-	// that the GenericXDPEnabled config setting is only relevant when BPFEnabled is false.
+	// to preserve the semantics of untracked ingress policy.  (Therefore we are also saying
+	// here that the GenericXDPEnabled config setting, like XDPEnabled, is only relevant when
+	// BPFEnabled is false.)
 	m.xdpModes = []bpf.XDPMode{
 		bpf.XDPOffload,
 		bpf.XDPDriver,
@@ -561,13 +560,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				defer parallelWG.Done()
 				ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress)
 			}()
-			if m.xdpEnabled {
-				parallelWG.Add(1)
-				go func() {
-					defer parallelWG.Done()
-					xdpErr = m.attachXDPProgram(iface, hepPtr)
-				}()
-			}
+			parallelWG.Add(1)
+			go func() {
+				defer parallelWG.Done()
+				xdpErr = m.attachXDPProgram(iface, hepPtr)
+			}()
 			err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress)
 			parallelWG.Wait()
 			if err == nil {
