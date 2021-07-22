@@ -1952,6 +1952,220 @@ func init() {
 				},
 			}, true,
 		),
+		Entry("allow a Service match in an egress rule destination",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Egress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, true,
+		),
+		Entry("disallow a Service match in an egress rule source",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Egress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+
+		Entry("disallow a Service match in an ingress rule",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a ServiceAccount match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								ServiceAccounts: &api.ServiceAccountMatch{
+									Names: []string{"serviceaccount"},
+								},
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a Ports match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								Ports: []numorstring.Port{
+									{MinPort: 80, MaxPort: 80},
+								},
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a NotPorts match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								NotPorts: []numorstring.Port{
+									{MinPort: 80, MaxPort: 80},
+								},
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a Nets match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								Nets: []string{"10.0.0.0/8"},
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a NotNets match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								NotNets: []string{"10.0.0.0/8"},
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a Selector match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								Selector: "x == 'y'",
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a NotSelector match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								NotSelector: "x == 'y'",
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a NamespaceSelector match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								NamespaceSelector: "x == 'y'",
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+
 		// Validate EntityRule against special selectors global().
 		// Extra spaces added in some cases to make sure validation handles it.
 		Entry("disallow global() in EntityRule selector field",

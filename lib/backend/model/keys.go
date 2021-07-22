@@ -323,7 +323,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 		if ip == nil {
 			return nil, nil
 		}
-		return &net.IP{ip}, nil
+		return &net.IP{IP: ip}, nil
 	}
 	value := reflect.New(valueType)
 	elem := value.Elem()

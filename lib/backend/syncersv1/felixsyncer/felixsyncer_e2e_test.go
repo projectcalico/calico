@@ -210,7 +210,11 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						expectedCacheSize += 1
 					}
 				}
+
+				// Expect two endpoint slices.
+				expectedCacheSize += 2
 			}
+
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			var node *libapiv3.Node

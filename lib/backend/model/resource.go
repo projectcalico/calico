@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	discoveryv1 "k8s.io/api/discovery/v1"
+
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -106,6 +108,11 @@ func init() {
 		KindKubernetesNetworkPolicy,
 		"kubernetesnetworkpolicies",
 		reflect.TypeOf(apiv3.NetworkPolicy{}),
+	)
+	registerResourceInfo(
+		KindKubernetesEndpointSlice,
+		"kubernetesendpointslices",
+		reflect.TypeOf(discoveryv1.EndpointSlice{}),
 	)
 	registerResourceInfo(
 		apiv3.KindNetworkSet,
