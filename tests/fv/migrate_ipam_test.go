@@ -27,9 +27,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	. "github.com/projectcalico/calicoctl/v3/tests/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
@@ -82,13 +82,20 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Assign some IPs.
-	v4, v6, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+	var v4, v6 []cnet.IPNet
+	v4Assignments, v6Assignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 		Num4:     5,
 		Num6:     7,
 		Attrs:    map[string]string{"note": "reserved by migrate_ipam_test.go"},
 		Hostname: "node4",
 	})
 	Expect(err).NotTo(HaveOccurred())
+	if v4Assignments != nil {
+		v4 = v4Assignments.IPs
+	}
+	if v6Assignments != nil {
+		v6 = v6Assignments.IPs
+	}
 
 	// Create a pool with blocksize 29, so we can easily allocate
 	// an entire block.
@@ -102,12 +109,19 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	// Allocate more than one block's worth (8) of IPs from that
 	// pool.
 	// Assign some IPs.
-	v4More, v6More, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+	var v4More, v6More []cnet.IPNet
+	v4MoreAssignments, v6MoreAssignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 		Num4:      11,
 		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
 		Hostname:  "node4",
 	})
 	Expect(err).NotTo(HaveOccurred())
+	if v4MoreAssignments != nil {
+		v4More = v4MoreAssignments.IPs
+	}
+	if v6MoreAssignments != nil {
+		v6More = v6MoreAssignments.IPs
+	}
 
 	// Migrate the data
 	// Lock the etcd datastore
