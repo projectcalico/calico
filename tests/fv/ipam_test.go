@@ -84,12 +84,19 @@ func TestIPAM(t *testing.T) {
 	Expect(out).To(ContainSubstring("IPS IN USE"))
 
 	// Assign some IPs.
-	v4, v6, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+	var v4, v6 []cnet.IPNet
+	v4Assignments, v6Assignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 		Num4:  5,
 		Num6:  7,
 		Attrs: map[string]string{"note": "reserved by ipam_test.go"},
 	})
 	Expect(err).NotTo(HaveOccurred())
+	if v4Assignments != nil {
+		v4 = v4Assignments.IPs
+	}
+	if v6Assignments != nil {
+		v6 = v6Assignments.IPs
+	}
 
 	// ipam show, pools only.
 	out = Calicoctl(false, "ipam", "show")
@@ -143,11 +150,18 @@ func TestIPAM(t *testing.T) {
 	// Allocate more than one block's worth (8) of IPs from that
 	// pool.
 	// Assign some IPs.
-	v4More, v6More, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+	var v4More, v6More []cnet.IPNet
+	v4MoreAssignments, v6MoreAssignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 		Num4:      11,
 		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
 	})
 	Expect(err).NotTo(HaveOccurred())
+	if v4MoreAssignments != nil {
+		v4More = v4MoreAssignments.IPs
+	}
+	if v6MoreAssignments != nil {
+		v6More = v6MoreAssignments.IPs
+	}
 
 	// ipam show, including blocks.
 	//
