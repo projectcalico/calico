@@ -279,6 +279,8 @@ func KeyFromDefaultPath(path string) Key {
 		return k
 	} else if k := (ResourceListOptions{Kind: apiv3.KindProfile}).KeyFromDefaultPath(path); k != nil {
 		return k
+	} else if k := (ResourceListOptions{Kind: KindKubernetesEndpointSlice}).KeyFromDefaultPath(path); k != nil {
+		return k
 	} else if k := (HostEndpointStatusListOptions{}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else if k := (WorkloadEndpointStatusListOptions{}).KeyFromDefaultPath(path); k != nil {
@@ -314,7 +316,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 		if ip == nil {
 			return nil, nil
 		}
-		return &net.IP{ip}, nil
+		return &net.IP{IP: ip}, nil
 	}
 	value := reflect.New(valueType)
 	elem := value.Elem()
