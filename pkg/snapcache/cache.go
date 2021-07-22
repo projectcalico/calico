@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -132,8 +132,8 @@ type Cache struct {
 }
 
 const (
-	healthName     = "cache"
-	healthInterval = 10 * time.Second
+	healthNameDefault = "cache"
+	healthInterval    = 10 * time.Second
 )
 
 type healthAggregator interface {
@@ -145,6 +145,7 @@ type Config struct {
 	MaxBatchSize     int
 	WakeUpInterval   time.Duration
 	HealthAggregator healthAggregator
+	HealthName       string
 }
 
 func (config *Config) ApplyDefaults() {
@@ -161,6 +162,9 @@ func (config *Config) ApplyDefaults() {
 			"default": defaultWakeUpInterval,
 		}).Info("Defaulting WakeUpInterval.")
 		config.WakeUpInterval = defaultWakeUpInterval
+	}
+	if config.HealthName == "" {
+		config.HealthName = healthNameDefault
 	}
 }
 
@@ -183,7 +187,7 @@ func New(config Config) *Cache {
 		healthTicks:       time.NewTicker(healthInterval).C,
 	}
 	if config.HealthAggregator != nil {
-		config.HealthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
+		config.HealthAggregator.RegisterReporter(config.HealthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
 	}
 	c.reportHealth()
 	return c
@@ -283,7 +287,7 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 
 func (c *Cache) reportHealth() {
 	if c.config.HealthAggregator != nil {
-		c.config.HealthAggregator.Report(healthName, &health.HealthReport{
+		c.config.HealthAggregator.Report(c.config.HealthName, &health.HealthReport{
 			Live:  true,
 			Ready: c.pendingStatus == api.InSync,
 		})
