@@ -1008,61 +1008,65 @@ func (m *endpointManager) updateHostEndpoints() {
 		m.activeHostIfaceToMangleIngressChains = newHostIfaceMangleIngressChains
 	}
 
-	// Build iptables chains for untracked host endpoint policy.
-	newHostIfaceRawChains := map[string][]*iptables.Chain{}
-	for ifaceName, id := range newUntrackedIfaceNameToHostEpID {
-		log.WithField("id", id).Info("Updating host endpoint raw chains.")
-		hostEp := m.rawHostEndpoints[id]
+	if m.ipVersion == 4 || !m.bpfEnabled {
+		// Build iptables chains for untracked host endpoint policy.
+		newHostIfaceRawChains := map[string][]*iptables.Chain{}
+		for ifaceName, id := range newUntrackedIfaceNameToHostEpID {
+			log.WithField("id", id).Info("Updating host endpoint raw chains.")
+			hostEp := m.rawHostEndpoints[id]
 
-		// Update the raw chain, for untracked traffic.
-		var ingressPolicyNames, egressPolicyNames []string
-		if len(hostEp.UntrackedTiers) > 0 {
-			ingressPolicyNames = hostEp.UntrackedTiers[0].IngressPolicies
-			egressPolicyNames = hostEp.UntrackedTiers[0].EgressPolicies
+			// Update the raw chain, for untracked traffic.
+			var ingressPolicyNames, egressPolicyNames []string
+			if len(hostEp.UntrackedTiers) > 0 {
+				ingressPolicyNames = hostEp.UntrackedTiers[0].IngressPolicies
+				egressPolicyNames = hostEp.UntrackedTiers[0].EgressPolicies
+			}
+			var rawChains []*iptables.Chain
+			if m.bpfEnabled {
+				rawChains = append(rawChains, m.ruleRenderer.HostEndpointToRawEgressChain(
+					ifaceName,
+					egressPolicyNames,
+				))
+			} else {
+				rawChains = m.ruleRenderer.HostEndpointToRawChains(
+					ifaceName,
+					ingressPolicyNames,
+					egressPolicyNames,
+				)
+			}
+			if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {
+				m.rawTable.UpdateChains(rawChains)
+			}
+			newHostIfaceRawChains[ifaceName] = rawChains
+			delete(m.activeHostIfaceToRawChains, ifaceName)
 		}
-		var rawChains []*iptables.Chain
-		if m.bpfEnabled {
-			rawChains = append(rawChains, m.ruleRenderer.HostEndpointToRawEgressChain(
-				ifaceName,
-				egressPolicyNames,
-			))
-		} else {
-			rawChains = m.ruleRenderer.HostEndpointToRawChains(
-				ifaceName,
-				ingressPolicyNames,
-				egressPolicyNames,
-			)
+
+		// Remove untracked policy iptables chains that are no longer wanted.
+		for ifaceName, chains := range m.activeHostIfaceToRawChains {
+			log.WithField("ifaceName", ifaceName).Info(
+				"Host interface no longer protected, deleting its untracked chains.")
+			m.rawTable.RemoveChains(chains)
 		}
-		if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {
-			m.rawTable.UpdateChains(rawChains)
-		}
-		newHostIfaceRawChains[ifaceName] = rawChains
-		delete(m.activeHostIfaceToRawChains, ifaceName)
+
+		m.activeHostIfaceToRawChains = newHostIfaceRawChains
 	}
-
-	// Remove untracked policy iptables chains that are no longer wanted.
-	for ifaceName, chains := range m.activeHostIfaceToRawChains {
-		log.WithField("ifaceName", ifaceName).Info(
-			"Host interface no longer protected, deleting its untracked chains.")
-		m.rawTable.RemoveChains(chains)
-	}
-
-	m.activeHostIfaceToRawChains = newHostIfaceRawChains
 
 	// Remember the host endpoints that are now in use.
 	m.activeIfaceNameToHostEpID = newIfaceNameToHostEpID
 	m.activeHostEpIDToIfaceNames = newHostEpIDToIfaceNames
 
-	// Rewrite the raw dispatch chains if they've changed.  Note, we use iptables for untracked
-	// egress policy even in BPF mode.
-	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
-	var newRawDispatchChains []*iptables.Chain
-	if m.bpfEnabled {
-		newRawDispatchChains = m.ruleRenderer.ToHostDispatchChains(newUntrackedIfaceNameToHostEpID, "")
-	} else {
-		newRawDispatchChains = m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, "", false)
+	if m.ipVersion == 4 || !m.bpfEnabled {
+		// Rewrite the raw dispatch chains if they've changed.  Note, we use iptables for untracked
+		// egress policy even in BPF mode.
+		log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
+		var newRawDispatchChains []*iptables.Chain
+		if m.bpfEnabled {
+			newRawDispatchChains = m.ruleRenderer.ToHostDispatchChains(newUntrackedIfaceNameToHostEpID, "")
+		} else {
+			newRawDispatchChains = m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, "", false)
+		}
+		m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
 	}
-	m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
 
 	if m.bpfEnabled {
 		// Code after this point is for other dispatch chains and IPVS endpoint marking,

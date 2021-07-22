@@ -1306,11 +1306,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
 
-		// Iptables for untracked egress policy.
-		t.UpdateChains(d.ruleRenderer.StaticRawEgressChains(t.IPVersion))
-		t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
-			Action: iptables.JumpAction{Target: rules.ChainRawOutput},
-		}})
+		if t.IPVersion == 4 {
+			// Iptables for untracked egress policy.
+			t.UpdateChains(d.ruleRenderer.StaticRawEgressChains(t.IPVersion))
+			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
+				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
+			}})
+		}
 	}
 
 	if d.config.BPFExtToServiceConnmark != 0 {
