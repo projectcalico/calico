@@ -158,6 +158,11 @@ type Rules struct {
 	HostForwardTiers []Tier
 	HostNormalTiers  []Tier
 	HostProfiles     []Profile
+
+	// True when building a policy program for XDP, as opposed to for TC.  This also means that
+	// we are implementing untracked policy (provided in the HostNormalTiers field) and that
+	// traffic is allowed to continue if not explicitly allowed or denied.
+	ForXDP bool
 }
 
 type Profile = Policy
@@ -173,6 +178,12 @@ const (
 func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	p.b = NewBlock()
 	p.writeProgramHeader()
+
+	if rules.ForXDP {
+		// For an XDP program HostNormalTiers continues the untracked policy to enforce;
+		// other fields are unused.
+		goto normalPolicy
+	}
 
 	// Pre-DNAT policy: on a host interface, or host-* policy on a workload interface.  Traffic
 	// is allowed to continue if there is no applicable pre-DNAT policy.
@@ -206,11 +217,16 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	// Now skip over normal host policy and jump to where we apply possible workload policy.
 	p.b.Jump("allowed_by_host_policy")
 
+normalPolicy:
 	if !rules.SuppressNormalHostPolicy {
 		// "Normal" host policy, i.e. for non-forwarded traffic.
 		p.b.LabelNextInsn("to_or_from_host")
 		p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
-		p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
+		if rules.ForXDP {
+			p.b.Jump("xdp_pass")
+		} else {
+			p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
+		}
 	}
 
 	// End of host policy.
@@ -225,7 +241,7 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 		p.writeProfiles(rules.Profiles, "allow")
 	}
 
-	p.writeProgramFooter()
+	p.writeProgramFooter(rules.ForXDP)
 	return p.b.Assemble()
 }
 
@@ -233,7 +249,7 @@ func (p *Builder) Instructions(rules Rules) (Insns, error) {
 // R6 = program context
 // R9 = pointer to state map
 func (p *Builder) writeProgramHeader() {
-	// Pre-amble to the policy program.
+	// Preamble to the policy program.
 	p.b.LabelNextInsn("start")
 	p.b.Mov64(R6, R1) // Save R1 (context) in R6.
 	// Zero-out the map key
@@ -274,11 +290,21 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 }
 
 // writeProgramFooter emits the program exit jump targets.
-func (p *Builder) writeProgramFooter() {
+func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Fall through here if there's no match.  Also used when we hit an error or if policy rejects packet.
 	p.b.LabelNextInsn("deny")
-	p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+	if forXDP {
+		p.b.MovImm64(R0, 1 /* XDP_DROP */)
+	} else {
+		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
+	}
 	p.b.Exit()
+
+	if forXDP {
+		p.b.LabelNextInsn("xdp_pass")
+		p.b.MovImm64(R0, 2 /* XDP_PASS */)
+		p.b.Exit()
+	}
 
 	if p.b.TargetIsUsed("allow") {
 		p.b.LabelNextInsn("allow")
