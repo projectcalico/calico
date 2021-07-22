@@ -138,7 +138,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		}
 	}
 	if !attachmentSucceeded {
-		return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%w", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
+		return fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
 	}
 	return nil
 }
