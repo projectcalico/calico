@@ -982,14 +982,14 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawPreroutingChain(ipVersion),
 		r.WireguardIncomingMarkChain(),
-		r.StaticRawOutputChain(),
+		r.StaticRawOutputChain(0),
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticRawEgressChains(ipVersion uint8) []*Chain {
+func (r *DefaultRuleRenderer) StaticRawEgressChains(ipVersion uint8, tcBypassMark uint32) []*Chain {
 	return []*Chain{
 		r.failsafeOutChain("raw", ipVersion),
-		r.StaticRawOutputChain(),
+		r.StaticRawOutputChain(tcBypassMark),
 	}
 }
 
@@ -1122,20 +1122,32 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
-	return &Chain{
-		Name: ChainRawOutput,
-		Rules: []Rule{
-			// For safety, clear all our mark bits before we start.  (We could be in
-			// append mode and another process' rules could have left the mark bit set.)
-			{Action: ClearMarkAction{Mark: r.allCalicoMarkBits()}},
-			// Then, jump to the untracked policy chains.
-			{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
-			// Then, if the packet was marked as allowed, accept it.  Packets also
-			// return here without the mark bit set if the interface wasn't one that
-			// we're policing.
+func (r *DefaultRuleRenderer) StaticRawOutputChain(tcBypassMark uint32) *Chain {
+	rules := []Rule{
+		// For safety, clear all our mark bits before we start.  (We could be in
+		// append mode and another process' rules could have left the mark bit set.)
+		{Action: ClearMarkAction{Mark: r.allCalicoMarkBits()}},
+		// Then, jump to the untracked policy chains.
+		{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+		// Then, if the packet was marked as allowed, accept it.  Packets also
+		// return here without the mark bit set if the interface wasn't one that
+		// we're policing.
+	}
+	if tcBypassMark == 0 {
+		rules = append(rules, []Rule{
 			{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
 				Action: AcceptAction{}},
-		},
+		}...)
+	} else {
+		rules = append(rules, []Rule{
+			{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
+				Action: SetMaskedMarkAction{Mark: tcBypassMark, Mask: 0xffffffff}},
+			{Match: Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Action: AcceptAction{}},
+		}...)
+	}
+	return &Chain{
+		Name:  ChainRawOutput,
+		Rules: rules,
 	}
 }
