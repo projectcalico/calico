@@ -15,6 +15,8 @@
 package xdp
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -141,6 +143,73 @@ func (ap *AttachPoint) AttachProgram() error {
 	return nil
 }
 
+func (ap AttachPoint) DetachProgram() error {
+	// Get the current XDP program ID, if any.
+	progID, err := ap.ProgramID()
+	if err != nil {
+		if errors.Is(err, ErrNoXDP) {
+			// Interface has no XDP attached - that's what we want.
+			return nil
+		}
+		// Some other error: return it to trigger a retry.
+		return fmt.Errorf("Couldn't get XDP program ID for %v: %w", ap.Iface, err)
+	}
+
+	// Get the map IDs that the program is using.
+	out, err := exec.Command("bpftool", "prog", "show", "id", progID, "-j").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Couldn't query XDP prog id=%v iface=%v out=\n%v err=%w", progID, ap.Iface, string(out), err)
+	}
+	var progJSON struct {
+		Maps []int `json:"map_ids"`
+	}
+	err = json.Unmarshal(out, &progJSON)
+	if err != nil {
+		ap.Log().WithError(err).Debugf("Failed to parse bpftool output out=\n%v.  Assume not our XDP program.", string(out))
+		return nil
+	}
+
+	ourProgram := false
+	for _, mapID := range progJSON.Maps {
+		// Check if this map is one of ours.
+		ap.Log().Debugf("Check if map id %v is one of ours", mapID)
+		out, err = exec.Command("bpftool", "map", "show", "id", fmt.Sprintf("%v", mapID), "-j").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Couldn't query map id=%v iface=%v out=\n%v err=%w", progID, ap.Iface, string(out), err)
+		}
+		var mapJSON struct {
+			Name string `json:"name"`
+		}
+		err = json.Unmarshal(out, &mapJSON)
+		if err != nil {
+			ap.Log().WithError(err).Debugf("Failed to parse bpftool output out=\n%v.  Assume not our map.", string(out))
+		} else if strings.HasPrefix(mapJSON.Name, "cali_") {
+			ourProgram = true
+			break
+		}
+	}
+
+	if ourProgram {
+		// It's our XDP program; remove it.
+		ap.Log().Debug("Removing our XDP program")
+		removalSucceeded := false
+		for _, mode := range ap.Modes {
+			cmd := exec.Command("ip", "link", "set", "dev", ap.Iface, mode.String(), "off")
+			ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
+			out, err := cmd.CombinedOutput()
+			ap.Log().WithField("mode", mode).Debugf("Result: err=%v out=\n%v", err, string(out))
+			if err == nil {
+				removalSucceeded = true
+			}
+		}
+		if !removalSucceeded {
+			return fmt.Errorf("Couldn't remove our XDP program from iface %v", ap.Iface)
+		}
+	}
+
+	return nil
+}
+
 func (ap *AttachPoint) patchBinary(ifile, ofile string) error {
 	b, err := bpf.BinaryFromFile(ifile)
 	if err != nil {
@@ -161,6 +230,8 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 	_, err := ap.ProgramID()
 	return err == nil, err
 }
+
+var ErrNoXDP = errors.New("no XDP program attached")
 
 func (ap *AttachPoint) ProgramID() (string, error) {
 	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
@@ -185,5 +256,5 @@ func (ap *AttachPoint) ProgramID() (string, error) {
 			return s[i+2], nil
 		}
 	}
-	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' err=%v out=\n%v", err, string(out))
+	return "", fmt.Errorf("Couldn't find 'prog/xdp id <ID>' out=\n%v err=%w", string(out), ErrNoXDP)
 }

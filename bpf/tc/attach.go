@@ -141,6 +141,12 @@ func (ap AttachPoint) AttachProgram() error {
 	return nil
 }
 
+func (ap AttachPoint) DetachProgram() error {
+	// We never detach TC programs, so this should not be called.
+	ap.Log().Panic("DetachProgram is not implemented for TC")
+	return nil
+}
+
 func ExecTC(args ...string) (out string, err error) {
 	tcCmd := exec.Command("tc", args...)
 	outBytes, err := tcCmd.Output()

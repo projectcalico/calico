@@ -81,6 +81,7 @@ type attachPoint interface {
 	JumpMapFDMapKey() string
 	IsAttached() (bool, error)
 	AttachProgram() error
+	DetachProgram() error
 	ProgramID() (string, error)
 	Log() *log.Entry
 }
@@ -88,6 +89,7 @@ type attachPoint interface {
 type bpfDataplane interface {
 	ensureStarted()
 	ensureProgramAttached(ap attachPoint) (bpf.MapFD, error)
+	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) error
 	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
@@ -604,7 +606,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 					"Will retry if it shows up.")
 			return set.RemoveItem
 		}
-		log.WithError(err).Warn("Failed to apply policy to interface")
+		log.WithError(err).Warn("Failed to apply policy to interface, will retry")
 		return nil
 	})
 }
@@ -905,12 +907,12 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		Modes:    m.xdpModes,
 	}
 
-	jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
-	if err != nil {
-		return err
-	}
-
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
+		jumpMapFD, err := m.dp.ensureProgramAttached(&ap)
+		if err != nil {
+			return err
+		}
+
 		ap.Log().Debugf("Building program for untracked policy hep=%v jumpMapFD=%v", ep.Name, jumpMapFD)
 		rules := polprog.Rules{
 			ForHostInterface: true,
@@ -920,7 +922,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		ap.Log().Debugf("Rules: %v", rules)
 		return m.dp.updatePolicyProgram(jumpMapFD, rules)
 	} else {
-		return m.dp.removePolicyProgram(jumpMapFD)
+		return m.dp.ensureNoProgram(&ap)
 	}
 }
 
@@ -1311,7 +1313,7 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) error {
 	return tc.EnsureQdisc(iface)
 }
 
-// Ensure TC program is attached to the specified interface and return its jump map FD.
+// Ensure TC/XDP program is attached to the specified interface and return its jump map FD.
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
 	jumpMapFD := m.getJumpMapFD(ap)
 	if jumpMapFD != 0 {
@@ -1353,6 +1355,26 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 	}
 
 	return jumpMapFD, nil
+}
+
+// Ensure that the specified interface does not have our XDP program, in any mode, but avoid
+// touching anyone else's XDP program(s).
+func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
+
+	// Clean up jump map FD if there is one.
+	jumpMapFD := m.getJumpMapFD(ap)
+	if jumpMapFD != 0 {
+		// Close the jump map FD.
+		if err := jumpMapFD.Close(); err == nil {
+			m.setJumpMapFD(ap, 0)
+		} else {
+			// Return error so as to trigger a retry.
+			return fmt.Errorf("Failed to close jump map FD %v: %w", jumpMapFD, err)
+		}
+	}
+
+	// Ensure interface does not have our XDP program attached in any mode.
+	return ap.DetachProgram()
 }
 
 func (m *bpfEndpointManager) getJumpMapFD(ap attachPoint) (fd bpf.MapFD) {
