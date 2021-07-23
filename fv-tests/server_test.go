@@ -1079,6 +1079,9 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
 
+			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			Expect(err).NotTo(HaveOccurred())
+
 			// Make the client block after it reads the first update.  This means the server will have started
 			// streaming the snapshot but it shouldn't be able to finish streaming the snapshot.  Blocking for
 			// >1s wastes the MaxFallBehind timeout so this client will need to rely on the
@@ -1093,7 +1096,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				recorder,
 				nil,
 			)
-			err := client.Start(clientCxt)
+			err = client.Start(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				clientCancel()
@@ -1118,11 +1121,15 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			sendNUpdates(1)
 
 			Eventually(recorder.Len, 2*time.Second).Should(BeNumerically("==", initialSnapshotSize+3))
+			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
 		})
 
 		It("client should get disconnected if it falls behind after the grace period", func() {
 			clientCxt, clientCancel := context.WithCancel(context.Background())
 			recorder := NewRecorder()
+
+			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			Expect(err).NotTo(HaveOccurred())
 
 			// Make the client block after it reads the first update.  This means the server will have started
 			// streaming the snapshot but it shouldn't be able to finish streaming the snapshot.  Blocking for
@@ -1138,7 +1145,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				recorder,
 				nil,
 			)
-			err := client.Start(clientCxt)
+			err = client.Start(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				clientCancel()
@@ -1175,6 +1182,9 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// Should only have received at most the first two chunks.
 			Expect(recorder.Len()).To(BeNumerically(">", initialSnapshotSize))
 			Expect(recorder.Len()).To(BeNumerically("<=", initialSnapshotSize*2))
+
+			// Should not use the grace period at all.
+			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
 		})
 	})
 })
@@ -1187,6 +1197,19 @@ func getGauge(name string) (float64, error) {
 	for _, mf := range mfs {
 		if mf.GetName() == name {
 			return mf.Metric[0].GetGauge().GetValue(), nil
+		}
+	}
+	return 0, errors.New("not found")
+}
+
+func getCounter(name string) (float64, error) {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return 0, err
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == name {
+			return mf.Metric[0].GetCounter().GetValue(), nil
 		}
 	}
 	return 0, errors.New("not found")

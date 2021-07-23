@@ -57,6 +57,11 @@ var (
 		Name: "typha_connections_dropped",
 		Help: "Total number of connections dropped due to rebalancing.",
 	})
+	counterGracePeriodUsed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "typha_connections_grace_used",
+		Help: "Total number of connections that made use of the grace period to catch up after sending the initial " +
+			"snapshot.",
+	})
 	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "typha_connections_active",
 		Help: "Number of open client connections.",
@@ -93,6 +98,7 @@ var (
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
 	prometheus.MustRegister(counterNumConnectionsDropped)
+	prometheus.MustRegister(counterGracePeriodUsed)
 	prometheus.MustRegister(gaugeNumConnections)
 	prometheus.MustRegister(summarySnapshotSendTime)
 	prometheus.MustRegister(summaryClientLatency)
@@ -785,7 +791,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 				//
 				// This has a secondary effect: under extreme overload where clients are falling behind we give
 				// them a grace period to apply the updates to the dataplane before we cut them off.  That means that
-				// Felix will still make progresseven though it's restarting, albeit with 90+s between dataplane
+				// Felix will still make progress even though it's restarting, albeit with 90+s between dataplane
 				// updates.
 				if time.Now().After(gracePeriodEndTime) {
 					logCxt.WithFields(log.Fields{
@@ -805,6 +811,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 					}).Warn("Client is a long way behind after sending snapshot; " +
 						"allowing grace period for it to catch up.")
 					loggedClientBehind = true
+					counterGracePeriodUsed.Add(1.0)
 				}
 			} else if loggedClientBehind && time.Now().After(gracePeriodEndTime) {
 				// Client caught up after being behind when we sent it a snapshot.
