@@ -2,6 +2,8 @@ title: "Reference"
 path: /reference/
 order: 5
 section:
+- title: API
+  path: /reference/api
 - title: Installation
   path: /reference/installation/api
 - title: calicoctl
