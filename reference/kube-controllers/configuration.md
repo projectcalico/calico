@@ -98,7 +98,7 @@ This controller is valid when using either the `etcdv3` or `kubernetes` datastor
 
 To enable the node controller when using `etcdv3`, perform the following two steps.
 
-1. Enable the controller in your [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfiguration) or add "node" to the list of enabled controllers in the environment for kube-controllers. For example: `ENABLED_CONTROLLERS=workloadendpoint,profile,policy,node`
+1. Enable the controller in your [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfig) or add "node" to the list of enabled controllers in the environment for kube-controllers. For example: `ENABLED_CONTROLLERS=workloadendpoint,profile,policy,node`
 1. Configure {{site.nodecontainer}} with a Kubernetes node reference by adding the following snippet to the environment section of the {{site.noderunning}} daemon set.
 
    ```yaml
@@ -116,7 +116,7 @@ resource that don't exist in the Kubernetes node will remain as is.
 
 #### kubernetes
 
-To enable the node controller when using `kubernetes`, enable the controller in your [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfiguration) or set the list of enabled controllers in the environment for kube-controllers to `node`. For example: `ENABLED_CONTROLLERS=node`
+To enable the node controller when using `kubernetes`, enable the controller in your [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfig) or set the list of enabled controllers in the environment for kube-controllers to `node`. For example: `ENABLED_CONTROLLERS=node`
 
 ### Policy controller
 
