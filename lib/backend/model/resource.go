@@ -22,7 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	discoveryv1 "k8s.io/api/discovery/v1"
+	discovery "k8s.io/api/discovery/v1beta1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -112,7 +112,7 @@ func init() {
 	registerResourceInfo(
 		KindKubernetesEndpointSlice,
 		"kubernetesendpointslices",
-		reflect.TypeOf(discoveryv1.EndpointSlice{}),
+		reflect.TypeOf(discovery.EndpointSlice{}),
 	)
 	registerResourceInfo(
 		apiv3.KindNetworkSet,
