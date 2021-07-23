@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@ package fvtests
 
 import (
 	"sync"
+	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -32,10 +35,12 @@ func NewRecorder() *StateRecorder {
 //
 //     Eventually(recorder.State).Should(Equal(...))
 type StateRecorder struct {
-	L      sync.Mutex
-	status api.SyncStatus
-	kvs    map[string]api.Update
-	err    error
+	L             sync.Mutex
+	status        api.SyncStatus
+	kvs           map[string]api.Update
+	err           error
+	blockAfter    int
+	blockDuration time.Duration
 }
 
 func (r *StateRecorder) KVs() map[string]api.Update {
@@ -47,6 +52,14 @@ func (r *StateRecorder) KVs() map[string]api.Update {
 		kvsCpy[k] = v
 	}
 	return kvsCpy
+}
+
+// Len returns the number of KVs that we've recorded.
+func (r *StateRecorder) Len() int {
+	r.L.Lock()
+	defer r.L.Unlock()
+
+	return len(r.kvs)
 }
 
 func (r *StateRecorder) Status() api.SyncStatus {
@@ -71,6 +84,17 @@ func (r *StateRecorder) OnUpdates(updates []api.Update) {
 		} else {
 			r.kvs[path] = u
 		}
+
+		if r.blockAfter > 0 {
+			r.blockAfter--
+			if r.blockAfter == 0 {
+				logrus.WithField("duration", r.blockDuration).Info("Recorder about to block")
+				r.L.Unlock()
+				time.Sleep(r.blockDuration)
+				r.L.Lock()
+				logrus.Info("Recorder woke up")
+			}
+		}
 	}
 }
 
@@ -79,4 +103,12 @@ func (r *StateRecorder) OnStatusUpdated(status api.SyncStatus) {
 	defer r.L.Unlock()
 
 	r.status = status
+}
+
+func (r *StateRecorder) BlockAfterNUpdates(n int, duration time.Duration) {
+	r.L.Lock()
+	defer r.L.Unlock()
+
+	r.blockAfter = n
+	r.blockDuration = duration
 }
