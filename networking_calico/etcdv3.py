@@ -22,7 +22,6 @@ from etcd3gw.lease import Lease
 
 from etcd3gw.utils import _encode
 from etcd3gw.utils import _increment_last_byte
-import etcd3gw.watch as watch
 
 from networking_calico.compat import cfg
 from networking_calico.compat import log
@@ -38,31 +37,6 @@ CHUNK_SIZE_LIMIT = 200
 # Indicates that a put operation must update an existing resource and not create
 # a new resource.
 MUST_UPDATE = "MUST_UPDATE"
-
-
-class ForceClosingWatcher(watch.Watcher):
-    def stop(self):
-        try:
-            # Workaround for (at least) Python 2.7.12.  Shut down the socket
-            # to force close both legs of the connection.  Without this, the
-            # socket sticks waiting for some data to read.
-            #
-            # We make our own socket from the file handle so that we disturb
-            # the real socket as little as possible.  From the real socket's
-            # point of view, the socket will appear to fail.
-            s = socket.fromfd(self._response.raw._fp.fileno(),
-                              socket.AF_INET,
-                              socket.SOCK_STREAM)
-            s.shutdown(socket.SHUT_RDWR)
-            s.close()
-        except Exception as e:
-            LOG.warning("Failed to force-close etcd3gw's watch socket: %r", e)
-
-        # Defer to the superclass to do the rest of its cleanup.
-        super(ForceClosingWatcher, self).stop()
-
-
-watch.Watcher = ForceClosingWatcher
 
 
 class KeyNotFound(Etcd3Exception):
