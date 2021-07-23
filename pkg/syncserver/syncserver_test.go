@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,14 +33,15 @@ var _ = Describe("With zero config", func() {
 	It("it should apply correct defaults", func() {
 		config.ApplyDefaults()
 		Expect(config).To(Equal(Config{
-			MaxMessageSize:          100,
-			MaxFallBehind:           90 * time.Second,
-			MinBatchingAgeThreshold: 100 * time.Millisecond,
-			PingInterval:            10 * time.Second,
-			PongTimeout:             60 * time.Second,
-			DropInterval:            time.Second,
-			MaxConns:                math.MaxInt32,
-			Port:                    5473,
+			MaxMessageSize:                 100,
+			MaxFallBehind:                  90 * time.Second,
+			NewClientFallBehindGracePeriod: 90 * time.Second,
+			MinBatchingAgeThreshold:        100 * time.Millisecond,
+			PingInterval:                   10 * time.Second,
+			PongTimeout:                    60 * time.Second,
+			DropInterval:                   time.Second,
+			MaxConns:                       math.MaxInt32,
+			Port:                           5473,
 		}))
 	})
 	It("should convert random port to 0", func() {
