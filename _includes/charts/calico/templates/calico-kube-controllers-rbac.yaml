@@ -56,12 +56,14 @@ rules:
       - watch
       - list
       - get
-  # Pods are queried to check for existence.
+  # Pods are watched to check for existence as part of IPAM controller.
   - apiGroups: [""]
     resources:
       - pods
     verbs:
       - get
+      - list
+      - watch
   # IPAM resources are manipulated when nodes are deleted.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
