@@ -1,6 +1,6 @@
 ---
 title: Calico API
-description: Learn about the Calico API and how to use it
+description: Learn about the Calico API and how to use it.
 canonical_url: '/reference/api'
 ---
 
