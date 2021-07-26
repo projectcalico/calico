@@ -121,7 +121,8 @@ spec:
 `xdpEnabled` is `true`; in other words when XDP is being used to accelerate denial-of-service
 preventation policies in the iptables dataplane.
 
-When `bpfEnabled` is `true` the "xdp" settings all have no effect.
+When `bpfEnabled` is `true` the "xdp" settings all have no effect; in BPF mode the implementation of
+policy is always accelerated, using the best available BPF technology.
 
 #### ProtoPort
 
