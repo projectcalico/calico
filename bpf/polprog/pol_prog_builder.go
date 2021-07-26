@@ -271,7 +271,7 @@ func (p *Builder) writeProgramHeader() {
 
 const (
 	jumpIdxPolicy = iota
-	jumpIdxEpilogue
+	jumpIdxAllowed
 	jumpIdxICMP
 
 	_ = jumpIdxPolicy
@@ -314,7 +314,7 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		// Execute the tail call.
 		p.b.Mov64(R1, R6)                      // First arg is the context.
 		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		p.b.MovImm32(R3, jumpIdxEpilogue)      // Third arg is the index (rather than a pointer to the index).
+		p.b.MovImm32(R3, jumpIdxAllowed)       // Third arg is the index (rather than a pointer to the index).
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.

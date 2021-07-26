@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
 /* Add new values to the end as these are program indices */
 enum cali_jump_index {
 	PROG_INDEX_POLICY,
-	PROG_INDEX_EPILOGUE,
+	PROG_INDEX_ALLOWED,
 	PROG_INDEX_ICMP,
 };
 #endif /* __CALI_BPF_JUMP_H__ */
