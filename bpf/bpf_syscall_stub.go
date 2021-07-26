@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ func GetMapFDByID(mapID int) (MapFD, error) {
 	panic("BPF syscall stub")
 }
 
-func LoadBPFProgramFromInsns(insns asm.Insns, license string) (ProgFD, error) {
+func LoadBPFProgramFromInsns(insns asm.Insns, license string, forXDP bool) (ProgFD, error) {
 	panic("BPF syscall stub")
 }
 

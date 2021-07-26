@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ func TestCompileTemplateRun(t *testing.T) {
 
 func TestLoadZeroProgram(t *testing.T) {
 	RegisterTestingT(t)
-	fd, err := bpf.LoadBPFProgramFromInsns(nil, "Apache-2.0")
+	fd, err := bpf.LoadBPFProgramFromInsns(nil, "Apache-2.0", false)
 	if err == nil {
 		_ = fd.Close()
 	}
@@ -238,7 +238,7 @@ outter:
 		pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
-		polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+		polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", false)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = polProgFD.Close() }()
 		progFDBytes := make([]byte, 4)
@@ -948,7 +948,7 @@ func TestJumpMap(t *testing.T) {
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())
-	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0", false)
 	Expect(err).NotTo(HaveOccurred())
 
 	k := make([]byte, 4)
