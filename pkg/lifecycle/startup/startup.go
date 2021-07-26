@@ -178,20 +178,6 @@ func Run() {
 	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
 		// Configure the node AS number.
 		configureASNumber(node)
-
-		if clientset != nil {
-			// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
-			// value is provided.
-			k8sNodeName := nodeName
-			if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
-				k8sNodeName = nodeRef
-			}
-
-			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
-			if err != nil {
-				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
-			}
-		}
 	}
 
 	// Populate a reference to the node based on orchestrator node identifiers.
@@ -224,6 +210,25 @@ func Run() {
 	if err := ensureNetworkForOS(ctx, cli, nodeName); err != nil {
 		log.WithError(err).Errorf("Unable to ensure network for os")
 		utils.Terminate()
+	}
+
+	// All done. Set NetworkUnavailable to false if using Calico for networking.
+	// We do it late in the process to avoid node resource update conflict because setting
+	// node condition will trigger node-controller updating node taints.
+	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
+		if clientset != nil {
+			// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
+			// value is provided.
+			k8sNodeName := nodeName
+			if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
+				k8sNodeName = nodeRef
+			}
+
+			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
+			if err != nil {
+				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+			}
+		}
 	}
 
 	// Remove shutdownTS file when everything is done.
