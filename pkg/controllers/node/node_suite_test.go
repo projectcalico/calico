@@ -17,11 +17,18 @@ package node_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/sirupsen/logrus"
 
 	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+	logrus.SetLevel(logrus.DebugLevel)
+}
 
 func TestConverter(t *testing.T) {
 	RegisterFailHandler(Fail)

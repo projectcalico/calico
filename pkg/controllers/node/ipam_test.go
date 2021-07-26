@@ -15,6 +15,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -613,6 +614,295 @@ var _ = Describe("IPAM controller UTs", func() {
 		Consistently(func() bool {
 			return fakeClient.affinityReleased("cnode")
 		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+	})
+
+	It("should clean up empty blocks", func() {
+		// Create Calico and k8s nodes for the test.
+		n := libapiv3.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		kn := v1.Node{}
+		kn.Name = "kname"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a pod for the allocation so that it doesn't get GC'd.
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Start the controller.
+		c.Start(make(chan struct{}))
+
+		// Add a new block with one allocation, affine to cnode.
+		idx := 0
+		handle := "test-handle"
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:cnode"
+		key := model.BlockKey{CIDR: cidr}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					AttrPrimary: &handle,
+					AttrSecondary: map[string]string{
+						ipam.AttributeNode:      "cnode",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{
+			Key:   key,
+			Value: &b,
+		}
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		// Wait for controller state to update. The block
+		// should appear in allBlocks.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks[blockCIDR]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// And, the allocationsByNode map should receive an entry.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allocationsByNode["cnode"]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Add a new block with no allocations.
+		cidr2 := net.MustParseCIDR("10.0.0.4/30")
+		key2 := model.BlockKey{CIDR: cidr2}
+		b2 := model.AllocationBlock{
+			CIDR:        cidr2,
+			Affinity:    &aff,
+			Allocations: []*int{nil, nil, nil, nil},
+			Unallocated: []int{0, 1, 2, 3},
+		}
+		kvp2 := model.KVPair{
+			Key:   key2,
+			Value: &b2,
+		}
+		blockCIDR2 := kvp2.Key.(model.BlockKey).CIDR.String()
+		update2 := bapi.Update{KVPair: kvp2, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update2)
+
+		// The controller should now recognize an empty block.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.emptyBlocks[blockCIDR2]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Mark the syncer as InSync so that the GC will be enabled.
+		c.onStatusUpdate(bapi.InSync)
+
+		// The empty block should be released.
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		Eventually(func() bool {
+			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
+		}, 15*time.Second, 100*time.Millisecond).Should(BeTrue())
+	})
+
+	It("should NOT clean up empty blocks if the node is full", func() {
+		// Create Calico and k8s nodes for the test.
+		n := libapiv3.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		kn := v1.Node{}
+		kn.Name = "kname"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a pod for the allocation so that it doesn't get GC'd.
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Start the controller.
+		c.Start(make(chan struct{}))
+
+		// Add a new block that is full.
+		idx := 0
+		handle := "test-handle"
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:cnode"
+		key := model.BlockKey{CIDR: cidr}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, &idx, &idx, &idx},
+			Unallocated: []int{},
+			Attributes: []model.AllocationAttribute{
+				{
+					AttrPrimary: &handle,
+					AttrSecondary: map[string]string{
+						ipam.AttributeNode:      "cnode",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{
+			Key:   key,
+			Value: &b,
+		}
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		// Wait for controller state to update. The block
+		// should appear in allBlocks.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allBlocks[blockCIDR]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// And, the allocationsByNode map should receive an entry.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.allocationsByNode["cnode"]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Add a new block with no allocations.
+		cidr2 := net.MustParseCIDR("10.0.0.4/30")
+		key2 := model.BlockKey{CIDR: cidr2}
+		b2 := model.AllocationBlock{
+			CIDR:        cidr2,
+			Affinity:    &aff,
+			Allocations: []*int{nil, nil, nil, nil},
+			Unallocated: []int{0, 1, 2, 3},
+		}
+		kvp2 := model.KVPair{
+			Key:   key2,
+			Value: &b2,
+		}
+		blockCIDR2 := kvp2.Key.(model.BlockKey).CIDR.String()
+		update2 := bapi.Update{KVPair: kvp2, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update2)
+
+		// The controller should now recognize an empty block.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			_, ok := c.emptyBlocks[blockCIDR2]
+			return ok
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Mark the syncer as InSync so that the GC will be enabled.
+		c.onStatusUpdate(bapi.InSync)
+
+		// The empty block should NOT be released, because the other block on the node is full.
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		Consistently(func() bool {
+			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
+		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+	})
+
+	It("should NOT clean up all blocks assigned to a node", func() {
+		// Create Calico and k8s nodes for the test.
+		n := libapiv3.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		kn := v1.Node{}
+		kn.Name = "kname"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a pod for the allocation so that it doesn't get GC'd.
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Start the controller.
+		c.Start(make(chan struct{}))
+
+		// Add 5 empty blocks to the node.
+		for i := 0; i < 5; i++ {
+			unallocated := make([]int, 64)
+			for i := 0; i < len(unallocated); i++ {
+				unallocated[i] = i
+			}
+			cidr := net.MustParseCIDR(fmt.Sprintf("10.0.%d.0/24", i))
+			aff := "host:cnode"
+			key := model.BlockKey{CIDR: cidr}
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: make([]*int, 64),
+				Unallocated: unallocated,
+				Attributes:  []model.AllocationAttribute{},
+			}
+			kvp := model.KVPair{
+				Key:   key,
+				Value: &b,
+			}
+			update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+			c.onUpdate(update)
+		}
+
+		// Wait for controller state to update with all blocks.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return len(c.allBlocks) == 5
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// The controller should recognize them as empty.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return len(c.emptyBlocks) == 5
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Mark the syncer as InSync so that the GC will be enabled.
+		c.onStatusUpdate(bapi.InSync)
+
+		// 4 out of the 5 empty blocks should be released, but not all.
+		numBlocks := func() int {
+			done := c.pause()
+			defer done()
+			return len(c.blocksByNode["cnode"])
+		}
+		Eventually(numBlocks, 15*time.Second, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, 5*time.Second, 100*time.Millisecond).Should(Equal(1))
+		numBlocks = func() int {
+			done := c.pause()
+			defer done()
+			return len(c.emptyBlocks)
+		}
+		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, 3*time.Second, 100*time.Millisecond).Should(Equal(1))
+
 	})
 
 })

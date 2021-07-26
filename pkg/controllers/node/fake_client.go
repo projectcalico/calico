@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -246,7 +247,11 @@ func (f *fakeIPAMClient) ClaimAffinity(ctx context.Context, cidr cnet.IPNet, hos
 // will be returned if any blocks within the CIDR are not empty - in this case, this
 // function may release some but not all blocks within the given CIDR.
 func (f *fakeIPAMClient) ReleaseAffinity(ctx context.Context, cidr cnet.IPNet, host string, mustBeEmpty bool) error {
-	panic("not implemented") // TODO: Implement
+	f.Lock()
+	defer f.Unlock()
+
+	f.affinitiesReleased[fmt.Sprintf("%s/%s", cidr.String(), host)] = true
+	return nil
 }
 
 // ReleaseHostAffinities releases affinity for all blocks that are affine

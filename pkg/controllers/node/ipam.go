@@ -29,6 +29,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -97,6 +98,8 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		confirmedLeaks:              make(map[string]*allocation),
 		podCache:                    make(map[string]*v1.Pod),
 		nodesByBlock:                make(map[string]string),
+		blocksByNode:                make(map[string]map[string]bool),
+		emptyBlocks:                 make(map[string]string),
 
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
@@ -130,6 +133,8 @@ type ipamController struct {
 	allocationsByBlock map[string]map[string]*allocation
 	allocationsByNode  map[string]map[string]*allocation
 	nodesByBlock       map[string]string
+	blocksByNode       map[string]map[string]bool
+	emptyBlocks        map[string]string
 	confirmedLeaks     map[string]*allocation
 
 	// Cache pods to avoid unnecessary API queries.
@@ -242,7 +247,7 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			log.Debug("Triggered IPAM sync")
 			err := c.syncIPAM()
 			if err != nil {
-				// We can kick ourselves on error for a retry. We have ratelimiting
+				// We can kick ourselves on error for a retry. We have rate limiting
 				// built in to the cleanup code.
 				log.WithError(err).Warn("error syncing IPAM data")
 				kick(c.syncChan)
@@ -307,7 +312,7 @@ func (c *ipamController) handleNodeUpdate(kvp model.KVPair) {
 		if err != nil {
 			log.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
 
-			// It's posible that a previous version of this node had an orchRef and so was added to the
+			// It's possible that a previous version of this node had an orchRef and so was added to the
 			// map. If so, we need to remove it.
 			if current, ok := c.kubernetesNodesByCalicoName[n.Name]; ok {
 				logrus.Warnf("Update mapping calico node -> k8s node. %s -> %s (previously %s)", n.Name, kn, current)
@@ -349,23 +354,33 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 	// Include affinity if it exists. We want to track nodes even
 	// if there are no IPs actually assigned to that node so that we can
 	// release their affinity if needed.
+	var n string
 	if b.Affinity != nil {
 		if strings.HasPrefix(*b.Affinity, "host:") {
-			n := strings.TrimPrefix(*b.Affinity, "host:")
+			n = strings.TrimPrefix(*b.Affinity, "host:")
 			c.nodesByBlock[blockCIDR] = n
+			if _, ok := c.blocksByNode[n]; !ok {
+				c.blocksByNode[n] = map[string]bool{}
+			}
+			c.blocksByNode[n][blockCIDR] = true
 		}
 	} else {
 		// Affinity may have been removed.
-		delete(c.nodesByBlock, blockCIDR)
+		if n, ok := c.nodesByBlock[blockCIDR]; ok {
+			delete(c.nodesByBlock, blockCIDR)
+			delete(c.blocksByNode[n], blockCIDR)
+		}
 	}
 
 	// Update allocations contributed from this block.
+	numAllocationsInBlock := 0
 	allocatedHandles := map[string]bool{}
 	for ord, idx := range b.Allocations {
 		if idx == nil {
 			// Not allocated.
 			continue
 		}
+		numAllocationsInBlock++
 		attr := b.Attributes[*idx]
 
 		// If there is no handle, then skip this IP. We need the handle
@@ -400,6 +415,13 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			c.allocationsByNode[node][handle] = &alloc
 		}
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
+	}
+
+	// If the block is empty, mark it as such. We'll check if it needs to be
+	// cleaned up in the sync loop.
+	delete(c.emptyBlocks, blockCIDR)
+	if n != "" && numAllocationsInBlock == 0 {
+		c.emptyBlocks[blockCIDR] = n
 	}
 
 	// Remove any previously assigned allocations that have since been released.
@@ -501,7 +523,65 @@ func (c *ipamController) updateMetrics() {
 	log.Debug("IPAM metrics updated")
 }
 
-// reviewIPAMState scans Calico IPAM and determines if any IPs appear to be leaks, and if any nodes should have their
+// checkEmptyBlocks looks at known empty blocks, and releases their affinity
+// if appropriate. A block is a candidate for having its affinity released if:
+// - The block is empty.
+// - The block's node has at least one other affine block.
+// - The other blocks on the node are not at capacity.
+func (c *ipamController) checkEmptyBlocks() error {
+	for blockCIDR, node := range c.emptyBlocks {
+		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": node})
+		nodeBlocks := c.blocksByNode[node]
+		if len(nodeBlocks) <= 1 {
+			continue
+		}
+
+		// The node has more than one block. Check that the other blocks allocated to this node
+		// are not at capacity. We only release blocks when there's room in the other affine blocks,
+		// otherwise the next IP allocation will just assign a new block to this node anyway.
+		numAddressesAvailableOnNode := 0
+		for b := range nodeBlocks {
+			if b == blockCIDR {
+				// Skip the known empty block.
+				continue
+			}
+
+			// Sum the number of unallocated addresses across the other blocks.
+			kvp := c.allBlocks[b]
+			numAddressesAvailableOnNode += len(kvp.Value.(*model.AllocationBlock).Unallocated)
+		}
+
+		// Make sure there are some addresses available before releasing.
+		if numAddressesAvailableOnNode < 3 {
+			logc.Debug("Block is still needed, skip release")
+			continue
+		}
+
+		// We can release the empty one.
+		logc.Infof("Releasing affinity for empty block (node has %d total blocks)", len(nodeBlocks))
+		_, cidr, err := cnet.ParseCIDR(blockCIDR)
+		if err != nil {
+			return err
+		}
+		err = c.client.IPAM().ReleaseAffinity(context.TODO(), *cidr, node, true)
+		if err != nil {
+			logc.WithError(err).Warn("unable or unwilling to release affinity for block")
+			continue
+		}
+
+		// Update internal state. We released affinity on an empty block, and so
+		// it will have been deleted. It's important that we update blocksByNode here
+		// in case there are other empty blocks allocated to the node so that we don't
+		// accidentally release all of the node's blocks.
+		delete(c.emptyBlocks, blockCIDR)
+		delete(c.blocksByNode[node], blockCIDR)
+		delete(c.nodesByBlock, blockCIDR)
+		delete(c.allBlocks, blockCIDR)
+	}
+	return nil
+}
+
+// checkAllocations scans Calico IPAM and determines if any IPs appear to be leaks, and if any nodes should have their
 // block affinities released.
 //
 // An IP allocation is a candidate for GC when:
@@ -517,7 +597,7 @@ func (c *ipamController) updateMetrics() {
 // - There are no longer any IP allocations on the node, OR
 // - The remaining IP allocations on the node are all determined to be leaked IP addresses.
 // TODO: We're effectively iterating every allocation in the cluster on every execution. Can we optimize? Or at least rate-limit?
-func (c *ipamController) reviewIPAMState() ([]string, error) {
+func (c *ipamController) checkAllocations() ([]string, error) {
 	// For each node present in IPAM, if it doesn't exist in the Kubernetes API then we
 	// should consider it a candidate for cleanup.
 	nodesAndAllocations := map[string]map[string]*allocation{}
@@ -734,7 +814,7 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 		for _, nw := range wep.Spec.IPNetworks {
 			ip, _, err := net.ParseCIDR(nw)
 			if err != nil {
-				logc.WithError(err).Error("Failed to parse wep IP, assume allocation is valid")
+				logc.WithError(err).Error("Failed to parse WEP IP, assume allocation is valid")
 				return true
 			}
 			allocIP := net.ParseIP(a.ip)
@@ -764,7 +844,7 @@ func (c *ipamController) syncIPAM() error {
 
 	// Check if any nodes in IPAM need to have affinities released.
 	log.Debug("Synchronizing IPAM data")
-	nodesToRelease, err := c.reviewIPAMState()
+	nodesToRelease, err := c.checkAllocations()
 	if err != nil {
 		return err
 	}
@@ -775,12 +855,18 @@ func (c *ipamController) syncIPAM() error {
 		return err
 	}
 
+	// Check if any empty blocks should be removed.
+	err = c.checkEmptyBlocks()
+	if err != nil {
+		return err
+	}
+
 	// Delete any nodes that we determined can be removed above.
 	var storedErr error
 	for _, cnode := range nodesToRelease {
 		logc := log.WithField("node", cnode)
 
-		// Potentially ratelimit node cleanup.
+		// Potentially rate limit node cleanup.
 		time.Sleep(c.rl.When(RateLimitCalicoDelete))
 		logc.Info("Cleaning up IPAM resources for deleted node")
 		if err := c.cleanupNode(cnode); err != nil {
@@ -799,7 +885,7 @@ func (c *ipamController) syncIPAM() error {
 	return nil
 }
 
-// garbageCollectIPs checks all known allocations and GCs any confirmed leaks.
+// garbageCollectIPs checks all known allocations and garbage collects any confirmed leaks.
 func (c *ipamController) garbageCollectIPs() error {
 	for handle, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
@@ -862,7 +948,7 @@ func (c *ipamController) nodeExists(knode string) bool {
 }
 
 // kubernetesNodeForCalico returns the name of the Kubernetes node that corresponds to this Calico node.
-// This function returns an empty string if no corresponding node coule be found.
+// This function returns an empty string if no corresponding node could be found.
 // Returns ErrorNotKubernetes if the given Calico node is not a Kubernetes node.
 func (c *ipamController) kubernetesNodeForCalico(cnode string) (string, error) {
 	// Check if we have the node name cached.
@@ -894,7 +980,7 @@ func ordinalToIP(b *model.AllocationBlock, ord int) net.IP {
 }
 
 // podUpdate is an internal struct used to send information about new, updated,
-// or deleted pods to the main worker goroutine in respsonse to calls from the
+// or deleted pods to the main worker goroutine in response to calls from the
 // informer.
 type podUpdate struct {
 	key string
@@ -906,7 +992,7 @@ type pauseRequest struct {
 	// pauseConfirmed is sent a signal when the main loop is paused.
 	pauseConfirmed chan struct{}
 
-	// doneChan can be used to un-pause the main loop.
+	// doneChan can be used to resume the main loop.
 	doneChan chan struct{}
 }
 
