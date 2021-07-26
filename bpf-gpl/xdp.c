@@ -102,6 +102,17 @@ deny:
 	return XDP_DROP;
 }
 
+/* This program contains "default" implementations of the policy program
+ * which ip will load for us when we're attaching a program to a xdp hook.
+ * This allows us to control the behaviour in the window before Felix replaces
+ * the policy program with its generated version.*/
+__attribute__((section("1/0")))
+int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
+{
+	CALI_DEBUG("Entering normal policy tail call: PASS\n");
+	return XDP_PASS;
+}
+
 __attribute__((section("1/1")))
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
@@ -113,7 +124,6 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
 		CALI_DEBUG("Failed to set metadata for TC\n");
 	}
-
 	return XDP_PASS;
 }
 

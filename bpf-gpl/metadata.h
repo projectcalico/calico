@@ -22,7 +22,7 @@
  * The struct must be 4 byte aligned, based on
  * samples/bpf/xdp2skb_meta_kern.c code in the Kernel source. */
 struct cali_metadata {
-	// Flags from parsing_metadata_flags
+	// Flags from cali_metadata_flags
 	__u32  flags;
 }__attribute__((aligned(4)));
 
