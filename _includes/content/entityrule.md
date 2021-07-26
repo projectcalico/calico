@@ -17,6 +17,7 @@ Selectors can match [workload endpoints]({{ site.baseurl }}/reference/resources/
 | ports | Positive match on the specified ports | | list of [ports](#ports) | |
 | notPorts | Negative match on the specified ports | | list of [ports](#ports) | |
 | serviceAccounts | Match endpoints running under service accounts. If a `namespaceSelector` is also defined, the set of service accounts this applies to is limited to the service accounts in the selected namespaces. | | [ServiceAccountMatch](#serviceaccountmatch) | |
+| services | Match the specified service(s). If specified, no other selection criteria can be set. Only valid on egress rule destinations. | | [ServiceMatch](#servicematch) | |
 
 When using selectors in network policy, remember that selectors only match (known) resources, but _rules_ match
 packets. A rule with a selector `all()` won't match "all packets", it will match "packets from all in-scope 
