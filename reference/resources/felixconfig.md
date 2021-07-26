@@ -102,7 +102,7 @@ spec:
 | wireguardMTU                       | MTU set on the WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
 | wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
 | xdpRefreshInterval                 | Period at which Felix re-checks the XDP state in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable XDP refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
-| xdpEnabled                         | Enable XDP acceleration for host endpoint policies. [Default: `true`] | true,false | boolean | `true` |
+| xdpEnabled                         | When `bpfEnabled` is `false`: enable XDP acceleration for host endpoint policies.  When `bpfEnabled` is `true`, XDP is automatically used for Calico policy where that makes sense, regardless of this setting.  [Default: `true`] | true,false | boolean | `true` |
 | bpfEnabled                         | Enable eBPF dataplane mode.  eBPF mode has some limitations, see the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for more details. | true, false | boolean | false |
 | bpfDisableUnprivileged             | If true, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with the ones that {{site.prodname}} installs. | true, false | boolean | true |
 | bpfLogLevel                        | In eBPF dataplane mode, the log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`. | Off,Info,Debug | string | Off |
@@ -115,6 +115,14 @@ spec:
 | routeSource                        | Where Felix gets is routing information from for VXLAN and the BPF dataplane. The CalicoIPAM setting is more efficient because it supports route aggregation, but it only works when Calico's IPAM or host-local IPAM is in use. Use the WorkloadIPs setting if you are using Calico's VXLAN or BPF dataplane and not using Calico IPAM or host-local IPAM. | CalicoIPAM,WorkloadIPs | string | `CalicoIPAM` |
 | mtuIfacePattern                    | Pattern used to discover the host's interface for MTU auto-detection. | regex | string | `^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)` |
 
+<br>
+
+`genericXDPEnabled` and `xdpRefreshInterval` are only relevant when `bpfEnabled` is `false` and
+`xdpEnabled` is `true`; in other words when XDP is being used to accelerate denial-of-service
+preventation policies in the iptables dataplane.
+
+When `bpfEnabled` is `true` the "xdp" settings all have no effect; in BPF mode the implementation of
+policy is always accelerated, using the best available BPF technology.
 
 #### ProtoPort
 
