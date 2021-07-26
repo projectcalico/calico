@@ -252,6 +252,9 @@ message Rule {
   repeated string src_ip_set_ids = 10;
   repeated string dst_ip_set_ids = 11;
 
+  // IP sets on which we should match both IP and port.
+  repeated string dst_ip_port_set_ids = 15;
+
   Protocol not_protocol = 102;
 
   repeated string not_src_net = 103;
@@ -275,6 +278,10 @@ message Rule {
   string original_dst_namespace_selector = 117;
   string original_not_src_selector = 118;
   string original_not_dst_selector = 119;
+
+  // Original destination service match criteria.
+  string original_dst_service = 130;
+  string original_dst_service_namespace = 131;
 
   // Pass through of the v3 datamodel service account match criteria.
   ServiceAccountMatch src_service_account_match = 120;

@@ -28,7 +28,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-
 	"github.com/projectcalico/felix/config"
 	windataplane "github.com/projectcalico/felix/dataplane/windows"
 	"github.com/projectcalico/felix/dataplane/windows/hns"

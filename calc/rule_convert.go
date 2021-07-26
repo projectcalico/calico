@@ -103,6 +103,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		DstNamedPortIpSetIds: in.DstNamedPortIPSetIDs,
 		SrcIpSetIds:          in.SrcIPSetIDs,
 		DstIpSetIds:          in.DstIPSetIDs,
+		DstIpPortSetIds:      in.DstIPPortSetIDs,
 
 		NotProtocol:             protocolToProtoProtocol(in.NotProtocol),
 		NotSrcNet:               ipNetsToProtoStrings(in.NotSrcNets),
@@ -121,6 +122,8 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		OriginalDstNamespaceSelector: in.OriginalDstNamespaceSelector,
 		OriginalNotSrcSelector:       in.OriginalNotSrcSelector,
 		OriginalNotDstSelector:       in.OriginalNotDstSelector,
+		OriginalDstService:           in.OriginalDstService,
+		OriginalDstServiceNamespace:  in.OriginalDstServiceNamespace,
 	}
 
 	if len(in.OriginalSrcServiceAccountNames) > 0 || in.OriginalSrcServiceAccountSelector != "" {
