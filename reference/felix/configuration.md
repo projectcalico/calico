@@ -152,7 +152,6 @@ See the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for step
 | BPFKubeProxyIptablesCleanupEnabled / <br/> FELIX_BPFKUBEPROXYIPTABLESCLEANUPENABLED   | Controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. | true,false| true |
 | BPFKubeProxyMinSyncPeriod          / <br/> FELIX_BPFKUBEPROXYMINSYNCPERIOD            | Controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | seconds | `1` |
 | BPFKubeProxyEndpointSlicesEnabled  / <br/> FELIX_BPFKUBEPROXYENDPOINTSLICESENABLED    | Controls whether Felix's embedded kube-proxy derives its services from Kubernetes' EndpointSlices resources. Using EndpointSlices is more efficient but it requires EndpointSlices support to be enabled at the Kubernetes API server. | true,false | false |
-| XDPEnabled                         / <br/> FELIX_XDPENABLED                           | Implement Calico untracked (aka DoNotTrack) policy (using XDP). [Default: `true`] | boolean |
 
 #### Kubernetes-specific configuration
 
