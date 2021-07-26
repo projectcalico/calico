@@ -36,6 +36,8 @@ section:
     path: /security/policy-rules-overview
   - title: Namespace rules
     path: /security/namespace-policy
+  - title: Service rules
+    path: /security/service-policy
   - title: Service accounts rules
     path: /security/service-accounts
   - title: External IPs or networks rules
