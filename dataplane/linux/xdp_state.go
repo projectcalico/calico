@@ -1470,6 +1470,7 @@ func isValidRuleForXDP(rule *proto.Rule) bool {
 		len(rule.DstPorts) == 0 &&
 		len(rule.DstNamedPortIpSetIds) == 0 &&
 		len(rule.DstIpSetIds) == 0 &&
+		len(rule.DstIpPortSetIds) == 0 &&
 		len(rule.NotDstNet) == 0 &&
 		len(rule.NotDstPorts) == 0 &&
 		len(rule.NotDstIpSetIds) == 0 &&

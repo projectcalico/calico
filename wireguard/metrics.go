@@ -19,10 +19,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/projectcalico/felix/netlinkshim"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+	"github.com/projectcalico/felix/netlinkshim"
 )
 
 const (
@@ -75,7 +76,7 @@ func (collector *Metrics) Describe(d chan<- *prometheus.Desc) {
 	}
 }
 
-func (collector *Metrics) descsByDevice(d chan<- *prometheus.Desc, device *wgtypes.Device){
+func (collector *Metrics) descsByDevice(d chan<- *prometheus.Desc, device *wgtypes.Device) {
 	if device == nil {
 		collector.logCtx.Error("BUG: called descsByDevice with nil device")
 		return
@@ -100,8 +101,8 @@ func (collector *Metrics) descByPeer(d chan<- *prometheus.Desc, peer *wgtypes.Pe
 
 	labels := collector.defaultLabelValues("pub", peerServiceLabelValues(peer))
 	for fqName, help := range map[string]string{
-		wireguardBytesRcvdFQName: wireguardBytesRcvdHelpText,
-		wireguardBytesSentFQName: wireguardBytesSentHelpText,
+		wireguardBytesRcvdFQName:               wireguardBytesRcvdHelpText,
+		wireguardBytesSentFQName:               wireguardBytesSentHelpText,
 		wireguardLatestHandshakeIntervalFQName: wireguardLatestHandshakeIntervalHelpText,
 	} {
 		d <- prometheus.NewDesc(fqName, help, nil, labels)

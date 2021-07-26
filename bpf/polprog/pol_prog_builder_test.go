@@ -51,6 +51,7 @@ func TestPolicySanityCheck(t *testing.T) {
 						Icmp:                    &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}},
 						SrcIpSetIds:             []string{setID("s:sbcdef1234567890")},
 						DstIpSetIds:             []string{setID("s:dbcdef1234567890")},
+						DstIpPortSetIds:         []string{setID("svc:abcdefg1234567")},
 						NotProtocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "UDP"}},
 						NotSrcNet:               []string{"12.0.0.0/8"},
 						NotSrcPorts:             []*proto.PortRange{{First: 5000, Last: 5000}},

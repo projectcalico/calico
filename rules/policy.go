@@ -620,6 +620,15 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}).Debug("Adding dst IP set match")
 	}
 
+	for _, ipsetID := range pRule.DstIpPortSetIds {
+		ipsetName := nameForIPSet(ipsetID)
+		match = match.DestIPPortSet(ipsetName)
+		logCxt.WithFields(log.Fields{
+			"ipsetID":   ipsetID,
+			"ipSetName": ipsetName,
+		}).Debug("Adding dst IP+port set match")
+	}
+
 	if len(pRule.DstPorts) > 0 {
 		logCxt.WithFields(log.Fields{
 			"ports": pRule.SrcPorts,

@@ -106,6 +106,8 @@ var knownProtoRuleFields = set.From(
 	"OriginalDstNamespaceSelector",
 	"OriginalNotSrcSelector",
 	"OriginalNotDstSelector",
+	"OriginalDstService",
+	"OriginalDstServiceNamespace",
 	"DstServiceAccountMatch",
 	"SrcNet",
 	"SrcPorts",
@@ -116,6 +118,7 @@ var knownProtoRuleFields = set.From(
 	"SrcServiceAccountMatch",
 	"HttpMatch",
 	"Metadata",
+	"DstIpPortSetIds",
 )
 
 func testAllProtoRuleFieldsAreKnown() {

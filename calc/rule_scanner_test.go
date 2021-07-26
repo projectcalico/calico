@@ -159,6 +159,15 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 		model.Rule{Metadata: &model.RuleMetadata{Annotations: map[string]string{"key": "value"}}},
 		ParsedRule{Metadata: &model.RuleMetadata{Annotations: map[string]string{"key": "value"}}}),
 
+	// Services.
+	Entry("dest service",
+		model.Rule{DstService: "svc", DstServiceNamespace: "default"},
+		ParsedRule{
+			DstIPPortSetIDs:             []string{"svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg"},
+			OriginalDstService:          "svc",
+			OriginalDstServiceNamespace: "default",
+		}),
+
 	// Tags/Selectors.
 	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),
 	Entry("dest tag", model.Rule{DstTag: "tag1"}, ParsedRule{DstIPSetIDs: []string{tag1ID}}),
@@ -260,13 +269,23 @@ var _ = Describe("ParsedRule", func() {
 		prType := reflect.TypeOf(ParsedRule{})
 		numPRFields := prType.NumField()
 		prFields := set.New()
+
+		// Build a set of ParsedRule fields, minus the IPSetIDs variants.
 		for i := 0; i < numPRFields; i++ {
 			name := prType.Field(i).Name
-			if strings.Contains(name, "IPSetIDs") {
+			if strings.Contains(name, "IPSetIDs") || strings.Contains(name, "IPPortSetIDs") {
+				continue
+			}
+			if name == "OriginalDstService" || name == "OriginalDstServiceNamespace" {
+				// These don't exist on the model.Rule, as there is no translation done
+				// on the Service / ServiceNamespace fields that requires them.
 				continue
 			}
 			prFields.Add(name)
 		}
+
+		// Build a set of model.Rule fields, excluding
+		// those which aren't copied through to the ParsedRule.
 		mrType := reflect.TypeOf(model.Rule{})
 		numMRFields := mrType.NumField()
 		mrFields := set.New()
@@ -279,12 +298,19 @@ var _ = Describe("ParsedRule", func() {
 					!strings.Contains(name, "Service")) {
 				continue
 			}
+			if name == "DstService" || name == "DstServiceNamespace" {
+				// Service name and namespace are rendered on the ParsedRule
+				// as IPPortIPSetIDs.
+				continue
+			}
 			if strings.HasSuffix(name, "Net") {
 				// Deprecated XXXNet fields.
 				continue
 			}
 			mrFields.Add(name)
 		}
+
+		// Expect the two sets to match (minus the differences from above).
 		Expect(prFields.Len()).To(BeNumerically(">", 0))
 		Expect(prFields).To(Equal(mrFields))
 	})
@@ -351,10 +377,18 @@ func (ur *scanUpdateRecorder) OnProfileInactive(key model.ProfileRulesKey) {
 }
 
 func (ur *scanUpdateRecorder) ipSetActive(ipSet *IPSetData) {
+	if ipSet.Service != "" {
+		// Not a selector-based set.
+		return
+	}
 	ur.activeSelectors.Add(ipSet.Selector.String())
 }
 
 func (ur *scanUpdateRecorder) ipSetInactive(ipSet *IPSetData) {
+	if ipSet.Service != "" {
+		// Not a selector-based set.
+		return
+	}
 	ur.activeSelectors.Discard(ipSet.Selector.String())
 }
 

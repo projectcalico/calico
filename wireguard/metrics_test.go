@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package wireguard_test
 
 import (
@@ -27,10 +26,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/netlinkshim"
 	"github.com/projectcalico/felix/wireguard"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 var _ netlinkshim.Wireguard = (*wireguardDevicesOnly)(nil)
@@ -54,7 +54,7 @@ func newMockPeeredWireguardDevice(privateKey wgtypes.Key, peers []*wgtypes.Peer)
 
 type mockPeerInfo struct {
 	privKey wgtypes.Key
-	peer *wgtypes.Peer
+	peer    *wgtypes.Peer
 }
 
 func mustPrivateKey() wgtypes.Key {
@@ -65,12 +65,11 @@ func mustPrivateKey() wgtypes.Key {
 	return pk
 }
 
-
 func mustNewMockPeer(ipAddr string, port int) *mockPeerInfo {
 	privKey := mustPrivateKey()
 	peer := &wgtypes.Peer{
-		PublicKey: privKey.PublicKey(),
-		Endpoint: &net.UDPAddr{IP: ip.FromString(ipAddr).AsNetIP(), Port: port},
+		PublicKey:       privKey.PublicKey(),
+		Endpoint:        &net.UDPAddr{IP: ip.FromString(ipAddr).AsNetIP(), Port: port},
 		ProtocolVersion: 4,
 	}
 
@@ -113,14 +112,13 @@ func (w *wireguardDevicesOnly) generatePeerTraffic(rx, tx int64) time.Time {
 	return ts
 }
 
-
 var _ = Describe("wireguard metrics", func() {
 
 	var wgStats *wireguard.Metrics
 	var wgClient *wireguardDevicesOnly
 	var mockPeers []*mockPeerInfo
 	const (
-		hostname = "l0c4lh057"
+		hostname                 = "l0c4lh057"
 		defaultRateLimitInterval = time.Second * 5
 	)
 
@@ -169,7 +167,6 @@ var _ = Describe("wireguard metrics", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(mfs).To(HaveLen(4))
 
-
 		By("comparing text output")
 		buf := &bytes.Buffer{}
 		for _, mf := range mfs {
@@ -177,16 +174,14 @@ var _ = Describe("wireguard metrics", func() {
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-
-
 		data := map[string]interface{}{
-			"pubkey": mockPeers[0].peer.PublicKey.String(),
-			"peerkey": mockPeers[1].peer.PublicKey.String(),
-			"endpoint": mockPeers[1].peer.Endpoint.String(),
-			"hostname": hostname,
-			"iface": wgClient.name,
+			"pubkey":     mockPeers[0].peer.PublicKey.String(),
+			"peerkey":    mockPeers[1].peer.PublicKey.String(),
+			"endpoint":   mockPeers[1].peer.Endpoint.String(),
+			"hostname":   hostname,
+			"iface":      wgClient.name,
 			"listenport": wgClient.listenPort,
-			"ts": float64(ts.Unix()),
+			"ts":         float64(ts.Unix()),
 		}
 
 		tmpl := template.Must(
@@ -226,7 +221,6 @@ wireguard_meta{hostname="{{.hostname}}",iface="{{.iface}}",listen_port="{{.liste
 		wgClient.generatePeerTraffic(512, 512)
 		mfs, err := registry.Gather()
 		Expect(err).ToNot(HaveOccurred())
-
 
 		By("checking if there are no metrics at all since it is unregistered")
 		Expect(mfs).To(HaveLen(0))

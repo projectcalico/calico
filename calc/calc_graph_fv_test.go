@@ -388,6 +388,11 @@ var baseTests = []StateList{
 		nodesWithDifferentAddressTypes,
 		nodesWithMoreIPsDeleted,
 	},
+	{
+		// Service NetworkPolicy basic case.
+		endpointSliceAndLocalWorkload,
+		endpointSliceActive,
+	},
 }
 
 var logOnce sync.Once

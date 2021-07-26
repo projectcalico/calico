@@ -109,6 +109,7 @@ func addIPSetsRuleList(rl ruleList, s map[string]bool) {
 func AddIPSetsRule(r *proto.Rule, s map[string]bool) {
 	addAll(r.SrcIpSetIds, s)
 	addAll(r.DstIpSetIds, s)
+	addAll(r.DstIpPortSetIds, s)
 	addAll(r.SrcNamedPortIpSetIds, s)
 	addAll(r.DstNamedPortIpSetIds, s)
 	addAll(r.NotSrcIpSetIds, s)
