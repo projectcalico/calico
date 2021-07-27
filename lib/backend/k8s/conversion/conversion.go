@@ -238,7 +238,7 @@ func (c converter) EndpointSliceToKVP(slice *discovery.EndpointSlice) (*model.KV
 			Namespace: slice.Namespace,
 			Kind:      model.KindKubernetesEndpointSlice,
 		},
-		Value:    slice,
+		Value:    slice.DeepCopy(),
 		Revision: slice.ResourceVersion,
 	}, nil
 }
