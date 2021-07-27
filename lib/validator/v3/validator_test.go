@@ -402,12 +402,12 @@ func init() {
 		Entry("should reject an invalid BGP logging level: info", api.BGPConfigurationSpec{LogSeverityScreen: "info"}, false),
 		Entry("should reject an invalid BGP logging level: INFO", api.BGPConfigurationSpec{LogSeverityScreen: "INFO"}, false),
 		Entry("should reject an invalid BGP logging level: invalidLvl", api.BGPConfigurationSpec{LogSeverityScreen: "invalidLvl"}, false),
-		Entry("should accept a valid BGP clusterIPs: 1.2.3.4", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{"1.2.3.4"}}}, true),
-		Entry("should accept a valid BGP externalIPs: 8.8.8.8", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{"8.8.8.8"}}}, true),
-		Entry("should reject invalid BGP clusterIPs: x.x.x.x", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{"x.x.x.x"}}}, false),
-		Entry("should reject invalid BGP externalIPs: x.x.x.x", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{"y.y.y.y"}}}, false),
-		Entry("should accept valid IPv6 BGP clusterIP", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{"fdf5:1234::102:304"}}}, true),
-		Entry("should accept valid IPv6 BGP externalIP", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{"fdf5:1234::808:808"}}}, true),
+		Entry("should accept a valid BGP clusterIPs: 1.2.3.4", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{CIDR: "1.2.3.4"}}}, true),
+		Entry("should accept a valid BGP externalIPs: 8.8.8.8", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{CIDR: "8.8.8.8"}}}, true),
+		Entry("should reject invalid BGP clusterIPs: x.x.x.x", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{CIDR: "x.x.x.x"}}}, false),
+		Entry("should reject invalid BGP externalIPs: x.x.x.x", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{CIDR: "y.y.y.y"}}}, false),
+		Entry("should accept valid IPv6 BGP clusterIP", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{CIDR: "fdf5:1234::102:304"}}}, true),
+		Entry("should accept valid IPv6 BGP externalIP", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{CIDR: "fdf5:1234::808:808"}}}, true),
 
 		// (API) IP version.
 		Entry("should accept IP version 4", api.Rule{Action: "Allow", IPVersion: &V4}, true),
@@ -1414,7 +1414,7 @@ func init() {
 
 		// BGPPeer MaxRestartTime
 		Entry("BGPPeer with valid MaxRestartTime", api.BGPPeerSpec{
-			MaxRestartTime: &v1.Duration{10 * time.Second},
+			MaxRestartTime: &v1.Duration{Duration: 10 * time.Second},
 		}, true),
 
 		// (API) NodeSpec
@@ -2150,6 +2150,60 @@ func init() {
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								NamespaceSelector: "x == 'y'",
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("allow a Service match on a GNP",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match without a namespace on a GNP",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								Services: &api.ServiceMatch{
+									Name: "service1",
+								},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a Service match AND a NamespaceSelector match on a GNP",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
 					Ingress: []api.Rule{
 						{
 							Action: "Allow",
