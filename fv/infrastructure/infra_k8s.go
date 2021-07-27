@@ -977,6 +977,10 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 			panic(err)
 		}
 		for _, s := range services.Items {
+			if s.Name == "kubernetes" {
+				// Skip cleaning up the Kubernetes API service.
+				continue
+			}
 			err := serviceInterface.Delete(context.Background(), s.Name, metav1.DeleteOptions{})
 			if err != nil {
 				panic(err)
@@ -988,6 +992,10 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 			panic(err)
 		}
 		for _, ep := range endpoints.Items {
+			if ep.Name == "kubernetes" {
+				// Skip cleaning up the Kubernetes API service.
+				continue
+			}
 			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
 			if err != nil {
 				panic(err)
