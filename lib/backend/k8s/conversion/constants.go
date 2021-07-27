@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,10 @@ const (
 	AnnotationPodIP = "cni.projectcalico.org/podIP"
 	// AnnotationPodIPs is similar for the plural PodIPs field.
 	AnnotationPodIPs = "cni.projectcalico.org/podIPs"
+	// AnnotationContainerID stores the container ID of the pod.  This allows us to disambiguate different pods
+	// that have the same name and namespace.  For example, stateful set pod that is restarted.  May be missing
+	// on older Pods.
+	AnnotationContainerID = "cni.projectcalico.org/containerID"
 
 	// NameLabel is a label that can be used to match a serviceaccount or namespace
 	// name exactly.

@@ -124,7 +124,8 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						Namespace: "testNamespace",
 					},
 					Spec: libapiv3.WorkloadEndpointSpec{
-						IPNetworks: []string{"192.168.91.117/32", "192.168.91.118/32"},
+						ContainerID: "abcde12345",
+						IPNetworks:  []string{"192.168.91.117/32", "192.168.91.118/32"},
 					},
 				}
 
@@ -143,8 +144,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
-					conversion.AnnotationPodIP:  "192.168.91.117/32",
-					conversion.AnnotationPodIPs: "192.168.91.117/32,192.168.91.118/32",
+					conversion.AnnotationPodIP:       "192.168.91.117/32",
+					conversion.AnnotationPodIPs:      "192.168.91.117/32,192.168.91.118/32",
+					conversion.AnnotationContainerID: "abcde12345",
 				}))
 			})
 		})
@@ -227,7 +229,8 @@ var _ = Describe("WorkloadEndpointClient", func() {
 						Namespace: "testNamespace",
 					},
 					Spec: libapiv3.WorkloadEndpointSpec{
-						IPNetworks: []string{"192.168.91.117/32", "192.168.91.118/32"},
+						IPNetworks:  []string{"192.168.91.117/32", "192.168.91.118/32"},
+						ContainerID: "abcd1234",
 					},
 				}
 
@@ -246,8 +249,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
-					conversion.AnnotationPodIP:  "192.168.91.117/32",
-					conversion.AnnotationPodIPs: "192.168.91.117/32,192.168.91.118/32",
+					conversion.AnnotationPodIP:       "192.168.91.117/32",
+					conversion.AnnotationPodIPs:      "192.168.91.117/32,192.168.91.118/32",
+					conversion.AnnotationContainerID: "abcd1234",
 				}))
 			})
 		})
@@ -255,15 +259,16 @@ var _ = Describe("WorkloadEndpointClient", func() {
 
 	Describe("Delete", func() {
 		Context("WorkloadEndpoint has no IPs set", func() {
-			It("zeros out the cni.projectcalico.org/podIP and cni.projectcalico.org/podIPs annotations", func() {
+			It("zeros out the annotations", func() {
 				podUID := types.UID(uuid.NewString())
 				k8sClient := fake.NewSimpleClientset(&k8sapi.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "simplePod",
 						Namespace: "testNamespace",
 						Annotations: map[string]string{
-							conversion.AnnotationPodIP:  "192.168.91.117/32",
-							conversion.AnnotationPodIPs: "192.168.91.117/32,192.168.91.118/32",
+							conversion.AnnotationPodIP:       "192.168.91.117/32",
+							conversion.AnnotationPodIPs:      "192.168.91.117/32,192.168.91.118/32",
+							conversion.AnnotationContainerID: "abcde12345",
 						},
 						UID: podUID,
 					},
@@ -310,8 +315,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				pod, err := k8sClient.CoreV1().Pods("testNamespace").Get(ctx, "simplePod", metav1.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pod.GetAnnotations()).Should(Equal(map[string]string{
-					conversion.AnnotationPodIP:  "",
-					conversion.AnnotationPodIPs: "",
+					conversion.AnnotationPodIP:       "",
+					conversion.AnnotationPodIPs:      "",
+					conversion.AnnotationContainerID: "abcde12345",
 				}))
 			})
 		})
@@ -323,6 +329,9 @@ var _ = Describe("WorkloadEndpointClient", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "simplePod",
 					Namespace: "testNamespace",
+					Annotations: map[string]string{
+						conversion.AnnotationContainerID: "abcde12345",
+					},
 				},
 				Spec: k8sapi.PodSpec{
 					NodeName: "test-node",
@@ -368,6 +377,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 					Profiles:      []string{"kns.testNamespace"},
 					IPNetworks:    []string{},
 					InterfaceName: "caliedff4356bd6",
+					ContainerID:   "abcde12345",
 				},
 			}))
 		})
