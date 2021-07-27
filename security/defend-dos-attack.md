@@ -73,7 +73,7 @@ kind: GlobalNetworkSet
 metadata:
   name: dos-mitigation
   labels:
-    dos-deny-list == 'true'
+    dos-deny-list: 'true'
 spec:
   nets:
   - "1.2.3.4/32"
