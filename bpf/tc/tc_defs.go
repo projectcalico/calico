@@ -16,7 +16,7 @@ package tc
 
 const (
 	MarkCalico                       = 0xc0000000
-	MarkCalicoMask                   = 0xf0000000
+	MarkCalicoMask                   = 0xe0000000
 	MarkSeen                         = MarkCalico | 0x01000000
 	MarkSeenMask                     = MarkCalicoMask | MarkSeen
 	MarkSeenBypass                   = MarkSeen | 0x02000000

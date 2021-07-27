@@ -169,7 +169,7 @@ int cali_ctlb_recvmsg_v4(struct bpf_sock_addr *ctx)
 	}
 
 	__u64 cookie = bpf_get_socket_cookie(ctx);
-	CALI_DEBUG("Lookup: ip=%x port=%d(BE) cookie=%x",ctx->user_ip4, ctx->user_port, cookie);
+	CALI_DEBUG("Lookup: ip=%x port=%d(BE) cookie=%x\n",ctx->user_ip4, ctx->user_port, cookie);
 	struct sendrecv4_key key = {
 		.ip	= ctx->user_ip4,
 		.port	= ctx->user_port,
