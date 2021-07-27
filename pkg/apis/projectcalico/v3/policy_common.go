@@ -181,11 +181,11 @@ type EntityRule struct {
 
 type ServiceMatch struct {
 	// Name specifies the name of a Kubernetes Service to match.
-	Name string `json:"name,omitempty" validate:"omitempty"`
+	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
 	// Namespace specifies the namespace of the given Service. If left empty, the rule
 	// will match within this policy's namespace.
-	Namespace string `json:"namespace,omitempty" validate:"omitempty"`
+	Namespace string `json:"namespace,omitempty" validate:"omitempty,name"`
 }
 
 type ServiceAccountMatch struct {
