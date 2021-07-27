@@ -50,6 +50,7 @@ Options:
   -l --log-level=<level>  Set the log level (one of panic, fatal, error,
                           warn, info, debug) [default: panic]
   --context=<context>	    The name of the kubeconfig context to use.
+  --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   The calicoctl command line tool is used to manage Calico network and security
@@ -62,6 +63,9 @@ Description:
 
 
 > **Note:** In a multi cluster environment if you have a {% include open-new-window.html url="https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/" text="kubeconfig" %} file with multiple cluster contexts it is possible to directly change the context using calicoctl `--context` argument.
+{: .alert .alert-info}
+
+> **Note:** The versions for Calico and calicoctl should be the same and calls to calicoctl will fail if the versions do not match. If needed, this can be overridden by using the `--allow-version-mismatch` argument.
 {: .alert .alert-info}
 
 ## Top level command line options
