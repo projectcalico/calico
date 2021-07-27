@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	// Re-implement the model.KindKubernetesNetworkPolicy constant here
+	// Re-implement the model constants here
 	// to avoid an import loop.
 	KindKubernetesNetworkPolicy = "KubernetesNetworkPolicy"
+	KindKubernetesEndpointSlice = "KubernetesEndpointSlice"
 )
 
 func IsNamespaced(kind string) bool {
@@ -32,6 +33,10 @@ func IsNamespaced(kind string) bool {
 	case KindKubernetesNetworkPolicy:
 		// KindKubernetesNetworkPolicy is a special-case resource. We don't expose it over the
 		// v3 API, but it is used in the felix syncer to implement the Kubernetes NetworkPolicy API.
+		return true
+	case KindKubernetesEndpointSlice:
+		// KindKubernetesEndpointSlice is a special-case resource. We don't expose it over the
+		// v3 API, but it is used in the felix syncer.
 		return true
 	default:
 		return false
