@@ -251,7 +251,7 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 	kindPlural := r[0][1]
 	name := r[0][2]
 	if kindPlural != ri.plural {
-		log.Debugf("Didn't match kind %s != %s", kindPlural, kindPlural)
+		log.Debugf("Didn't match kind %s != %s", kindPlural, ri.plural)
 		return nil
 	}
 	if len(options.Name) != 0 {
