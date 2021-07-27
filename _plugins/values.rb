@@ -58,6 +58,7 @@ def gen_values(versions, imageNames, imageRegistry, chart)
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: FELIX_LOGSEVERITYSCREEN
         #   value: "debug"
+      sidecarContainers: []
     calicoctl:
       image: #{imageRegistry}#{imageNames.fetch("calicoctl")}
       tag: #{versions.fetch("calicoctl")}
@@ -69,6 +70,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: TYPHA_LOGSEVERITYSYS
         #   value: debug
+      tolerations: {}
+      resources: {}
+      sidecarContainers: []
     cni:
       image: #{imageRegistry}#{imageNames.fetch("cni")}
       tag: #{versions.fetch("calico/cni")}
@@ -85,6 +89,8 @@ def gen_values(versions, imageNames, imageRegistry, chart)
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: LOG_LEVEL
         #   value: debug
+      tolerations: {}
+      resources: {}
     flannel:
       image: #{imageNames.fetch("flannel")}
       tag: #{versions.fetch("flannel")}

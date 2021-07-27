@@ -55,6 +55,9 @@ spec:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
           operator: Exists
+{{- if .Values.typha.tolerations }}
+{{ toYaml .Values.typha.tolerations | indent 8 }}
+{{- end }}
       # Since Calico can't network a pod until Typha is up, we need to run Typha itself
       # as a host-networked pod.
       serviceAccountName: calico-node
@@ -134,7 +137,11 @@ spec:
             port: 9098
             host: localhost
           periodSeconds: 10
-
+        resources:
+{{ toYaml .Values.typha.resources | indent 12 }}
+{{- if .Values.typha.sidecarContainers }}
+{{- toYaml .Values.typha.sidecarContainers | nindent 6 }}
+{{- end }}
 ---
 
 # This manifest creates a Pod Disruption Budget for Typha to allow K8s Cluster Autoscaler to evict

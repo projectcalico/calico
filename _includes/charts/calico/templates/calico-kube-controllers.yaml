@@ -29,6 +29,9 @@ spec:
           operator: Exists
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
+{{- if .Values.kubeControllers.tolerations }}
+{{ toYaml .Values.kubeControllers.tolerations | indent 8 }}
+{{- end }}
       serviceAccountName: calico-kube-controllers
       priorityClassName: system-cluster-critical
 {{- if eq .Values.datastore "etcd" }}
@@ -87,6 +90,8 @@ spec:
               - /usr/bin/check-status
               - -r
             periodSeconds: 10
+      resources:
+{{ toYaml .Values.kubeControllers.resources | indent 12 }}
       volumes:
         # Mount in the etcd TLS secrets with mode 400.
         # See https://kubernetes.io/docs/concepts/configuration/secret/

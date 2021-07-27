@@ -537,6 +537,9 @@ spec:
               name: etcd-certs
   {{- end }}
 {{- end }}
+{{- if .Values.node.sidecarContainers }}
+{{- toYaml .Values.node.sidecarContainers | nindent 8 }}
+{{- end }}
       volumes:
         # Used by {{ include "nodeName" . }}.
         - name: lib-modules
