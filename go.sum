@@ -583,6 +583,8 @@ github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:J
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210723223347-37aee5973b82 h1:Ud2j9XqgrxSAT9XXVPnSMpJImL6912oH+3rJc2IOYQs=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210723223347-37aee5973b82/go.mod h1:ppp3k6x8TYJgwdKuU/lLtGOKUPlN8Lq7dW5HaHnFGbs=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210727154840-3c713ec37ff1 h1:EJRqIctBL5lid7XuFYEgvlJrZKq6oDW1+9Zk5gPVsX4=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210727154840-3c713ec37ff1/go.mod h1:ppp3k6x8TYJgwdKuU/lLtGOKUPlN8Lq7dW5HaHnFGbs=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20210715003609-86f5318f4023/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
