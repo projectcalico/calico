@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ func (c *WorkloadEndpointClient) Create(ctx context.Context, kvp *model.KVPair) 
 	// Note: it's a bit odd to do this in the Create, but the CNI plugin uses CreateOrUpdate().  Doing it
 	// here makes sure that, if the update fails: we retry here, and, we don't report success without
 	// making the patch.
-	return c.patchInPodIPs(ctx, kvp)
+	return c.patchInAnnotations(ctx, kvp)
 }
 
 func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -68,7 +68,7 @@ func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) 
 	// As a special case for the CNI plugin, try to patch the Pod with the IP that we've calculated.
 	// This works around a bug in kubelet that causes it to delay writing the Pod IP for a long time:
 	// https://github.com/kubernetes/kubernetes/issues/39113.
-	return c.patchInPodIPs(ctx, kvp)
+	return c.patchInAnnotations(ctx, kvp)
 }
 
 func (c *WorkloadEndpointClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -77,16 +77,17 @@ func (c *WorkloadEndpointClient) DeleteKVP(ctx context.Context, kvp *model.KVPai
 
 func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Debug("Delete for WorkloadEndpoint, patching out annotations.")
-	return c.patchOutPodIPs(ctx, key, revision, uid)
+	return c.patchOutAnnotations(ctx, key, revision, uid)
 }
 
-// patchInPodIPs PATCHes the Kubernetes Pod associated with the given KVPair with the IP addresses it contains.
+// patchInAnnotations PATCHes the Kubernetes Pod associated with the given KVPair with the IP addresses it contains.
 // This is a no-op if there is no IP address.
 //
 // We store the IP addresses in annotations because patching the PodStatus directly races with changes that
 // kubelet makes so kubelet can undo our changes.
-func (c *WorkloadEndpointClient) patchInPodIPs(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	ips := kvp.Value.(*libapiv3.WorkloadEndpoint).Spec.IPNetworks
+func (c *WorkloadEndpointClient) patchInAnnotations(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
+	ips := wep.Spec.IPNetworks
 	if len(ips) == 0 {
 		return kvp, nil
 	}
@@ -96,16 +97,20 @@ func (c *WorkloadEndpointClient) patchInPodIPs(ctx context.Context, kvp *model.K
 
 	// Note: we drop the revision here because the CNI plugin can't handle a retry right now (and the kubelet
 	// ensures that only one CNI ADD for a given UID can be in progress).
-	return c.patchPodIPAnnotations(ctx, key, "", kvp.UID, ips)
+	return c.patchPodAnnotations(ctx, key, "", kvp.UID, wep.Spec.ContainerID, ips)
 }
 
-// patchOutPodIPs sets our pod IP annotations to empty strings; this is used to signal that the IP has been removed
+// patchOutAnnotations sets our pod IP annotations to empty strings; this is used to signal that the IP has been removed
 // from the pod at teardown.
-func (c *WorkloadEndpointClient) patchOutPodIPs(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	return c.patchPodIPAnnotations(ctx, key, revision, uid, nil)
+func (c *WorkloadEndpointClient) patchOutAnnotations(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	// Passing "" for containerID means "don't touch".  Passing nil for IPs will result in all annotations being
+	// explicitly set to the empty string.  Setting the podIPs to empty string is used to signal that the CNI DEL
+	// has removed the IP from the Pod.  We leave the container ID in place to allow any repeat invocations of the
+	// CNI DEL to tell which instance of a Pod they are seeing.
+	return c.patchPodAnnotations(ctx, key, revision, uid, "", nil)
 }
 
-func (c *WorkloadEndpointClient) patchPodIPAnnotations(ctx context.Context, key model.Key, revision string, uid *types.UID, ips []string) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) patchPodAnnotations(ctx context.Context, key model.Key, revision string, uid *types.UID, containerID string, ips []string) (*model.KVPair, error) {
 	wepID, err := c.converter.ParseWorkloadEndpointName(key.(model.ResourceKey).Name)
 	if err != nil {
 		return nil, err
@@ -120,11 +125,15 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(ctx context.Context, key 
 	if len(ips) > 0 {
 		firstIP = ips[0]
 	}
-	patch, err := calculateAnnotationPatch(
-		revision, uid,
-		conversion.AnnotationPodIP, firstIP,
-		conversion.AnnotationPodIPs, strings.Join(ips, ","),
-	)
+	annotations := map[string]string{
+		conversion.AnnotationPodIP:  firstIP,
+		conversion.AnnotationPodIPs: strings.Join(ips, ","),
+	}
+	if containerID != "" {
+		log.WithField("containerID", containerID).Debug("Container ID specified, including in patch")
+		annotations[conversion.AnnotationContainerID] = containerID
+	}
+	patch, err := calculateAnnotationPatch(revision, uid, annotations)
 	if err != nil {
 		log.WithError(err).Error("failed to calculate Pod patch.")
 		return nil, err
@@ -144,16 +153,12 @@ func (c *WorkloadEndpointClient) patchPodIPAnnotations(ctx context.Context, key 
 	return kvps[0], nil
 }
 
-func calculateAnnotationPatch(revision string, uid *types.UID, namesAndValues ...string) ([]byte, error) {
+func calculateAnnotationPatch(revision string, uid *types.UID, annotations map[string]string) ([]byte, error) {
 	patch := map[string]interface{}{}
 	metadata := map[string]interface{}{}
 	patch["metadata"] = metadata
-	annotations := map[string]interface{}{}
 	metadata["annotations"] = annotations
 
-	for i := 0; i < len(namesAndValues); i += 2 {
-		annotations[namesAndValues[i]] = namesAndValues[i+1]
-	}
 	if revision != "" {
 		// We have a revision.  Since the revision is immutable, if our patch revision doesn't match then the
 		// patch will fail.
