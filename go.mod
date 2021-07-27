@@ -11,7 +11,7 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/projectcalico/api v0.0.0-20210721205409-e5769c6ea695
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210723223352-3a03a80830cb
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210727203459-ee7ab0f86bf2
 	github.com/prometheus/client_golang v1.4.0
 	github.com/sirupsen/logrus v1.4.2
 	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
