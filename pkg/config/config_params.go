@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
-
-	"time"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 )
@@ -115,12 +114,13 @@ type Config struct {
 
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 
-	ServerMaxMessageSize              int           `config:"int(1,);100"`
-	ServerMaxFallBehindSecs           time.Duration `config:"seconds;90"`
-	ServerMinBatchingAgeThresholdSecs time.Duration `config:"seconds;0.01"`
-	ServerPingIntervalSecs            time.Duration `config:"seconds;10"`
-	ServerPongTimeoutSecs             time.Duration `config:"seconds;60"`
-	ServerPort                        int           `config:"port;0"`
+	ServerMaxMessageSize                 int           `config:"int(1,);100"`
+	ServerMaxFallBehindSecs              time.Duration `config:"seconds;90"`
+	ServerNewClientFallBehindGracePeriod time.Duration `config:"seconds;90"`
+	ServerMinBatchingAgeThresholdSecs    time.Duration `config:"seconds;0.01"`
+	ServerPingIntervalSecs               time.Duration `config:"seconds;10"`
+	ServerPongTimeoutSecs                time.Duration `config:"seconds;60"`
+	ServerPort                           int           `config:"port;0"`
 
 	// Server-side TLS config for Typha's communication with Felix.  If any of these are
 	// specified, they _all_ must be - except that either ClientCN or ClientURISAN may be left

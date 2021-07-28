@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,6 +57,11 @@ var (
 		Name: "typha_connections_dropped",
 		Help: "Total number of connections dropped due to rebalancing.",
 	})
+	counterGracePeriodUsed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "typha_connections_grace_used",
+		Help: "Total number of connections that made use of the grace period to catch up after sending the initial " +
+			"snapshot.",
+	})
 	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "typha_connections_active",
 		Help: "Number of open client connections.",
@@ -93,6 +98,7 @@ var (
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
 	prometheus.MustRegister(counterNumConnectionsDropped)
+	prometheus.MustRegister(counterGracePeriodUsed)
 	prometheus.MustRegister(gaugeNumConnections)
 	prometheus.MustRegister(summarySnapshotSendTime)
 	prometheus.MustRegister(summaryClientLatency)
@@ -103,13 +109,14 @@ func init() {
 }
 
 const (
-	defaultMaxMessageSize       = 100
-	defaultMaxFallBehind        = 90 * time.Second
-	defaultBatchingAgeThreshold = 100 * time.Millisecond
-	defaultPingInterval         = 10 * time.Second
-	defaultDropInterval         = 1 * time.Second
-	defaultMaxConns             = math.MaxInt32
-	PortRandom                  = -1
+	defaultMaxMessageSize                 = 100
+	defaultMaxFallBehind                  = 90 * time.Second
+	defaultNewClientFallBehindGracePeriod = 90 * time.Second
+	defaultBatchingAgeThreshold           = 100 * time.Millisecond
+	defaultPingInterval                   = 10 * time.Second
+	defaultDropInterval                   = 1 * time.Second
+	defaultMaxConns                       = math.MaxInt32
+	PortRandom                            = -1
 )
 
 type Server struct {
@@ -133,20 +140,21 @@ type BreadcrumbProvider interface {
 }
 
 type Config struct {
-	Port                    int
-	MaxMessageSize          int
-	MaxFallBehind           time.Duration
-	MinBatchingAgeThreshold time.Duration
-	PingInterval            time.Duration
-	PongTimeout             time.Duration
-	DropInterval            time.Duration
-	MaxConns                int
-	HealthAggregator        *health.HealthAggregator
-	KeyFile                 string
-	CertFile                string
-	CAFile                  string
-	ClientCN                string
-	ClientURISAN            string
+	Port                           int
+	MaxMessageSize                 int
+	MaxFallBehind                  time.Duration
+	NewClientFallBehindGracePeriod time.Duration
+	MinBatchingAgeThreshold        time.Duration
+	PingInterval                   time.Duration
+	PongTimeout                    time.Duration
+	DropInterval                   time.Duration
+	MaxConns                       int
+	HealthAggregator               *health.HealthAggregator
+	KeyFile                        string
+	CertFile                       string
+	CAFile                         string
+	ClientCN                       string
+	ClientURISAN                   string
 }
 
 const (
@@ -168,6 +176,13 @@ func (c *Config) ApplyDefaults() {
 			"default": defaultMaxFallBehind,
 		}).Info("Defaulting MaxFallBehind.")
 		c.MaxFallBehind = defaultMaxFallBehind
+	}
+	if c.NewClientFallBehindGracePeriod <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.NewClientFallBehindGracePeriod,
+			"default": defaultNewClientFallBehindGracePeriod,
+		}).Info("Defaulting MaxFallBehind.")
+		c.NewClientFallBehindGracePeriod = defaultNewClientFallBehindGracePeriod
 	}
 	if c.MinBatchingAgeThreshold <= 0 {
 		log.WithFields(log.Fields{
@@ -715,6 +730,8 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 		log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
 		return
 	}
+	// Finished sending the snapshot, calculate the grace time for the client to catch up to a recent breadcrumb.
+	gracePeriodEndTime := time.Now().Add(h.config.NewClientFallBehindGracePeriod)
 
 	// Track the sync status reported in each Breadcrumb so we can send an update if it changes.
 	var lastSentStatus api.SyncStatus
@@ -739,6 +756,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 		return
 	}
 
+	loggedClientBehind := false
 	for h.cxt.Err() == nil {
 		// Wait for new Breadcrumbs.  If we're behind, we'll coalesce the deltas from multiple Breadcrumbs
 		// before exiting the loop.
@@ -767,12 +785,43 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 
 			// Check if we're too far behind the latest Breadcrumb.
 			if crumbAge > h.config.MaxFallBehind {
+				// Allow extra time for new clients to catch up after sending the snapshot.  If the snapshot was
+				// very large and clients are slow for some reason then we don't want to get stuck in a loop where
+				// clients connect, grab the snapshot, immediately end up behind and get disconnected.
+				//
+				// This has a secondary effect: under extreme overload where clients are falling behind we give
+				// them a grace period to apply the updates to the dataplane before we cut them off.  That means that
+				// Felix will still make progress even though it's restarting, albeit with 90+s between dataplane
+				// updates.
+				if time.Now().After(gracePeriodEndTime) {
+					logCxt.WithFields(log.Fields{
+						"snapAge":        crumbAge,
+						"mySeqNo":        breadcrumb.SequenceNumber,
+						"latestSeqNo":    latestCrumb.SequenceNumber,
+						"mySnapshotSize": breadcrumb.KVs.Size(),
+					}).Warn("Client fell behind. Disconnecting.")
+					return
+				} else if !loggedClientBehind {
+					logCxt.WithFields(log.Fields{
+						"snapAge":        crumbAge,
+						"mySeqNo":        breadcrumb.SequenceNumber,
+						"latestSeqNo":    latestCrumb.SequenceNumber,
+						"gracePeriod":    h.config.NewClientFallBehindGracePeriod,
+						"mySnapshotSize": breadcrumb.KVs.Size(),
+					}).Warn("Client is a long way behind after sending snapshot; " +
+						"allowing grace period for it to catch up.")
+					loggedClientBehind = true
+					counterGracePeriodUsed.Add(1.0)
+				}
+			} else if loggedClientBehind && time.Now().After(gracePeriodEndTime) {
+				// Client caught up after being behind when we sent it a snapshot.
 				logCxt.WithFields(log.Fields{
-					"snapAge":     crumbAge,
-					"mySeqNo":     breadcrumb.SequenceNumber,
-					"latestSeqNo": latestCrumb.SequenceNumber,
-				}).Warn("Client fell behind. Disconnecting.")
-				return
+					"snapAge":        crumbAge,
+					"mySeqNo":        breadcrumb.SequenceNumber,
+					"latestSeqNo":    latestCrumb.SequenceNumber,
+					"mySnapshotSize": breadcrumb.KVs.Size(),
+				}).Info("Client was behind after sending snapshot but it has now caught up.")
+				loggedClientBehind = false // Avoid logging the "caught up" log on every loop.
 			}
 
 			if crumbAge < h.config.MinBatchingAgeThreshold && deltas == nil {

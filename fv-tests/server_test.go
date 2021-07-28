@@ -978,6 +978,217 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 	})
 })
 
+var _ = Describe("With an in-process Server with short grace period", func() {
+	var (
+		cacheCxt     context.Context
+		cacheCancel  context.CancelFunc
+		cache        *snapcache.Cache
+		server       *syncserver.Server
+		serverCxt    context.Context
+		serverCancel context.CancelFunc
+		serverAddr   string
+		updIdx       int
+	)
+
+	BeforeEach(func() {
+		cache = snapcache.New(snapcache.Config{
+			// Set the batch size small so we can force new Breadcrumbs easily.
+			MaxBatchSize: 10,
+			// Reduce the wake up interval from the default to give us faster tear down.
+			WakeUpInterval: 50 * time.Millisecond,
+		})
+		server = syncserver.New(
+			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
+			syncserver.Config{
+				PingInterval:                   10000 * time.Second,
+				PongTimeout:                    50000 * time.Second,
+				Port:                           syncserver.PortRandom,
+				DropInterval:                   1 * time.Second,
+				MaxFallBehind:                  1 * time.Second,
+				NewClientFallBehindGracePeriod: 1 * time.Second,
+			})
+		cacheCxt, cacheCancel = context.WithCancel(context.Background())
+		cache.Start(cacheCxt)
+		serverCxt, serverCancel = context.WithCancel(context.Background())
+		server.Start(serverCxt)
+		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
+		updIdx = 0
+	})
+
+	AfterEach(func() {
+		if server != nil {
+			serverCancel()
+			log.Info("Waiting for server to shut down")
+			server.Finished.Wait()
+			log.Info("Done waiting for server to shut down")
+		}
+		if cache != nil {
+			cacheCancel()
+		}
+	})
+
+	sendNUpdates := func(n int) map[string]api.Update {
+		expectedEndState := map[string]api.Update{}
+		cache.OnStatusUpdated(api.ResyncInProgress)
+		for i := 0; i < n; i++ {
+			update := api.Update{
+				KVPair: model.KVPair{
+					Key: model.GlobalConfigKey{
+						Name: fmt.Sprintf("foo%v", i+updIdx),
+					},
+					// Nice big value so that we can fill up the send queue.
+					Value: fmt.Sprintf("baz%vxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"+
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", i),
+					Revision: fmt.Sprintf("%v", i+updIdx),
+				},
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			path, err := model.KeyToDefaultPath(update.Key)
+			Expect(err).NotTo(HaveOccurred())
+			expectedEndState[path] = update
+			cache.OnUpdates([]api.Update{update})
+			updIdx += n
+		}
+		return expectedEndState
+	}
+
+	sendNUpdatesThenInSync := func(n int) map[string]api.Update {
+		expectedEndState := sendNUpdates(n)
+		cache.OnStatusUpdated(api.InSync)
+		return expectedEndState
+	}
+
+	Describe("with lots of KVs", func() {
+		const initialSnapshotSize = 10000
+		BeforeEach(func() {
+			sendNUpdatesThenInSync(initialSnapshotSize)
+		})
+
+		It("client should get a grace period after reading the snapshot", func() {
+			clientCxt, clientCancel := context.WithCancel(context.Background())
+			recorder := NewRecorder()
+
+			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Make the client block after it reads the first update.  This means the server will have started
+			// streaming the snapshot but it shouldn't be able to finish streaming the snapshot.  Blocking for
+			// >1s wastes the MaxFallBehind timeout so this client will need to rely on the
+			// NewClientFallBehindGracePeriod, which should kick in only once we've finished reading the snapshot.
+			recorder.BlockAfterNUpdates(1, 2500*time.Millisecond)
+
+			client := syncclient.New(
+				serverAddr,
+				"test-version",
+				"test-host",
+				"test-info",
+				recorder,
+				nil,
+			)
+			err = client.Start(clientCxt)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				clientCancel()
+				client.Finished.Wait()
+			}()
+
+			// Wait until the client reads its first KV so that we know the server has started streaming the
+			// first breadcrumb before we create a new one...
+			Eventually(recorder.Len, time.Second).Should(BeNumerically(">", 0))
+
+			// Make a breadcrumb 1s later.
+			time.Sleep(time.Second)
+			sendNUpdates(1)
+			// Make a breadcrumb 1s later.
+			time.Sleep(time.Second)
+			sendNUpdates(1)
+
+			// Client should wake up around now and start catching up.
+
+			// Make a breadcrumb 1s later.
+			time.Sleep(time.Second)
+			sendNUpdates(1)
+
+			Eventually(recorder.Len, 2*time.Second).Should(BeNumerically("==", initialSnapshotSize+3))
+			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue+1))
+		})
+
+		It("client should get disconnected if it falls behind after the grace period", func() {
+			clientCxt, clientCancel := context.WithCancel(context.Background())
+			recorder := NewRecorder()
+
+			origGaugeValue, err := getCounter("typha_connections_grace_used")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Make the client block after it reads the first update.  This means the server will have started
+			// streaming the snapshot but it shouldn't be able to finish streaming the snapshot.  Blocking for
+			// >1s wastes the MaxFallBehind timeout so this client will need to rely on the
+			// NewClientFallBehindGracePeriod, which should kick in only once we've finished reading the snapshot.
+			recorder.BlockAfterNUpdates(initialSnapshotSize+1, 2500*time.Millisecond)
+
+			client := syncclient.New(
+				serverAddr,
+				"test-version",
+				"test-host",
+				"test-info",
+				recorder,
+				nil,
+			)
+			err = client.Start(clientCxt)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				clientCancel()
+				client.Finished.Wait()
+			}()
+
+			// Wait until the snapshot is read.
+			Eventually(recorder.Len, time.Second).Should(BeNumerically("==", initialSnapshotSize))
+
+			// Make a breadcrumb.
+			time.Sleep(time.Second)
+			sendNUpdates(initialSnapshotSize)
+
+			// Client should read the first update from the above and then block.
+
+			// Make a breadcrumb 1s later.
+			time.Sleep(time.Second)
+			sendNUpdates(1)
+
+			// Make a breadcrumb 1s later.
+			time.Sleep(time.Second)
+			sendNUpdates(1)
+
+			// Client should wake up around now but be too far behind and get disconnected.
+
+			finishedC := make(chan struct{})
+			go func() {
+				client.Finished.Wait()
+				close(finishedC)
+			}()
+
+			Eventually(finishedC, 5*time.Second).Should(BeClosed())
+
+			// Should only have received at most the first two chunks.
+			Expect(recorder.Len()).To(BeNumerically(">", initialSnapshotSize))
+			Expect(recorder.Len()).To(BeNumerically("<=", initialSnapshotSize*2))
+
+			// Should not use the grace period at all.
+			Expect(getCounter("typha_connections_grace_used")).To(BeNumerically("==", origGaugeValue))
+		})
+	})
+})
+
 func getGauge(name string) (float64, error) {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -986,6 +1197,19 @@ func getGauge(name string) (float64, error) {
 	for _, mf := range mfs {
 		if mf.GetName() == name {
 			return mf.Metric[0].GetGauge().GetValue(), nil
+		}
+	}
+	return 0, errors.New("not found")
+}
+
+func getCounter(name string) (float64, error) {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return 0, err
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == name {
+			return mf.Metric[0].GetCounter().GetValue(), nil
 		}
 	}
 	return 0, errors.New("not found")
