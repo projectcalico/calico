@@ -42,9 +42,9 @@ kubectl apply -f /tests/mock_data/kdd/ipam.yaml
 # Use calicoctl to apply some data - this will require the CRDs to be online.  Repeat
 # until successful.
 echo "Waiting for CRDs to be ready"
-for i in $(seq 1 30); do calicoctl apply -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml 1>/dev/null 2>&1 && break || sleep 1; done
-calicoctl apply -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml
-calicoctl delete -f /tests/mock_data/calicoctl/explicit_peering/specific_node/delete.yaml
+for i in $(seq 1 30); do $CALICOCTL apply -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml 1>/dev/null 2>&1 && break || sleep 1; done
+$CALICOCTL apply -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml
+$CALICOCTL delete -f /tests/mock_data/calicoctl/explicit_peering/specific_node/delete.yaml
 
 # Run the tests a few times.
 execute_test_suite
