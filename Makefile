@@ -6,6 +6,7 @@ SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
 
 KUBE_APISERVER_PORT?=8080
 KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
+KUBE_CLUSTERINFO_CRD_MANIFEST?=crd.projectcalico.org_clusterinformations.yaml
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
@@ -64,7 +65,7 @@ LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/v3/calicoctl/commands.VERSION=$(GIT_VERSION
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} \;
-	rm -rf .go-pkg-cache bin build certs *.tar vendor Makefile.common* calicoctl/commands/report
+	rm -rf .go-pkg-cache bin build certs *.tar vendor Makefile.common* calicoctl/commands/report $(CALICO_VERSION_HELPER_DIR)/bin
 	docker rmi $(CALICOCTL_IMAGE):latest-$(ARCH) || true
 	docker rmi $(CALICOCTL_IMAGE):$(VERSION)-$(ARCH) || true
 ifeq ($(ARCH),amd64)
@@ -144,6 +145,16 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
+CALICO_VERSION_HELPER_DIR=tests/fv/helper
+CALICO_VERSION_HELPER_BIN=$(CALICO_VERSION_HELPER_DIR)/bin/calico_version_helper
+CALICO_VERSION_HELPER_SRC=$(CALICO_VERSION_HELPER_DIR)/calico_version_helper.go
+
+.PHONY: version-helper
+version-helper: $(CALICO_VERSION_HELPER_BIN)
+$(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && \
+		go build -v -o $(CALICO_VERSION_HELPER_BIN) -ldflags "-X main.VERSION=$(GIT_VERSION)" $(CALICO_VERSION_HELPER_SRC)'
+
 ###############################################################################
 # UTs
 ###############################################################################
@@ -157,7 +168,7 @@ ut: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64
 ###############################################################################
 .PHONY: fv
 ## Run the tests in a container. Useful for CI, Mac dev.
-fv: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64
+fv: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) run-etcd-host
 	# We start two API servers in order to test multiple kubeconfig support
 	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=8080 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
@@ -181,7 +192,7 @@ ST_OPTIONS?=
 
 .PHONY: st
 ## Run the STs in a container
-st: bin/calicoctl-linux-amd64
+st: bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) run-etcd-host
 	$(MAKE) run-kubernetes-master
 	# Use the host, PID and network namespaces from the host.
@@ -265,6 +276,16 @@ run-kubernetes-master: stop-kubernetes-master
 		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /manifests/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
+
+	# Apply ClusterInformation CRD because the tests now require it
+	while ! docker run \
+	    --net=host \
+	    --rm \
+		-v $(CURDIR):/manifests \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
+		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
+		apply -f /manifests/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
+		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
 	-docker run \

@@ -187,7 +187,7 @@ class CalicoctlOutput:
             "\nunexpected=\n" + text
 
 
-def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdout=False, no_config=False, kdd=False):
+def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdout=False, no_config=False, kdd=False, allowVersionMismatch=True):
     """
     Convenience function for abstracting away calling the calicoctl
     command.
@@ -222,6 +222,9 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
         option_file = ' -f /tmp/input-data'
 
     calicoctl_bin = os.environ.get("CALICOCTL", "/code/bin/calicoctl-linux-amd64")
+
+    if allowVersionMismatch:
+        calicoctl_bin += " --allow-version-mismatch"
 
     if ETCD_SCHEME == "https":
         etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
@@ -506,3 +509,39 @@ def namespace(data):
     Returns: The resource name.
     """
     return data['metadata']['namespace']
+
+def set_cluster_version(calico_version="", kdd=False):
+    """
+    Set Calico version in ClusterInformation using the calico_version_helper go app.
+    Args:
+        calico_version: string with version to set
+        kdd: optional bool to indicate use of kubernetes datastore (default False)
+
+    Returns: The command output
+    """
+
+    if ETCD_SCHEME == "https":
+        etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
+    else:
+        etcd_auth = "%s:2379" % get_ip()
+
+    calico_helper_bin = "/code/tests/fv/helper/bin/calico_version_helper"
+    full_cmd = "export ETCD_ENDPOINTS=%s; " \
+        "export ETCD_CA_CERT_FILE=%s; " \
+        "export ETCD_CERT_FILE=%s; " \
+        "export ETCD_KEY_FILE=%s; " \
+        "export DATASTORE_TYPE=%s; %s" % \
+        (ETCD_SCHEME+"://"+etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY,
+         "etcdv3", calico_helper_bin)
+    if kdd:
+        full_cmd = "export DATASTORE_TYPE=kubernetes; " \
+            "export K8S_API_ENDPOINT=%s; %s" % \
+            (K8S_API_ENDPOINT, calico_helper_bin)
+    if calico_version:
+        full_cmd += " -v " + calico_version
+
+    try:
+        output = log_and_run(full_cmd, stderr=STDOUT)
+        return CalicoctlOutput(full_cmd, output)
+    except CalledProcessError as e:
+        return CalicoctlOutput(full_cmd, e.output, error=e.returncode)
