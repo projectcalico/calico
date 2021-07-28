@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/felix/wireguard"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
@@ -35,6 +36,7 @@ var _ = Describe("Constructor test", func() {
 	var healthAggregator *health.HealthAggregator
 	var kubernetesProvider = config.ProviderNone
 	var routeSource = "CalicoIPAM"
+	var wireguardEncryptHostTraffic bool
 
 	JustBeforeEach(func() {
 		configParams = config.New()
@@ -89,6 +91,9 @@ var _ = Describe("Constructor test", func() {
 
 			KubernetesProvider: kubernetesProvider,
 			RouteSource:        routeSource,
+			Wireguard: wireguard.Config{
+				EncryptHostTraffic: wireguardEncryptHostTraffic,
+			},
 		}
 	})
 
@@ -114,6 +119,7 @@ var _ = Describe("Constructor test", func() {
 		BeforeEach(func() {
 			kubernetesProvider = config.ProviderAKS
 			routeSource = "WorkloadIPs"
+			wireguardEncryptHostTraffic = true
 		})
 
 		It("should set the correct MTU", func() {

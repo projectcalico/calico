@@ -996,7 +996,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	)
 
 	// Set a mark on encapsulated packets coming from WireGuard to ensure the RPF check allows it
-	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && r.RouteSource == "WorkloadIPs" {
+	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 && r.Config.WireguardEncryptHostTraffic {
 		log.Debug("Adding Wireguard iptables rule")
 		rules = append(rules, Rule{
 			Match:  nil,
