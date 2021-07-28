@@ -10,7 +10,7 @@ require (
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210722214910-036a2cd30ed7
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210728180906-a1e445240f99
 	github.com/prometheus/client_golang v1.4.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190710185942-9d28bd7c0945 // indirect
