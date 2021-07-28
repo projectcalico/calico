@@ -19,7 +19,7 @@ require (
 	github.com/projectcalico/api v0.0.0-20210727230302-ced3d12c92fe
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210727232910-3a5e83a63f46
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210728000831-e38be01c2454
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
