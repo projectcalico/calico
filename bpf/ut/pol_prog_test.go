@@ -173,8 +173,8 @@ func TestLoadGarbageProgram(t *testing.T) {
 }
 
 const (
-	RCDrop            = 2
-	RCEpilogueReached = 123
+	RCDrop           = 2
+	RCAllowedReached = 123
 )
 
 func packetWithPorts(proto int, src, dst string) packet {
@@ -1592,7 +1592,7 @@ func runTest(t *testing.T, tp testPolicy) {
 	}()
 
 	// Give the policy program somewhere to jump to.
-	epiFD := installEpilogueProgram(jumpMap)
+	epiFD := installAllowedProgram(jumpMap)
 	defer func() {
 		err := epiFD.Close()
 		Expect(err).NotTo(HaveOccurred())
@@ -1602,7 +1602,7 @@ func runTest(t *testing.T, tp testPolicy) {
 	for _, tc := range tp.AllowedPackets() {
 		t.Run(fmt.Sprintf("should allow %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			runProgram(tc, testStateMap, polProgFD, RCEpilogueReached, state.PolicyAllow)
+			runProgram(tc, testStateMap, polProgFD, RCAllowedReached, state.PolicyAllow)
 		})
 	}
 	for _, tc := range tp.DroppedPackets() {
@@ -1613,12 +1613,12 @@ func runTest(t *testing.T, tp testPolicy) {
 	}
 }
 
-// installEpilogueProgram installs a trivial BPF program into the jump table that returns RCEpilogueReached.
-func installEpilogueProgram(jumpMap bpf.Map) bpf.ProgFD {
+// installAllowedProgram installs a trivial BPF program into the jump table that returns RCAllowedReached.
+func installAllowedProgram(jumpMap bpf.Map) bpf.ProgFD {
 	b := asm.NewBlock()
 
 	// Load the RC into the return register.
-	b.MovImm64(asm.R0, RCEpilogueReached)
+	b.MovImm64(asm.R0, RCAllowedReached)
 	// Exit!
 	b.Exit()
 

@@ -84,7 +84,7 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 	state->pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src,
 					    state->ip_dst, state->sport, state->dport);
 
-	bpf_tail_call(skb, &cali_jump, PROG_INDEX_EPILOGUE);
+	bpf_tail_call(skb, &cali_jump, PROG_INDEX_ALLOWED);
 	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
 
 deny:
