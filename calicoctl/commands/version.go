@@ -211,6 +211,10 @@ Description:
 
 	ci, err := client.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			// ClusterInformation does not exist, so skip version check.
+			return nil
+		}
 		return fmt.Errorf("Unable to get Cluster Information to verify version mismatch: %w", err)
 	}
 
