@@ -114,3 +114,16 @@ include:
 | `process_resident_memory_bytes` | Resident memory size in bytes. |
 | `process_start_time_seconds` | Start time of the process since unix epoch in seconds. |
 | `process_virtual_memory_bytes` | Virtual memory size in bytes. |
+
+
+#### Wireguard Metrics
+
+Felix also exports wireguard device stats if found/detected. Can be disabled via Felix configuration.
+
+
+| Name          | Description     |
+| ------------- | --------------- |
+| `wireguard_meta` | Gauge. Device / interface information for a felix/calico node, values are in this metric's labels |
+| `wireguard_bytes_rcvd` | Counter. Current bytes received from a peer identified by a peer public key and endpoint |
+| `wireguard_bytes_sent` | Counter. Current bytes sent to a peer identified by a peer public key and endpoint |
+| `wireguard_latest_handshake_seconds` | Gauge. Last handshake with a peer, unix timestamp in seconds. |

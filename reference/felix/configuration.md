@@ -64,6 +64,7 @@ The full list of parameters which can be set is as follows.
 | `PrometheusMetricsHost`           | `FELIX_PROMETHEUSMETRICSHOST`           | TCP network address that the Prometheus metrics server should bind to. [Default: `""`] | string |
 | `PrometheusMetricsPort`           | `FELIX_PROMETHEUSMETRICSPORT`           | TCP port that the Prometheus metrics server should bind to. [Default: `9091`] | int |
 | `PrometheusProcessMetricsEnabled` | `FELIX_PROMETHEUSPROCESSMETRICSENABLED` | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`] | boolean |
+| `PrometheusWireguardMetricsEnabled` | `FELIX_PROMETHEUSWIREGUARDMETRICSENABLED` | Set to `false` to disable wireguard device metrics collection, which Felix does by default. [Default: `true`] | boolean |
 | `RemoveExternalRoutes`            | `FELIX_REMOVEEXTERNALROUTES`            | Whether or not to remove device routes that have not been programmed by Felix. Disabling this will allow external applications to also add device routes. [Default: `true`] | bool |
 | `ReportingIntervalSecs`           | `FELIX_REPORTINGINTERVALSECS`           | Interval at which Felix reports its status into the datastore or `0` to disable. Must be non-zero in OpenStack deployments. [Default: `30`] | int |
 | `ReportingTTLSecs`                | `FELIX_REPORTINGTTLSECS`                | Time-to-live setting for process-wide status reports. [Default: `90`] | int |
