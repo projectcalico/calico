@@ -12,11 +12,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
-
-	"regexp"
 
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -261,9 +260,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(endpoints.Items).Should(HaveLen(1))
 
 			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
-				// Put them back manually for later comparison.
-				endpoints.Items[0].Spec.ContainerID = containerID
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for the MAC.
+				// Put it back manually for later comparison.
 				endpoints.Items[0].Spec.MAC = mac.String()
 			}
 
@@ -425,9 +423,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(endpoints.Items).Should(HaveLen(1))
 
 				if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-					// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
-					// Put them back manually for later comparison.
-					endpoints.Items[0].Spec.ContainerID = containerID
+					// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for the MAC.
+					// Put it back manually for later comparison.
 					endpoints.Items[0].Spec.MAC = mac.String()
 				}
 
@@ -1644,9 +1641,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(endpoints.Items).Should(HaveLen(1))
 
 			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
-				// Put them back manually for later comparison.
-				endpoints.Items[0].Spec.ContainerID = containerID
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for the MAC.
+				// Put it back manually for later comparison.
 				endpoints.Items[0].Spec.MAC = mac.String()
 			}
 
@@ -1843,9 +1839,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(endpoints.Items).Should(HaveLen(1))
 
 			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
-				// Put them back manually for later comparison.
-				endpoints.Items[0].Spec.ContainerID = containerID
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for the MAC.
+				// Put it back manually for later comparison.
 				endpoints.Items[0].Spec.MAC = mac.String()
 			}
 
@@ -1975,9 +1970,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(endpoints.Items).Should(HaveLen(1))
 
 			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
-				// Put them back manually for later comparison.
-				endpoints.Items[0].Spec.ContainerID = containerID
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for the MAC.
+				// Put it back manually for later comparison.
 				endpoints.Items[0].Spec.MAC = mac.String()
 			}
 
@@ -2758,9 +2752,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(endpoints.Items).Should(HaveLen(1))
 
 			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
-				// Put them back manually for later comparison.
-				endpoints.Items[0].Spec.ContainerID = containerID
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for the MAC.
+				// Put it back manually for later comparison.
 				endpoints.Items[0].Spec.MAC = mac.String()
 			}
 
@@ -2908,9 +2901,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(endpoints.Items).Should(HaveLen(1))
 
 			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
-				// Put them back manually for later comparison.
-				endpoints.Items[0].Spec.ContainerID = containerID
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for the MAC.
+				// Put it back manually for later comparison.
 				endpoints.Items[0].Spec.MAC = mac.String()
 			}
 
