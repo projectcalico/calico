@@ -44,7 +44,8 @@ class TestCalicoctlCLIFlags(TestBase):
         """
         Test version mismatch verification
         """
-        # Create a Node, this should also trigger auto-creation of a cluster info
+        # Create a Node, this should also trigger auto-creation of a cluster info,
+        # but without any CalicoVersion field.
         rc = calicoctl("create", data=node_name1_rev1)
         rc.assert_no_error()
 
@@ -54,7 +55,7 @@ class TestCalicoctlCLIFlags(TestBase):
         rc.assert_error("Invalid datastore type")
 
         rc = calicoctl("version", allowVersionMismatch=False)
-        rc.assert_error("Version mismatch.")
+        rc.assert_no_error()
 
         output = set_cluster_version()
         output.assert_no_error()
