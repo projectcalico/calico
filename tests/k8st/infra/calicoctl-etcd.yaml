@@ -18,6 +18,7 @@ spec:
     command:
       - /calicoctl
     args:
+      - --allow-version-mismatch
       - version
       - --poll=1m
     env:
