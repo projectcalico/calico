@@ -106,6 +106,8 @@ kubeadmConfigPatches:
   metadata:
     name: config
   mode: ipvs
+  conntrack:
+    maxPerCore: 0
 EOF
     kind_rc=$?
     if ${TEST_RETRY:-false} || test "${kind_rc}" != 0; then
