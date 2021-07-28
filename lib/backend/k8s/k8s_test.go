@@ -223,7 +223,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 		})
 
 		// Expect the key to have existed.
-		Expect(matches).To(Equal(true), fmt.Sprintf("Expected update not found: %v", update.Key))
+		ExpectWithOffset(1, matches).To(Equal(true), fmt.Sprintf("Expected update not found: %v", update.Key))
 	}
 }
 
@@ -252,7 +252,7 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 		})
 
 		// Expect the key to not exist.
-		Expect(exists).To(Equal(false), fmt.Sprintf("Expected key not to exist: %v", kvp.Key))
+		ExpectWithOffset(1, exists).To(Equal(false), fmt.Sprintf("Expected key not to exist: %v", kvp.Key))
 	}
 }
 
@@ -274,15 +274,15 @@ poll:
 		select {
 		case e := <-events:
 			// Got an event. Check it's OK.
-			Expect(e.Error).NotTo(HaveOccurred())
-			Expect(e.Type).To(Equal(type_))
+			ExpectWithOffset(2, e.Error).NotTo(HaveOccurred())
+			ExpectWithOffset(2, e.Type).To(Equal(type_))
 			receivedEvent = &e
 			break poll
 		default:
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
-	Expect(receivedEvent).NotTo(BeNil(), "Did not receive watch event")
+	ExpectWithOffset(2, receivedEvent).NotTo(BeNil(), "Did not receive watch event")
 	return receivedEvent
 }
 
@@ -449,8 +449,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Deleting the namespace", func() {
-			err := c.ClientSet.CoreV1().Namespaces().Delete(ctx, ns.ObjectMeta.Name, metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			testutils.DeleteNamespace(c.ClientSet, ns.ObjectMeta.Name)
 		})
 
 		By("Checking the correct entries are no longer in our cache", func() {
@@ -500,8 +499,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("deleting a namespace", func() {
-			err := c.ClientSet.CoreV1().Namespaces().Delete(ctx, ns.ObjectMeta.Name, metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			testutils.DeleteNamespace(c.ClientSet, ns.ObjectMeta.Name)
 		})
 
 		By("Checking the correct entries are in no longer in our cache", func() {
@@ -1155,14 +1153,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Deleting the namespace", func() {
-			err := c.ClientSet.CoreV1().Namespaces().Delete(ctx, ns.ObjectMeta.Name, metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			testutils.DeleteNamespace(c.ClientSet, ns.ObjectMeta.Name)
 		})
 
 		By("Listing all Network Sets in a non-existent namespace", func() {
 			kvps, err := c.List(ctx, model.ResourceListOptions{Namespace: ns.ObjectMeta.Name, Kind: apiv3.KindNetworkSet}, "")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs).To(HaveLen(0))
 		})
 	})
 
@@ -3024,8 +3021,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 			Expect(err).NotTo(HaveOccurred())
 		})
 		By("Deleting the namespace", func() {
-			err := c.ClientSet.CoreV1().Namespaces().Delete(ctx, ns.ObjectMeta.Name, metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			testutils.DeleteNamespace(c.ClientSet, ns.ObjectMeta.Name)
 		})
 	})
 })
