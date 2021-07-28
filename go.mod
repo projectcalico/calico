@@ -20,8 +20,8 @@ require (
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20210721183356-e23a6f19214b
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210727210547-f1cfeef87983
+	github.com/projectcalico/api v0.0.0-20210727230154-ae822ba06c23
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210727232737-a62724233980
 	github.com/prometheus/common v0.9.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
