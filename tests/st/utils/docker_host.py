@@ -303,7 +303,7 @@ class DockerHost(object):
             calicoctl = "export HOSTNAME=%s; %s" % (
                 self.override_hostname, calicoctl)
 
-        return self.execute(calicoctl + " " + command, raise_exception_on_failure=raise_exception_on_failure)
+        return self.execute(calicoctl + " --allow-version-mismatch " + command, raise_exception_on_failure=raise_exception_on_failure)
 
     def start_calico_node(self, options="", with_ipv4pool_cidr_env_var=True, env_options=""):
         """
