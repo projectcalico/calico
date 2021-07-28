@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/docopt/docopt-go"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/argutils"
@@ -211,7 +213,8 @@ Description:
 
 	ci, err := client.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
-		if strings.Contains(err.Error(), "does not exist") {
+		var notFound cerrors.ErrorResourceDoesNotExist
+		if errors.As(err, &notFound) {
 			// ClusterInformation does not exist, so skip version check.
 			return nil
 		}
