@@ -211,6 +211,10 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		}
 	}
 
+	// Get the container ID if present.  This is used in the CNI plugin to distinguish different pods that have
+	// the same name.  For example, restarted stateful set pods.
+	containerID := pod.Annotations[AnnotationContainerID]
+
 	// Create the workload endpoint.
 	wep := libapiv3.NewWorkloadEndpoint()
 	wep.ObjectMeta = metav1.ObjectMeta{
@@ -225,6 +229,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Orchestrator:       "k8s",
 		Node:               pod.Spec.NodeName,
 		Pod:                pod.Name,
+		ContainerID:        containerID,
 		Endpoint:           "eth0",
 		InterfaceName:      interfaceName,
 		Profiles:           profiles,
