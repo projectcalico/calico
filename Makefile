@@ -149,9 +149,9 @@ release-tag: release-prereqs release-notes
 ## Produces a clean build of release artifacts at the specified version.
 release-build: release-prereqs clean
 	$(MAKE) image-all
-	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	$(MAKE) tag-images-all IMAGETAG=latest
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -175,7 +175,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -190,7 +190,7 @@ release-publish: release-prereqs
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
-	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
