@@ -68,6 +68,13 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error)
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
+	if fd, exists := m.fds[key]; exists {
+		delete(m.state, uint32(fd))
+		delete(m.fds, key)
+	}
 	return nil
 }
 
@@ -231,6 +238,17 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
+	genUntracked := func(tier, policy string) func() {
+		return func() {
+			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
+				Id:     &proto.PolicyID{Tier: tier, Name: policy},
+				Policy: &proto.Policy{Untracked: true},
+			})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
 	genWLUpdate := func(name string) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -281,7 +299,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("does not have host-* policy on the workload interface", func() {
-			var eth0I, eth0E, caliI, caliE *polprog.Rules
+			var eth0I, eth0E, eth0X, caliI, caliE *polprog.Rules
 
 			// Check eth0 ingress.
 			Eventually(dp.setAndReturn(&eth0I, "eth0:tc-ingress")).ShouldNot(BeNil())
@@ -306,6 +324,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Eventually(dp.setAndReturn(&caliE, "cali12345:tc-ingress")).ShouldNot(BeNil())
 			Expect(caliE.ForHostInterface).To(BeFalse())
 			Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
+
+			// Check no XDP.
+			Eventually(dp.setAndReturn(&eth0X, "eth0:xdp")).Should(BeNil())
 		})
 
 		Context("with DefaultEndpointToHostAction RETURN", func() {
@@ -347,7 +368,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					Name: "mypolicy",
 				}]).To(HaveKey("eth0"))
 
-				var eth0I, eth0E *polprog.Rules
+				var eth0I, eth0E, eth0X *polprog.Rules
 
 				// Check ingress rules.
 				Eventually(dp.setAndReturn(&eth0I, "eth0:tc-ingress")).ShouldNot(BeNil())
@@ -359,6 +380,31 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Eventually(dp.setAndReturn(&eth0E, "eth0:tc-egress")).ShouldNot(BeNil())
 				Expect(eth0E.ForHostInterface).To(BeTrue())
 				Expect(eth0E.HostPreDnatTiers).To(BeNil())
+
+				// Check no XDP.
+				Eventually(dp.setAndReturn(&eth0X, "eth0:xdp")).Should(BeNil())
+
+				By("adding untracked policy")
+				genUntracked("default", "untracked1")()
+				newHEP := hostEp
+				newHEP.UntrackedTiers = []*proto.TierInfo{{
+					Name:            "default",
+					IngressPolicies: []string{"untracked1"},
+				}}
+				genHEPUpdate("eth0", newHEP)()
+
+				// Check XDP.
+				Eventually(dp.setAndReturn(&eth0X, "eth0:xdp")).ShouldNot(BeNil())
+				Expect(eth0X.ForHostInterface).To(BeTrue())
+				Expect(eth0X.ForXDP).To(BeTrue())
+				Expect(eth0X.HostNormalTiers).To(HaveLen(1))
+				Expect(eth0X.HostNormalTiers[0].Policies).To(HaveLen(1))
+
+				By("removing untracked policy again")
+				genHEPUpdate("eth0", hostEp)()
+
+				// Check no XDP.
+				Eventually(dp.setAndReturn(&eth0X, "eth0:xdp")).Should(BeNil())
 			})
 		})
 

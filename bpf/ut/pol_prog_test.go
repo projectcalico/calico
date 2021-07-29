@@ -177,6 +177,8 @@ func TestLoadGarbageProgram(t *testing.T) {
 const (
 	RCDrop           = 2
 	RCAllowedReached = 123
+	XDPDrop          = 1
+	XDPPass          = 2
 )
 
 func packetWithPorts(proto int, src, dst string) packet {
@@ -1344,6 +1346,63 @@ var hostPolProgramTests = []polProgramTest{
 	},
 }
 
+var xdpPolProgramTests = []polProgramTest{
+	{
+		PolicyName: "XDP allow else deny",
+		Policy: polprog.Rules{
+			ForXDP:           true,
+			ForHostInterface: true,
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDestElseDeny("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+		},
+	},
+	{
+		PolicyName: "XDP allow some",
+		Policy: polprog.Rules{
+			ForXDP:           true,
+			ForHostInterface: true,
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  allowDest("p1", "10.96.0.10/32"),
+			}},
+		},
+		AllowedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+		},
+		UnmatchedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+		},
+	},
+	{
+		PolicyName: "XDP deny some",
+		Policy: polprog.Rules{
+			ForXDP:           true,
+			ForHostInterface: true,
+			HostNormalTiers: []polprog.Tier{{
+				Name:      "default",
+				EndAction: "pass",
+				Policies:  denyDest("p1", "10.96.0.10/32"),
+			}},
+		},
+		DroppedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.10:53"),
+		},
+		UnmatchedPackets: []packet{
+			udpPkt("123.0.0.1:1024", "10.96.0.11:53"),
+		},
+	},
+}
+
 func allowDestElseDeny(name, dst string) []polprog.Policy {
 	return []polprog.Policy{{
 		Name: name,
@@ -1365,6 +1424,18 @@ func allowDest(name, dst string) []polprog.Policy {
 		Rules: []polprog.Rule{{
 			Rule: &proto.Rule{
 				Action: "Allow",
+				DstNet: []string{dst},
+			}},
+		}},
+	}
+}
+
+func denyDest(name, dst string) []polprog.Policy {
+	return []polprog.Policy{{
+		Name: name,
+		Rules: []polprog.Rule{{
+			Rule: &proto.Rule{
+				Action: "Deny",
 				DstNet: []string{dst},
 			}},
 		}},
@@ -1404,6 +1475,19 @@ func (w polProgramTestWrapper) DroppedPackets() []testCase {
 	return ret
 }
 
+func (w polProgramTestWrapper) UnmatchedPackets() []testCase {
+	ret := make([]testCase, len(w.p.UnmatchedPackets))
+	for i, p := range w.p.UnmatchedPackets {
+		ret[i] = p
+	}
+
+	return ret
+}
+
+func (w polProgramTestWrapper) XDP() bool {
+	return w.p.Policy.ForXDP
+}
+
 func wrap(p polProgramTest) polProgramTestWrapper {
 	return polProgramTestWrapper{p}
 }
@@ -1420,12 +1504,19 @@ func TestHostPolicyPrograms(t *testing.T) {
 	}
 }
 
+func TestXDPPolicyPrograms(t *testing.T) {
+	for i, p := range xdpPolProgramTests {
+		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), func(t *testing.T) { runTest(t, wrap(p)) })
+	}
+}
+
 type polProgramTest struct {
-	PolicyName     string
-	Policy         polprog.Rules
-	AllowedPackets []packet
-	DroppedPackets []packet
-	IPSets         map[string][]string
+	PolicyName       string
+	Policy           polprog.Rules
+	AllowedPackets   []packet
+	DroppedPackets   []packet
+	UnmatchedPackets []packet
+	IPSets           map[string][]string
 }
 
 type packet struct {
@@ -1557,6 +1648,8 @@ type testPolicy interface {
 	IPSets() map[string][]string
 	AllowedPackets() []testCase
 	DroppedPackets() []testCase
+	UnmatchedPackets() []testCase
+	XDP() bool
 }
 
 type testCase interface {
@@ -1572,7 +1665,7 @@ func runTest(t *testing.T, tp testPolicy) {
 	realAlloc := idalloc.New()
 	forceAlloc := &forceAllocator{alloc: realAlloc}
 
-	// MAke sure the maps are available.
+	// Make sure the maps are available.
 	cleanIPSetMap()
 	// FIXME should clean up the maps at the end of each test but recreating the maps seems to be racy
 
@@ -1610,7 +1703,17 @@ func runTest(t *testing.T, tp testPolicy) {
 	for _, tc := range tp.DroppedPackets() {
 		t.Run(fmt.Sprintf("should drop %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			runProgram(tc, testStateMap, polProgFD, RCDrop, state.PolicyNoMatch)
+			if tp.XDP() {
+				runProgram(tc, testStateMap, polProgFD, XDPDrop, state.PolicyNoMatch)
+			} else {
+				runProgram(tc, testStateMap, polProgFD, RCDrop, state.PolicyNoMatch)
+			}
+		})
+	}
+	for _, tc := range tp.UnmatchedPackets() {
+		t.Run(fmt.Sprintf("should not match %s", tc), func(t *testing.T) {
+			RegisterTestingT(t)
+			runProgram(tc, testStateMap, polProgFD, XDPPass, state.PolicyNoMatch)
 		})
 	}
 }
