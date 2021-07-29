@@ -23,15 +23,16 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	v1 "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/infrastructure"
