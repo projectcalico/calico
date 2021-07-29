@@ -84,6 +84,7 @@ spec:
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
+            timeoutSeconds: 10
           readinessProbe:
             exec:
               command:
@@ -117,6 +118,7 @@ spec:
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
+            timeoutSeconds: 10
           readinessProbe:
             exec:
               command:

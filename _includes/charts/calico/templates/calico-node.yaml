@@ -369,6 +369,7 @@ spec:
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
+            timeoutSeconds: 10
           readinessProbe:
 {{- if eq .Values.network "calico" }}
             exec:
@@ -390,6 +391,7 @@ spec:
               - -felix-ready
 {{- end }}
             periodSeconds: 10
+            timeoutSeconds: 10
           volumeMounts:
             # For maintaining CNI plugin API credentials.
             - mountPath: /host/etc/cni/net.d

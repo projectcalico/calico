@@ -64,6 +64,7 @@ The full list of parameters which can be set is as follows.
 | `PrometheusMetricsHost`           | `FELIX_PROMETHEUSMETRICSHOST`           | TCP network address that the Prometheus metrics server should bind to. [Default: `""`] | string |
 | `PrometheusMetricsPort`           | `FELIX_PROMETHEUSMETRICSPORT`           | TCP port that the Prometheus metrics server should bind to. [Default: `9091`] | int |
 | `PrometheusProcessMetricsEnabled` | `FELIX_PROMETHEUSPROCESSMETRICSENABLED` | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`] | boolean |
+| `PrometheusWireguardMetricsEnabled` | `FELIX_PROMETHEUSWIREGUARDMETRICSENABLED` | Set to `false` to disable wireguard device metrics collection, which Felix does by default. [Default: `true`] | boolean |
 | `RemoveExternalRoutes`            | `FELIX_REMOVEEXTERNALROUTES`            | Whether or not to remove device routes that have not been programmed by Felix. Disabling this will allow external applications to also add device routes. [Default: `true`] | bool |
 | `ReportingIntervalSecs`           | `FELIX_REPORTINGINTERVALSECS`           | Interval at which Felix reports its status into the datastore or `0` to disable. Must be non-zero in OpenStack deployments. [Default: `30`] | int |
 | `ReportingTTLSecs`                | `FELIX_REPORTINGTTLSECS`                | Time-to-live setting for process-wide status reports. [Default: `90`] | int |
@@ -83,7 +84,7 @@ The full list of parameters which can be set is as follows.
 | `TyphaK8sServiceName`             | `FELIX_TYPHAK8SSERVICENAME`             | Name of the Typha Kubernetes service | string |
 | `Ipv6Support`                     | `FELIX_IPV6SUPPORT`                     | Enable {{site.prodname}} networking and security for IPv6 traffic as well as for IPv4. | boolean |
 | `RouteSource`                     | `FELIX_ROUTESOURCE`                     | Where Felix gets is routing information from for VXLAN and the BPF dataplane. The CalicoIPAM setting is more efficient because it supports route aggregation, but it only works when Calico's IPAM or host-local IPAM is in use. Use the WorkloadIPs setting if you are using Calico's VXLAN or BPF dataplane and not using Calico IPAM or host-local IPAM. [Default: "CalicoIPAM"] | 'CalicoIPAM', or 'WorkloadIPs' |
-| `mtuIfacePattern`                 | `FELIX_MTUIFACEPATTERN`                 | Pattern used to discover the host's interface for MTU auto-detection. [Default: "^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)" | regex |
+| `mtuIfacePattern`                 | `FELIX_MTUIFACEPATTERN`                 | Pattern used to discover the host's interface for MTU auto-detection. [Default: `^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*)` | regex |
 
 #### etcd datastore configuration
 

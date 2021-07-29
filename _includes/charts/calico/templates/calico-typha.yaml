@@ -128,6 +128,7 @@ spec:
             host: localhost
           periodSeconds: 30
           initialDelaySeconds: 30
+          timeoutSeconds: 10
         securityContext:
           runAsNonRoot: true
           allowPrivilegeEscalation: false
@@ -137,12 +138,12 @@ spec:
             port: 9098
             host: localhost
           periodSeconds: 10
+          timeoutSeconds: 10
         resources:
 {{ toYaml .Values.typha.resources | indent 12 }}
 {{- if .Values.typha.sidecarContainers }}
 {{- toYaml .Values.typha.sidecarContainers | nindent 6 }}
 {{- end }}
----
 
 # This manifest creates a Pod Disruption Budget for Typha to allow K8s Cluster Autoscaler to evict
 
