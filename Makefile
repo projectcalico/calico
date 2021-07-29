@@ -534,9 +534,9 @@ ifneq ($(VERSION), $(GIT_VERSION))
 endif
 
 	$(MAKE) image-all
-	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	$(MAKE) tag-images-all IMAGETAG=latest
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -564,7 +564,7 @@ release-publish: release-prereqs
 
 	# Push images.
 	# Disabling for now since no-one is consuming the images.
-	# $(MAKE) push-all IMAGETAG=$(VERSION)
+	# $(MAKE) push-images-to-registries IMAGETAG=$(VERSION)
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -601,7 +601,7 @@ release-publish-latest: release-prereqs
 	done; \
 
 	# Disabling for now since no-one is consuming the images.
-	# $(MAKE) push-all IMAGETAG=latest
+	# $(MAKE) push-images-to-registries IMAGETAG=latest
 
 ## release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
