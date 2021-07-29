@@ -517,9 +517,9 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 	$(MAKE) image-all
-	$(MAKE) tag-images-all RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	$(MAKE) tag-images-all RELEASE=true IMAGETAG=latest
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
 	$(MAKE) release-windows-archive
 
 ## Produces the Windows ZIP archive for the release.
@@ -547,7 +547,7 @@ endif
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=$(VERSION)
 
 	# Push Windows artifacts to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -569,7 +569,7 @@ endif
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-verify
-	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest
 
 .PHONY: node-test-at
 # Run docker-image acceptance tests
