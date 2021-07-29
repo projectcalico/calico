@@ -223,7 +223,8 @@ Description:
 
 	clusterv := ci.Spec.CalicoVersion
 	if clusterv == "" {
-		clusterv = "unknown"
+		// CalicoVersion field not specified in the cluster, so skip check.
+		return nil
 	} else {
 		clusterv = strings.Split(clusterv, "-")[0]
 	}
