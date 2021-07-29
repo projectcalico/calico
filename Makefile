@@ -527,7 +527,7 @@ release-tag: release-prereqs release-notes
 	@echo ""
 
 ## Produces a clean build of release artifacts at the specified version.
-release-build: release-prereqs clean
+release-build: release-prereqs clean $(GENERATED_FILES)
 # Check that the correct code is checked out.
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
