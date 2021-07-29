@@ -349,8 +349,8 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 	$(MAKE) build-all image-all
-	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
-	$(MAKE) tag-images-all IMAGETAG=latest
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
 
 	# Copy the amd64 variant to calicoctl - for now various downstream projects
 	# expect this naming convention. Until they can be swapped over, we still need to
@@ -379,7 +379,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION)
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -410,7 +410,7 @@ release-publish-latest: release-prereqs
 	  echo "Version check passed\n"; \
 	fi
 
-	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
