@@ -54,11 +54,6 @@ func TestMultiCluster(t *testing.T) {
 	Expect(err).To(HaveOccurred())
 	Expect(out).To(ContainSubstring("Failed"))
 
-	// This check will Fail a version mismatch cannot be verified for context "fake"
-	out, err = CalicoctlMayFail(true, "get", "node", "--context", "fake")
-	Expect(err).To(HaveOccurred())
-	Expect(out).To(ContainSubstring("version mismatch"))
-
 	// This check should Pass
 	out = Calicoctl(true, "get", "node", "--context", "main")
 	Expect(out).To(ContainSubstring("node4"))
