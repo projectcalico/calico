@@ -95,7 +95,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 
 	// No route - should not pass
 	bpfIfaceName = "ctNO"
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
@@ -109,7 +109,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctLW"
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
@@ -123,7 +123,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctRW"
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
@@ -137,7 +137,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctRH"
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
@@ -151,7 +151,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	bpfIfaceName = "ctLH"
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -172,7 +172,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	_, _, _, _, synAckPkt, err := testPacket(nil, &ipv4Ret, tcpSynAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
-	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synAckPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -189,7 +189,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	_, _, _, _, ackPkt, err := testPacket(nil, nil, tcpAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(ackPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -199,7 +199,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	err = ctMap.Delete(firstCTKey[:])
 	Expect(err).NotTo(HaveOccurred())
 
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(ackPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -213,7 +213,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	// Towards WEP, the feature is disabled - should not pass
 	//
 	// Such a packet would not make it here anyway due to routing.
-	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", false, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
@@ -259,7 +259,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))

@@ -225,7 +225,7 @@ func TestFailsafes(t *testing.T) {
 			result = "TC_ACT_UNSPEC"
 		}
 
-		runBpfTest(t, prog, test.Rules, func(bpfrun bpfProgRunFn) {
+		runBpfTest(t, prog, false, test.Rules, func(bpfrun bpfProgRunFn) {
 			res, err := bpfrun(pktBytes)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected program to return %s", result))
