@@ -148,10 +148,10 @@ release-tag: release-prereqs release-notes
 
 ## Produces a clean build of release artifacts at the specified version.
 release-build: release-prereqs clean
-	$(MAKE) image-all
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
+	$(MAKE) image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	# Generate the `latest` images.
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
