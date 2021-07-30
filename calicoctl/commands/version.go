@@ -206,7 +206,10 @@ Description:
 
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
-		return fmt.Errorf("Unable to create Calico API client to verify version mismatch: %w", err)
+		// If we can't connect to the cluster, skip the check. Either we're running a command that
+		// doesn't need API access, in which case the check doesn't need to be run, or we'll
+		// fail on the actual command.
+		return nil
 	}
 
 	ctx := context.Background()
