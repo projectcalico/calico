@@ -242,10 +242,10 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 
-	$(MAKE) image-all
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
+	$(MAKE) image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	# Generate the `latest` images.
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
