@@ -76,7 +76,7 @@ Description:
 	if err != nil {
 		if _, ok := err.(*docopt.UserError); ok {
 			// the user gave us bad input
-			fmt.Printf("Invalid or incomplete arguments: '%s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(os.Args[1:], " "))
+			fmt.Printf("Invalid option: '%s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(os.Args[1:], " "))
 		}
 		os.Exit(1)
 	}
