@@ -348,9 +348,9 @@ release-build: release-prereqs clean
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-	$(MAKE) build-all image-all
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest
+	$(MAKE) build-all image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 
 	# Copy the amd64 variant to calicoctl - for now various downstream projects
 	# expect this naming convention. Until they can be swapped over, we still need to
