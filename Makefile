@@ -392,6 +392,7 @@ helm-index: release-prereqs
 	rm -rf charts
 
 ## Generates release notes for the given version.
+.PHONY: release-notes
 release-notes: #release-prereqs
 	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
 
