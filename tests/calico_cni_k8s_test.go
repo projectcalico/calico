@@ -312,6 +312,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Protocol:  syscall.RTPROT_BOOT,
 				Table:     syscall.RT_TABLE_MAIN,
 				Type:      syscall.RTN_UNICAST,
+				Family:    syscall.AF_INET,
 			}))
 
 			// Routes and interface in netns
@@ -326,6 +327,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Protocol:  syscall.RTPROT_BOOT,
 					Table:     syscall.RT_TABLE_MAIN,
 					Type:      syscall.RTN_UNICAST,
+					Family:    syscall.AF_INET,
 				}),
 				ContainElement(netlink.Route{
 					LinkIndex: contVeth.Attrs().Index,
@@ -334,6 +336,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Protocol:  syscall.RTPROT_BOOT,
 					Table:     syscall.RT_TABLE_MAIN,
 					Type:      syscall.RTN_UNICAST,
+					Family:    syscall.AF_INET,
 				})))
 
 			// Delete container

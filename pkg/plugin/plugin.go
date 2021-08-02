@@ -152,6 +152,9 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logrus.WithField("mtu", mtu).Debug("Using MTU from /var/lib/calico/mtu")
 		conf.MTU = mtu
 	}
+	if conf.NumQueues <= 0 {
+		conf.NumQueues = 1
+	}
 
 	// Determine which node name to use.
 	nodename := utils.DetermineNodename(conf)

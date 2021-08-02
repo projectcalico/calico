@@ -80,6 +80,7 @@ type NetConf struct {
 	} `json:"ipam,omitempty"`
 	Args                 Args                   `json:"args"`
 	MTU                  int                    `json:"mtu"`
+	NumQueues            int                    `json:"num_queues"`
 	Nodename             string                 `json:"nodename"`
 	NodenameFile         string                 `json:"nodename_file"`
 	IPAMLockFile         string                 `json:"ipam_lock_file"`

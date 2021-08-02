@@ -167,6 +167,7 @@ var _ = Describe("CalicoCni", func() {
 				Protocol:  syscall.RTPROT_BOOT,
 				Table:     syscall.RT_TABLE_MAIN,
 				Type:      syscall.RTN_UNICAST,
+				Family:    syscall.AF_INET,
 			}))
 
 			// Routes and interface in netns
@@ -180,6 +181,7 @@ var _ = Describe("CalicoCni", func() {
 				Protocol:  syscall.RTPROT_BOOT,
 				Table:     syscall.RT_TABLE_MAIN,
 				Type:      syscall.RTN_UNICAST,
+				Family:    syscall.AF_INET,
 			}),
 				ContainElement(netlink.Route{
 					LinkIndex: contVeth.Attrs().Index,
@@ -188,6 +190,7 @@ var _ = Describe("CalicoCni", func() {
 					Protocol:  syscall.RTPROT_BOOT,
 					Table:     syscall.RT_TABLE_MAIN,
 					Type:      syscall.RTN_UNICAST,
+					Family:    syscall.AF_INET,
 				})))
 
 			_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
