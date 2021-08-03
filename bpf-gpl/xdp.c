@@ -121,7 +121,7 @@ int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
 __attribute__((section("1/1")))
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
-	CALI_DEBUG("Entring calico_xdp_accepted_entrypoint\n");
+	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
 	// Share with TC the packet is already accepted and accept it there too.
 	if (xdp2tc_set_metadata(xdp, CALI_META_ACCEPTED_BY_XDP)) {
 		CALI_DEBUG("Failed to set metadata for TC\n");

@@ -1307,8 +1307,11 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		}})
 
 		if t.IPVersion == 4 {
-			// Iptables for untracked egress policy.
-			t.UpdateChains(d.ruleRenderer.StaticRawEgressChains(t.IPVersion, uint32(tc.MarkSeenBypass)))
+			// Iptables for untracked policy.
+			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tc.MarkSeenBypass)))
+			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
+				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
+			}})
 			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 			}})

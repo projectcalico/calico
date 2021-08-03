@@ -75,6 +75,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (CALI_F_FROM_HEP) {
 		if (xdp2tc_get_metadata(skb) & CALI_META_ACCEPTED_BY_XDP) {
 			CALI_INFO("Final result=ALLOW (%d). Accepted by XDP.\n", CALI_REASON_ACCEPTED_BY_XDP);
+			skb->mark = CALI_SKB_MARK_BYPASS;
 			return TC_ACT_UNSPEC;
 		}
 	}
