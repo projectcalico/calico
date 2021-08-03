@@ -1373,6 +1373,7 @@ var _ = Describe("Static", func() {
 				WireguardInterfaceName:      "wireguard.cali",
 				WireguardIptablesMark:       0x100000,
 				WireguardListeningPort:      51820,
+				WireguardEncryptHostTraffic: true,
 				RouteSource:                 "WorkloadIPs",
 			}
 		})
