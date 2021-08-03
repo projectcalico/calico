@@ -124,7 +124,6 @@ func MustNewWireguardMetrics() *Metrics {
 func NewWireguardMetrics() (*Metrics, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		logrus.WithError(err).Error("cannot register wireguard metrics stats")
 		return nil, err
 	}
 	return NewWireguardMetricsWithShims(hostname, netlinkshim.NewRealWireguard, defaultCollectionRatelimit), nil
@@ -149,13 +148,13 @@ func NewWireguardMetricsWithShims(hostname string, newWireguardClient func() (ne
 func (collector *Metrics) getDevices() []*wgtypes.Device {
 	wgClient, err := collector.newWireguardClient()
 	if err != nil {
-		collector.logCtx.WithError(err).Error("error initializing wireguard client devices")
+		collector.logCtx.WithError(err).Debug("something went wrong initializing wireguard rpc client")
 		return nil
 	}
 
 	devices, err := wgClient.Devices()
 	if err != nil {
-		collector.logCtx.WithError(err).Error("error listing wireguard devices")
+		collector.logCtx.WithError(err).Debug("something went wrong enumerating wireguard devices")
 		return nil
 	}
 	return devices
@@ -166,7 +165,7 @@ func (collector *Metrics) refreshStats(m chan<- prometheus.Metric) {
 		collector.logCtx.WithFields(logrus.Fields{
 			"since":              ct.String(),
 			"ratelimit_interval": collector.rateLimitInterval.String(),
-		}).Error("refreshStats disallowed due to rate limit")
+		}).Debug("refreshStats disallowed due to rate limit")
 		return
 	}
 	devices := collector.getDevices()
