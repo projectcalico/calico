@@ -468,6 +468,7 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	// Remove from raw block storage.
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
+	delete(c.emptyBlocks, blockCIDR)
 }
 
 func (c *ipamController) updateMetrics() {
