@@ -66,6 +66,7 @@ from networking_calico.compat import constants
 from networking_calico.compat import db_exc
 from networking_calico.compat import lockutils
 from networking_calico.compat import log
+from networking_calico.compat import n_exc
 from networking_calico.compat import plugin_dir
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
@@ -783,7 +784,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # transaction.
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-port"):
-            port = self.db.get_port(plugin_context, port['id'])
+
+            # If the port was previously bound, the endpoint should already
+            # exist.
+            endpoint_should_already_exist = port_bound(original)
 
             # Check for migration so that we can reliably delete the
             # WorkloadEndpoint on the old host.
@@ -791,6 +795,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.info("Migration, delete WorkloadEndpoint on old host %s",
                          original['binding:host_id'])
                 self.endpoint_syncer.delete_endpoint(original)
+                endpoint_should_already_exist = False
+
+            try:
+                port = self.db.get_port(plugin_context, port['id'])
+            except n_exc.PortNotFound:
+                LOG.info("Port no longer exists")
+                return
 
             # Now, fork execution based on the type of update we're performing.
             # There are a few:
@@ -805,16 +816,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             #   we do nothing with unbound ports).
             if port.get('binding:profile', {}).get('migrating_to') is not None:
                 LOG.debug("Pre-live-migration notification message: no action")
-            elif port_bound(port) and not port_bound(original):
-                LOG.info("Port becoming bound: create.")
-                self.endpoint_syncer.write_endpoint(port,
-                                                    context._plugin_context)
-            elif port_bound(original) and not port_bound(port):
+            elif port_bound(port):
+                if endpoint_should_already_exist:
+                    LOG.info("Port update")
+                    self.endpoint_syncer.write_endpoint(port,
+                                                        plugin_context,
+                                                        must_update=True)
+                else:
+                    LOG.info("Port becoming bound: create.")
+                    self.endpoint_syncer.write_endpoint(port,
+                                                        context._plugin_context)
+            elif endpoint_should_already_exist:
                 LOG.info("Port becoming unbound: destroy.")
                 self.endpoint_syncer.delete_endpoint(original)
-            elif port_bound(original) and port_bound(port):
-                LOG.info("Port update")
-                self._update_port(plugin_context, port)
             else:
                 LOG.info("Update on unbound port: no action")
                 pass
