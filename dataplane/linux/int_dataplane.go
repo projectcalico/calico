@@ -565,7 +565,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
-		dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
+		ipsetsManager.AddDataplane(ipSetsV4)
 		bpfRTMgr := newBPFRouteManager(config.Hostname, config.ExternalNodesCidrs, bpfMapContext, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
