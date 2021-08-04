@@ -38,9 +38,6 @@ All platforms listed above will encrypt pod-to-pod traffic. Additionally, when u
 ### How to
 
 - [Install WireGuard](#install-wireguard)
-    - [AKS](#aks)
-    - [EKS](#eks)
-    - [OpenShift](#openshift)
 - [Enable WireGuard for a cluster](#enable-wireguard-for-a-cluster)
 - [Disable WireGuard for an individual node](#disable-wireguard-for-an-individual-node)
 - [Verify configuration](#verify-configuration)
@@ -52,14 +49,11 @@ WireGuard is included in Linux 5.6+ kernels, and has been backported to earlier 
 
 Install WireGuard on cluster nodes using {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}. Note that you may need to reboot your nodes after installing WireGuard to make the kernel modules available on your system.
 
-Use the following instructions for these operating systems that are not listed on the WireGuard installation page.
+   Use the following instructions for these operating systems that are not listed on the WireGuard installation page.
 
-##### AKS
-
-AKS cluster nodes run Ubuntu with a kernel that has WireGuard installed already, so there is no manual installation required.
-
-##### EKS
-
+{% tabs %}
+<label:EKS,active:true>
+<%
 To install WireGuard on the default Amazon Machine Image (AMI):
 
    ```bash
@@ -68,9 +62,13 @@ To install WireGuard on the default Amazon Machine Image (AMI):
    sudo curl -o /etc/yum.repos.d/jdoss-wireguard-epel-7.repo https://copr.fedorainfracloud.org/coprs/jdoss/wireguard/repo/epel-7/jdoss-wireguard-epel-7.repo
    sudo yum install wireguard-dkms wireguard-tools -y
    ```
-
-##### OpenShift
-
+%>
+<label:AKS>
+<%
+AKS cluster nodes run Ubuntu with a kernel that has WireGuard installed already, so there is no manual installation required.
+%>
+<label:OpenShift>
+<%
 To install WireGuard for OpenShift v4.6:
 
   This approach uses kernel modules via container installation as outlined here {% include open-new-window.html text='atomic wireguard' url='https://github.com/projectcalico/atomic-wireguard' %} 
@@ -145,6 +143,8 @@ To install WireGuard for OpenShift v4.6:
    ```bash
    oc create -f mc-wg.yaml
    ```
+%>
+{% endtabs %}
 
 #### Enable WireGuard for a cluster
 
@@ -156,17 +156,32 @@ Enable WireGuard encryption across all the nodes using the following command.
 ```bash
 calicoctl patch felixconfiguration default --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
 ```
+    Additional steps are needed for some platforms as follows.
 
-For AKS and EKS, additionally you will need to enable host-to-host encryption using the following command.
+{% tabs %}
+<label:EKS,active:true>
+<%
+Enable host-to-host encryption using the following command.
 
 ```bash
 kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
 ```
+%>
+<label:AKS>
+<%
+Enable host-to-host encryption using the following command.
 
+```bash
+kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
+```
+%>
+<label:AKS>
+<%
 For OpenShift, add the Felix configuration with WireGuard enabled [under custom resources]({{site.baseurl}}/getting-started/openshift/installation#optionally-provide-additional-configuration).
 
    > **Note**: The above command can be used to change other WireGuard attributes. For a list of other WireGuard parameters and configuration evaluation, see the [Felix configuration]({{site.baseurl}}/reference/resources/felixconfig#felix-configuration-definition).
    {: .alert .alert-info}
+%>
 
 We recommend that you review and modify the MTU used by Calico networking when WireGuard is enabled to increase network performance. Follow the instructions in the [Configure MTU to maximize network performance]({{site.baseurl}}/networking/mtu) guide to set the MTU to a value appropriate for your network.
 
