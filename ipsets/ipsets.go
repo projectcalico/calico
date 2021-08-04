@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,6 +71,10 @@ type IPSets struct {
 	stderrCopy bytes.Buffer
 
 	opReporter logutils.OpRecorder
+
+	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
+	// as Linux IP sets.
+	neededIPSetNames set.Set
 }
 
 func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *IPSets {
@@ -626,7 +630,19 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 // 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
 // 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
 func (s *IPSets) tryUpdates() error {
-	if s.dirtyIPSetIDs.Len() == 0 {
+	needUpdates := false
+	if s.neededIPSetNames == nil {
+		needUpdates = s.dirtyIPSetIDs.Len() > 0
+	} else {
+		s.dirtyIPSetIDs.Iter(func(item interface{}) error {
+			if s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(item.(string))) {
+				needUpdates = true
+				return set.StopIteration
+			}
+			return nil
+		})
+	}
+	if !needUpdates {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
 	}
@@ -670,6 +686,9 @@ func (s *IPSets) tryUpdates() error {
 	// Ask each dirty IP set to write its updates to the stream.
 	var writeErr error
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
+		if s.neededIPSetNames != nil && !s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(item.(string))) {
+			return nil
+		}
 		ipSet := s.ipSetIDToIPSet[item.(string)]
 		writeErr = s.writeUpdates(ipSet, stdin)
 		if writeErr != nil {
@@ -702,6 +721,9 @@ func (s *IPSets) tryUpdates() error {
 	// dataplane should be in sync.  If we bail out above, then the resync logic will kick in
 	// and figure out how much of our update succeeded.
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
+		if s.neededIPSetNames != nil && !s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(item.(string))) {
+			return nil
+		}
 		ipSet := s.ipSetIDToIPSet[item.(string)]
 		if ipSet.pendingReplace != nil {
 			ipSet.members = ipSet.pendingReplace
@@ -937,4 +959,8 @@ func firstNonNilErr(errs ...error) error {
 		}
 	}
 	return nil
+}
+
+func (s *IPSets) SetFilter(ipSetNames set.Set) {
+	s.neededIPSetNames = ipSetNames
 }

@@ -166,3 +166,20 @@ func (c *Chain) RuleHashes(features *Features) []string {
 	}
 	return hashes
 }
+
+func (c *Chain) IPSetIDs() (ipSetIDs []string) {
+	if c == nil {
+		return nil
+	}
+	for _, rule := range c.Rules {
+		for _, matchString := range []string(rule.Match) {
+			words := strings.Split(matchString, " ")
+			for i := range words {
+				if words[i] == "--match-set" && (i+1) < len(words) {
+					ipSetIDs = append(ipSetIDs, words[i+1])
+				}
+			}
+		}
+	}
+	return
+}
