@@ -225,9 +225,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			goto finalize;
 		} else {
 			if (CALI_F_HEP) {
-				// TODO-HEP for data interfaces, this should allow, for active HEPs it should drop or apply policy.
-				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, allow.\n");
-				goto allow;
+				CALI_DEBUG("CT mid-flow miss with no Linux conntrack entry, egressing via HEP: continue through HEP policy.\n");
+				ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_NEW);
 			} else {
 				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, drop.\n");
 				goto deny;
