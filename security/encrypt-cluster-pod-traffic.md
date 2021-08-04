@@ -63,7 +63,7 @@ To install WireGuard on the default Amazon Machine Image (AMI):
    sudo yum install wireguard-dkms wireguard-tools -y
    ```
 
-Enable host-to-host encryption mode using the following command.
+Additionally, you will need to enable host-to-host encryption mode for WireGuard using the following command.
 
 ```bash
 kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
@@ -73,7 +73,7 @@ kubectl -n calico-system set env daemonset/calico-node --containers="calico-node
 <%
 AKS cluster nodes run Ubuntu with a kernel that has WireGuard installed already, so there is no manual installation required.
 
-Enable host-to-host encryption mode using the following command.
+You will need to enable host-to-host encryption mode for WireGuard using the following command.
 
 ```bash
 kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
