@@ -69,6 +69,7 @@ func Run(args []string) error {
                      [--no-default-ippools]
                      [--dryrun]
                      [--init-system]
+                     [--allow-version-mismatch]
 
 Options:
   -h --help                Show this screen.
@@ -144,8 +145,10 @@ Options:
                            configuration in YAML or JSON format.
                            [default: ` + constants.DefaultConfigPath + `]
      --felix-config=<CONFIG>
-                            Path to the file containing Felix
-                            configuration in YAML or JSON format.
+                           Path to the file containing Felix
+                           configuration in YAML or JSON format.
+     --allow-version-mismatch
+	                       Allow client and cluster versions mismatch.
 
 Description:
   This command is used to start a calico/node container instance which provides
@@ -163,6 +166,8 @@ Description:
 	if len(arguments) == 0 {
 		return nil
 	}
+
+	// Note: Intentionally not check version mismatch for this command
 
 	// Extract all the parameters.
 	ipv4 := argutils.ArgStringOrBlank(arguments, "--ip")

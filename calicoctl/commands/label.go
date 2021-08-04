@@ -34,7 +34,7 @@ func Label(args []string) error {
   <BINARY_NAME> label (<KIND> <NAME>
   	              ( <key>=<value> [--overwrite] |
   	                <key> --remove )
-                  [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>])
+                  [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>]) [--allow-version-mismatch]
 
 
 
@@ -57,14 +57,15 @@ Options:
   -n --namespace=<NS>          Namespace of the resource.
                                Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                                Uses the default namespace if not specified.
-  --overwrite                  If true, overwrite the value when the key is already
+     --overwrite               If true, overwrite the value when the key is already
                                present in labels. Otherwise reports error when the
                                labeled resource already have the key in its labels.
                                Can not be used with --remove.
-  --remove                     If true, remove the specified key in labels of the
+     --remove                  If true, remove the specified key in labels of the
                                resource. Reports error when specified key does not
                                exist. Can not be used with --overwrite.
-  --context=<context>          The name of the kubeconfig context to use.
+     --context=<context>       The name of the kubeconfig context to use.
+     --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   The label command is used to add or update a label on a resource. Resource types

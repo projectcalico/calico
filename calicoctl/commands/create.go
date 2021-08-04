@@ -30,7 +30,7 @@ import (
 func Create(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> create --filename=<FILENAME> [--recursive] [--skip-empty]
-                   [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>]
+                   [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>] [--allow-version-mismatch]
 
 Examples:
   # Create a policy using the data in policy.yaml.
@@ -40,23 +40,24 @@ Examples:
   cat policy.json | <BINARY_NAME> create -f -
 
 Options:
-  -h --help                 Show this screen.
-  -f --filename=<FILENAME>  Filename to use to create the resource.  If set to
-                            "-" loads from stdin. If filename is a directory, this command is
-                            invoked for each .json .yaml and .yml file within that directory,
-                            terminating after the first failure.
-  -R --recursive            Process the filename specified in -f or --filename recursively.
-     --skip-empty           Do not error if any files or directory specified using -f or --filename contain no
-                            data.
-     --skip-exists          Skip over and treat as successful any attempts to
-                            create an entry that already exists.
-  -c --config=<CONFIG>      Path to the file containing connection
-                            configuration in YAML or JSON format.
-                            [default: ` + constants.DefaultConfigPath + `]
-  -n --namespace=<NS>       Namespace of the resource.
-                            Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
-                            Uses the default namespace if not specified.
-  --context=<context>       The name of the kubeconfig context to use.
+  -h --help                    Show this screen.
+  -f --filename=<FILENAME>     Filename to use to create the resource.  If set to
+                               "-" loads from stdin. If filename is a directory, this command is
+                               invoked for each .json .yaml and .yml file within that directory,
+                               terminating after the first failure.
+  -R --recursive               Process the filename specified in -f or --filename recursively.
+     --skip-empty              Do not error if any files or directory specified using -f or --filename contain no
+                               data.
+     --skip-exists             Skip over and treat as successful any attempts to
+                               create an entry that already exists.
+  -c --config=<CONFIG>         Path to the file containing connection
+                               configuration in YAML or JSON format.
+                               [default: ` + constants.DefaultConfigPath + `]
+  -n --namespace=<NS>          Namespace of the resource.
+                               Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
+                               Uses the default namespace if not specified.
+     --context=<context>       The name of the kubeconfig context to use.
+     --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   The create command is used to create a set of resources by filename or stdin.
