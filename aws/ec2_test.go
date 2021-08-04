@@ -21,14 +21,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
 	"k8s.io/apimachinery/pkg/util/clock"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
 	"github.com/projectcalico/libcalico-go/lib/health"
 
@@ -43,8 +40,6 @@ const (
 )
 
 type mockClient struct {
-	ec2iface.EC2API
-	ec2MetadaAPI
 	UsageCounter int
 }
 
@@ -52,43 +47,48 @@ func newMockClient() *mockClient {
 	return &mockClient{UsageCounter: 0}
 }
 
-func (c *mockClient) GetInstanceIdentityDocumentWithContext(ctx aws.Context) (ec2metadata.EC2InstanceIdentityDocument, error) {
+func (c *mockClient) GetInstanceIdentityDocument(
+	ctx context.Context, params *imds.GetInstanceIdentityDocumentInput, optFns ...func(*imds.Options),
+) (*imds.GetInstanceIdentityDocumentOutput, error) {
+	c.UsageCounter++
+	return &imds.GetInstanceIdentityDocumentOutput{InstanceIdentityDocument: imds.InstanceIdentityDocument{
+		InstanceID: testInstId,
+	}}, nil
+}
+
+func (c *mockClient) GetRegion(
+	ctx context.Context, params *imds.GetRegionInput, optFns ...func(*imds.Options),
+) (*imds.GetRegionOutput, error) {
 	c.UsageCounter++
 
-	return ec2metadata.EC2InstanceIdentityDocument{
-		InstanceID: testInstId,
+	return &imds.GetRegionOutput{
+		Region: testRegion,
 	}, nil
 }
 
-func (c *mockClient) RegionWithContext(ctx aws.Context) (string, error) {
-	c.UsageCounter++
-
-	return testRegion, nil
-}
-
-func (c *mockClient) ModifyNetworkInterfaceAttributeWithContext(ctx aws.Context, input *ec2.ModifyNetworkInterfaceAttributeInput, opts ...request.Option) (*ec2.ModifyNetworkInterfaceAttributeOutput, error) {
+func (c *mockClient) ModifyNetworkInterfaceAttribute(ctx context.Context, params *ec2.ModifyNetworkInterfaceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyNetworkInterfaceAttributeOutput, error) {
 	c.UsageCounter++
 
 	return nil, nil
 }
 
-func (c *mockClient) DescribeInstancesWithContext(ctx aws.Context, input *ec2.DescribeInstancesInput, opts ...request.Option) (*ec2.DescribeInstancesOutput, error) {
+func (c *mockClient) DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
 	c.UsageCounter++
 
-	deviceIndexZero := int64(0)
+	deviceIndexZero := int32(0)
 	eniId := testEniId
 
 	return &ec2.DescribeInstancesOutput{
-		Reservations: []*ec2.Reservation{
+		Reservations: []types.Reservation{
 			{
-				Instances: []*ec2.Instance{
+				Instances: []types.Instance{
 					{
-						NetworkInterfaces: []*ec2.InstanceNetworkInterface{
+						NetworkInterfaces: []types.InstanceNetworkInterface{
 							{
-								Attachment: &ec2.InstanceNetworkInterfaceAttachment{
+								NetworkInterfaceId: &eniId,
+								Attachment: &types.InstanceNetworkInterfaceAttachment{
 									DeviceIndex: &deviceIndexZero,
 								},
-								NetworkInterfaceId: &eniId,
 							},
 						},
 					},
@@ -97,6 +97,10 @@ func (c *mockClient) DescribeInstancesWithContext(ctx aws.Context, input *ec2.De
 		},
 	}, nil
 }
+
+var (
+	_ ec2API = (*mockClient)(nil) // Compile-time type assert.
+)
 
 type mockSrcDstCheckUpdater struct {
 	fakeClock        *clock.FakeClock
@@ -136,12 +140,21 @@ func (updater *mockSrcDstCheckUpdater) Update(option string) error {
 	return errors.New("Some AWS EC2 errors")
 }
 
+func newAPIError(code, msg string) error {
+	err := &smithy.GenericAPIError{
+		Code:    code,
+		Message: msg,
+		Fault:   0,
+	}
+	return fmt.Errorf("wrapped err: %w", err)
+}
+
 var _ = Describe("AWS Tests", func() {
 	It("should correctly convert between errors and awserrors", func() {
 		fakeCode := "fakeCode"
 		fakeMsg := "fakeMsg"
 
-		awsErr := awserr.New(fakeCode, fakeMsg, nil)
+		awsErr := newAPIError(fakeCode, fakeMsg)
 		errMsg := convertError(awsErr)
 		Expect(errMsg).To(Equal(fmt.Sprintf("%s: %s", fakeCode, fakeMsg)))
 
@@ -155,13 +168,13 @@ var _ = Describe("AWS Tests", func() {
 		internalErrCode := "InternalError"
 		internalErrMsg := "internal error"
 
-		awsErr := awserr.New(internalErrCode, internalErrMsg, nil)
+		awsErr := newAPIError(internalErrCode, internalErrMsg)
 		Expect(retriable(awsErr)).To(BeTrue())
 
 		fakeCode := "fakeCode"
 		fakeMsg := "fakeMsg"
 
-		awsErr = awserr.New(fakeCode, fakeMsg, nil)
+		awsErr = newAPIError(fakeCode, fakeMsg)
 		Expect(retriable(awsErr)).To(BeFalse())
 
 		fakeMsg = "non-aws error"
@@ -178,20 +191,20 @@ var _ = Describe("AWS Tests", func() {
 
 	It("should handle EC2 interactions correctly", func() {
 		mock := newMockClient()
-		cli := &ec2Client{
+		client := &ec2Client{
 			EC2Svc:        mock,
 			ec2InstanceId: testInstId,
 		}
 
-		Expect(cli.getEC2NetworkInterfaceId(context.TODO())).To(Equal(testEniId))
-		Expect(cli.setEC2SourceDestinationCheck(context.TODO(), testEniId, false)).NotTo(HaveOccurred())
+		Expect(client.getEC2NetworkInterfaceId(context.TODO())).To(Equal(testEniId))
+		Expect(client.setEC2SourceDestinationCheck(context.TODO(), testEniId, false)).NotTo(HaveOccurred())
 		Expect(mock.UsageCounter).To(BeNumerically("==", 2))
 
 		By("verifying Availability")
 		os.Setenv("AWS_EC2_METADATA_DISABLED", "true")
 		_, err := newEC2Client(context.TODO())
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("EC2 metadata service is unavailable"))
+		Expect(err.Error()).To(ContainSubstring("access disabled to EC2 IMDS via client option"))
 	})
 
 	It("should retry EC2 source-destination-check on error and exit the retry loop on success", func() {

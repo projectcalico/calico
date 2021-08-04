@@ -16,21 +16,21 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	awssession "github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	log "github.com/sirupsen/logrus"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
@@ -41,16 +41,18 @@ const (
 )
 
 func convertError(err error) string {
-	if awsErr, ok := err.(awserr.Error); ok {
-		return fmt.Sprintf("%s: %s", awsErr.Code(), awsErr.Message())
+	var awsErr smithy.APIError
+	if errors.As(err, &awsErr) {
+		return fmt.Sprintf("%s: %s", awsErr.ErrorCode(), awsErr.ErrorMessage())
 	}
 
 	return fmt.Sprintf("%v", err.Error())
 }
 
 func retriable(err error) bool {
-	if awsErr, ok := err.(awserr.Error); ok {
-		switch awsErr.Code() {
+	var awsErr smithy.APIError
+	if errors.As(err, &awsErr) {
+		switch awsErr.ErrorCode() {
 		case "InternalError":
 			return true
 		case "InternalFailure":
@@ -136,13 +138,21 @@ func (updater *EC2SrcDstCheckUpdater) Update(caliCheckOption string) error {
 
 // Interface for EC2 Metadata service.
 type ec2MetadaAPI interface {
-	AvailableWithContext(ctx aws.Context) bool
-	GetInstanceIdentityDocumentWithContext(ctx aws.Context) (ec2metadata.EC2InstanceIdentityDocument, error)
-	RegionWithContext(ctx aws.Context) (string, error)
+	GetInstanceIdentityDocument(
+		ctx context.Context, params *imds.GetInstanceIdentityDocumentInput, optFns ...func(*imds.Options),
+	) (*imds.GetInstanceIdentityDocumentOutput, error)
+	GetRegion(
+		ctx context.Context, params *imds.GetRegionInput, optFns ...func(*imds.Options),
+	) (*imds.GetRegionOutput, error)
+}
+
+type ec2API interface {
+	DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
+	ModifyNetworkInterfaceAttribute(ctx context.Context, params *ec2.ModifyNetworkInterfaceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyNetworkInterfaceAttributeOutput, error)
 }
 
 func getEC2InstanceID(ctx context.Context, svc ec2MetadaAPI) (string, error) {
-	idDoc, err := svc.GetInstanceIdentityDocumentWithContext(ctx)
+	idDoc, err := svc.GetInstanceIdentityDocument(ctx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -151,33 +161,25 @@ func getEC2InstanceID(ctx context.Context, svc ec2MetadaAPI) (string, error) {
 }
 
 func getEC2Region(ctx context.Context, svc ec2MetadaAPI) (string, error) {
-	region, err := svc.RegionWithContext(ctx)
+	region, err := svc.GetRegion(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 	log.Debugf("region: %s", region)
-	return region, nil
+	return region.Region, nil
 }
 
 type ec2Client struct {
-	EC2Svc        ec2iface.EC2API
+	EC2Svc        ec2API
 	ec2InstanceId string
 }
 
 func newEC2Client(ctx context.Context) (*ec2Client, error) {
-	awsSession, err := awssession.NewSession()
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error creating AWS session: %w", err)
+		return nil, fmt.Errorf("error loading AWS config: %w", err)
 	}
-
-	metadataSvc := ec2metadata.New(awsSession)
-	if metadataSvc == nil {
-		return nil, fmt.Errorf("error connecting to EC2 Metadata service")
-	}
-
-	if !metadataSvc.AvailableWithContext(ctx) {
-		return nil, fmt.Errorf("EC2 metadata service is unavailable or not running on an EC2 instance")
-	}
+	metadataSvc := imds.NewFromConfig(cfg)
 
 	region, err := getEC2Region(ctx, metadataSvc)
 	if err != nil {
@@ -189,7 +191,9 @@ func newEC2Client(ctx context.Context) (*ec2Client, error) {
 		return nil, fmt.Errorf("error getting ec2 instance-id: %s", convertError(err))
 	}
 
-	ec2Svc := ec2.New(awsSession, aws.NewConfig().WithRegion(region))
+	ec2Svc := ec2.NewFromConfig(cfg, func(o *ec2.Options) {
+		o.Region = region
+	})
 	if ec2Svc == nil {
 		return nil, fmt.Errorf("error connecting to EC2 service")
 	}
@@ -202,14 +206,14 @@ func newEC2Client(ctx context.Context) (*ec2Client, error) {
 
 func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstanceId string, err error) {
 	input := &ec2.DescribeInstancesInput{
-		InstanceIds: []*string{
-			aws.String(c.ec2InstanceId),
+		InstanceIds: []string{
+			c.ec2InstanceId,
 		},
 	}
 
 	var out *ec2.DescribeInstancesOutput
 	for i := 0; i < retries; i++ {
-		out, err = c.EC2Svc.DescribeInstancesWithContext(ctx, input)
+		out, err = c.EC2Svc.DescribeInstances(ctx, input)
 		if err != nil {
 			if retriable(err) {
 				// if error is temporary, try again in a second.
@@ -259,14 +263,14 @@ func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstan
 func (c *ec2Client) setEC2SourceDestinationCheck(ctx context.Context, ec2NetId string, checkVal bool) error {
 	input := &ec2.ModifyNetworkInterfaceAttributeInput{
 		NetworkInterfaceId: aws.String(ec2NetId),
-		SourceDestCheck: &ec2.AttributeBooleanValue{
+		SourceDestCheck: &types.AttributeBooleanValue{
 			Value: aws.Bool(checkVal),
 		},
 	}
 
 	var err error
 	for i := 0; i < retries; i++ {
-		_, err = c.EC2Svc.ModifyNetworkInterfaceAttributeWithContext(ctx, input)
+		_, err = c.EC2Svc.ModifyNetworkInterfaceAttribute(ctx, input)
 		if err != nil {
 			if retriable(err) {
 				// if error is temporary, try again in a second.
