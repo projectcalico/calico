@@ -19,15 +19,21 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
+**Supported**
+
+The following platforms using only IPv4:
+- Kubernetes, on-premises
+- EKS using Calico CNI
+- EKS using AWS CNI
+- AKS using Azure CNI
+
+All platforms listed above will encrypt pod-to-pod traffic. Additionally, when using AKS or EKS, host-to-host traffic will also be encrypted, including host-networked pods.
+
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/clis/calicoctl/install)
 - Verify the operating system(s) running on the nodes in the cluster {% include open-new-window.html text='support WireGuard' url='https://www.wireguard.com/install/' %}.
 - WireGuard in {{site.prodname}} requires node IP addresses to establish secure tunnels between nodes. {{site.prodname}} can automatically detect IP address of a node using [IP Setting]({{site.baseurl}}/reference/node/configuration#ip-setting) and [IP autodetection method]({{site.baseurl}}/reference/node/configuration#ip-autodetection-methods) in [calico/node]({{site.baseurl}}/reference/node/configuration) resource.
     - Set `IP` (or `IP6`) environment variable to `autodetect`.
     - Set `IP_AUTODETECTION_METHOD` (or `IP6_AUTODETECTION_METHOD`) to an appropriate value. If there are multiple interfaces on a node, set the value to detect the IP address of the primary interface.
-
-> **Note**: WireGuard in {{site.prodname}} does not support IPv6 at this time. Also, encryption using WireGuard is not supported on managed Kubernetes platforms which don't use Calico CNI (e.g. managed Kubernetes platforms EKS, and GKE).
-> WireGuard is supported when using Azure CNI on AKS, and on this platform will encrypt not just pod-to-pod traffic but host-to-host traffic as well.
-{: .alert .alert-info}
 
 ### How to
 
@@ -43,7 +49,8 @@ WireGuard is included in Linux 5.6+ kernels, and has been backported to earlier 
 
 Install WireGuard on cluster nodes using {% include open-new-window.html text='instructions for your operating system' url='https://www.wireguard.com/install/' %}. Note that you may need to reboot your nodes after installing WireGuard to make the kernel modules available on your system.
 
-   Use the following instructions for these operating systems that are not listed on the WireGuard installation page.
+Use the following instructions for these platforms that are not listed on the WireGuard installation page.
+
 {% tabs %}
 <label:EKS,active:true>
 <%
@@ -55,10 +62,22 @@ To install WireGuard on the default Amazon Machine Image (AMI):
    sudo curl -o /etc/yum.repos.d/jdoss-wireguard-epel-7.repo https://copr.fedorainfracloud.org/coprs/jdoss/wireguard/repo/epel-7/jdoss-wireguard-epel-7.repo
    sudo yum install wireguard-dkms wireguard-tools -y
    ```
+
+Additionally, you will need to enable host-to-host encryption mode for WireGuard using the following command.
+
+```bash
+kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
+```
 %>
-<label:Kubernetes-AKS>
+<label:AKS>
 <%
-AKS cluster nodes currently run Ubuntu with a kernel that has WireGuard installed already, so there is no manual installation required.
+AKS cluster nodes run Ubuntu with a kernel that has WireGuard installed already, so there is no manual installation required.
+
+You will need to enable host-to-host encryption mode for WireGuard using the following command.
+
+```bash
+kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
+```
 %>
 <label:OpenShift>
 <%
