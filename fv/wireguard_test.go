@@ -1247,6 +1247,9 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled bool) infrastructu
 	topologyOptions.ExtraEnvVars["FELIX_PROMETHEUSMETRICSENABLED"] = "true"
 	topologyOptions.IPIPEnabled = ipipEnabled
 
+	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
+	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
+
 	// Enable Wireguard.
 	felixConfig := api.NewFelixConfiguration()
 	felixConfig.SetName("default")

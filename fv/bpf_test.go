@@ -266,6 +266,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.WireguardEnabled = true
 				// Enable Wireguard.
 				options.ExtraEnvVars["FELIX_WIREGUARDENABLED"] = "true"
+				// With Wireguard the default IptablesMarkMask of 0xffff0000 isn't enough.
+				options.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
 			default:
 				Fail("bad tunnel option")
 			}
