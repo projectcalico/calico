@@ -52,6 +52,10 @@ if [[ "${filename}" =~ test_.* ]]; then
   args+=("-D__BPFTOOL_LOADER__")
 fi
 
+if [[ "${filename}" =~ test_xdp_.* ]]; then
+  args+=("-DUNITTEST")
+fi
+
 flags=0
 
 # WARNING: these constants must be kept in sync with bpf.h.

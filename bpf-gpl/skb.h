@@ -79,7 +79,7 @@ static CALI_BPF_INLINE void skb_refresh_start_end(struct cali_tc_ctx *ctx) {
  * For example, in programs attached to L3 tunnel devices, the IP header is at location 0.
  * Whereas, in L2 programs, it's past the ethernet header.
  */
-static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
+static CALI_BPF_INLINE long skb_iphdr_offset(void)
 {
 	if (CALI_F_IPIP_ENCAPPED) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
@@ -98,7 +98,7 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
  */
 static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx)
 {
-	long offset = skb_iphdr_offset(ctx->skb);
+	long offset = skb_iphdr_offset();
 	struct iphdr *ip =  ctx->data_start + offset;
 	CALI_DEBUG("IP id=%d s=%x d=%x\n",
 			bpf_ntohs(ip->id), bpf_ntohl(ip->saddr), bpf_ntohl(ip->daddr));
@@ -126,7 +126,7 @@ static CALI_BPF_INLINE void skb_refresh_hdr_ptrs(struct cali_tc_ctx *ctx)
  * - ctx->nh/tcp_header/udp_header/icmp_header.
  */
 static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
-	int min_size = skb_iphdr_offset(ctx->skb) + IP_SIZE;
+	int min_size = skb_iphdr_offset() + IP_SIZE;
 	skb_refresh_start_end(ctx);
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// This is an XDP program and there is not enough data for next header.
@@ -161,7 +161,7 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 
 static CALI_BPF_INLINE long skb_l4hdr_offset(struct __sk_buff *skb, __u8 ihl)
 {
-	return skb_iphdr_offset(skb) + ihl;
+	return skb_iphdr_offset() + ihl;
 }
 
 static CALI_BPF_INLINE __u32 skb_ingress_ifindex(struct __sk_buff *skb)

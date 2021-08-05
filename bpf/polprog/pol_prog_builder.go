@@ -223,8 +223,10 @@ normalPolicy:
 		p.b.LabelNextInsn("to_or_from_host")
 		p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
 		if rules.ForXDP {
+			p.writeTiers(rules.HostNormalTiers, legDestPreNAT, "allowed_by_host_policy")
 			p.b.Jump("xdp_pass")
 		} else {
+			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
 			p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
 		}
 	}

@@ -133,7 +133,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			/* XXX do a proper CT lookup to find this */
 			ctx.ip_header->saddr = HOST_IP;
-			int l3_csum_off = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
+			int l3_csum_off = skb_iphdr_offset() + offsetof(struct iphdr, check);
 
 			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, HOST_IP, 4);
 			if (res) {
@@ -355,20 +355,17 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			.ip	= ctx.state->ip_dst,
 			.port	= host_to_ctx_port(ctx.state->dport),
 		};
+		// If we didn't find a CTLB NAT entry then use the packet's own IP/port for the
+		// pre-DNAT values that's set by tc_state_fill_from_iphdr() and
+		// tc_state_fill_from_nextheader().
 		struct sendrecv4_val *revnat = cali_v4_ct_nats_lookup_elem(&ct_nkey);
 		if (revnat) {
 			CALI_DEBUG("Got cali_v4_ct_nats entry; flow was NATted by CTLB.\n");
 			ctx.state->pre_nat_ip_dst = revnat->ip;
 			ctx.state->pre_nat_dport = ctx_port_to_host(revnat->port);
-			goto skip_pre_dnat_default;
 		}
 	}
-	// If we didn't find a CTLB NAT entry then use the packet's own IP/port for the
-	// pre-DNAT values.
-	ctx.state->pre_nat_ip_dst = ctx.state->ip_dst;
-	ctx.state->pre_nat_dport = ctx.state->dport;
 
-skip_pre_dnat_default:
 	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
 		if (CALI_F_FROM_HEP && is_failsafe_in(ctx.state->ip_proto, ctx.state->post_nat_dport, ctx.state->ip_src)) {
@@ -529,7 +526,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check);
+	l3_csum_off = skb_iphdr_offset() +  offsetof(struct iphdr, check);
 
 	if (ct_related) {
 		if (ctx->ip_header->protocol == IPPROTO_ICMP) {
