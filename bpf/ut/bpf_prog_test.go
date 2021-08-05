@@ -304,7 +304,7 @@ func bpftool(args ...string) ([]byte, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if e, ok := err.(*exec.ExitError); ok {
-			log.WithField("stderr", string(e.Stderr)).Errorf("bpftool %s failed: %v", args, err)
+			log.WithField("stderr", string(e.Stderr)).Errorf("bpftool %s failed: %v out=\n%v", args, err, string(out))
 			// to make the output reflect the new lines, logrus ignores it
 			fmt.Print(fmt.Sprint(string(e.Stderr)))
 		}
