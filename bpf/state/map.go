@@ -32,16 +32,18 @@ const (
 )
 
 // struct cali_tc_state {
-//    __be32 ip_src;4
-//    __be32 ip_dst;8
-//    __be32 post_nat_ip_dst;12
-//    __be32 nat_tun_src;16
-//    enum calico_policy_result pol_rc;24
-//    __u16 sport;26
-//    __u16 dport;28
-//    __u16 post_nat_dport;30
-//    __u8 ip_proto;31
-//    __u8 pad;
+//    __be32 ip_src;
+//    __be32 ip_dst;
+//    __be32 pre_nat_ip_dst;
+//    __be32 post_nat_ip_dst;
+//    __be32 tun_ip;
+//    __s32 pol_rc;
+//    __u16 sport;
+//    __u16 dport;
+//    __u16 pre_nat_dport;
+//    __u16 post_nat_dport;
+//    __u8 ip_proto;
+//    __u8 flags;
 //    __be16 ip_size;
 //    struct calico_ct_result ct_result;
 //    struct calico_nat_dest nat_dest;
@@ -52,7 +54,7 @@ type State struct {
 	DstAddr             uint32
 	PreNATDstAddr       uint32
 	PostNATDstAddr      uint32
-	NATTunSrcAddr       uint32
+	TunIP               uint32
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16

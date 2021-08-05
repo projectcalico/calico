@@ -265,7 +265,7 @@ func (p *Builder) writeProgramHeader() {
 	p.b.LoadMapFD(R1, uint32(p.stateMapFD)) // R1 = 0 (64-bit immediate)
 	p.b.Call(HelperMapLookupElem)           // Call helper
 	// Check return value for NULL.
-	p.b.JumpEqImm64(R0, 0, "deny")
+	p.b.JumpEqImm64(R0, 0, "exit")
 	// Save state pointer in R9.
 	p.b.Mov64(R9, R0)
 	p.b.LabelNextInsn("policy")
@@ -295,9 +295,16 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Fall through here if there's no match.  Also used when we hit an error or if policy rejects packet.
 	p.b.LabelNextInsn("deny")
+
+	// Store the policy result in the state for the next program to see.
+	p.b.MovImm32(R1, int32(state.PolicyDeny))
+	p.b.Store32(R9, R1, stateOffPolResult)
+
 	if forXDP {
+		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 1 /* XDP_DROP */)
 	} else {
+		p.b.LabelNextInsn("exit")
 		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
 	}
 	p.b.Exit()
