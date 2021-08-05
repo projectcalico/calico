@@ -162,7 +162,7 @@ var xdpTestCases = []xdpTest{
 			SrcPort: 54321,
 		},
 		Drop:     false,
-		Metadata: true,
+		Metadata: false,
 	},
 	{
 		Description: "6 - Match against a deny policy, must drop",
