@@ -84,9 +84,17 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 		goto allow;
 	}
 
-	// Allow a packet if it hits an entry in the failsafe map
+	// Allow a packet if it hits an entry in the inbound ports failsafe map
 	if (is_failsafe_in(ctx.state->ip_proto, ctx.state->dport, ctx.state->ip_src)) {
 		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->dport);
+		ctx.state->pol_rc = CALI_POL_ALLOW;
+		goto allow_with_metadata;
+	}
+
+	// Allow a packet if it hits an entry in the outbound ports failsafe map
+	if (is_failsafe_out(ctx.state->ip_proto, ctx.state->sport, ctx.state->ip_src)) {
+		CALI_DEBUG("Outbound failsafe port: %d. Skip policy\n", ctx.state->sport);
+		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow_with_metadata;
 	}
 
