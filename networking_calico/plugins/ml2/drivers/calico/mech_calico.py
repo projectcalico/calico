@@ -825,7 +825,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 else:
                     LOG.info("Port becoming bound: create.")
                     self.endpoint_syncer.write_endpoint(port,
-                                                        context._plugin_context)
+                                                        plugin_context)
             elif endpoint_should_already_exist:
                 LOG.info("Port becoming unbound: destroy.")
                 self.endpoint_syncer.delete_endpoint(original)
