@@ -225,7 +225,22 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			goto finalize;
 		} else {
 			if (CALI_F_HEP) {
-				CALI_DEBUG("CT mid-flow miss with no Linux conntrack entry, egressing via HEP: continue through HEP policy.\n");
+				// HEP egress for a mid-flow packet with no BPF or Linux CT state.
+				// This happens, for example, with asymmetric untracked policy,
+				// where we want the return path packet to be dropped if there is a
+				// HEP present (as opposed to just a data interface).  Allowing the
+				// packet to hit the HEP policy will achieve that.  On the other
+				// hand, a plain data interface should not drop the packet because
+				// of asymmetric untracked policy, and allowing the packet to
+				// continue will achieve that too.
+				//
+				// However we are mid-flow and so it's important to suppress any CT
+				// state creation - which normally follows when a packet is allowed
+				// through - because that CT state would not be correct.  Basically,
+				// unless we see the SYN packet that starts a flow, we should never
+				// have CT state for that flow.
+				CALI_DEBUG("CT mid-flow miss to HEP with no Linux conntrack entry: continue but suppressing CT state creation.\n");
+				ctx.state->flags |= CALI_ST_SUPPRESS_CT_STATE;
 				ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_NEW);
 			} else {
 				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, drop.\n");

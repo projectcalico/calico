@@ -101,6 +101,8 @@ enum cali_state_flags {
 	/* CALI_ST_SRC_IS_HOST is set if the packet is heading away from the host namespace and the source
 	 * belongs to the host. */
 	CALI_ST_SRC_IS_HOST	  = 0x08,
+	/* CALI_ST_SUPPRESS_CT_STATE prevents the creation of any new CT state. */
+	CALI_ST_SUPPRESS_CT_STATE = 0x10,
 };
 
 struct fwd {

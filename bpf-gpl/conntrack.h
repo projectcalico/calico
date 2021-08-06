@@ -805,6 +805,11 @@ static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_c
 	struct calico_ct_key k;
 	int err;
 
+	if (ctx->state->flags & CALI_ST_SUPPRESS_CT_STATE) {
+		// CT state creation is suppressed.
+		return 0;
+	}
+
 	// Workaround for verifier; make sure verifier sees the skb on all code paths.
 	ct_ctx->skb = ctx->skb;
 
