@@ -359,9 +359,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ XDP tests with initialized 
 				}
 			})
 
-			It("should block connections even if the source port is a failsafe port", func() {
-				expectTCPSourceFailsafePortBlacklisted(ccTCP)
-			})
+			if bpfEnabled {
+				// The following test case only works for the old iptables-mode XDP
+				// implementation of untracked ingress deny policy.  The BPF mode
+				// and iptables chain implementations of untracked ingress policy
+				// both match against both inbound and outbound failsafes - which we
+				// now believe is the most correct behaviour - and it was an
+				// oversight that outbound failsafes were not added to the old XDP
+				// program.  It isn't worth fixing the old XDP program now, as it's
+				// likely it will be replaced with the new XDP as used in BPF mode.
+			} else {
+				It("should block connections even if the source port is a failsafe port", func() {
+					expectTCPSourceFailsafePortBlacklisted(ccTCP)
+				})
+			}
 
 			It("should block ICMP too", func() {
 				client, server := clientServerIndexes("tcp")
