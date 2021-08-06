@@ -221,7 +221,6 @@ normalPolicy:
 	if !rules.SuppressNormalHostPolicy {
 		// "Normal" host policy, i.e. for non-forwarded traffic.
 		p.b.LabelNextInsn("to_or_from_host")
-		p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
 		if rules.ForXDP {
 			p.writeTiers(rules.HostNormalTiers, legDestPreNAT, "allowed_by_host_policy")
 			p.b.Jump("xdp_pass")
