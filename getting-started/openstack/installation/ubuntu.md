@@ -35,20 +35,7 @@ These steps are detailed in this section.
     ```bash
     add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
     ```
-
-1.  Add the official [BIRD](http://bird.network.cz/){:target="_blank"} PPA. This PPA contains
-    fixes to BIRD that are not yet available in Ubuntu. To add the PPA, run:
-
-    ```bash
-    add-apt-repository ppa:cz.nic-labs/bird
-    ```
-
-    > **Tip**: If the above command fails with error
-    > `'ascii' codec can't decode byte`, try running the command with a
-    > UTF-8 enabled locale:
-    > `LC_ALL=en_US.UTF-8 add-apt-repository ppa:cz.nic-labs/bird`.
-    {: .alert .alert-success}
-
+    
 1. Update your package manager on each machine:
 
     ```bash
@@ -61,7 +48,7 @@ These steps are detailed in this section.
 
     ```
     apt-get install -y python3-pip
-    pip3 install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
+    pip3 install git+https://opendev.org/openstack/etcd3gw.git@dc9f55975ecd5b291eb1014b9fe8393dcd6d7e5c
     ```
 
 1.  Edit `/etc/neutron/neutron.conf`.  Add a `[calico]` section with
