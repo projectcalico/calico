@@ -66,6 +66,7 @@ from networking_calico.compat import constants
 from networking_calico.compat import db_exc
 from networking_calico.compat import lockutils
 from networking_calico.compat import log
+from networking_calico.compat import n_exc
 from networking_calico.compat import plugin_dir
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
@@ -766,10 +767,41 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                      original.get("status"), port.get("status"))
             return
 
-        # Now, re-read the port.
+        # Re-read the port; we do this to guarantee correctly ordered handling
+        # of multiple updates to the same port, when there are multiple Neutron
+        # servers and so different updates could be processed on different
+        # servers.  Imagine an update that changes KEY1=NEW1, and a following
+        # update that changes KEY2=NEW2.  So the first update_port_postcommit
+        # callback will have KEY1=NEW1 KEY2=OLD2 and the second callback will
+        # have KEY1=NEW1 KEY2=NEW2.  Now suppose the 'second' callback executes
+        # first, and in particular that its write hits the etcd datastore first.
+        # Then the 'first' callback's write hits second and we can end up with
+        # data in the datastore that corresponds to KEY1=NEW1 KEY2=OLD2.
+        #
+        # To eliminate that possibility of writing stale data, take a Neutron DB
+        # transaction, re-read the latest available port data, and write
+        # corresponding data into etcd while still holding the Neutron DB
+        # transaction.
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-port"):
-            port = self.db.get_port(plugin_context, port['id'])
+
+            # If the port was previously bound, the endpoint should already
+            # exist.
+            endpoint_should_already_exist = port_bound(original)
+
+            # Check for migration so that we can reliably delete the
+            # WorkloadEndpoint on the old host.
+            if original['binding:host_id'] != port['binding:host_id']:
+                LOG.info("Migration, delete WorkloadEndpoint on old host %s",
+                         original['binding:host_id'])
+                self.endpoint_syncer.delete_endpoint(original)
+                endpoint_should_already_exist = False
+
+            try:
+                port = self.db.get_port(plugin_context, port['id'])
+            except n_exc.PortNotFound:
+                LOG.info("Port no longer exists")
+                return
 
             # Now, fork execution based on the type of update we're performing.
             # There are a few:
@@ -779,25 +811,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # - a port becoming bound (binding vif_type from unbound to bound);
             # - a port becoming unbound (binding vif_type from bound to
             #   unbound);
-            # - an Icehouse migration (binding host id changed and port bound);
             # - an update (port bound at all times);
             # - a change to an unbound port (which we don't care about, because
             #   we do nothing with unbound ports).
             if port.get('binding:profile', {}).get('migrating_to') is not None:
                 LOG.debug("Pre-live-migration notification message: no action")
-            elif port_bound(port) and not port_bound(original):
-                LOG.info("Port becoming bound: create.")
-                self.endpoint_syncer.write_endpoint(port,
-                                                    context._plugin_context)
-            elif port_bound(original) and not port_bound(port):
+            elif port_bound(port):
+                if endpoint_should_already_exist:
+                    LOG.info("Port update")
+                    self.endpoint_syncer.write_endpoint(port,
+                                                        plugin_context,
+                                                        must_update=True)
+                else:
+                    LOG.info("Port becoming bound: create.")
+                    self.endpoint_syncer.write_endpoint(port,
+                                                        plugin_context)
+            elif endpoint_should_already_exist:
                 LOG.info("Port becoming unbound: destroy.")
                 self.endpoint_syncer.delete_endpoint(original)
-            elif original['binding:host_id'] != port['binding:host_id']:
-                LOG.info("Migration")
-                self._migration_step(context, port, original)
-            elif port_bound(original) and port_bound(port):
-                LOG.info("Port update")
-                self._update_port(plugin_context, port)
             else:
                 LOG.info("Update on unbound port: no action")
                 pass
@@ -879,53 +910,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             with context.session.begin(subtransactions=True) as txn:
                 yield txn
 
-    def _migration_step(self, context, port, original):
-        """_migration_step
-
-        This is called when migrating (on Icehouse and later releases). Here,
-        we basically just perform an unbinding and a binding at exactly the
-        same time, but we hold a DB lock the entire time.
-
-        This method expects to be called from within a database transaction,
-        and does not create one itself.
-        """
-        # TODO(nj): Can we avoid re-writing policy here? Put another way, can
-        # security groups change during migration steps, or does a separate
-        # port update event occur?
-        LOG.info("Migration as implemented in Icehouse and later")
-        if self.endpoint_syncer.delete_endpoint(original):
-            # Note, only write the new endpoint if the old one existed and so
-            # was successfully deleted.
-            self.endpoint_syncer.write_endpoint(port,
-                                                context._plugin_context)
-        else:
-            LOG.info("Pre-migration etcd resource already gone")
-
     def _update_port(self, plugin_context, port):
         """_update_port
-
-        Called during port updates that have nothing to do with migration.
 
         This method assumes it's being called from within a database
         transaction and does not take out another one.
         """
-        # TODO(nj): There's a lot of redundant code in these methods, with the
-        # only key difference being taking out transactions. Come back and
-        # shorten these.
         LOG.info("Updating port %s", port)
 
-        # If the binding VIF type is unbound, we consider this port 'disabled',
-        # and should attempt to delete it. Otherwise, the port is enabled:
-        # re-process it.
-        port_disabled = port['binding:vif_type'] == 'unbound'
-        if not port_disabled:
-            LOG.info("Port enabled, attempting to update.")
+        if port_bound(port):
+            LOG.info("Port bound, attempting to update.")
             self.endpoint_syncer.write_endpoint(port,
                                                 plugin_context,
                                                 must_update=True)
         else:
-            # Port unbound, attempt to delete.
-            LOG.info("Port disabled, attempting delete if needed.")
+            LOG.info("Port unbound, attempting delete if needed.")
             self.endpoint_syncer.delete_endpoint(port)
 
     def periodic_resync_thread(self, expected_epoch):

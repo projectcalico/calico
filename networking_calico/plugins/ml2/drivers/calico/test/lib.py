@@ -131,6 +131,16 @@ class NoResultFound(Exception):
 m_sqlalchemy.orm.exc.NoResultFound = NoResultFound
 
 
+class PortNotFound(Exception):
+
+    def __init__(self, port_id=None):
+        super(PortNotFound, self).__init__()
+        self.port_id = port_id
+
+
+m_compat.n_exc.PortNotFound = PortNotFound
+
+
 # Define a stub class, that we will use as the base class for
 # CalicoMechanismDriver.
 class DriverBase(object):
@@ -499,7 +509,10 @@ class Lib(object):
         self.db.update_port_status.reset_mock()
 
     def get_port(self, context, port_id):
-        return self.get_ports(context, filters={'id': [port_id]})[0]
+        try:
+            return self.get_ports(context, filters={'id': [port_id]})[0]
+        except IndexError:
+            raise mech_calico.n_exc.PortNotFound(port_id=port_id)
 
     def get_ports(self, context, filters=None):
         if filters is None:
