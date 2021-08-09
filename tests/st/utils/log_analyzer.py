@@ -203,7 +203,7 @@ class LogAnalyzer(object):
             cmd = "cat %s"
         else:
             _log.debug("Check appended logs")
-            cmd = "tail -n +%s %s" % (self.init_log_lines + 1)
+            cmd = "tail -n +%s %s" % (self.init_log_lines + 1, self.filename)
         return self._parse_logs(cmd, self.filename)
 
     def _parse_logs(self, cmd, filename):
