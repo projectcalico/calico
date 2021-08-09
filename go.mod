@@ -5,7 +5,7 @@ go 1.15
 require (
 	github.com/go-openapi/spec v0.19.5
 	github.com/projectcalico/api v0.0.0-20210727230154-ae822ba06c23
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210727232737-a62724233980
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210809162050-073c4ac02f2b
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
