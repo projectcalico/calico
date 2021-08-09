@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,21 +19,23 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/encap"
-	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+	resources2 "github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -41,6 +43,146 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/resources"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
+
+// calculateDefaultFelixSyncerEntries determines the expected set of Felix configuration for the currently configured
+// cluster.
+func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.DatastoreType) (expected []model.KVPair) {
+	// Add 2 for the default-allow profile that is always there.
+	// However, no profile labels are in the list because the
+	// default-allow profile doesn't specify labels.
+	expectedProfile := resources.DefaultAllowProfile()
+	expected = append(expected, *expectedProfile)
+	expected = append(expected, model.KVPair{
+		Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "projectcalico-default-allow"}},
+		Value: &model.ProfileRules{
+			InboundRules:  []model.Rule{{Action: "allow"}},
+			OutboundRules: []model.Rule{{Action: "allow"}},
+		},
+	})
+
+	if dt == apiconfig.Kubernetes {
+		// Grab the k8s converter (we use this for converting some of the resources below).
+		converter := conversion.NewConverter()
+
+		// Add one for each node resource.
+		nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, node := range nodes.Items {
+			// Nodes get updated frequently, so don't include the revision info.
+			node.ResourceVersion = ""
+			cnodekv, err := resources2.K8sNodeToCalico(&node, false)
+			Expect(err).NotTo(HaveOccurred())
+			expected = append(expected, *cnodekv)
+
+			if node.Name == "kind-control-plane" {
+				for _, ip := range cnodekv.Value.(*libapiv3.Node).Spec.Addresses {
+					if ip.Type == libapiv3.InternalIP {
+						expected = append(expected, model.KVPair{
+							Key: model.HostIPKey{
+								Hostname: node.Name,
+							},
+							Value: net.ParseIP(ip.Address),
+						})
+					}
+				}
+			}
+		}
+
+		// Add endpoint slices.
+		epss, err := cs.DiscoveryV1beta1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, eps := range epss.Items {
+			// Endpoints slices get updated frequently, so don't include the revision info.
+			eps.ResourceVersion = ""
+			epskv, err := converter.EndpointSliceToKVP(&eps)
+			Expect(err).NotTo(HaveOccurred())
+			expected = append(expected, *epskv)
+		}
+
+		// Add resources for the namespaces we expect in the cluster.
+		namespaces, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, ns := range namespaces.Items {
+			name := "kns." + ns.Name
+
+			// Expect profile rules for each namespace providing default allow behavior.
+			expected = append(expected, model.KVPair{
+				Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: name}},
+				Value: &model.ProfileRules{
+					InboundRules:  []model.Rule{{Action: "allow"}},
+					OutboundRules: []model.Rule{{Action: "allow"}},
+				},
+			})
+
+			// Expect profile labels for each namespace as well. The labels should include the name
+			// of the namespace.
+			expected = append(expected, model.KVPair{
+				Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
+				Value: map[string]string{
+					"pcns.projectcalico.org/name": ns.Name,
+				},
+			})
+
+			// And expect a v3 profile for each namespace.
+			prof := apiv3.Profile{
+				TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
+				Spec: apiv3.ProfileSpec{
+					LabelsToApply: map[string]string{
+						"pcns.projectcalico.org/name": ns.Name,
+					},
+					Ingress: []apiv3.Rule{{Action: apiv3.Allow}},
+					Egress:  []apiv3.Rule{{Action: apiv3.Allow}},
+				},
+			}
+			expected = append(expected, model.KVPair{
+				Key:   model.ResourceKey{Kind: "Profile", Name: name},
+				Value: &prof,
+			})
+
+			serviceAccounts, err := cs.CoreV1().ServiceAccounts(ns.Name).List(context.Background(), metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			for _, sa := range serviceAccounts.Items {
+				name := "ksa." + ns.Name + "." + sa.Name
+
+				// Expect profile rules for the serviceaccounts in each namespace.
+				expected = append(expected, model.KVPair{
+					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: name}},
+					Value: &model.ProfileRules{
+						InboundRules:  nil,
+						OutboundRules: nil,
+					},
+				})
+
+				// Expect profile labels for each default serviceaccount as well. The labels should include the name
+				// of the service account.
+				expected = append(expected, model.KVPair{
+					Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
+					Value: map[string]string{
+						"pcsa.projectcalico.org/name": sa.Name,
+					},
+				})
+
+				//  We also expect one v3 Profile to be present for each ServiceAccount.
+				prof := apiv3.Profile{
+					TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
+					ObjectMeta: metav1.ObjectMeta{Name: name, UID: sa.UID, CreationTimestamp: sa.CreationTimestamp},
+					Spec: apiv3.ProfileSpec{
+						LabelsToApply: map[string]string{
+							"pcsa.projectcalico.org/name": sa.Name,
+						},
+					},
+				}
+				expected = append(expected, model.KVPair{
+					Key:   model.ResourceKey{Kind: "Profile", Name: name},
+					Value: &prof,
+				})
+			}
+		}
+	}
+
+	return
+}
 
 var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
@@ -98,123 +240,29 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectStatusUpdate(api.ResyncInProgress)
 			syncTester.ExpectStatusUpdate(api.InSync)
 
-			// Add 2 for the default-allow profile that is always there.
-			// However, no profile labels are in the list because the
-			// default-allow profile doesn't specify labels.
-			expectedProfile := resources.DefaultAllowProfile()
-			syncTester.ExpectData(*expectedProfile)
-			expectedCacheSize += 1
-			syncTester.ExpectData(model.KVPair{
-				Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "projectcalico-default-allow"}},
-				Value: &model.ProfileRules{
-					InboundRules:  []model.Rule{{Action: "allow"}},
-					OutboundRules: []model.Rule{{Action: "allow"}},
-				},
-			})
-			expectedCacheSize += 1
-
-			// Kubernetes will have a profile for each of the namespaces that is configured.
-			// We expect:  default, kube-system, kube-public, namespace-1, namespace-2
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				// Add one for each node resource.
-				nodes, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				expectedCacheSize += len(nodes.Items)
-
-				// Add one for the hostIPKey for the control-plane node.
-				expectedCacheSize += 1
-
-				// Add resources for the namespaces we expect in the cluster.
-				namespaces, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				for _, ns := range namespaces.Items {
-					name := "kns." + ns.Name
-
-					// Expect profile rules for each namespace providing default allow behavior.
-					syncTester.ExpectData(model.KVPair{
-						Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: name}},
-						Value: &model.ProfileRules{
-							InboundRules:  []model.Rule{{Action: "allow"}},
-							OutboundRules: []model.Rule{{Action: "allow"}},
-						},
-					})
-					expectedCacheSize += 1
-
-					// Expect profile labels for each namespace as well. The labels should include the name
-					// of the namespace.
-					syncTester.ExpectData(model.KVPair{
-						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
-						Value: map[string]string{
-							"pcns.projectcalico.org/name": ns.Name,
-						},
-					})
-					expectedCacheSize += 1
-
-					// And expect a v3 profile for each namespace.
-					prof := v3.Profile{
-						TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
-						ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
-						Spec: v3.ProfileSpec{
-							LabelsToApply: map[string]string{
-								"pcns.projectcalico.org/name": ns.Name,
-							},
-							Ingress: []v3.Rule{{Action: v3.Allow}},
-							Egress:  []v3.Rule{{Action: v3.Allow}},
-						},
-					}
-					syncTester.ExpectData(model.KVPair{
-						Key:   model.ResourceKey{Kind: "Profile", Name: name},
-						Value: &prof,
-					})
-					expectedCacheSize += 1
-
-					serviceAccounts, err := cs.CoreV1().ServiceAccounts(ns.Name).List(context.Background(), metav1.ListOptions{})
-					Expect(err).NotTo(HaveOccurred())
-					for _, sa := range serviceAccounts.Items {
-						name := "ksa." + ns.Name + "." + sa.Name
-
-						// Expect profile rules for the serviceaccounts in each namespace.
-						syncTester.ExpectData(model.KVPair{
-							Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: name}},
-							Value: &model.ProfileRules{
-								InboundRules:  nil,
-								OutboundRules: nil,
-							},
-						})
-						expectedCacheSize += 1
-
-						// Expect profile labels for each default serviceaccount as well. The labels should include the name
-						// of the service account.
-						syncTester.ExpectData(model.KVPair{
-							Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
-							Value: map[string]string{
-								"pcsa.projectcalico.org/name": sa.Name,
-							},
-						})
-						expectedCacheSize += 1
-
-						//  We also expect one v3 Profile to be present for each ServiceAccount.
-						prof := v3.Profile{
-							TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
-							ObjectMeta: metav1.ObjectMeta{Name: name, UID: sa.UID, CreationTimestamp: sa.CreationTimestamp},
-							Spec: v3.ProfileSpec{
-								LabelsToApply: map[string]string{
-									"pcsa.projectcalico.org/name": sa.Name,
-								},
-							},
-						}
-						syncTester.ExpectData(model.KVPair{
-							Key:   model.ResourceKey{Kind: "Profile", Name: name},
-							Value: &prof,
-						})
-						expectedCacheSize += 1
-					}
-				}
-
-				// Expect two endpoint slices.
-				expectedCacheSize += 2
+			By("Checking updates match those expected.")
+			defaultCacheEntries := calculateDefaultFelixSyncerEntries(cs, config.Spec.DatastoreType)
+			expectedCacheSize += len(defaultCacheEntries)
+			for _, r := range defaultCacheEntries {
+				// Expect the correct cache values.
+				syncTester.ExpectData(r)
 			}
 
+			// Expect the correct updates - should have a new entry for each of these entries. Note that we don't do
+			// any more update checks below because we filter out host related updates since they are chatty outside
+			// of our control (and a lot of the tests below are focussed on host data), instead the tests below will
+			// just check the final cache entry.
+			var expectedEvents []api.Update
+			for _, r := range defaultCacheEntries {
+				expectedEvents = append(expectedEvents, api.Update{
+					KVPair:     r,
+					UpdateType: api.UpdateTypeKVNew,
+				})
+			}
+			syncTester.ExpectUpdates(expectedEvents, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify our cache size is correct.
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			var node *libapiv3.Node
@@ -381,7 +429,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// The pool will add as single entry ( +1 ), plus will also create the default
 			// Felix config with IPIP enabled.
 			expectedCacheSize += 2
-			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectData(model.KVPair{
 				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
 				Value: &model.IPPool{
@@ -398,6 +445,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				Key:   model.GlobalConfigKey{"IpInIpEnabled"},
 				Value: "true",
 			})
+			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Creating a GlobalNetworkSet")
 			gns := apiv3.NewGlobalNetworkSet()
@@ -414,7 +462,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				options.SetOptions{},
 			)
 			expectedCacheSize++
-			syncTester.ExpectCacheSize(expectedCacheSize)
 			_, expGNet, err := net.ParseCIDROrIP("11.0.0.0/16")
 			Expect(err).NotTo(HaveOccurred())
 			syncTester.ExpectData(model.KVPair{
@@ -429,6 +476,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				},
 				Revision: gns.ResourceVersion,
 			})
+			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Creating a NetworkSet")
 			ns := apiv3.NewNetworkSet()
@@ -446,7 +494,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				options.SetOptions{},
 			)
 			expectedCacheSize++
-			syncTester.ExpectCacheSize(expectedCacheSize)
+
 			_, expNet, err := net.ParseCIDROrIP("11.0.0.0/16")
 			Expect(err).NotTo(HaveOccurred())
 			syncTester.ExpectData(model.KVPair{
@@ -465,6 +513,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				},
 				Revision: ns.ResourceVersion,
 			})
+			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Creating a HostEndpoint")
 			hep, err := c.HostEndpoints().Create(
@@ -497,11 +546,10 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				},
 				options.SetOptions{},
 			)
-
 			Expect(err).NotTo(HaveOccurred())
 			// The host endpoint will add as single entry ( +1 )
 			expectedCacheSize += 1
-			syncTester.ExpectCacheSize(expectedCacheSize)
+
 			syncTester.ExpectData(model.KVPair{
 				Key: model.HostEndpointKey{Hostname: "127.0.0.1", EndpointID: "hosta.eth0-a"},
 				Value: &model.HostEndpoint{
@@ -527,6 +575,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				},
 				Revision: hep.ResourceVersion,
 			})
+			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Allocating an IP")
 			err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
@@ -565,10 +614,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectStatusUpdate(api.ResyncInProgress)
 			syncTester.ExpectCacheSize(len(current))
 			for _, e := range current {
-				if config.Spec.DatastoreType == apiconfig.Kubernetes {
-					// Don't check revisions for K8s since the node data gets updated constantly.
-					e.Revision = ""
-				}
 				syncTester.ExpectData(e)
 			}
 			syncTester.ExpectStatusUpdate(api.InSync)

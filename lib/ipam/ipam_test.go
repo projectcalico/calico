@@ -131,6 +131,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	var kc *kubernetes.Clientset
 	BeforeEach(func() {
 		var err error
+		config.Spec.K8sClientQPS = 500
 		bc, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
 		ic = NewIPAMClient(bc, ipPools)
