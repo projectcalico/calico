@@ -128,6 +128,11 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 	log.Info("Executing config command")
 
+	err := CheckVersionMismatch(args["--config"], args["--allow-version-mismatch"])
+	if err != nil {
+		return CommandResults{Err: err}
+	}
+
 	errorOnEmpty := !argutils.ArgBoolOrFalse(args, "--skip-empty")
 
 	if filename := args["--filename"]; filename != nil {
