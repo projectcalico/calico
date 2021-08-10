@@ -121,11 +121,6 @@ Felix must reprogram the HNS ACL policy attached to the pod. This reprogramming 
 
 On Windows nodes, kube-proxy unconditionally applies source NAT to traffic from local pods to service ClusterIPs. This means that, at the destination pod, where policy is applied, the traffic appears to come from the source host rather than the source pod. In turn, this means that a network policy with a source selector matching the source pod will not match the expected traffic.
 
-**Managed EKS**
-
-Currently, managed EKS Windows nodes ship with kube-proxy WinDSR disabled. However, WinDSR is required for network policy to be enforced for service ClusterIPs.
-This means that managed EKS is not currently recommended for production usage.
-
 ### Network policy and using selectors
 
 Under certain conditions, relatively simple {{site.prodname}} policies can require significant Windows dataplane resources, that can cause significant CPU and memory usage, and large policy programming latency.
