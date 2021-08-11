@@ -45,7 +45,7 @@ var (
 	peer2              = "peer2"
 	peer3              = "peer3"
 	peer4              = "peer4"
-	FelixRouteProtocol = syscall.RTPROT_BOOT
+	FelixRouteProtocol = netlink.RouteProtocol(syscall.RTPROT_BOOT)
 	tableIndex         = 99
 	rulePriority       = 98
 	firewallMark       = 10

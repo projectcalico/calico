@@ -118,7 +118,7 @@ var _ = Describe("VXLANManager", func() {
 				links: []netlink.Link{&mockLink{attrs: netlink.LinkAttrs{Name: "eth0"}}},
 			},
 			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol int, removeExternalRoutes bool) routeTable {
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routeTable {
 				return prt
 			},
 		)

@@ -176,7 +176,7 @@ type RouteTable struct {
 
 	deviceRouteSourceAddress net.IP
 
-	deviceRouteProtocol  int
+	deviceRouteProtocol  netlink.RouteProtocol
 	removeExternalRoutes bool
 
 	// The route table index. A value of 0 defaults to the main table.
@@ -197,7 +197,7 @@ func New(
 	vxlan bool,
 	netlinkTimeout time.Duration,
 	deviceRouteSourceAddress net.IP,
-	deviceRouteProtocol int,
+	deviceRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
@@ -230,7 +230,7 @@ func NewWithShims(
 	conntrack conntrackIface,
 	timeShim timeshim.Interface,
 	deviceRouteSourceAddress net.IP,
-	deviceRouteProtocol int,
+	deviceRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
