@@ -639,6 +639,8 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
 github.com/projectcalico/api v0.0.0-20210727230154-ae822ba06c23 h1:WsKGB/myqeTATRhbLHfriNCXhzbHMZOIB9gxFvYyflA=
 github.com/projectcalico/api v0.0.0-20210727230154-ae822ba06c23/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
+github.com/projectcalico/api v0.0.0-20210812134025-25e27fa7c71b h1:kc8IWapTNNuyJFzmyYXWhbHL6gkxo2MzoE+MwtL4+l0=
+github.com/projectcalico/api v0.0.0-20210812134025-25e27fa7c71b/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
 github.com/projectcalico/cni-plugin v1.11.1-0.20210810142307-959036fa9c16 h1:8ggRCYLCndlD4crQcwkMHm9juXhc5Mc0RFXF+jqd4GA=
 github.com/projectcalico/cni-plugin v1.11.1-0.20210810142307-959036fa9c16/go.mod h1:gNBqsp8y1nNTF6S7AZLE4rjFcJi/4TIu5GvbCSkuIrU=
 github.com/projectcalico/confd v1.0.1-0.20210810143132-d603f56e86ec h1:qjeqFYmTsAJPbiBQ4sv4GrRGkTf50wYiBLGRw3aGYNE=
@@ -655,6 +657,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20210727232737-a62724233980 h1:h2
 github.com/projectcalico/libcalico-go v1.7.2-0.20210727232737-a62724233980/go.mod h1:89htLGk5oJrTAQDzUqlVFK969vDwpM7oRLabyURpJ7Q=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210809162050-073c4ac02f2b h1:zl3e7+vadlJDWrZ8QY9vNa+NaFsRHwazbSJx5Sr3CnA=
 github.com/projectcalico/libcalico-go v1.7.2-0.20210809162050-073c4ac02f2b/go.mod h1:89htLGk5oJrTAQDzUqlVFK969vDwpM7oRLabyURpJ7Q=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210812140029-ea2cbedbe2e7 h1:/xtP5HlC1nja8VVekcx+7nuQ8HdSJMJKktIpW2XS1Ug=
+github.com/projectcalico/libcalico-go v1.7.2-0.20210812140029-ea2cbedbe2e7/go.mod h1:WEn+XzuWwHhVsSap+RlGhbe2WzbRy1t0LgtBW3KM+1E=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20210730214600-1e304d763cc0 h1:5Hen1ndSQPLXQ/Ijl1NLmlzwxQygm95cyFvj7JA+Kl8=
