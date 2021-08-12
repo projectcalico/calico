@@ -9,7 +9,7 @@ DOCS_PATH = os.environ.get("CALICO_DOCS_PATH") or "/docs"
 RELEASE_STREAM = os.environ.get("RELEASE_STREAM")
 PPA_VER = RELEASE_STREAM.replace("v", "calico-")
 UBUNTU_VERSIONS = ["bionic", "focal", "trusty", "xenial"]
-components =["felix"]
+components = ["felix"]
 PPA_IMAGE_URL_TEMPL = (
     # e.g. http://ppa.launchpad.net/project-calico/calico-3.19/ubuntu/pool/main/f/felix/calico-felix_3.19.2-focal_amd64.deb
     "http://ppa.launchpad.net/project-calico/{ppa_ver}/ubuntu/pool/main/f/felix/calico-{component}_{component_version}-{ubuntu_version}_amd64.deb"
@@ -27,7 +27,9 @@ for component in components:
         RPM_URL_TEMPL.format(
             ppa_ver=PPA_VER,
             component=component,
-            component_version=versions[0]["components"]["calico/node"]["version"].replace("v", ""),
+            component_version=versions[0]["components"]["calico/node"][
+                "version"
+            ].replace("v", ""),
         )
     )
     for UBUNTU_VERSION in UBUNTU_VERSIONS:
@@ -35,16 +37,20 @@ for component in components:
             PPA_IMAGE_URL_TEMPL.format(
                 ppa_ver=PPA_VER,
                 component=component,
-                component_version=versions[0]["components"]["calico/node"]["version"].replace("v", ""),
-                ubuntu_version = UBUNTU_VERSION,
+                component_version=versions[0]["components"]["calico/node"][
+                    "version"
+                ].replace("v", ""),
+                ubuntu_version=UBUNTU_VERSION,
             )
         )
+
 
 @parameterized(unrolled_urls)
 def test_artifact_url(url):
     resp = requests.get(url, stream=True)
     print("[INFO] %s: %s" % (resp.status_code, url))
     assert resp.status_code == 200
+
 
 with open("%s/_data/versions.yml" % DOCS_PATH) as f:
     versions = yaml.safe_load(f)
