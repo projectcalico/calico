@@ -1,3 +1,4 @@
+# Permissions required when running the operator for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -28,11 +29,11 @@ rules:
       - nodes
     verbs:
       # Need to update node labels when migrating nodes.
-      - 'get'
-      - 'patch'
-      - 'list'
+      - get
+      - patch
+      - list
       # We need this for Typha autoscaling
-      - 'watch'
+      - watch
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -124,13 +125,6 @@ rules:
       - update
       - delete
       - watch
-  - apiGroups:
-      - monitoring.coreos.com
-    resources:
-      - servicemonitors
-    verbs:
-      - get
-      - create
   - apiGroups:
       - policy
     resources:
