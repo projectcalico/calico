@@ -88,11 +88,12 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 	return
 }
 
-// findUnclaimedBlock finds a block cidr which does not yet exist within the given list of pools. The provided pools
-// should already be sanitized and only include existing, enabled pools. Note that the block may become claimed
-// between receiving the cidr from this function and attempting to claim the corresponding block as this function
-// does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string, version int, pools []v3.IPPool, config IPAMConfig) (*cnet.IPNet, error) {
+// findUsableBlock finds a block cidr which either does not yet exist within the given list of pools, or does exist but is affine to this host
+// and has available address space. The provided pools should already be sanitized and only include existing, enabled pools.
+//
+// Note that the block may become claimed between receiving the CIDR from this function and attempting to claim the corresponding
+// block as this function does not reserve the returned IPNet.
+func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, version int, pools []v3.IPPool, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("no configured Calico pools for node %s", host)
@@ -105,10 +106,17 @@ func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string,
 		return nil, err
 	}
 
+	type blockInfo struct {
+		numFree  int
+		affinity string
+	}
+
 	/// Build a map for faster lookups.
-	exists := map[string]bool{}
+	exists := map[string]blockInfo{}
 	for _, e := range existingBlocks.KVPairs {
-		exists[e.Key.(model.BlockKey).CIDR.String()] = true
+		hostAff := e.Value.(*model.AllocationBlock).Host()
+		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses()
+		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{numFree: numFree, affinity: hostAff}
 	}
 
 	// Iterate through pools to find a new block.
@@ -120,11 +128,15 @@ func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string,
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if a block already exists for this subnet.
 			log.Debugf("Getting block: %s", subnet.String())
-			if _, ok := exists[subnet.String()]; !ok {
+			if info, ok := exists[subnet.String()]; !ok {
 				log.Infof("Found free block: %+v", *subnet)
 				return subnet, nil
+			} else if info.affinity == host && info.numFree != 0 {
+				// Belongs to this host and has free allocations.
+				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
+				return subnet, nil
 			}
-			log.Debugf("Block %s already exists", subnet.String())
+			log.Debugf("Block %s already exists and is either affine to another host or has no space, try another", subnet.String())
 		}
 	}
 	return nil, noFreeBlocksError("No Free Blocks")
