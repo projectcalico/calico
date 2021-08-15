@@ -1,6 +1,8 @@
 FROM s390x/alpine:3.10
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
+RUN apk --no-cache upgrade apk-tools
+
 ADD bin/calicoctl-linux-s390x /calicoctl
 
 ENV CALICO_CTL_CONTAINER=TRUE
