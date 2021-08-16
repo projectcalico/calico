@@ -17,7 +17,7 @@ CNI_PLUGIN_IMAGE ?=cni
 DEV_REGISTRIES   ?=quay.io/calico calico $(RELEASE_REGISTRIES)
 else
 CNI_PLUGIN_IMAGE ?=calico/cni
-DEV_REGISTRIES   ?=quay.io registry.hub.docker.com
+DEV_REGISTRIES   ?=quay.io docker.io
 endif
 
 BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
@@ -356,7 +356,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -383,7 +383,7 @@ release-publish-latest: release-prereqs
 	if ! docker run $(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest RELEASE=true CONFIRM=true
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
