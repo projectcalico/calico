@@ -29,7 +29,7 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20210727230154-ae822ba06c23
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210727232737-a62724233980
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210809162050-073c4ac02f2b
 	github.com/projectcalico/pod2daemon v0.0.0-20210730214600-1e304d763cc0
 	github.com/projectcalico/typha v0.7.3-0.20210730161412-c5c253a34511
 	github.com/prometheus/client_golang v1.7.1
@@ -37,7 +37,7 @@ require (
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/viper v1.7.0
-	github.com/vishvananda/netlink v1.1.0
+	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
 	golang.org/x/net v0.0.0-20210224082022-3d97a244fca7
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
