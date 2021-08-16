@@ -17,7 +17,7 @@ FLEXVOL_IMAGE  ?=pod2daemon-flexvol
 DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
 else
 FLEXVOL_IMAGE  ?=calico/pod2daemon-flexvol
-DEV_REGISTRIES ?=quay.io registry.hub.docker.com
+DEV_REGISTRIES ?=quay.io docker.io
 endif
 
 BUILD_IMAGES ?=$(FLEXVOL_IMAGE)
@@ -172,7 +172,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -187,7 +187,7 @@ release-publish: release-prereqs
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=true CONFIRM=true
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
