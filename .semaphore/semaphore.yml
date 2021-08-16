@@ -34,6 +34,7 @@ global_job_config:
   - name: docker-hub
   prologue:
     commands:
+    - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
 blocks:
