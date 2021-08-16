@@ -81,12 +81,12 @@ kubectl -n calico-system set env daemonset/calico-node --containers="calico-node
 %>
 <label:OpenShift>
 <%
-To install WireGuard for OpenShift v4.8 (and above):
+To install WireGuard for OpenShift v4.8:
 
 
    1. Install requirements:
-      - [CoreOS Butane](https://coreos.github.io/butane/getting-started/)
-      - [Openshift CLI](https://docs.openshift.com/container-platform/4.2/cli_reference/openshift_cli/getting-started-cli.html)
+      - {% include open-new-window.html text='CoreOS Butane' url='https://coreos.github.io/butane/getting-started/' %}
+      - {% include open-new-window.html text='Openshift CLI' url='https://docs.openshift.com/container-platform/4.2/cli_reference/openshift_cli/getting-started-cli.html' %}
 
    1. Download and configure the tools needed for kmods.
    ```bash
@@ -112,14 +112,14 @@ To install WireGuard for OpenShift v4.8 (and above):
       ```bash
       tar -czf subs.tar.gz /etc/pki/entitlement/ /etc/rhsm/ /etc/yum.repos.d/redhat.repo
       ```
-      Please refer to Openshift [documentation](https://access.redhat.com/documentation/en-us/red_hat_subscription_management/1/html-single/rhsm/index#reg-cli) for more information about these entitlement files.
+      Please refer to Openshift {% include open-new-window.html text='documentation' url='https://access.redhat.com/documentation/en-us/red_hat_subscription_management/1/html-single/rhsm/index#reg-cli' %} for more information about these entitlement files.
 
    1. Copy the `subs.tar.gz` file to your workspace and then extract the contents using the following command.
       ```bash
       tar -x -C ${FAKEROOT}/root -f subs.tar.gz
       ```
 
-   1. Transpile your machine config using [CoreOS Butane](https://coreos.github.io/butane/getting-started/).
+   1. Transpile your machine config using {% include open-new-window.html text='CoreOS Butane' url='https://coreos.github.io/butane/getting-started/' %}.
       ```bash
       cd kvc-wireguard-kmod
       make ignition FAKEROOT=${FAKEROOT} > mc-wg.yaml
@@ -152,13 +152,7 @@ We recommend that you review and modify the MTU used by Calico networking when W
 
 #### Disable WireGuard for an individual node
 
-To disable WireGuard on a specific node with WireGuard installed, modify the node-specific Felix configuration. For example:
-
-  ```bash
-calicoctl patch felixconfiguration node.<Node-Name> --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
-  ```
-
-To disable encryption for pod traffic on node `my-node`, use the following command:
+To disable WireGuard on a specific node with WireGuard installed, modify the node-specific Felix configuration. e.g., to turn off encryption for pod traffic on node `my-node`, use the following command:
 
   ```bash
 cat <<EOF | kubectl apply -f -
@@ -169,7 +163,7 @@ metadata:
 spec:
   logSeverityScreen: Info
   reportingInterval: 0s
-  wireguardEnabled: true
+  wireguardEnabled: false
 EOF
   ```
 
