@@ -616,8 +616,8 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
 github.com/projectcalico/api v0.0.0-20210812153050-d56d8a62d55f h1:SIzIwUwtGpC69Dc5tI3/p3Jy4nULpOxcT+Lr00NKo4w=
 github.com/projectcalico/api v0.0.0-20210812153050-d56d8a62d55f/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210816170741-13352f9cc1eb h1:0zDLbwb0vFSWDadHqDePtG3xY0tLwjbx52n3flQWx3g=
-github.com/projectcalico/cni-plugin v1.11.1-0.20210816170741-13352f9cc1eb/go.mod h1:CxH7xxwnt3iA4/DouBMFhX1KoRZiQCvELZB01z8oI04=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210816233625-bc0c409a6cad h1:V3GukoW/P03kUh3oTYVIdT815VOCeuv+4W1Hiz+KvEE=
+github.com/projectcalico/cni-plugin v1.11.1-0.20210816233625-bc0c409a6cad/go.mod h1:CxH7xxwnt3iA4/DouBMFhX1KoRZiQCvELZB01z8oI04=
 github.com/projectcalico/confd v1.0.1-0.20210816164814-9d15f1c239e2 h1:XtkF3v26nUxkx7eeHOD49yLZh9kx3rc2ltutEhfaFKQ=
 github.com/projectcalico/confd v1.0.1-0.20210816164814-9d15f1c239e2/go.mod h1:PS24f7gFA2desMBh4kG8t6oD5dC4+qk8knlrmlPq0hE=
 github.com/projectcalico/felix v0.0.0-20210816193128-a1bfb4e4fff2 h1:YkSFHw5yWh0bujGL7Wed0J0ejxbRgW/ecChEu/BgN64=
