@@ -145,7 +145,7 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
  *
  * The internal structure of the top 3 nibbles is as follows:
 
-     1 1 0 .  . . . .  . . . .       indicates any packet that has been marked in
+     . 1 0 .  . . . .  . . . .       indicates any packet that has been marked in
                                      some way by the Calico BPF C code
 
      . . . .  . . . 1  . . . .       packet SEEN by at least one TC program
@@ -166,8 +166,8 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 
 enum calico_skb_mark {
 	/* Bits that we set in all _our_ mark patterns. */
-	CALI_MARK_CALICO                     = 0xc0000000,
-	CALI_MARK_CALICO_MASK                = 0xe0000000,
+	CALI_MARK_CALICO                     = 0x40000000,
+	CALI_MARK_CALICO_MASK                = 0x60000000,
 	/* The "SEEN" bit is set by any BPF program that allows a packet through.  It allows
 	 * a second BPF program that handles the same packet to determine that another program
 	 * handled it first. */
