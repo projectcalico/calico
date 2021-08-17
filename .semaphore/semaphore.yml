@@ -46,6 +46,9 @@ blocks:
   - name: 'FVs'
     dependencies: ["Build"]
     task:
+      prologue:
+        commands:
+          - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       jobs:
         - name: Run FV
           commands:
