@@ -84,14 +84,22 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 		goto allow;
 	}
 
-	// Allow a packet if it hits an entry in the inbound ports failsafe map
+	// Skip XDP policy, and hence fall through to TC processing, if packet hits an
+	// entry in the inbound ports failsafe map.  The point here is that flows through
+	// configured failsafe ports should be allowed and NOT be accidentally untracked.
 	if (is_failsafe_in(ctx.state->ip_proto, ctx.state->dport, ctx.state->ip_src)) {
 		CALI_DEBUG("Inbound failsafe port: %d. Skip policy\n", ctx.state->dport);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
 		goto allow;
 	}
 
-	// Allow a packet if it hits an entry in the outbound ports failsafe map
+	// Similarly check against the outbound ports failsafe map.  The logic here is
+	// that an outbound failsafe port <cidr>:<port> means to allow outbound connection
+	// to IPs in <cidr> and destination <port>.  But then the return path - INBOUND,
+	// and FROM <cidr>:<port> - will come through this XDP program and we need to make
+	// sure that it is (a) not accidentally marked as DoNotTrack, (b) allowed through
+	// to the TC program, which will then check that it matches a known outbound
+	// conntrack state.
 	if (is_failsafe_out(ctx.state->ip_proto, ctx.state->sport, ctx.state->ip_src)) {
 		CALI_DEBUG("Outbound failsafe port: %d. Skip policy\n", ctx.state->sport);
 		ctx.state->pol_rc = CALI_POL_ALLOW;
