@@ -124,7 +124,6 @@ func StartDataplaneDriver(configParams *config.Config,
 			}
 		}
 
-		// markPass and the scratch-1 bits are only used in iptables mode.
 		if markAccept == 0 || markScratch0 == 0 || markPass == 0 || markScratch1 == 0 {
 			log.WithFields(log.Fields{
 				"Name":     "felix-iptables",

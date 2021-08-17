@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -218,6 +218,18 @@ func (m MatchCriteria) DestIPPortSet(name string) MatchCriteria {
 
 func (m MatchCriteria) NotDestIPPortSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set ! --match-set %s dst,dst", name))
+}
+
+func (m MatchCriteria) IPSetNames() (ipSetNames []string) {
+	for _, matchString := range []string(m) {
+		words := strings.Split(matchString, " ")
+		for i := range words {
+			if words[i] == "--match-set" && (i+1) < len(words) {
+				ipSetNames = append(ipSetNames, words[i+1])
+			}
+		}
+	}
+	return
 }
 
 func (m MatchCriteria) SourcePorts(ports ...uint16) MatchCriteria {

@@ -147,7 +147,7 @@ var xdpTestCases = []xdpTest{
 		Metadata:    true,
 	},
 	{
-		Description: "5 - Match with failsafe, must pass with metadata",
+		Description: "5 - Match with failsafe, must pass without metadata",
 		Rules:       nil,
 		IPv4Header: &layers.IPv4{
 			Version: 4,

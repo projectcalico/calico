@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -167,19 +167,12 @@ func (c *Chain) RuleHashes(features *Features) []string {
 	return hashes
 }
 
-func (c *Chain) IPSetIDs() (ipSetIDs []string) {
+func (c *Chain) IPSetNames() (ipSetNames []string) {
 	if c == nil {
 		return nil
 	}
 	for _, rule := range c.Rules {
-		for _, matchString := range []string(rule.Match) {
-			words := strings.Split(matchString, " ")
-			for i := range words {
-				if words[i] == "--match-set" && (i+1) < len(words) {
-					ipSetIDs = append(ipSetIDs, words[i+1])
-				}
-			}
-		}
+		ipSetNames = append(ipSetNames, rule.Match.IPSetNames()...)
 	}
 	return
 }

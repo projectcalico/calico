@@ -93,7 +93,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 			for _, chain := range chains {
 				if strings.Contains(chain.Name, string(rules.PolicyOutboundPfx)) {
 					filteredChains = append(filteredChains, chain)
-					neededIPSets.AddAll(chain.IPSetIDs())
+					neededIPSets.AddAll(chain.IPSetNames())
 				}
 			}
 			chains = filteredChains

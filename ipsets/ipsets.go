@@ -635,7 +635,7 @@ func (s *IPSets) tryUpdates() error {
 		needUpdates = s.dirtyIPSetIDs.Len() > 0
 	} else {
 		s.dirtyIPSetIDs.Iter(func(item interface{}) error {
-			if s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(item.(string))) {
+			if s.ipSetNeeded(item.(string)) {
 				needUpdates = true
 				return set.StopIteration
 			}
@@ -686,7 +686,7 @@ func (s *IPSets) tryUpdates() error {
 	// Ask each dirty IP set to write its updates to the stream.
 	var writeErr error
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
-		if s.neededIPSetNames != nil && !s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(item.(string))) {
+		if !s.ipSetNeeded(item.(string)) {
 			return nil
 		}
 		ipSet := s.ipSetIDToIPSet[item.(string)]
@@ -721,7 +721,7 @@ func (s *IPSets) tryUpdates() error {
 	// dataplane should be in sync.  If we bail out above, then the resync logic will kick in
 	// and figure out how much of our update succeeded.
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
-		if s.neededIPSetNames != nil && !s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(item.(string))) {
+		if !s.ipSetNeeded(item.(string)) {
 			return nil
 		}
 		ipSet := s.ipSetIDToIPSet[item.(string)]
@@ -963,4 +963,14 @@ func firstNonNilErr(errs ...error) error {
 
 func (s *IPSets) SetFilter(ipSetNames set.Set) {
 	s.neededIPSetNames = ipSetNames
+}
+
+func (s *IPSets) ipSetNeeded(id string) bool {
+	if s.neededIPSetNames == nil {
+		// We're not filtering down to a "needed" set, so all IP sets are needed.
+		return true
+	}
+
+	// We are filtering down, so compare against the needed set.
+	return s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(id))
 }
