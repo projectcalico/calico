@@ -350,8 +350,8 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
-github.com/projectcalico/api v0.0.0-20210812134025-25e27fa7c71b h1:kc8IWapTNNuyJFzmyYXWhbHL6gkxo2MzoE+MwtL4+l0=
-github.com/projectcalico/api v0.0.0-20210812134025-25e27fa7c71b/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
+github.com/projectcalico/api v0.0.0-20210817231838-b92521e7bf58 h1:CzTmSJ+60t3MpBg50Yuw+v1xfTTAst3nJ0hc1clkC1A=
+github.com/projectcalico/api v0.0.0-20210817231838-b92521e7bf58/go.mod h1:8raLpE2oURN0I33JpEniA3LmAs5uPZ1kGnW/YunYEB0=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
