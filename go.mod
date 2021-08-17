@@ -16,10 +16,10 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
-	github.com/projectcalico/api v0.0.0-20210727230154-ae822ba06c23
+	github.com/projectcalico/api v0.0.0-20210812134025-25e27fa7c71b
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210809162050-073c4ac02f2b
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210812140029-ea2cbedbe2e7
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
