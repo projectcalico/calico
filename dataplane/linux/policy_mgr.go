@@ -34,6 +34,7 @@ type policyManager struct {
 	ruleRenderer   policyRenderer
 	ipVersion      uint8
 	outboundOnly   bool
+	neededIPSets   map[proto.PolicyID]set.Set
 	ipSetsCallback func(neededIPSets set.Set)
 }
 
@@ -60,8 +61,25 @@ func newRawEgressPolicyManager(rawTable iptablesTable, ruleRenderer policyRender
 		ruleRenderer:   ruleRenderer,
 		ipVersion:      ipVersion,
 		outboundOnly:   true,
+		neededIPSets:   make(map[proto.PolicyID]set.Set),
 		ipSetsCallback: ipSetsCallback,
 	}
+}
+
+func (m *policyManager) mergeNeededIPSets(id *proto.PolicyID, neededIPSets set.Set) {
+	if neededIPSets != nil {
+		m.neededIPSets[*id] = neededIPSets
+	} else {
+		delete(m.neededIPSets, *id)
+	}
+	merged := set.New()
+	for _, ipSets := range m.neededIPSets {
+		ipSets.Iter(func(item interface{}) error {
+			merged.Add(item)
+			return nil
+		})
+	}
+	m.ipSetsCallback(merged)
 }
 
 func (m *policyManager) OnUpdate(msg interface{}) {
@@ -79,7 +97,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 				}
 			}
 			chains = filteredChains
-			m.ipSetsCallback(neededIPSets)
+			m.mergeNeededIPSets(msg.Id, neededIPSets)
 		}
 		// We can't easily tell whether the policy is in use in a particular table, and, if the policy
 		// type gets changed it may move between tables.  Hence, we put the policy into all tables.
@@ -89,6 +107,9 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
+		if m.outboundOnly {
+			m.mergeNeededIPSets(msg.Id, nil)
+		}
 		inName := rules.PolicyChainName(rules.PolicyInboundPfx, msg.Id)
 		outName := rules.PolicyChainName(rules.PolicyOutboundPfx, msg.Id)
 		// As above, we need to clean up in all the tables.

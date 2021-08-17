@@ -15,12 +15,16 @@
 package intdataplane
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 var _ = Describe("Policy manager", func() {
@@ -243,6 +247,113 @@ var _ = Describe("Policy manager", func() {
 		})
 	})
 })
+
+var _ = Describe("Raw egress policy manager", func() {
+	var (
+		policyMgr    *policyManager
+		rawTable     *mockTable
+		neededIPSets set.Set
+	)
+
+	BeforeEach(func() {
+		rawTable = newMockTable("raw")
+		ruleRenderer := rules.NewRenderer(rules.Config{
+			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			IptablesMarkAccept:          0x8,
+			IptablesMarkPass:            0x10,
+			IptablesMarkScratch0:        0x20,
+			IptablesMarkScratch1:        0x40,
+			IptablesMarkEndpoint:        0xff00,
+			IptablesMarkNonCaliEndpoint: 0x0100,
+		})
+		policyMgr = newRawEgressPolicyManager(rawTable, ruleRenderer, 4, func(ipSets set.Set) { neededIPSets = ipSets })
+	})
+
+	It("correctly reports needed IP sets", func() {
+		By("defining one policy with an IP set")
+		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+			Id: &proto.PolicyID{Tier: "default", Name: "pol1"},
+			Policy: &proto.Policy{
+				Untracked: true,
+				OutboundRules: []*proto.Rule{
+					&proto.Rule{
+						Action:      "deny",
+						DstIpSetIds: []string{"ipsetA"},
+					},
+				},
+			},
+		})
+		err := policyMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(neededIPSets).To(MatchIPSets("ipsetA"))
+
+		By("defining another policy with a different IP set")
+		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+			Id: &proto.PolicyID{Tier: "default", Name: "pol2"},
+			Policy: &proto.Policy{
+				Untracked: true,
+				OutboundRules: []*proto.Rule{
+					&proto.Rule{
+						Action:      "deny",
+						DstIpSetIds: []string{"ipsetB"},
+					},
+				},
+			},
+		})
+		err = policyMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(neededIPSets).To(MatchIPSets("ipsetA", "ipsetB"))
+
+		By("removing the first policy")
+		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+			Id: &proto.PolicyID{Tier: "default", Name: "pol1"},
+		})
+		err = policyMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(neededIPSets).To(MatchIPSets("ipsetB"))
+
+		By("removing the second policy")
+		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+			Id: &proto.PolicyID{Tier: "default", Name: "pol2"},
+		})
+		err = policyMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(neededIPSets).To(MatchIPSets())
+	})
+})
+
+type ipSetsMatcher struct {
+	items []interface{}
+}
+
+func MatchIPSets(items ...interface{}) *ipSetsMatcher {
+	return &ipSetsMatcher{
+		items: items,
+	}
+}
+
+func (m *ipSetsMatcher) Match(actual interface{}) (success bool, err error) {
+	actualSet := actual.(set.Set)
+	actualCopy := actualSet.Copy()
+	for _, expected := range m.items {
+		actualCopy.Add("cali40" + expected.(string))
+	}
+	success = (actualSet.Len() == len(m.items)) && (actualCopy.Len() == len(m.items))
+	return
+}
+
+func (m *ipSetsMatcher) FailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected %v to match IP set IDs: %v", actual.(set.Set), m.items)
+}
+
+func (m *ipSetsMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected %v not to match IP set IDs: %v", actual.(set.Set), m.items)
+}
 
 type mockPolRenderer struct {
 }
