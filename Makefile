@@ -55,7 +55,7 @@ include Makefile.common
 # fail if unable to download
 CURL=curl -C - -sSf
 
-CNI_VERSION=v0.8.6
+CNI_VERSION=v0.9.1
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
