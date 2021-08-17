@@ -483,12 +483,11 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 	logCtx.Debugf("Allocate new blocks? Config: %+v", config)
 	if config.AutoAllocateBlocks {
 		for i := 0; i < datastoreRetries; i++ {
-			// Claim a new block.
-			logCtx.Infof("No more affine blocks, but need to claim more blocks -- allocate another block")
-
-			// First, try to find an unclaimed block.
-			logCtx.Info("Looking for an unclaimed block")
-			subnet, err := s.client.blockReaderWriter.findUnclaimedBlock(ctx, s.host, s.version, s.pools, *config)
+			// First, try to find a usable block. findUsableBlock will usually return a new block, or in rare scenarios an already
+			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
+			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
+			logCtx.Info("Tried all affine blocks. Looking for an affine block with space, or a new unclaimed block")
+			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.host, s.version, s.pools, *config)
 			if err != nil {
 				if _, ok := err.(noFreeBlocksError); ok {
 					// No free blocks.  Break.
