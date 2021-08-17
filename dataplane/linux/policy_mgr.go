@@ -33,7 +33,7 @@ type policyManager struct {
 	filterTable    iptablesTable
 	ruleRenderer   policyRenderer
 	ipVersion      uint8
-	outboundOnly   bool
+	rawEgressOnly  bool
 	neededIPSets   map[proto.PolicyID]set.Set
 	ipSetsCallback func(neededIPSets set.Set)
 }
@@ -60,7 +60,7 @@ func newRawEgressPolicyManager(rawTable iptablesTable, ruleRenderer policyRender
 		filterTable:    &noopTable{},
 		ruleRenderer:   ruleRenderer,
 		ipVersion:      ipVersion,
-		outboundOnly:   true,
+		rawEgressOnly:  true,
 		neededIPSets:   make(map[proto.PolicyID]set.Set),
 		ipSetsCallback: ipSetsCallback,
 	}
@@ -85,9 +85,13 @@ func (m *policyManager) mergeNeededIPSets(id *proto.PolicyID, neededIPSets set.S
 func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
+		if m.rawEgressOnly && !msg.Policy.Untracked {
+			log.WithField("id", msg.Id).Debug("Ignore non-untracked policy")
+			return
+		}
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
 		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
-		if m.outboundOnly {
+		if m.rawEgressOnly {
 			neededIPSets := set.New()
 			filteredChains := []*iptables.Chain(nil)
 			for _, chain := range chains {
@@ -107,7 +111,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
-		if m.outboundOnly {
+		if m.rawEgressOnly {
 			m.mergeNeededIPSets(msg.Id, nil)
 		}
 		inName := rules.PolicyChainName(rules.PolicyInboundPfx, msg.Id)
@@ -120,6 +124,10 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.rawTable.RemoveChainByName(inName)
 		m.rawTable.RemoveChainByName(outName)
 	case *proto.ActiveProfileUpdate:
+		if m.rawEgressOnly {
+			log.WithField("id", msg.Id).Debug("Ignore non-untracked profile")
+			return
+		}
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
 		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile, m.ipVersion)
 		m.filterTable.UpdateChains([]*iptables.Chain{inbound, outbound})

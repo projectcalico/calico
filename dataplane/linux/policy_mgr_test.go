@@ -271,7 +271,7 @@ var _ = Describe("Raw egress policy manager", func() {
 	})
 
 	It("correctly reports needed IP sets", func() {
-		By("defining one policy with an IP set")
+		By("defining one untracked policy with an IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
 			Id: &proto.PolicyID{Tier: "default", Name: "pol1"},
 			Policy: &proto.Policy{
@@ -289,7 +289,7 @@ var _ = Describe("Raw egress policy manager", func() {
 
 		Expect(neededIPSets).To(MatchIPSets("ipsetA"))
 
-		By("defining another policy with a different IP set")
+		By("defining another untracked policy with a different IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
 			Id: &proto.PolicyID{Tier: "default", Name: "pol2"},
 			Policy: &proto.Policy{
@@ -307,7 +307,25 @@ var _ = Describe("Raw egress policy manager", func() {
 
 		Expect(neededIPSets).To(MatchIPSets("ipsetA", "ipsetB"))
 
-		By("removing the first policy")
+		By("defining a non-untracked policy with a third IP set")
+		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+			Id: &proto.PolicyID{Tier: "default", Name: "pol3"},
+			Policy: &proto.Policy{
+				OutboundRules: []*proto.Rule{
+					&proto.Rule{
+						Action:      "deny",
+						DstIpSetIds: []string{"ipsetC"},
+					},
+				},
+			},
+		})
+		err = policyMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// The non-untracked policy IP set is not needed.
+		Expect(neededIPSets).To(MatchIPSets("ipsetA", "ipsetB"))
+
+		By("removing the first untracked policy")
 		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{Tier: "default", Name: "pol1"},
 		})
@@ -316,7 +334,7 @@ var _ = Describe("Raw egress policy manager", func() {
 
 		Expect(neededIPSets).To(MatchIPSets("ipsetB"))
 
-		By("removing the second policy")
+		By("removing the second untracked policy")
 		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{Tier: "default", Name: "pol2"},
 		})
