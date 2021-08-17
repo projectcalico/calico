@@ -987,6 +987,30 @@ func firstNonNilErr(errs ...error) error {
 }
 
 func (s *IPSets) SetFilter(ipSetNames set.Set) {
+	s.logCxt.Debugf("Filtering to needed IP set names: %v", ipSetNames)
+	markDirty := func(ipSetName string) {
+		if ipSet := s.mainIPSetNameToIPSet[ipSetName]; ipSet != nil {
+			s.dirtyIPSetIDs.Add(ipSet.SetID)
+		}
+	}
+	if s.neededIPSetNames != nil {
+		s.neededIPSetNames.Iter(func(item interface{}) error {
+			if ipSetNames != nil && !ipSetNames.Contains(item) {
+				// Name was needed before and now isn't, so mark as dirty.
+				markDirty(item.(string))
+			}
+			return nil
+		})
+	}
+	if ipSetNames != nil {
+		ipSetNames.Iter(func(item interface{}) error {
+			if s.neededIPSetNames != nil && !s.neededIPSetNames.Contains(item) {
+				// Name wasn't needed before and now is, so mark as dirty.
+				markDirty(item.(string))
+			}
+			return nil
+		})
+	}
 	s.neededIPSetNames = ipSetNames
 }
 

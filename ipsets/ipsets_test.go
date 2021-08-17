@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -500,6 +500,39 @@ var _ = Describe("IP sets dataplane", func() {
 				dataplane.ExpectMembers(map[string][]string{
 					v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 					v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
+				})
+			})
+
+			Context("with filtering to single IP set", func() {
+				BeforeEach(func() {
+					ipsets.SetFilter(set.From(v4MainIPSetName2))
+					ipsets.QueueResync()
+					apply()
+				})
+
+				It("should delete the non-needed IP set", func() {
+					Expect(dataplane.AttemptedDestroys).To(Equal([]string{
+						v4TempIPSetName0,
+						v4TempIPSetName1,
+						v4MainIPSetName,
+					}))
+					dataplane.ExpectMembers(map[string][]string{
+						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
+					})
+				})
+
+				Context("with filtering to both known IP sets", func() {
+					BeforeEach(func() {
+						ipsets.SetFilter(set.From(v4MainIPSetName2, v4MainIPSetName))
+						apply()
+					})
+
+					It("should recreate the re-needed IP set", func() {
+						dataplane.ExpectMembers(map[string][]string{
+							v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
+							v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
+						})
+					})
 				})
 			})
 
