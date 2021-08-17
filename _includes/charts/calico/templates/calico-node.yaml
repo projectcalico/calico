@@ -328,6 +328,9 @@ spec:
             # Cluster type to identify the deployment type
             - name: CLUSTER_TYPE
               value: "k8s"
+            # Non-calico CNI, disable credential management.
+            - name: CALICO_MANAGE_CNI
+              value: "false"
 {{- end }}
 {{- if and (eq .Values.network "calico") (.Values.vxlan) }}
             # Disable AWS source-destination check on nodes.
