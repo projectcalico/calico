@@ -584,6 +584,9 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	// that we expect to be there.
 	expectedIPSets := set.New()
 	for _, ipSet := range s.ipSetIDToIPSet {
+		if !s.ipSetNeeded(ipSet.SetID) {
+			continue
+		}
 		expectedIPSets.Add(ipSet.MainIPSetName)
 		s.logCxt.WithFields(log.Fields{
 			"ID":       ipSet.SetID,
@@ -939,6 +942,28 @@ func (s *IPSets) deleteIPSet(setName string) error {
 	// Success, update the cache.
 	s.logCxt.WithField("setName", setName).Info("Deleted IP set")
 	s.existingIPSetNames.Discard(setName)
+	if ipSet := s.mainIPSetNameToIPSet[setName]; ipSet != nil {
+		// We are still tracking this IP set; it has been deleted because it's not currently
+		// in the "needed" set.
+		if s.ipSetNeeded(ipSet.SetID) {
+			s.logCxt.Errorf("Unexpected deletion of an IP set %v that is still needed", ipSet.SetID)
+		}
+		// If we don't already have a pending complete IP set membership...
+		if ipSet.pendingReplace == nil {
+			// Reconstruct what the IP set membership should be from what was
+			// programmed, plus any pending additions, minus any pending deletions.
+			ipSet.pendingReplace = ipSet.members
+			ipSet.members = nil
+			ipSet.pendingAdds.Iter(func(m interface{}) error {
+				ipSet.pendingReplace.Add(m)
+				return set.RemoveItem
+			})
+			ipSet.pendingDeletions.Iter(func(m interface{}) error {
+				ipSet.pendingReplace.Discard(m)
+				return set.RemoveItem
+			})
+		}
+	}
 	return nil
 }
 
