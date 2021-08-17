@@ -81,80 +81,54 @@ kubectl -n calico-system set env daemonset/calico-node --containers="calico-node
 %>
 <label:OpenShift>
 <%
-To install WireGuard for OpenShift v4.6:
+To install WireGuard for OpenShift v4.8:
 
-  This approach uses kernel modules via container installation as outlined here {% include open-new-window.html text='atomic wireguard' url='https://github.com/projectcalico/atomic-wireguard' %} 
 
-   1. Create MachineConfig for WireGuard on your local machine.
-   ```bash
-   cat <<EOF > mc-wg-worker.yaml
-   apiVersion: machineconfiguration.openshift.io/v1
-   kind: MachineConfig
-   metadata:
-     labels:
-       machineconfiguration.openshift.io/role: worker
-     name: 10-kvc-wireguard-kmod
-   spec:
-     config:
-   EOF
-   ```
+   1. Install requirements:
+      - {% include open-new-window.html text='CoreOS Butane' url='https://coreos.github.io/butane/getting-started/' %}
+      - {% include open-new-window.html text='Openshift CLI' url='https://docs.openshift.com/container-platform/4.2/cli_reference/openshift_cli/getting-started-cli.html' %}
 
-   2. Create base {% include open-new-window.html text='Ignition' url='https://github.com/coreos/ignition' %} config.
-   ```bash
-   cat <<EOF > ./wg-config.ign
-   {
-     "ignition": { "version": "2.2.0" },
-     "systemd": {
-       "units": [{
-         "name": "require-kvc-wireguard-kmod.service",
-         "enabled": true,
-         "contents": "[Unit]\nRequires=kmods-via-containers@wireguard-kmod.service\n[Service]\nType=oneshot\nExecStart=/usr/bin/true\n\n[Install]\nWantedBy=multi-user.target"
-       }]
-     }
-   }
-   EOF
-   ```
-
-   3. Download and configure the tools needed for kmods.
+   1. Download and configure the tools needed for kmods.
    ```bash
    FAKEROOT=$(mktemp -d)
-   git clone https://github.com/kmods-via-containers/kmods-via-containers
+   git clone https://github.com/tigera/kmods-via-containers
    cd kmods-via-containers
-   make install DESTDIR=${FAKEROOT}/usr/local CONFDIR=${FAKEROOT}/etc/
+   make install FAKEROOT=${FAKEROOT}
    cd ..
    git clone https://github.com/tigera/kvc-wireguard-kmod
    cd kvc-wireguard-kmod
-   make install DESTDIR=${FAKEROOT}/usr/local CONFDIR=${FAKEROOT}/etc/
+   make install FAKEROOT=${FAKEROOT}
    cd ..
    ```
 
-   4. Configure/edit `kvc-wireguard-kmod/wireguard-kmod.conf`. 
+   1. Configure/edit `${FAKEROOT}/root/etc/kvc/wireguard-kmod.conf`. 
    
-       a. You must then set the URLs for the `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` packages in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. 
+       a. You must then set the URLs for the `KERNEL_CORE_RPM`, `KERNEL_DEVEL_RPM` and `KERNEL_MODULES_RPM` packages in the conf file `$FAKEROOT/etc/kvc/wireguard-kmod.conf`. Obtain copies for `kernel-core`, `kernel-devel`, and `kernel-modules` rpms from {% include open-new-window.html text='RedHat Access' url='https://access.redhat.com/downloads/content/package-browser' %} and host it in an http file server that is reachable by your OCP workers.
 
        b. For more details and help about configuring `kvc-wireguard-kmod/wireguard-kmod.conf`, see the {% include open-new-window.html text='kvc-wireguard-kmod README file' url='https://github.com/tigera/kvc-wireguard-kmod#quick-config-variables-guide' %}. Notes about wireguard version to kernel version compatibility is also available there.
 
 
-   5. Get RHEL Entitlement data from your own RHEL8 system from a host in your cluster.
-   ```bash
-   tar -czf subs.tar.gz /etc/pki/entitlement/ /etc/rhsm/ /etc/yum.repos.d/redhat.repo
-   ```
+   1. Get RHEL Entitlement data from your own RHEL8 system from a host in your cluster.
+      ```bash
+      tar -czf subs.tar.gz /etc/pki/entitlement/ /etc/rhsm/ /etc/yum.repos.d/redhat.repo
+      ```
+      Please refer to Openshift {% include open-new-window.html text='documentation' url='https://access.redhat.com/documentation/en-us/red_hat_subscription_management/1/html-single/rhsm/index#reg-cli' %} for more information about these entitlement files.
 
-   6. Copy the `subs.tar.gz` file to your workspace and then extract the contents using the following command.
-   ```bash
-   tar -x -C ${FAKEROOT} -f subs.tar.gz
-   ```
+   1. Copy the `subs.tar.gz` file to your workspace and then extract the contents using the following command.
+      ```bash
+      tar -x -C ${FAKEROOT}/root -f subs.tar.gz
+      ```
 
-   7. Get filetranspiler to generate the usable machine-config.
-   ```bash
-   git clone https://github.com/ashcrow/filetranspiler
-   ./filetranspiler/filetranspile -i ./wg-config.ign -f ${FAKEROOT} --format=yaml --dereference-symlinks | sed 's/^/     /' | (cat mc-wg-worker.yaml -) > mc-wg.yaml
-   ```
+   1. Transpile your machine config using {% include open-new-window.html text='CoreOS Butane' url='https://coreos.github.io/butane/getting-started/' %}.
+      ```bash
+      cd kvc-wireguard-kmod
+      make ignition FAKEROOT=${FAKEROOT} > mc-wg.yaml
+      ```
 
-   8. With the KUBECONFIG set for your cluster, run the following command to apply the MachineConfig which will install WireGuard across your cluster.
-   ```bash
-   oc create -f mc-wg.yaml
-   ```
+   1. With the KUBECONFIG set for your cluster, run the following command to apply the MachineConfig which will install WireGuard across your cluster.
+      ```bash
+      oc create -f mc-wg.yaml
+      ```
 %>
 {% endtabs %}
 
@@ -178,19 +152,28 @@ We recommend that you review and modify the MTU used by Calico networking when W
 
 #### Disable WireGuard for an individual node
 
-To disable WireGuard on a specific node with WireGuard installed, modify the node-specific Felix configuration. For example:
+To disable WireGuard on a specific node with WireGuard installed, modify the node-specific Felix configuration. e.g., to turn off encryption for pod traffic on node `my-node`, use the following command:
 
   ```bash
-calicoctl patch felixconfiguration node.<Node-Name> --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
-  ```
-
-To disable encryption for pod traffic on node `my-node`, use the following command:
-
-  ```bash
-calicoctl patch felixconfiguration node.my-node --type='merge' -p '{"spec":{"wireguardEnabled":false}}'
+cat <<EOF | kubectl apply -f -
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  name: node.my-node
+spec:
+  logSeverityScreen: Info
+  reportingInterval: 0s
+  wireguardEnabled: false
+EOF
   ```
 
 With the above command, Calico will not encrypt any of the pod traffic to or from node `my-node`.
+
+To enable encryption for pod traffic on node `my-node` again:
+
+  ```bash
+calicoctl patch felixconfiguration node.my-node --type='merge' -p '{"spec":{"wireguardEnabled":true}}'
+  ```
 
 #### Verify configuration
 
