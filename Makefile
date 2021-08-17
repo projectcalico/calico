@@ -8,7 +8,7 @@ SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_KUBE_CONTROLLERS_PROJECT_ID)
 KUBE_CONTROLLERS_IMAGE  ?=calico/kube-controllers
 FLANNEL_MIGRATION_IMAGE ?=calico/flannel-migration-controller
 BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
-DEV_REGISTRIES          ?=registry.hub.docker.com quay.io
+DEV_REGISTRIES          ?=docker.io quay.io
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
@@ -222,7 +222,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -241,7 +241,7 @@ release-publish-latest: release-prereqs
 	if ! docker run $(KUBE_CONTROLLERS_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(KUBE_CONTROLLERS_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=true CONFIRM=true
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
