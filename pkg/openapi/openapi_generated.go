@@ -1859,7 +1859,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"awsSrcDstCheck": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Set source-destination-check on AWS EC2 instances. Accepted value must be one of \"DoNothing\", \"Enabled\" or \"Disabled\". [Default: DoNothing]",
+							Description: "Set source-destination-check on AWS EC2 instances. Accepted value must be one of \"DoNothing\", \"Enable\" or \"Disable\". [Default: DoNothing]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
