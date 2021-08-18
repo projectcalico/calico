@@ -20,9 +20,11 @@ import (
 )
 
 var (
-	Scheme    = runtime.NewScheme()
-	Codecs    = serializer.NewCodecFactory(Scheme)
-	GroupName = v3.GroupName
+	Scheme        = runtime.NewScheme()
+	Codecs        = serializer.NewCodecFactory(Scheme)
+	GroupName     = v3.GroupName
+	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	AddToScheme   = SchemeBuilder.AddToScheme
 )
 
 func init() {
@@ -116,5 +118,14 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 // install registers the API group and adds types to a scheme
 func install(scheme *runtime.Scheme) {
 	utilruntime.Must(v3.AddToScheme(scheme))
+	utilruntime.Must(AddToScheme(scheme))
 	utilruntime.Must(scheme.SetVersionPriority(v3.SchemeGroupVersion))
+}
+
+// Adds the list of known types to Scheme.
+func addKnownTypes(scheme *runtime.Scheme) error {
+	// At the moment the v3 API is identical to the internal API. Register the same set of definitions as the
+	// internal set, no conversions are required since they are identical.
+	scheme.AddKnownTypes(v3.SchemeGroupVersionInternal, v3.AllKnownTypes...)
+	return nil
 }
