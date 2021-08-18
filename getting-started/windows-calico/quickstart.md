@@ -171,7 +171,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   <label:Kubernetes BGP>
   <%
 
-1. Enable BGP service on Windows node (instead of VXLan).
+1. Enable BGP service on Windows node (instead of VXLAN).
    Install the RemoteAccess service using the following Powershell commands:
    
    ```powershell
