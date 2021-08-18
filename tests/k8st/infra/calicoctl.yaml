@@ -23,7 +23,7 @@ spec:
   serviceAccountName: calicoctl
   containers:
   - name: calicoctl
-    image: calico/ctl:master
+    image: calico/ctl:release-v3.18
     command:
       - /calicoctl
     args:
