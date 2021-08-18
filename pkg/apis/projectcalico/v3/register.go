@@ -19,18 +19,7 @@ var (
 	SchemeBuilder      runtime.SchemeBuilder
 	localSchemeBuilder = &SchemeBuilder
 	AddToScheme        = localSchemeBuilder.AddToScheme
-)
-
-func init() {
-	// We only register manually written functions here. The registration of the
-	// generated functions takes place in the generated files. The separation
-	// makes the code compile even when the generated files are missing.
-	localSchemeBuilder.Register(addKnownTypes, addConversionFuncs)
-}
-
-// Adds the list of known types to api.Scheme.
-func addKnownTypes(scheme *runtime.Scheme) error {
-	all := []runtime.Object{
+	AllKnownTypes      = []runtime.Object{
 		&NetworkPolicy{},
 		&NetworkPolicyList{},
 		&GlobalNetworkPolicy{},
@@ -56,12 +45,19 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkSet{},
 		&NetworkSetList{},
 	}
-	scheme.AddKnownTypes(SchemeGroupVersion, all...)
-	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+)
 
-	// At the moment the v3 API is identical to the internal API. Register the same set of definitions as the
-	// internal set, no conversions are required since they are identical.
-	scheme.AddKnownTypes(SchemeGroupVersionInternal, all...)
+func init() {
+	// We only register manually written functions here. The registration of the
+	// generated functions takes place in the generated files. The separation
+	// makes the code compile even when the generated files are missing.
+	localSchemeBuilder.Register(addKnownTypes, addConversionFuncs)
+}
+
+// Adds the list of known types to api.Scheme.
+func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(SchemeGroupVersion, AllKnownTypes...)
+	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
 }
 
