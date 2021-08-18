@@ -304,7 +304,7 @@ function Wait-ForManagementIP($NetworkName)
 
 function Get-LastBootTime()
 {
-    $bootTime = (Get-WmiObject win32_operatingsystem | select @{LABEL='LastBootUpTime';EXPRESSION={$_.lastbootuptime}}).LastBootUpTime
+    $bootTime = (Get-CimInstance win32_operatingsystem | select @{LABEL='LastBootUpTime';EXPRESSION={$_.lastbootuptime}}).LastBootUpTime
     if (($bootTime -EQ $null) -OR ($bootTime.length -EQ 0))
     {
         throw "Failed to get last boot time"
