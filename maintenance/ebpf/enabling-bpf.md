@@ -305,8 +305,7 @@ kubectl patch networks.operator.openshift.io cluster --type merge -p '{"spec":{"
 
 #### Configure data interface
 
-If the name of the data interfaces doesn't match the default regular expression `^(en.*|eth.*|tunl0$)`, you should configure the spec
-`bpfDataIfacePattern` of `FelixConfiguration`, otherwise eBPF can't catch traffic from client outside cluster to service `ClusterIP` or `NodePort`.
+If the name of the your node's interface doesn't match the default regular expression of `^(en.*|eth.*|tunl0$)`, you must configure felix to detect your interface by modifying the `bpfDataIfacePattern` configuration option with an appropriate regex.
 
 ```
 calicoctl patch felixconfiguration default --patch='{"spec": {"bpfDataIfacePattern": "<Regular expression>"}}'
