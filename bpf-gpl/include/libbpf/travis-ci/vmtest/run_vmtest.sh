@@ -14,12 +14,12 @@ ${VMTEST_ROOT}/build_pahole.sh travis-ci/vmtest/pahole
 
 travis_fold start install_clang "Installing Clang/LLVM"
 
-# Install required packages
 wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic main" | sudo tee -a /etc/apt/sources.list
+sudo add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal main"
 sudo apt-get update
-sudo apt-get -y install clang-12 lld-12 llvm-12
-sudo apt-get -y install python-docutils # for rst2man
+sudo apt-get install --allow-downgrades -y libc6=2.31-0ubuntu9.2
+sudo aptitude install -y g++ libelf-dev
+sudo aptitude install -y clang-13 lld-13 llvm-13
 
 travis_fold end install_clang
 

@@ -1,4 +1,4 @@
-/* This is auto-generated file. See bpf_helpers_doc.py for details. */
+/* This is auto-generated file. See bpf_doc.py for details. */
 
 /* Forward declarations of BPF structs */
 struct bpf_fib_lookup;
@@ -16,6 +16,7 @@ struct bpf_sysctl;
 struct bpf_tcp_sock;
 struct bpf_tunnel_key;
 struct bpf_xfrm_state;
+struct linux_binprm;
 struct pt_regs;
 struct sk_reuseport_md;
 struct sockaddr;
@@ -32,6 +33,9 @@ struct sk_msg_md;
 struct xdp_md;
 struct path;
 struct btf_ptr;
+struct inode;
+struct socket;
+struct file;
 
 /*
  * bpf_map_lookup_elem
@@ -1142,8 +1146,8 @@ static long (*bpf_probe_read_str)(void *dst, __u32 size, const void *unsafe_ptr)
  * 	identifier that can be assumed unique.
  *
  * Returns
- * 	A 8-byte long non-decreasing number on success, or 0 if the
- * 	socket field is missing inside *skb*.
+ * 	A 8-byte long unique number on success, or 0 if the socket
+ * 	field is missing inside *skb*.
  */
 static __u64 (*bpf_get_socket_cookie)(void *ctx) = (void *) 46;
 
@@ -1244,6 +1248,10 @@ static long (*bpf_setsockopt)(void *bpf_socket, int level, int optname, void *op
  * 	* **BPF_F_ADJ_ROOM_ENCAP_L2**\ (*len*):
  * 	  Use with ENCAP_L3/L4 flags to further specify the tunnel
  * 	  type; *len* is the length of the inner MAC header.
+ *
+ * 	* **BPF_F_ADJ_ROOM_ENCAP_L2_ETH**:
+ * 	  Use with BPF_F_ADJ_ROOM_ENCAP_L2 flag to further specify the
+ * 	  L2 type as Ethernet.
  *
  * 	A call to this helper is susceptible to change the underlying
  * 	packet buffer. Therefore, at load time, all checks on pointers
@@ -1795,6 +1803,9 @@ static long (*bpf_skb_load_bytes_relative)(const void *skb, __u32 offset, void *
  * 	*   0 on success (packet is forwarded, nexthop neighbor exists)
  * 	* > 0 one of **BPF_FIB_LKUP_RET_** codes explaining why the
  * 	  packet is not forwarded or needs assist from full stack
+ *
+ * 	If lookup fails with BPF_FIB_LKUP_RET_FRAG_NEEDED, then the MTU
+ * 	was exceeded and output params->mtu_result contains the MTU.
  */
 static long (*bpf_fib_lookup)(void *ctx, struct bpf_fib_lookup *params, int plen, __u32 flags) = (void *) 69;
 
@@ -2067,7 +2078,7 @@ static __u64 (*bpf_get_current_cgroup_id)(void) = (void *) 80;
  * 	running simultaneously.
  *
  * 	A user should care about the synchronization by himself.
- * 	For example, by using the **BPF_STX_XADD** instruction to alter
+ * 	For example, by using the **BPF_ATOMIC** instructions to alter
  * 	the shared data.
  *
  * Returns
@@ -2744,10 +2755,10 @@ static long (*bpf_probe_read_kernel)(void *dst, __u32 size, const void *unsafe_p
  * 	string length is larger than *size*, just *size*-1 bytes are
  * 	copied and the last byte is set to NUL.
  *
- * 	On success, the length of the copied string is returned. This
- * 	makes this helper useful in tracing programs for reading
- * 	strings, and more importantly to get its length at runtime. See
- * 	the following snippet:
+ * 	On success, returns the number of bytes that were written,
+ * 	including the terminal NUL. This makes this helper useful in
+ * 	tracing programs for reading strings, and more importantly to
+ * 	get its length at runtime. See the following snippet:
  *
  * 	::
  *
@@ -2776,7 +2787,7 @@ static long (*bpf_probe_read_kernel)(void *dst, __u32 size, const void *unsafe_p
  * 	one can quickly iterate at the right offset of the memory area.
  *
  * Returns
- * 	On success, the strictly positive length of the string,
+ * 	On success, the strictly positive length of the output string,
  * 	including the trailing NUL character. On error, a negative
  * 	value.
  */
@@ -3081,6 +3092,13 @@ static __u64 (*bpf_sk_ancestor_cgroup_id)(void *sk, int ancestor_level) = (void 
  * 	of new data availability is sent.
  * 	If **BPF_RB_FORCE_WAKEUP** is specified in *flags*, notification
  * 	of new data availability is sent unconditionally.
+ * 	If **0** is specified in *flags*, an adaptive notification
+ * 	of new data availability is sent.
+ *
+ * 	An adaptive notification is a notification sent whenever the user-space
+ * 	process has caught up and consumed all available payloads. In case the user-space
+ * 	process is still processing a previous payload, then no notification is needed
+ * 	as it will process the newly added payload automatically.
  *
  * Returns
  * 	0 on success, or a negative error in case of failure.
@@ -3091,6 +3109,7 @@ static long (*bpf_ringbuf_output)(void *ringbuf, void *data, __u64 size, __u64 f
  * bpf_ringbuf_reserve
  *
  * 	Reserve *size* bytes of payload in a ring buffer *ringbuf*.
+ * 	*flags* must be 0.
  *
  * Returns
  * 	Valid pointer with *size* bytes of memory available; NULL,
@@ -3106,6 +3125,10 @@ static void *(*bpf_ringbuf_reserve)(void *ringbuf, __u64 size, __u64 flags) = (v
  * 	of new data availability is sent.
  * 	If **BPF_RB_FORCE_WAKEUP** is specified in *flags*, notification
  * 	of new data availability is sent unconditionally.
+ * 	If **0** is specified in *flags*, an adaptive notification
+ * 	of new data availability is sent.
+ *
+ * 	See 'bpf_ringbuf_output()' for the definition of adaptive notification.
  *
  * Returns
  * 	Nothing. Always succeeds.
@@ -3120,6 +3143,10 @@ static void (*bpf_ringbuf_submit)(void *data, __u64 flags) = (void *) 132;
  * 	of new data availability is sent.
  * 	If **BPF_RB_FORCE_WAKEUP** is specified in *flags*, notification
  * 	of new data availability is sent unconditionally.
+ * 	If **0** is specified in *flags*, an adaptive notification
+ * 	of new data availability is sent.
+ *
+ * 	See 'bpf_ringbuf_output()' for the definition of adaptive notification.
  *
  * Returns
  * 	Nothing. Always succeeds.
@@ -3616,5 +3643,250 @@ static void *(*bpf_this_cpu_ptr)(const void *percpu_ptr) = (void *) 154;
  * 	**TC_ACT_SHOT** on error.
  */
 static long (*bpf_redirect_peer)(__u32 ifindex, __u64 flags) = (void *) 155;
+
+/*
+ * bpf_task_storage_get
+ *
+ * 	Get a bpf_local_storage from the *task*.
+ *
+ * 	Logically, it could be thought of as getting the value from
+ * 	a *map* with *task* as the **key**.  From this
+ * 	perspective,  the usage is not much different from
+ * 	**bpf_map_lookup_elem**\ (*map*, **&**\ *task*) except this
+ * 	helper enforces the key must be an task_struct and the map must also
+ * 	be a **BPF_MAP_TYPE_TASK_STORAGE**.
+ *
+ * 	Underneath, the value is stored locally at *task* instead of
+ * 	the *map*.  The *map* is used as the bpf-local-storage
+ * 	"type". The bpf-local-storage "type" (i.e. the *map*) is
+ * 	searched against all bpf_local_storage residing at *task*.
+ *
+ * 	An optional *flags* (**BPF_LOCAL_STORAGE_GET_F_CREATE**) can be
+ * 	used such that a new bpf_local_storage will be
+ * 	created if one does not exist.  *value* can be used
+ * 	together with **BPF_LOCAL_STORAGE_GET_F_CREATE** to specify
+ * 	the initial value of a bpf_local_storage.  If *value* is
+ * 	**NULL**, the new bpf_local_storage will be zero initialized.
+ *
+ * Returns
+ * 	A bpf_local_storage pointer is returned on success.
+ *
+ * 	**NULL** if not found or there was an error in adding
+ * 	a new bpf_local_storage.
+ */
+static void *(*bpf_task_storage_get)(void *map, struct task_struct *task, void *value, __u64 flags) = (void *) 156;
+
+/*
+ * bpf_task_storage_delete
+ *
+ * 	Delete a bpf_local_storage from a *task*.
+ *
+ * Returns
+ * 	0 on success.
+ *
+ * 	**-ENOENT** if the bpf_local_storage cannot be found.
+ */
+static long (*bpf_task_storage_delete)(void *map, struct task_struct *task) = (void *) 157;
+
+/*
+ * bpf_get_current_task_btf
+ *
+ * 	Return a BTF pointer to the "current" task.
+ * 	This pointer can also be used in helpers that accept an
+ * 	*ARG_PTR_TO_BTF_ID* of type *task_struct*.
+ *
+ * Returns
+ * 	Pointer to the current task.
+ */
+static struct task_struct *(*bpf_get_current_task_btf)(void) = (void *) 158;
+
+/*
+ * bpf_bprm_opts_set
+ *
+ * 	Set or clear certain options on *bprm*:
+ *
+ * 	**BPF_F_BPRM_SECUREEXEC** Set the secureexec bit
+ * 	which sets the **AT_SECURE** auxv for glibc. The bit
+ * 	is cleared if the flag is not specified.
+ *
+ * Returns
+ * 	**-EINVAL** if invalid *flags* are passed, zero otherwise.
+ */
+static long (*bpf_bprm_opts_set)(struct linux_binprm *bprm, __u64 flags) = (void *) 159;
+
+/*
+ * bpf_ktime_get_coarse_ns
+ *
+ * 	Return a coarse-grained version of the time elapsed since
+ * 	system boot, in nanoseconds. Does not include time the system
+ * 	was suspended.
+ *
+ * 	See: **clock_gettime**\ (**CLOCK_MONOTONIC_COARSE**)
+ *
+ * Returns
+ * 	Current *ktime*.
+ */
+static __u64 (*bpf_ktime_get_coarse_ns)(void) = (void *) 160;
+
+/*
+ * bpf_ima_inode_hash
+ *
+ * 	Returns the stored IMA hash of the *inode* (if it's avaialable).
+ * 	If the hash is larger than *size*, then only *size*
+ * 	bytes will be copied to *dst*
+ *
+ * Returns
+ * 	The **hash_algo** is returned on success,
+ * 	**-EOPNOTSUP** if IMA is disabled or **-EINVAL** if
+ * 	invalid arguments are passed.
+ */
+static long (*bpf_ima_inode_hash)(struct inode *inode, void *dst, __u32 size) = (void *) 161;
+
+/*
+ * bpf_sock_from_file
+ *
+ * 	If the given file represents a socket, returns the associated
+ * 	socket.
+ *
+ * Returns
+ * 	A pointer to a struct socket on success or NULL if the file is
+ * 	not a socket.
+ */
+static struct socket *(*bpf_sock_from_file)(struct file *file) = (void *) 162;
+
+/*
+ * bpf_check_mtu
+ *
+ * 	Check packet size against exceeding MTU of net device (based
+ * 	on *ifindex*).  This helper will likely be used in combination
+ * 	with helpers that adjust/change the packet size.
+ *
+ * 	The argument *len_diff* can be used for querying with a planned
+ * 	size change. This allows to check MTU prior to changing packet
+ * 	ctx. Providing an *len_diff* adjustment that is larger than the
+ * 	actual packet size (resulting in negative packet size) will in
+ * 	principle not exceed the MTU, why it is not considered a
+ * 	failure.  Other BPF-helpers are needed for performing the
+ * 	planned size change, why the responsability for catch a negative
+ * 	packet size belong in those helpers.
+ *
+ * 	Specifying *ifindex* zero means the MTU check is performed
+ * 	against the current net device.  This is practical if this isn't
+ * 	used prior to redirect.
+ *
+ * 	On input *mtu_len* must be a valid pointer, else verifier will
+ * 	reject BPF program.  If the value *mtu_len* is initialized to
+ * 	zero then the ctx packet size is use.  When value *mtu_len* is
+ * 	provided as input this specify the L3 length that the MTU check
+ * 	is done against. Remember XDP and TC length operate at L2, but
+ * 	this value is L3 as this correlate to MTU and IP-header tot_len
+ * 	values which are L3 (similar behavior as bpf_fib_lookup).
+ *
+ * 	The Linux kernel route table can configure MTUs on a more
+ * 	specific per route level, which is not provided by this helper.
+ * 	For route level MTU checks use the **bpf_fib_lookup**\ ()
+ * 	helper.
+ *
+ * 	*ctx* is either **struct xdp_md** for XDP programs or
+ * 	**struct sk_buff** for tc cls_act programs.
+ *
+ * 	The *flags* argument can be a combination of one or more of the
+ * 	following values:
+ *
+ * 	**BPF_MTU_CHK_SEGS**
+ * 		This flag will only works for *ctx* **struct sk_buff**.
+ * 		If packet context contains extra packet segment buffers
+ * 		(often knows as GSO skb), then MTU check is harder to
+ * 		check at this point, because in transmit path it is
+ * 		possible for the skb packet to get re-segmented
+ * 		(depending on net device features).  This could still be
+ * 		a MTU violation, so this flag enables performing MTU
+ * 		check against segments, with a different violation
+ * 		return code to tell it apart. Check cannot use len_diff.
+ *
+ * 	On return *mtu_len* pointer contains the MTU value of the net
+ * 	device.  Remember the net device configured MTU is the L3 size,
+ * 	which is returned here and XDP and TC length operate at L2.
+ * 	Helper take this into account for you, but remember when using
+ * 	MTU value in your BPF-code.
+ *
+ *
+ * Returns
+ * 	* 0 on success, and populate MTU value in *mtu_len* pointer.
+ *
+ * 	* < 0 if any input argument is invalid (*mtu_len* not updated)
+ *
+ * 	MTU violations return positive values, but also populate MTU
+ * 	value in *mtu_len* pointer, as this can be needed for
+ * 	implementing PMTU handing:
+ *
+ * 	* **BPF_MTU_CHK_RET_FRAG_NEEDED**
+ * 	* **BPF_MTU_CHK_RET_SEGS_TOOBIG**
+ */
+static long (*bpf_check_mtu)(void *ctx, __u32 ifindex, __u32 *mtu_len, __s32 len_diff, __u64 flags) = (void *) 163;
+
+/*
+ * bpf_for_each_map_elem
+ *
+ * 	For each element in **map**, call **callback_fn** function with
+ * 	**map**, **callback_ctx** and other map-specific parameters.
+ * 	The **callback_fn** should be a static function and
+ * 	the **callback_ctx** should be a pointer to the stack.
+ * 	The **flags** is used to control certain aspects of the helper.
+ * 	Currently, the **flags** must be 0.
+ *
+ * 	The following are a list of supported map types and their
+ * 	respective expected callback signatures:
+ *
+ * 	BPF_MAP_TYPE_HASH, BPF_MAP_TYPE_PERCPU_HASH,
+ * 	BPF_MAP_TYPE_LRU_HASH, BPF_MAP_TYPE_LRU_PERCPU_HASH,
+ * 	BPF_MAP_TYPE_ARRAY, BPF_MAP_TYPE_PERCPU_ARRAY
+ *
+ * 	long (\*callback_fn)(struct bpf_map \*map, const void \*key, void \*value, void \*ctx);
+ *
+ * 	For per_cpu maps, the map_value is the value on the cpu where the
+ * 	bpf_prog is running.
+ *
+ * 	If **callback_fn** return 0, the helper will continue to the next
+ * 	element. If return value is 1, the helper will skip the rest of
+ * 	elements and return. Other return values are not used now.
+ *
+ *
+ * Returns
+ * 	The number of traversed map elements for success, **-EINVAL** for
+ * 	invalid **flags**.
+ */
+static long (*bpf_for_each_map_elem)(void *map, void *callback_fn, void *callback_ctx, __u64 flags) = (void *) 164;
+
+/*
+ * bpf_snprintf
+ *
+ * 	Outputs a string into the **str** buffer of size **str_size**
+ * 	based on a format string stored in a read-only map pointed by
+ * 	**fmt**.
+ *
+ * 	Each format specifier in **fmt** corresponds to one u64 element
+ * 	in the **data** array. For strings and pointers where pointees
+ * 	are accessed, only the pointer values are stored in the *data*
+ * 	array. The *data_len* is the size of *data* in bytes.
+ *
+ * 	Formats **%s** and **%p{i,I}{4,6}** require to read kernel
+ * 	memory. Reading kernel memory may fail due to either invalid
+ * 	address or valid address but requiring a major memory fault. If
+ * 	reading kernel memory fails, the string for **%s** will be an
+ * 	empty string, and the ip address for **%p{i,I}{4,6}** will be 0.
+ * 	Not returning error to bpf program is consistent with what
+ * 	**bpf_trace_printk**\ () does for now.
+ *
+ *
+ * Returns
+ * 	The strictly positive length of the formatted string, including
+ * 	the trailing zero character. If the return value is greater than
+ * 	**str_size**, **str** contains a truncated string, guaranteed to
+ * 	be zero-terminated except when **str_size** is 0.
+ *
+ * 	Or **-EBUSY** if the per-CPU memory copy buffer is busy.
+ */
+static long (*bpf_snprintf)(char *str, __u32 str_size, const char *fmt, __u64 *data, __u32 data_len) = (void *) 165;
 
 

@@ -1,20 +1,16 @@
 #!/bin/bash
-set -e
-set -x
+set -eux
 
-RELEASE="bionic"
-
-echo "deb-src http://archive.ubuntu.com/ubuntu/ $RELEASE main restricted universe multiverse" >>/etc/apt/sources.list
+RELEASE="focal"
 
 apt-get update
-apt-get -y build-dep libelf-dev
-apt-get install -y libelf-dev pkg-config
+apt-get install -y pkg-config
 
 source "$(dirname $0)/travis_wait.bash"
 
 cd $REPO_ROOT
 
-CFLAGS="-g -O2 -Werror -Wall -fsanitize=address,undefined"
+CFLAGS="-g -O2 -Werror -Wall -fsanitize=address,undefined -Wno-stringop-truncation"
 mkdir build install
 cc --version
 make -j$((4*$(nproc))) CFLAGS="${CFLAGS}" -C ./src -B OBJDIR=../build

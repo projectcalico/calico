@@ -337,3 +337,33 @@ LIBBPF_0.2.0 {
 		perf_buffer__consume_buffer;
 		xsk_socket__create_shared;
 } LIBBPF_0.1.0;
+
+LIBBPF_0.3.0 {
+	global:
+		btf__base_btf;
+		btf__parse_elf_split;
+		btf__parse_raw_split;
+		btf__parse_split;
+		btf__new_empty_split;
+		btf__new_split;
+		ring_buffer__epoll_fd;
+		xsk_setup_xdp_prog;
+		xsk_socket__update_xskmap;
+} LIBBPF_0.2.0;
+
+LIBBPF_0.4.0 {
+	global:
+		btf__add_float;
+		btf__add_type;
+		bpf_linker__add_file;
+		bpf_linker__finalize;
+		bpf_linker__free;
+		bpf_linker__new;
+		bpf_map__inner_map;
+		bpf_object__set_kversion;
+		bpf_tc_attach;
+		bpf_tc_detach;
+		bpf_tc_hook_create;
+		bpf_tc_hook_destroy;
+		bpf_tc_query;
+} LIBBPF_0.3.0;

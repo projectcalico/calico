@@ -6,7 +6,7 @@ CONT_NAME="${CONT_NAME:-libbpf-debian-$DEBIAN_RELEASE}"
 ENV_VARS="${ENV_VARS:-}"
 DOCKER_RUN="${DOCKER_RUN:-docker run}"
 REPO_ROOT="${REPO_ROOT:-$PWD}"
-ADDITIONAL_DEPS=(clang pkg-config gcc-8)
+ADDITIONAL_DEPS=(clang pkg-config gcc-10)
 CFLAGS="-g -O2 -Werror -Wall"
 
 function info() {
@@ -21,7 +21,7 @@ function docker_exec() {
     docker exec $ENV_VARS -it $CONT_NAME "$@"
 }
 
-set -e
+set -eu
 
 source "$(dirname $0)/travis_wait.bash"
 
@@ -31,7 +31,6 @@ for phase in "${PHASES[@]}"; do
             info "Setup phase"
             info "Using Debian $DEBIAN_RELEASE"
 
-            sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
             docker --version
 
             docker pull debian:$DEBIAN_RELEASE
@@ -41,17 +40,18 @@ for phase in "${PHASES[@]}"; do
                         -dit --net=host debian:$DEBIAN_RELEASE /bin/bash
             docker_exec bash -c "echo deb-src http://deb.debian.org/debian $DEBIAN_RELEASE main >>/etc/apt/sources.list"
             docker_exec apt-get -y update
-            docker_exec apt-get -y build-dep libelf-dev
-            docker_exec apt-get -y install libelf-dev
-            docker_exec apt-get -y install "${ADDITIONAL_DEPS[@]}"
+            docker_exec apt-get -y install aptitude
+            docker_exec aptitude -y build-dep libelf-dev
+            docker_exec aptitude -y install libelf-dev
+            docker_exec aptitude -y install "${ADDITIONAL_DEPS[@]}"
             ;;
-        RUN|RUN_CLANG|RUN_GCC8|RUN_ASAN|RUN_CLANG_ASAN|RUN_GCC8_ASAN)
+        RUN|RUN_CLANG|RUN_GCC10|RUN_ASAN|RUN_CLANG_ASAN|RUN_GCC10_ASAN)
             if [[ "$phase" = *"CLANG"* ]]; then
                 ENV_VARS="-e CC=clang -e CXX=clang++"
                 CC="clang"
-            elif [[ "$phase" = *"GCC8"* ]]; then
-                ENV_VARS="-e CC=gcc-8 -e CXX=g++-8"
-                CC="gcc-8"
+            elif [[ "$phase" = *"GCC10"* ]]; then
+                ENV_VARS="-e CC=gcc-10 -e CXX=g++-10"
+                CC="gcc-10"
             else
                 CFLAGS="${CFLAGS} -Wno-stringop-truncation"
             fi

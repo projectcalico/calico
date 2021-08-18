@@ -46,6 +46,6 @@ cd libbpf/selftests/bpf
 test_progs
 
 if [[ "${KERNEL}" == 'latest' ]]; then
-	test_maps
+	#test_maps
 	test_verifier
 fi

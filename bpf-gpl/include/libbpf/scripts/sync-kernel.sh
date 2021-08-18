@@ -266,12 +266,12 @@ for patch in $(ls -1 ${TMP_DIR}/patches | tail -n +2); do
 done
 
 # Generate bpf_helper_defs.h and commit, if anything changed
-# restore Linux tip to use bpf_helpers_doc.py
+# restore Linux tip to use bpf_doc.py
 cd_to ${LINUX_REPO}
 git checkout ${TIP_TAG}
 # re-generate bpf_helper_defs.h
 cd_to ${LIBBPF_REPO}
-"${LINUX_ABS_DIR}/scripts/bpf_helpers_doc.py" --header			    \
+"${LINUX_ABS_DIR}/scripts/bpf_doc.py" --header					      \
 	--file include/uapi/linux/bpf.h > src/bpf_helper_defs.h
 # if anything changed, commit it
 helpers_changes=$(git status --porcelain src/bpf_helper_defs.h | wc -l)
