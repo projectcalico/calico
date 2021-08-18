@@ -91,6 +91,7 @@ eBPF mode has the following pre-requisites:
 - [Verify that your cluster is ready for eBPF mode](#verify-that-your-cluster-is-ready-for-ebpf-mode)
 - [Configure {{site.prodname}} to talk directly to the API server](#configure-{{site.prodnamedash}}-to-talk-directly-to-the-api-server)
 - [Configure kube-proxy](#configure-kube-proxy)
+- [Configure data interface](#configure-data-interface)
 - [Enable eBPF mode](#enable-ebpf-mode)
 - [Try out DSR mode](#try-out-dsr-mode)
 - [Reversing the process](#reversing-the-process)
@@ -300,6 +301,14 @@ To re-enable it:
 
 ```
 kubectl patch networks.operator.openshift.io cluster --type merge -p '{"spec":{"deployKubeProxy": true}}'
+```
+
+#### Configure data interface
+
+If the name of the your node's interface doesn't match the default regular expression of `^(en.*|eth.*|tunl0$)`, you must configure felix to detect your interface by modifying the `bpfDataIfacePattern` configuration option with an appropriate regex.
+
+```
+calicoctl patch felixconfiguration default --patch='{"spec": {"bpfDataIfacePattern": "<Regular expression>"}}'
 ```
 
 #### Enable eBPF mode
