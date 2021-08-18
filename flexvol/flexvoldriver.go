@@ -230,7 +230,7 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	newDestianationDir := destinationDir + "/nodeagent"
 	err = os.MkdirAll(newDestianationDir, 0777)
 	if err != nil {
-		cmd := exec.Command("/bin/unmount", destinationDir)
+		cmd := exec.Command("/bin/umount", destinationDir)
 		e := cmd.Run()
 		if e != nil {
 			logError("doMount", inp, fmt.Sprintf("failed to unmount %s\n", destinationDir), syslogOnlyTrue)
