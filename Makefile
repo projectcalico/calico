@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/libcalico-go
-GO_BUILD_VER=v0.53
+GO_BUILD_VER=v0.55
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_LIBCALICO_GO_PROJECT_ID)
@@ -64,36 +64,22 @@ gen-files: gen-crds
 	$(MAKE) fix
 
 ## Force a rebuild of custom resource definition yamls
-gen-crds: bin/controller-gen
+gen-crds:
 	rm -rf config
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c './bin/controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_GO_BUILD) sh -c 'controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
 	@rm config/crd/_.yaml
 	patch -s -p0 < ./config.patch
 
-# Used for generating CRD files.
-$(BINDIR)/controller-gen:
-	# Download a version of controller-gen that has been hacked to support additional types (e.g., float).
-	# We can remove this once we update the Calico v3 APIs to use only types which are supported by the upstream controller-gen
-	# tooling. Example: float, all the types in the numorstring package, etc.
-	mkdir -p bin
-	wget -O $@ https://github.com/projectcalico/controller-tools/releases/download/calico/controller-gen && chmod +x $@
-
-$(BINDIR)/openapi-gen: 
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/openapi-gen"
-
-$(BINDIR)/deepcopy-gen: 
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install k8s.io/code-generator/cmd/deepcopy-gen"
-
-./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS) $(BINDIR)/deepcopy-gen
-	$(DOCKER_GO_BUILD) sh -c '$(BINDIR)/deepcopy-gen \
+./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
+	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--input-dirs "$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom" \
 		--bounding-dirs "github.com/projectcalico/libcalico-go" \
 		--output-file-base zz_generated.deepcopy'
 
-./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS) $(BINDIR)/deepcopy-gen
-	$(DOCKER_GO_BUILD) sh -c '$(BINDIR)/deepcopy-gen \
+./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
+	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--input-dirs "$(PACKAGE_NAME)/lib/apis/v3" \
@@ -101,16 +87,16 @@ $(BINDIR)/deepcopy-gen:
 		--output-file-base zz_generated.deepcopy'
 
 # Generate OpenAPI spec
-./lib/apis/v3/openapi_generated.go: $(APIS_SRCS) $(BINDIR)/openapi-gen
+./lib/apis/v3/openapi_generated.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) \
-           sh -c '$(BINDIR)/openapi-gen \
+           sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
                 --input-dirs "$(PACKAGE_NAME)/lib/apis/v3,$(PACKAGE_NAME)/lib/apis/v1" \
                 --output-package "$(PACKAGE_NAME)/lib/apis/v3"'
 
 	$(DOCKER_GO_BUILD) \
-           sh -c '$(BINDIR)/openapi-gen \
+           sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
                 --input-dirs "$(PACKAGE_NAME)/lib/apis/v1" \
