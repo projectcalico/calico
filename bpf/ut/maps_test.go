@@ -90,6 +90,99 @@ func TestMapIterationDeleteAfter(t *testing.T) {
 	Expect(err2).NotTo(HaveOccurred(), "Failed to delete map entry")
 }
 
+// TestDeleteDuringIter tries to validate that BPF map iteration is working as we want even when keys are being added
+// to and deleted from the map during iteration.
+func TestDeleteDuringIter(t *testing.T) {
+	RegisterTestingT(t)
+	defer cleanUpMaps()
+	logLevel := logrus.GetLevel()
+	defer func() {
+		logrus.SetLevel(logLevel)
+	}()
+	logrus.SetLevel(logrus.InfoLevel)
+
+	testDelDuringIterN(10)
+	testDelDuringIterN(11)
+	testDelDuringIterN(100)
+	testDelDuringIterN(10000)
+	testDelDuringIterN(100000)
+}
+
+func testDelDuringIterN(numEntries int) {
+	cleanUpMaps()
+	for i := 0; i < numEntries; i++ {
+		err := insertNumberedKey(i)
+		Expect(err).NotTo(HaveOccurred())
+	}
+	// First pass, no deletions.
+	seenKeys := map[conntrack.Key]bool{}
+	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		key := conntrack.KeyFromBytes(k)
+		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
+		seenKeys[key] = true
+		return bpf.IterNone
+	})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(seenKeys).To(HaveLen(numEntries), "Should have seen expected num entries on first iteration")
+
+	// Second pass, delete alternate keys.
+	seenKeys = map[conntrack.Key]bool{}
+	deleteNextKey := false
+	expectedKeys := map[conntrack.Key]bool{}
+	err = ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		defer func() {
+			deleteNextKey = !deleteNextKey
+		}()
+		key := conntrack.KeyFromBytes(k)
+		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
+		seenKeys[key] = true
+		if deleteNextKey {
+			return bpf.IterDelete
+		} else {
+			expectedKeys[key] = true
+			return bpf.IterNone
+		}
+	})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(seenKeys).To(HaveLen(numEntries), "Should have seen expected num entries on deletion iteration")
+
+	// Third pass, insert key on each iteration an delete on alternate iterations.
+	numLeftAfterSecondPass := len(expectedKeys)
+	seenKeys = map[conntrack.Key]bool{}
+	deleteNextKey = false
+	insertClock := 0
+	insertIdx := numEntries
+	numInsertedInThirdPass := 0
+	err = ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		defer func() {
+			deleteNextKey = !deleteNextKey
+			insertClock++
+		}()
+		key := conntrack.KeyFromBytes(k)
+		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
+		seenKeys[key] = true
+		delete(expectedKeys, key)
+		if insertClock % 3 == 0 {
+			err := insertNumberedKey(insertIdx)
+			Expect(err).NotTo(HaveOccurred())
+			insertIdx++
+			numInsertedInThirdPass++
+		}
+		if deleteNextKey {
+			return bpf.IterDelete
+		} else {
+			return bpf.IterNone
+		}
+	})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(expectedKeys).To(BeEmpty(), "Didn't see every key in third pass")
+	Expect(len(seenKeys)).To(BeNumerically(">=", numLeftAfterSecondPass),
+		"Should see at least as many entries as we left in the second pass")
+	Expect(len(seenKeys)).To(BeNumerically("<=", numLeftAfterSecondPass+numInsertedInThirdPass),
+		"Should see all of the numLeftAfterSecondPass and some of the numInsertedInThirdPass")
+	logrus.WithField("numSeen", len(seenKeys)).Info("Saw this many keys")
+}
+
 func setUpMapTestWithSingleKV(t *testing.T) (conntrack.Key, error) {
 	RegisterTestingT(t)
 	k := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), 51234, net.ParseIP("10.0.0.2"), 8080)
@@ -99,6 +192,15 @@ func setUpMapTestWithSingleKV(t *testing.T) (conntrack.Key, error) {
 	}
 	err1 := ctMap.Update(k.AsBytes(), v[:])
 	return k, err1
+}
+
+func insertNumberedKey(n int) error {
+	k := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(n), net.ParseIP("10.0.0.2"), uint16(n>>16))
+	v := conntrack.Value{}
+	for i := range v {
+		v[i] = uint8(i+n)
+	}
+	return ctMap.Update(k.AsBytes(), v[:])
 }
 
 func BenchmarkMapIteration10k(b *testing.B) {
