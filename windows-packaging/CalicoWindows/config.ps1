@@ -59,7 +59,8 @@ $env:CNI_IPAM_TYPE = "calico-ipam"
 $env:VXLAN_VNI = "4096"
 # Prefix used when generating MAC addresses for virtual NICs.
 $env:VXLAN_MAC_PREFIX = "0E-2A"
-
+# Network Adapter used on VXLAN, leave blank for primary NIC. 
+$env:VXLAN_ADAPTER = ""
 
 ## Node configuration.
 
