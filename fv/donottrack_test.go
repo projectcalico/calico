@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("do-not-track policy tests; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
 		infra          infrastructure.DatastoreInfra

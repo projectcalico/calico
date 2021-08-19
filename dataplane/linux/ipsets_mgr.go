@@ -25,23 +25,39 @@ import (
 // ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
 // dataplane layer.
 type ipSetsManager struct {
-	ipsetsDataplane ipsetsDataplane
-	maxSize         int
+	dataplanes []ipsetsDataplane
+	maxSize    int
 }
 
 func newIPSetsManager(ipsets_ ipsetsDataplane, maxIPSetSize int) *ipSetsManager {
 	return &ipSetsManager{
-		ipsetsDataplane: ipsets_,
-		maxSize:         maxIPSetSize,
+		dataplanes: []ipsetsDataplane{ipsets_},
+		maxSize:    maxIPSetSize,
 	}
 }
 
-func (m *ipSetsManager) GetIPSetType(setID string) (ipsets.IPSetType, error) {
-	return m.ipsetsDataplane.GetTypeOf(setID)
+func (m *ipSetsManager) AddDataplane(dp ipsetsDataplane) {
+	m.dataplanes = append(m.dataplanes, dp)
 }
 
-func (m *ipSetsManager) GetIPSetMembers(setID string) (set.Set /*<string>*/, error) {
-	return m.ipsetsDataplane.GetMembers(setID)
+func (m *ipSetsManager) GetIPSetType(setID string) (typ ipsets.IPSetType, err error) {
+	for _, dp := range m.dataplanes {
+		typ, err = dp.GetTypeOf(setID)
+		if err == nil {
+			break
+		}
+	}
+	return
+}
+
+func (m *ipSetsManager) GetIPSetMembers(setID string) (members set.Set /*<string>*/, err error) {
+	for _, dp := range m.dataplanes {
+		members, err = dp.GetMembers(setID)
+		if err == nil {
+			break
+		}
+	}
+	return
 }
 
 func (m *ipSetsManager) OnUpdate(msg interface{}) {
@@ -49,8 +65,10 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set delta update")
-		m.ipsetsDataplane.AddMembers(msg.Id, msg.AddedMembers)
-		m.ipsetsDataplane.RemoveMembers(msg.Id, msg.RemovedMembers)
+		for _, dp := range m.dataplanes {
+			dp.AddMembers(msg.Id, msg.AddedMembers)
+			dp.RemoveMembers(msg.Id, msg.RemovedMembers)
+		}
 	case *proto.IPSetUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set update")
 		var setType ipsets.IPSetType
@@ -69,10 +87,14 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 			SetID:   msg.Id,
 			MaxSize: m.maxSize,
 		}
-		m.ipsetsDataplane.AddOrReplaceIPSet(metadata, msg.Members)
+		for _, dp := range m.dataplanes {
+			dp.AddOrReplaceIPSet(metadata, msg.Members)
+		}
 	case *proto.IPSetRemove:
 		log.WithField("ipSetId", msg.Id).Debug("IP set remove")
-		m.ipsetsDataplane.RemoveIPSet(msg.Id)
+		for _, dp := range m.dataplanes {
+			dp.RemoveIPSet(msg.Id)
+		}
 	}
 }
 

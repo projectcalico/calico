@@ -370,6 +370,11 @@ func (m *bpfIPSets) markIPSetDirty(data *bpfIPSet) {
 	m.dirtyIPSetIDs.Add(data.ID)
 }
 
+func (m *bpfIPSets) SetFilter(ipSetNames set.Set) {
+	// Not needed for this IP set dataplane.  All known IP sets
+	// are written into the corresponding BPF map.
+}
+
 type bpfIPSet struct {
 	OriginalID string
 	ID         uint64

@@ -147,7 +147,7 @@ var xdpTestCases = []xdpTest{
 		Metadata:    true,
 	},
 	{
-		Description: "5 - Match with failsafe, must pass with metadata",
+		Description: "5 - Match with failsafe, must pass without metadata",
 		Rules:       nil,
 		IPv4Header: &layers.IPv4{
 			Version: 4,
@@ -162,7 +162,7 @@ var xdpTestCases = []xdpTest{
 			SrcPort: 54321,
 		},
 		Drop:     false,
-		Metadata: true,
+		Metadata: false,
 	},
 	{
 		Description: "6 - Match against a deny policy, must drop",

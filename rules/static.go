@@ -982,7 +982,42 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawPreroutingChain(ipVersion),
 		r.WireguardIncomingMarkChain(),
-		r.StaticRawOutputChain(),
+		r.StaticRawOutputChain(0),
+	}
+}
+
+func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8, tcBypassMark uint32) []*Chain {
+	rawPreroutingChain := &Chain{
+		Name: ChainRawPrerouting,
+		Rules: []Rule{
+			Rule{
+				// Return, i.e. no-op, if bypass mark is not set.
+				Match:  Match().NotMarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Action: ReturnAction{},
+			},
+			// At this point we know bypass mark is set, which means that the packet has
+			// been explicitly allowed by untracked ingress policy (XDP).  We should
+			// clear the mark so as not to affect any FROM_HOST processing.  (There
+			// shouldn't be any FROM_HOST processing, because untracked policy is only
+			// intended for traffic to/from the host.  But if the traffic is in fact
+			// forwarded and goes to or through another endpoint, it's better to enforce
+			// that endpoint's policy than to accidentally skip it because of the BYPASS
+			// mark.  Note that we can clear the mark without stomping on anyone else's
+			// logic because no one else's iptables should have had a chance to execute
+			// yet.
+			Rule{
+				Action: SetMarkAction{Mark: 0},
+			},
+			// Now ensure that the packet is not tracked.
+			Rule{
+				Action: NoTrackAction{},
+			},
+		},
+	}
+	return []*Chain{
+		rawPreroutingChain,
+		r.failsafeOutChain("raw", ipVersion),
+		r.StaticRawOutputChain(tcBypassMark),
 	}
 }
 
@@ -1115,20 +1150,32 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
-	return &Chain{
-		Name: ChainRawOutput,
-		Rules: []Rule{
-			// For safety, clear all our mark bits before we start.  (We could be in
-			// append mode and another process' rules could have left the mark bit set.)
-			{Action: ClearMarkAction{Mark: r.allCalicoMarkBits()}},
-			// Then, jump to the untracked policy chains.
-			{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
-			// Then, if the packet was marked as allowed, accept it.  Packets also
-			// return here without the mark bit set if the interface wasn't one that
-			// we're policing.
+func (r *DefaultRuleRenderer) StaticRawOutputChain(tcBypassMark uint32) *Chain {
+	rules := []Rule{
+		// For safety, clear all our mark bits before we start.  (We could be in
+		// append mode and another process' rules could have left the mark bit set.)
+		{Action: ClearMarkAction{Mark: r.allCalicoMarkBits()}},
+		// Then, jump to the untracked policy chains.
+		{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+		// Then, if the packet was marked as allowed, accept it.  Packets also
+		// return here without the mark bit set if the interface wasn't one that
+		// we're policing.
+	}
+	if tcBypassMark == 0 {
+		rules = append(rules, []Rule{
 			{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
 				Action: AcceptAction{}},
-		},
+		}...)
+	} else {
+		rules = append(rules, []Rule{
+			{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
+				Action: SetMaskedMarkAction{Mark: tcBypassMark, Mask: 0xffffffff}},
+			{Match: Match().MarkMatchesWithMask(tcBypassMark, 0xffffffff),
+				Action: AcceptAction{}},
+		}...)
+	}
+	return &Chain{
+		Name:  ChainRawOutput,
+		Rules: rules,
 	}
 }

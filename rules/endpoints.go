@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -202,6 +202,27 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	}
 }
 
+func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
+	ifaceName string,
+	egressPolicyNames []string,
+) *Chain {
+	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
+	return r.endpointIptablesChain(
+		egressPolicyNames,
+		nil, // We don't render profiles into the raw table.
+		ifaceName,
+		PolicyOutboundPfx,
+		ProfileOutboundPfx,
+		HostToEndpointPfx,
+		ChainFailsafeOut,
+		chainTypeUntracked,
+		true, // Host endpoints are always admin up.
+		AcceptAction{},
+		alwaysAllowVXLANEncap,
+		alwaysAllowIPIPEncap,
+	)
+}
+
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
 	ingressPolicyNames []string,
@@ -210,20 +231,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint chain.")
 	return []*Chain{
 		// Chain for traffic _to_ the endpoint.
-		r.endpointIptablesChain(
-			egressPolicyNames,
-			nil, // We don't render profiles into the raw table.
-			ifaceName,
-			PolicyOutboundPfx,
-			ProfileOutboundPfx,
-			HostToEndpointPfx,
-			ChainFailsafeOut,
-			chainTypeUntracked,
-			true, // Host endpoints are always admin up.
-			AcceptAction{},
-			alwaysAllowVXLANEncap,
-			alwaysAllowIPIPEncap,
-		),
+		r.HostEndpointToRawEgressChain(ifaceName, egressPolicyNames),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
 			ingressPolicyNames,

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,6 +71,10 @@ type IPSets struct {
 	stderrCopy bytes.Buffer
 
 	opReporter logutils.OpRecorder
+
+	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
+	// as Linux IP sets.
+	neededIPSetNames set.Set
 }
 
 func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *IPSets {
@@ -580,6 +584,9 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	// that we expect to be there.
 	expectedIPSets := set.New()
 	for _, ipSet := range s.ipSetIDToIPSet {
+		if !s.ipSetNeeded(ipSet.SetID) {
+			continue
+		}
 		expectedIPSets.Add(ipSet.MainIPSetName)
 		s.logCxt.WithFields(log.Fields{
 			"ID":       ipSet.SetID,
@@ -626,7 +633,19 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 // 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
 // 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
 func (s *IPSets) tryUpdates() error {
-	if s.dirtyIPSetIDs.Len() == 0 {
+	needUpdates := false
+	if s.neededIPSetNames == nil {
+		needUpdates = s.dirtyIPSetIDs.Len() > 0
+	} else {
+		s.dirtyIPSetIDs.Iter(func(item interface{}) error {
+			if s.ipSetNeeded(item.(string)) {
+				needUpdates = true
+				return set.StopIteration
+			}
+			return nil
+		})
+	}
+	if !needUpdates {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
 	}
@@ -670,6 +689,9 @@ func (s *IPSets) tryUpdates() error {
 	// Ask each dirty IP set to write its updates to the stream.
 	var writeErr error
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
+		if !s.ipSetNeeded(item.(string)) {
+			return nil
+		}
 		ipSet := s.ipSetIDToIPSet[item.(string)]
 		writeErr = s.writeUpdates(ipSet, stdin)
 		if writeErr != nil {
@@ -702,6 +724,9 @@ func (s *IPSets) tryUpdates() error {
 	// dataplane should be in sync.  If we bail out above, then the resync logic will kick in
 	// and figure out how much of our update succeeded.
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
+		if !s.ipSetNeeded(item.(string)) {
+			return nil
+		}
 		ipSet := s.ipSetIDToIPSet[item.(string)]
 		if ipSet.pendingReplace != nil {
 			ipSet.members = ipSet.pendingReplace
@@ -917,6 +942,28 @@ func (s *IPSets) deleteIPSet(setName string) error {
 	// Success, update the cache.
 	s.logCxt.WithField("setName", setName).Info("Deleted IP set")
 	s.existingIPSetNames.Discard(setName)
+	if ipSet := s.mainIPSetNameToIPSet[setName]; ipSet != nil {
+		// We are still tracking this IP set; it has been deleted because it's not currently
+		// in the "needed" set.
+		if s.ipSetNeeded(ipSet.SetID) {
+			s.logCxt.Errorf("Unexpected deletion of an IP set %v that is still needed", ipSet.SetID)
+		}
+		// If we don't already have a pending complete IP set membership...
+		if ipSet.pendingReplace == nil {
+			// Reconstruct what the IP set membership should be from what was
+			// programmed, plus any pending additions, minus any pending deletions.
+			ipSet.pendingReplace = ipSet.members
+			ipSet.members = nil
+			ipSet.pendingAdds.Iter(func(m interface{}) error {
+				ipSet.pendingReplace.Add(m)
+				return set.RemoveItem
+			})
+			ipSet.pendingDeletions.Iter(func(m interface{}) error {
+				ipSet.pendingReplace.Discard(m)
+				return set.RemoveItem
+			})
+		}
+	}
 	return nil
 }
 
@@ -937,4 +984,42 @@ func firstNonNilErr(errs ...error) error {
 		}
 	}
 	return nil
+}
+
+func (s *IPSets) SetFilter(ipSetNames set.Set) {
+	s.logCxt.Debugf("Filtering to needed IP set names: %v", ipSetNames)
+	markDirty := func(ipSetName string) {
+		if ipSet := s.mainIPSetNameToIPSet[ipSetName]; ipSet != nil {
+			s.dirtyIPSetIDs.Add(ipSet.SetID)
+		}
+	}
+	if s.neededIPSetNames != nil {
+		s.neededIPSetNames.Iter(func(item interface{}) error {
+			if ipSetNames != nil && !ipSetNames.Contains(item) {
+				// Name was needed before and now isn't, so mark as dirty.
+				markDirty(item.(string))
+			}
+			return nil
+		})
+	}
+	if ipSetNames != nil {
+		ipSetNames.Iter(func(item interface{}) error {
+			if s.neededIPSetNames != nil && !s.neededIPSetNames.Contains(item) {
+				// Name wasn't needed before and now is, so mark as dirty.
+				markDirty(item.(string))
+			}
+			return nil
+		})
+	}
+	s.neededIPSetNames = ipSetNames
+}
+
+func (s *IPSets) ipSetNeeded(id string) bool {
+	if s.neededIPSetNames == nil {
+		// We're not filtering down to a "needed" set, so all IP sets are needed.
+		return true
+	}
+
+	// We are filtering down, so compare against the needed set.
+	return s.neededIPSetNames.Contains(s.IPVersionConfig.NameForMainIPSet(id))
 }
