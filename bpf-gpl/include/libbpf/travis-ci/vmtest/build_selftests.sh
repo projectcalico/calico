@@ -6,7 +6,9 @@ source $(cd $(dirname $0) && pwd)/helpers.sh
 
 travis_fold start prepare_selftests "Building selftests"
 
-LLVM_VER=12
+sudo apt-get -y install python-docutils # for rst2man
+
+LLVM_VER=13
 LIBBPF_PATH="${REPO_ROOT}"
 REPO_PATH="travis-ci/vmtest/bpf-next"
 
@@ -28,7 +30,7 @@ make \
 	VMLINUX_BTF="${VMLINUX_BTF}" \
 	VMLINUX_H=${VMLINUX_H} \
 	-C "${REPO_ROOT}/${REPO_PATH}/tools/testing/selftests/bpf" \
-	-j $((2*$(nproc)))
+	-j $((4*$(nproc)))
 mkdir ${LIBBPF_PATH}/selftests
 cp -R "${REPO_ROOT}/${REPO_PATH}/tools/testing/selftests/bpf" \
 	${LIBBPF_PATH}/selftests
