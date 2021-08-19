@@ -28,7 +28,6 @@ eBPF mode currently has some limitations relative to the standard Linux pipeline
 
 - eBPF mode only supports x86-64.  (The eBPF programs are not currently built for the other platforms.)
 - eBPF mode does not yet support IPv6.
-- eBPF mode does not yet support host endpoint `doNotTrack` policy (but it does support normal, pre-DNAT and apply-on-forward policy for host endpoints).
 - When enabling eBPF mode, pre-existing connections continue to use the non-BPF datapath; such connections should not be disrupted, but they do not benefit from eBPF mode's advantages.
 - Disabling eBPF mode _is_ disruptive; connections that were handled through the eBPF dataplane may be broken and services that do not detect and recover may need to be restarted.
 - Hybrid clusters (with some eBPF nodes and some standard dataplane nodes) are not supported.  (In such a cluster, NodePort traffic from eBPF nodes to non-eBPF nodes will be dropped.)  This includes clusters with Windows nodes.
@@ -262,7 +261,7 @@ Confirm that pods restart and then reach the `Running` state with the following 
 watch "kubectl get pods -n kube-system | grep calico"
 ```
 
-You can verify that the change was picked up by checking the logs of one of the  {{ site.nodecontainer }} pods.  
+You can verify that the change was picked up by checking the logs of one of the  {{ site.nodecontainer }} pods.
 
 ```
 kubectl get po -n kube-system -l k8s-app=calico-node
@@ -344,8 +343,8 @@ calicoctl patch felixconfiguration default --patch='{"spec": {"bpfDataIfacePatte
 <label:Operator,active:true>
 <%
 
-If you installed {{site.prodname}} using the operator, change the `spec.calicoNetwork.linuxDataplane` parameter in 
-the operator's `Installation` resource to `"BPF"`; you must also clear the `hostPorts` setting because host ports 
+If you installed {{site.prodname}} using the operator, change the `spec.calicoNetwork.linuxDataplane` parameter in
+the operator's `Installation` resource to `"BPF"`; you must also clear the `hostPorts` setting because host ports
 are not supported in BPF mode:
 
 ```bash
@@ -370,8 +369,8 @@ calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true
 %>
 {% endtabs %}
 
-Enabling eBPF mode should not disrupt existing connections but existing connections will continue to use the standard 
-Linux datapath. You may wish to restart pods to ensure that they start new connections using the BPF dataplane.  
+Enabling eBPF mode should not disrupt existing connections but existing connections will continue to use the standard
+Linux datapath. You may wish to restart pods to ensure that they start new connections using the BPF dataplane.
 
 #### Try out DSR mode
 
@@ -400,9 +399,9 @@ To revert to standard Linux networking:
    ```bash
    kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Iptables"}}}'
    ```
-   
+
    or:
-   
+
    ```
    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": false}}'
    ```
