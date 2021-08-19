@@ -268,8 +268,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->post_nat_dport = ctx.nat_dest->port;
 	} else if (nat_res == NAT_NO_BACKEND) {
 		/* send icmp port unreachable if there is no backend for a service */
-		ctx.state->icmp_type = ICMP_DEST_UNREACH;
-		ctx.state->icmp_code = ICMP_PORT_UNREACH;
+		tc_state_set_icmp(&ctx, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH);
 		ctx.state->tun_ip = 0;
 		goto icmp_send_reply;
 	} else {
@@ -567,7 +566,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			 * WARNING: this modifies the ip_header pointer in the main context; need to
 			 * be careful in later code to avoid overwriting that. */
 			l3_csum_off += sizeof(*ctx->ip_header) + sizeof(struct icmphdr);
-			ctx->ip_header = (struct iphdr *)(ctx->icmp_header + 1); /* skip to inner ip */
+			ctx->ip_header = (struct iphdr *)(tc_icmphdr(ctx) + 1); /* skip to inner ip */
 			if (ctx->ip_header->ihl != 5) {
 				CALI_INFO("ICMP inner IP header has options; unsupported\n");
 				ctx->fwd.reason = CALI_REASON_IP_OPTIONS;
@@ -663,7 +662,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
-			ct_ctx_nat.tcp = ctx->tcp_header;
+			ct_ctx_nat.tcp = tc_tcphdr(ctx);
 		}
 
 		// If we get here, we've passed policy.
@@ -788,10 +787,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
-			ctx->tcp_header->dest = bpf_htons(state->post_nat_dport);
+			tc_tcphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		case IPPROTO_UDP:
-			ctx->udp_header->dest = bpf_htons(state->post_nat_dport);
+			tc_udphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		}
 
@@ -871,10 +870,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
-			ctx->tcp_header->source = bpf_htons(state->ct_result.nat_port);
+			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			break;
 		case IPPROTO_UDP:
-			ctx->udp_header->source = bpf_htons(state->ct_result.nat_port);
+			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			break;
 		}
 
@@ -947,14 +946,12 @@ icmp_ttl_exceeded:
 	if (ip_frag_no(ctx->ip_header)) {
 		goto deny;
 	}
-	state->icmp_type = ICMP_TIME_EXCEEDED;
-	state->icmp_code = ICMP_EXC_TTL;
+	tc_state_set_icmp(ctx, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL);
 	state->tun_ip = 0;
 	goto icmp_send_reply;
 
 icmp_too_big:
-	state->icmp_type = ICMP_DEST_UNREACH;
-	state->icmp_code = ICMP_FRAG_NEEDED;
+	tc_state_set_icmp(ctx, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED);
 
 	struct {
 		__be16  unused;
@@ -993,7 +990,7 @@ nat_encap:
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
-			__builtin_memcpy(&ctx->eth->h_dest, arpv->mac_dst, ETH_ALEN);
+			__builtin_memcpy(&tc_ethhdr(ctx)->h_dest, arpv->mac_dst, ETH_ALEN);
 			if (state->ct_result.ifindex_fwd == skb->ifindex) {
 				/* No need to change src MAC, if we are at the right device */
 			} else {
@@ -1059,9 +1056,10 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 
-	CALI_DEBUG("ICMP type %d and code %d\n",ctx.state->icmp_type, ctx.state->icmp_code);
+	CALI_DEBUG("ICMP type %d and code %d\n",tc_state_get_icmp_type(&ctx),
+			tc_state_get_icmp_code(&ctx));
 
-	if (ctx.state->icmp_code == ICMP_FRAG_NEEDED) {
+	if (tc_state_get_icmp_code(&ctx) == ICMP_FRAG_NEEDED) {
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 		if (CALI_F_FROM_WEP) {
 			/* we know it came from workload, just send it back the same way */
@@ -1069,7 +1067,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		}
 	}
 
-	if (icmp_v4_reply(&ctx, ctx.state->icmp_type, ctx.state->icmp_code, ctx.state->tun_ip)) {
+	if (icmp_v4_reply(&ctx, tc_state_get_icmp_type(&ctx), tc_state_get_icmp_code(&ctx), ctx.state->tun_ip)) {
 		ctx.fwd.res = TC_ACT_SHOT;
 	} else {
 		ctx.fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
