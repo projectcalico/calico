@@ -268,7 +268,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ctx.state->post_nat_dport = ctx.nat_dest->port;
 	} else if (nat_res == NAT_NO_BACKEND) {
 		/* send icmp port unreachable if there is no backend for a service */
-		tc_state_set_icmp(&ctx, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH);
+		ctx.state->icmp_type = ICMP_DEST_UNREACH;
+		ctx.state->icmp_code = ICMP_PORT_UNREACH;
 		ctx.state->tun_ip = 0;
 		goto icmp_send_reply;
 	} else {
@@ -946,12 +947,14 @@ icmp_ttl_exceeded:
 	if (ip_frag_no(ctx->ip_header)) {
 		goto deny;
 	}
-	tc_state_set_icmp(ctx, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL);
+	state->icmp_type = ICMP_TIME_EXCEEDED;
+	state->icmp_code = ICMP_EXC_TTL;
 	state->tun_ip = 0;
 	goto icmp_send_reply;
 
 icmp_too_big:
-	tc_state_set_icmp(ctx, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED);
+	state->icmp_type = ICMP_DEST_UNREACH;
+	state->icmp_code = ICMP_FRAG_NEEDED;
 
 	struct {
 		__be16  unused;
@@ -1056,10 +1059,9 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 
-	CALI_DEBUG("ICMP type %d and code %d\n",tc_state_get_icmp_type(&ctx),
-			tc_state_get_icmp_code(&ctx));
+	CALI_DEBUG("ICMP type %d and code %d\n",ctx.state->icmp_type, ctx.state->icmp_code);
 
-	if (tc_state_get_icmp_code(&ctx) == ICMP_FRAG_NEEDED) {
+	if (ctx.state->icmp_code == ICMP_FRAG_NEEDED) {
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 		if (CALI_F_FROM_WEP) {
 			/* we know it came from workload, just send it back the same way */
@@ -1067,7 +1069,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		}
 	}
 
-	if (icmp_v4_reply(&ctx, tc_state_get_icmp_type(&ctx), tc_state_get_icmp_code(&ctx), ctx.state->tun_ip)) {
+	if (icmp_v4_reply(&ctx, ctx.state->icmp_type, ctx.state->icmp_code, ctx.state->tun_ip)) {
 		ctx.fwd.res = TC_ACT_SHOT;
 	} else {
 		ctx.fwd.mark = CALI_SKB_MARK_BYPASS_FWD;

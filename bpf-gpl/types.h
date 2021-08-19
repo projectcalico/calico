@@ -59,10 +59,16 @@ struct cali_tc_state {
 	/* Source port of the packet; updated on the CALI_CT_ESTABLISHED_SNAT path or when doing encap.
 	 * zeroed out on the ICMP response path. */
 	__u16 sport;
-	/* dport is the destination port of the packet; it may be pre or post NAT.
-	 * This field is also used to keep ICMP Type and Code. The lower byte keeps
-	 * ICMP Type and the higher byte keeps ICMP Code */
-	__u16 dport;
+	union
+	{
+		/* dport is the destination port of the packet; it may be pre or post NAT */
+		__u16 dport;
+		struct
+		{
+			__u8 icmp_type;
+			__u8 icmp_code;
+		};
+	};
 	/* Pre-NAT dest port; set similarly to pre_nat_ip_dst. */
 	__u16 pre_nat_dport;
 	/* Post-NAT dest port; set similarly to post_nat_ip_dst. */
@@ -141,23 +147,6 @@ static CALI_BPF_INLINE struct udphdr* tc_udphdr(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE struct icmphdr* tc_icmphdr(struct cali_tc_ctx *ctx)
 {
 	return (struct icmphdr *)ctx->nh;
-}
-
-static CALI_BPF_INLINE __u8 tc_state_get_icmp_type(struct cali_tc_ctx *ctx)
-{
-	// The lower byte of dport (type __u16) in cali_tc_state is used to store ICMP type
-	return (ctx->state->dport & 0xff);
-}
-
-static CALI_BPF_INLINE __u8 tc_state_get_icmp_code(struct cali_tc_ctx *ctx)
-{
-	// The higher byte of dport (type __u16) in cali_tc_state is used to store ICMP code
-	return (ctx->state->dport >> 8) & 0xff;
-}
-
-static CALI_BPF_INLINE void tc_state_set_icmp(struct cali_tc_ctx *ctx, __u8 type, __u8 code)
-{
-	ctx->state->dport = type + (code << 8);
 }
 
 #endif /* __CALI_BPF_TYPES_H__ */

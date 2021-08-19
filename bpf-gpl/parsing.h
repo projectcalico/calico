@@ -155,7 +155,8 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 		}
 		break;
 	case IPPROTO_ICMP:
-		tc_state_set_icmp(ctx, tc_icmphdr(ctx)->type, tc_icmphdr(ctx)->code);
+		ctx->state->icmp_type = tc_icmphdr(ctx)->type;
+		ctx->state->icmp_code = tc_icmphdr(ctx)->code;
 
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
 				tc_icmphdr(ctx)->type, tc_icmphdr(ctx)->code);
