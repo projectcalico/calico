@@ -150,5 +150,3 @@
 <feBlend result="effect1_dropShadow" in2="BackgroundImageFix" mode="normal"></feBlend>
 <feBlend result="shape" in2="effect1_dropShadow" in="SourceGraphic" mode="normal"></feBlend>
 </filter>
-</defs>
-</svg>

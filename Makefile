@@ -13,7 +13,7 @@ ifneq ($(IMAGES_FILE),)
 	CONFIG:=$(CONFIG),/config_images.yml
 endif
 
-# Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown. 
+# Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown.
 # This is useful for comparing changes to templates & includes.
 ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
@@ -61,11 +61,11 @@ CONTAINERIZED_VALUES?=docker run --rm \
 _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
 	$(CONTAINERIZED_VALUES) ruby ./hack/gen_values_yml.rb --registry $(REGISTRY) --chart $* > $@
 
-# The following chunk of conditionals sets the Version of the helm chart. 
+# The following chunk of conditionals sets the Version of the helm chart.
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
 ifdef RELEASE_CHART
 # the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
-chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
+chartVersion:=$(CALICO_VER)
 appVersion:=$(CALICO_VER)
 else
 # otherwise, it's a nightly build.
@@ -142,12 +142,17 @@ LOCAL_BUILD=true
 .PHONY: dev-image dev-test dev-clean
 ## Build a local version of Calico based on the checked out codebase.
 dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
+
+# Dynamically declare new make targets for all calico subprojects...
 $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
-	@cd $< && export TAG=$$($(TAG_COMMAND)); make image tag-images \
+	echo "TARGET:"
+	echo $< 
+	@cd $< && export TAG=$$($(TAG_COMMAND)); make image retag-build-images-with-registries \
+		ARCHES=amd64 \
 		BUILD_IMAGE=$(REGISTRY)/$* \
 		PUSH_IMAGES=$(REGISTRY)/$* \
 		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG
+		IMAGETAG=$$TAG 
 
 ## Push locally built images.
 dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
@@ -305,7 +310,7 @@ update_canonical_urls:
 ###############################################################################
 
 ## Tags and builds a release from start to finish.
-release: release-prereqs	
+release: release-prereqs
 	$(MAKE) RELEASE_CHART=true release-tag
 	$(MAKE) RELEASE_CHART=true release-build
 	$(MAKE) RELEASE_CHART=true release-verify
@@ -341,8 +346,23 @@ UPLOAD_DIR?=$(OUTPUT_DIR)/upload
 $(UPLOAD_DIR):
 	mkdir -p $(UPLOAD_DIR)
 
+# Define a multi-line string for the GitHub release body.
+# We need to export it as an env var to properly format it.
+# See here: https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile/5887751
+define RELEASE_BODY
+Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/
+
+Attached to this release are the following artifacts:
+
+- `release-v$(CALICO_VER).tgz`: docker images and kubernetes manifests.
+- `calico-windows-v$(CALICO_VER).zip`: Calico for Windows.
+- `tigera-operator-v$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
+
+endef
+export RELEASE_BODY
+
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR)
+release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
@@ -352,7 +372,7 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
 	ghr -u projectcalico -r calico \
-		-b 'Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
+		-b "$$RELEASE_BODY" \
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(UPLOAD_DIR)
 
@@ -360,6 +380,16 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
+
+## Updates helm-index with the new release chart
+helm-index: release-prereqs
+	rm -rf  charts
+	mkdir -p charts/$(CALICO_VER)/
+	cp $(RELEASE_HELM_CHART) charts/$(CALICO_VER)/
+	wget https://calico-public.s3.amazonaws.com/charts/index.yaml -O charts/index.yaml.bak
+	cd charts/ && helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
+	aws --profile helm s3 cp index.yaml s3://calico-public/charts/ --acl public-read
+	rm -rf charts
 
 ## Generates release notes for the given version.
 release-notes: #release-prereqs
@@ -501,7 +531,7 @@ $(RELEASE_DIR_BIN)/%:
 bin/helm: bin/helm3
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget -q https://storage.googleapis.com/kubernetes-helm/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
+	wget -q https://get.helm.sh/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
 	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
 
@@ -558,6 +588,7 @@ release-test-image:
 .PHONY: release-test
 release-test: release-test-image
 	docker run --rm \
+	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v $(PWD):/docs \
 	-e RELEASE_STREAM=$(RELEASE_STREAM) \
 	$(DOCS_TEST_CONTAINER) sh -c \

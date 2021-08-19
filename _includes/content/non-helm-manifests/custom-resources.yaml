@@ -19,3 +19,13 @@ spec:
   # Enables provider-specific settings required for compatibility.
   kubernetesProvider: {{include.kubernetesProvider}}
 {%- endif %}
+
+---
+
+# This section configures the {{site.prodname}} API server.
+# For more information, see: {{site.url}}/{{page.version}}/reference/installation/api#operator.tigera.io/v1.APIServer
+apiVersion: operator.tigera.io/v1
+kind: APIServer 
+metadata: 
+  name: default 
+spec: {}

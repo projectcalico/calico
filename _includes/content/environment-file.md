@@ -19,8 +19,28 @@ Use the following guidelines and sample file to define the environment variables
  [Felix configuration reference]({{site.baseurl}}/reference/felix/configuration).
 {% endif %}
 
+{% tabs %}
+  <label: Kubernetes datastore,active:true>
+  <%
 
-For an etcdv3 datastore set the following
+For a Kubernetes datastore (default) set the following:
+
+| Variable | Configuration guidance |
+|----------|------------------------|
+| {{datastore_type}} | Set to `kubernetes` |
+| KUBECONFIG | Path to kubeconfig file to access the Kubernetes API Server |
+
+{% if include.install == "container" %}
+> **Note**: You will need to volume mount the kubeconfig file into the container at the location specified by the paths mentioned above.
+{: .alert .alert-info}
+{% endif %}
+
+
+%>
+  <label: etcd datastore>
+  <%
+
+For an etcdv3 datastore set the following:
 
 | Variable | Configuration guidance |
 |----------|------------------------|
@@ -30,22 +50,15 @@ For an etcdv3 datastore set the following
 | {{etcd_cert_file}}<br>{{etcd_key_file}} | Paths to certificate and keys used for client authentication to the etcd cluster, if enabled.   |
 
 {% if include.install == "container" %}
-> **Note**: If using certificates and keys, you will need to volume mount them in the container and the path values above are *inside* the container.
+> **Note**: If using certificates and keys, you will need to volume mount them into the container at the location specified by the paths mentioned above.
 {: .alert .alert-info}
 {% endif %}
 
-For a Kubernetes datastore set the following
-
-| Variable | Configuration guidance |
-|----------|------------------------|
-| {{datastore_type}} | Set to `kubernetes` |
-| KUBECONFIG | Path to kubeconfig file to access the Kubernetes API Server |
-
-{% if include.install == "container" %}
-> **Note**: You will need to volume mount the kubeconfig file in the container and the path value above is *inside* the container.
-{: .alert .alert-info}
-
-For either datastore set the following
+%>
+  <label: Either datastore>
+  <%
+  
+For either datastore set the following:
 
 | Variable | Configuration guidance |
 |----------|------------------------|
@@ -54,7 +67,7 @@ For either datastore set the following
 | CALICO_AS | If not specified, {{site.prodname}} uses the currently configured value for the AS Number for the node BGP client—this can be configured through the Node resource. If the Node resource value is not set, Calico inherits the AS Number from the global default value. If you set a value through this environment variable, it reconfigures any value currently set through the Node resource. |
 | NO_DEFAULT_POOLS | Set to true to prevent {{site.prodname}} from creating a default pool if one does not exist. Pools are used for workload endpoints and not required for non-cluster hosts. |
 | CALICO_NETWORKING_BACKEND | The networking backend to use. In `bird` mode, Calico will provide BGP networking using the BIRD BGP daemon; VXLAN networking can also be used. In `vxlan` mode, only VXLAN networking is provided; BIRD and BGP are disabled. If you want to run Calico for policy only, set to `none`. |
-{% endif %}
+
 
 Sample `EnvironmentFile` - save to `/etc/calico/calico.env`
 
@@ -73,3 +86,6 @@ CALICO_AS=""
 CALICO_NETWORKING_BACKEND=bird
 {%- endif %}
 ```
+%>
+
+  {% endtabs %}

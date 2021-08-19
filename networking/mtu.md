@@ -24,9 +24,9 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### MTU and {{site.prodname}} defaults
 
-The maximum transmission unit (MTU) setting determines the largest packet size that can be transmitted through your network. MTU is configured on the veth attached to each workload, and tunnel devices (if you enable IP in IP and/or VXLAN).
+The maximum transmission unit (MTU) setting determines the largest packet size that can be transmitted through your network. MTU is configured on the veth attached to each workload, and tunnel devices (if you enable IP in IP, VXLAN, or WireGuard).
 
-In general, maximum performance is achieved by using the highest MTU value that does not cause fragmentation or drop packets on the path.  Maximum bandwidth increases and CPU consumption may drop for a given traffic rate.  The improvement is often more significant when pod to pod traffic is being encapsulated (IP in IP or VXLAN), and splitting and combining such traffic cannot be offloaded to your NICs.
+In general, maximum performance is achieved by using the highest MTU value that does not cause fragmentation or dropped packets on the path. Maximum bandwidth increases and CPU consumption may drop for a given traffic rate.  The improvement is often more significant when pod to pod traffic is being encapsulated (IP in IP, VXLAN, or WireGuard), and splitting and combining such traffic cannot be offloaded to your NICs.
 
 By default, {{site.prodname}} will auto-detect the correct MTU for your cluster based on node configuration and enabled networking modes. This guide explains how you can override auto-detection
 of MTU by providing an explicit value if needed.
@@ -35,7 +35,9 @@ To ensure auto-detection of MTU works correctly, make sure that the correct enca
 
 ### Before you begin...
 
-For help using IP in IP and/or VXLAN overlays, see [Configure overlay networking]({{ site.baseurl }}/networking/vxlan-ipip).
+For help on using IP in IP and/or VXLAN overlays, see [Configure overlay networking]({{ site.baseurl }}/networking/vxlan-ipip).
+
+For help on using WireGuard encryption, see [Configure WireGuard encryption]({{ site.baseurl }}/security/encrypt-cluster-pod-traffic).
 
 ### How to
 
@@ -53,15 +55,23 @@ The following table lists common MTU sizes for {{site.prodname}} environments. B
 | ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- | ------------------------------------------- |
 | 1500                   | 1500                  | 1480                                       | 1450                                    | 1440                                        |
 | 9000                   | 9000                  | 8980                                       | 8950                                    | 8940                                        |
+| 1500 (AKS)             | 1500                  | 1480                                       | 1450                                    | 1340                                        |
 | 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    | 1400                                        |
 | 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    | 8941                                        |
 | 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    | 1390                                        |
 
 **Recommended MTU for overlay networking**
 
-The extra overlay header used in IP in IP, VXLAN and WireGuard protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, VXLAN uses a 50-byte header, and WireGuard uses a {% include open-new-window.html text='60-byte header' url='https://lists.zx2c4.com/pipermail/wireguard/2017-December/002201.html' %}). Therefore, we recommend the following:
+The extra overlay header used in IP in IP, VXLAN and WireGuard protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, VXLAN uses a 50-byte header, and WireGuard uses a {% include open-new-window.html text='60-byte header' url='https://lists.zx2c4.com/pipermail/wireguard/2017-December/002201.html' %}).
 
-- If you use WireGuard encryption configure MTU size as “physical network MTU size minus 60”.
+When using AKS, the underlying network has an {% include open-new-window.html text='MTU of 1400' url='https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning#azure-and-vm-mtu' %}, even though the network interface will have an MTU of 1500.
+WireGuard sets the Don't Fragment (DF) bit on its packets, and so the MTU for WireGuard on AKS needs to be set to 60 bytes below the 1400 MTU of the underlying network to avoid dropped packets.
+
+If you have a mix of Wireguard and either IP in IP or VXLAN in your cluster, you should configure the MTU to be the smallest of the values of each encap type. This could be the case if, for example, you are in the process of installing WireGuard on your nodes.
+
+Therefore, we recommend the following:
+
+- If you use WireGuard encryption anywhere in your pod network, configure MTU size as “physical network MTU size minus 60”.
 - If you don't use WireGuard, but use VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 50”.
 - If you don't use WireGuard, but use only IP in IP, configure MTU size as “physical network MTU size minus 20”
 - Set the workload endpoint MTU and the tunnel MTUs to the same value (so all paths have the same MTU)

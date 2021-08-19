@@ -176,6 +176,18 @@
     display: block;
   }
 
+  &__tigera-logo {
+    width: 130px;
+    height: 27px;
+    margin-top: 14px;
+  }
+
+  &__calico-logo {
+    width: 130px;
+    height: 42px;
+    margin-top: 5px;
+  }
+
   @media (min-width: $grid-float-breakpoint) {
     .navbar > .container &,
     .navbar > .container-fluid & {
@@ -411,6 +423,21 @@
     color: $navbar-default-color;
   }
 
+  .navbar-os {
+    .navbar-form {
+      .navbar-nav {
+        > .active > a {
+          &,
+          &:hover,
+          &:focus {
+            color: $navbar-default-link-active-color;
+            background-color: transparent;
+          }
+        }
+      }
+    }
+  }
+
   .navbar-nav {
     > li > a {
       color: $navbar-default-link-color;
@@ -447,6 +474,17 @@
     }
     .icon-bar {
       background-color: $navbar-default-toggle-icon-bar-bg;
+    }
+  }
+
+  .tigera-navbar-footer-container .navbar-toggle {
+    border-color: $navbar-white-toggle-border-color;
+    &:hover,
+    &:focus {
+      background-color: $navbar-inverse-toggle-icon-bar-bg;
+    }
+    .icon-bar {
+      background-color: $navbar-default-toggle-border-color;
     }
   }
 

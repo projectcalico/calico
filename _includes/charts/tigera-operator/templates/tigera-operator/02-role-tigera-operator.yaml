@@ -1,3 +1,4 @@
+# Permissions required when running the operator for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -28,11 +29,11 @@ rules:
       - nodes
     verbs:
       # Need to update node labels when migrating nodes.
-      - 'get'
-      - 'patch'
-      - 'list'
+      - get
+      - patch
+      - list
       # We need this for Typha autoscaling
-      - 'watch'
+      - watch
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -84,11 +85,26 @@ rules:
       - delete
       - watch
   - apiGroups:
+    - networking.k8s.io
+    resources:
+    - networkpolicies
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
+  - apiGroups:
     - crd.projectcalico.org
     resources:
     - felixconfigurations
     verbs:
+    - create
     - patch
+    - list
+    - get
+    - watch
   - apiGroups:
     - crd.projectcalico.org
     resources:
@@ -110,13 +126,6 @@ rules:
       - delete
       - watch
   - apiGroups:
-      - monitoring.coreos.com
-    resources:
-      - servicemonitors
-    verbs:
-      - get
-      - create
-  - apiGroups:
       - policy
     resources:
       - poddisruptionbudgets
@@ -134,6 +143,8 @@ rules:
     verbs:
       - list
       - watch
+      - create 
+      - update
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
@@ -178,13 +189,16 @@ rules:
       - update
       - delete
       - watch
-  # For host network access.
+  # The following rule is only for operator certification purposes.
+  # The operator normally runs in a namespace with openshift.io/run-level=0 which bypasses SCC.
+  # However in certification tests, the operator is run in a normal namespace so this
+  # rule is needed for host networking and hostPath volume access.
   - apiGroups:
       - security.openshift.io
     resources:
       - securitycontextconstraints
     resourceNames:
-      - hostnetwork
+      - hostaccess
     verbs:
       - use
   # Need these permissions for the calicoctl init container.
@@ -209,6 +223,13 @@ rules:
       - ipamblocks
     verbs:
       - list
+  # Need this permission for the calicoctl version mismatch checking
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - clusterinformations
+    verbs:
+      - get
   # For AWS security group setup.
   - apiGroups:
       - batch
@@ -240,6 +261,7 @@ rules:
       - watch
       - create
       - update
+      - delete
 # Add the permissions to monitor the status of certificatesigningrequests when certificate management is enabled.
   - apiGroups:
       - certificates.k8s.io

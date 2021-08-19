@@ -7,6 +7,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
       enabled: true
       kubernetesProvider: ""
 
+    apiServer:
+      enabled: true
+
     certs:
       node:
         key:

@@ -76,8 +76,17 @@ The following environment variables can be used to configure the {{site.prodname
 
 ### Node controller
 
-The node controller automatically cleans up configuration for nodes that no longer exist. The controller must have read
-access to the Kubernetes API to monitor `Node` events.
+The node controller has several functions depending on the datastore in use.
+
+**Either datastore**
+
+- Garbage collects IP addresses.
+- Automatically provisions host endpoints for Kubernetes nodes.
+
+**etcdv3 only**
+
+- Garbage collects projectcalico.org/v3 Node resources when the Kubernetes node is deleted.
+- Synchronizes labels between Kubernetes and Calico Node resources.
 
 The node controller is not enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
 However, the {{site.prodname}} Kubernetes manifests explicitly specify the `ENABLED_CONTROLLERS` and enable this controller
@@ -89,7 +98,7 @@ This controller is valid when using either the `etcdv3` or `kubernetes` datastor
 
 To enable the node controller when using `etcdv3`, perform the following two steps.
 
-1. Add "node" to the list of enabled controllers in the environment for kube-controllers. For example: `ENABLED_CONTROLLERS=workloadendpoint,profile,policy,node`
+1. Enable the controller in your [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfig) or add "node" to the list of enabled controllers in the environment for kube-controllers. For example: `ENABLED_CONTROLLERS=workloadendpoint,profile,policy,node`
 1. Configure {{site.nodecontainer}} with a Kubernetes node reference by adding the following snippet to the environment section of the {{site.noderunning}} daemon set.
 
    ```yaml
@@ -107,8 +116,7 @@ resource that don't exist in the Kubernetes node will remain as is.
 
 #### kubernetes
 
-To enable the node controller when using `kubernetes`, set the list of enabled controllers
-in the environment for kube-controllers to `node`. For example: `ENABLED_CONTROLLERS=node`
+To enable the node controller when using `kubernetes`, enable the controller in your [KubeControllersConfiguration]({{site.baseurl}}/reference/resources/kubecontrollersconfig) or set the list of enabled controllers in the environment for kube-controllers to `node`. For example: `ENABLED_CONTROLLERS=node`
 
 ### Policy controller
 

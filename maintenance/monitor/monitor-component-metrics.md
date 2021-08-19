@@ -185,7 +185,7 @@ You need to provide Prometheus a serviceAccount with required permissions to col
 
 ```bash
 kubectl apply -f - <<EOF
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: calico-prometheus-user
@@ -205,7 +205,7 @@ metadata:
   name: calico-prometheus-user
   namespace: calico-monitoring
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: calico-prometheus-user

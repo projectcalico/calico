@@ -43,6 +43,17 @@ To release Calico, you need **the following permissions**:
 
 - You must have admin access to docs.projectcalico.org site on netlify.
 
+- To publish the helm release to the repo, you’ll need an AWS helm profile:
+  Add this to your ~/.aws/config
+      ```
+      [profile helm]
+      role_arn = arn:aws:iam::<production_account_id>:role/CalicoDevHelmAdmin
+      mfa_serial = arn:aws:iam::<tigera-dev_account_id>:mfa/myusername
+      source_profile = default
+      region = us-east-2
+      ```
+  Your user will need permission for assuming the helm admin role in the production account.
+  
 You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
 
 Some of the release scripts also require **tools to be installed** in your dev environment:

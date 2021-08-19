@@ -77,13 +77,6 @@ spec:
                 description: 'BPFEnabled, if enabled Felix will use the BPF dataplane.
                   [Default: false]'
                 type: boolean
-              bpfExtToServiceConnmark:
-                description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
-                  mark that is set on connections from an external client to a local
-                  service. This mark allows us to control how packets of that connection
-                  are routed within the host and how is routing intepreted by RPF
-                  check. [Default: 0]'
-                type: integer
               bpfExternalServiceMode:
                 description: 'BPFExternalServiceMode in BPF mode, controls how connections
                   from outside the cluster to services (node ports and cluster IPs)
@@ -94,6 +87,14 @@ spec:
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
+              bpfExtToServiceConnmark:
+                description: 'BPFExtToServiceConnmark in BPF mode, controls a
+                  32bit mark that is set on connections from an external client to
+                  a local service. This mark allows us to control how packets of
+                  that connection are routed within the host and how is routing
+                  intepreted by RPF check. [Default: 0]'
+                type: integer
+
               bpfKubeProxyEndpointSlicesEnabled:
                 description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
                   whether Felix's embedded kube-proxy accepts EndpointSlices or not.
@@ -183,7 +184,7 @@ spec:
                   udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667]'
                 items:
                   description: ProtoPort is combination of protocol, port, and CIDR.
-                    All three must be specified.
+                    Protocol and port must be specified.
                   properties:
                     net:
                       type: string
@@ -192,7 +193,6 @@ spec:
                     protocol:
                       type: string
                   required:
-                  - net
                   - port
                   - protocol
                   type: object
@@ -211,7 +211,7 @@ spec:
                   tcp:6667, udp:53, udp:67]'
                 items:
                   description: ProtoPort is combination of protocol, port, and CIDR.
-                    All three must be specified.
+                    Protocol and port must be specified.
                   properties:
                     net:
                       type: string
@@ -220,7 +220,6 @@ spec:
                     protocol:
                       type: string
                   required:
-                  - net
                   - port
                   - protocol
                   type: object

@@ -16,7 +16,7 @@ Packaged binaries of {{site.prodname}} are easy to consume and upgrade. This met
 1. Ensure the host meets the minimum [system requirements](../requirements)
 1. If your system is not an Ubuntu- or RedHat-derived system, you will need to choose a different install method.
 1. If you want to install {{site.prodname}} with networking (so that you can communicate with cluster workloads), you should choose the [container install method](./container)
-1. [Install and configure `calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/)
+1. Install `kubectl` (for Kubernetes datastore) or [Install and configure `calicoctl`]({{site.baseurl}}/getting-started/clis/calicoctl/) for etcd3 datastore.
 
 ### How to
 

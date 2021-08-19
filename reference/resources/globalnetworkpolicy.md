@@ -121,6 +121,10 @@ for how `doNotTrack` and `preDNAT` and `applyOnForward` can be useful for host e
 
 {% include content/serviceaccountmatch.md %}
 
+#### ServiceMatch 
+
+{% include content/servicematch.md %}
+
 ### Application layer policy
 
 Application layer policy is an optional feature of {{site.prodname}} and

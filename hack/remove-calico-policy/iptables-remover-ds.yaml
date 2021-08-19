@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: calico-remove-iptables
@@ -6,6 +6,9 @@ metadata:
   labels:
     k8s-app: calico-remove-iptables
 spec:
+  selector:
+    matchLabels:
+      k8s-app: calico-remove-iptables
   template:
     metadata:
       labels:

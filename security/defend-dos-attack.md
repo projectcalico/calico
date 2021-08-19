@@ -56,7 +56,7 @@ kind: HostEndpoint
 metadata:
   name: production-host
   labels:
-    apply-dos-mitigation: true
+    apply-dos-mitigation: "true"
 spec:
   interfaceName: eth0
   node: jasper
@@ -73,7 +73,7 @@ kind: GlobalNetworkSet
 metadata:
   name: dos-mitigation
   labels:
-    dos-deny-list == 'true'
+    dos-deny-list: 'true'
 spec:
   nets:
   - "1.2.3.4/32"

@@ -71,7 +71,7 @@ kind: GlobalNetworkSet
 metadata:
   name: ip-protect
   labels:
-    IP-deny-list: true
+    ip-deny-list: "true"
 spec:
   nets:
   - 192.0.2.55/32
@@ -86,7 +86,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: forward-default-allow
 spec:
-  selector: apply-IP-protect == 'true'
+  selector: apply-ip-protect == 'true'
   order: 1000
   doNotTrack: true
   applyOnForward: true
@@ -100,7 +100,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: ip-protect
 spec:
-  selector: apply-IP-protect == 'true'
+  selector: apply-ip-protect == 'true'
   order: 0
   doNotTrack: true
   applyOnForward: true
@@ -109,7 +109,7 @@ spec:
   ingress:
   - action: Deny
     source:
-      selector: IP-deny-list == 'true' && !has(projectcalico.org/namespace)
+      selector: ip-deny-list == 'true' && !has(projectcalico.org/namespace)
 ```
 
 ### Above and beyond

@@ -54,9 +54,8 @@ Param(
 
 function DownloadFiles()
 {
-    Write-Host "Downloading CNI binaries"
+    Write-Host "Creating CNI directory"
     md $BaseDir\cni\config -ErrorAction Ignore
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
 
     Write-Host "Downloading Windows Kubernetes scripts"
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
@@ -224,12 +223,12 @@ function EnableWinDsrForEKS()
     }
 
     # Update and restart kube-proxy if WinDSR is not enabled by default.
-    $Path = Get-WmiObject -Query 'select * from win32_service where name="kube-proxy"' | Select -ExpandProperty pathname
+    $Path = Get-CimInstance -Query 'select * from win32_service where name="kube-proxy"' | Select -ExpandProperty pathname
     if ($Path -like "*--enable-dsr=true*") {
         Write-Host "WinDsr is enabled by default."
     } else {
         $UpdatedPath = $Path + " --enable-dsr=true --feature-gates=WinDSR=true"
-        Get-WmiObject win32_service -filter 'Name="kube-proxy"' | Invoke-WmiMethod -Name Change -ArgumentList @($null,$null,$null,$null,$null,$UpdatedPath)
+        Get-CimInstance win32_service -filter 'Name="kube-proxy"' | Invoke-CimMethod -Name Change -ArgumentList @($null,$null,$null,$null,$null,$UpdatedPath)
         Restart-Service -name "kube-proxy"
         Write-Host "WinDsr has been enabled for kube-proxy."
     }
