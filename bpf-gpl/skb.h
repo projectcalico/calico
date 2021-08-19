@@ -18,7 +18,6 @@
 #ifndef __SKB_H__
 #define __SKB_H__
 
-
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
