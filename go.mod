@@ -9,9 +9,9 @@ require (
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/projectcalico/api v0.0.0-20210817231838-b92521e7bf58
-	github.com/projectcalico/felix v0.0.0-20210817123015-a8536c5620cf
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210817233724-9e8aa8a0ac85
+	github.com/projectcalico/api v0.0.0-20210818175712-59320232f526
+	github.com/projectcalico/felix v0.0.0-20210819145024-b91f95da817c
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210818181547-e7396385abd4
 	github.com/prometheus/client_golang v1.7.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0
