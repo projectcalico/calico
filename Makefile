@@ -55,7 +55,7 @@ include Makefile.common
 # fail if unable to download
 CURL=curl -C - -sSf
 
-CNI_VERSION=v0.8.6
+CNI_VERSION=v1.0.0
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -153,9 +153,16 @@ endif
 .PHONY: fetch-cni-bins
 fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
 
-$(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
+$(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 	mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./flannel ./loopback ./host-local ./portmap ./tuning ./bandwidth
+	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
+
+$(BIN)/flannel:
+	# Flannel was removed from v1.0.0 CNI plugins, but doesn't yet have its own release.
+	# For now, just pull the older version of the binary hosted at containernetworking/plugins.
+	# Eventually, replace with a release from https://github.com/flannel-io/cni-plugin
+	mkdir -p $(BIN)
+	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/v0.9.1/cni-plugins-linux-$(subst v7,,$(ARCH))-v0.9.1.tgz | tar -xz -C $(BIN) ./flannel
 
 ###############################################################################
 # Unit Tests
