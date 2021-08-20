@@ -305,16 +305,6 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err = calicoClient.IPPools().Create(context.Background(), &pool, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Claim affinity to a block.
-			affBlock := cnet.IPNet{
-				IPNet: net.IPNet{
-					IP:   net.IP{192, 168, 0, 0},
-					Mask: net.IPMask{255, 255, 255, 0},
-				},
-			}
-			_, _, err = calicoClient.IPAM().ClaimAffinity(context.Background(), affBlock, cNodeName)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Allocate an address within the block, which will be assigned to a WEP.
 			// We don't specify metadata in the attrs fields (e.g., pod name, namespace, node), since those fields
 			// weren't added until Calico v3.6 so some allocations won't have them. For these allocations, we NEED
@@ -388,7 +378,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			affBlock = cnet.IPNet{IPNet: net.IPNet{
+			affBlock := cnet.IPNet{IPNet: net.IPNet{
 				IP:   net.IP{192, 168, 1, 0},
 				Mask: net.IPMask{255, 255, 255, 0},
 			}}
