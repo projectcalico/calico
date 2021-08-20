@@ -5,7 +5,11 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/libcalico-go)](https://goreportcard.com/report/github.com/projectcalico/libcalico-go)
 
 # libcalico-go
+
 <img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
+
+**Note: This library is intended for internal use only. See [github.com/projectcalico/api](https://github.com/projectcalico/api) for the officially supported API
+definition and golang clients.**
 
 This repository contains the internal library for interacting with the Calico data store as well as common source code used across Calico components. Note that the APIs defined in this library are not guaranteed to be forwards or backwards compatible and may change at any time without notice.
 
