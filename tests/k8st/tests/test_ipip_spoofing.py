@@ -57,7 +57,7 @@ class TestSpoof(TestBase):
         kubectl("run --generator=run-pod/v1 "
                 "scapy "
                 "-n %s "
-                "--image ehlers/scapy "
+                "--image calico/scapy:v2.4.0 "
                 "--overrides='{\"spec\": {\"nodeName\":\"%s\"}}' "
                 "--command /bin/sleep -- 3600" % (self.ns_name, nodes[2]))
 
@@ -181,7 +181,7 @@ class TestSpoof(TestBase):
     def send_packet(ns_name, name, remote_pod_ip, message):
         try:
             kubectl("exec " + name + " -ti -n %s -- "
-                                     "scapy3 << EOF\n"
+                                     "scapy << EOF\n"
                                      "send("
                                      "IP(dst='%s')/"
                                      "UDP(dport=5000, sport=5000)/"
@@ -196,7 +196,7 @@ class TestSpoof(TestBase):
     def send_spoofed_ipip_packet(ns_name, name, remote_node_ip, remote_pod_ip, message):
         try:
             kubectl("exec " + name + " -ti -n %s -- "
-                                     "scapy3 << EOF\n"
+                                     "scapy << EOF\n"
                                      "send("
                                      "IP(dst='%s')/"
                                      "IP(dst='%s')/"
@@ -212,7 +212,7 @@ class TestSpoof(TestBase):
     def send_spoofed_vxlan_packet(ns_name, name, remote_node_ip, remote_pod_ip, message):
         try:
             kubectl("exec " + name + " -ti -n %s -- "
-                                     "scapy3 << EOF\n"
+                                     "scapy << EOF\n"
                                      "send("
                                      "IP(dst='%s')/"
                                      "UDP(dport=4789)/"
