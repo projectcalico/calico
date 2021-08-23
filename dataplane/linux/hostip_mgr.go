@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -31,13 +32,13 @@ type hostIPManager struct {
 	hostIfaceToAddrs map[string]set.Set
 
 	hostIPSetID     string
-	ipsetsDataplane ipsetsDataplane
+	ipsetsDataplane common.IPSetsDataplane
 	maxSize         int
 }
 
 func newHostIPManager(wlIfacesPrefixes []string,
 	ipSetID string,
-	ipsets ipsetsDataplane,
+	ipsets common.IPSetsDataplane,
 	maxIPSetSize int) *hostIPManager {
 
 	return newHostIPManagerWithShims(
@@ -50,7 +51,7 @@ func newHostIPManager(wlIfacesPrefixes []string,
 
 func newHostIPManagerWithShims(wlIfacesPrefixes []string,
 	ipSetID string,
-	ipsets ipsetsDataplane,
+	ipsets common.IPSetsDataplane,
 	maxIPSetSize int) *hostIPManager {
 
 	wlIfacesPattern := "^(" + strings.Join(wlIfacesPrefixes, "|") + ").*"

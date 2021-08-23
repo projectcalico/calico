@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,14 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type sockmapState struct {
 	bpfLib            bpf.BPFDataplane
-	cbIDs             []*CbID
+	cbIDs             []*common.CbID
 	workloadEndpoints map[string][]string // name -> []CIDR
 }
 
@@ -42,15 +43,15 @@ func NewSockmapState() (*sockmapState, error) {
 	}, nil
 }
 
-func (s *sockmapState) PopulateCallbacks(cbs *callbacks) {
-	cbIDs := []*CbID{
+func (s *sockmapState) PopulateCallbacks(cbs *common.Callbacks) {
+	cbIDs := []*common.CbID{
 		cbs.UpdateWorkloadEndpointV4.Append(s.updateWorkload),
 		cbs.RemoveWorkloadEndpointV4.Append(s.removeWorkload),
 	}
 	s.cbIDs = append(s.cbIDs, cbIDs...)
 }
 
-func (s *sockmapState) DepopulateCallbacks(cbs *callbacks) {
+func (s *sockmapState) DepopulateCallbacks(cbs *common.Callbacks) {
 	for _, id := range s.cbIDs {
 		cbs.Drop(id)
 	}

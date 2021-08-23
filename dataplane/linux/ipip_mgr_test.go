@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -37,7 +38,7 @@ var (
 var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
 		ipipMgr   *ipipManager
-		ipSets    *mockIPSets
+		ipSets    *common.MockIPSets
 		dataplane *mockIPIPDataplane
 	)
 
@@ -52,7 +53,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = newMockIPSets()
+		ipSets = common.NewMockIPSets()
 		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, nil)
 	})
 
@@ -205,7 +206,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 var _ = Describe("ipipManager IP set updates", func() {
 	var (
 		ipipMgr   *ipipManager
-		ipSets    *mockIPSets
+		ipSets    *common.MockIPSets
 		dataplane *mockIPIPDataplane
 	)
 
@@ -215,7 +216,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = newMockIPSets()
+		ipSets = common.NewMockIPSets()
 		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, []string{externalCIDR})
 	})
 

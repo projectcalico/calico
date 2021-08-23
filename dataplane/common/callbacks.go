@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package common
 
 import (
 	"github.com/projectcalico/felix/proto"
 )
 
-type callbacks struct {
+type Callbacks struct {
 	AddInterfaceV4           *AddInterfaceFuncs
 	RemoveInterfaceV4        *RemoveInterfaceFuncs
 	UpdateInterfaceV4        *UpdateInterfaceFuncs
@@ -28,8 +28,8 @@ type callbacks struct {
 	RemoveWorkloadEndpointV4 *RemoveWorkloadEndpointFuncs
 }
 
-func newCallbacks() *callbacks {
-	return &callbacks{
+func NewCallbacks() *Callbacks {
+	return &Callbacks{
 		AddInterfaceV4:           &AddInterfaceFuncs{},
 		RemoveInterfaceV4:        &RemoveInterfaceFuncs{},
 		UpdateInterfaceV4:        &UpdateInterfaceFuncs{},
@@ -40,7 +40,7 @@ func newCallbacks() *callbacks {
 	}
 }
 
-func (c *callbacks) Drop(id *CbID) {
+func (c *Callbacks) Drop(id *CbID) {
 	if id.dropper != nil {
 		id.dropper()
 		id.dropper = nil
