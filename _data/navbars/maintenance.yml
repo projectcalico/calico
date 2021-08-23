@@ -29,7 +29,7 @@ section:
     path: /maintenance/ebpf/enabling-bpf
   - title: eBPF on EKS
     path: /maintenance/ebpf/ebpf-and-eks
-  - title: Troubleshooting
+  - title: troubleshooting
     path: /maintenance/troubleshoot/troubleshoot-ebpf
 - title: Monitor
   path: /maintenance/monitor/
@@ -43,8 +43,10 @@ section:
 - title: Troubleshoot
   path: /maintenance/troubleshoot/
   section:
-  - title: Troubleshoot
+  - title: Troubleshoot and diagnotics
     path: /maintenance/troubleshoot/troubleshooting
+  - title: Troubleshooting commands
+    path: /maintenance/troubleshoot/commands  
   - title: Component logs
     path: /maintenance/troubleshoot/component-logs
   - title: eBPF Dataplane
