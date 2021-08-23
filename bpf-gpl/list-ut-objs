@@ -26,8 +26,7 @@ emit_filename() {
   echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}${dsr}.o"
 }
 
-((mark_calico = 0x40000000))
-((mark_seen = mark_calico | 0x1000000))
+((mark_seen = 0x1000000))
 ((mark_seen_bypass = mark_seen | 0x2000000))
 ((mark_seen_bypass_src_fixup = mark_seen_bypass | 0x500000))
 ((mark_seen_bypass_forward = mark_seen_bypass | 0x300000))
