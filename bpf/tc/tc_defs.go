@@ -15,10 +15,8 @@
 package tc
 
 const (
-	MarkCalico                       = 0x40000000
-	MarkCalicoMask                   = 0x60000000
-	MarkSeen                         = MarkCalico | 0x01000000
-	MarkSeenMask                     = MarkCalicoMask | MarkSeen
+	MarkSeen                         = 0x01000000
+	MarkSeenMask                     = MarkSeen
 	MarkSeenBypass                   = MarkSeen | 0x02000000
 	MarkSeenBypassMask               = MarkSeenMask | MarkSeenBypass
 	MarkSeenFallThrough              = MarkSeen | 0x04000000
@@ -30,8 +28,8 @@ const (
 	MarkSeenNATOutgoing              = MarkSeenBypass | 0x00800000
 	MarkSeenNATOutgoingMask          = MarkSeenBypassMask | MarkSeenNATOutgoing
 
-	MarkLinuxConntrackEstablished     = MarkCalico | 0x08000000
-	MarkLinuxConntrackEstablishedMask = MarkCalico | 0x08000000
+	MarkLinuxConntrackEstablished     = 0x08000000
+	MarkLinuxConntrackEstablishedMask = 0x08000000
 
-	MarksMask uint32 = 0x7ff00000
+	MarksMask uint32 = 0x1ff00000
 )
