@@ -22,11 +22,14 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
+type CallBackFunc func(ipSetId string)
+
 // IPSets manages a whole plane of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
 type IPSets struct {
-	IPVersionConfig *IPVersionConfig
-	ipSetIDToIPSet  map[string]*ipSet
-	logCxt          *log.Entry
+	IPVersionConfig  *IPVersionConfig
+	ipSetIDToIPSet   map[string]*ipSet
+	logCxt           *log.Entry
+	callbackOnUpdate CallBackFunc
 }
 
 func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
@@ -37,6 +40,10 @@ func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
 			"family": ipVersionConfig.Family,
 		}),
 	}
+}
+
+func (s *IPSets) SetCallback(callback CallBackFunc) {
+	s.callbackOnUpdate = callback
 }
 
 // AddOrReplaceIPSet is responsible for the creation (or replacement) of an IP set in the store
@@ -58,12 +65,14 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 		Members:       filteredMembers,
 	}
 	s.ipSetIDToIPSet[setID] = ipSet
+	s.callbackOnUpdate(setID)
 }
 
 // RemoveIPSet is responsible for the removal of an IP set from the store
 func (s *IPSets) RemoveIPSet(setID string) {
 	s.logCxt.WithField("setID", setID).Info("Removing IP set")
 	delete(s.ipSetIDToIPSet, setID)
+	s.callbackOnUpdate(setID)
 }
 
 // AddMembers adds a range of new members to an existing IP set in the store
@@ -85,6 +94,7 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		ipSet.Members.Add(m)
 		return nil
 	})
+	s.callbackOnUpdate(setID)
 }
 
 // RemoveMembers removes a range of members from an existing IP set in the store
@@ -107,6 +117,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 		ipSet.Members.Discard(m)
 		return nil
 	})
+	s.callbackOnUpdate(setID)
 }
 
 // GetIPSetMembers returns all of the members for a given IP set
@@ -124,6 +135,8 @@ func (s *IPSets) GetIPSetMembers(setID string) []string {
 		return nil
 	})
 
+	// Note: It is very important that nil is returned if there is no ip in an ipset
+	// so that policy rules related to this ipset won't be populated.
 	return retVal
 }
 
@@ -140,6 +153,33 @@ func (s *IPSets) filterMembers(members []string) set.Set {
 		filtered.Add(member)
 	}
 	return filtered
+}
+
+func (s *IPSets) GetIPFamily() IPFamily {
+	return s.IPVersionConfig.Family
+}
+
+// The following functions are no-ops on Windows.
+func (s *IPSets) QueueResync() {
+	return
+}
+
+func (m *IPSets) GetTypeOf(setID string) (IPSetType, error) {
+	panic("Not implemented")
+}
+
+func (m *IPSets) GetMembers(setID string) (set.Set, error) {
+	// GetMembers is only called from XDPState, and XDPState does not coexist with
+	// config.BPFEnabled.
+	panic("Not implemented")
+}
+
+func (m *IPSets) ApplyUpdates() {
+	return
+}
+
+func (m *IPSets) ApplyDeletions() {
+	return
 }
 
 func (s *IPSets) SetFilter(ipSetNames set.Set) {
