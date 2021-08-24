@@ -161,7 +161,6 @@ func (s *IPSets) GetIPFamily() IPFamily {
 
 // The following functions are no-ops on Windows.
 func (s *IPSets) QueueResync() {
-	return
 }
 
 func (m *IPSets) GetTypeOf(setID string) (IPSetType, error) {
@@ -175,11 +174,9 @@ func (m *IPSets) GetMembers(setID string) (set.Set, error) {
 }
 
 func (m *IPSets) ApplyUpdates() {
-	return
 }
 
 func (m *IPSets) ApplyDeletions() {
-	return
 }
 
 func (s *IPSets) SetFilter(ipSetNames set.Set) {
