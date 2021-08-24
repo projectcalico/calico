@@ -43,6 +43,7 @@ import (
 	"github.com/projectcalico/felix/bpf/state"
 	"github.com/projectcalico/felix/bpf/tc"
 	"github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/felix/idalloc"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
@@ -238,7 +239,7 @@ type InternalDataplane struct {
 	iptablesNATTables    []*iptables.Table
 	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
-	ipSets               []ipsetsDataplane
+	ipSets               []common.IPSetsDataplane
 
 	ipipManager *ipipManager
 
@@ -283,7 +284,7 @@ type InternalDataplane struct {
 	sockmapState      *sockmapState
 	endpointsSourceV4 endpointsSource
 	ipsetsSourceV4    ipsetsSource
-	callbacks         *callbacks
+	callbacks         *common.Callbacks
 
 	loopSummarizer *logutils.Summarizer
 }
@@ -447,7 +448,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
-	callbacks := newCallbacks()
+	callbacks := common.NewCallbacks()
 	dp.callbacks = callbacks
 	if config.XDPEnabled {
 		if err := bpf.SupportsXDP(); err != nil {
@@ -510,7 +511,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
-	ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize)
+	ipsetsManager := common.NewIPSetsManager(ipSetsV4, config.MaxIPSetSize)
 	dp.RegisterManager(ipsetsManager)
 
 	if !config.BPFEnabled {
@@ -795,7 +796,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer)
 
 		if !config.BPFEnabled {
-			dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
+			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))
 			dp.RegisterManager(newHostIPManager(
 				config.RulesConfig.WorkloadIfacePrefixes,
 				rules.IPSetIDThisHostIPs,
@@ -1799,7 +1800,7 @@ func (d *InternalDataplane) apply() {
 	var ipSetsWG sync.WaitGroup
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
-		go func(ipSets ipsetsDataplane) {
+		go func(ipSets common.IPSetsDataplane) {
 			ipSets.ApplyUpdates()
 			d.reportHealth()
 			ipSetsWG.Done()
@@ -1848,7 +1849,7 @@ func (d *InternalDataplane) apply() {
 	// Now clean up any left-over IP sets.
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
-		go func(s ipsetsDataplane) {
+		go func(s common.IPSetsDataplane) {
 			s.ApplyDeletions()
 			d.reportHealth()
 			ipSetsWG.Done()

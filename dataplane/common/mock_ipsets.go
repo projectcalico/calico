@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package common
 
 import (
 	"net"
@@ -23,20 +23,20 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type mockIPSets struct {
+type MockIPSets struct {
 	Members            map[string]set.Set
 	Metadata           map[string]ipsets.IPSetMetadata
 	AddOrReplaceCalled bool
 }
 
-func newMockIPSets() *mockIPSets {
-	return &mockIPSets{
+func NewMockIPSets() *MockIPSets {
+	return &MockIPSets{
 		Members:  map[string]set.Set{},
 		Metadata: map[string]ipsets.IPSetMetadata{},
 	}
 }
 
-func (s *mockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMembers []string) {
+func (s *MockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMembers []string) {
 	s.Metadata[setMetadata.SetID] = setMetadata
 	members := set.New()
 	for _, member := range newMembers {
@@ -48,7 +48,7 @@ func (s *mockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMemb
 	s.Members[setMetadata.SetID] = members
 	s.AddOrReplaceCalled = true
 }
-func (s *mockIPSets) AddMembers(setID string, newMembers []string) {
+func (s *MockIPSets) AddMembers(setID string, newMembers []string) {
 	members := s.Members[setID]
 	for _, member := range newMembers {
 		if s.Metadata[setID].Type == ipsets.IPSetTypeHashIP {
@@ -59,7 +59,7 @@ func (s *mockIPSets) AddMembers(setID string, newMembers []string) {
 	}
 }
 
-func (s *mockIPSets) RemoveMembers(setID string, removedMembers []string) {
+func (s *MockIPSets) RemoveMembers(setID string, removedMembers []string) {
 	members := s.Members[setID]
 	for _, member := range removedMembers {
 		if s.Metadata[setID].Type == ipsets.IPSetTypeHashIP {
@@ -70,35 +70,35 @@ func (s *mockIPSets) RemoveMembers(setID string, removedMembers []string) {
 	}
 }
 
-func (s *mockIPSets) RemoveIPSet(setID string) {
+func (s *MockIPSets) RemoveIPSet(setID string) {
 	delete(s.Members, setID)
 	delete(s.Metadata, setID)
 }
 
-func (s *mockIPSets) GetIPFamily() ipsets.IPFamily {
+func (s *MockIPSets) GetIPFamily() ipsets.IPFamily {
 	return ipsets.IPFamilyV4
 }
 
-func (s *mockIPSets) GetMembers(setID string) (set.Set, error) {
+func (s *MockIPSets) GetMembers(setID string) (set.Set, error) {
 	return s.Members[setID], nil
 }
 
-func (s *mockIPSets) GetTypeOf(setID string) (ipsets.IPSetType, error) {
+func (s *MockIPSets) GetTypeOf(setID string) (ipsets.IPSetType, error) {
 	return s.Metadata[setID].Type, nil
 }
 
-func (s *mockIPSets) QueueResync() {
+func (s *MockIPSets) QueueResync() {
 	// Not implemented for UT.
 }
 
-func (s *mockIPSets) ApplyUpdates() {
+func (s *MockIPSets) ApplyUpdates() {
 	// Not implemented for UT.
 }
 
-func (s *mockIPSets) ApplyDeletions() {
+func (s *MockIPSets) ApplyDeletions() {
 	// Not implemented for UT.
 }
 
-func (s *mockIPSets) SetFilter(ipSetNames set.Set) {
+func (s *MockIPSets) SetFilter(ipSetNames set.Set) {
 	// Not implemented for UT.
 }

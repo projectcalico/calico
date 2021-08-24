@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package windataplane
 
 import (
+	"math"
 	"regexp"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 
 	"github.com/projectcalico/felix/dataplane/windows/hns"
 
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/felix/dataplane/windows/ipsets"
 	"github.com/projectcalico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/felix/jitter"
@@ -54,6 +56,9 @@ func init() {
 type Config struct {
 	IPv6Enabled      bool
 	HealthAggregator *health.HealthAggregator
+
+	// Currently set to maximum value.
+	MaxIPSetSize int
 
 	Hostname     string
 	VXLANEnabled bool
@@ -156,6 +161,7 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 	)
 
 	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
+	config.MaxIPSetSize = math.MaxInt64
 
 	dp := &WindowsDataplane{
 		toDataplane:      make(chan interface{}, msgPeekLimit),
@@ -175,10 +181,11 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 	}
 	dp.policySets = policysets.NewPolicySets(hns, ipsc, policysets.FileReader(policysets.StaticFileName))
 
-	dp.RegisterManager(newIPSetsManager(ipSetsV4))
+	dp.RegisterManager(common.NewIPSetsManager(ipSetsV4, config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(dp.policySets))
 	dp.endpointMgr = newEndpointManager(hns, dp.policySets)
 	dp.RegisterManager(dp.endpointMgr)
+	ipSetsV4.SetCallback(dp.endpointMgr.OnIPSetsUpdate)
 	if config.VXLANEnabled {
 		log.Info("VXLAN enabled, starting the VXLAN manager")
 		dp.RegisterManager(newVXLANManager(

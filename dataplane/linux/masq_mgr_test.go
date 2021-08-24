@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
@@ -29,12 +30,12 @@ var _ = Describe("Masquerade manager", func() {
 	var (
 		masqMgr      *masqManager
 		natTable     *mockTable
-		ipSets       *mockIPSets
+		ipSets       *common.MockIPSets
 		ruleRenderer rules.RuleRenderer
 	)
 
 	BeforeEach(func() {
-		ipSets = newMockIPSets()
+		ipSets = common.NewMockIPSets()
 		natTable = newMockTable("nat")
 		ruleRenderer = rules.NewRenderer(rules.Config{
 			IPSetConfigV4: ipsets.NewIPVersionConfig(

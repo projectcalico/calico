@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -120,6 +121,15 @@ func NewXDPStateWithBPFLibrary(library bpf.BPFDataplane, allowGenericXDP bool) *
 	}
 }
 
+func membersToSet(members []string) set.Set /*string*/ {
+	membersSet := set.New()
+	for _, m := range members {
+		membersSet.Add(m)
+	}
+
+	return membersSet
+}
+
 func (x *xdpState) OnUpdate(protoBufMsg interface{}) {
 	log.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
@@ -146,9 +156,9 @@ func (x *xdpState) CompleteDeferredWork() error {
 	return nil
 }
 
-func (x *xdpState) PopulateCallbacks(cbs *callbacks) {
+func (x *xdpState) PopulateCallbacks(cbs *common.Callbacks) {
 	if x.ipV4State != nil {
-		cbIDs := []*CbID{
+		cbIDs := []*common.CbID{
 			cbs.AddInterfaceV4.Append(x.ipV4State.addInterface),
 			cbs.RemoveInterfaceV4.Append(x.ipV4State.removeInterface),
 			cbs.UpdateInterfaceV4.Append(x.ipV4State.updateInterface),
@@ -159,7 +169,7 @@ func (x *xdpState) PopulateCallbacks(cbs *callbacks) {
 	}
 }
 
-func (x *xdpState) DepopulateCallbacks(cbs *callbacks) {
+func (x *xdpState) DepopulateCallbacks(cbs *common.Callbacks) {
 	if x.ipV4State != nil {
 		for _, id := range x.ipV4State.cbIDs {
 			cbs.Drop(id)
@@ -290,7 +300,7 @@ type xdpIPState struct {
 	pendingDiffState  *xdpPendingDiffState
 	newCurrentState   *xdpSystemState
 	bpfActions        *xdpBPFActions
-	cbIDs             []*CbID
+	cbIDs             []*common.CbID
 	logCxt            *log.Entry
 }
 
@@ -2173,7 +2183,7 @@ type ipsetsSource interface {
 	GetIPSetMembers(setID string) (set.Set /*<string>*/, error)
 }
 
-var _ ipsetsSource = &ipSetsManager{}
+var _ ipsetsSource = &common.IPSetsManager{}
 var _ ipsetsSource = &nilIPSetsSource{}
 
 type xdpMemberCache struct {

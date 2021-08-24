@@ -24,18 +24,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/projectcalico/felix/ethtool"
-	"github.com/projectcalico/felix/ipsets"
-	"github.com/projectcalico/felix/logutils"
-	"github.com/projectcalico/felix/rules"
-
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/felix/dataplane/common"
+	"github.com/projectcalico/felix/ethtool"
 	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
+	"github.com/projectcalico/felix/rules"
 )
 
 // added so that we can shim netlink for tests
@@ -75,7 +75,7 @@ type vxlanManager struct {
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty       bool
-	ipsetsDataplane   ipsetsDataplane
+	ipsetsDataplane   common.IPSetsDataplane
 	ipSetMetadata     ipsets.IPSetMetadata
 	externalNodeCIDRs []string
 	vtepsDirty        bool
@@ -92,7 +92,7 @@ const (
 )
 
 func newVXLANManager(
-	ipsetsDataplane ipsetsDataplane,
+	ipsetsDataplane common.IPSetsDataplane,
 	rt routeTable,
 	deviceName string,
 	dpConfig Config,
@@ -133,7 +133,7 @@ func newVXLANManager(
 }
 
 func newVXLANManagerWithShims(
-	ipsetsDataplane ipsetsDataplane,
+	ipsetsDataplane common.IPSetsDataplane,
 	rt, brt routeTable,
 	deviceName string,
 	dpConfig Config,

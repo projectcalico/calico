@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,17 +18,18 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/dataplane/common"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 var _ = Describe("Host ip manager", func() {
 	var (
 		hostIPMgr *hostIPManager
-		ipSets    *mockIPSets
+		ipSets    *common.MockIPSets
 	)
 
 	BeforeEach(func() {
-		ipSets = newMockIPSets()
+		ipSets = common.NewMockIPSets()
 		hostIPMgr = newHostIPManager([]string{"cali"}, "this-host", ipSets, 1024)
 	})
 

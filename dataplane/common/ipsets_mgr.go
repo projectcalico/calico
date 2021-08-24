@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package common
 
 import (
 	log "github.com/sirupsen/logrus"
@@ -22,25 +22,39 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-// ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
-// dataplane layer.
-type ipSetsManager struct {
-	dataplanes []ipsetsDataplane
+type IPSetsDataplane interface {
+	AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string)
+	AddMembers(setID string, newMembers []string)
+	RemoveMembers(setID string, removedMembers []string)
+	RemoveIPSet(setID string)
+	GetIPFamily() ipsets.IPFamily
+	GetTypeOf(setID string) (ipsets.IPSetType, error)
+	GetMembers(setID string) (set.Set, error)
+	QueueResync()
+	ApplyUpdates()
+	ApplyDeletions()
+}
+
+// Except for domain IP sets, IPSetsManager simply passes through IP set updates from the datastore
+// to the ipsets.IPSets dataplane layer.  For domain IP sets - which hereafter we'll just call
+// "domain sets" - IPSetsManager handles the resolution from domain names to expiring IPs.
+type IPSetsManager struct {
+	dataplanes []IPSetsDataplane
 	maxSize    int
 }
 
-func newIPSetsManager(ipsets_ ipsetsDataplane, maxIPSetSize int) *ipSetsManager {
-	return &ipSetsManager{
-		dataplanes: []ipsetsDataplane{ipsets_},
+func NewIPSetsManager(ipsets_ IPSetsDataplane, maxIPSetSize int) *IPSetsManager {
+	return &IPSetsManager{
+		dataplanes: []IPSetsDataplane{ipsets_},
 		maxSize:    maxIPSetSize,
 	}
 }
 
-func (m *ipSetsManager) AddDataplane(dp ipsetsDataplane) {
+func (m *IPSetsManager) AddDataplane(dp IPSetsDataplane) {
 	m.dataplanes = append(m.dataplanes, dp)
 }
 
-func (m *ipSetsManager) GetIPSetType(setID string) (typ ipsets.IPSetType, err error) {
+func (m *IPSetsManager) GetIPSetType(setID string) (typ ipsets.IPSetType, err error) {
 	for _, dp := range m.dataplanes {
 		typ, err = dp.GetTypeOf(setID)
 		if err == nil {
@@ -50,7 +64,7 @@ func (m *ipSetsManager) GetIPSetType(setID string) (typ ipsets.IPSetType, err er
 	return
 }
 
-func (m *ipSetsManager) GetIPSetMembers(setID string) (members set.Set /*<string>*/, err error) {
+func (m *IPSetsManager) GetIPSetMembers(setID string) (members set.Set /*<string>*/, err error) {
 	for _, dp := range m.dataplanes {
 		members, err = dp.GetMembers(setID)
 		if err == nil {
@@ -60,7 +74,7 @@ func (m *ipSetsManager) GetIPSetMembers(setID string) (members set.Set /*<string
 	return
 }
 
-func (m *ipSetsManager) OnUpdate(msg interface{}) {
+func (m *IPSetsManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:
@@ -98,16 +112,7 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	}
 }
 
-func (m *ipSetsManager) CompleteDeferredWork() error {
+func (m *IPSetsManager) CompleteDeferredWork() error {
 	// Nothing to do, we don't defer any work.
 	return nil
-}
-
-func membersToSet(members []string) set.Set /*string*/ {
-	membersSet := set.New()
-	for _, m := range members {
-		membersSet.Add(m)
-	}
-
-	return membersSet
 }
