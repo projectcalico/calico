@@ -106,14 +106,6 @@ The code is a little roundabout for a few reasons:
         <div class="row-offcanvas row-offcanvas-left main-content {% unless page.show_toc %}no-toc{% endunless  %}">
           <div class="sidebar-container sidebar-offcanvas">
             <div class="sidebar">
-              <div class="search">
-                <div class="search-input-container" data-toggle="popover" data-placement="bottom"></div>
-                <div class="search-container">
-                  <div class="search-container__results"></div>
-                  <div class="search-container__pagination"></div>
-                </div>
-                <div class="search-powered-by" ></div>
-              </div>
               <div id="sidebar">
                 <div class="panel-group" id="sidebar-accordion">
                   {% for navbar in navbars %}
@@ -174,10 +166,6 @@ The code is a little roundabout for a few reasons:
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include nav-breadcrumbs.html content=edit_page %}
 
-              {% unless site.is_latest %}
-              {% include version_warning.html %}
-              {% endunless %}
-
               {% if page.calico_enterprise -%}
               {% include enterprise_header.html %}   
               {% endif -%}
@@ -226,6 +214,7 @@ The code is a little roundabout for a few reasons:
     <script>
       $(document).ready(function() {
         window.initializeSearch('{{page.version}}', '.search-powered-by', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
+        $('.version-combo > ul.dropdown-menu').load('/releases #release-list > li');
       });
     </script>
   </body>
