@@ -91,7 +91,7 @@ container-optimised OS with an emphasis on security; it has a version of the ker
   > are not specialised for EKS (but the operator knows how to customise the installation for EKS).
   {: .alert .alert-info}
 
-* Using `kubectl`, apply the following [`Installation` resource]({{site.url}}/{{page.version}}/reference/installation/api#operator.tigera.io/v1.Installation) to tell the operator to install {{site.prodname}}; note the `flexVolumePath` tweak, which is needed for Bottlerocket.
+* Using `kubectl`, apply the following [`Installation` resource](/reference/installation/api#operator.tigera.io/v1.Installation) to tell the operator to install {{site.prodname}}; note the `flexVolumePath` tweak, which is needed for Bottlerocket.
 
   ```
   apiVersion: operator.tigera.io/v1
@@ -147,7 +147,7 @@ which is suitable:
   
 * To use {{site.prodname}} with the AWS VPC CNI: 
 
-  * Using `kubectl`, apply the following [`Installation` resource]({{site.url}}/{{page.version}}/reference/installation/api#operator.tigera.io/v1.Installation) to tell   the operator to install {{site.prodname}}.
+  * Using `kubectl`, apply the following [`Installation` resource](/reference/installation/api#operator.tigera.io/v1.Installation) to tell   the operator to install {{site.prodname}}.
 
     ```
     apiVersion: operator.tigera.io/v1
@@ -168,7 +168,7 @@ which is suitable:
     ```bash
     kubectl delete daemonset -n kube-system aws-node
     ```
-  * Using `kubectl`, apply the following [`Installation` resource]({{site.url}}/{{page.version}}/reference/installation/api#operator.tigera.io/v1.Installation) to tell   the operator to install {{site.prodname}}.  Modify the IP pool CIDR to avoid any clash with your VPC network:
+  * Using `kubectl`, apply the following [`Installation` resource](/reference/installation/api#operator.tigera.io/v1.Installation) to tell   the operator to install {{site.prodname}}.  Modify the IP pool CIDR to avoid any clash with your VPC network:
 
     ```
     apiVersion: operator.tigera.io/v1
