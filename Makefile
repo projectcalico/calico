@@ -179,7 +179,7 @@ dev-manifests: dev-versions-yaml dev-images-file
 		IMAGES_FILE="$$PWD/pinned_images.yml" \
 		DEV=true
 	@mkdir -p _output
-	@cp -r _site/master/manifests _output/dev-manifests
+	@cp -r _site/manifests _output/dev-manifests
 
 # Builds an images file for help in building the docs manifests. We need this in order
 # to override the default images file with the desired registry and image names as
@@ -272,7 +272,7 @@ helm-tests: vendor bin/helm values.yaml
 ###############################################################################
 
 # URLs to ignore when checking external links.
-HP_IGNORE_URLS=/docs.openshift.org/
+HP_IGNORE_URLS="/docs.openshift.org/,/localhost/"
 
 check_external_links: _site
 	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --external_only --file-ignore $(HP_IGNORE_LOCAL_DIRS) --assume-extension --url-ignore $(HP_IGNORE_URLS) --internal_domains "docs.projectcalico.org"
@@ -501,7 +501,7 @@ $(RELEASE_DIR_BIN)/%:
 bin/helm: bin/helm3
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget -q https://storage.googleapis.com/kubernetes-helm/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
+	wget -q https://get.helm.sh/helm-v2.16.3-linux-amd64.tar.gz -O $(TMP)/helm.tar.gz
 	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
 
