@@ -2292,6 +2292,43 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 							})
 
+							_ = testIfTCP && It("should not break connectivity with source port collision", func() {
+
+								By("Synchronizing with policy and services")
+								cc.Expect(Some, externalClient, TargetIP(felixes[0].IP), ExpectWithPorts(npPort))
+								cc.Expect(Some, externalClient, TargetIP(felixes[1].IP), ExpectWithPorts(npPort))
+								cc.CheckConnectivity()
+
+								pc := &PersistentConnection{
+									Runtime:             externalClient,
+									RuntimeName:         externalClient.Name,
+									IP:                  felixes[0].IP,
+									Port:                int(npPort),
+									SourcePort:          12345,
+									Protocol:            testOpts.protocol,
+									MonitorConnectivity: true,
+								}
+
+								err := pc.Start()
+								Expect(err).NotTo(HaveOccurred())
+								defer pc.Stop()
+
+								EventuallyWithOffset(1, pc.PongCount, "5s").Should(
+									BeNumerically(">", 0),
+									"Expected to see pong responses on the connection but didn't receive any")
+								log.Info("Pongs received within last 1s")
+
+								cc.ResetExpectations()
+								cc.Expect(None, externalClient, TargetIP(felixes[1].IP),
+									ExpectWithPorts(npPort), ExpectWithSrcPort(12345))
+								cc.CheckConnectivity()
+
+								EventuallyWithOffset(1, pc.PongCount, "5s").Should(
+									BeNumerically(">", 0),
+									"Expected to see pong responses on the connection but didn't receive any")
+								log.Info("Pongs received within last 1s")
+							})
+
 							_ = testIfTCP && It("should survive conntrack cleanup sweep", func() {
 								By("checking the connectivity and thus syncing with service creation", func() {
 									cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)

@@ -162,6 +162,10 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 				opts = append(opts, WithSendLen(exp.sendLen), WithRecvLen(exp.recvLen))
 			}
 
+			if exp.srcPort != 0 {
+				opts = append(opts, WithSourcePort(strconv.Itoa(int(exp.srcPort))))
+			}
+
 			res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, opts...)
 
 			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res.HasConnectivity())
@@ -376,6 +380,13 @@ func ExpectWithSrcIPs(ips ...string) ExpectationOption {
 		e.ExpSrcIPs = ips
 	}
 }
+
+func ExpectWithSrcPort(port uint16) ExpectationOption {
+	return func(e *Expectation) {
+		e.srcPort = port
+	}
+}
+
 func ExpectNoneWithError(ErrorStr string) ExpectationOption {
 	return func(e *Expectation) {
 		e.ErrorStr = ErrorStr
@@ -445,6 +456,8 @@ type Expectation struct {
 
 	clientMTUStart int
 	clientMTUEnd   int
+
+	srcPort uint16
 
 	ErrorStr string
 }

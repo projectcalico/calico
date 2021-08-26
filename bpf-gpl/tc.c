@@ -789,8 +789,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 
 			ct_ctx_nat.type = CALI_CT_TYPE_NAT_REV;
-			if (conntrack_create(ctx, &ct_ctx_nat)) {
-				CALI_DEBUG("Creating NAT conntrack failed\n");
+			int err;
+			if ((err = conntrack_create(ctx, &ct_ctx_nat))) {
+				CALI_DEBUG("Creating NAT conntrack failed with %d\n", err);
 				goto deny;
 			}
 		} else {

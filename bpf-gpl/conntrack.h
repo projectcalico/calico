@@ -200,7 +200,7 @@ create:
 		CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
 	}
 
-	err = cali_v4_ct_update_elem(k, &ct_value, 0);
+	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
 out:
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
