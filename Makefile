@@ -184,7 +184,7 @@ dev-manifests: dev-versions-yaml dev-images-file
 		IMAGES_FILE="$$PWD/pinned_images.yml" \
 		DEV=true
 	@mkdir -p _output
-	@cp -r _site/master/manifests _output/dev-manifests
+	@cp -r _site/manifests _output/dev-manifests
 
 # Builds an images file for help in building the docs manifests. We need this in order
 # to override the default images file with the desired registry and image names as
