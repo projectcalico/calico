@@ -12,7 +12,7 @@ network.
 Any technology that is capable of transporting IP packets can be used as
 the interconnect fabric in a {{site.prodname}} network (the first person to test
 and publish the results of using [IP over Avian
-Carrier](http://tools.ietf.org/html/rfc1149){:target="_blank"} as a transport for {{site.prodname}}
+Carrier](https://datatracker.ietf.org/doc/html/rfc1149){:target="_blank"} as a transport for {{site.prodname}}
 will earn a very nice dinner on or with the core {{site.prodname}} team). This
 means that the standard tools used to transport IP, such as MPLS and
 Ethernet can be used in a {{site.prodname}} network.
@@ -32,7 +32,7 @@ It has been acknowledged by the industry for years that, beyond a
 certain size, classical Ethernet networks are unsuitable for production
 deployment. Although there have been
 [multiple](https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering){:target="_blank"}
-[attempts](https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html){:target="_blank"} [to address](https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service){:target="_blank"}
+[attempts](https://web.archive.org/web/20150923231827/https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html){:target="_blank"} [to address](https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service){:target="_blank"}
 these issues, the scale-out networking community has, largely abandoned
 Ethernet for anything other than providing physical point-to-point links
 in the networking fabric. The principal reasons for Ethernet failures at
