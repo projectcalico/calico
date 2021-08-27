@@ -2641,6 +2641,21 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"allowedUses": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to [\"Tunnel\", \"Workload\"] for back-compatibility",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"cidr"},
 			},
