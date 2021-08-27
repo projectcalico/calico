@@ -18,3 +18,4 @@ blocks:
             - checkout
             - make dev-manifests
             - make ci
+            - make check_external_links
