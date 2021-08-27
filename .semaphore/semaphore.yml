@@ -16,5 +16,6 @@ blocks:
         - name: CI
           commands:
             - checkout
-            - make dev-manifests
             - make ci
+            - make check_external_links
+            - make dev-manifests

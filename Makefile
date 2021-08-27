@@ -277,7 +277,7 @@ helm-tests: vendor bin/helm values.yaml
 ###############################################################################
 
 # URLs to ignore when checking external links.
-HP_IGNORE_URLS=/docs.openshift.org/
+HP_IGNORE_URLS="/docs.openshift.org/,/localhost/"
 
 check_external_links: _site
 	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --external_only --file-ignore $(HP_IGNORE_LOCAL_DIRS) --assume-extension --url-ignore $(HP_IGNORE_URLS) --internal_domains "docs.projectcalico.org"
