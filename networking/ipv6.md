@@ -118,7 +118,7 @@ This how-to guide uses the following {{site.prodname}} features:
 If you want your workloads to have IPv6 addresses only, because you do not have IPv4 addresses or connectivity
 between your nodes, complete these additional steps to tell {{site.prodname}} not to look for any IPv4 addresses.
 
-1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
+1. Disable [IP autodetection of IPv4](/networking/ip-autodetection) by setting `IP` to `none`.
 1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
    - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.
      This configures {{site.prodname}} to calculate the router ID based on the hostname.
