@@ -17,5 +17,7 @@ blocks:
           commands:
             - checkout
             - make ci
-            - make check_external_links
+           # Disabled for now since this target fails due to github.com rate
+           # limits being hit.
+           #- make check_external_links
             - make dev-manifests
