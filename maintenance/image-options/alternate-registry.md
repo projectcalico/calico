@@ -1,5 +1,5 @@
 ---
-title: Install images using an alternate registry 
+title: Configure use of your image registry 
 description: Configure Calico to pull images from a public or private registry. 
 canonical_url: '/maintenance/image-options/alternate-registry'
 ---
