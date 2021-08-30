@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.54
+GO_BUILD_VER?=v0.55
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_NODE_PROJECT_ID)
@@ -53,6 +53,14 @@ Makefile.common.$(MAKE_BRANCH):
 	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
 include Makefile.common
+
+# Required for eBPF support in ARM64
+ifeq ($(ARCH),arm64)
+# Forces ARM64 build image to be used in a crosscompilation run.
+CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
+# Prevents docker from tagging the output image incorrectly as amd64.
+TARGET_PLATFORM=--platform=linux/arm64/v8
+endif
 
 ###############################################################################
 
@@ -205,7 +213,8 @@ remote-deps: mod-download
 		chmod -R +w filesystem/etc/calico/confd/ config/ filesystem/usr/lib/calico/bpf/'
 
 # We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), amd64)
+# Currently CGO can be enbaled in ARM64 and AMD64 builds.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
 else
 CGO_ENABLED=0
@@ -260,7 +269,8 @@ endif
 	docker run --rm -v $(CURDIR)/dist/bin:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calico-node-$(ARCH) -v;	 /go/bin/calico-node-$(ARCH) -v; \
 	"
-	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+## TARGET_PLATFORM fixes an issue where `FROM SCRATCH` in the Dockerfile share the same architecture as the host.
+	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	touch $@
 
 # download BIRD source to include in image.

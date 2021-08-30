@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,42 +11,213 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG QEMU_IMAGE=calico/go-build:latest
+ARG ARCH=aarch64
+ARG GIT_VERSION=unknown
+ARG IPTABLES_VER=1.8.4-17
+ARG LIBNFTNL_VER=1.1.5-4
+ARG RUNIT_VER=2.1.2
+ARG QEMU_IMAGE=calico/go-build:v0.55-arm64
 ARG BIRD_IMAGE=calico/bird:latest
 
+FROM calico/bpftool:v5.0-arm64 as bpftool
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
-FROM calico/bpftool:v5.0-arm64 as bpftool
+FROM arm64v8/centos:8 as centos
 
-FROM arm64v8/alpine:3.13 as base
-MAINTAINER Casey Davenport <casey@tigera.io>
+MAINTAINER Reza Ramezanpour <reza@projectcalico.org>
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
-ARG ARCH=arm64
+ARG ARCH
+ARG IPTABLES_VER
+ARG LIBNFTNL_VER
+ARG RUNIT_VER
+ARG CENTOS_MIRROR_BASE_URL=https://vault.centos.org/8.4.2105
+ARG LIBNFTNL_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/libnftnl-${LIBNFTNL_VER}.el8.src.rpm
+ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/iptables-${IPTABLES_VER}.el8.src.rpm
+
+# Install build dependencies and security updates.
+RUN dnf install -y 'dnf-command(config-manager)' && \
+    # Enable PowerTools repo for '-devel' packages
+    dnf config-manager --set-enabled powertools && \
+    # Install required packages for building rpms. yum-utils is not required but it gives us yum-builddep to easily install build deps.
+    yum install -y rpm-build yum-utils make && \
+    # Need these to build runit.
+    yum install -y wget glibc-static gcc && \
+    # Ensure security updates are installed.
+    yum -y update-minimal --security --sec-severity=Important --sec-severity=Critical
+
+# In order to rebuild the iptables RPM, we first need to rebuild the libnftnl RPM because building
+# iptables requires libnftnl-devel but libnftnl-devel is not available on ubi or CentOS repos.
+# (Note: it's not in RHEL8.1 either https://bugzilla.redhat.com/show_bug.cgi?id=1711361).
+# Rebuilding libnftnl will give us libnftnl-devel too.
+RUN rpm -i ${LIBNFTNL_SOURCERPM_URL} && \
+    yum-builddep -y --spec /root/rpmbuild/SPECS/libnftnl.spec && \
+    rpmbuild -bb /root/rpmbuild/SPECS/libnftnl.spec && \
+    # Now install libnftnl and libnftnl-devel
+    rpm -Uv /root/rpmbuild/RPMS/${ARCH}/libnftnl-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
+    rpm -Uv /root/rpmbuild/RPMS/${ARCH}/libnftnl-devel-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
+    # Install source RPM for iptables and install its build dependencies.
+    rpm -i ${IPTABLES_SOURCERPM_URL} && \
+    yum-builddep -y --spec /root/rpmbuild/SPECS/iptables.spec
+
+# Patch the iptables build spec so that we keep the legacy iptables binaries.
+RUN sed -i '/drop all legacy tools/,/sbindir.*legacy/d' /root/rpmbuild/SPECS/iptables.spec
+
+# Patch the iptables build spec to drop the renaming of nft binaries. Instead of renaming binaries,
+# we will use alternatives to set the canonical iptables binaries.
+RUN sed -i '/rename nft versions to standard name/,/^done/d' /root/rpmbuild/SPECS/iptables.spec
+
+# Patch the iptables build spec so that legacy and nft iptables binaries are verified to be in the resulting rpm.
+RUN sed -i '/%files$/a \
+\%\{_sbindir\}\/xtables-legacy-multi \n\
+\%\{_sbindir\}\/ip6tables-legacy \n\
+\%\{_sbindir\}\/ip6tables-legacy-restore \n\
+\%\{_sbindir\}\/ip6tables-legacy-save \n\
+\%\{_sbindir\}\/iptables-legacy \n\
+\%\{_sbindir\}\/iptables-legacy-restore \n\
+\%\{_sbindir\}\/iptables-legacy-save \n\
+\%\{_sbindir\}\/ip6tables-nft\n\
+\%\{_sbindir\}\/ip6tables-nft-restore\n\
+\%\{_sbindir\}\/ip6tables-nft-save\n\
+\%\{_sbindir\}\/iptables-nft\n\
+\%\{_sbindir\}\/iptables-nft-restore\n\
+\%\{_sbindir\}\/iptables-nft-save\n\
+' /root/rpmbuild/SPECS/iptables.spec
+
+# Finally rebuild iptables.
+RUN rpmbuild -bb /root/rpmbuild/SPECS/iptables.spec
+
+# runit is not available in ubi or CentOS repos so build it.
+RUN wget -P /tmp http://smarden.org/runit/runit-${RUNIT_VER}.tar.gz && \
+    gunzip /tmp/runit-${RUNIT_VER}.tar.gz && \
+    tar -xpf /tmp/runit-${RUNIT_VER}.tar -C /tmp && \
+    cd /tmp/admin/runit-${RUNIT_VER}/ && \
+    # runit compilation trigger a false positive error halting the process.
+    sed -i "s/runit-init/\/tmp\/admin\/runit-2.1.2\/compile\/runit-init/" src/runit-init.dist && \
+    sed -i "s/runsv/\/tmp\/admin\/runit-2.1.2\/compile\/runsv/" src/runsv.dist && \
+    sed -i "s/runsvchdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvchdir/" src/runsvchdir.dist && \
+    sed -i "s/runsvdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvdir/" src/runsvdir.dist && \
+    sed -i "s/svlogd/\/tmp\/admin\/runit-2.1.2\/compile\/svlogd/" src/svlogd.dist && \
+    sed -i "s/utmpset/\/tmp\/admin\/runit-2.1.2\/compile\/utmpset/" src/utmpset.dist && \
+    package/install
+
+ARG UBI_DIGEST
+FROM --platform=linux/arm64 registry.access.redhat.com/ubi8/ubi-minimal:8.4 as ubi
+ARG ARCH
+ARG GIT_VERSION
+ARG IPTABLES_VER
+ARG LIBNFTNL_VER
+ARG RUNIT_VER
 
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
-# we only need this for the intermediate "base" image, so we can run all the apk and other commands
-# when running on a kernel >= 4.8, this will become less relevant
-COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
-# Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit ca-certificates
+# Update base packages to pick up security updates.  Must do this before adding the centos repo.
+RUN microdnf update
+
+# Copy in runit binaries
+COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
+
+# Copy in our rpms
+COPY --from=centos  /root/rpmbuild/RPMS/${ARCH}/* /tmp/rpms/
+
+# Install the necessary packages, making sure that we're using only CentOS repos.
+# Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
+# we're using CentOS repos for all our packages. Using packages from a single source (CentOS) makes
+# it less likely we'll run into package dependency version mismatches.
+#
+# NOTE: new packages need to be added to the keep-list in clean-up-filesystem.sh.
+COPY centos.repo /etc/yum.repos.d/
+
+RUN sed -i 's/x86_64/aarch64/' /etc/yum.repos.d/centos.repo
+
+RUN rm /etc/yum.repos.d/ubi.repo && \
+    touch /in-the-container && \
+    microdnf install \
+    # Don't install copious docs.
+    --setopt=tsflags=nodocs \
+    # Needed for iptables
+    libpcap libmnl libnfnetlink libnetfilter_conntrack \
+    ipset \
+    iputils \
+    # Need arp
+    net-tools \
+    # Need kmod to ensure ip6tables-save works correctly
+    kmod \
+    # Also needed (provides utilities for browsing procfs like ps)
+    procps-ng \
+    iproute \
+    iproute-tc \
+    # Needed for conntrack
+    libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
+    conntrack-tools \
+    # Needed for runit startup script
+    which \
+    # Needed for the cleanup script
+    findutils && \
+    microdnf clean all && \
+    # Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
+    # version '9.el8_0.1' while the existing iptables-libs (pulled in by the iputils package) has version '9.el8.1'.
+    rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.${ARCH}.rpm && \
+    # Install compatible libnftnl version with selected iptables version
+    rpm --force -i /tmp/rpms/libnftnl-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
+    rpm -i /tmp/rpms/iptables-${IPTABLES_VER}.el8.${ARCH}.rpm && \
+    # Set alternatives
+    alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
+    alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
+
+# Add mitigation for https://access.redhat.com/security/cve/CVE-2019-15718
+# This can be removed once we update to ubi:8.1
+RUN systemctl disable systemd-resolved
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
 
-# Copy in the filesystem - this contains felix, calico-bgp-daemon etc...
+# Copy in the filesystem - this contains felix, calico-bgp-daemon, licenses, etc...
 COPY filesystem/ /
 
-# Copy in the calico-node binary
-COPY dist/bin/calico-node-${ARCH} /bin/calico-node
+# On UBI, /sbin/ is a symlink so the above copy clobbers it; restore /sbin as symlinks (some binaries and
+# scripts hard-code /sbin/xyz, for example.
+RUN ln -s /usr/sbin/* /sbin/
 
 COPY --from=bpftool /bpftool /bin
 
-RUN rm /usr/bin/qemu-aarch64-static
+# Copy in the calico-node binary
+COPY dist/bin/calico-node-arm64 /bin/calico-node
+
+# Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
+# or any of its dependencies.
+ADD clean-up-filesystem.sh /
+
+# Allowing qemu binaries to presist.
+RUN sed -i 's#zmore#zmore\n\tqemu\n#m' clean-up-filesystem.sh
+RUN /clean-up-filesystem.sh
+
+# Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
+# that have been removed in our later layers.
+FROM scratch
+COPY --from=ubi / /
+
+# Add in top-level license file
+COPY LICENSE /licenses
+
+# Delete qemu binaries
+RUN rm /usr/bin/qemu-*-static
 
 CMD ["start_runit"]
+
+# Required labels for certification
+LABEL name="Calico node" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico node handles networking and policy for Calico" \
+      description="Calico node handles networking and policy for Calico" \
+      maintainer="reza@tigera.io"
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled
