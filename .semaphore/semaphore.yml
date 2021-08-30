@@ -17,5 +17,5 @@ blocks:
           commands:
             - checkout
             - make ci
-            - make check_external_links
+            # - make check_external_links
             - make dev-manifests
