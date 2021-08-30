@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ $Stored = Get-StoredLastBootTime
 Write-Host "StoredLastBootTime $Stored, CurrentLastBootTime $lastBootTime"
 
 $timeout = $env:STARTUP_VALID_IP_TIMEOUT
+$vxlanAdapter = $env:VXLAN_ADAPTER
 
 # Autoconfigure the IPAM block mode.
 if ($env:CNI_IPAM_TYPE -EQ "host-local") {
@@ -87,7 +88,7 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp" -OR $env:CALICO_NETWORKING_
         if ($env:CALICO_NETWORKING_BACKEND -EQ "vxlan") {
             # FIXME Firewall rule port?
             New-NetFirewallRule -Name OverlayTraffic4789UDP -Description "Overlay network traffic UDP" -Action Allow -LocalPort 4789 -Enabled True -DisplayName "Overlay Traffic 4789 UDP" -Protocol UDP -ErrorAction SilentlyContinue
-            $result = New-HNSNetwork -Type Overlay -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -SubnetPolicies @(@{Type = "VSID"; VSID = 9999; })  -Verbose
+            $result = New-HNSNetwork -Type Overlay -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -SubnetPolicies @(@{Type = "VSID"; VSID = 9999; }) -AdapterName $vxlanAdapter -Verbose
         }
         else
         {
