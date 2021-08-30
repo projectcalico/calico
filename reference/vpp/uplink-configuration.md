@@ -251,4 +251,4 @@ spec:
               value: "create interface avf 0000:ab:cd.1 num-rx-queues 1"
 ````
 
-In the specific case of the AVF driver, the PCI id must belong to a VF that can be created with the `avf.sh` [script](https://github.com/projectcalico/vpp-dataplane/blob/master/test/baremetal/utils/avf.sh). Different drivers will have different requirements.
+In the specific case of the AVF driver, the PCI id must belong to a VF that can be created with the `avf.sh` [script](https://github.com/projectcalico/vpp-dataplane/blob/master/test/scripts/utils/avf.sh). Different drivers will have different requirements.
