@@ -181,5 +181,5 @@ spec:
 
 ### Above and beyond
 
-- [Kubernetes Network Policy API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/#networkpolicy-v1-networking-k8s-io){:target="_blank"}
+- [Kubernetes Network Policy API documentation](https://kubernetes.io/docs/reference/kubernetes-api/policy-resources/network-policy-v1/){:target="_blank"}
 - {% include enterprise_icon.html %}[Compliance and threat detection with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/network-visibility)
