@@ -134,36 +134,36 @@ func init() {
 		Entry("should reject rule with no action", api.Rule{}, false),
 
 		// (API model) EndpointPorts.
-		Entry("should accept EndpointPort with tcp protocol", api.EndpointPort{
+		Entry("should accept EndpointPort with tcp protocol", libapiv3.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoTCP,
 			Port:     1234,
 		}, true),
-		Entry("should accept EndpointPort with udp protocol", api.EndpointPort{
+		Entry("should accept EndpointPort with udp protocol", libapiv3.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoUDP,
 			Port:     1234,
 		}, true),
-		Entry("should accept EndpointPort with sctp protocol", api.EndpointPort{
+		Entry("should accept EndpointPort with sctp protocol", libapiv3.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoSCTP,
 			Port:     1234,
 		}, true),
-		Entry("should reject EndpointPort with empty name", api.EndpointPort{
+		Entry("should reject EndpointPort with empty name", libapiv3.WorkloadEndpointPort{
 			Name:     "",
 			Protocol: protoUDP,
 			Port:     1234,
 		}, false),
-		Entry("should reject EndpointPort with no protocol", api.EndpointPort{
+		Entry("should reject EndpointPort with no protocol", libapiv3.WorkloadEndpointPort{
 			Name: "a-valid-port",
 			Port: 1234,
 		}, false),
-		Entry("should reject EndpointPort with numeric protocol", api.EndpointPort{
+		Entry("should reject EndpointPort with numeric protocol", libapiv3.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoNumeric,
 			Port:     1234,
 		}, false),
-		Entry("should reject EndpointPort with no port", api.EndpointPort{
+		Entry("should reject EndpointPort with no port", libapiv3.WorkloadEndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoTCP,
 		}, false),
@@ -172,7 +172,7 @@ func init() {
 		Entry("should accept WorkloadEndpointSpec with a port (m)",
 			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []api.EndpointPort{
+				Ports: []libapiv3.WorkloadEndpointPort{
 					{
 						Name:     "a-valid-port",
 						Protocol: protoTCP,
@@ -182,10 +182,10 @@ func init() {
 			},
 			true,
 		),
-		Entry("should reject WorkloadEndpointSpec with an unnamed port (m)",
+		Entry("should reject WorkloadEndpointSpec with an unnamed port and no host mapping (m)",
 			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []api.EndpointPort{
+				Ports: []libapiv3.WorkloadEndpointPort{
 					{
 						Protocol: protoTCP,
 						Port:     1234,
@@ -197,7 +197,7 @@ func init() {
 		Entry("should accept WorkloadEndpointSpec with name-clashing ports (m)",
 			libapiv3.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
-				Ports: []api.EndpointPort{
+				Ports: []libapiv3.WorkloadEndpointPort{
 					{
 						Name:     "a-valid-port",
 						Protocol: protoTCP,
@@ -211,6 +211,33 @@ func init() {
 				},
 			},
 			true,
+		),
+		Entry("should accept WorkloadEndpointSpec with an unnamed port and a host port (m)",
+			libapiv3.WorkloadEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []libapiv3.WorkloadEndpointPort{
+					{
+						Protocol: protoTCP,
+						Port:     1234,
+						HostPort: 2345,
+					},
+				},
+			},
+			true,
+		),
+		Entry("should reject WorkloadEndpointSpec with a port with an invalid host IP (m)",
+			libapiv3.WorkloadEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []libapiv3.WorkloadEndpointPort{
+					{
+						Protocol: protoTCP,
+						Port:     1234,
+						HostPort: 2345,
+						HostIP:   bad_ipv4_1,
+					},
+				},
+			},
+			false,
 		),
 
 		// (API) HostEndpointSpec.

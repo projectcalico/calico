@@ -145,7 +145,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		expectedIPv4Gateway, _, err := cnet.ParseCIDROrIP("10.10.10.1")
 		res.Spec.IPv6Gateway = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
 		expectedIPv6Gateway, _, err := cnet.ParseCIDROrIP("2001:0db8:85a3:0000:0000:8a2e:0370:7334")
-		res.Spec.Ports = []apiv3.EndpointPort{
+		res.Spec.Ports = []libapiv3.WorkloadEndpointPort{
 			{
 				Name:     "portname",
 				Protocol: numorstring.ProtocolFromInt(uint8(30)),

@@ -215,6 +215,18 @@ var _ = Describe("Test Pod conversion", func() {
 								HostPort:      5678,
 							},
 							{
+								Name:          "tcp-proto-with-host-port-and-ip",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 8081,
+								HostPort:      6789,
+								HostIP:        "1.2.3.4",
+							},
+							{
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 500,
+								HostPort:      5000,
+							},
+							{
 								Name:          "udp-proto",
 								Protocol:      kapiv1.ProtocolUDP,
 								ContainerPort: 432,
@@ -270,15 +282,19 @@ var _ = Describe("Test Pod conversion", func() {
 		nsProtoSCTP := numorstring.ProtocolFromString("sctp")
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.Ports).To(ConsistOf(
 			// No proto defaults to TCP (as defined in k8s API spec)
-			apiv3.EndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
+			libapiv3.WorkloadEndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
 			// Explicit TCP proto is OK too.
-			apiv3.EndpointPort{Name: "tcp-proto", Port: 1024, Protocol: nsProtoTCP},
-			// Host port should be ignored.
-			apiv3.EndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP},
+			libapiv3.WorkloadEndpointPort{Name: "tcp-proto", Port: 1024, Protocol: nsProtoTCP},
+			// Host port should be parsed
+			libapiv3.WorkloadEndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP, HostPort: 5678},
+			// Host IP should be passed through
+			libapiv3.WorkloadEndpointPort{Name: "tcp-proto-with-host-port-and-ip", Port: 8081, Protocol: nsProtoTCP, HostPort: 6789, HostIP: "1.2.3.4"},
+			// Host port but no name
+			libapiv3.WorkloadEndpointPort{Port: 500, Protocol: nsProtoTCP, HostPort: 5000},
 			// UDP is also an option.
-			apiv3.EndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
+			libapiv3.WorkloadEndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
 			// SCTP.
-			apiv3.EndpointPort{Name: "sctp-proto", Port: 891, Protocol: nsProtoSCTP},
+			libapiv3.WorkloadEndpointPort{Name: "sctp-proto", Port: 891, Protocol: nsProtoSCTP},
 			// Unknown protocol port is ignored.
 		))
 

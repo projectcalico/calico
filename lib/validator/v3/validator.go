@@ -191,6 +191,7 @@ func init() {
 	registerStructValidator(validate, validateProtoPort, api.ProtoPort{})
 	registerStructValidator(validate, validatePort, numorstring.Port{})
 	registerStructValidator(validate, validateEndpointPort, api.EndpointPort{})
+	registerStructValidator(validate, validateWorkloadEndpointPort, libapi.WorkloadEndpointPort{})
 	registerStructValidator(validate, validateIPNAT, libapi.IPNAT{})
 	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
@@ -1135,6 +1136,30 @@ func validateEndpointPort(structLevel validator.StructLevel) {
 			"EndpointPort.Protocol",
 			"",
 			reason("EndpointPort protocol does not support ports."),
+			"",
+		)
+	}
+}
+
+func validateWorkloadEndpointPort(structLevel validator.StructLevel) {
+	port := structLevel.Current().Interface().(libapi.WorkloadEndpointPort)
+
+	if !port.Protocol.SupportsPorts() {
+		structLevel.ReportError(
+			reflect.ValueOf(port.Protocol),
+			"WorkloadEndpointPort.Protocol",
+			"",
+			reason("WorkloadEndpointPort protocol does not support ports."),
+			"",
+		)
+	}
+
+	if port.Name == "" && port.HostPort == 0 {
+		structLevel.ReportError(
+			reflect.ValueOf(port.Name),
+			"WorkloadEndpointPort.Name",
+			"",
+			reason("WorkloadEndpointPort name must not be empty if no HostPort is specified"),
 			"",
 		)
 	}

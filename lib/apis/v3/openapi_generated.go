@@ -92,6 +92,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/libcalico-go/lib/apis/v3.OrchRef":                  schema_libcalico_go_lib_apis_v3_OrchRef(ref),
 		"github.com/projectcalico/libcalico-go/lib/apis/v3.WorkloadEndpoint":         schema_libcalico_go_lib_apis_v3_WorkloadEndpoint(ref),
 		"github.com/projectcalico/libcalico-go/lib/apis/v3.WorkloadEndpointList":     schema_libcalico_go_lib_apis_v3_WorkloadEndpointList(ref),
+		"github.com/projectcalico/libcalico-go/lib/apis/v3.WorkloadEndpointPort":     schema_libcalico_go_lib_apis_v3_WorkloadEndpointPort(ref),
 		"github.com/projectcalico/libcalico-go/lib/apis/v3.WorkloadEndpointSpec":     schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref),
 	}
 }
@@ -2989,6 +2990,56 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointList(ref common.ReferenceCa
 	}
 }
 
+func schema_libcalico_go_lib_apis_v3_WorkloadEndpointPort(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "WorkloadEndpointPort represents one endpoint's named or mapped port",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"protocol": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
+						},
+					},
+					"port": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"hostPort": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int32",
+						},
+					},
+					"hostIP": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"name", "protocol", "port", "hostPort", "hostIP"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
+	}
+}
+
 func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3125,7 +3176,7 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.EndpointPort"),
+										Ref:     ref("github.com/projectcalico/libcalico-go/lib/apis/v3.WorkloadEndpointPort"),
 									},
 								},
 							},
@@ -3135,6 +3186,6 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EndpointPort", "github.com/projectcalico/libcalico-go/lib/apis/v3.IPNAT"},
+			"github.com/projectcalico/libcalico-go/lib/apis/v3.IPNAT", "github.com/projectcalico/libcalico-go/lib/apis/v3.WorkloadEndpointPort"},
 	}
 }

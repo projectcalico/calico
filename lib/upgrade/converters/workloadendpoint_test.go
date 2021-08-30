@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
@@ -474,8 +473,8 @@ func makeEndpointPortsKvp() []model.EndpointPort {
 	return ports
 }
 
-func makeEndpointPortsV3() []apiv3.EndpointPort {
-	return []apiv3.EndpointPort{
+func makeEndpointPortsV3() []libapiv3.WorkloadEndpointPort {
+	return []libapiv3.WorkloadEndpointPort{
 		{
 			Name:     "ep1",
 			Protocol: numorstring.ProtocolFromString("tcp"),

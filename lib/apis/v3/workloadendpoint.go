@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 )
 
 const (
@@ -77,7 +78,16 @@ type WorkloadEndpointSpec struct {
 	// MAC is the MAC address of the endpoint interface.
 	MAC string `json:"mac,omitempty" validate:"omitempty,mac"`
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
-	Ports []apiv3.EndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
+	Ports []WorkloadEndpointPort `json:"ports,omitempty" validate:"dive,omitempty"`
+}
+
+// WorkloadEndpointPort represents one endpoint's named or mapped port
+type WorkloadEndpointPort struct {
+	Name     string               `json:"name" validate:"omitempty,portName"`
+	Protocol numorstring.Protocol `json:"protocol"`
+	Port     uint16               `json:"port" validate:"gt=0"`
+	HostPort uint16               `json:"hostPort"`
+	HostIP   string               `json:"hostIP" validate:"omitempty,net"`
 }
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.

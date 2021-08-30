@@ -21,7 +21,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -260,11 +259,11 @@ func getPodNamespaceName(workload string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
-// convertPorts updates to the new apiv3.EndpointPort struct.
-func convertPorts(v1Ports []model.EndpointPort) []apiv3.EndpointPort {
-	var v3Ports []apiv3.EndpointPort
+// convertPorts updates to the new libapiv3.WorkloadEndpointPort struct.
+func convertPorts(v1Ports []model.EndpointPort) []libapiv3.WorkloadEndpointPort {
+	var v3Ports []libapiv3.WorkloadEndpointPort
 	for _, p := range v1Ports {
-		v3Ports = append(v3Ports, apiv3.EndpointPort{
+		v3Ports = append(v3Ports, libapiv3.WorkloadEndpointPort{
 			Name:     p.Name,
 			Protocol: p.Protocol,
 			Port:     p.Port,
