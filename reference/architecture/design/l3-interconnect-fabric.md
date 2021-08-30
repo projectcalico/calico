@@ -122,7 +122,7 @@ The two methods are:
     [leaf/spine](http://bradhedlund.com/2012/10/24/video-a-basic-introduction-to-the-leafspine-data-center-networking-fabric-design/){:target="_blank"}
     architecture, or via a set of spine switches, each of which is also
     a unique AS. We'll refer to this as the *AS per rack* model. This
-    model is detailed in [IETF RFC 7938](https://tools.ietf.org/search/rfc7938){:target="_blank"}.
+    model is detailed in [IETF RFC 7938](https://tools.ietf.org/search/){:target="_blank"}.
 2.  A BGP fabric where each of the compute servers is a unique AS, and
     the TOR switches make up a transit AS. We'll refer to this as the
     *AS per server* model.
