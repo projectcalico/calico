@@ -26,7 +26,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
-- [Allow access to the Kubernetes API for a specific namespace](#allow-access-to-the-kubernetes-api)
+- [Allow access to the Kubernetes API for a specific namespace](#allow-access-to-the-kubernetes-api-for-a-specific-namespace)
 - [Allow access to Kubernetes DNS for the entire cluster](#allow-access-to-kubernetes-dns-for-the-entire-cluster)
 
 #### Allow access to the Kubernetes API for a specific namespace
