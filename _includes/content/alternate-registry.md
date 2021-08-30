@@ -79,7 +79,6 @@ spec:
   <b>registry: myregistry.com</b>
 </pre>
 
-
 %>
   <label: All other platforms>
   <%

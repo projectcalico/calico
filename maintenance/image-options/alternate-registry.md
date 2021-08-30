@@ -35,6 +35,6 @@ An **image path** is a directory in a registry that contains images required to 
 
 ### How to
 
-The following examples show the path format for public or private registry, `$REGISTRY/<path>`. If you are using an image path, substitute the format: `$REGISTRY/$IMAGE_PATH/<path>`
+The following examples show the path format for public or private registry, `$REGISTRY/...`. If you are using an image path, substitute the format: `$REGISTRY/$IMAGE_PATH/...`
 
 {% include content/alternate-registry.md %}
