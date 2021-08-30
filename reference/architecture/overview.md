@@ -12,6 +12,7 @@ The following diagram shows the required and optional {{site.prodname}} componen
 
 **{{site.prodname}} components**
 
+ - [Calico API server](#calico-api-server)
  - [Felix](#felix)
  - [BIRD](#bird)
  - [confd](#confd)
@@ -26,6 +27,10 @@ The following diagram shows the required and optional {{site.prodname}} componen
 **Cloud orchestrator plugins**
 
  - [Plugins for cloud orchestrators](#plugins-for-cloud-orchestrators)
+
+### Calico API server
+
+**Main task**: Lets you manage {{site.prodname}} resources directly with `kubectl`.
 
 ### Felix
 
