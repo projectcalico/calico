@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	libv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
@@ -119,7 +120,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			// Includes some named ports on each workload.  Each workload gets its own named port,
 			// which is unique and a shared one.
-			w[ii].WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
+			w[ii].WorkloadEndpoint.Spec.Ports = []libv3.WorkloadEndpointPort{
 				{
 					Port:     sharedPort,
 					Name:     sharedPortName,
@@ -735,7 +736,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		nginx.WorkloadEndpoint.Labels = map[string]string{
 			"name": "nginx",
 		}
-		nginx.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
+		nginx.WorkloadEndpoint.Spec.Ports = []libv3.WorkloadEndpointPort{
 			{
 				Port:     80,
 				Name:     "http-port",
@@ -1045,7 +1046,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 			w.WorkloadEndpoint.Labels = map[string]string{
 				"name": "nginx",
 			}
-			w.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
+			w.WorkloadEndpoint.Spec.Ports = []libv3.WorkloadEndpointPort{
 				{
 					Port:     80,
 					Name:     "tcp-port",
