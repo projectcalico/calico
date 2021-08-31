@@ -188,7 +188,28 @@ type RouteTable struct {
 	conntrack         conntrackIface
 	time              timeshim.Interface
 
+	additionalRouteFilter *netlink.Route
+
 	opReporter logutils.OpRecorder
+}
+
+type RouteTableOption func(rt *RouteTable)
+
+// WithAdditionalLogFields - add additional log fields to merge into logCxt.
+//  useful if we want to discern between multiple route tables in operation e.g. in vxlan_mgr.go
+func WithAdditionalLogFields(fields log.Fields) RouteTableOption {
+	return func(rt *RouteTable) {
+		rt.logCxt = rt.logCxt.WithFields(fields)
+	}
+}
+
+// WithAdditionalRouteFilter - add additional route filters used in fullResyncRoutesForLink.
+//  this causes the aforementioned function to only touch specified programmed routes that match the filter.
+//  netlink.Route fields Table and LinkIndex will be ignored!
+func WithAdditionalRouteFilter(filter *netlink.Route) RouteTableOption {
+	return func(rt *RouteTable) {
+		rt.additionalRouteFilter = filter
+	}
 }
 
 func New(
@@ -201,6 +222,7 @@ func New(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	opts ...RouteTableOption,
 ) *RouteTable {
 	return NewWithShims(
 		interfaceRegexes,
@@ -216,6 +238,7 @@ func New(
 		removeExternalRoutes,
 		tableIndex,
 		opReporter,
+		opts...,
 	)
 }
 
@@ -234,6 +257,7 @@ func NewWithShims(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	opts ...RouteTableOption,
 ) *RouteTable {
 	var regexpParts []string
 	includeNoOIF := false
@@ -255,7 +279,7 @@ func NewWithShims(
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
 
-	return &RouteTable{
+	rt := &RouteTable{
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion":  ipVersion,
 			"ifaceRegex": ifaceNamePattern,
@@ -284,6 +308,13 @@ func NewWithShims(
 		tableIndex:                     tableIndex,
 		opReporter:                     opReporter,
 	}
+
+	// apply any RouteTableOptions found
+	for _, opt := range opts {
+		opt(rt)
+	}
+
+	return rt
 }
 
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
@@ -766,6 +797,35 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 	return route
 }
 
+func (r *RouteTable) routeListFilterParams(linkAttrs *netlink.LinkAttrs) (*netlink.Route, uint64) {
+	var routeFilter *netlink.Route
+
+	if r.additionalRouteFilter == nil {
+		routeFilter = &netlink.Route{}
+	} else {
+		routeFilter = r.additionalRouteFilter
+	}
+
+	routeFilter.Table = r.tableIndex
+
+	routeFilterFlags := netlink.RT_FILTER_OIF
+
+	if routeFilter.Table != 0 {
+		routeFilterFlags |= netlink.RT_FILTER_TABLE
+	}
+
+	if routeFilter.Type != syscall.RTN_UNSPEC {
+		routeFilterFlags |= netlink.RT_FILTER_TYPE
+	}
+
+	if linkAttrs != nil {
+		// Link attributes might be nil for the special "no-OIF" interface name.
+		routeFilter.LinkIndex = linkAttrs.Index
+	}
+
+	return routeFilter, routeFilterFlags
+}
+
 // fullResyncRoutesForLink performs a full resync of the routes by first listing current routes and correlating against
 // the expected set. After correlation, it will create a set of routes to delete and update the delta routes to add
 // back any missing routes.
@@ -793,18 +853,12 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	// was oper down before we tried to do the sync but that prevented us from removing
 	// routes from an interface in some corner cases (such as being admin up but oper
 	// down).
-	routeFilter := &netlink.Route{
-		Table: r.tableIndex,
-	}
-	routeFilterFlags := netlink.RT_FILTER_OIF
-	if r.tableIndex != 0 {
-		routeFilterFlags |= netlink.RT_FILTER_TABLE
-	}
-	if linkAttrs != nil {
-		// Link attributes might be nil for the special "no-OIF" interface name.
-		routeFilter.LinkIndex = linkAttrs.Index
-	}
+	routeFilter, routeFilterFlags := r.routeListFilterParams(linkAttrs)
+	logCxt.WithFields(log.Fields{"filter": routeFilter, "flags": routeFilterFlags}).Debug("route filter and flags")
+
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+	logCxt.WithField("routes", programmedRoutes).Debug("programmed routes list")
+
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
