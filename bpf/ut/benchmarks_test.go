@@ -31,13 +31,13 @@ func BenchmarkHEP(b *testing.B) {
 	defer cleanUpMaps()
 
 	// Run once to create conntrack entry
-	setupAndRun(b, "no_log", "calico_from_host_ep", false, nil, func(progName string) {
+	setupAndRun(b, "no_log", "calico_from_host_ep", nil, func(progName string) {
 		res, err := bpftoolProgRun(progName, pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	setupAndRun(b, "no_log", "calico_from_host_ep", false, nil, func(progName string) {
+	setupAndRun(b, "no_log", "calico_from_host_ep", nil, func(progName string) {
 		b.ResetTimer()
 		res, err := bpftoolProgRunN(progName, pktBytes, b.N)
 		b.StopTimer()

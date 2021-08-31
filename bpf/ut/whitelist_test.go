@@ -54,7 +54,7 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
 	// Leaving workload
-	runBpfTest(t, "calico_from_workload_ep", false, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -74,7 +74,7 @@ func TestWhitelistFromWorkloadExitHost(t *testing.T) {
 	// Leaving node 1
 	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
-	runBpfTest(t, "calico_to_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -123,7 +123,7 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 	ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
-	runBpfTest(t, "calico_from_host_ep", false, nil, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -142,7 +142,7 @@ func TestWhitelistEnterHostToWorkload(t *testing.T) {
 
 	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
-	runBpfTest(t, "calico_to_workload_ep", false, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -191,7 +191,7 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 	ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
-	runBpfTest(t, "calico_from_workload_ep", false, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -210,7 +210,7 @@ func TestWhitelistWorkloadToWorkload(t *testing.T) {
 
 	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
 
-	runBpfTest(t, "calico_to_workload_ep", false, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
