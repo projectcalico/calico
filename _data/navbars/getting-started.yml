@@ -166,17 +166,3 @@ section:
       path: /getting-started/bare-metal/installation/binary-mgr
     - title: Binary install without package manager
       path: /getting-started/bare-metal/installation/binary
-- title: calicoctl
-  path: /getting-started/clis/calicoctl/
-  section:
-  - title: Install calicoctl
-    path: /getting-started/clis/calicoctl/install
-  - title: Configure calicoctl
-    path: /getting-started/clis/calicoctl/configure/
-    section:
-    - title: Overview
-      path: /getting-started/clis/calicoctl/configure/overview
-    - title: Configure calicoctl to connect to an etcd datastore
-      path: /getting-started/clis/calicoctl/configure/etcd
-    - title: Configure calicoctl to connect to the Kubernetes API datastore
-      path: /getting-started/clis/calicoctl/configure/kdd
