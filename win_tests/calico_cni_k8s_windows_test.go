@@ -379,7 +379,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(endpoints.Items[0].Spec.Endpoint).Should(Equal("eth0"))
 				Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(containerID))
 				Expect(endpoints.Items[0].Spec.Orchestrator).Should(Equal(api.OrchestratorKubernetes))
-				Expect(endpoints.Items[0].Spec.Ports).Should(Equal([]api.EndpointPort{{
+				Expect(endpoints.Items[0].Spec.Ports).Should(Equal([]libapi.WorkloadEndpointPort{{
 					Name:     "anamedport",
 					Protocol: numorstring.ProtocolFromString("TCP"),
 					Port:     555,
