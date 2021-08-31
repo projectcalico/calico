@@ -53,7 +53,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 
 	icmpUNreachable := makeICMPError(ipv4, udp, 3 /* Unreachable */, 1 /*Host unreachable error */)
 
-	runBpfTest(t, "calico_to_workload_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
 		Expect(err).NotTo(HaveOccurred())
 		// there is no normal CT record yet, must be denied
@@ -66,13 +66,13 @@ func TestICMPRelatedPlain(t *testing.T) {
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 
-	runBpfTest(t, "calico_from_workload_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	runBpfTest(t, "calico_to_workload_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
@@ -82,7 +82,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 	// fake icmp echo reply, we do not really care about the payload, just the type and code
 	icmpEchoResp := makeICMPError(ipv4, udp, 0 /* Echo reply */, 0)
 
-	runBpfTest(t, "calico_to_workload_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpEchoResp)
 		Expect(err).NotTo(HaveOccurred())
 		// echo is unrelated, must be denied
@@ -130,7 +130,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 	var natPkt gopacket.Packet
 
-	runBpfTest(t, "calico_from_workload_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -145,7 +145,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 
 	icmpUNreachable := makeICMPError(natIPv4L.(*layers.IPv4), natUDPL.(*layers.UDP), 3, 1)
 
-	runBpfTest(t, "calico_to_workload_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
@@ -165,7 +165,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
-	runBpfTest(t, "calico_from_host_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -173,7 +173,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 
 	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)
 
-	runBpfTest(t, "calico_to_host_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpTTLExceeded)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
@@ -230,7 +230,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// this will create NAT tracking entries for a nodeport
-	runBpfTest(t, "calico_from_host_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -241,7 +241,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	// packet would be complicated
 	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)
 
-	runBpfTest(t, "calico_to_host_ep", false, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpTTLExceeded)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
