@@ -200,6 +200,8 @@ create:
 		CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
 	}
 
+	CALI_DEBUG("CT-ALL   key A=%x:%d proto=%d\n", bpf_ntohl(k->addr_a), k->port_a, (int)k->protocol);
+	CALI_DEBUG("CT-ALL   key B=%x:%d size=%d\n", bpf_ntohl(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
 
 out:
