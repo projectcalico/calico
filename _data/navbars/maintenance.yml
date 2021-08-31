@@ -11,6 +11,20 @@ section:
     path: /maintenance/openshift-upgrade
   - title: OpenStack
     path: /maintenance/openstack-upgrade
+- title: calicoctl
+  path: /maintenance/clis/calicoctl
+  section:
+  - title: Install calicoctl
+    path: /maintenance/clis/calicoctl/install
+  - title: Configure calicoctl
+    path: /maintenance/clis/calicoctl/configure/
+    section:
+    - title: Overview
+      path: /maintenance/clis/calicoctl/configure/overview
+    - title: Configure calicoctl to connect to an etcd datastore
+      path: /maintenance/clis/calicoctl/configure/etcd
+    - title: Configure calicoctl to connect to the Kubernetes API datastore
+      path: /maintenance/clis/calicoctl/configure/kdd
 - title: Deploy image options
   path: /maintenance/image-options/
   section:
