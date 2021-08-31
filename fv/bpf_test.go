@@ -2313,7 +2313,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Expect(err).NotTo(HaveOccurred())
 								defer pc.Stop()
 
-								EventuallyWithOffset(1, pc.PongCount, "5s").Should(
+								Eventually(pc.PongCount, "5s").Should(
 									BeNumerically(">", 0),
 									"Expected to see pong responses on the connection but didn't receive any")
 								log.Info("Pongs received within last 1s")
@@ -2323,8 +2323,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									ExpectWithPorts(npPort), ExpectWithSrcPort(12345))
 								cc.CheckConnectivity()
 
-								EventuallyWithOffset(1, pc.PongCount, "5s").Should(
-									BeNumerically(">", 0),
+								prevCount := pc.PongCount()
+
+								Eventually(pc.PongCount, "5s").Should(BeNumerically(">", prevCount),
 									"Expected to see pong responses on the connection but didn't receive any")
 								log.Info("Pongs received within last 1s")
 							})
