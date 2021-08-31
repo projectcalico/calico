@@ -28,7 +28,7 @@ device constructs were virtualized in the cloud, and the same techniques for cre
 additional network design to update the network topology and network device configuration to provide the desired
 security.
 
-In contrast, the [Kubernetes network model]({{site.baseurl}}/about/about-kubernetes-networking) defines a "flat"
+In contrast, the [Kubernetes network model]({{site.baseurl}}/about/about-k8s-networking) defines a "flat"
 network in which every pod can communicate with all other pods in the cluster using pod IP addresses. This approach
 massively simplifies network design and allows new workloads to be scheduled dynamically anywhere in the cluster with no
 dependencies on the network design.
