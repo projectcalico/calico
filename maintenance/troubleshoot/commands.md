@@ -11,7 +11,6 @@ Use command line tools to get status and troubleshoot.
 - [Hosts](#hosts)
 - [Kubernetes](#kubernetes)
 - [Calico components](#calico-components)
-- [Logs and diagnostics](#logs-and-diagnostics)
 - [Routing](#routing)
 - [Network policy](#network-policy)
 
