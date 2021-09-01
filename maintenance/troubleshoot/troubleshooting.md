@@ -23,57 +23,6 @@ To view debug logs on some Calico components, set the `LogSeverityScreen` throug
 To report a problem, please [open an issue in GitHub](https://github.com/projectcalico/calico/issues){:target="_blank"}.
 
 
-### Containers do not have network connectivity
-
-#### Check for mismatched node names
-
-If you notice that a workload has not received network connectivity, check
-that the node name for that host is properly configured. The name for the [node resource]({{ site.baseurl }}/reference/resources/node) must match
-the node name in the [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint) on that host. If the names are mismatched,
-it is likely that all workloads on that node will not receive networking.
-
-To check this, query one of the broken workload endpoints and check its node name:
-
-	calicoctl get workloadendpoints -n <namespace>
-
-Then, check to see if a single corresponding node resource exists:
-
-	calicoctl get nodes
-
-If the node resource either does not exist or there are multiple node resources representing the bad node, it is likely that the node's hostname has changed. This often happens
-as a result of switching a node's hostname between its FQDN and its short DNS name.
-
-To correct this, you must perform the following steps (with examples shown using Kubernetes):
-
-1. Prevent new workloads from being scheduled on the bad node.
-```bash
-kubectl cordon mynode.internal.projectcalico.org
-```
-1. Drain all workloads from the node.
-```bash
-kubectl drain mynode.internal.projectcalico.org --ignore-daemonsets
-```
-1. On the bad node, set the hostname to the desired value.
-```bash
-sudo hostnamectl set-hostname <desired-hostname>
-```
-1. Delete the bad node configuration from {{site.prodname}}.
-```bash
-calicoctl delete node <name-of-bad-node>
-```
-1. Restart {{site.nodecontainer}} on the bad node to pick up the changes.
-```bash
-kubectl delete pod -n kube-system <name-of-calico-pod>
-```
-1. Reenable scheduling of worklods on the node.
-```bash
-kubectl uncordon mynode.internal.projectcalico.org
-```
-
-To prevent this problem from occurring, we recommend always mounting the `/var/lib/calico` directory into the `{{site.nodecontainer}}`
-container when installing {{site.prodname}}. This allows all components to detect and use the same node name. See
-[node name determination]({{ site.baseurl }}/reference/node/configuration#node-name-determination) for more information.
-
 #### Check BGP peer status
 
 If you have connectivity between containers on the same host, and between
@@ -122,10 +71,10 @@ unmanaged-devices=interface-name:cali*;interface-name:tunl*;interface-name:vxlan
 
 ### Errors when running sudo calicoctl
 
-If you use `sudo` for commands like `calicoctl node run`, remember that your environment variables are not transferred to the `sudo` environment.  You must run `sudo` with the `-E` flag to include your environment variables:
+If you use `sudo` for commands, remember that your environment variables are not transferred to the `sudo` environment.  You must run `sudo` with the `-E` flag to include your environment variables:
 
 ```bash
-sudo -E calicoctl node run
+sudo -E calicoctl node diags
 ```
 
 or you can set environment variables for `sudo` commands like this:

@@ -57,8 +57,10 @@ section:
 - title: Troubleshoot
   path: /maintenance/troubleshoot/
   section:
-  - title: Troubleshoot
+  - title: Troubleshoot and diagnotics
     path: /maintenance/troubleshoot/troubleshooting
+  - title: Troubleshooting commands
+    path: /maintenance/troubleshoot/commands  
   - title: Component logs
     path: /maintenance/troubleshoot/component-logs
   - title: eBPF Dataplane
