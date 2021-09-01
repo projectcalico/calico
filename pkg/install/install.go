@@ -387,8 +387,8 @@ func writeCNIConfig(c config) {
 	// Remove any old config file, if one exists.
 	oldName := getEnv("CNI_OLD_CONF_NAME", "10-calico.conflist")
 	if name != oldName {
-		logrus.Infof("Removing /host/etcd/cni/net.d/%s", oldName)
-		if err := os.Remove(fmt.Sprintf("/host/etcd/cni/net.d/%s", oldName)); err != nil {
+		logrus.Infof("Removing /host/etc/cni/net.d/%s", oldName)
+		if err := os.Remove(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName)); err != nil {
 			logrus.WithError(err).Warnf("Failed to remove %s", oldName)
 		}
 	}
