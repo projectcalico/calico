@@ -170,6 +170,10 @@ dev-versions-yaml:
 	/bin/echo -e \
 "- title: \"dev-build\"\\n"\
 "  note: \"Developer build\"\\n"\
+"  tigera-operator:\\n"\
+"   image: tigera/operator\\n"\
+"   registry: quay.io\\n"\
+"   version: release-v1.7\\n"\
 "  components:\\n"\
 "     typha:\\n"\
 "      version: $$TYPHA_VER\\n"\
