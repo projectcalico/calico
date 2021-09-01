@@ -2319,7 +2319,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								log.Info("Pongs received within last 1s")
 
 								cc.ResetExpectations()
-								cc.Expect(None, externalClient, TargetIP(felixes[1].IP),
+								cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
 									ExpectWithPorts(npPort), ExpectWithSrcPort(12345))
 								cc.CheckConnectivity()
 

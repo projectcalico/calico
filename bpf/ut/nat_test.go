@@ -1708,8 +1708,17 @@ func TestNATSourceCollision(t *testing.T) {
 
 	var err error
 
+	podIP := net.IPv4(5, 0, 0, 1)
+	podPort := uint16(1234)
+
+	clientIP := net.IPv4(3, 2, 1, 0)
+	clientPort := uint16(50555)
+
+	tcpProto := uint8(6)
+	nodeportPort := uint16(1122)
+
 	node2wCIDR := net.IPNet{
-		IP:   node2ip,
+		IP:   podIP,
 		Mask: net.IPv4Mask(255, 255, 255, 0),
 	}
 
@@ -1734,15 +1743,6 @@ func TestNATSourceCollision(t *testing.T) {
 
 	dumpRTMap(rtMap)
 
-	podIP := net.IPv4(5, 0, 0, 1)
-	podPort := uint16(1234)
-
-	clientIP := net.IPv4(3, 2, 1, 0)
-	clientPort := uint16(50555)
-
-	tcpProto := uint8(6)
-	nodeportPort := uint16(1122)
-
 	// we are at the node with local workload
 	err = natMap.Update(
 		nat.NewNATKey(node2ip, nodeportPort, tcpProto).AsBytes(),
@@ -1757,7 +1757,7 @@ func TestNATSourceCollision(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Create an active TCP conntrack entry pair
-	ctKey := conntrack.NewKey(tcpProto, node1ip, nodeportPort, clientIP, clientPort)
+	ctKey := conntrack.NewKey(tcpProto, clientIP, clientPort, node1ip, nodeportPort)
 	revKey := conntrack.NewKey(tcpProto, clientIP, clientPort, podIP, podPort)
 	ctVal := conntrack.NewValueNATForward(0, 0, 0, revKey)
 	revVal := conntrack.NewValueNATReverse(0, 0, 0,
@@ -1797,12 +1797,109 @@ func TestNATSourceCollision(t *testing.T) {
 		DataOffset: 5,
 	}
 
+	var recvPkt []byte
+
 	_, _, _, _, pktBytes, err := testPacket(nil, pktIPHdr, pktTCPHdr,
 		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
 
+	skbMark = 0
+	var newSPort uint16
+
+	// Arriving at node2 HEP
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		tcpL := pktR.Layer(layers.LayerTypeTCP)
+		Expect(tcpL).NotTo(BeNil())
+
+		tcp := tcpL.(*layers.TCP)
+		newSPort = uint16(tcp.SrcPort)
+		Expect(newSPort).NotTo(Equal(clientPort))
+		Expect(newSPort).NotTo(Equal(uint16(0)))
+
+		recvPkt = res.dataOut
+	})
+
+	dumpCTMap(ctMap)
+
+	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
+
+	skbMark = tc.MarkSeenBypassSkipRPF // CALI_SKB_MARK_SKIP_RPF
+
+	// Arriving at workload at node 2
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(recvPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		Expect(res.dataOut).To(Equal(recvPkt))
+	})
+
+	respPkt := tcpResposeRaw(recvPkt)
+	skbMark = 0
+
+	// Response leaving workload at node 2
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.dataOut).To(Equal(respPkt))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+	})
+
+	// Response leaving node 2
+	skbMark = tc.MarkSeen // CALI_SKB_MARK_SEEN
+	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		tcpL := pktR.Layer(layers.LayerTypeTCP)
+		Expect(tcpL).NotTo(BeNil())
+
+		tcp := tcpL.(*layers.TCP)
+		Expect(uint16(tcp.DstPort)).To(Equal(clientPort))
+	})
+
+	pktTCPHdr.SYN = false
+	pktTCPHdr.ACK = true
+	pktTCPHdr.Seq = 1
+
+	_, _, _, _, pktBytes, err = testPacket(nil, pktIPHdr, pktTCPHdr,
+		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
+
+	dumpCTMap(ctMap)
+
+	skbMark = 0
+
+	// Another packet arriving from client to HEP
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		tcpL := pktR.Layer(layers.LayerTypeTCP)
+		Expect(tcpL).NotTo(BeNil())
+
+		tcp := tcpL.(*layers.TCP)
+		Expect(uint16(tcp.SrcPort)).To(Equal(newSPort))
+
+		recvPkt = res.dataOut
 	})
 }

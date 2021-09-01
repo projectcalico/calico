@@ -42,7 +42,8 @@
 
 static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
 						__be32 ip_from, __be32 ip_to,
-						__u16 port_from, __u16 port_to,
+						__u16 dport_from, __u16 dport_to,
+						__u16 sport_from, __u16 sport_to,
 						__u64 flags)
 {
 	int ret = 0;
@@ -53,11 +54,18 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, flags | BPF_F_PSEUDO_HDR | 4);
 		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
 	}
-	if (port_from != port_to) {
-		CALI_DEBUG("L4 checksum update (csum is at %d) port from %d to %d\n",
-				off, bpf_ntohs(port_from), bpf_ntohs(port_to));
-		int rc = bpf_l4_csum_replace(skb, off, port_from, port_to, flags | 2);
-		CALI_DEBUG("bpf_l4_csum_replace(port): %d\n", rc);
+	if (sport_from != sport_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) sport from %d to %d\n",
+				off, bpf_ntohs(sport_from), bpf_ntohs(sport_to));
+		int rc = bpf_l4_csum_replace(skb, off, sport_from, sport_to, flags | 2);
+		CALI_DEBUG("bpf_l4_csum_replace(sport): %d\n", rc);
+		ret |= rc;
+	}
+	if (dport_from != dport_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) dport from %d to %d\n",
+				off, bpf_ntohs(dport_from), bpf_ntohs(dport_to));
+		int rc = bpf_l4_csum_replace(skb, off, dport_from, dport_to, flags | 2);
+		CALI_DEBUG("bpf_l4_csum_replace(dport): %d\n", rc);
 		ret |= rc;
 	}
 

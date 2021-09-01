@@ -84,7 +84,7 @@ struct calico_ct_value {
 			// CALI_CT_TYPE_NAT_REV
 			__u32 orig_ip;                     // 44
 			__u16 orig_port;                   // 48
-			__u8 pad1[2];                      // 50
+			__u16 orig_sport;                  // 50
 			__u32 tun_ip;                      // 52
 			__u32 pad3;                        // 56
 		};
@@ -92,7 +92,8 @@ struct calico_ct_value {
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
 		struct {
 			struct calico_ct_key nat_rev_key;  // 24
-			__u8 pad2[8];
+			__u16 nat_sport;
+			__u8 pad2[6];
 		};
 	};
 };
@@ -115,6 +116,7 @@ struct ct_create_ctx {
 	__u16 sport;
 	__u16 dport;
 	__u16 orig_dport;
+	__u16 orig_sport;
 	struct tcphdr *tcp;
 	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
@@ -181,7 +183,8 @@ struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
 	__be32 nat_ip;
-	__u32 nat_port;
+	__u16 nat_port;
+	__u16 nat_sport;
 	__be32 tun_ip;
 	__u32 ifindex_fwd; /* if set, the ifindex where the packet should be forwarded */
 	__u32 ifindex_created; /* For a CT state that was created by a packet ingressing
