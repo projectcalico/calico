@@ -45,7 +45,7 @@ spec:
                 type: boolean
               awsSrcDstCheck:
                 description: 'Set source-destination-check on AWS EC2 instances. Accepted
-                  value must be one of "DoNothing", "Enabled" or "Disabled". [Default:
+                  value must be one of "DoNothing", "Enable" or "Disable". [Default:
                   DoNothing]'
                 enum:
                 - DoNothing

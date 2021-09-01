@@ -17,12 +17,13 @@ package resources
 import (
 	"context"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/pager"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
 // pagedList performs a paginated list operation against the Kubernetes API using the given

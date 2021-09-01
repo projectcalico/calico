@@ -109,7 +109,7 @@ gen-crds:
 LINT_ARGS += --disable gosimple,unused,structcheck,errcheck,deadcode,varcheck,ineffassign,staticcheck,govet
 
 .PHONY: check-gen-files
-check-gen-files: $(GENERATED_FILES) fix
+check-gen-files: $(GENERATED_FILES) fix gen-crds
 	git diff --exit-code -- $(GENERATED_FILES) || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
 
 .PHONY: check-format
