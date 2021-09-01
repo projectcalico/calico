@@ -154,7 +154,15 @@ then the following changes will ensure IPv6 operation.
 
 ## Enabling IPv6 with OpenStack
 
+<<<<<<< HEAD
 ### Prerequisites
+=======
+1. Disable [IP autodetection of IPv4](/networking/ip-autodetection) by setting `IP` to `none`.
+1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
+   - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.
+     This configures {{site.prodname}} to calculate the router ID based on the hostname.
+   - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
+>>>>>>> aceeaafd (Merge pull request #4872 from coutinhop/pedro-CORE-7010)
 
 When using {{site.prodname}} with a VM platform (e.g., OpenStack), obtaining IPv6
 connectivity requires certain configuration in the guest VM image:
