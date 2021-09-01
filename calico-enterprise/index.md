@@ -1,20 +1,21 @@
 ---
-title: Calico Enterprise
-description: Learn about Calico Enterprise
+title: Calico Cloud
+description: Learn about Calico Cloud
 show_read_time: false
 show_toc: false
 show_title: false
 calico_enterprise: true
+calico_cloud_header: true
 ---
 <br>
-<h3 style="font-style: italic;">If you like Calico, you'll love Calico Enterprise!</h3>
+<h3 style="font-style: italic;">If you like Calico, you'll love Calico Cloud!</h3>
 <br>
 <table style="max-width: 900px;">
   <thead>
     <tr>
       <th></th>
       <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-logo-64px.png" alt="Calico" style="margin: auto;"></th>
-      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-enterprise-logo-64px.png" alt="Calico Enterprise" style="margin: auto;"></th>
+      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-cloud-small.png" alt="Calico Cloud" style="margin: auto;"></th>
     </tr>
   </thead>
   <tbody>
@@ -27,7 +28,7 @@ calico_enterprise: true
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Advanced IP Address Management</td>
+      <td>Advanced IP address management</td>
       <td style="text-align: center">✓</td>
       <td style="text-align: center">✓</td>
     </tr>
@@ -37,12 +38,12 @@ calico_enterprise: true
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>eBPF Dataplane</td>
+      <td>eBPF dataplane</td>
       <td style="text-align: center">✓</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Windows Dataplane</td>
+      <td>Windows dataplane</td>
       <td style="text-align: center">✓</td>
       <td style="text-align: center">✓</td>
     </tr>
@@ -70,7 +71,7 @@ calico_enterprise: true
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Microsegmentation across Host/VMs/Containers</td>
+      <td>Microsegmentation across host/VMs/containers</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
@@ -80,7 +81,7 @@ calico_enterprise: true
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Compliance reporting & alertse</td>
+      <td>Compliance reporting & alerts</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
@@ -90,7 +91,7 @@ calico_enterprise: true
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>SIEM Integrations</td>
+      <td>SIEM integrations</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
@@ -98,22 +99,22 @@ calico_enterprise: true
       <th colspan="3">Observability</th>
     </tr>
     <tr>
-      <td>Dynamic Service Graph</td>
+      <td>Dynamic service graph</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Application Layer Observability</td>
+      <td>Application Layer observability</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>Dynamic Packet Capture</td>
+      <td>Dynamic packet capture</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>
     <tr>
-      <td>DNS Dashboards</td>
+      <td>DNS dashboards</td>
       <td style="text-align: center">&nbsp;</td>
       <td style="text-align: center">✓</td>
     </tr>

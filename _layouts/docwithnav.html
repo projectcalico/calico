@@ -146,7 +146,7 @@ The code is a little roundabout for a few reasons:
                   <div class="panel panel-default">
                     <div class="panel-heading free-training" role="button" aria-controls="navbar-free-training">
                       <h4 class="panel-title">
-                        <a href="https://www.tigera.io/free-training-resources" target="_blank" rel="noopener noreferrer" class="navbar-title--clickable">
+                        <a href="https://www.tigera.io/lp/calico-certification/" target="_blank" rel="noopener noreferrer" class="navbar-title--clickable">
                           <span>Free training</span>
                         </a>
                       </h4>
@@ -178,8 +178,10 @@ The code is a little roundabout for a few reasons:
               {% include version_warning.html %}
               {% endunless %}
 
-              {% if page.calico_enterprise -%}
-              {% include enterprise_header.html %}   
+              {% if page.calico_cloud_header -%}
+              {% include cloud_header.html %}  
+              {% elsif page.calico_enterprise %}
+              {% include enterprise_header.html %} 
               {% endif -%}
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
