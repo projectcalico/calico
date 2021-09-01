@@ -163,7 +163,7 @@ that is possible with today's designs.
 A more in-depth discussion is possible, so if you'd like, please make a
 request, and I will put up a post or white paper. In the meantime, it
 may be interesting to venture over to Facebook's [blog
-post](https://code.facebook.com/posts/360346274145943/introducing-data-center-fabric-the-next-generation-facebook-data-center-network/){:target="_blank"}
+post](https://engineering.fb.com/2014/11/14/production-engineering/introducing-data-center-fabric-the-next-generation-facebook-data-center-network/){:target="_blank"}
 on their fabric approach. A quick picture to visualize the idea is shown
 below.
 
