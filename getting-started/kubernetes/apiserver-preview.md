@@ -19,7 +19,7 @@ Normally, calicoctl is required in order to manage Calico APIs in the `projectca
 
 ### Before you begin
 
-- A cluster with Calico installed using the Kubernetes API data store.
+- Make sure you have a cluster with Calico installed using the Kubernetes API data store. If not, you can [migrate from etcd]({{site.baseurl}}/maintenance/datastore-migration).
 
 - A machine with `openssl` installed.
 
@@ -128,6 +128,6 @@ Once removed, you will need to use calicoctl to manage projectcalico.org/v3 APIs
 ### Next steps
 
 **Recommended tutorials**
-- [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)
-- [Control ingress and egress traffic using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-advanced)
-- [Run a tutorial that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+- [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic.html)
+- [Control ingress and egress traffic using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-advanced.html)
+- [Run a tutorial that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo.html)
