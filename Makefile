@@ -450,7 +450,7 @@ HELM_RELEASE=helm-v2.16.3-linux-amd64.tar.gz
 bin/helm:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget -q https://storage.googleapis.com/kubernetes-helm/$(HELM_RELEASE) -O $(TMP)/$(HELM_RELEASE)
+	wget -q https://get.helm.sh/$(HELM_RELEASE) -O $(TMP)/$(HELM_RELEASE)
 	tar -zxvf $(TMP)/$(HELM_RELEASE) -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
 
