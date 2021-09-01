@@ -147,6 +147,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		var hostname string
 		var err error
 		var pool20, pool32, pool26 []cnet.IPNet
+		var origLogLevel log.Level
 
 		BeforeEach(func() {
 			// Remove all data in the datastore.
@@ -179,16 +180,21 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Create the node object.
 			hostname = "host-perf"
 			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
+
+			// Set log level to Info and save original value to be restored later
+			origLogLevel = log.GetLevel()
+			log.SetLevel(log.InfoLevel)
+
 		})
 
 		AfterEach(func() {
 			deleteNode(bc, kc, hostname)
+
+			// Restore original log level value
+			log.SetLevel(origLogLevel)
 		})
 
 		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
-			origLevel := log.GetLevel()
-			defer log.SetLevel(origLevel)
-			log.SetLevel(log.InfoLevel)
 			runtime := b.Time("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -206,9 +212,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
-			origLevel := log.GetLevel()
-			defer log.SetLevel(origLevel)
-			log.SetLevel(log.InfoLevel)
 			runtime := b.Time("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -226,9 +229,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
-			origLevel := log.GetLevel()
-			defer log.SetLevel(origLevel)
-			log.SetLevel(log.InfoLevel)
 			runtime := b.Time("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -246,9 +246,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		}, 100)
 
 		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
-			origLevel := log.GetLevel()
-			defer log.SetLevel(origLevel)
-			log.SetLevel(log.InfoLevel)
 			runtime := b.Time("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -266,9 +263,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		}, 20)
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
-			origLevel := log.GetLevel()
-			defer log.SetLevel(origLevel)
-			log.SetLevel(log.InfoLevel)
 			runtime := b.Time("runtime", func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
