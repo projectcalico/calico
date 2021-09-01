@@ -29,7 +29,7 @@ section:
     path: /maintenance/ebpf/enabling-bpf
   - title: eBPF on EKS
     path: /maintenance/ebpf/ebpf-and-eks
-  - title: troubleshooting
+  - title: Troubleshooting
     path: /maintenance/troubleshoot/troubleshoot-ebpf
 - title: Monitor
   path: /maintenance/monitor/
