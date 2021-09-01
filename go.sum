@@ -643,8 +643,8 @@ github.com/projectcalico/cni-plugin v1.11.1-0.20210831183744-0b52ece79605 h1:CL9
 github.com/projectcalico/cni-plugin v1.11.1-0.20210831183744-0b52ece79605/go.mod h1:msHLwQ8DCJBxdnaZNT3+4a8D33cFn2PxMyWB+FQwUpM=
 github.com/projectcalico/confd v1.0.1-0.20210830164812-79f5da49e625 h1:gc7q86cagcMTRwokGVgt+K8UW4VNWWt8WUdEG0Eq+RA=
 github.com/projectcalico/confd v1.0.1-0.20210830164812-79f5da49e625/go.mod h1:GlEXaz/hdOshXDhqKquKGDUU/wg6w9BgpfWV+rC2MhY=
-github.com/projectcalico/felix v0.0.0-20210831233402-b26a07a93537 h1:jtj0cokkm/8rvTnJ0cClODos866Ukgj4NIeyNDThlhQ=
-github.com/projectcalico/felix v0.0.0-20210831233402-b26a07a93537/go.mod h1:3sYeSsqldefvP6VE8fZrCeeMEz62nke54Lpvi9durS8=
+github.com/projectcalico/felix v0.0.0-20210901101607-45ebba7d9030 h1:XWIodV/I4+bFO7JzhGyjoBUwof5DQ8WshmSNKgYx7z0=
+github.com/projectcalico/felix v0.0.0-20210901101607-45ebba7d9030/go.mod h1:4RGGoD+YatwqT3Gk07GJa/vbiLaA8K38X31mP4svVoE=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
@@ -657,8 +657,6 @@ github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunD
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20210818162850-fa9ba6fd57c4 h1:uRGzd86c2V1mpRiwcWuWuGRDjnjhtKLY0lBm71BJAEM=
 github.com/projectcalico/pod2daemon v0.0.0-20210818162850-fa9ba6fd57c4/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
-github.com/projectcalico/typha v0.7.3-0.20210830153705-73b36b69b537 h1:tb2P/FArCU5CEHHET+TG1VrZ3Sn0zxU6dTPPtuwPMfs=
-github.com/projectcalico/typha v0.7.3-0.20210830153705-73b36b69b537/go.mod h1:3LZHpUHMF6djgCwhk+SyUkL56qXGUGM2Pnc2YOIylqA=
 github.com/projectcalico/typha v0.7.3-0.20210830163841-a15d41e36ca4 h1:Cufr9cK1bGWBwDyxzluQZUIOUu0nCHrPXMjqJPKQmUo=
 github.com/projectcalico/typha v0.7.3-0.20210830163841-a15d41e36ca4/go.mod h1:3LZHpUHMF6djgCwhk+SyUkL56qXGUGM2Pnc2YOIylqA=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
