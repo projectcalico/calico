@@ -64,11 +64,12 @@ type cacheEntry struct {
 // Create a new watcherCache.
 func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}) *watcherCache {
 	return &watcherCache{
-		logger:       logrus.WithField("ListRoot", model.ListOptionsToDefaultPathRoot(resourceType.ListInterface)),
-		client:       client,
-		resourceType: resourceType,
-		results:      results,
-		resources:    make(map[string]cacheEntry, 0),
+		logger:               logrus.WithField("ListRoot", model.ListOptionsToDefaultPathRoot(resourceType.ListInterface)),
+		client:               client,
+		resourceType:         resourceType,
+		results:              results,
+		resources:            make(map[string]cacheEntry, 0),
+		currentWatchRevision: "0",
 	}
 }
 
@@ -119,7 +120,7 @@ mainLoop:
 				// because errors may occur due to compaction causing revisions to no longer be valid - in this case
 				// we simply need to do a full resync.
 				wc.logger.WithError(event.Error).Infof("Watch error received from Upstream")
-				wc.currentWatchRevision = ""
+				wc.currentWatchRevision = "0"
 				wc.resyncAndCreateWatcher(ctx)
 			default:
 				// Unknown event type - not much we can do other than log.
@@ -155,7 +156,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 	wc.cleanExistingWatcher()
 
 	// If we don't have a currentWatchRevision then we need to perform a full resync.
-	performFullResync := wc.currentWatchRevision == ""
+	performFullResync := wc.currentWatchRevision == "0"
 
 	for {
 		select {
@@ -179,8 +180,9 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				wc.resourceType.UpdateProcessor.OnSyncerStarting()
 			}
 
-			// Start the sync by Listing the current resources.
-			l, err := wc.client.List(ctx, wc.resourceType.ListInterface, "")
+			// Start the sync by Listing the current resources. Start from the current watch revision, which will
+			// be 0 at start of day or the latest received revision.
+			l, err := wc.client.List(ctx, wc.resourceType.ListInterface, wc.currentWatchRevision)
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")

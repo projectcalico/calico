@@ -28,6 +28,7 @@ import (
 
 	discovery "k8s.io/api/discovery/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
@@ -90,39 +91,25 @@ func (c *endpointSliceClient) Get(ctx context.Context, key model.Key, revision s
 }
 
 func (c *endpointSliceClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	log.Debug("Received List request on Kubernetes EndpointSlice type")
-	// List all of the k8s EndpointSlice objects.
-	endpointSlices := discovery.EndpointSliceList{}
-	req := c.clientSet.DiscoveryV1beta1().RESTClient().
-		Get().
-		Resource("endpointslices")
-	err := req.Do(ctx).Into(&endpointSlices)
-	if err != nil {
-		log.WithError(err).Info("Unable to list K8s EndpointSlice resources")
-		return nil, K8sErrorToCalico(err, list)
+	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		return c.clientSet.DiscoveryV1beta1().EndpointSlices("").List(ctx, opts)
 	}
-
-	kvps := model.KVPairList{KVPairs: []*model.KVPair{}}
-	for _, es := range endpointSlices.Items {
-		kvp, err := c.EndpointSliceToKVP(&es)
+	convertFunc := func(r Resource) ([]*model.KVPair, error) {
+		kvp, err := c.EndpointSliceToKVP(r.(*discovery.EndpointSlice))
 		if err != nil {
-			log.WithError(err).Info("Failed to convert K8s EndpointSlice")
 			return nil, err
 		}
-		kvps.KVPairs = append(kvps.KVPairs, kvp)
+		return []*model.KVPair{kvp}, nil
 	}
 
-	// Add in the Revision information.
-	kvps.Revision = endpointSlices.ResourceVersion
-	log.WithFields(log.Fields{
-		"num_kvps": len(kvps.KVPairs),
-		"revision": kvps.Revision}).Debug("Returning Kubernetes EndpointSlice KVPs")
-	return &kvps, nil
+	// For each object returned from the API server, add it to a KVPairList.
+	logContext := log.WithField("Resource", "EndpointSlice")
+	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
 func (c *endpointSliceClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{Watch: true}
+	opts := metav1.ListOptions{Watch: true, AllowWatchBookmarks: false}
 	_, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)

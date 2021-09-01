@@ -509,6 +509,7 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 		if err != nil {
 			log.WithError(err).Fatal("failed to add calico resources to scheme")
 		}
+		metav1.AddToGroupVersion(scheme.Scheme, schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"})
 	})
 	return cli, nil
 }

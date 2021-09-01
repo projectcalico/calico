@@ -23,8 +23,10 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	scheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
@@ -228,26 +230,27 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 }
 
 // List lists configured Custom K8s Resource instances in the k8s API matching the
-// supplied ListInterface.
+// supplied ListInterface. It will use list paging if necessary to reduce the load on the Kubernetes API server.
 func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	logContext := log.WithFields(log.Fields{
 		"ListInterface": list,
 		"Resource":      c.resource,
+		"Type":          "CustomResource",
 	})
-	logContext.Debug("List Custom K8s Resource")
-	kvps := []*model.KVPair{}
+	logContext.Debug("Received List request")
 
 	// Attempt to convert the ListInterface to a Key.  If possible, the parameters
 	// indicate a fully qualified resource, and we'll need to use Get instead of
 	// List.
 	if key := c.listInterfaceToKey(list); key != nil {
 		logContext.Debug("Performing List using Get")
+		kvps := []*model.KVPair{}
 		if kvp, err := c.Get(ctx, key, revision); err != nil {
 			// The error will already be a Calico error type.  Ignore
 			// error that it doesn't exist - we'll return an empty
 			// list.
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				log.WithField("Resource", c.resource).WithError(err).Debug("Error listing resource")
+				logContext.WithField("Resource", c.resource).WithError(err).Debug("Error listing resource")
 				return nil, err
 			}
 			return &model.KVPairList{
@@ -263,62 +266,49 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 		}
 	}
 
-	// Since we are not performing an exact Get, Kubernetes will return a
-	// list of resources.
-	reslOut := reflect.New(c.k8sListType).Interface().(ResourceList)
-
 	// If it is a namespaced resource, then we'll need the namespace.
 	namespace := list.(model.ResourceListOptions).Namespace
 
-	// Perform the request.
-	err := c.restClient.Get().
-		NamespaceIfScoped(namespace, c.namespaced).
-		Resource(c.resource).
-		Param("resourceVersion", revision).
-		Do(ctx).Into(reslOut)
-	if err != nil {
-		// Don't return errors for "not found".  This just
-		// means there are no matching Custom K8s Resources, and we should return
-		// an empty list.
-		if !kerrors.IsNotFound(err) {
-			log.WithError(err).Debug("Error listing resources")
-			return nil, K8sErrorToCalico(err, list)
+	// listFunc performs a list with the given options.
+	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		out := reflect.New(c.k8sListType).Interface().(ResourceList)
+		err := c.restClient.Get().
+			NamespaceIfScoped(namespace, c.namespaced).
+			Resource(c.resource).
+			VersionedParams(&opts, scheme.ParameterCodec).
+			Do(ctx).Into(out)
+		if err != nil {
+			// Don't return errors for "not found".  This just
+			// means there are no matching Custom K8s Resources, and we should return
+			// an empty list.
+			if !kerrors.IsNotFound(err) {
+				logContext.WithError(err).Debug("Error listing resources")
+				return nil, err
+			}
 		}
-		return &model.KVPairList{
-			KVPairs:  kvps,
-			Revision: revision,
-		}, nil
+		return out, nil
 	}
-
-	// We expect the list type to have an "Items" field that we can
-	// iterate over.
-	elem := reflect.ValueOf(reslOut).Elem()
-	items := reflect.ValueOf(elem.FieldByName("Items").Interface())
-	for idx := 0; idx < items.Len(); idx++ {
-		res := items.Index(idx).Addr().Interface().(Resource)
-		if kvp, err := c.convertResourceToKVPair(res); err == nil {
-			kvps = append(kvps, kvp)
-		} else {
-			logContext.WithError(err).WithField("Item", res).Warning("unable to process resource, skipping")
+	convertFunc := func(r Resource) ([]*model.KVPair, error) {
+		kvp, err := c.convertResourceToKVPair(r)
+		if err != nil {
+			return nil, err
 		}
+		return []*model.KVPair{kvp}, nil
 	}
-	return &model.KVPairList{
-		KVPairs:  kvps,
-		Revision: reslOut.GetListMeta().GetResourceVersion(),
-	}, nil
+	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
 func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true}
+	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true, AllowWatchBookmarks: false}
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
 	fieldSelector := fields.Everything()
 	if len(rlo.Name) != 0 {
-		// We've been asked to watch a specific customresource.
-		log.WithField("name", rlo.Name).Debug("Watching a single customresource")
+		// We've been asked to watch a specific custom resource.
+		log.WithField("name", rlo.Name).Debug("Watching a single custom resource")
 		fieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name)
 
 		// If this is a namespaced resource, we also need the namespace specified.

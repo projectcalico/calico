@@ -23,8 +23,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
@@ -128,7 +130,8 @@ func (c *nodeClient) Get(ctx context.Context, key model.Key, revision string) (*
 }
 
 func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	log.Debug("Received List request on Node type")
+	logContext := log.WithField("Resource", "Node")
+	logContext.Debug("Received List request")
 	nl := list.(model.ResourceListOptions)
 	kvps := []*model.KVPair{}
 
@@ -153,25 +156,23 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 		}, nil
 	}
 
-	// Listing all nodes.
-	nodes, err := c.clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{ResourceVersion: revision})
-	if err != nil {
-		return nil, K8sErrorToCalico(err, list)
-	}
-
-	for _, node := range nodes.Items {
-		kvp, err := K8sNodeToCalico(&node, c.usePodCIDR)
+	// List all nodes.
+	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		nodes, err := c.clientSet.CoreV1().Nodes().List(ctx, opts)
 		if err != nil {
-			log.Errorf("Unable to convert k8s node to Calico node: node=%s: %v", node.Name, err)
-			continue
+			return nil, err
 		}
-		kvps = append(kvps, kvp)
+		return nodes, nil
 	}
-
-	return &model.KVPairList{
-		KVPairs:  kvps,
-		Revision: revision,
-	}, nil
+	convertFunc := func(r Resource) ([]*model.KVPair, error) {
+		node := r.(*v1.Node)
+		kvp, err := K8sNodeToCalico(node, c.usePodCIDR)
+		if err != nil {
+			return nil, err
+		}
+		return []*model.KVPair{kvp}, nil
+	}
+	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
 func (c *nodeClient) EnsureInitialized() error {
@@ -180,7 +181,7 @@ func (c *nodeClient) EnsureInitialized() error {
 
 func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true}
+	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true, AllowWatchBookmarks: false}
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)

@@ -226,7 +226,7 @@ func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision strin
 		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
 			return nil, err
 		}
-		return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), key}
+		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
 	}
 
 	return v1kvp, nil
@@ -253,7 +253,7 @@ func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, re
 func (c *ipamBlockClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	resl := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
-	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision})
+	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision, AllowWatchBookmarks: false})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
