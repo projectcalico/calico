@@ -306,6 +306,13 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 			cfg.Spec.ServiceLoopPrevention = "Disabled"
 		})
 
+		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
+		// restart.)  This ensures that the cali-cidr-block chain has been cleared
+		// before we try a test ping.
+		for _, felix := range felixes {
+			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+		}
+
 		By("test that we DO get a routing loop")
 		// (In order to test that the tryRoutingLoop setup is genuine.)
 		tryRoutingLoop(true)
@@ -333,6 +340,13 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		updateFelixConfig(func(cfg *api.FelixConfiguration) {
 			cfg.Spec.ServiceLoopPrevention = "Disabled"
 		})
+
+		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
+		// restart.)  This ensures that the cali-cidr-block chain has been cleared
+		// before we try a test ping.
+		for _, felix := range felixes {
+			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+		}
 
 		By("test that we DO get a routing loop")
 		// (In order to test that the tryRoutingLoop setup is genuine.)
