@@ -878,12 +878,19 @@ func (m *endpointManager) updateHostEndpoints() {
 		logCxt := log.WithField("id", id).WithField("ifaceName", ifaceName)
 		ep := m.rawHostEndpoints[id]
 		if len(ep.UntrackedTiers) > 0 {
-			// Optimisation: only add the endpoint chains to the raw (untracked)
-			// table if there's some untracked policy to apply.  This reduces
-			// per-packet latency since every packet has to traverse the raw
-			// table.
-			logCxt.Debug("Endpoint has untracked policies.")
-			newUntrackedIfaceNameToHostEpID[ifaceName] = id
+			if ifaceName == allInterfaces {
+				// GlobalNetworkPolicy with `doNotTrack: True` has been configured
+				// to apply to a host-* endpoint, which is not currently supported.
+				// Log and warning and ignore it.
+				logCxt.Warning("DoNotTrack policy is not supported for a HEP with `interfaceName: *`; ignoring it")
+			} else {
+				// Optimisation: only add the endpoint chains to the raw (untracked)
+				// table if there's some untracked policy to apply.  This reduces
+				// per-packet latency since every packet has to traverse the raw
+				// table.
+				logCxt.Debug("Endpoint has untracked policies.")
+				newUntrackedIfaceNameToHostEpID[ifaceName] = id
+			}
 		}
 		if len(ep.PreDnatTiers) > 0 {
 			// Similar optimisation (or neatness) for pre-DNAT policy.
