@@ -24,6 +24,8 @@ nodecontainer: calico/node
 noderunning: calico-node
 
 open_source: true
+# Change this to v([0-9]+.[0-9])(?:.*?)$ for EE merge
+version_pattern: v([0-9]+.[0-9]+)(?:.*?)$
 
 # DEPRECATED: use imageNames stored in per-directory defaults, e.g. 'page.imageNames'
 imageNames:
