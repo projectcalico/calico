@@ -70,7 +70,6 @@
 							</li>
 					</ul>
 				</li>
-				<li><a data-proofer-ignore href="/releases">Releases</a></li>
 				<li><a href="https://www.tigera.io/project-calico/community/">Community</a></li>
 				<li class="dropdown">
 					<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
@@ -96,7 +95,25 @@
 							<li><a href="https://www.tigera.io/resources/">Resources</a></li>
 					</ul>
 				</li>
-				<li><a href="https://www.tigera.io/lp/calico-certification" class="get-certified">Get Certified</a></li>              
+				<li>
+					<a href="https://www.tigera.io/lp/calico-certification" class="get-certified">Get Certified</a>
+				</li>
+				<div class="search col-xs-12">
+					<div class="search-input-container" data-toggle="popover" data-placement="bottom"></div>
+					<div class="search-container">
+					<div class="search-container__results"></div>
+					<div class="search-container__pagination"></div>
+					<div class="search-powered-by" ></div>
+					</div>
+				</div>
+				<li class="dropdown version-combo">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+						<span>{% if site.data.versions.first.title == "master" %}nightly{% else %}{{site.data.versions.first.title | slice: 0,4 | replace: "v", "Version "}}{% endif %}</span>
+						<span class="glyphicon glyphicon-menu-down sub-arrow" aria-hidden="true"></span>
+					</a>
+					<ul class="dropdown-menu dropdown-menu-left" aria-labelledby="nav-version-dropdown" style="margin:0">
+					</ul>
+				</li>
 			</ul>
 			<form class="navbar-form visible-xs">
 				<ul class="nav navbar-nav navbar-right">
