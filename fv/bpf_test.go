@@ -194,6 +194,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	}
 
 	testIfTCP := testOpts.protocol == "tcp"
+	testIfNotUDPUConnected := (!testOpts.udpUnConnected)
 
 	protoExt := ""
 	if testOpts.udpUnConnected {
@@ -2292,7 +2293,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 							})
 
-							_ = testIfTCP && It("should not break connectivity with source port collision", func() {
+							// Our unconnected test client cannot handle multiple streams. Two
+							// clients cannot use the same local address. The connected case shows
+							// that it works in principle.
+							_ = testIfNotUDPUConnected && It("should not break connectivity with source port collision", func() {
 
 								By("Synchronizing with policy and services")
 								cc.Expect(Some, externalClient, TargetIP(felixes[0].IP), ExpectWithPorts(npPort))

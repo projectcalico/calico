@@ -831,6 +831,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			tc_tcphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		case IPPROTO_UDP:
+			CALI_DEBUG("Fixing source port from %d to %d\n",
+					bpf_ntohs(tc_udphdr(ctx)->source), state->ct_result.nat_sport);
+			tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
 			tc_udphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		}
@@ -922,7 +925,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 			break;
 		case IPPROTO_UDP:
-			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			if (state->ct_result.nat_sport) {
+				CALI_DEBUG("Fixing dest port from %d to %d\n",
+						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
+				tc_udphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
+			}
 			break;
 		}
 
