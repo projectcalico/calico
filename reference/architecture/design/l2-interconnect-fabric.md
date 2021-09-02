@@ -12,11 +12,7 @@ network.
 Any technology that is capable of transporting IP packets can be used as
 the interconnect fabric in a {{site.prodname}} network (the first person to test
 and publish the results of using [IP over Avian
-<<<<<<< HEAD
-Carrier](http://tools.ietf.org/html/rfc1149) as a transport for {{site.prodname}}
-=======
 Carrier](https://datatracker.ietf.org/doc/html/rfc1149){:target="_blank"} as a transport for {{site.prodname}}
->>>>>>> aceeaafd (Merge pull request #4872 from coutinhop/pedro-CORE-7010)
 will earn a very nice dinner on or with the core {{site.prodname}} team). This
 means that the standard tools used to transport IP, such as MPLS and
 Ethernet can be used in a {{site.prodname}} network.
