@@ -105,7 +105,7 @@ blocks:
       jobs:
       - name: "make cd"
         execution_time_limit:
-          minutes: 60
+          minutes: 120
         commands:
         - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
