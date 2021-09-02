@@ -1,7 +1,7 @@
 ---
 title: About eBPF
 description: Learn about eBPF!
-canonical_url: '/about/about-ebpf'
+canonical_url: 'https://www.tigera.io/learn/guides/ebpf/'
 ---
 
 > <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional background education, including
@@ -123,7 +123,7 @@ While the eBPF dataplane has some features that the standard Linux dataplane lac
 | Other routing             | Supported                               | Supported                          |
 | Supports third party CNI plugins | Yes (compatible plugins only)    | Yes (compatible plugins only)      |
 | Compatible with other iptables rules | Yes (can write rules above or below other rules) | Partial; iptables bypassed for workload traffic |
-| Host endpoint policy      | Supported                               | Supported (apart from doNotTrack policy) |
+| Host endpoint policy      | Supported                               | Supported                          |
 | Enterprise version        | Available                               | Available                          |
 | XDP DoS Protection        | Supported                               | Supported                          |
 | IPv6                      | Supported                               | Not supported (yet)                |

@@ -92,7 +92,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   <label:Kubernetes VXLAN,active:true>
   <%
 
-1. Ensure that BGP is disabled.
+1. Ensure that BGP is disabled since you're using VXLAN.
    If you installed Calico using operator, you can do this by:
 
    ```bash
@@ -171,7 +171,7 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
   <label:Kubernetes BGP>
   <%
 
-1. Enable BGP service on Windows node. 
+1. Enable BGP service on Windows node (instead of VXLAN).
    Install the RemoteAccess service using the following Powershell commands:
    
    ```powershell

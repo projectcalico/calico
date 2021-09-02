@@ -126,21 +126,25 @@ custom_css: css/intro.css
 
 <div id="why-use-calico-10" class="row">
   <div class="col-md-6">
-    <h3 id="enterprise-compatible" style="margin-top: 5px">Calico Enterprise compatible</h3>
-    <p>Calico Enterprise builds on top of open source Calico to provide additional higher-level features and capabilities:</p>
+    <h3 id="enterprise-compatible" style="margin-top: 5px">Calico Cloud compatible</h3>
+    <p>Calico Cloud builds on top of open source Calico to provide Kubernetes security and observability features and capabilities:</p>
     <ul style="">
-        <li>Hierarchical network policy</li>
         <li>Egress access controls (DNS policies, egress gateways)</li>
-        <li>Network visualization and troubleshooting</li>
-        <li>Network policy recommendations</li>
-        <li>Network policy preview and staging</li>
-        <li>Compliance controls and reporting</li>
-        <li>Intrusion detection (suspicious activity, anomaly detection)</li>
-        <li>Multi-cluster management with multi-cloud federation</li>
+        <li>Extend firewall to Kubernetes</li>
+        <li>Hierarchical tiers</li>
+        <li>FQDN / DNS based policy</li>
+        <li>Micro-segmentation across host/VMs/containers</li>
+        <li>Security policy preview, staging, and recommendation</li>
+        <li>Compliance reporting and alerts</li>
+        <li>Intrusion detection & prevention (IDS / IPS) for Kubernetes</li>
+        <li>SIEM Integrations</li>
+        <li>Application Layer (L7) observability</li>
+        <li>Dynamic packet capture</li>
+        <li>DNS dashboards</li>
     </ul>
   </div>
   <div class="col-md-6">
-    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/calico-enterprise-logo-128px.png">
+    <img class="img-responsive center-block" src="{{ site.baseurl }}/images/calico-cloud-small.png">
     <div style="display: flex; justify-content: center; align-items: center;" id="enterprise-footer">
       <a href="https://www.tigera.io/tigera-products/calico-enterprise/?utm_referring_url=dynamic&amp;utm_source=projectcalico-docs&amp;utm_medium=website&amp;utm_campaign=calico-docs-conversion" class="learn-more-button">Learn More</a>
     </div>    

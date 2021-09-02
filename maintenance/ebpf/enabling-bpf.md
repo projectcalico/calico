@@ -28,7 +28,6 @@ eBPF mode currently has some limitations relative to the standard Linux pipeline
 
 - eBPF mode only supports x86-64.  (The eBPF programs are not currently built for the other platforms.)
 - eBPF mode does not yet support IPv6.
-- eBPF mode does not yet support host endpoint `doNotTrack` policy (but it does support normal, pre-DNAT and apply-on-forward policy for host endpoints).
 - When enabling eBPF mode, pre-existing connections continue to use the non-BPF datapath; such connections should not be disrupted, but they do not benefit from eBPF mode's advantages.
 - Disabling eBPF mode _is_ disruptive; connections that were handled through the eBPF dataplane may be broken and services that do not detect and recover may need to be restarted.
 - Hybrid clusters (with some eBPF nodes and some standard dataplane nodes) are not supported.  (In such a cluster, NodePort traffic from eBPF nodes to non-eBPF nodes will be dropped.)  This includes clusters with Windows nodes.
@@ -91,6 +90,7 @@ eBPF mode has the following pre-requisites:
 - [Verify that your cluster is ready for eBPF mode](#verify-that-your-cluster-is-ready-for-ebpf-mode)
 - [Configure {{site.prodname}} to talk directly to the API server](#configure-{{site.prodnamedash}}-to-talk-directly-to-the-api-server)
 - [Configure kube-proxy](#configure-kube-proxy)
+- [Configure data interface](#configure-data-interface)
 - [Enable eBPF mode](#enable-ebpf-mode)
 - [Try out DSR mode](#try-out-dsr-mode)
 - [Reversing the process](#reversing-the-process)
@@ -132,6 +132,31 @@ This section explains how to make sure your cluster is suitable for eBPF mode.
    ```
 
    If you see no output, then the BPF filesystem is not mounted; consult the documentation for your OS distribution to see how to make sure the file system is mounted at boot in its standard location  /sys/fs/bpf.  This may involve editing `/etc/fstab` or adding a `systemd` unit, depending on your distribution. If the file system is not mounted on the host then eBPF mode will work normally until {{site.prodname}} is restarted, at which point workload networking will be disrupted for several seconds.
+
+   If your distribution uses `systemd`, you can refer to the following settings:
+
+   ```
+   cat <<EOF | sudo tee /etc/systemd/system/sys-fs-bpf.mount
+   [Unit]
+   Description=BPF mounts
+   DefaultDependencies=no
+   Before=local-fs.target umount.target
+   After=swap.target
+
+   [Mount]
+   What=bpffs
+   Where=/sys/fs/bpf
+   Type=bpf
+   Options=rw,nosuid,nodev,noexec,relatime,mode=700
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+
+   systemctl daemon-reload
+   systemctl start sys-fs-bpf.mount
+   systemctl enable sys-fs-bpf.mount
+   ```
 
 #### Configure {{site.prodname}} to talk directly to the API server
 
@@ -236,7 +261,7 @@ Confirm that pods restart and then reach the `Running` state with the following 
 watch "kubectl get pods -n kube-system | grep calico"
 ```
 
-You can verify that the change was picked up by checking the logs of one of the  {{ site.nodecontainer }} pods.  
+You can verify that the change was picked up by checking the logs of one of the  {{ site.nodecontainer }} pods.
 
 ```
 kubectl get po -n kube-system -l k8s-app=calico-node
@@ -302,6 +327,14 @@ To re-enable it:
 kubectl patch networks.operator.openshift.io cluster --type merge -p '{"spec":{"deployKubeProxy": true}}'
 ```
 
+#### Configure data interface
+
+If the name of the your node's interface doesn't match the default regular expression of `^(en.*|eth.*|tunl0$)`, you must configure felix to detect your interface by modifying the `bpfDataIfacePattern` configuration option with an appropriate regex.
+
+```
+calicoctl patch felixconfiguration default --patch='{"spec": {"bpfDataIfacePattern": "<Regular expression>"}}'
+```
+
 #### Enable eBPF mode
 
 **The next step depends on whether you installed {{site.prodname}} using the operator, or a manifest:**
@@ -310,8 +343,8 @@ kubectl patch networks.operator.openshift.io cluster --type merge -p '{"spec":{"
 <label:Operator,active:true>
 <%
 
-If you installed {{site.prodname}} using the operator, change the `spec.calicoNetwork.linuxDataplane` parameter in 
-the operator's `Installation` resource to `"BPF"`; you must also clear the `hostPorts` setting because host ports 
+If you installed {{site.prodname}} using the operator, change the `spec.calicoNetwork.linuxDataplane` parameter in
+the operator's `Installation` resource to `"BPF"`; you must also clear the `hostPorts` setting because host ports
 are not supported in BPF mode:
 
 ```bash
@@ -336,8 +369,8 @@ calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true
 %>
 {% endtabs %}
 
-Enabling eBPF mode should not disrupt existing connections but existing connections will continue to use the standard 
-Linux datapath. You may wish to restart pods to ensure that they start new connections using the BPF dataplane.  
+Enabling eBPF mode should not disrupt existing connections but existing connections will continue to use the standard
+Linux datapath. You may wish to restart pods to ensure that they start new connections using the BPF dataplane.
 
 #### Try out DSR mode
 
@@ -366,9 +399,9 @@ To revert to standard Linux networking:
    ```bash
    kubectl patch installation.operator.tigera.io default --type merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Iptables"}}}'
    ```
-   
+
    or:
-   
+
    ```
    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": false}}'
    ```
