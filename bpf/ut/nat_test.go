@@ -1775,8 +1775,8 @@ func TestNATSourceCollision(t *testing.T) {
 		},
 		node1ip, node1ip, nodeportPort)
 
-	ctMap.Update(ctKey.AsBytes(), ctVal.AsBytes())
-	ctMap.Update(revKey.AsBytes(), revVal.AsBytes())
+	_ = ctMap.Update(ctKey.AsBytes(), ctVal.AsBytes())
+	_ = ctMap.Update(revKey.AsBytes(), revVal.AsBytes())
 
 	dumpCTMap(ctMap)
 
@@ -1799,7 +1799,7 @@ func TestNATSourceCollision(t *testing.T) {
 
 	var recvPkt []byte
 
-	_, _, _, _, pktBytes, err := testPacket(nil, pktIPHdr, pktTCPHdr,
+	_, _, _, _, pktBytes, _ := testPacket(nil, pktIPHdr, pktTCPHdr,
 		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
 
 	skbMark = 0
@@ -1878,7 +1878,7 @@ func TestNATSourceCollision(t *testing.T) {
 	pktTCPHdr.ACK = true
 	pktTCPHdr.Seq = 1
 
-	_, _, _, _, pktBytes, err = testPacket(nil, pktIPHdr, pktTCPHdr,
+	_, _, _, _, pktBytes, _ = testPacket(nil, pktIPHdr, pktTCPHdr,
 		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
 
 	dumpCTMap(ctMap)
