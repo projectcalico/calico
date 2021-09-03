@@ -65,7 +65,7 @@ endif
 ###############################################################################
 
 # Versions and location of dependencies used in the build.
-BIRD_VERSION=v0.3.3-182-g4b493986
+BIRD_VERSION=v0.3.3-184-g202a2186
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
@@ -456,7 +456,7 @@ remove-go-build-image:
 
 .PHONY: st
 ## Run the system tests
-st: image-all remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
+st: image remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
 	# Check versions of Calico binaries that ST execution will use.
 	docker run --rm -v $(CURDIR)/dist:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calicoctl version;	  /go/bin/calicoctl version; \
