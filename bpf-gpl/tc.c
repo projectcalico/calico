@@ -825,15 +825,19 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
-			CALI_DEBUG("Fixing source port from %d to %d\n",
-					bpf_ntohs(tc_tcphdr(ctx)->source), state->ct_result.nat_sport);
-			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+			if (state->ct_result.nat_sport) {
+				CALI_DEBUG("Fixing source port from %d to %d\n",
+						bpf_ntohs(tc_tcphdr(ctx)->source), state->ct_result.nat_sport);
+				tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+			}
 			tc_tcphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		case IPPROTO_UDP:
-			CALI_DEBUG("Fixing source port from %d to %d\n",
-					bpf_ntohs(tc_udphdr(ctx)->source), state->ct_result.nat_sport);
-			tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+			if (state->ct_result.nat_sport) {
+				CALI_DEBUG("Fixing source port from %d to %d\n",
+						bpf_ntohs(tc_udphdr(ctx)->source), state->ct_result.nat_sport);
+				tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+			}
 			tc_udphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		}
@@ -846,7 +850,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					bpf_htons(state->dport),
 					bpf_htons(state->post_nat_dport),
 					bpf_htons(state->sport),
-					bpf_htons(state->ct_result.nat_sport),
+					bpf_htons(state->ct_result.nat_sport ? : state->sport),
 					ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
