@@ -235,6 +235,7 @@ outter:
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
+	bin.PatchPSNATPorts(20000, 30000)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())

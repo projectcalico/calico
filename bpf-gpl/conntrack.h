@@ -26,12 +26,9 @@
 
 // Connection tracking.
 
-#define PSNAT_START	20000
-#define PSNAT_NUM	10000
-
 static CALI_BPF_INLINE int psnat_get_port(void)
 {
-	return PSNAT_START + (bpf_get_prandom_u32() % PSNAT_NUM);
+	return PSNAT_START + (bpf_get_prandom_u32() % PSNAT_LEN);
 }
 
 #define src_lt_dest(ip_src, ip_dst, sport, dport) \
