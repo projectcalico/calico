@@ -28,6 +28,16 @@ global_job_config:
       - git fetch --unshallow
 
 blocks:
+  - name: "Build Images"
+    dependencies: []
+    task:
+      jobs:
+        - name: "Build All Images"
+          execution_time_limit:
+            minutes: 120
+          commands:
+            - TEST_IMAGE_BUILD=true make image-all
+
   - name: "General Tests"
     dependencies: []
     task:
@@ -40,8 +50,18 @@ blocks:
             - make ut
             - make fv
 
-  - name: "System Tests"
+  - name: "Build amd64 Image"
     dependencies: []
+    task:
+      jobs:
+        - name: "Build amd64 Image"
+          execution_time_limit:
+            minutes: 120
+          commands:
+            - make image
+
+  - name: "System Tests"
+    dependencies: ["Build amd64 Image"]
     task:
       prologue:
         commands:
