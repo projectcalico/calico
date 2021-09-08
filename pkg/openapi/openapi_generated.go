@@ -9,10 +9,10 @@
 package openapi
 
 import (
+	spec "github.com/go-openapi/spec"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 	common "k8s.io/kube-openapi/pkg/common"
-	spec "k8s.io/kube-openapi/pkg/validation/spec"
 
 	numorstring "github.com/projectcalico/api/pkg/lib/numorstring"
 )
