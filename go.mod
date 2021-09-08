@@ -9,11 +9,12 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210908210009-4286b5210ea6
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210908214348-194a10ce7182
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/net v0.0.0-20210224082022-3d97a244fca7
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
 	google.golang.org/grpc v1.27.1
+	k8s.io/kube-openapi v0.0.0-20210817084001-7fbd8d59e5b8 // indirect
 )
 
 // Replace the envoy data-plane-api dependency with the projectcalico fork that includes the generated
