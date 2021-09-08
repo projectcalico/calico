@@ -6,6 +6,7 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
+	github.com/go-openapi/spec v0.19.5
 	github.com/go-playground/locales v0.12.1 // indirect
 	github.com/go-playground/universal-translator v0.0.0-20170327191703-71201497bace // indirect
 	github.com/google/uuid v1.2.0
@@ -34,7 +35,7 @@ require (
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
 	k8s.io/code-generator v0.21.0-rc.0
-	k8s.io/kube-openapi v0.0.0-20210817084001-7fbd8d59e5b8
+	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
 	sigs.k8s.io/kind v0.11.1
 )
 

@@ -21,8 +21,8 @@
 package v1
 
 import (
+	spec "github.com/go-openapi/spec"
 	common "k8s.io/kube-openapi/pkg/common"
-	spec "k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
@@ -179,6 +179,7 @@ func schema_libcalico_go_lib_apis_v1_BGPPeerMetadata(ref common.ReferenceCallbac
 					"peerIP": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The IP address of the peer.",
+							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/projectcalico/libcalico-go/lib/net.IP"),
 						},
 					},
@@ -674,7 +675,8 @@ func schema_libcalico_go_lib_apis_v1_HostEndpointSpec(ref common.ReferenceCallba
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/libcalico-go/lib/net.IP"),
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/libcalico-go/lib/net.IP"),
 									},
 								},
 							},
@@ -780,12 +782,14 @@ func schema_libcalico_go_lib_apis_v1_IPNAT(ref common.ReferenceCallback) common.
 					"internalIP": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The internal IP address which must be associated with the owning endpoint via the configured IPNetworks for the endpoint.",
+							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/projectcalico/libcalico-go/lib/net.IP"),
 						},
 					},
 					"externalIP": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The external IP address.",
+							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/projectcalico/libcalico-go/lib/net.IP"),
 						},
 					},
