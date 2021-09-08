@@ -8,6 +8,8 @@ type BGPConfigurationExpansion interface{}
 
 type BGPPeerExpansion interface{}
 
+type CalicoNodeStatusExpansion interface{}
+
 type ClusterInformationExpansion interface{}
 
 type FelixConfigurationExpansion interface{}

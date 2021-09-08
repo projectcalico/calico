@@ -23,6 +23,10 @@ func (c *FakeProjectcalicoV3) BGPPeers() v3.BGPPeerInterface {
 	return &FakeBGPPeers{c}
 }
 
+func (c *FakeProjectcalicoV3) CalicoNodeStatuses() v3.CalicoNodeStatusInterface {
+	return &FakeCalicoNodeStatuses{c}
+}
+
 func (c *FakeProjectcalicoV3) ClusterInformations() v3.ClusterInformationInterface {
 	return &FakeClusterInformations{c}
 }

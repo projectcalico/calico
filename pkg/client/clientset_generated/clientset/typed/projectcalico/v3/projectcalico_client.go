@@ -15,6 +15,7 @@ type ProjectcalicoV3Interface interface {
 	RESTClient() rest.Interface
 	BGPConfigurationsGetter
 	BGPPeersGetter
+	CalicoNodeStatusesGetter
 	ClusterInformationsGetter
 	FelixConfigurationsGetter
 	GlobalNetworkPoliciesGetter
@@ -39,6 +40,10 @@ func (c *ProjectcalicoV3Client) BGPConfigurations() BGPConfigurationInterface {
 
 func (c *ProjectcalicoV3Client) BGPPeers() BGPPeerInterface {
 	return newBGPPeers(c)
+}
+
+func (c *ProjectcalicoV3Client) CalicoNodeStatuses() CalicoNodeStatusInterface {
+	return newCalicoNodeStatuses(c)
 }
 
 func (c *ProjectcalicoV3Client) ClusterInformations() ClusterInformationInterface {
