@@ -151,28 +151,17 @@ create:
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
+	*k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
 
 	if (srcLTDest) {
-		*k = (struct calico_ct_key) {
-			.protocol = ct_ctx->proto,
-			.addr_a = ip_src, .port_a = sport,
-			.addr_b = ip_dst, .port_b = dport,
-		};
 		CALI_VERB("CT-ALL src_to_dst A->B\n");
 		src_to_dst = &ct_value.a_to_b;
 		dst_to_src = &ct_value.b_to_a;
 	} else  {
-		*k = (struct calico_ct_key) {
-			.protocol = ct_ctx->proto,
-			.addr_a = ip_dst, .port_a = dport,
-			.addr_b = ip_src, .port_b = sport,
-		};
 		CALI_VERB("CT-ALL src_to_dst B->A\n");
 		src_to_dst = &ct_value.b_to_a;
 		dst_to_src = &ct_value.a_to_b;
 	}
-
-	dump_ct_key(k);
 
 	src_to_dst->seqno = seq;
 	src_to_dst->syn_seen = syn;
@@ -220,21 +209,7 @@ create:
 
 		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 
-		if (srcLTDest) {
-			*k = (struct calico_ct_key) {
-				.protocol = ct_ctx->proto,
-					.addr_a = ip_src, .port_a = sport,
-					.addr_b = ip_dst, .port_b = dport,
-			};
-		} else  {
-			*k = (struct calico_ct_key) {
-				.protocol = ct_ctx->proto,
-					.addr_a = ip_dst, .port_a = dport,
-					.addr_b = ip_src, .port_b = sport,
-			};
-		}
-
-		dump_ct_key(k);
+		*k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
 
 		if ((err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST))) {
 			CALI_DEBUG("Source collision with randomized port 0x%x:%d\n", bpf_htonl(ip_src), sport);
@@ -268,22 +243,9 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	};
 
 	struct calico_ct_key k;
+	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
 
-	if ((ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport)) {
-		k = (struct calico_ct_key) {
-			.protocol = ip_proto,
-			.addr_a = ip_src, .port_a = sport,
-			.addr_b = ip_dst, .port_b = dport,
-		};
-	} else  {
-		k = (struct calico_ct_key) {
-			.protocol = ip_proto,
-			.addr_a = ip_dst, .port_a = dport,
-			.addr_b = ip_src, .port_b = sport,
-		};
-	}
-
-	dump_ct_key(&k);
 	ct_value.nat_rev_key = *rk;
 	if (ct_ctx->orig_sport) {
 		ct_value.nat_sport = ct_ctx->sport;
