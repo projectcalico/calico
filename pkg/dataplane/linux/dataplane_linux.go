@@ -338,8 +338,30 @@ func SetupRoutes(hostVeth netlink.Link, result *current.Result) error {
 						return nil
 					}
 				}
-				return fmt.Errorf("route (Ifindex: %d, Dst: %s, Scope: %v) already exists for an interface other than '%s'",
-					route.LinkIndex, route.Dst.String(), route.Scope, hostVeth.Attrs().Name)
+
+				// Search all routes and report the conflict, search the name of the iface
+				routes, err = netlink.RouteList(nil, netlink.FAMILY_ALL)
+				if err != nil {
+					return fmt.Errorf("error listing routes")
+				}
+
+				var conflict string
+
+				for _, r := range routes {
+					if r.Dst.IP.Equal(route.Dst.IP) {
+						linkName := "unknown"
+						if link, err := netlink.LinkByIndex(r.LinkIndex); err == nil {
+							linkName = link.Attrs().Name
+						}
+
+						conflict = fmt.Sprintf("route (Ifindex: %d, Dst: %s, Scope: %v, Iface: %s)",
+							r.LinkIndex, r.Dst.String(), r.Scope, linkName)
+						break
+					}
+				}
+
+				return fmt.Errorf("route (Ifindex: %d, Dst: %s, Scope: %v) already exists for an interface other than '%s': %s",
+					route.LinkIndex, route.Dst.String(), route.Scope, hostVeth.Attrs().Name, conflict)
 			default:
 				return fmt.Errorf("failed to add route (Ifindex: %d, Dst: %s, Scope: %v, Iface: %s): %v",
 					route.LinkIndex, route.Dst.String(), route.Scope, hostVeth.Attrs().Name, err)
