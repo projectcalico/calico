@@ -162,8 +162,10 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	runFn func(progName string), opts ...testOption) {
 
 	topts := testOpts{
-		subtests: true,
-		logLevel: log.DebugLevel,
+		subtests:  true,
+		logLevel:  log.DebugLevel,
+		psnaStart: 20000,
+		psnatEnd:  30000,
 	}
 
 	for _, o := range opts {
@@ -235,7 +237,7 @@ outter:
 	Expect(err).NotTo(HaveOccurred())
 	bin.PatchTunnelMTU(natTunnelMTU)
 	bin.PatchVXLANPort(testVxlanPort)
-	bin.PatchPSNATPorts(20000, 30000)
+	bin.PatchPSNATPorts(topts.psnaStart, topts.psnatEnd)
 	tempObj := tempDir + "bpf.o"
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
@@ -596,6 +598,8 @@ type testOpts struct {
 	logLevel  log.Level
 	extraMaps []bpf.Map
 	xdp       bool
+	psnaStart uint32
+	psnatEnd  uint32
 }
 
 type testOption func(opts *testOpts)
@@ -625,6 +629,13 @@ func withExtraMap(m bpf.Map) testOption {
 func withXDP() testOption {
 	return func(o *testOpts) {
 		o.xdp = true
+	}
+}
+
+func withPSNATPorts(start, end uint16) testOption {
+	return func(o *testOpts) {
+		o.psnaStart = uint32(start)
+		o.psnatEnd = uint32(end)
 	}
 }
 

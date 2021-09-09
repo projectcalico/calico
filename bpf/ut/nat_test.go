@@ -1729,12 +1729,6 @@ func TestNATSourceCollision(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	// we must know that the encaped packet src ip is from a known host
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsRemoteHost).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2CIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
@@ -1819,11 +1813,10 @@ func TestNATSourceCollision(t *testing.T) {
 
 		tcp := tcpL.(*layers.TCP)
 		newSPort = uint16(tcp.SrcPort)
-		Expect(newSPort).NotTo(Equal(clientPort))
-		Expect(newSPort).NotTo(Equal(uint16(0)))
+		Expect(newSPort).To(Equal(uint16(22222)))
 
 		recvPkt = res.dataOut
-	})
+	}, withPSNATPorts(22222, 22222))
 
 	dumpCTMap(ctMap)
 
@@ -1902,4 +1895,79 @@ func TestNATSourceCollision(t *testing.T) {
 
 		recvPkt = res.dataOut
 	})
+
+	// Test random port conflict by sending another SYN packet. To avoid the
+	// complexity of VXLAN encap in the test, send it with a different node IP,
+	// which in fact mimics as if this node had 2 IPs. That is a realistic
+	// scenario, but the main reason is to excercise the conflict after the
+	// packet is unpacked and DNATed and that a retransmit eventually picks a
+	// different port.
+
+	node2ip2 := net.IPv4(10, 10, 1, 2).To4()
+	// Create a NAT entry pointing to the same backend
+	err = natMap.Update(
+		nat.NewNATKey(node2ip2, nodeportPort, tcpProto).AsBytes(),
+		nat.NewNATValue(0 /* id */, 1 /* count */, 1 /* local */, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	pktIPHdr = &layers.IPv4{
+		Version:  4,
+		IHL:      5,
+		TTL:      64,
+		Flags:    layers.IPv4DontFragment,
+		SrcIP:    clientIP,
+		DstIP:    node2ip2,
+		Protocol: layers.IPProtocolTCP,
+	}
+
+	pktTCPHdr = &layers.TCP{
+		SrcPort:    layers.TCPPort(clientPort),
+		DstPort:    layers.TCPPort(nodeportPort),
+		SYN:        true,
+		DataOffset: 5,
+	}
+
+	_, _, _, _, pktBytes, _ = testPacket(nil, pktIPHdr, pktTCPHdr,
+		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0})
+
+	skbMark = 0
+
+	// It must fail if we force the collision on the random port
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	}, withPSNATPorts(22222, 22222))
+
+	// It should eventually succeed if we keep retransmitting and it is possible to pick
+	// non-colliding port. TCP would retransmit a few times. linux retries 6 times by default with
+	// 1s initial timeout https://sysctl-explorer.net/net/ipv4/tcp_syn_retries/
+	Eventually(func() error {
+		var res bpfRunResult
+
+		runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+			var err error
+			res, err = bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+		}, withPSNATPorts(22222, 22223))
+
+		if res.Retval != resTC_ACT_UNSPEC {
+			return fmt.Errorf("Unresolved collision")
+		}
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		tcpL := pktR.Layer(layers.LayerTypeTCP)
+		Expect(tcpL).NotTo(BeNil())
+
+		tcp := tcpL.(*layers.TCP)
+		newSPort = uint16(tcp.SrcPort)
+		if newSPort != uint16(22223) {
+			fmt.Errorf("Unexpected resolution port")
+		}
+
+		return nil
+	}, "120s").Should(Succeed())
 }
