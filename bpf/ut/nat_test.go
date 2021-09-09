@@ -1729,7 +1729,7 @@ func TestNATSourceCollision(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	// we must know that the encaped packet src ip if from a known host
+	// we must know that the encaped packet src ip is from a known host
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValue(routes.FlagsRemoteHost).AsBytes(),

@@ -213,7 +213,7 @@ create:
 	if (err == -17 /* EEXIST */) {
 		CALI_DEBUG("Source collision for 0x%x:%d\n", bpf_htonl(ip_src), sport);
 
-		ct_ctx->orig_sport = ct_value.orig_sport = sport;
+		ct_value.orig_sport = sport;
 
 		sport = psnat_get_port();
 		CALI_DEBUG("New sport %d\n", sport);
@@ -237,6 +237,7 @@ create:
 		dump_ct_key(k);
 
 		if ((err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST))) {
+			CALI_DEBUG("Source collision with randomized port 0x%x:%d\n", bpf_htonl(ip_src), sport);
 			goto out;
 		}
 
