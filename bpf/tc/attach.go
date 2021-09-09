@@ -53,6 +53,8 @@ type AttachPoint struct {
 	TunnelMTU            uint16
 	VXLANPort            uint16
 	ExtToServiceConnmark uint32
+	PSNATStart           uint16
+	PSNATEnd             uint16
 }
 
 var tcLock sync.RWMutex
