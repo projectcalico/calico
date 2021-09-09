@@ -473,7 +473,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
-		Expect(ctr.NATSPort()).To(Equal(0))
+		Expect(ctr.NATSPort()).To(Equal(uint16(0)))
 
 		ctKey = ctr.ReverseNATKey()
 		Expect(ct).Should(HaveKey(ctKey))
