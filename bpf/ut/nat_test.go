@@ -473,6 +473,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
+		Expect(ctr.NATSPort()).To(Equal(0))
 
 		ctKey = ctr.ReverseNATKey()
 		Expect(ct).Should(HaveKey(ctKey))
@@ -1814,6 +1815,20 @@ func TestNATSourceCollision(t *testing.T) {
 		tcp := tcpL.(*layers.TCP)
 		newSPort = uint16(tcp.SrcPort)
 		Expect(newSPort).To(Equal(uint16(22222)))
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+
+		ctKey := conntrack.NewKey(uint8(6 /* TCP */), clientIP, clientPort, node2ip, nodeportPort)
+
+		Expect(ct).Should(HaveKey(ctKey))
+		ctr := ct[ctKey]
+		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
+		Expect(ctr.NATSPort()).To(Equal(newSPort))
+
+		revKey = ctr.ReverseNATKey()
+		Expect(revKey.AsBytes()).To(Equal(
+			conntrack.NewKey(uint8(6 /* TCP */), clientIP, newSPort, podIP, podPort).AsBytes()))
 
 		recvPkt = res.dataOut
 	}, withPSNATPorts(22222, 22222))

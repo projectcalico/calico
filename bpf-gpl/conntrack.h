@@ -247,7 +247,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
 
 	ct_value.nat_rev_key = *rk;
-	if (ct_ctx->orig_sport) {
+	if (ct_ctx->orig_sport != ct_ctx->sport) {
 		ct_value.nat_sport = ct_ctx->sport;
 	}
 	int err = cali_v4_ct_update_elem(&k, &ct_value, 0);
