@@ -826,7 +826,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
 			if (state->ct_result.nat_sport) {
-				CALI_DEBUG("Fixing source port from %d to %d\n",
+				CALI_DEBUG("Fixing TCP source port from %d to %d\n",
 						bpf_ntohs(tc_tcphdr(ctx)->source), state->ct_result.nat_sport);
 				tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
 			}
@@ -834,7 +834,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			break;
 		case IPPROTO_UDP:
 			if (state->ct_result.nat_sport) {
-				CALI_DEBUG("Fixing source port from %d to %d\n",
+				CALI_DEBUG("Fixing UDP source port from %d to %d\n",
 						bpf_ntohs(tc_udphdr(ctx)->source), state->ct_result.nat_sport);
 				tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
 			}
@@ -923,7 +923,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		case IPPROTO_TCP:
 			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			if (state->ct_result.nat_sport) {
-				CALI_DEBUG("Fixing dest port from %d to %d\n",
+				CALI_DEBUG("Fixing TCP dest port from %d to %d\n",
 						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
 				tc_tcphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
 			}
@@ -931,7 +931,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		case IPPROTO_UDP:
 			tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
 			if (state->ct_result.nat_sport) {
-				CALI_DEBUG("Fixing dest port from %d to %d\n",
+				CALI_DEBUG("Fixing UDP dest port from %d to %d\n",
 						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
 				tc_udphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
 			}
