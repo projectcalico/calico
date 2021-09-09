@@ -174,7 +174,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	// Response leaving workload at node 2
 	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		respPkt = udpResposeRaw(recvPkt)
+		respPkt = udpResponseRaw(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -555,7 +555,7 @@ func TestNATNodePort(t *testing.T) {
 
 	// Response leaving workload at node 2
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		respPkt := udpResposeRaw(recvPkt)
+		respPkt := udpResponseRaw(recvPkt)
 		// Change the MAC addresses so that we can observe that the right
 		// addresses were patched in.
 		copy(respPkt[:6], []byte{1, 2, 3, 4, 5, 6})
@@ -811,7 +811,7 @@ func TestNATNodePort(t *testing.T) {
 
 		// Response leaving workload at node 2
 		runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
-			respPkt := udpResposeRaw(recvPkt)
+			respPkt := udpResponseRaw(recvPkt)
 
 			// Change the MAC addresses so that we can observe that the right
 			// addresses were patched in.
@@ -963,7 +963,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 
 	// Response leaving workload at node 2
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		respPkt = udpResposeRaw(recvPkt)
+		respPkt = udpResponseRaw(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -1836,7 +1836,7 @@ func TestNATSourceCollision(t *testing.T) {
 		Expect(res.dataOut).To(Equal(recvPkt))
 	})
 
-	respPkt := tcpResposeRaw(recvPkt)
+	respPkt := tcpResponseRaw(recvPkt)
 	skbMark = 0
 
 	// Response leaving workload at node 2
@@ -1965,7 +1965,7 @@ func TestNATSourceCollision(t *testing.T) {
 		tcp := tcpL.(*layers.TCP)
 		newSPort = uint16(tcp.SrcPort)
 		if newSPort != uint16(22223) {
-			fmt.Errorf("Unexpected resolution port")
+			return fmt.Errorf("Unexpected resolution port")
 		}
 
 		return nil

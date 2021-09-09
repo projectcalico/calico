@@ -137,7 +137,7 @@ func encapedResponse(pktR gopacket.Packet) []byte {
 	vxlanR := vxlanL.(*layers.VXLAN)
 
 	inner := gopacket.NewPacket(vxlanR.LayerPayload(), layers.LayerTypeEthernet, gopacket.Default)
-	resp := udpResposeRaw(inner.Data())
+	resp := udpResponseRaw(inner.Data())
 
 	pkt := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: false},

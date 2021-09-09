@@ -668,7 +668,7 @@ func layersMatchFields(l gopacket.Layer, ignore ...string) GomegaMatcher {
 	return PointTo(MatchFields(IgnoreMissing|IgnoreExtras, f))
 }
 
-func udpResposeRaw(in []byte) []byte {
+func udpResponseRaw(in []byte) []byte {
 	pkt := gopacket.NewPacket(in, layers.LayerTypeEthernet, gopacket.Default)
 	ethL := pkt.Layer(layers.LayerTypeEthernet)
 	ethR := ethL.(*layers.Ethernet)
@@ -692,7 +692,7 @@ func udpResposeRaw(in []byte) []byte {
 	return out.Bytes()
 }
 
-func tcpResposeRaw(in []byte) []byte {
+func tcpResponseRaw(in []byte) []byte {
 	pkt := gopacket.NewPacket(in, layers.LayerTypeEthernet, gopacket.Default)
 	ethL := pkt.Layer(layers.LayerTypeEthernet)
 	ethR := ethL.(*layers.Ethernet)
