@@ -28,10 +28,10 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/api v0.0.0-20210818175712-59320232f526
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210901221559-fee02ceeb160
+	github.com/projectcalico/api v0.0.0-20210908204226-36fbcf68f1c8
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210908214348-194a10ce7182
 	github.com/projectcalico/pod2daemon v0.0.0-20210818162850-fa9ba6fd57c4
-	github.com/projectcalico/typha v0.7.3-0.20210901223245-ffce4ae743b2
+	github.com/projectcalico/typha v0.7.3-0.20210909183203-9920216f72c7
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.10.0
 	github.com/sirupsen/logrus v1.7.0
@@ -43,6 +43,7 @@ require (
 	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/grpc v1.27.1
+	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
 	k8s.io/api v0.21.0-rc.0
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
