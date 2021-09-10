@@ -9,7 +9,7 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
 ## Provision EC2 Nodes
 
 1. Provision five nodes
-    1. Ubuntu 18.04 LTS
+    1. Ubuntu 20.04 LTS - Focal
     1. T2.medium
     1. Ensure the instances are in the same subnet, and security group policy allows them communicate freely with one another.
     1. Disable Source / Destination Checks on the Elastic Network Interface for each instance

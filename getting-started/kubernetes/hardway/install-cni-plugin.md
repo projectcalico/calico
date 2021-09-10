@@ -32,7 +32,7 @@ sudo openssl x509 -req -in cni.csr \
                   -CAcreateserial \
                   -out cni.crt \
                   -days 365
-sudo chown ubuntu:ubuntu cni.crt
+sudo chown $(id -u):$(id -g) cni.crt
 ```
 
 Next, we create a kubeconfig file for the CNI plugin to use to access Kubernetes.
