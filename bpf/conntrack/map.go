@@ -136,6 +136,17 @@ func (e Value) OrigPort() uint16 {
 	return binary.LittleEndian.Uint16(e[52:54])
 }
 
+// OrigSPort returns the original source port, valid only if Type() is
+// TypeNATReverse and if the value returned is non-zero.
+func (e Value) OrigSPort() uint16 {
+	return binary.LittleEndian.Uint16(e[54:56])
+}
+
+// NATSPort resturns the port to SNAT to, valid only if Type() is TypeNATForward.
+func (e Value) NATSPort() uint16 {
+	return binary.LittleEndian.Uint16(e[40:42])
+}
+
 const (
 	TypeNormal uint8 = iota
 	TypeNATForward
@@ -293,11 +304,12 @@ func readConntrackLeg(b []byte) Leg {
 }
 
 type EntryData struct {
-	A2B      Leg
-	B2A      Leg
-	OrigDst  net.IP
-	OrigPort uint16
-	TunIP    net.IP
+	A2B       Leg
+	B2A       Leg
+	OrigDst   net.IP
+	OrigPort  uint16
+	OrigSPort uint16
+	TunIP     net.IP
 }
 
 func (data EntryData) Established() bool {
@@ -320,11 +332,12 @@ func (e Value) Data() EntryData {
 	ip := e[48:52]
 	tip := e[56:60]
 	return EntryData{
-		A2B:      readConntrackLeg(e[24:36]),
-		B2A:      readConntrackLeg(e[36:48]),
-		OrigDst:  ip,
-		OrigPort: binary.LittleEndian.Uint16(e[52:54]),
-		TunIP:    tip,
+		A2B:       readConntrackLeg(e[24:36]),
+		B2A:       readConntrackLeg(e[36:48]),
+		OrigDst:   ip,
+		OrigPort:  binary.LittleEndian.Uint16(e[52:54]),
+		OrigSPort: binary.LittleEndian.Uint16(e[54:56]),
+		TunIP:     tip,
 	}
 }
 
@@ -361,7 +374,7 @@ func (e Value) String() string {
 
 	switch e.Type() {
 	case TypeNATForward:
-		ret += fmt.Sprintf("REVKey : %s", e.ReverseNATKey().String())
+		ret += fmt.Sprintf("REVKey: %s NATSPort: %d", e.ReverseNATKey().String(), e.NATSPort())
 	case TypeNormal, TypeNATReverse:
 		ret += fmt.Sprintf("Data: %+v", e.Data())
 	default:

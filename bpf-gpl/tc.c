@@ -251,11 +251,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				// Net, we can use the same flag, CALI_ST_SUPPRESS_CT_STATE, both to
 				// suppress CT state creation and to drop the packet if we find that
 				// there is a HEP present.
-				CALI_DEBUG("CT mid-flow miss to HEP with no Linux conntrack entry: continue but suppressing CT state creation.\n");
+				CALI_DEBUG("CT mid-flow miss to HEP with no Linux conntrack entry: "
+						"continue but suppressing CT state creation.\n");
 				ctx.state->flags |= CALI_ST_SUPPRESS_CT_STATE;
 				ct_result_set_rc(ctx.state->ct_result.rc, CALI_CT_NEW);
 			} else {
-				CALI_DEBUG("CT mid-flow miss away from host with no Linux conntrack entry, drop.\n");
+				CALI_DEBUG("CT mid-flow miss away from host with no Linux "
+						"conntrack entry, drop.\n");
 				goto deny;
 			}
 		}
@@ -717,6 +719,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		ct_ctx_nat.orig_dst = state->ip_dst;
 		ct_ctx_nat.orig_dport = state->dport;
+		state->ct_result.nat_sport = ct_ctx_nat.sport;
 		/* fall through as DNAT is now established */
 
 	case CALI_CT_ESTABLISHED_DNAT:
@@ -789,10 +792,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 
 			ct_ctx_nat.type = CALI_CT_TYPE_NAT_REV;
-			if (conntrack_create(ctx, &ct_ctx_nat)) {
-				CALI_DEBUG("Creating NAT conntrack failed\n");
+			int err;
+			if ((err = conntrack_create(ctx, &ct_ctx_nat))) {
+				CALI_DEBUG("Creating NAT conntrack failed with %d\n", err);
 				goto deny;
 			}
+			state->ct_result.nat_sport = ct_ctx_nat.sport;
 		} else {
 			if (encap_needed && ct_result_np_node(state->ct_result)) {
 				CALI_DEBUG("CT says encap to node %x\n", bpf_ntohl(state->ct_result.tun_ip));
@@ -820,9 +825,19 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
+			if (state->ct_result.nat_sport) {
+				CALI_DEBUG("Fixing TCP source port from %d to %d\n",
+						bpf_ntohs(tc_tcphdr(ctx)->source), state->ct_result.nat_sport);
+				tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+			}
 			tc_tcphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		case IPPROTO_UDP:
+			if (state->ct_result.nat_sport) {
+				CALI_DEBUG("Fixing UDP source port from %d to %d\n",
+						bpf_ntohs(tc_udphdr(ctx)->source), state->ct_result.nat_sport);
+				tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_sport);
+			}
 			tc_udphdr(ctx)->dest = bpf_htons(state->post_nat_dport);
 			break;
 		}
@@ -831,8 +846,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 		if (l4_csum_off) {
 			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
-					state->post_nat_ip_dst,	bpf_htons(state->dport),
+					state->post_nat_ip_dst,
+					bpf_htons(state->dport),
 					bpf_htons(state->post_nat_dport),
+					bpf_htons(state->sport),
+					bpf_htons(state->ct_result.nat_sport ? : state->sport),
 					ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
@@ -904,19 +922,30 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		switch (ctx->ip_header->protocol) {
 		case IPPROTO_TCP:
 			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			if (state->ct_result.nat_sport) {
+				CALI_DEBUG("Fixing TCP dest port from %d to %d\n",
+						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
+				tc_tcphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
+			}
 			break;
 		case IPPROTO_UDP:
-			tc_tcphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			tc_udphdr(ctx)->source = bpf_htons(state->ct_result.nat_port);
+			if (state->ct_result.nat_sport) {
+				CALI_DEBUG("Fixing UDP dest port from %d to %d\n",
+						bpf_ntohs(tc_tcphdr(ctx)->dest), state->ct_result.nat_sport);
+				tc_udphdr(ctx)->dest = bpf_htons(state->ct_result.nat_sport);
+			}
 			break;
 		}
 
 		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
 		if (l4_csum_off) {
-			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_src,
-					state->ct_result.nat_ip, bpf_htons(state->sport),
-					bpf_htons(state->ct_result.nat_port),
-					ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off,
+				state->ip_src, state->ct_result.nat_ip,
+				bpf_htons(state->dport), bpf_htons(state->ct_result.nat_sport ? : state->dport),
+				bpf_htons(state->sport), bpf_htons(state->ct_result.nat_port),
+				ctx->ip_header->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",

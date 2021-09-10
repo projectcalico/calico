@@ -194,6 +194,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	}
 
 	testIfTCP := testOpts.protocol == "tcp"
+	testIfNotUDPUConnected := (!testOpts.udpUnConnected)
 
 	protoExt := ""
 	if testOpts.udpUnConnected {
@@ -2290,6 +2291,47 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											Should(BeNumerically(">", 0), "MACs do not match")
 									})
 								}
+							})
+
+							// Our unconnected test client cannot handle multiple streams. Two
+							// clients cannot use the same local address. The connected case shows
+							// that it works in principle.
+							_ = testIfNotUDPUConnected && It("should not break connectivity with source port collision", func() {
+
+								By("Synchronizing with policy and services")
+								cc.Expect(Some, externalClient, TargetIP(felixes[0].IP), ExpectWithPorts(npPort))
+								cc.Expect(Some, externalClient, TargetIP(felixes[1].IP), ExpectWithPorts(npPort))
+								cc.CheckConnectivity()
+
+								pc := &PersistentConnection{
+									Runtime:             externalClient,
+									RuntimeName:         externalClient.Name,
+									IP:                  felixes[0].IP,
+									Port:                int(npPort),
+									SourcePort:          12345,
+									Protocol:            testOpts.protocol,
+									MonitorConnectivity: true,
+								}
+
+								err := pc.Start()
+								Expect(err).NotTo(HaveOccurred())
+								defer pc.Stop()
+
+								Eventually(pc.PongCount, "5s").Should(
+									BeNumerically(">", 0),
+									"Expected to see pong responses on the connection but didn't receive any")
+								log.Info("Pongs received within last 1s")
+
+								cc.ResetExpectations()
+								cc.Expect(Some, externalClient, TargetIP(felixes[1].IP),
+									ExpectWithPorts(npPort), ExpectWithSrcPort(12345))
+								cc.CheckConnectivity()
+
+								prevCount := pc.PongCount()
+
+								Eventually(pc.PongCount, "5s").Should(BeNumerically(">", prevCount),
+									"Expected to see pong responses on the connection but didn't receive any")
+								log.Info("Pongs received within last 1s")
 							})
 
 							_ = testIfTCP && It("should survive conntrack cleanup sweep", func() {

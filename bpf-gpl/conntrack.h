@@ -26,6 +26,11 @@
 
 // Connection tracking.
 
+static CALI_BPF_INLINE int psnat_get_port(void)
+{
+	return PSNAT_START + (bpf_get_prandom_u32() % PSNAT_LEN);
+}
+
 #define src_lt_dest(ip_src, ip_dst, sport, dport) \
 	((ip_src) < (ip_dst)) || (((ip_src) == (ip_dst)) && (sport) < (dport))
 
@@ -66,6 +71,9 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_create_ctx *ct
 	__be32 seq = 0;
 	bool syn = false;
 	__u64 now;
+
+	/* Make sure we have the right port in case we change it. */
+	ct_ctx->orig_sport = ct_ctx->sport;
 
 	if (ct_ctx->tcp) {
 		seq = ct_ctx->tcp->seq;
@@ -200,7 +208,27 @@ create:
 		CALI_DEBUG("CT-ALL Whitelisted dest side - to EP\n");
 	}
 
-	err = cali_v4_ct_update_elem(k, &ct_value, 0);
+	err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST);
+
+	if (err == -17 /* EEXIST */) {
+		CALI_DEBUG("Source collision for 0x%x:%d\n", bpf_htonl(ip_src), sport);
+
+		ct_value.orig_sport = sport;
+
+		sport = psnat_get_port();
+		CALI_DEBUG("New sport %d\n", sport);
+
+		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
+
+		*k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
+
+		if ((err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST))) {
+			CALI_DEBUG("Source collision with randomized port 0x%x:%d\n", bpf_htonl(ip_src), sport);
+			goto out;
+		}
+
+		ct_ctx->sport = sport;
+	}
 
 out:
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
@@ -213,7 +241,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	__u8 ip_proto = ct_ctx->proto;
 	__be32 ip_src = ct_ctx->src;
 	__be32 ip_dst = ct_ctx->orig_dst;
-	__u16 sport = ct_ctx->sport;
+	__u16 sport = ct_ctx->orig_sport;
 	__u16 dport = ct_ctx->orig_dport;
 
 	__u64 now = bpf_ktime_get_ns();
@@ -226,23 +254,13 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_create_ctx *ct_
 	};
 
 	struct calico_ct_key k;
+	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
 
-	if ((ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport)) {
-		k = (struct calico_ct_key) {
-			.protocol = ip_proto,
-			.addr_a = ip_src, .port_a = sport,
-			.addr_b = ip_dst, .port_b = dport,
-		};
-	} else  {
-		k = (struct calico_ct_key) {
-			.protocol = ip_proto,
-			.addr_a = ip_dst, .port_a = dport,
-			.addr_b = ip_src, .port_b = sport,
-		};
-	}
-
-	dump_ct_key(&k);
 	ct_value.nat_rev_key = *rk;
+	if (ct_ctx->orig_sport != ct_ctx->sport) {
+		ct_value.nat_sport = ct_ctx->sport;
+	}
 	int err = cali_v4_ct_update_elem(&k, &ct_value, 0);
 	CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 	return err;
@@ -539,6 +557,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			CALI_CT_DEBUG("Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;
 		}
+		result.nat_sport = v->nat_sport ? : sport;
 		// Record timestamp.
 		tracking_v->last_seen = now;
 
@@ -626,6 +645,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
 			result.nat_port = v->orig_port;
+			result.nat_sport = v->orig_sport;
 		} else {
 			CALI_CT_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;

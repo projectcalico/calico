@@ -139,6 +139,13 @@ func (b *Binary) PatchExtToServiceConnmark(mark uint32) {
 	b.patchU32Placeholder("MARK", uint32(mark))
 }
 
+// PatchPSNATPorts replaces PSNAT_START and PSNAT_LEN with the provided port range.
+func (b *Binary) PatchPSNATPorts(start, end uint32) {
+	logrus.WithFields(logrus.Fields{"start": start, "end": end}).Debug("Patching pSNAT ports")
+	b.patchU32Placeholder("PRTS", start)
+	b.patchU32Placeholder("PRTL", end-start+1)
+}
+
 // patchU32Placeholder replaces a placeholder with the given value.
 func (b *Binary) patchU32Placeholder(from string, to uint32) {
 	toBytes := make([]byte, 4)
