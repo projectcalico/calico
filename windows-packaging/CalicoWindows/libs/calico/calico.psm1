@@ -309,7 +309,10 @@ function Get-LastBootTime()
     {
         throw "Failed to get last boot time"
     }
-    return $bootTime
+ 
+    # This function is used in conjunction with Get-StoredLastBootTime, which
+    # returns a string, so convert the datetime value to a string using the "general" standard format.
+    return $bootTime.ToString("G")
 }
 
 $softwareRegistryKey = "HKLM:\Software\Tigera"
