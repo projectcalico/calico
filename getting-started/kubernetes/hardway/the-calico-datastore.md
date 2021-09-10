@@ -56,7 +56,7 @@ To interact directly with the {{site.prodname}} datastore, use the `calicoctl` c
 1. Download the `calicoctl` binary to a Linux host with access to Kubernetes.
 
    ```bash
-   wget https://github.com/projectcalico/calicoctl/releases/download/v3.14.0/calicoctl
+   wget https://github.com/projectcalico/calicoctl/releases/download/v3.20.0/calicoctl
    chmod +x calicoctl
    sudo mv calicoctl /usr/local/bin/
    ```
