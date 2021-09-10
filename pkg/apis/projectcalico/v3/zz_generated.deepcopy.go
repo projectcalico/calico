@@ -825,6 +825,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFPSNATPorts != nil {
+		in, out := &in.BPFPSNATPorts, &out.BPFPSNATPorts
+		*out = new(numorstring.Port)
+		**out = **in
+	}
 	if in.RouteTableRange != nil {
 		in, out := &in.RouteTableRange, &out.RouteTableRange
 		*out = new(RouteTableRange)
