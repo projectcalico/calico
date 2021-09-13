@@ -6,7 +6,7 @@ canonical_url: '/security/tutorials/app-layer-policy/enforce-policy-istio'
 
 This tutorial sets up a microservices application, then demonstrates how to use {{site.prodname}} application layer policy to mitigate some common threats.
 
-> **Note**: This tutorial was verified using Istio v1.4.2. Some content may not apply to the latest Istio version.
+> **Note**: This tutorial was verified using Istio v1.10.2. Some content may not apply to the latest Istio version.
 {: .alert .alert-info}
 
 ## Prerequisites
@@ -52,45 +52,6 @@ database-1601951801-m4w70   3/3       Running   0          21h
 summary-2817688950-g1b3n    3/3       Running   0          21h
 ```
 {: .no-select-button}
-
-View the Kubernetes ServiceAccounts created by the manifest.
-
-    kubectl get serviceaccount
-
-You should see a Kubernetes ServiceAccount for each microservice in the application (in addition to the `default` account).
-
-```
-NAME       SECRETS   AGE
-customer   1         21h
-database   1         21h
-default    1         21h
-summary    1         21h
-```
-{: .no-select-button}
-
-Examine the Kubernetes Secrets.
-
-    kubectl get secret
-
-You should see output similar to the following.
-
-```
-NAME                   TYPE                                  DATA      AGE
-customer-token-mgb8w   kubernetes.io/service-account-token   3         21h
-database-token-nb5xp   kubernetes.io/service-account-token   3         21h
-default-token-wwml6    kubernetes.io/service-account-token   3         21h
-istio.customer         istio.io/key-and-cert                 3         21h
-istio.database         istio.io/key-and-cert                 3         21h
-istio.default          istio.io/key-and-cert                 3         21h
-istio.summary          istio.io/key-and-cert                 3         21h
-summary-token-8kpt1    kubernetes.io/service-account-token   3         21h
-```
-{: .no-select-button}
-
-Notice that Istio CA will have created a secret of type `istio.io/key-and-cert` for each
-service account.  These keys and X.509 certificates are used to cryptographically authenticate
-traffic in the Istio service mesh, and the corresponding service account identities are used by
-{{site.prodname}} in authentication policy.
 
 ### Determining ingress IP and port
 
@@ -169,35 +130,6 @@ For example, the {% include open-new-window.html text='Heartbleed'
 url='http://heartbleed.com' %} vulnerability in OpenSSL allowed attackers to
 trick an affected application into reading out portions of its memory,
 compromising private keys.
-
-Let's simulate an attacker who has stolen the private keys of another pod.  Since the keys are
-stored as Kubernetes secrets, we won't exploit a vulnerability in a service, but instead just mount
-the secret in a pod that will simulate an attacker.
-
-If you still have your shell open in the customer pod, exit out or open a new terminal tab (we will
-return to the customer pod later).
-
-```bash
-kubectl apply -f \
-{{ "/security/tutorials/app-layer-policy/manifests/20-attack-pod.yaml" | absolute_url }}
-```
-
-Take a look at the [`20-attack-pod.yaml` manifest in your browser](manifests/20-attack-pod.yaml).
-It creates a pod and mounts `istio.summary` secret.  This will allow us to masquerade as if we were
-the `summary` service, even though this pod is not run as that service account.  Let's try this out.  First, `exec` into the pod.
-
-    kubectl exec -ti attack-<fill in pod ID> bash
-
-Now, we will attack the database.  Instead of listing the contents like we did before, let's try
-something more malicious, like changing the account balance with a `PUT` command.
-
-    curl -k https://database:2379/v2/keys/accounts/519940/balance -d value="10000.00" \
-    -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
-
-Unlike when we did this with the customer web pod, we do not have Envoy to handle encryption, so we
-have to pass an `https` URL, the `--key` and `--cert` parameters to `curl` to do the cryptography.
-
-Return to your web browser and refresh to confirm the new balance.
 
 #### Network policy
 
@@ -289,24 +221,3 @@ Repeat our attempt to access the database.
 We have left out the JSON formatting because we do not expect to get a valid JSON response. This
 time we should get a `403 Forbidden` response.  Only the account summary microservice has database
 access according to our policy.
-
-Finally, let's return to the attack pod that simulated stealing secret keys.
-
-    kubectl exec -ti attack-<fill in pod ID> bash
-
-Let's repeat our attack with stolen keys. We'll further increase the account balance to highlight
-whether it succeeds.
-
-```bash
-curl -k --connect-timeout 3 https://database:2379/v2/keys/account/519940/balance -d \
-value="99999.99" -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
-```
-
-You should get no response, and refreshing your browser should not show an increased balance.
-
-You might wonder how {{site.prodname}} was able to detect and prevent this attack—the attacker was
-able to steal the keys which prove identity in our system.  This highlights the value of multi-layer
-authentication checks.  Although our attack pod had the keys to fool the X.509 certificate check,
-{{site.prodname}} also monitors the Kubernetes API Server for which IP addresses are associated with which
-service accounts.  Since our attack pod has an IP not associated with the account summary service
-account we disallow the connection.
