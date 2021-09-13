@@ -375,6 +375,11 @@ fv-bpf:
 check-wireguard:
 	fv/wireguard-available || ( echo "WireGuard not available."; exit 1 )
 
+fv/win-fv.exe: $(REMOTE_DEPS)
+	mkdir -p bin
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
+		GOOS=windows CC=x86_64-w64-mingw32-gcc go test --buildmode=exe -mod=mod ./$(shell dirname $@)/winfv -c -o $@'
+
 ###############################################################################
 # K8SFV Tests
 ###############################################################################
