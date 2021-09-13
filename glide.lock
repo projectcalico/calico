@@ -128,6 +128,7 @@ testImports:
   - events/v1beta1
   - extensions/v1beta1
   - networking/v1
+  - policy/v1
   - policy/v1beta1
   - rbac/v1
   - rbac/v1alpha1

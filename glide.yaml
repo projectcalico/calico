@@ -7,6 +7,7 @@ testImport:
   - apps/v1beta1
   - core/v1
   - extensions/v1beta1
+  - policy/v1
   - policy/v1beta1
 - package: k8s.io/client-go
   version: release-7.0
