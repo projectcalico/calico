@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
       - name: attacker
-        image: tutum/curl
+        image: curlimages/curl
         command: ["/bin/sleep","infinity"]
         volumeMounts:
         - name: istio-certs
