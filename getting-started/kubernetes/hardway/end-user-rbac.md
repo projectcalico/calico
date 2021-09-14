@@ -7,6 +7,28 @@ canonical_url: '/getting-started/kubernetes/hardway/end-user-rbac'
 In this lab we will set up role-based access control (RBAC) suitable for running the cluster in production. We will
 cover roles for using {{site.prodname}}.  General RBAC for a production Kubernetes cluster is beyond the scope of this lab.
 
+## Using `calicoctl`
+
+In order for the `calicoctl` tool to perform version mismatch verification (to make sure the versions for both the cluster
+and `calicoctl` are the same), whoever is using it needs to have `get` access to `clusterinformations` at the cluster
+level, i.e., not in a namespace. The network admin role below already has such access, but we will see that we will need to add
+it to the service owner user we will create further on.
+
+```bash
+kubectl apply -f - <<EOF
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calicoctl-user
+rules:
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - clusterinformations
+    verbs:
+      - get
+EOF
+```
+
 ## Network admin
 
 A network admin is a person responsible for configuring and operating the {{site.prodname}} network as a whole. As such, they
@@ -83,7 +105,7 @@ sudo openssl x509 -req -in nik.csr \
                   -CAcreateserial \
                   -out nik.crt \
                   -days 365
-sudo chown ubuntu:ubuntu nik.crt
+sudo chown $(id -u):$(id -g) nik.crt
 ```
 
 Next, we create a kubeconfig file for Nik.
@@ -198,7 +220,7 @@ sudo openssl x509 -req -in sam.csr \
                   -CAcreateserial \
                   -out sam.crt \
                   -days 365
-sudo chown ubuntu:ubuntu sam.crt
+sudo chown $(id -u):$(id -g) sam.crt
 ```
 
 Next, we create a kubeconfig file for Sam.
@@ -235,6 +257,12 @@ Bind the role to Sam in the namespace
 
 ```bash
 kubectl create rolebinding -n sam network-service-owner-sam --clusterrole=network-service-owner --user=sam
+```
+
+Also bind the `calicoctl-user` role to sam at the cluster level so that they can use `calicoctl` properly
+
+```bash
+kubectl create clusterrolebinding calicoctl-user-sam --clusterrole=calicoctl-user --user=sam
 ```
 
 Sam cannot create global network set resources (like Nik can as network admin)

@@ -107,7 +107,7 @@ information.
 Imagine what would happen if an attacker were to gain control of the customer web pod in our
 application. Let's simulate this by executing a remote shell inside that pod.
 
-    kubectl exec -ti customer-<fill in pod ID> -c customer bash
+    kubectl exec -ti customer-<fill in pod ID> -c customer -- bash
 
 Notice that from here, we get direct access to the backend database.  For example, we can list all the entries in the database like this:
 
