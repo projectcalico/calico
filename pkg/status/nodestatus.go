@@ -1,0 +1,265 @@
+// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package status
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/typha/pkg/syncclientutils"
+	"github.com/projectcalico/typha/pkg/syncproto"
+
+	"github.com/projectcalico/node/buildinfo"
+	"github.com/projectcalico/node/pkg/calicoclient"
+)
+
+const (
+	DefaultIntervalInSeconds = 10
+)
+
+// This file contains the main processing and common logic for node status reporter.
+
+// Run runs the node status reporter.
+func Run() {
+	// This binary is only ever invoked _after_ the
+	// startup binary has been invoked and the modified environments have
+	// been sourced.  Therefore, the NODENAME environment will always be
+	// set at this point.
+	nodename := os.Getenv("NODENAME")
+	if nodename == "" {
+		log.Panic("NODENAME environment is not set")
+	}
+
+	// Load the client config from environment.
+	cfg, c := calicoclient.CreateClient()
+
+	// This is running as a daemon. Create a long-running nodeStatusReporter.
+	r := &nodeStatusReporter{
+		nodename: nodename,
+		cfg:      cfg,
+		client:   c,
+		// Don't block syncer but wait for the last update has been processed.
+		syncerC:    make(chan interface{}, 1),
+		reporter:   make(map[string]*reporter),
+		populators: GetPopulators(),
+		done:       make(chan struct{}),
+	}
+
+	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
+	// nodeStatusReporter to trigger updates when necessary.
+
+	// Read Typha settings from the environment.
+	// When Typha is in use, there will already be variables prefixed with FELIX_, so it's
+	// convenient if we honor those as well as the CALICO variables.
+	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
+	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
+		&typhaConfig, syncproto.SyncerTypeNodeStatus,
+		buildinfo.GitVersion, nodename, fmt.Sprintf("node-status %s", buildinfo.GitVersion),
+		r,
+	) {
+		log.Debug("Using typha syncclient")
+	} else {
+		// Use the syncer locally.
+		log.Debug("Using local syncer")
+		syncer := nodestatussyncer.New(c.(backendClientAccessor).Backend(), r)
+		syncer.Start()
+	}
+
+	// Run the nodeStatusReporter.
+	r.run()
+}
+
+// getPopulators maps BirdConnType to a map from classType to statusPopulator.
+func GetPopulators() map[BirdConnType]map[apiv3.NodeStatusClassType]statusPopulator {
+	// Get all the statusPopulators
+	populators := make(map[BirdConnType]map[apiv3.NodeStatusClassType]statusPopulator)
+
+	for _, ipv := range []BirdConnType{BirdConnTypeV4, BirdConnTypeV6} {
+		populators[ipv] = make(map[apiv3.NodeStatusClassType]statusPopulator)
+		populators[ipv][apiv3.NodeStatusClassTypeAgent] = BirdInfo{ipv: ipv}
+		populators[ipv][apiv3.NodeStatusClassTypeBGP] = BirdBGPPeers{ipv: ipv}
+		populators[ipv][apiv3.NodeStatusClassTypeRoute] = BirdRoutes{ipv: ipv}
+	}
+
+	return populators
+}
+
+// Show prints status information from all populators.
+func Show() {
+	for _, ipv := range []BirdConnType{BirdConnTypeV4, BirdConnTypeV6} {
+		for _, class := range []apiv3.NodeStatusClassType{
+			apiv3.NodeStatusClassTypeAgent,
+			apiv3.NodeStatusClassTypeBGP,
+			apiv3.NodeStatusClassTypeRoute,
+		} {
+			if p, ok := GetPopulators()[ipv][class]; ok {
+				p.Show()
+			}
+		}
+		fmt.Println("\n\n")
+	}
+}
+
+// nodeStatusReporter watches node status resource and creates/maintains reporter for each request.
+type nodeStatusReporter struct {
+	// Node name.
+	nodename string
+
+	// Calico client config
+	cfg *apiconfig.CalicoAPIConfig
+
+	// Calico client
+	client client.Interface
+
+	// Channel for getting updates and status updates from syncer.
+	syncerC chan interface{}
+
+	// cache for pending updates.
+	// No lock needed for updating the cache since it is updated in main loop only.
+	pendingUpdates map[string]*apiv3.CalicoNodeStatus
+
+	// Cache to map the name of node status object to the reporter.
+	reporter map[string]*reporter
+
+	// Map BirdConnType to a map from each class to a populator.
+	// Currently all the reporters would have the same populator for each class but
+	// it can be extended in the future.
+	populators map[BirdConnType]map[apiv3.NodeStatusClassType]statusPopulator
+
+	// Channel to indicate node status reporter routine is not needed anymore.
+	done chan struct{}
+
+	// Flag to show we are in-sync.
+	inSync bool
+}
+
+// run is the main reconciliation loop, it loops until done.
+// Here the logic for handling syncer updates is
+// - If we get a value update, cache it to pendingUpdates.
+// - If we get a inSync message, set inSync to true.
+//   We don't need to worry about any status message after inSync message,
+//   getting a non-in sync status after an in-sync isn't important here, there's no real impact.
+//   It'd just mean that we've got slightly old data.
+// - After handling syncer event, process pendingUpdates if we are in-sync.
+func (r *nodeStatusReporter) run() {
+	// Loop forever, updating whenever we get a kick. The first kick will happen as soon as the syncer is in sync.
+	for {
+		select {
+		case e := <-r.syncerC:
+			switch event := e.(type) {
+			case []bapi.Update:
+				r.onUpdates(event)
+			case bapi.SyncStatus:
+				if event == bapi.InSync {
+					r.inSync = true
+				}
+			default:
+				log.Panicf("Unknown type %T in syncer channel", event)
+			}
+		case <-r.done:
+			return
+		}
+
+		if r.inSync {
+			r.processPendingUpdates()
+		}
+	}
+}
+
+// OnUpdated handles the syncer update callback method.
+func (r *nodeStatusReporter) OnUpdates(updates []bapi.Update) {
+	r.syncerC <- updates
+}
+
+// OnStatusUpdated handles the syncer status callback method.
+func (r *nodeStatusReporter) OnStatusUpdated(status bapi.SyncStatus) {
+	r.syncerC <- status
+}
+
+// onUpdates caches the syncer resource updates in main loop.
+func (r *nodeStatusReporter) onUpdates(updates []bapi.Update) {
+	for _, u := range updates {
+		var name string
+		// Get resource name from the key.
+		// Node status is non-namespaced resources hence
+		// resource name is unique.
+		if v, ok := u.Key.(model.ResourceKey); ok {
+			name = v.Name
+		} else {
+			log.Warningf("Unexpected resource update: %s", u.Key)
+			continue
+		}
+
+		switch u.UpdateType {
+		case bapi.UpdateTypeKVDeleted:
+			// Resource is deleted. Set nil pointer for pending updates.
+			r.pendingUpdates[name] = nil
+		case bapi.UpdateTypeKVNew, bapi.UpdateTypeKVUpdated:
+			// Resource is created or updated. Cache latest value to pending updates.
+			switch v := u.Value.(type) {
+			case *apiv3.CalicoNodeStatus:
+				log.Infof("Updated node status resource: %s", u.Key)
+				r.pendingUpdates[name] = v
+			default:
+				log.Warningf("Unexpected resource update: %s", u.Key)
+				continue
+			}
+		}
+	}
+}
+
+// processPendingUpdates processes pending updates in main loop.
+// It is called when we are in-sync.
+func (r *nodeStatusReporter) processPendingUpdates() {
+	if len(r.pendingUpdates) == 0 {
+		return
+	}
+
+	for name, data := range r.pendingUpdates {
+		if data == nil {
+			// we have a deletion of the resource.
+			if reporter, ok := r.reporter[name]; ok {
+				reporter.KillAndWait()
+				delete(r.reporter, name)
+			}
+		} else {
+			// We have a new or updated resource.
+			if _, ok := r.reporter[name]; !ok {
+				// new resource.
+				reporter := newReporter(name, r.client, DefaultIntervalInSeconds, r.populators)
+				r.reporter[name] = reporter
+			}
+			// Send updated data to reporter.
+			r.reporter[name].RequestUpdate(data)
+		}
+		delete(r.pendingUpdates, name)
+	}
+}
+
+// backendClientAccessor is an interface to access the backend client from the main v2 client.
+type backendClientAccessor interface {
+	Backend() bapi.Client
+}

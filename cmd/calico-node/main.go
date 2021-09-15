@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/node/pkg/hostpathinit"
 	"github.com/projectcalico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/node/pkg/status"
 )
 
 // Create a new flag set.
@@ -65,6 +66,10 @@ var felixReady = flagSet.Bool("felix-ready", false, "Run felix readiness checks"
 
 // thresholdTime is introduced for bird readiness check. Default value is 30 sec.
 var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshold time for bird readiness")
+
+// Options for node status.
+var runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
+var showStatus = flagSet.Bool("show-status", false, "Print out node status")
 
 // confd flags
 var runConfd = flagSet.Bool("confd", false, "Run confd")
@@ -158,6 +163,12 @@ func main() {
 	} else if *initHostpaths {
 		logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
 		hostpathinit.Run()
+	} else if *runStatusReporter {
+		logrus.SetFormatter(&logutils.Formatter{Component: "status-reporter"})
+		status.Run()
+	} else if *showStatus {
+		status.Show()
+		os.Exit(0)
 	} else {
 		fmt.Println("No valid options provided. Usage:")
 		flagSet.PrintDefaults()
