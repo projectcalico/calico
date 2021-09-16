@@ -60,10 +60,10 @@ For step-by-step instructions, refer to the section that corresponds to your des
 > **Note**: Make sure you always install the version of `calicoctl` that matches the version of {{site.prodname}} running on your cluster.
 {: .alert .alert-info}
 
-- Install calicoctl as a binary on a single host (#install-calicoctl-as-a-binary-on-a-single-host)
-- Install calicoctl as a kubectl plugin on a single host (#install-calicoctl-as-a-kubectl-plugin-on-a-single-host)
-- Install calicoctl as a container on a single host (#install-calicoctl-as-a-container-on-a-single-host)
-- Install calicoctl as a Kubernetes pod (#install-calicoctl-as-a-kubernetes-pod)
+- [Install calicoctl as a binary on a single host](#install-calicoctl-as-a-binary-on-a-single-host)
+- [Install calicoctl as a kubectl plugin on a single host](#install-calicoctl-as-a-kubectl-plugin-on-a-single-host)
+- [Install calicoctl as a container on a single host](#install-calicoctl-as-a-container-on-a-single-host)
+- [Install calicoctl as a Kubernetes pod](#install-calicoctl-as-a-kubernetes-pod)
 
 #### Install calicoctl as a binary on a single host
 
