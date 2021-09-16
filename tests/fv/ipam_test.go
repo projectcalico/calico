@@ -91,9 +91,10 @@ func TestIPAM(t *testing.T) {
 	// Assign some IPs.
 	var v4, v6 []cnet.IPNet
 	v4Assignments, v6Assignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-		Num4:  5,
-		Num6:  7,
-		Attrs: map[string]string{"note": "reserved by ipam_test.go"},
+		Num4:        5,
+		Num6:        7,
+		Attrs:       map[string]string{"note": "reserved by ipam_test.go"},
+		IntendedUse: v3.IPPoolAllowedUseWorkload,
 	})
 	Expect(err).NotTo(HaveOccurred())
 	if v4Assignments != nil {
@@ -157,8 +158,9 @@ func TestIPAM(t *testing.T) {
 	// Assign some IPs.
 	var v4More, v6More []cnet.IPNet
 	v4MoreAssignments, v6MoreAssignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-		Num4:      11,
-		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
+		Num4:        11,
+		IPv4Pools:   []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
+		IntendedUse: v3.IPPoolAllowedUseWorkload,
 	})
 	Expect(err).NotTo(HaveOccurred())
 	if v4MoreAssignments != nil {
