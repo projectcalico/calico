@@ -86,6 +86,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Eric Son                                 | @nuxeric |
 | Erik Stidham                             | @tmjd |
 | Fabian Ruff                              | @databus23 |
+| Fahad Arshad                             | @faarshad |
 | Feilong Wang                             | @openstacker |
 | Fernando Alvarez                         | @methadata |
 | Fionera                                  | @fionera |
@@ -116,6 +117,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | JG                                       | @elfchief |
 | Jiawei Huang                             | @hjiawei |
 | jie zhang                                | @kadisi |
+| jmjoy                                    | @jmjoy |
 | Joel Bastos                              | @kintoandar |
 | Johan Fleury                             | @johanfleury |
 | Johannes Scheerer                        | @ScheererJ |
@@ -205,6 +207,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Pierre Grimaud                           | @pgrimaud |
 | Pike                                     | @pikeszfish |
 | Pushkar Joglekar                         | @PushkarJ |
+| Qijun Chen                               | @arikachen |
 | Qiu Yu                                   | @unicell |
 | Rahul Krishna Upadhyaya                  | @rakrup |
 | rao yunkun                               | @yunkunrao |
