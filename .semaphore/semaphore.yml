@@ -66,7 +66,7 @@ blocks:
             minutes: 15
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true VALIDARCHES=amd64; fi
 
 promotions:
   # Run this manually via the semaphore UI if the cache is full
