@@ -39,6 +39,8 @@ section:
 - title: The eBPF dataplane
   path: /maintenance/ebpf/
   section:
+  - title: eBPF use cases
+    path: /maintenance/ebpf/use-cases-ebpf 
   - title: Enable the eBPF dataplane
     path: /maintenance/ebpf/enabling-bpf
   - title: eBPF on EKS
