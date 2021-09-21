@@ -61,6 +61,10 @@ calicoctl ipam configure --strictaffinity=true
 >**Note**: For operator-managed Linux {{site.prodname}} clusters, three Linux worker nodes are required in order to meet high-availability requirements for Typha.
 {: .alert .alert-info}
 
+#### AWS
+
+For AWS, the {% include open-new-window.html text='Amazon EC2 Metadata Service v2 (IMDSv2)' url='https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html' %} needs to be enabled (it is enabled by default).
+
 #### Windows platform 
 
 - Windows versions:
