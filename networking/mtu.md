@@ -67,7 +67,7 @@ The extra overlay header used in IP in IP, VXLAN and WireGuard protocols, reduce
 When using AKS, the underlying network has an {% include open-new-window.html text='MTU of 1400' url='https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-tcpip-performance-tuning#azure-and-vm-mtu' %}, even though the network interface will have an MTU of 1500.
 WireGuard sets the Don't Fragment (DF) bit on its packets, and so the MTU for WireGuard on AKS needs to be set to 60 bytes below the 1400 MTU of the underlying network to avoid dropped packets.
 
-If you have a mix of Wireguard and either IP in IP or VXLAN in your cluster, you should configure the MTU to be the smallest of the values of each encap type. This could be the case if, for example, you are in the process of installing WireGuard on your nodes.
+If you have a mix of WireGuard and either IP in IP or VXLAN in your cluster, you should configure the MTU to be the smallest of the values of each encap type. The reason for this is that only WireGuard encapsulation will be used between any nodes where both have WireGuard enabled, and IP in IP or VXLAN will then be used between any nodes where both do not have WireGuard enabled. This could be the case if, for example, you are in the process of installing WireGuard on your nodes.
 
 Therefore, we recommend the following:
 
