@@ -54,7 +54,7 @@ Depending on the specific orchestrator environment, Felix is responsible for:
 
     Provides network health data. In particular, it reports errors and problems when configuring its host. This data is written to the datastore so it visible to other components and operators of the network.
 
-> **Note**: `{{site.nodecontainer}}` can be run in *policy only mode* where Felix runs without BIRD and confd. This provides policy management without route distribution between hosts, and is used for deployments like managed cloud providers. You enable this mode by setting the environment variable, `CALICO_NETWORKING=false` before starting the node.
+> **Note**: `{{site.nodecontainer}}` can be run in *policy only mode* where Felix runs without BIRD and confd. This provides policy management without route distribution between hosts, and is used for deployments like managed cloud providers. You enable this mode by setting the environment variable, `CALICO_NETWORKING_BACKEND=none` before starting the node.
 {: .alert .alert-info}
 
 ### BIRD
