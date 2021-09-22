@@ -68,7 +68,7 @@ blocks:
     epilogue:
       always:
         commands:
-          - for f in report/*.xml; do test-results publish $f; done
+          - test-results publish report
 
 - name: "Build Windows binaries"
   dependencies: []
