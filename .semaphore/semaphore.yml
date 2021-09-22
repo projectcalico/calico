@@ -65,6 +65,10 @@ blocks:
       - make ut
       - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
       - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+    epilogue:
+      always:
+        commands:
+          - for f in report/*.xml; do test-results publish $f; done
 
 - name: "Build Windows binaries"
   dependencies: []
