@@ -134,7 +134,7 @@ you want to install the binary.
    {: .alert .alert-success}
 
 ```
-Invoke-WebRequest -Uri "https://github.com/projectcalico/calicoctl/releases/{{ version }}/calicoctl-windows-amd64.exe" -OutFile "calicocttl.exe" 
+Invoke-WebRequest -Uri "https://github.com/projectcalico/calicoctl/releases/{{ version }}/calicoctl-windows-amd64.exe" -OutFile "calicoctl.exe" 
 ```
 
 %>
