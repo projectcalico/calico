@@ -368,8 +368,6 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 		svc:        sinfo,
 	}
 
-	s.newEpsMap[skey.sname] = eps
-
 	if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("applied a service %s update: sinfo=%+v", skey, s.newSvcMap[skey])
 	}
