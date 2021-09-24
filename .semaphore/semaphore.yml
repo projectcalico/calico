@@ -11,8 +11,12 @@ global_job_config:
     commands:
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
     - sudo apt-get update
-    - sudo apt-get install -y python-all-dev python3-all-dev python3-pip
+    - sudo apt-get install -y python-all-dev python3-all-dev python3-pip crudini
     - sudo pip3 install tox
+    # Disable initramfs update, as it means we run out of space on the Semaphore
+    # VM (and we don't need it because we're not going to reboot).
+    - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
+    - cat /etc/initramfs-tools/update-initramfs.conf
 
 blocks:
   - name: 'Testing'
