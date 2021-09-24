@@ -64,7 +64,7 @@ func NewEtcdClient(config *v1.EtcdConfig) (*EtcdClient, error) {
 		etcdLocation = strings.Split(config.EtcdEndpoints, ",")
 	}
 	if config.EtcdDiscoverySrv != "" {
-		srvs, srvErr := srv.GetClient("etcd-client", config.EtcdDiscoverySrv, "")
+		srvs, srvErr := srv.GetClient("etcd-client", config.EtcdDiscoverySrv)
 		if srvErr != nil {
 			return nil, fmt.Errorf("failed to discover etcd endpoints through SRV discovery: %v", srvErr)
 		}
