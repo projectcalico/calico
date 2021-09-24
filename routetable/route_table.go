@@ -188,28 +188,7 @@ type RouteTable struct {
 	conntrack         conntrackIface
 	time              timeshim.Interface
 
-	additionalRouteFilter *netlink.Route
-
 	opReporter logutils.OpRecorder
-}
-
-type RouteTableOption func(rt *RouteTable)
-
-// WithAdditionalLogFields - add additional log fields to merge into logCxt.
-//  useful if we want to discern between multiple route tables in operation e.g. in vxlan_mgr.go
-func WithAdditionalLogFields(fields log.Fields) RouteTableOption {
-	return func(rt *RouteTable) {
-		rt.logCxt = rt.logCxt.WithFields(fields)
-	}
-}
-
-// WithAdditionalRouteFilter - add additional route filters used in fullResyncRoutesForLink.
-//  this causes the aforementioned function to only touch specified programmed routes that match the filter.
-//  netlink.Route fields Table and LinkIndex will be ignored!
-func WithAdditionalRouteFilter(filter *netlink.Route) RouteTableOption {
-	return func(rt *RouteTable) {
-		rt.additionalRouteFilter = filter
-	}
 }
 
 func New(
@@ -222,7 +201,6 @@ func New(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
-	opts ...RouteTableOption,
 ) *RouteTable {
 	return NewWithShims(
 		interfaceRegexes,
@@ -238,7 +216,6 @@ func New(
 		removeExternalRoutes,
 		tableIndex,
 		opReporter,
-		opts...,
 	)
 }
 
@@ -257,20 +234,37 @@ func NewWithShims(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
-	opts ...RouteTableOption,
 ) *RouteTable {
-	var regexpParts []string
+	var filteredRegexes []string
 	includeNoOIF := false
+
 	for _, interfaceRegex := range interfaceRegexes {
 		if interfaceRegex == InterfaceNone {
 			includeNoOIF = true
 		} else {
-			regexpParts = append(regexpParts, interfaceRegex)
+			filteredRegexes = append(filteredRegexes, interfaceRegex)
 		}
 	}
 
-	ifaceNamePattern := strings.Join(regexpParts, "|")
-	log.WithField("regex", ifaceNamePattern).Info("Calculated interface name regexp")
+	logCxt := log.WithFields(log.Fields{
+		"ipVersion":  ipVersion,
+		"tableIndex": tableIndex,
+	})
+
+	// Create a regexp matching the interfaces this route table manages.
+	var ifacePrefixRegexp *regexp.Regexp
+	if len(filteredRegexes) == 0 && len(interfaceRegexes) > 0 {
+		// All of the regexp parts were special matches for non-interface types. In this case don't match any
+		// interfaces.
+		logCxt.Info("No interface matches required for routetable")
+	} else {
+		// Either there were no regexp parts supplied (same as match all), or at least one real interface was included.
+		// Compile the interface regex.
+		ifaceNamePattern := strings.Join(filteredRegexes, "|")
+		logCxt = logCxt.WithField("ifaceRegex", ifaceNamePattern)
+		ifacePrefixRegexp = regexp.MustCompile(ifaceNamePattern)
+		logCxt.Info("Calculated interface name regexp")
+	}
 
 	family := netlink.FAMILY_V4
 	if ipVersion == 6 {
@@ -279,14 +273,11 @@ func NewWithShims(
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
 
-	rt := &RouteTable{
-		logCxt: log.WithFields(log.Fields{
-			"ipVersion":  ipVersion,
-			"ifaceRegex": ifaceNamePattern,
-		}),
+	return &RouteTable{
+		logCxt:                         logCxt,
 		ipVersion:                      ipVersion,
 		netlinkFamily:                  family,
-		ifacePrefixRegexp:              regexp.MustCompile(ifaceNamePattern),
+		ifacePrefixRegexp:              ifacePrefixRegexp,
 		includeNoInterface:             includeNoOIF,
 		ifaceNameToTargets:             map[string]map[ip.CIDR]Target{},
 		ifaceNameToL2Targets:           map[string][]L2Target{},
@@ -308,19 +299,12 @@ func NewWithShims(
 		tableIndex:                     tableIndex,
 		opReporter:                     opReporter,
 	}
-
-	// apply any RouteTableOptions found
-	for _, opt := range opts {
-		opt(rt)
-	}
-
-	return rt
 }
 
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-	if !r.ifacePrefixRegexp.MatchString(ifaceName) {
-		logCxt.Debug("Ignoring interface state change, not a Calico interface.")
+	if r.ifacePrefixRegexp == nil || !r.ifacePrefixRegexp.MatchString(ifaceName) {
+		logCxt.Debug("Ignoring interface state change, not an interface managed by this routetable.")
 		return
 	}
 	if state == ifacemonitor.StateUp {
@@ -485,50 +469,55 @@ func (r *RouteTable) Apply() error {
 
 		listStartTime := time.Now()
 
-		nl, err := r.getNetlink()
-		if err != nil {
-			r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
-			return ConnectFailed
-		}
-		links, err := nl.LinkList()
-		if err != nil {
-			r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
-			r.closeNetlink() // Defensive: force a netlink reconnection next time.
-			return ListFailed
-		}
-		// Track the seen interfaces, and for each seen interface flag for full resync. No point in doing a full resync
-		// for interfaces that are still in our cache and have been deleted, so leave them unchanged - if there are any
-		// route deletions then the delta processing for those interfaces will ensure conntrack entries are deleted.
-		seen := set.New()
-		for _, link := range links {
-			attrs := link.Attrs()
-			if attrs == nil {
-				continue
+		if r.ifacePrefixRegexp != nil {
+			// If there is an interface regex then we need to query links to find matching links for this route table
+			// instance and mark the interface for update.
+			log.Debug("Check interfaces matching regex")
+			nl, err := r.getNetlink()
+			if err != nil {
+				r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
+				return ConnectFailed
 			}
-			ifaceName := attrs.Name
-			if r.ifacePrefixRegexp.MatchString(ifaceName) {
-				r.logCxt.WithField("ifaceName", ifaceName).Debug(
-					"Resync: found calico-owned interface")
-				r.markIfaceForUpdate(ifaceName, true)
-				r.onIfaceSeen(ifaceName)
-				seen.Add(ifaceName)
+			links, err := nl.LinkList()
+			if err != nil {
+				r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
+				r.closeNetlink() // Defensive: force a netlink reconnection next time.
+				return ListFailed
 			}
-		}
-		// Clean up first-seen timestamps for old interfaces.
-		// Resyncs happen periodically, so the amount of memory leaked to old
-		// first seen timestamps is small.
-		for name, firstSeen := range r.ifaceNameToFirstSeen {
-			if seen.Contains(name) {
-				// Interface still present.
-				continue
+			// Track the seen interfaces, and for each seen interface flag for full resync. No point in doing a full resync
+			// for interfaces that are still in our cache and have been deleted, so leave them unchanged - if there are any
+			// route deletions then the delta processing for those interfaces will ensure conntrack entries are deleted.
+			seen := set.New()
+			for _, link := range links {
+				attrs := link.Attrs()
+				if attrs == nil {
+					continue
+				}
+				ifaceName := attrs.Name
+				if r.ifacePrefixRegexp.MatchString(ifaceName) {
+					r.logCxt.WithField("ifaceName", ifaceName).Debug(
+						"Resync: found calico-owned interface")
+					r.markIfaceForUpdate(ifaceName, true)
+					r.onIfaceSeen(ifaceName)
+					seen.Add(ifaceName)
+				}
 			}
-			if r.time.Since(firstSeen) < cleanupGracePeriod {
-				// Interface first seen recently.
-				continue
+			// Clean up first-seen timestamps for old interfaces.
+			// Resyncs happen periodically, so the amount of memory leaked to old
+			// first seen timestamps is small.
+			for name, firstSeen := range r.ifaceNameToFirstSeen {
+				if seen.Contains(name) {
+					// Interface still present.
+					continue
+				}
+				if r.time.Since(firstSeen) < cleanupGracePeriod {
+					// Interface first seen recently.
+					continue
+				}
+				log.WithField("ifaceName", name).Debug(
+					"Cleaning up timestamp for removed interface.")
+				delete(r.ifaceNameToFirstSeen, name)
 			}
-			log.WithField("ifaceName", name).Debug(
-				"Cleaning up timestamp for removed interface.")
-			delete(r.ifaceNameToFirstSeen, name)
 		}
 
 		// If we are managing no-OIF routes then add that to our dirty set.
@@ -797,35 +786,6 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 	return route
 }
 
-func (r *RouteTable) routeListFilterParams(linkAttrs *netlink.LinkAttrs) (*netlink.Route, uint64) {
-	var routeFilter *netlink.Route
-
-	if r.additionalRouteFilter == nil {
-		routeFilter = &netlink.Route{}
-	} else {
-		routeFilter = r.additionalRouteFilter
-	}
-
-	routeFilter.Table = r.tableIndex
-
-	routeFilterFlags := netlink.RT_FILTER_OIF
-
-	if routeFilter.Table != 0 {
-		routeFilterFlags |= netlink.RT_FILTER_TABLE
-	}
-
-	if routeFilter.Type != syscall.RTN_UNSPEC {
-		routeFilterFlags |= netlink.RT_FILTER_TYPE
-	}
-
-	if linkAttrs != nil {
-		// Link attributes might be nil for the special "no-OIF" interface name.
-		routeFilter.LinkIndex = linkAttrs.Index
-	}
-
-	return routeFilter, routeFilterFlags
-}
-
 // fullResyncRoutesForLink performs a full resync of the routes by first listing current routes and correlating against
 // the expected set. After correlation, it will create a set of routes to delete and update the delta routes to add
 // back any missing routes.
@@ -853,12 +813,18 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 	// was oper down before we tried to do the sync but that prevented us from removing
 	// routes from an interface in some corner cases (such as being admin up but oper
 	// down).
-	routeFilter, routeFilterFlags := r.routeListFilterParams(linkAttrs)
-	logCxt.WithFields(log.Fields{"filter": routeFilter, "flags": routeFilterFlags}).Debug("route filter and flags")
-
+	routeFilter := &netlink.Route{
+		Table: r.tableIndex,
+	}
+	routeFilterFlags := netlink.RT_FILTER_OIF
+	if r.tableIndex != 0 {
+		routeFilterFlags |= netlink.RT_FILTER_TABLE
+	}
+	if linkAttrs != nil {
+		// Link attributes might be nil for the special "no-OIF" interface name.
+		routeFilter.LinkIndex = linkAttrs.Index
+	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
-	logCxt.WithField("routes", programmedRoutes).Debug("programmed routes list")
-
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
