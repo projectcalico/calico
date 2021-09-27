@@ -56,7 +56,7 @@ replace (
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799
 
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
-	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for
+	// the Kubernetes repo pulls them in via a replacement to its own vendored copies, which doesn't work for
 	// transient imports.
 	k8s.io/api => k8s.io/api v0.21.0-rc.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.21.0-rc.0

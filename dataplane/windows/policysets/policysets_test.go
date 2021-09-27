@@ -376,6 +376,153 @@ func TestRuleRendering(t *testing.T) {
 
 }
 
+func TestIpPortRuleRendering(t *testing.T) {
+	RegisterTestingT(t)
+
+	h := mockHNS{}
+
+	// Windows 1803/RS4
+	h.SupportedFeatures.Acl.AclRuleId = true
+	h.SupportedFeatures.Acl.AclNoHostRulePriority = true
+
+	log.SetLevel(log.DebugLevel)
+
+	ipsc := mockIPSetCache{
+		IPSets: map[string][]string{
+			"ip-set-id": {"10.0.0.1,tcp:80", "10.0.0.2,udp:80"},
+		},
+	}
+
+	ps := NewPolicySets(&h, []IPSetCache{&ipsc}, mockReader(""))
+
+	// Tests of basic policy matches: CIDRs, protocol, ports.
+	ps.AddOrReplacePolicySet("basic", &proto.Policy{
+		OutboundRules: []*proto.Rule{
+			{
+				Action:          "Allow",
+				RuleId:          "rule-1",
+				DstIpPortSetIds: []string{"ip-set-id"},
+			},
+		},
+		InboundRules: []*proto.Rule{},
+	})
+
+	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
+		{
+			Type: hns.ACL, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch,
+			Priority:        1000,
+			Protocol:        6,
+			Id:              "basic-rule-1-0",
+			RemoteAddresses: "10.0.0.1",
+			RemotePorts:     "80",
+		},
+		{
+			Type: hns.ACL, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch,
+			Priority:        1000,
+			Protocol:        17,
+			Id:              "basic-rule-1-1",
+			RemoteAddresses: "10.0.0.2",
+			RemotePorts:     "80",
+		},
+		// Default deny rule.
+		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
+		// Default host/pod rule.
+		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
+	}), "unexpected rules returned for IP+port policy")
+}
+
+func TestIpPortRuleRenderingMultiPort(t *testing.T) {
+	RegisterTestingT(t)
+
+	h := mockHNS{}
+
+	// Windows 1803/RS4
+	h.SupportedFeatures.Acl.AclRuleId = true
+	h.SupportedFeatures.Acl.AclNoHostRulePriority = true
+
+	log.SetLevel(log.DebugLevel)
+
+	ipsc := mockIPSetCache{
+		IPSets: map[string][]string{
+			"ip-set-id": {"10.0.0.1,tcp:80", "10.0.0.2,tcp:80", "10.0.0.2,udp:80"},
+		},
+	}
+
+	ps := NewPolicySets(&h, []IPSetCache{&ipsc}, mockReader(""))
+
+	ps.AddOrReplacePolicySet("basic", &proto.Policy{
+		OutboundRules: []*proto.Rule{
+			{
+				Action:          "Allow",
+				RuleId:          "rule-1",
+				DstIpPortSetIds: []string{"ip-set-id"},
+			},
+		},
+		InboundRules: []*proto.Rule{},
+	})
+
+	// Should combine the first two endpoints since they share a protocol / port.
+	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
+		{
+			Type: hns.ACL, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch,
+			Priority:        1000,
+			Protocol:        6,
+			Id:              "basic-rule-1-0",
+			RemoteAddresses: "10.0.0.1,10.0.0.2",
+			RemotePorts:     "80",
+		},
+		{
+			Type: hns.ACL, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch,
+			Priority:        1000,
+			Protocol:        17,
+			Id:              "basic-rule-1-1",
+			RemoteAddresses: "10.0.0.2",
+			RemotePorts:     "80",
+		},
+		// Default deny rule.
+		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
+		// Default host/pod rule.
+		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
+	}), "unexpected rules returned for IP+port policy")
+}
+
+func TestIpPortRuleRenderingEmptyIPSet(t *testing.T) {
+	RegisterTestingT(t)
+
+	h := mockHNS{}
+
+	// Windows 1803/RS4
+	h.SupportedFeatures.Acl.AclRuleId = true
+	h.SupportedFeatures.Acl.AclNoHostRulePriority = true
+
+	log.SetLevel(log.DebugLevel)
+
+	ipsc := mockIPSetCache{
+		IPSets: map[string][]string{"ip-set-id": {}},
+	}
+
+	ps := NewPolicySets(&h, []IPSetCache{&ipsc}, mockReader(""))
+
+	ps.AddOrReplacePolicySet("basic", &proto.Policy{
+		OutboundRules: []*proto.Rule{
+			{
+				Action:          "Allow",
+				RuleId:          "rule-1",
+				DstIpPortSetIds: []string{"ip-set-id"},
+			},
+		},
+		InboundRules: []*proto.Rule{},
+	})
+
+	// Should only have the default rules.
+	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
+		// Default deny rule.
+		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
+		// Default host/pod rule.
+		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
+	}), "unexpected rules returned for IP+port policy")
+}
+
 func TestNegativeTestCases(t *testing.T) {
 
 	RegisterTestingT(t)

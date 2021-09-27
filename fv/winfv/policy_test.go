@@ -21,7 +21,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
 )
 
 func powershell(args ...string) (string, string, error) {
@@ -60,6 +65,15 @@ func kubectlExec(command string) error {
 	cmd := fmt.Sprintf(`c:\k\kubectl.exe --kubeconfig=c:\k\config -n demo exec %v`, command)
 	_, _, err := powershell(cmd)
 	return err
+}
+
+func newClient() clientv3.Interface {
+	cfg := apiconfig.NewCalicoAPIConfig()
+	cfg.Spec.DatastoreType = apiconfig.Kubernetes
+	cfg.Spec.Kubeconfig = `c:\k\config`
+	client, err := clientv3.New(*cfg)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	return client
 }
 
 // These Windows policy FV tests rely on a 2 node cluster (1 Linux and 1 Windows) provisioned using internal tooling.
@@ -115,6 +129,35 @@ var _ = Describe("Windows policy test", func() {
 		})
 		It("porter pod cannot connect to google.com", func() {
 			err := kubectlExec(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 www.google.com'`)
+			Expect(err).To(HaveOccurred())
+		})
+		It("porter pod can connect to kube apiserver after creating service egress policy", func() {
+			// Assert API is not reachable.
+			err := kubectlExec(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 https://kubernetes.default.svc.cluster.local'`)
+			Expect(err).To(HaveOccurred())
+
+			// Create a policy allowing to the k8s API
+			client := newClient()
+			p := v3.NetworkPolicy{}
+			p.Name = "allow-apiserver"
+			p.Namespace = "demo"
+			p.Spec.Selector = "all()"
+			p.Spec.Egress = []v3.Rule{
+				{
+					Action: v3.Allow,
+					Destination: v3.EntityRule{
+						Services: &v3.ServiceMatch{
+							Name:      "kubernetes",
+							Namespace: "default",
+						},
+					},
+				},
+			}
+			_, err = client.NetworkPolicies().Create(context.Background(), &p, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Assert that it's now reachable.
+			err = kubectlExec(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -SkipCertificateCheck -TimeoutSec 5 https://kubernetes.default.svc.cluster.local'`)
 			Expect(err).To(HaveOccurred())
 		})
 	})

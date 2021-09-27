@@ -361,6 +361,72 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 		logCxt.WithField("action", ruleCopy.Action).Panic("Unknown rule action")
 	}
 
+	//
+	// DstIpPort sets - these cannot co-exist with other fields, so do them first and short-circuit if set.
+	//
+	if len(ruleCopy.DstIpPortSetIds) > 0 {
+		ipsetMembers, err := s.getIPSetAddresses(ruleCopy.DstIpPortSetIds)
+		if err != nil {
+			logCxt.Warn("DstIpPortSetIds could not be resolved, rule will be skipped")
+			return nil, err
+		}
+
+		parseIPPortMember := func(m string) (string, uint16, string) {
+			// Split out address.
+			splits := strings.Split(m, ",")
+			addr := splits[0]
+			protoPort := splits[1]
+
+			// Split port and protocol.
+			splits = strings.Split(protoPort, ":")
+			protocol := protocolNameToNumber(splits[0])
+			port := splits[1]
+			return addr, protocol, port
+		}
+
+		// Each member includes both an address and a port.
+		// However, we can combine all addresses across all members that share the same proto+port into a single rule.
+		type policyMembers struct {
+			proto uint16
+			port  string
+			addrs []string
+		}
+
+		// We need to consolidate addrs based on ports/protocols, so use a map to lookup.
+		membersByPort := map[string]*policyMembers{}
+
+		// We need to ensure the ordering of generated rules is deterministic, so use a slice.
+		orderedPolicyMembers := []*policyMembers{}
+		for _, m := range ipsetMembers {
+			// The member should be of the format <IP>,(tcp|udp):<port number>
+			addr, proto, port := parseIPPortMember(m)
+			var pm *policyMembers
+			pm = membersByPort[fmt.Sprintf("%d/%s", proto, port)]
+			if pm == nil {
+				pm = &policyMembers{proto: proto, port: port}
+				membersByPort[fmt.Sprintf("%d/%s", proto, port)] = pm
+				orderedPolicyMembers = append(orderedPolicyMembers, pm)
+			}
+			pm.addrs = append(pm.addrs, addr)
+		}
+
+		for i, m := range orderedPolicyMembers {
+			newPolicy := *aclPolicy
+			newPolicy.RemoteAddresses = strings.Join(m.addrs, ",")
+			newPolicy.RemotePorts = m.port
+			newPolicy.Protocol = m.proto
+			if s.supportedFeatures.Acl.AclRuleId {
+				newPolicy.Id = fmt.Sprintf("%s-%s-%d", policyId, ruleCopy.RuleId, i)
+			}
+			aclPolicies = append(aclPolicies, &newPolicy)
+		}
+
+		// DstIpPortSetIds are mutually exclusive with other fields - if specified, then no other rule match criteria can be.
+		// The API validates against this, so simply return here.
+		return aclPolicies, nil
+	}
+
+	//
 	// Protocol
 	//
 	if ruleCopy.Protocol != nil {
@@ -437,11 +503,6 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 		} else {
 			dstAddresses = ipsetAddresses
 		}
-	}
-
-	if len(ruleCopy.DstIpPortSetIds) > 0 {
-		// TODO: Implement match on IP+port IP sets.
-		logCxt.Warn("Windows nodes do not yet support Service-based policy rules")
 	}
 
 	if len(dstAddresses) > 0 {
