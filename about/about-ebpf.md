@@ -4,6 +4,10 @@ description: Learn about eBPF!
 canonical_url: 'https://www.tigera.io/learn/guides/ebpf/'
 ---
 
+{% comment %}
+Do not change the canonical_url above *or the title*. Content is shared with Marketing and is used for SEO purposes. If you change the title, it will mess up Marketing metrics. 
+{% endcomment %}
+
 > <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional background education, including
 > education that is not specific to {{site.prodname}}.
 {: .alert .alert-info}
