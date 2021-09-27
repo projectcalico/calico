@@ -53,6 +53,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPool":                             schema_pkg_apis_projectcalico_v3_IPPool(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolList":                         schema_pkg_apis_projectcalico_v3_IPPoolList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec":                         schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservation":                      schema_pkg_apis_projectcalico_v3_IPReservation(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationList":                  schema_pkg_apis_projectcalico_v3_IPReservationList(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationSpec":                  schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfiguration":       schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationList":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref),
@@ -2662,6 +2665,124 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_IPReservation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPReservation allows certain IP addresses to be reserved (i.e. prevented from being allocated) by Calico IPAM.  Reservations only block new allocations, they do not cause existing IP allocations to be released. The current implementation is only suitable for reserving small numbers of IP addresses relative to the size of the IP pool.  If large portions of an IP pool are reserved, Calico IPAM may hunt for a long time to find a non-reserved IP.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationSpec"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPReservationList contains a list of IPReservation resources.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservation"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservation", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPReservationSpec contains the specification for an IPReservation resource.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"reservedCIDRs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReservedCIDRs is a list of CIDRs and/or IP addresses that Calico IPAM will exclude from new allocations.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

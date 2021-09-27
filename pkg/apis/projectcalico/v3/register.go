@@ -30,6 +30,8 @@ var (
 		&HostEndpointList{},
 		&IPPool{},
 		&IPPoolList{},
+		&IPReservation{},
+		&IPReservationList{},
 		&BGPConfiguration{},
 		&BGPConfigurationList{},
 		&BGPPeer{},
