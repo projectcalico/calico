@@ -186,6 +186,7 @@ func init() {
 	registerFieldValidator("cidrv4", validateCIDRv4)
 	registerFieldValidator("cidrv6", validateCIDRv6)
 	registerFieldValidator("cidr", validateCIDR)
+	registerFieldValidator("cidrs", validateCIDRs)
 
 	registerStructValidator(validate, validateProtocol, numorstring.Protocol{})
 	registerStructValidator(validate, validateProtoPort, api.ProtoPort{})
@@ -529,13 +530,27 @@ func validateCIDRv6(fl validator.FieldLevel) bool {
 	return ipa.Version() == 6
 }
 
-// validateIPv4Network validates the field is a valid (not strictly masked) IP network.
+// validateCIDR validates the field is a valid (not strictly masked) IP network.
 // An IP address is valid, and assumed to be fully masked (i.e /32 or /128)
 func validateCIDR(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate IP network: %s", n)
 	_, _, err := cnet.ParseCIDROrIP(n)
 	return err == nil
+}
+
+// validateCIDRs validates the field is a slice of valid (not strictly masked) IP networks.
+// An IP address is valid, and assumed to be fully masked (i.e /32 or /128)
+func validateCIDRs(fl validator.FieldLevel) bool {
+	addrs := fl.Field().Interface().([]string)
+	log.Debugf("Validate IP CIDRs: %s", addrs)
+	for _, addr := range addrs {
+		_, _, err := cnet.ParseCIDROrIP(addr)
+		if err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // validateKeyValueList validates the field is a comma separated list of key=value pairs.

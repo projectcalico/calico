@@ -901,6 +901,50 @@ func init() {
 		Entry("should reject IPv6 pool with a CIDR range overlapping with Link Local range",
 			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "fe80::/120"}}, false),
 
+		// (API) IPReservation
+		Entry("should accept IPReservation with an IP",
+			api.IPReservation{
+				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
+				Spec: api.IPReservationSpec{
+					ReservedCIDRs: []string{"10.0.0.1"},
+				},
+			}, true),
+		Entry("should accept IPReservation with a CIDR",
+			api.IPReservation{
+				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
+				Spec: api.IPReservationSpec{
+					ReservedCIDRs: []string{"10.0.1.0/24"},
+				},
+			}, true),
+		Entry("should accept IPReservation IP and a CIDR",
+			api.IPReservation{
+				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
+				Spec: api.IPReservationSpec{
+					ReservedCIDRs: []string{"10.0.1.0/24", "192.168.0.34"},
+				},
+			}, true),
+		Entry("should reject IPReservation with bad CIDR",
+			api.IPReservation{
+				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
+				Spec: api.IPReservationSpec{
+					ReservedCIDRs: []string{"garbage"},
+				},
+			}, false),
+		Entry("should reject IPReservation with too-long CIDR",
+			api.IPReservation{
+				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
+				Spec: api.IPReservationSpec{
+					ReservedCIDRs: []string{"10.0.1.0/33"},
+				},
+			}, false),
+		Entry("should accept IPReservation with an IPv6",
+			api.IPReservation{
+				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
+				Spec: api.IPReservationSpec{
+					ReservedCIDRs: []string{"10.0.0.1", "cafe::1", "cafe:f00d::/96"},
+				},
+			}, true),
+
 		// (API) IPIPMode
 		Entry("should accept IPPool with no IPIP mode specified", api.IPPoolSpec{CIDR: "1.2.3.0/24"}, true),
 		Entry("should accept IPIP mode Never (api)", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: api.IPIPModeNever, VXLANMode: api.VXLANModeNever}, true),
