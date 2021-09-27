@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 				return nil, nil, fmt.Errorf("provided IPv4 IPPools list contains one or more IPv6 IPPools")
 			}
 		}
-		v4ia, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv4s)
+		v4ia, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv4s, args.IntendedUse)
 		if err != nil {
 			log.Errorf("Error assigning IPV4 addresses: %v", err)
 			return v4ia, nil, err
@@ -121,7 +121,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6ia, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv6s)
+		v6ia, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv6s, args.IntendedUse)
 		if err != nil {
 			log.Errorf("Error assigning IPV6 addresses: %v", err)
 			return v4ia, v6ia, err
@@ -315,15 +315,10 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	return
 }
 
-// prepareAffinityBlocksForHost returns a list of blocks affine to a node based on requested ippools.
-// It also release any emptied blocks still affine to this host but no longer part of an IP Pool which
+// prepareAffinityBlocksForHost returns a list of blocks affine to a node based on requested IP pools.
+// It also releases any emptied blocks still affine to this host but no longer part of an IP Pool which
 // selects this node. It returns matching pools, list of host-affine blocks and any error encountered.
-func (c ipamClient) prepareAffinityBlocksForHost(
-	ctx context.Context,
-	requestedPools []net.IPNet,
-	version int,
-	host string,
-	rsvdAttr *HostReservedAttr) ([]v3.IPPool, []net.IPNet, error) {
+func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedPools []net.IPNet, version int, host string, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse) ([]v3.IPPool, []net.IPNet, error) {
 	// Retrieve node for given hostname to use for ip pool node selection
 	node, err := c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
 	if err != nil {
@@ -343,20 +338,42 @@ func (c ipamClient) prepareAffinityBlocksForHost(
 	}
 
 	// Determine the correct set of IP pools to use for this request.
-	pools, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, maxPrefixLen)
+	poolsSelectingNode, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, maxPrefixLen)
 	if err != nil {
 		return nil, nil, err
 	}
+	if len(poolsSelectingNode) == 0 {
+		return nil, nil, fmt.Errorf("no configured Calico pools for node %s", host)
+	}
 
-	// If there are no pools, we cannot assign addresses.
-	if len(pools) == 0 {
-		return nil, nil, fmt.Errorf("no configured Calico pools for node %v", host)
+	// Figure out what subset of the selecting pools we're allowed to use for the request according to the
+	// pool's allowed use.
+	poolsAllowedByUse := filterPoolsByUse(poolsSelectingNode, use)
+	log.Debugf("Pools filtered by allowed use: %v", poolsAllowedByUse)
+
+	// If there are no allowed pools, we cannot assign addresses.
+	if len(poolsAllowedByUse) == 0 {
+		return nil, nil, fmt.Errorf("%w, no pools match the required use (%v)", ErrNoQualifiedPool, use)
 	}
 
 	logCtx := log.WithFields(log.Fields{"host": host})
 
+	// Look for any existing affine blocks.
 	logCtx.Info("Looking up existing affinities for host")
-	affBlocks, affBlocksToRelease, err := c.blockReaderWriter.getAffineBlocks(ctx, host, version, pools)
+	allAffBlocks, err := c.blockReaderWriter.getAffineBlocks(ctx, host, version)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Split the blocks into ones that we're allowed to use and ones that we're not allowed to use for this
+	// allocation.
+	allowedAffBlocks, nonAllowedAffBlocks, err := filterBlocksByPools(allAffBlocks, poolsAllowedByUse)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Further, split the non-allowed blocks into ones that are from pools that select this node and pools that
+	// don't select this node.  We'll try to release the latter below.
+	_, affBlocksToRelease, err := filterBlocksByPools(nonAllowedAffBlocks, poolsSelectingNode)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -404,7 +421,22 @@ func (c ipamClient) prepareAffinityBlocksForHost(
 		}
 	}
 
-	return pools, affBlocks, nil
+	return poolsAllowedByUse, allowedAffBlocks, nil
+}
+
+// filterPoolsByUse returns a slice containing the subset of the input pools that are allowed for the given use.
+// Handles defaulting of the allowed uses if not specified on the pool.
+func filterPoolsByUse(pools []v3.IPPool, use v3.IPPoolAllowedUse) []v3.IPPool {
+	var filteredPools []v3.IPPool
+	for _, p := range pools {
+		for _, allowed := range p.Spec.AllowedUses {
+			if allowed == use {
+				filteredPools = append(filteredPools, p)
+				break
+			}
+		}
+	}
+	return filteredPools
 }
 
 // blockAssignState manages the state in relation to the request of finding or claiming a block for a host.
@@ -585,15 +617,22 @@ func (i *IPAMAssignments) PartialFulfillmentError() error {
 	return nil
 }
 
-func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr) (*IPAMAssignments, error) {
+var ErrUseRequired = errors.New("must specify the intended use when assigning an IP")
 
-	// First, get the existing host-affine blocks.
+func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse) (*IPAMAssignments, error) {
+	// Default parameters.
+	if use == "" {
+		log.Error("Attempting to auto-assign an IP without specifying intended use.")
+		return nil, ErrUseRequired
+	}
+
+	// Get the existing host-affine blocks.
 	logCtx := log.WithFields(log.Fields{"host": host})
 	if handleID != nil {
 		logCtx = logCtx.WithField("handle", *handleID)
 	}
 	logCtx.Info("Looking up existing affinities for host")
-	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr)
+	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr, use)
 	if err != nil {
 		return nil, err
 	}
@@ -1264,7 +1303,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, must
 	var storedError error
 	versions := []int{4, 6}
 	for _, version := range versions {
-		blockCIDRs, _, err := c.blockReaderWriter.getAffineBlocks(ctx, hostname, version, nil)
+		blockCIDRs, err := c.blockReaderWriter.getAffineBlocks(ctx, hostname, version)
 		if err != nil {
 			return err
 		}
@@ -2018,7 +2057,7 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 	logCtx := log.WithFields(log.Fields{"host": host})
 
 	logCtx.Info("Looking up existing affinities for host")
-	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr)
+	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr, v3.IPPoolAllowedUseWorkload)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,6 @@ go 1.15
 require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
-	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/go-openapi/spec v0.19.5
 	github.com/go-playground/locales v0.12.1 // indirect
 	github.com/go-playground/universal-translator v0.0.0-20170327191703-71201497bace // indirect
@@ -40,3 +39,5 @@ require (
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
+
+replace github.com/projectcalico/api => github.com/fasaxc/api v0.0.0-20210927101419-26e32994c328
