@@ -13,6 +13,7 @@ require (
 	github.com/projectcalico/libcalico-go v1.7.2-0.20210924171343-658c80ee8a34
 	github.com/projectcalico/typha v0.7.3-0.20210924173430-87026f538030
 	github.com/sirupsen/logrus v1.7.0
+	github.com/tigera/api v0.0.0-20210917233738-3fea29c333ab
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
@@ -24,6 +25,8 @@ require (
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
 	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20210924174325-837ffa270322
+	github.com/projectcalico/api => github.com/fasaxc/api v0.0.0-20210927163059-c89aa9ffedfb
+	github.com/projectcalico/libcalico-go => github.com/fasaxc/libcalico-go v0.0.0-20210927122827-ed28aafc526b
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
