@@ -4,6 +4,10 @@ description: Learn about Kubernetes networking!
 canonical_url: 'https://www.tigera.io/learn/guides/kubernetes-networking/'
 ---
 
+{% comment %}
+Do not change the canonical_url above *or the title*. Content is shared with Marketing and is used for SEO purposes. If you change the title, it will screw up Marketing metrics. 
+{% endcomment %}
+
 > <span class="glyphicon glyphicon-info-sign"></span> This guide provides optional background education, not specific to {{site.prodname}}.
 {: .alert .alert-info}
 
