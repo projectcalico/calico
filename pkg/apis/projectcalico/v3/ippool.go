@@ -87,8 +87,8 @@ type IPPoolSpec struct {
 type IPPoolAllowedUse string
 
 const (
-	IPPoolAllowedUseWorkload      IPPoolAllowedUse = "Workload"
-	IPPoolAllowedUseTunnel                         = "Tunnel"
+	IPPoolAllowedUseWorkload IPPoolAllowedUse = "Workload"
+	IPPoolAllowedUseTunnel                    = "Tunnel"
 )
 
 type VXLANMode string
