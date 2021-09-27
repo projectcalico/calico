@@ -2117,15 +2117,63 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					if localOnly {
 						It("should not have connectivity from all workloads via a nodeport to non-local workload 0", func() {
+							By("Checking connectivity")
+
 							node0IP := felixes[0].IP
 							node1IP := felixes[1].IP
-							// Via remote nodeport, should fail.
+
+							// Should work through the nodeport where the pods is
+							cc.ExpectSome(w[0][1], TargetIP(node0IP), npPort)
+							cc.ExpectSome(w[1][0], TargetIP(node0IP), npPort)
+							cc.ExpectSome(w[1][1], TargetIP(node0IP), npPort)
+
+							// Should not work through the nodeport where the pod isn't
 							cc.ExpectNone(w[0][1], TargetIP(node1IP), npPort)
 							cc.ExpectNone(w[1][0], TargetIP(node1IP), npPort)
 							cc.ExpectNone(w[1][1], TargetIP(node1IP), npPort)
-							// Include a check that goes via the local nodeport to make sure the dataplane has converged.
-							cc.ExpectSome(w[0][1], TargetIP(node0IP), npPort)
+
 							cc.CheckConnectivity()
+
+							// Enough to test for one protocol
+							if testIfTCP {
+								By("checking correct NAT entries for remote nodeports")
+
+								ipOK := []string{"255.255.255.255", "10.101.0.1", /* API server */
+									testSvc.Spec.ClusterIP,
+									felixes[0].IP, felixes[1].IP, felixes[2].IP}
+
+								if testOpts.tunnel == "ipip" {
+									ipOK = append(ipOK, felixes[0].ExpectedIPIPTunnelAddr,
+										felixes[1].ExpectedIPIPTunnelAddr, felixes[2].ExpectedIPIPTunnelAddr)
+								}
+								if testOpts.tunnel == "wireguard" {
+									ipOK = append(ipOK, felixes[0].ExpectedWireguardTunnelAddr,
+										felixes[1].ExpectedWireguardTunnelAddr, felixes[2].ExpectedWireguardTunnelAddr)
+								}
+
+								for _, felix := range felixes {
+									fe, _ := dumpNATMaps(felix)
+									for feKey := range fe {
+										Expect(feKey.Addr().String()).To(BeElementOf(ipOK))
+									}
+								}
+
+								feKey := nat.NewNATKey(net.ParseIP(felixes[0].IP), npPort, 6)
+
+								// RemoteNodeport on node 0
+								fe, _ := dumpNATMaps(felixes[0])
+								Expect(fe).To(HaveKey(feKey))
+								be := fe[feKey]
+								Expect(be.Count()).To(Equal(uint32(1)))
+								Expect(be.LocalCount()).To(Equal(uint32(1)))
+
+								// RemoteNodeport on node 1
+								fe, _ = dumpNATMaps(felixes[1])
+								Expect(fe).To(HaveKey(feKey))
+								be = fe[feKey]
+								Expect(be.Count()).To(Equal(uint32(1)))
+								Expect(be.LocalCount()).To(Equal(uint32(0)))
+							}
 						})
 					} else {
 						It("should have connectivity from all workloads via a nodeport to workload 0", func() {

@@ -456,12 +456,16 @@ func (s *Syncer) expandNodePorts(
 			continue
 		}
 
-		nodeIP := rt.NextHop().(ip.V4Addr)
-		if log.GetLevel() >= log.DebugLevel {
-			log.Debugf("found rt %s for dest %s", nodeIP, ipv4)
-		}
+		flags := rt.Flags()
 
-		ipToEp[nodeIP] = append(ipToEp[nodeIP], ep)
+		if flags&routes.FlagWorkload != 0 && flags&routes.FlagLocal == 0 {
+			nodeIP := rt.NextHop().(ip.V4Addr)
+
+			ipToEp[nodeIP] = append(ipToEp[nodeIP], ep)
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("found rt %s for remote dest %s", nodeIP, ipv4)
+			}
+		}
 	}
 	return ipToEp, miss
 }
