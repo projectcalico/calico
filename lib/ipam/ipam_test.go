@@ -27,8 +27,10 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -39,10 +41,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
-
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 // Implement an IP pools accessor for the IPAM client.  This is a "mock" version
@@ -135,6 +135,13 @@ type testArgsClaimAff struct {
 	expError                    error
 }
 
+type fakeReservations struct {
+}
+
+func (f *fakeReservations) List(ctx context.Context, opts options.ListOptions) (*v3.IPReservationList, error) {
+	return &v3.IPReservationList{}, nil
+}
+
 var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	// Create a new backend client and an IPAM Client using the IP Pools Accessor.
 	// Tests that need to ensure a clean datastore should invoke Clean() on the datastore at the start of the
@@ -147,7 +154,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		config.Spec.K8sClientQPS = 500
 		bc, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
-		ic = NewIPAMClient(bc, ipPools)
+		ic = NewIPAMClient(bc, ipPools, &fakeReservations{})
 
 		// If running in KDD mode, extract the k8s clientset.
 		if config.Spec.DatastoreType == "kubernetes" {
@@ -213,7 +220,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -230,7 +237,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool26, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -247,7 +254,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool20, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -264,7 +271,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -281,7 +288,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				v4IP := make([]cnet.IP, 0, 0)
@@ -2828,7 +2835,7 @@ var _ = DescribeTable("determinePools tests IPV4",
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools)
+		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
 		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
@@ -2897,7 +2904,7 @@ var _ = DescribeTable("determinePools tests IPV6",
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools)
+		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
 		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}

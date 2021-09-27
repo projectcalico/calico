@@ -146,6 +146,11 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 	return nil, nil
 }
 
+// backendClientAccessor is an interface used to access the backend client from the main clientv3.
+type backendClientAccessor interface {
+	Backend() api.Client
+}
+
 var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
 	log.SetLevel(log.DebugLevel)
@@ -196,6 +201,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/22": {enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
+					reservations:      &fakeReservations{},
 					client:            bc,
 					pools:             pls,
 					blockReaderWriter: rw,
@@ -810,7 +816,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							return nil, err
 						}
 						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
-						b1.autoAssign(1, nil, hostA, nil, false)
+						b1.autoAssign(1, nil, hostA, nil, false, nilFilter{})
 						if _, err := bc.Update(ctx, kvpb); err != nil {
 							return nil, err
 						}

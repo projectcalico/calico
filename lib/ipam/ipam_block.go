@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package ipam
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"reflect"
 	"strings"
@@ -83,9 +82,7 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	return allocationBlock{&b}
 }
 
-func (b *allocationBlock) autoAssign(
-	num int, handleID *string, host string, attrs map[string]string, affinityCheck bool) ([]cnet.IPNet, error) {
-
+func (b *allocationBlock) autoAssign(num int, handleID *string, host string, attrs map[string]string, affinityCheck bool, reservations addrFilter) ([]cnet.IPNet, error) {
 	// Determine if we need to check for affinity.
 	if affinityCheck && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
@@ -99,23 +96,38 @@ func (b *allocationBlock) autoAssign(
 		}
 	}
 
-	// Walk the allocations until we find enough addresses.
-	ordinals := []int{}
-	for len(b.Unallocated) > 0 && len(ordinals) < num {
-		ordinals = append(ordinals, b.Unallocated[0])
-		b.Unallocated = b.Unallocated[1:]
-	}
-
-	// Create slice of IPs and perform the allocations.
-	ips := []cnet.IPNet{}
+	// Search the "unallocated" list for IPs that we can use. We want to preserve the order of the ordinals list
+	// so we copy unused ordinals to the updatedUnallocated slice as we go.
 	_, mask, _ := cnet.ParseCIDR(b.CIDR.String())
-	for _, o := range ordinals {
-		attrIndex := b.findOrAddAttribute(handleID, attrs)
-		b.Allocations[o] = &attrIndex
-		ipNets := cnet.IPNet(*mask)
-		ipNets.IP = cnet.IncrementIP(cnet.IP{b.CIDR.IP}, big.NewInt(int64(o))).IP
-		ips = append(ips, ipNets)
+	var ips []cnet.IPNet
+	updatedUnallocated := b.Unallocated[:0]
+	var attrIndexPtr *int
+	for idx, ordinal := range b.Unallocated {
+		// Check if we're done.
+		if len(ips) >= num {
+			// Got enough IPs, finish copying the remaining ordinals.
+			updatedUnallocated = append(updatedUnallocated, b.Unallocated[idx:]...)
+			break
+		}
+		// Check if this IP is reserved.
+		addr := b.OrdinalToIP(ordinal)
+		if reservations.MatchesIP(addr) {
+			log.WithField("addr", addr).Debug("Skipping reserved IP.")
+			updatedUnallocated = append(updatedUnallocated, ordinal)
+			continue
+		}
+		// This IP is OK to use.  Allocate it.
+		if attrIndexPtr == nil {
+			attrIndex := b.findOrAddAttribute(handleID, attrs)
+			attrIndexPtr = &attrIndex
+		}
+		b.Allocations[ordinal] = attrIndexPtr
+		ipNet := *mask
+		ipNet.IP = addr.IP
+		ips = append(ips, ipNet)
+		continue
 	}
+	b.Unallocated = updatedUnallocated
 
 	log.Debugf("Block %s returned ips: %v", b.CIDR.String(), ips)
 	return ips, nil
