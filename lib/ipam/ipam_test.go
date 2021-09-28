@@ -2121,6 +2121,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				remainingAffineBlocks: affBlocks,
 				hostReservedAttr:      rsvdAttr,
 				allowNewClaim:         true,
+				reservations:          nilFilter{},
 			}
 		})
 
