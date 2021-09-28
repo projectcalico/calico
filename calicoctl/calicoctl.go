@@ -45,8 +45,6 @@ func main() {
     ipam         IP address management.
     node         Calico node management.
     version      Display the version of this binary.
-    export       Export the Calico datastore objects for migration
-    import       Import the Calico datastore objects for migration
     datastore    Calico datastore management.
 
 Options:
