@@ -457,7 +457,7 @@ func (s *Syncer) expandNodePorts(
 		}
 
 		flags := rt.Flags()
-
+		// Include only remote workloads.
 		if flags&routes.FlagWorkload != 0 && flags&routes.FlagLocal == 0 {
 			nodeIP := rt.NextHop().(ip.V4Addr)
 
