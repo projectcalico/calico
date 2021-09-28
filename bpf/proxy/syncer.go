@@ -368,8 +368,6 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 		svc:        sinfo,
 	}
 
-	s.newEpsMap[skey.sname] = eps
-
 	if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("applied a service %s update: sinfo=%+v", skey, s.newSvcMap[skey])
 	}
@@ -458,12 +456,16 @@ func (s *Syncer) expandNodePorts(
 			continue
 		}
 
-		nodeIP := rt.NextHop().(ip.V4Addr)
-		if log.GetLevel() >= log.DebugLevel {
-			log.Debugf("found rt %s for dest %s", nodeIP, ipv4)
-		}
+		flags := rt.Flags()
+		// Include only remote workloads.
+		if flags&routes.FlagWorkload != 0 && flags&routes.FlagLocal == 0 {
+			nodeIP := rt.NextHop().(ip.V4Addr)
 
-		ipToEp[nodeIP] = append(ipToEp[nodeIP], ep)
+			ipToEp[nodeIP] = append(ipToEp[nodeIP], ep)
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("found rt %s for remote dest %s", nodeIP, ipv4)
+			}
+		}
 	}
 	return ipToEp, miss
 }
@@ -632,13 +634,17 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 			return errors.WithMessage(err, "startup sync")
 		}
 		log.Infof("Loaded BPF map state from dataplane")
+		s.mapsLck.Lock()
 	} else {
 		// if we were not synced yet, the fixer cannot run yet
 		s.stopExpandNPFixup()
 
+		s.mapsLck.Lock()
 		s.prevSvcMap = s.newSvcMap
 		s.prevEpsMap = s.newEpsMap
 	}
+
+	defer s.mapsLck.Unlock()
 
 	// preallocate maps to track sticky services for cleanup
 	s.stickySvcs = make(map[nat.FrontEndAffinityKey]stickyFrontend)
@@ -649,9 +655,6 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		s.stickySvcs = nil
 		s.stickyEps = nil
 	}()
-
-	s.mapsLck.Lock()
-	defer s.mapsLck.Unlock()
 
 	if err := s.apply(state); err != nil {
 		// dont bother to cleanup affinity since we do not know in what state we
