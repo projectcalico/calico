@@ -326,6 +326,19 @@ created by the operator.</p>
 </tr>
 <tr>
 <td>
+<code>controlPlaneReplicas</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Replicas defines how many replicas of the control plane core components will be deployed.
+This field applies to all control plane components that support High Availability. Defaults to 2.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>nodeMetricsPort</code><br>
 <em>
 int32
@@ -1261,6 +1274,19 @@ components. This is globally applied to all resources created by the operator ex
 <em>(Optional)</em>
 <p>ControlPlaneTolerations specify tolerations which are then globally applied to all resources
 created by the operator.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>controlPlaneReplicas</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Replicas defines how many replicas of the control plane core components will be deployed.
+This field applies to all control plane components that support High Availability. Defaults to 2.</p>
 </td>
 </tr>
 <tr>
