@@ -37,6 +37,7 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
@@ -379,6 +380,7 @@ func (t *TyphaDaemon) CreateServer() {
 	t.addSyncerPipeline(syncproto.SyncerTypeFelix, t.DatastoreClient.FelixSyncerByIface)
 	t.addSyncerPipeline(syncproto.SyncerTypeBGP, t.DatastoreClient.BGPSyncerByIface)
 	t.addSyncerPipeline(syncproto.SyncerTypeTunnelIPAllocation, t.DatastoreClient.TunnelIPAllocationSyncerByIface)
+	t.addSyncerPipeline(syncproto.SyncerTypeNodeStatus, t.DatastoreClient.NodeStatusSyncerByIface)
 
 	// Create the server, which listens for connections from Felix.
 	t.Server = syncserver.New(
@@ -474,12 +476,17 @@ func (s ClientV3Shim) TunnelIPAllocationSyncerByIface(callbacks bapi.SyncerCallb
 	return tunnelipsyncer.New(s.Backend(), callbacks, "")
 }
 
+func (s ClientV3Shim) NodeStatusSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	return nodestatussyncer.New(s.Backend(), callbacks)
+}
+
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.
 type DatastoreClient interface {
 	clientv3.Interface
 	FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 	BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 	TunnelIPAllocationSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
+	NodeStatusSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
 // RealClientV3 is the real API of the V3 client, including the semi-private API that we use to get the backend.

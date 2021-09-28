@@ -139,7 +139,7 @@ type Config struct {
 	ConnectionRebalancingMode  string        `config:"oneof(none,kubernetes);none"`
 	ConnectionDropIntervalSecs time.Duration `config:"seconds;1"`
 	MaxConnectionsUpperLimit   int           `config:"int(1,);10000"`
-	MaxConnectionsLowerLimit   int           `config:"int(1,);300"`
+	MaxConnectionsLowerLimit   int           `config:"int(1,);400"`
 	K8sServicePollIntervalSecs time.Duration `config:"seconds;30"`
 	K8sNamespace               string        `config:"string;kube-system"`
 	K8sServiceName             string        `config:"string;calico-typha"`
