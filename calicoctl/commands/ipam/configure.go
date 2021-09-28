@@ -23,6 +23,7 @@ import (
 	docopt "github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/common"
 	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
@@ -51,7 +52,7 @@ func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, en
 // Configure IPAM.
 func Configure(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam configure --strictaffinity=<true/false> [--config=<CONFIG>]
+  <BINARY_NAME> ipam configure --strictaffinity=<true/false> [--config=<CONFIG>] [--allow-version-mismatch]
 
 Options:
   -h --help                        Show this screen.
@@ -60,6 +61,7 @@ Options:
   -c --config=<CONFIG>             Path to the file containing connection configuration in
                                    YAML or JSON format.
                                    [default: ` + constants.DefaultConfigPath + `]
+     --allow-version-mismatch      Allow client and cluster versions mismatch.
 
 Description:
  Modify configuration for Calico IP address management.
@@ -74,6 +76,11 @@ Description:
 	}
 	if len(parsedArgs) == 0 {
 		return nil
+	}
+
+	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
+	if err != nil {
+		return err
 	}
 
 	ctx := context.Background()

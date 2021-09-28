@@ -39,10 +39,11 @@ import (
 // Status prints status of the node and returns error (if any)
 func Status(args []string) error {
 	doc := `Usage:
-  <BINARY_NAME> node status
+  <BINARY_NAME> node status [--allow-version-mismatch]
 
 Options:
-  -h --help                 Show this screen.
+  -h --help                    Show this screen.
+     --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   Check the status of the Calico node instance.  This includes the status and
@@ -59,6 +60,8 @@ Description:
 	if len(parsedArgs) == 0 {
 		return nil
 	}
+
+	// Note: Intentionally not check version mismatch for this command
 
 	// Must run this command as root to be able to connect to BIRD sockets
 	enforceRoot()
