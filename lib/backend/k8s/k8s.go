@@ -482,6 +482,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 					&apiv3.FelixConfigurationList{},
 					&apiv3.IPPool{},
 					&apiv3.IPPoolList{},
+					&apiv3.IPReservation{},
+					&apiv3.IPReservationList{},
 					&apiv3.BGPPeer{},
 					&apiv3.BGPPeerList{},
 					&apiv3.BGPConfiguration{},

@@ -40,4 +40,4 @@ require (
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
-replace github.com/projectcalico/api => github.com/fasaxc/api v0.0.0-20210927125338-1ea1cdb13deb
+replace github.com/projectcalico/api => github.com/fasaxc/api v0.0.0-20210928133302-83ae15a10bd0
