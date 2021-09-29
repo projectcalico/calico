@@ -23,12 +23,19 @@ import (
 	"os"
 	"reflect"
 
+	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/sirupsen/logrus"
 )
 
 func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile string, autoHepEnabled bool) *containers.Container {
@@ -136,4 +143,63 @@ func ExpectHostendpointDeleted(c client.Interface, name string) error {
 		return fmt.Errorf("hostendpoint %q is still not deleted", name)
 	}
 	return nil
+}
+
+// UpdateK8sNode updates a Kubernetes node resource, handling retries if there are update conflicts.
+func UpdateK8sNode(c *kubernetes.Clientset, name string, update func(n *v1.Node)) error {
+	var err error
+	var kn *v1.Node
+
+	for i := 0; i < 10; i++ {
+		// Retry node update in the event of an update conflict.
+		kn, err = c.CoreV1().Nodes().Get(context.Background(), name, metav1.GetOptions{})
+		if err != nil {
+			// Unable to get the node, exit.
+			return err
+		}
+
+		// Call the supplied function to update the node resource.
+		update(kn)
+
+		// And perform the update, retrying if we hit a conflict (i.e. another update occurred while we were updating
+		// the node).
+		_, err = c.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
+		if err == nil || !kerrors.IsConflict(err) {
+			// We either didn't hit an error, or the error we hit was not a conflict - exit.
+			return err
+		}
+	}
+
+	// Return the last error (if there was one).
+	return err
+}
+
+// UpdateCalicoNode updates a Calico node resource, handling retries if there are update conflicts.
+func UpdateCalicoNode(c client.Interface, name string, update func(n *v3.Node)) error {
+	var err error
+	var cn *v3.Node
+
+	for i := 0; i < 10; i++ {
+		// Retry node update in the event of an update conflict.
+		cn, err = c.Nodes().Get(context.Background(), name, options.GetOptions{})
+		if err != nil {
+			// Unable to get the node, exit.
+			return err
+		}
+
+		// Call the supplied function to update the node resource.
+		update(cn)
+
+		// And perform the update, retrying if we hit a conflict (i.e. another update occurred while we were updating
+		// the node).
+		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		if err == nil {
+			return nil
+		} else if _, ok := err.(errors.ErrorResourceUpdateConflict); !ok {
+			return err
+		}
+	}
+
+	// Return the last error (if there was one).
+	return err
 }
