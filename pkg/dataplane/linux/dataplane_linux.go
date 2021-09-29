@@ -382,6 +382,13 @@ func (d *linuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 
 	var err error
 
 	if hasIPv4 {
+		// Enable routing to localhost.  This is required to allow for NAT to the local
+		// host.
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", hostVethName), "1")
+		if err != nil {
+			return fmt.Errorf("failed to set net.ipv4.conf.%s.route_localnet=1: %s", hostVethName, err)
+		}
+
 		// Normally, the kernel has a delay before responding to proxy ARP but we know
 		// that's not needed in a Calico network so we disable it.
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", hostVethName), "0"); err != nil {
