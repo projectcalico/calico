@@ -131,11 +131,9 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Kubernetes node labels.
-		kn, err = k8sClient.CoreV1().Nodes().Get(context.Background(), kn.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		kn.Labels["label1"] = "value2"
-		_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(testutils.UpdateK8sNode(k8sClient, kn.Name, func(kn *v1.Node) {
+			kn.Labels["label1"] = "value2"
+		})).NotTo(HaveOccurred())
 
 		// Expect the node label to sync.
 		expected = map[string]string{"label1": "value2", "calico-label": "calico-value"}
@@ -143,11 +141,9 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Delete the label, add a different one.
-		kn, err = k8sClient.CoreV1().Nodes().Get(context.Background(), kn.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		kn.Labels = map[string]string{"label2": "value1"}
-		_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(testutils.UpdateK8sNode(k8sClient, kn.Name, func(kn *v1.Node) {
+			kn.Labels = map[string]string{"label2": "value1"}
+		})).NotTo(HaveOccurred())
 
 		// Expect the node labels to sync.
 		expected = map[string]string{"label2": "value1", "calico-label": "calico-value"}

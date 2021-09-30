@@ -139,11 +139,9 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Kubernetes node labels.
-		kn, err = k8sClient.CoreV1().Nodes().Get(context.Background(), kn.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		kn.Labels["label1"] = "value2"
-		_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(testutils.UpdateK8sNode(k8sClient, kn.Name, func(kn *v1.Node) {
+			kn.Labels["label1"] = "value2"
+		})).NotTo(HaveOccurred())
 
 		// Expect the node labels to sync.
 		expectedNodeLabels = map[string]string{"label1": "value2", "calico-label": "calico-value"}
@@ -157,13 +155,11 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Calico node with new IPs.
-		cn, err = c.Nodes().Get(context.Background(), cn.Name, options.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		cn.Spec.BGP.IPv4Address = "172.100.2.3"
-		cn.Spec.BGP.IPv4IPIPTunnelAddr = ""
-		cn.Spec.IPv4VXLANTunnelAddr = "10.10.20.1"
-		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
+			cn.Spec.BGP.IPv4Address = "172.100.2.3"
+			cn.Spec.BGP.IPv4IPIPTunnelAddr = ""
+			cn.Spec.IPv4VXLANTunnelAddr = "10.10.20.1"
+		})).NotTo(HaveOccurred())
 
 		// Expect the hostendpoint's expectedIPs to sync the new node IPs.
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1"}
@@ -171,11 +167,14 @@ var _ = Describe("Auto Hostendpoint tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
-		cn.Spec.Wireguard = &libapi.NodeWireguardSpec{
-			InterfaceIPv4Address: "192.168.100.1",
-		}
-		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		// Update the wireguard IP.
+		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
+			cn.Spec.Wireguard = &libapi.NodeWireguardSpec{
+				InterfaceIPv4Address: "192.168.100.1",
+			}
+		})).NotTo(HaveOccurred())
+
+		// Expect the HEP to include the wireguard IP.
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "192.168.100.1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles)

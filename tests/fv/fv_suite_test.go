@@ -17,8 +17,9 @@ package fv_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 
 	"testing"
 
