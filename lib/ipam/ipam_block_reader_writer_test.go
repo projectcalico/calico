@@ -296,6 +296,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pls,
 					blockReaderWriter: rw,
+					reservations:      &fakeReservations{},
 				}
 			})
 
@@ -361,6 +362,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pls,
 					blockReaderWriter: rw,
+					reservations:      &fakeReservations{},
 				}
 
 				var err error
@@ -496,6 +498,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pools,
 					blockReaderWriter: rw,
+					reservations:      &fakeReservations{},
 				}
 			})
 
@@ -590,6 +593,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pools,
 					blockReaderWriter: rw,
+					reservations:      &fakeReservations{},
 				}
 			})
 
@@ -718,6 +722,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client:            bc,
 				pools:             pools,
 				blockReaderWriter: rw,
+				reservations:      &fakeReservations{},
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
@@ -836,6 +841,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pools,
 					blockReaderWriter: rw,
+					reservations:      &fakeReservations{},
 				}
 			})
 
