@@ -1028,6 +1028,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client:            bc,
 				pools:             p,
 				blockReaderWriter: rw,
+				reservations:      &fakeReservations{},
 			}
 			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel /* for variety */)
 			Expect(err).ShouldNot(HaveOccurred())
