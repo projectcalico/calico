@@ -217,6 +217,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					j := i
 					go func() {
 						defer GinkgoRecover()
+						defer wg.Done()
 
 						testhost := fmt.Sprintf("host-%d", j)
 						applyNode(bc, kc, testhost, nil)
@@ -232,8 +233,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							log.WithError(err).Errorf("No IPs assigned for host %s", testhost)
 							testErr = fmt.Errorf("No IPs assigned to %s", testhost)
 						}
-
-						wg.Done()
 					}()
 				}
 
@@ -428,6 +427,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
+						defer wg.Done()
 
 						testhost := "same-host"
 						err := ic.ReleaseAffinity(ctx, *net, testhost, false)
@@ -436,7 +436,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							testErr = err
 						}
 
-						wg.Done()
 					}()
 				}
 
