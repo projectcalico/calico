@@ -134,10 +134,11 @@ func (i IPNet) String() string {
 	return ip.String()
 }
 
-func (i IPNet) NumAddrs() int {
+func (i IPNet) NumAddrs() *big.Int {
 	ones, bits := i.Mask.Size()
 	zeros := bits - ones
-	return 1 << zeros
+	numAddrs := big.NewInt(1)
+	return numAddrs.Lsh(numAddrs, uint(zeros))
 }
 
 // MustParseNetwork parses the string into an IPNet.  The IP address in the

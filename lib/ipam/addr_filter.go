@@ -15,6 +15,9 @@
 package ipam
 
 import (
+	"math/big"
+	"sort"
+
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -49,29 +52,58 @@ func (c cidrSliceFilter) MatchesIP(ip net.IP) bool {
 }
 
 func (c cidrSliceFilter) MatchesWholeCIDR(candidateCIDR *net.IPNet) bool {
-	var overlaps cidrSliceFilter
+	var cidrsOverlappingCandidate cidrSliceFilter
 	for _, filterCIDR := range c {
 		if filterCIDR.Covers(candidateCIDR.IPNet) {
 			return true
 		}
 		if candidateCIDR.Contains(filterCIDR.IP) {
 			// This CIDR overlaps the candidate but doesn't cover it.  Save it off so we can do a second pass.
-			overlaps = append(overlaps, filterCIDR)
+			cidrsOverlappingCandidate = append(cidrsOverlappingCandidate, filterCIDR)
 		}
 	}
-	if len(overlaps) == 0 {
+	if len(cidrsOverlappingCandidate) == 0 {
 		return false
 	}
-	// Corner case, some CIDRs overlap the candidateCIDR but we don't yet know if together they cover it.
-	// Check for _that_.
-	numAddrs := candidateCIDR.NumAddrs()
-	for i := 0; i < numAddrs; i++ {
-		addr := candidateCIDR.NthIP(i)
-		if !overlaps.MatchesIP(addr) {
-			return false
+
+	// If we get here, we have some CIDRs that overlap candidateCIDR but none that completely cover it.
+	// Check if, together they cover it.
+
+	// Remove duplicates and overlapping CIDRs in the overlapping set.
+	cidrsOverlappingCandidate = cidrsOverlappingCandidate.filterOutDuplicates()
+	// Now, everything that remains in cidrsOverlappingCandidate is non-overlapping and contained within the
+	// candidate CIDR.  If the candidate CIDR contains the same number of IPs as the overlapping set then
+	// we know that the overlapping set covers the candidate CIDR.
+	return cidrsOverlappingCandidate.numCoveredIPs().Cmp(candidateCIDR.NumAddrs()) == 0
+}
+
+// filterOutDuplicates returns a cidrSliceFilter with duplicate CIDRs and overlapping CIDRs pruned out.
+// It reuses the storage of the input slice.
+func (c cidrSliceFilter) filterOutDuplicates() cidrSliceFilter {
+	sort.SliceStable(c, func(i, j int) bool {
+		return c[i].NumAddrs().Cmp(c[j].NumAddrs()) < 0
+	})
+	filteredOverlaps := c[:0]
+outer:
+	for i, cidr := range c {
+		for _, largerCIDR := range c[i+1:] {
+			if largerCIDR.Contains(cidr.IP) {
+				continue outer
+			}
 		}
+		filteredOverlaps = append(filteredOverlaps, cidr)
 	}
-	return true
+	return filteredOverlaps
+}
+
+// numCoveredIPs returns the sum of the number of IPs covered by each CIDR in the slice. To be useful, should
+// be called on a slice with no duplicates or overlapping CIDRs.
+func (c cidrSliceFilter) numCoveredIPs() *big.Int {
+	num := big.NewInt(0)
+	for _, cidr := range c {
+		num = num.Add(num, cidr.NumAddrs())
+	}
+	return num
 }
 
 var _ addrFilter = cidrSliceFilter(nil)
