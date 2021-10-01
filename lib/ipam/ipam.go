@@ -631,13 +631,6 @@ func (i *IPAMAssignments) PartialFulfillmentError() error {
 
 var ErrUseRequired = errors.New("must specify the intended use when assigning an IP")
 
-type addrFilter interface {
-	// MatchesIP returns true if the given IP is matched by the filter.
-	MatchesIP(ip net.IP) bool
-	// MatchesWholeCIDR returns true if every address within the CIDR is matched by the filter.
-	MatchesWholeCIDR(ip *net.IPNet) bool
-}
-
 func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse) (*IPAMAssignments, error) {
 	// Default parameters.
 	if use == "" {
@@ -2124,7 +2117,7 @@ func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
 		return nil, err
 	}
 	if len(reservations.Items) == 0 {
-		return nilFilter{}, nil
+		return nilAddrFilter{}, nil
 	}
 	var cidrs cidrSliceFilter
 	for _, r := range reservations.Items {
@@ -2144,54 +2137,3 @@ func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
 	}
 	return cidrs, nil
 }
-
-type nilFilter struct{}
-
-func (n nilFilter) MatchesIP(ip net.IP) bool {
-	return false
-}
-
-func (n nilFilter) MatchesWholeCIDR(ip *net.IPNet) bool {
-	return false
-}
-
-var _ addrFilter = nilFilter{}
-
-type cidrSliceFilter []net.IPNet
-
-func (c cidrSliceFilter) MatchesIP(ip net.IP) bool {
-	for _, cidr := range c {
-		if cidr.Contains(ip.IP) {
-			return true
-		}
-	}
-	return false
-}
-
-func (c cidrSliceFilter) MatchesWholeCIDR(candidateCIDR *net.IPNet) bool {
-	var overlaps cidrSliceFilter
-	for _, filterCIDR := range c {
-		if filterCIDR.Covers(candidateCIDR.IPNet) {
-			return true
-		}
-		if candidateCIDR.Contains(filterCIDR.IP) {
-			// This CIDR overlaps the candidate but doesn't cover it.  Save it off so we can do a second pass.
-			overlaps = append(overlaps, filterCIDR)
-		}
-	}
-	if len(overlaps) == 0 {
-		return false
-	}
-	// Corner case, some CIDRs overlap the candidateCIDR but we don't yet know if together they cover it.
-	// Check for _that_.
-	numAddrs := candidateCIDR.NumAddrs()
-	for i := 0; i < numAddrs; i++ {
-		addr := candidateCIDR.NthIP(i)
-		if !overlaps.MatchesIP(addr) {
-			return false
-		}
-	}
-	return true
-}
-
-var _ addrFilter = cidrSliceFilter(nil)

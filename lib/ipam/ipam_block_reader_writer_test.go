@@ -818,7 +818,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							return nil, err
 						}
 						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
-						b1.autoAssign(1, nil, hostA, nil, false, nilFilter{})
+						b1.autoAssign(1, nil, hostA, nil, false, nilAddrFilter{})
 						if _, err := bc.Update(ctx, kvpb); err != nil {
 							return nil, err
 						}
