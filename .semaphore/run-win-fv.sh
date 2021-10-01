@@ -17,8 +17,10 @@ puttygen ${MASTER_CONNECT_KEY} -O private -o ${WIN_PPK_KEY}
 chmod 600 $WIN_PPK_KEY
 aws ec2 import-key-pair --key-name ${KEYPAIR_NAME} --public-key-material file://${MASTER_CONNECT_KEY_PUB}
 
-# Set up the cluster.
-NAME_PREFIX="$CLUSTER_NAME" KUBE_VERSION="$K8S_VERSION" WINDOWS_KEYPAIR_NAME="$KEYPAIR_NAME" WINDOWS_PEM_FILE="$MASTER_CONNECT_KEY" WINDOWS_PPK_FILE="$WIN_PPK_KEY" WINDOWS_OS="Windows1809container" ./setup-fv.sh -q | tee fv.log
+# Set up the cluster. Set FV timeout to 40 minutes.
+NAME_PREFIX="$CLUSTER_NAME" KUBE_VERSION="$K8S_VERSION" WINDOWS_KEYPAIR_NAME="$KEYPAIR_NAME" \
+WINDOWS_PEM_FILE="$MASTER_CONNECT_KEY" WINDOWS_PPK_FILE="$WIN_PPK_KEY" WINDOWS_OS="Windows1809container" \
+FV_TIMEOUT=2400 ./setup-fv.sh -q | tee fv.log
 
 # Run FV
 MASTER_IP=$(grep ubuntu@ fv.log | cut -d '@' -f2)
