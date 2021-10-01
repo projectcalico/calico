@@ -26,9 +26,15 @@ type addrFilter interface {
 	MatchesIP(ip net.IP) bool
 	// MatchesWholeCIDR returns true if every address within the CIDR is matched by the filter.
 	MatchesWholeCIDR(ip *net.IPNet) bool
+	// MatchesSome returns true if any part of hte given CIDR is matched by this filter.
+	MatchesSome(ip *net.IPNet) bool
 }
 
 type nilAddrFilter struct{}
+
+func (n nilAddrFilter) MatchesSome(ip *net.IPNet) bool {
+	return false
+}
 
 func (n nilAddrFilter) MatchesIP(ip net.IP) bool {
 	return false
@@ -41,6 +47,15 @@ func (n nilAddrFilter) MatchesWholeCIDR(ip *net.IPNet) bool {
 var _ addrFilter = nilAddrFilter{}
 
 type cidrSliceFilter []net.IPNet
+
+func (c cidrSliceFilter) MatchesSome(ip *net.IPNet) bool {
+	for _, cidr := range c {
+		if cidr.IsNetOverlap(ip.IPNet) {
+			return true
+		}
+	}
+	return false
+}
 
 func (c cidrSliceFilter) MatchesIP(ip net.IP) bool {
 	for _, cidr := range c {

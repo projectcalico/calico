@@ -136,10 +136,11 @@ type testArgsClaimAff struct {
 }
 
 type fakeReservations struct {
+	Reservations []v3.IPReservation
 }
 
 func (f *fakeReservations) List(ctx context.Context, opts options.ListOptions) (*v3.IPReservationList, error) {
-	return &v3.IPReservationList{}, nil
+	return &v3.IPReservationList{Items: f.Reservations}, nil
 }
 
 var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
@@ -149,12 +150,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	var bc bapi.Client
 	var ic Interface
 	var kc *kubernetes.Clientset
+	var reservations *fakeReservations
 	BeforeEach(func() {
 		var err error
 		config.Spec.K8sClientQPS = 500
 		bc, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
-		ic = NewIPAMClient(bc, ipPools, &fakeReservations{})
+		reservations = &fakeReservations{}
+		ic = NewIPAMClient(bc, ipPools, reservations)
 
 		// If running in KDD mode, extract the k8s clientset.
 		if config.Spec.DatastoreType == "kubernetes" {
@@ -453,6 +456,63 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 	})
 
+	Describe("Reservation tests", func() {
+		var hostname string
+		BeforeEach(func() {
+			// Remove all data in the datastore.
+			bc.Clean()
+
+			// Create an IP pool
+			applyPool("10.0.0.0/26", true, "all()")
+
+			// Create the node object.
+			hostname = "allocation-attributes"
+			applyNode(bc, kc, hostname, nil)
+		})
+
+		AfterEach(func() {
+			bc.Clean()
+		})
+
+		It("before adding reservation, should assign all IPs", func() {
+			handle := "my-test-handle"
+			args := AutoAssignArgs{
+				Num4:        64, // Try to get all the IPs
+				Hostname:    hostname,
+				HandleID:    &handle,
+				IntendedUse: v3.IPPoolAllowedUseWorkload,
+			}
+			v4, _, err := ic.AutoAssign(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4.IPs).To(HaveLen(64))
+		})
+
+		Describe("with reservations", func() {
+			BeforeEach(func() {
+				resv1 := v3.NewIPReservation()
+				resv1.Name = "resv1"
+				resv1.Spec.ReservedCIDRs = []string{"10.0.0.16/32", "10.0.0.32/30"}
+				resv2 := v3.NewIPReservation()
+				resv2.Name = "resv2"
+				resv2.Spec.ReservedCIDRs = []string{"11.0.0.0/30", "10.0.0.17/32"}
+				reservations.Reservations = []v3.IPReservation{*resv1, *resv2}
+			})
+
+			It("should assign non-reserved IPs only", func() {
+				handle := "my-test-handle"
+				args := AutoAssignArgs{
+					Num4:        64, // Try to get all the IPs
+					Hostname:    hostname,
+					HandleID:    &handle,
+					IntendedUse: v3.IPPoolAllowedUseWorkload,
+				}
+				v4, _, err := ic.AutoAssign(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v4.IPs).To(HaveLen(58))
+			})
+		})
+	})
+
 	Describe("Affinity FV tests", func() {
 		var err error
 		var hostname string
@@ -546,7 +606,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(blocks.KVPairs)).To(Equal(1))
 		})
 
-		It("should release host affinifies even if the pool has been deleted", func() {
+		It("should release host affinities even if the pool has been deleted", func() {
 			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
 			// per each block.
 			handle := "test-handle"
@@ -1522,7 +1582,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Tests behavior when there are no more blocks available. For nodes which are selected by an
 		// IP pool, addresses should be borrowed from other blocks within the pool. For nodes which are
-		// not selected by that IP pool, an error should be returned and addresses should no be borrowed.
+		// not selected by that IP pool, an error should be returned and addresses should not be borrowed.
 		It("should handle changing node selectors between two nodes with no available blocks", func() {
 			node1 := "host1"
 			node2 := "host2"
@@ -2123,6 +2183,23 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				allowNewClaim:         true,
 				reservations:          nilAddrFilter{},
 			}
+		})
+
+		It("Should skip blocks that are reserved", func() {
+			// Reserve the whole first block.
+			s.reservations = cidrSliceFilter{
+				cnet.MustParseCIDR("10.0.0.0/30"),
+			}
+
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks.
+			Expect(newlyClaimed).To(BeFalse())
+			// Should find second block.
+			Expect(b.Key.(model.BlockKey).CIDR.String()).To(Equal("10.0.0.4/30"))
+			// uncheckedAffBlocks has no elements.
+			Expect(len(s.remainingAffineBlocks)).To(Equal(0))
+			Expect(s.datastoreRetryCount).To(Equal(0))
 		})
 
 		It("Should find or claim blocks", func() {

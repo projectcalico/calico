@@ -130,7 +130,7 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, ve
 	exists := map[string]blockInfo{}
 	for _, e := range existingBlocks.KVPairs {
 		hostAff := e.Value.(*model.AllocationBlock).Host()
-		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses()
+		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses(reservations)
 		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{numFree: numFree, affinity: hostAff}
 	}
 
@@ -153,7 +153,7 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, ve
 				log.Infof("Found free block: %+v", *subnet)
 				return subnet, nil
 			} else if info.affinity == host && info.numFree != 0 {
-				// Belongs to this host and has free allocations.
+				// Belongs to this host and has free allocations.  Check that the IPs really are free (not reserved).
 				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
 				return subnet, nil
 			}

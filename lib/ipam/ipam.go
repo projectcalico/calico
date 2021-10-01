@@ -503,11 +503,12 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 
 			// Pull out the block.
 			block := allocationBlock{b.Value.(*model.AllocationBlock)}
-			if block.NumFreeAddresses() >= minFreeIps {
-				logCtx.Debugf("Block '%s' has %d free ips which is more than %d ips required.", cidr.String(), block.NumFreeAddresses(), minFreeIps)
+			numFreeAddresses := block.NumFreeAddresses(s.reservations)
+			if numFreeAddresses >= minFreeIps {
+				logCtx.Debugf("Block '%s' has %d free ips which is more than %d ips required.", cidr.String(), numFreeAddresses, minFreeIps)
 				return b, false, nil
 			} else {
-				logCtx.Debugf("Block '%s' has %d free ips which is less than %d ips required.", cidr.String(), block.NumFreeAddresses(), minFreeIps)
+				logCtx.Debugf("Block '%s' has %d free ips which is less than %d ips required.", cidr.String(), numFreeAddresses, minFreeIps)
 				break
 			}
 		}
@@ -575,11 +576,14 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 
 				// Claim successful.
 				block := allocationBlock{b.Value.(*model.AllocationBlock)}
-				if block.NumFreeAddresses() >= minFreeIps {
-					logCtx.Infof("Block '%s' has %d free ips which is more than %d ips required.", b.Key.(model.BlockKey).CIDR, block.NumFreeAddresses(), minFreeIps)
+				numFree := block.NumFreeAddresses(s.reservations)
+				if numFree >= minFreeIps {
+					logCtx.Infof("Block '%s' has %d free ips which is more than %d ips required.",
+						b.Key.(model.BlockKey).CIDR, numFree, minFreeIps)
 					return b, true, nil
 				} else {
-					errString := fmt.Sprintf("Block '%s' has %d free ips which is less than %d ips required.", b.Key.(model.BlockKey).CIDR, block.NumFreeAddresses(), minFreeIps)
+					errString := fmt.Sprintf("Block '%s' has %d free ips which is less than %d ips required.",
+						b.Key.(model.BlockKey).CIDR, numFree, minFreeIps)
 					logCtx.Errorf(errString)
 					return nil, false, errors.New(errString)
 				}

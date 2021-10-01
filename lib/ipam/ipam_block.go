@@ -185,7 +185,21 @@ func getHostAffinity(block *model.AllocationBlock) string {
 	return ""
 }
 
-func (b allocationBlock) NumFreeAddresses() int {
+func (b allocationBlock) NumFreeAddresses(reservations addrFilter) int {
+	if reservations.MatchesWholeCIDR(&b.CIDR) {
+		return 0
+	}
+	if reservations.MatchesSome(&b.CIDR) {
+		// Slow path: some IPs are filtered, need to count the non-filtered ones.
+		unfiltered := 0
+		for _, ord := range b.Unallocated {
+			if reservations.MatchesIP(b.CIDR.NthIP(ord)) {
+				continue
+			}
+			unfiltered++
+		}
+		return unfiltered
+	}
 	return len(b.Unallocated)
 }
 
