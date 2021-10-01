@@ -132,7 +132,7 @@ The route reflector controller scales BGP topology inside the cluster based on t
 | minReplicas | Minimum number of route refletors | integer | 3 |
 | maxReplicas | Maxium number of route refletors | integer | 10 |
 | routeReflectorRatio | Ration of route reflectors and clients, between 0.001 and 0.05 | number | 0.005 |
-| incompatibleLabels | Set of node labels to disallow route reflector selection | string | |
+| incompatibleLabels | Set of node labels to disallow route reflector selection | map | |
 
 ### Supported operations
 
