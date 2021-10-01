@@ -127,15 +127,12 @@ The route reflector controller scales BGP topology inside the cluster based on t
 |------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
 | reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
 | clusterId | Route reflector cluster id | string | 224.0.0.0 |
-| hostnameLabel | Hostname label on Kubernetes nodes | string | kubernetes.io/hostname |
-| zoneLabel | Zone label on Kubernetes nodes | string | failure-domain.beta.kubernetes.io/zone |
-| routeReflectorsPerNode | Route reflectors per node | integer | 3 |
-| min | Minimum number of route refletors | integer | 3 |
-| max | Maxium number of route refletors | integer | 10 |
-| ratio | Ration of route reflectors and clients, between 0.001 and 0.05 | number | 0.005 |
-| routeReflectorLabelKey | Label key of route reflector selector | string | calico-route-reflector |
-| routeReflectorLabelValue | Label value of route reflector selector | string | |
-| incompatibleLabels | List of node labels to disallow route reflector selection | string | |
+| zoneLabel | Zone label on Kubernetes nodes | string | topology.kubernetes.io/zone |
+| clientConnectionRedundancy | Route reflectors per client | integer | 3 |
+| minReplicas | Minimum number of route refletors | integer | 3 |
+| maxReplicas | Maxium number of route refletors | integer | 10 |
+| routeReflectorRatio | Ration of route reflectors and clients, between 0.001 and 0.05 | number | 0.005 |
+| incompatibleLabels | Set of node labels to disallow route reflector selection | string | |
 
 ### Supported operations
 
