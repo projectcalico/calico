@@ -463,6 +463,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			bc.Clean()
 
 			// Create an IP pool
+			deleteAllPools()
 			applyPool("10.0.0.0/26", true, "all()")
 
 			// Create the node object.
