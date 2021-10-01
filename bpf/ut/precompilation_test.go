@@ -94,12 +94,12 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 								vethName, veth := createVeth()
 								defer deleteLink(veth)
-
 								ap.Iface = vethName
 								err := tc.EnsureQdisc(ap.Iface)
 								Expect(err).NotTo(HaveOccurred())
-								err = ap.AttachProgram()
+								opts, err := ap.AttachProgram()
 								Expect(err).NotTo(HaveOccurred())
+								Expect(opts).NotTo(Equal(nil))
 							})
 						}
 					}

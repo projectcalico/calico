@@ -80,9 +80,8 @@ type attachPoint interface {
 	IfaceName() string
 	JumpMapFDMapKey() string
 	IsAttached() (bool, error)
-	AttachProgram() error
+	AttachProgram() (string, error)
 	DetachProgram() error
-	ProgramID() (string, error)
 	Log() *log.Entry
 }
 
@@ -1336,12 +1335,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.MapFD, e
 	if jumpMapFD == 0 {
 		ap.Log().Info("Need to attach program")
 		// We don't have a program attached to this interface yet, attach one now.
-		err := ap.AttachProgram()
-		if err != nil {
-			return 0, err
-		}
-
-		progID, err := ap.ProgramID()
+		progID, err := ap.AttachProgram()
 		if err != nil {
 			return 0, err
 		}

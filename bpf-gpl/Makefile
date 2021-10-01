@@ -26,7 +26,8 @@ CFLAGS +=  \
 	-fno-stack-protector \
 	-O2 \
 	-target bpf \
-	-emit-llvm
+	-emit-llvm \
+	-g
 
 # Build against libbpf and its recent copy of the kernel headers.
 # We link against the user API version of the headers because they contain

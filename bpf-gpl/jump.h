@@ -32,6 +32,14 @@ static CALI_BPF_INLINE struct cali_tc_state *state_get(void)
 	return cali_v4_state_lookup_elem(&key);
 }
 
+#ifdef __LIBBPF_LOADER__
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
+	.type = BPF_MAP_TYPE_PROG_ARRAY,
+	.key_size = 4,
+	.value_size = 4,
+	.max_entries = 8,
+};
+#else
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
@@ -42,6 +50,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
 	.pinning_strategy = 1 /* object namespace */,
 #endif
 };
+#endif
 
 /* Add new values to the end as these are program indices */
 enum cali_jump_index {

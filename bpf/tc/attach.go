@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/libbpf"
 )
 
 type AttachPoint struct {
@@ -58,7 +59,6 @@ type AttachPoint struct {
 }
 
 var tcLock sync.RWMutex
-
 var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
@@ -72,12 +72,12 @@ func (ap AttachPoint) Log() *log.Entry {
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func (ap AttachPoint) AttachProgram() error {
+func (ap AttachPoint) AttachProgram() (string, error) {
 	logCxt := log.WithField("attachPoint", ap)
 
 	tempDir, err := ioutil.TempDir("", "calico-tc")
 	if err != nil {
-		return fmt.Errorf("failed to create temporary directory: %w", err)
+		return "", fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 	defer func() {
 		_ = os.RemoveAll(tempDir)
@@ -90,7 +90,7 @@ func (ap AttachPoint) AttachProgram() error {
 	err = ap.patchBinary(logCxt, preCompiledBinary, tempBinary)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to patch binary")
-		return err
+		return "", err
 	}
 
 	// Using the RLock allows multiple attach calls to proceed in parallel unless
@@ -100,20 +100,54 @@ func (ap AttachPoint) AttachProgram() error {
 	defer tcLock.RUnlock()
 	logCxt.Debug("AttachProgram got lock.")
 
+	//nolint
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
-		return err
+		return "", err
 	}
-
-	_, err = ExecTC("filter", "add", "dev", ap.Iface, string(ap.Hook),
-		"bpf", "da", "obj", tempBinary,
-		"sec", SectionName(ap.Type, ap.ToOrFrom),
-	)
+	obj, err := libbpf.OpenObject(tempBinary)
 	if err != nil {
-		return err
+		return "", err
+	}
+	defer obj.Close()
+
+	baseDir := "/sys/fs/bpf/tc/"
+	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		subDir := "globals"
+		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), "cali_jump") {
+			if ap.Hook == HookIngress {
+				subDir = ap.Iface + "_igr/"
+			} else {
+				subDir = ap.Iface + "_egr/"
+			}
+		}
+		pinPath := path.Join(baseDir, subDir, m.Name())
+		perr := m.SetPinPath(pinPath)
+		if perr != nil {
+			return "", fmt.Errorf("error pinning map %v errno %v", m.Name(), perr)
+		}
 	}
 
-	// Success: clean up the old programs.
+	err = obj.Load()
+	if err != nil {
+		return "", fmt.Errorf("error loading program %v", err)
+	}
+
+	isHost := false
+	if ap.Type == "host" {
+		isHost = true
+	}
+
+	err = updateJumpMap(obj, isHost)
+	if err != nil {
+		return "", fmt.Errorf("error updating jump map %v", err)
+	}
+
+	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, string(ap.Hook))
+	if err != nil {
+		return "", err
+	}
+
 	var progErrs []error
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
@@ -137,10 +171,9 @@ func (ap AttachPoint) AttachProgram() error {
 	}
 
 	if len(progErrs) != 0 {
-		return fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
+		return "", fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
 	}
-
-	return nil
+	return strconv.Itoa(progId), nil
 }
 
 func (ap AttachPoint) DetachProgram() error {
@@ -284,9 +317,9 @@ func (ap AttachPoint) IsAttached() (bool, error) {
 	return len(progs) > 0, nil
 }
 
-// tcDirRegex matches tc's auto-created directory names so we can clean them up when removing maps without accidentally
-// removing other user-created dirs..
-var tcDirRegex = regexp.MustCompile(`[0-9a-f]{40}`)
+// tcDirRegex matches tc's auto-created directory names, directories created when using libbpf
+// so we can clean them up when removing maps without accidentally removing other user-created dirs..
+var tcDirRegex = regexp.MustCompile(`([0-9a-f]{40})|(.*_(igr|egr))`)
 
 // CleanUpJumpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
 // our BPF programs.
@@ -447,11 +480,7 @@ func EnsureQdisc(ifaceName string) error {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return nil
 	}
-	_, err = ExecTC("qdisc", "add", "dev", ifaceName, "clsact")
-	if err != nil {
-		return fmt.Errorf("failed to add qdisc to interface '%s': %w", ifaceName, err)
-	}
-	return nil
+	return libbpf.CreateQDisc(ifaceName)
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
@@ -474,35 +503,7 @@ func RemoveQdisc(ifaceName string) error {
 	if !hasQdisc {
 		return nil
 	}
-	_, err = ExecTC("qdisc", "del", "dev", ifaceName, "clsact")
-	if err != nil {
-		return fmt.Errorf("failed to remove qdisc from interface '%s': %w", ifaceName, err)
-	}
-	return nil
-}
-
-func (ap *AttachPoint) ProgramID() (string, error) {
-	logCtx := log.WithField("iface", ap.Iface)
-	logCtx.Info("Finding TC program ID")
-	out, err := ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
-	if err != nil {
-		return "", fmt.Errorf("failed to find TC filter for interface %v: %w", ap.Iface, err)
-	}
-	logCtx.Infof("out:\n%v", out)
-
-	progName := ap.ProgramName()
-	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, progName) {
-			re := regexp.MustCompile(`id (\d+)`)
-			m := re.FindStringSubmatch(line)
-			if len(m) > 0 {
-				return m[1], nil
-			}
-			return "", fmt.Errorf("failed to process TC output: %v", line)
-		}
-	}
-
-	return "", errors.New("failed to find TC program")
+	return libbpf.RemoveQDisc(ifaceName)
 }
 
 // Return a key that uniquely identifies this attach point, amongst all of the possible attach
@@ -513,4 +514,23 @@ func (ap *AttachPoint) JumpMapFDMapKey() string {
 
 func (ap *AttachPoint) IfaceName() string {
 	return ap.Iface
+}
+
+// nolint
+func updateJumpMap(obj *libbpf.Obj, isHost bool) error {
+	if !isHost {
+		err := obj.UpdateJumpMap("cali_jump", string(policyProgram), PolicyProgramIndex)
+		if err != nil {
+			return fmt.Errorf("error updating policy program %v", err)
+		}
+	}
+	err := obj.UpdateJumpMap("cali_jump", string(allowProgram), AllowProgramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating epilogue program %v", err)
+	}
+	err = obj.UpdateJumpMap("cali_jump", string(icmpProgram), IcmpProgramIndex)
+	if err != nil {
+		return fmt.Errorf("error updating icmp program %v", err)
+	}
+	return nil
 }
