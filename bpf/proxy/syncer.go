@@ -544,7 +544,13 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	for sname, sinfo := range state.SvcMap {
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
-		eps := state.EpsMap[sname]
+
+		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
+		for _, ep := range state.EpsMap[sname] {
+			if ep.IsReady() {
+				eps = append(eps, ep)
+			}
+		}
 
 		err := s.applySvc(skey, sinfo, eps)
 		if err != nil {
