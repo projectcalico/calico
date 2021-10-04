@@ -4,13 +4,10 @@
 TEST_DIR=./tests/k8st
 
 # kubectl binary.
-: ${kubectl:=./kubectl}
+: ${kubectl:=./bin/kubectl}
 
 # kind binary.
-: ${KIND:=$TEST_DIR/kind}
-
-# Set config variables needed for ${kubectl}.
-export KUBECONFIG=~/.kube/kind-config-kind
+: ${KIND:=./bin/kind}
 
 function checkModule(){
   MODULE="$1"
@@ -56,73 +53,6 @@ EOF
   sed -i '/FELIX_IPV6SUPPORT/!b;n;c\              value: "true"' "${yaml}"
 }
 
-echo "kubernetes dualstack requires ipvs mode kube-proxy for the moment."
-MODULES=("ip_vs" "ip_vs_rr" "ip_vs_wrr" "ip_vs_sh" "nf_conntrack_ipv4")
-for m in "${MODULES[@]}"; do
-  checkModule $m || {
-      echo "Could not find kernel module $m. install it..."
-      # Modules could be built into kernel and not exist as a kernel module anymore.
-      # For instance, kernel 5.0.0 ubuntu has nf_conntrack_ipv4 built in.
-      # So try to install modules required and continue if it failed..
-      sudo modprobe $m || true
-  }
-done
-echo
-
-echo "Download kind executable with dual stack support"
-# We need to replace kind executable and node image
-# with official release once dual stack is fully supported by upstream.
-curl -L https://github.com/song-jiang/kind/releases/download/dualstack-1.17.0/kind -o ${KIND}
-chmod +x ${KIND}
-
-echo "Create kind cluster"
-
-set +e
-for attempt in 1 2 3; do
-    ${KIND} create cluster --image songtjiang/kindnode-dualstack:1.17.0 --config - <<EOF
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-networking:
-  disableDefaultCNI: true
-  podSubnet: "192.168.0.0/16,fd00:10:244::/64"
-  ipFamily: DualStack
-nodes:
-# the control plane node
-- role: control-plane
-- role: worker
-- role: worker
-- role: worker
-kubeadmConfigPatches:
-- |
-  apiVersion: kubeadm.k8s.io/v1beta2
-  kind: ClusterConfiguration
-  metadata:
-    name: config
-  featureGates:
-    IPv6DualStack: true
-- |
-  apiVersion: kubeproxy.config.k8s.io/v1alpha1
-  kind: KubeProxyConfiguration
-  metadata:
-    name: config
-  mode: ipvs
-  conntrack:
-    maxPerCore: 0
-EOF
-    kind_rc=$?
-    if ${TEST_RETRY:-false} || test "${kind_rc}" != 0; then
-	${KIND} delete cluster
-	TEST_RETRY=false	# Only force a retry test once.
-	continue
-    fi
-    break
-done
-set -e
-test "${kind_rc}" = 0
-
-${kubectl} get no -o wide
-${kubectl} get po --all-namespaces -o wide
-
 echo "Set ipv6 address on each node"
 docker exec kind-control-plane ip -6 a a 2001:20::8/64 dev eth0
 docker exec kind-worker ip -6 a a 2001:20::1/64 dev eth0
@@ -130,15 +60,17 @@ docker exec kind-worker2 ip -6 a a 2001:20::2/64 dev eth0
 docker exec kind-worker3 ip -6 a a 2001:20::3/64 dev eth0
 echo
 
+echo "Load calico/node docker images onto each node"
 load_image kind-control-plane
 load_image kind-worker
 load_image kind-worker2
 load_image kind-worker3
 
 echo "Install Calico and Calicoctl for dualstack"
-cp $TEST_DIR/infra/calico-kdd.yaml $TEST_DIR/infra/calico.yaml
-enable_dual_stack $TEST_DIR/infra/calico.yaml
-${kubectl} apply -f $TEST_DIR/infra/calico.yaml
+cp $TEST_DIR/infra/calico-kdd.yaml $TEST_DIR/infra/calico.yaml.tmp
+enable_dual_stack $TEST_DIR/infra/calico.yaml.tmp
+${kubectl} apply -f $TEST_DIR/infra/calico.yaml.tmp
+rm $TEST_DIR/infra/calico.yaml.tmp
 ${kubectl} apply -f $TEST_DIR/infra/calicoctl.yaml
 echo
 

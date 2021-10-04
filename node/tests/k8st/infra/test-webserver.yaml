@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: webserver
-        image: gcr.io/kubernetes-e2e-test-images/test-webserver:1.0 
+        image: gcr.io/kubernetes-e2e-test-images/test-webserver:1.0
         ports:
         - containerPort: 80
 
@@ -26,7 +26,8 @@ metadata:
   labels:
     run: webserver-ipv6
 spec:
-  ipFamily: IPv6
+  ipFamilies:
+  - IPv6
   ports:
   - port: 80
     protocol: TCP
@@ -42,7 +43,8 @@ metadata:
   labels:
     run: webserver-ipv4
 spec:
-  ipFamily: IPv4
+  ipFamilies:
+  - IPv4
   ports:
   - port: 80
     protocol: TCP
