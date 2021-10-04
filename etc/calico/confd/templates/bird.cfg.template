@@ -131,6 +131,10 @@ template bgp bgp_template {
 # ------------- Node-to-node mesh -------------
 {{- $node_cid_key := printf "/host/%s/rr_cluster_id" (getenv "NODENAME")}}
 {{- $node_cluster_id := getv $node_cid_key}}
+{{- if ne "" ($node_cluster_id)}}
+# This node ({{getenv "NODENAME"}}) is configured as a route reflector with cluster ID {{$node_cluster_id}};
+# ignore node-to-node mesh setting.
+{{- else}}
 {{if (json (getv "/global/node_mesh")).enabled}}
 {{range $host := lsdir "/host"}}
 {{$onode_as_key := printf "/host/%s/as_num" .}}
@@ -142,9 +146,12 @@ template bgp bgp_template {
 {{- else if exists "/global/listen_port"}}
 {{- $listen_port = getv "/global/listen_port"}}
 {{- end}}
+{{- $onode_cid_key := printf "/host/%s/rr_cluster_id" .}}
+{{- $onode_cluster_id := getv $onode_cid_key}}
 {{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
 # For peer {{$onode_ip_key}}
 {{if eq $onode_ip ($node_ip) }}# Skipping ourselves ({{$node_ip}})
+{{- else if ne "" ($onode_cluster_id)}}# Skipping {{$onode_ip}} ({{.}}) as it is a route reflector with cluster ID {{$onode_cluster_id}}
 {{else if ne "" $onode_ip}}protocol bgp Mesh_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} {{if ne "" $listen_port}}port {{$listen_port}} {{end}}as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
   source address {{$node_ip}};  # The local address we use for the TCP connection
@@ -161,6 +168,7 @@ template bgp bgp_template {
 {{else}}
 # Node-to-node mesh disabled
 {{end}}
+{{- end}}
 
 
 # ------------- Global peers -------------
