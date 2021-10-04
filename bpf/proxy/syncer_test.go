@@ -542,7 +542,7 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(0))
 		}))
 
-		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
+		By("inserting non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
 			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
@@ -555,6 +555,7 @@ var _ = Describe("BPF Syncer", func() {
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.1.1:2222"},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.2.1:2222", IsLocal: true},
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.3.1:2222"},
 			}
 
@@ -562,11 +563,16 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(svcs.m).To(HaveLen(3))
-			Expect(eps.m).To(HaveLen(2))
+			Expect(eps.m).To(HaveLen(3))
 			k := nat.NewNATKey(net.IPv4(10, 123, 0, 111), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
 			Expect(svcs.m).NotTo(HaveKey(k))
 			k = nat.NewNATKey(net.IPv4(10, 123, 0, 113), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
 			Expect(svcs.m).NotTo(HaveKey(k))
+
+			k = nat.NewNATKey(net.IPv4(192, 168, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
+			k = nat.NewNATKey(net.IPv4(10, 123, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
 		}))
 
 		By("adding a route should fix one missing expanded NP", makestep(func() {
@@ -589,9 +595,26 @@ var _ = Describe("BPF Syncer", func() {
 				defer svcs.Unlock()
 				return len(svcs.m)
 			}).Should(Equal(4))
+
+			Expect(eps.m).To(HaveLen(4))
+
 			k := nat.NewNATKey(net.IPv4(10, 123, 0, 111), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
 			Expect(svcs.m).To(HaveKey(k))
-			Expect(eps.m).To(HaveLen(3))
+			remote := svcs.m[k]
+			Expect(remote.Count()).To(Equal(uint32(1)))
+			Expect(remote.LocalCount()).To(Equal(uint32(0)))
+
+			k = nat.NewNATKey(net.IPv4(10, 123, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
+			local := svcs.m[k]
+			Expect(local.Count()).To(Equal(uint32(1)))
+			Expect(local.LocalCount()).To(Equal(uint32(1)))
+
+			k = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
+			cluster := svcs.m[k]
+			Expect(cluster.Count()).To(Equal(uint32(3)))
+			Expect(cluster.LocalCount()).To(Equal(uint32(1)))
 		}))
 
 		By("adding an unrelated route does not change anyhing", makestep(func() {
@@ -629,7 +652,46 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(svcs.m).To(HaveKey(k))
 			k = nat.NewNATKey(net.IPv4(10, 123, 0, 113), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
 			Expect(svcs.m).To(HaveKey(k))
-			Expect(eps.m).To(HaveLen(4))
+			Expect(eps.m).To(HaveLen(5))
+		}))
+
+		By("checking frontend-backend mapping", makestep(func() {
+			s.StopExpandNPFixup()
+			s.ConntrackScanStart()
+			defer s.ConntrackScanEnd()
+
+			// Any backend is valid for the ClusterIP
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 0, 0, 2), 2222, net.IPv4(10, 2, 1, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 0, 0, 2), 2222, net.IPv4(10, 2, 2, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 0, 0, 2), 2222, net.IPv4(10, 2, 3, 1), 2222, 6)).To(BeTrue())
+
+			// Not all backends are reachable through the NodePort, but there is
+			// no harm in not cleaning connctions that cannot exist. Even if
+			// they existed, why would we break them?
+
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(192, 168, 0, 1), 4444, net.IPv4(10, 2, 1, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(192, 168, 0, 1), 4444, net.IPv4(10, 2, 2, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(192, 168, 0, 1), 4444, net.IPv4(10, 2, 3, 1), 2222, 6)).To(BeTrue())
+
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 123, 0, 111), 4444, net.IPv4(10, 2, 1, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 123, 0, 111), 4444, net.IPv4(10, 2, 2, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 123, 0, 111), 4444, net.IPv4(10, 2, 3, 1), 2222, 6)).To(BeTrue())
+
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 123, 0, 113), 4444, net.IPv4(10, 2, 1, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 123, 0, 113), 4444, net.IPv4(10, 2, 2, 1), 2222, 6)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 123, 0, 113), 4444, net.IPv4(10, 2, 3, 1), 2222, 6)).To(BeTrue())
 		}))
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {

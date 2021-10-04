@@ -91,7 +91,9 @@ func hasSvcKeyExtra(skey svcKey, t svcType) bool {
 }
 
 func isSvcKeyDerived(skey svcKey) bool {
-	return hasSvcKeyExtra(skey, svcTypeExternalIP) || hasSvcKeyExtra(skey, svcTypeNodePort) || hasSvcKeyExtra(skey, svcTypeLoadBalancer)
+	return hasSvcKeyExtra(skey, svcTypeExternalIP) ||
+		hasSvcKeyExtra(skey, svcTypeNodePort) ||
+		hasSvcKeyExtra(skey, svcTypeLoadBalancer)
 }
 
 type stickyFrontend struct {
@@ -356,7 +358,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 	} else {
 		id = s.newSvcID()
 	}
-	count, local, err := s.updateService(skey.sname, sinfo, id, eps)
+	count, local, err := s.updateService(skey, sinfo, id, eps)
 	if err != nil {
 		return err
 	}
@@ -643,7 +645,7 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		s.mapsLck.Lock()
 	} else {
 		// if we were not synced yet, the fixer cannot run yet
-		s.stopExpandNPFixup()
+		s.StopExpandNPFixup()
 
 		s.mapsLck.Lock()
 		s.prevSvcMap = s.newSvcMap
@@ -678,7 +680,7 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	return s.cleanupSticky()
 }
 
-func (s *Syncer) updateService(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id uint32, eps []k8sp.Endpoint) (int, int, error) {
+func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, eps []k8sp.Endpoint) (int, int, error) {
 
 	cpEps := make([]k8sp.Endpoint, 0, len(eps))
 
@@ -720,7 +722,17 @@ func (s *Syncer) updateService(sname k8sp.ServicePortName, sinfo k8sp.ServicePor
 		return 0, 0, err
 	}
 
-	s.newEpsMap[sname] = cpEps
+	// svcTypeNodePortRemote is semi-primary service - it has a different set of
+	// backends for NAT (hence primary) but is also derived and would overwrite
+	// the primary service for connection cleaning.
+	//
+	// As a result we are a bit more conservative in which connections we break.
+	// Even if a backend is technically not reachable through the nodeport due
+	// to the Local vs. Cluster traffic policy, there is no harm if include also
+	// those backends and possible do not break connections that cannot happen.
+	if !hasSvcKeyExtra(skey, svcTypeNodePortRemote) {
+		s.newEpsMap[skey.sname] = cpEps
+	}
 
 	return cnt, local, nil
 }
@@ -1052,7 +1064,7 @@ func (s *Syncer) SetTriggerFn(f func()) {
 	s.triggerFn = f
 }
 
-func (s *Syncer) stopExpandNPFixup() {
+func (s *Syncer) StopExpandNPFixup() {
 	// If there was an error before we started ExpandNPFixup, there is nothing to stop
 	if s.expFixupStop != nil {
 		close(s.expFixupStop)
