@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -231,4 +232,26 @@ func SetNodeNetworkUnavailableCondition(clientset kubernetes.Clientset,
 			}
 		}
 	}
+}
+
+// IsIPv6String returns if ip is IPv6.
+func IsIPv6String(ip string) bool {
+	netIP := net.ParseIP(ip)
+	return IsIPv6(netIP)
+}
+
+// IsIPv4String returns if ip is IPv4.
+func IsIPv4String(ip string) bool {
+	netIP := net.ParseIP(ip)
+	return IsIPv4(netIP)
+}
+
+// IsIPv4 returns if netIP is IPv4.
+func IsIPv4(netIP net.IP) bool {
+	return netIP != nil && netIP.To4() != nil
+}
+
+// IsIPv6 returns if netIP is IPv6.
+func IsIPv6(netIP net.IP) bool {
+	return netIP != nil && netIP.To4() == nil
 }

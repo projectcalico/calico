@@ -78,6 +78,19 @@ func makeNode(ipv4 string, ipv6 string) *libapi.Node {
 	return n
 }
 
+// makeK8sNode creates an v1.Node with some Addresses populated.
+func makeK8sNode(ipv4 string, ipv6 string) *v1.Node {
+	node := &v1.Node{
+		Status: v1.NodeStatus{
+			Addresses: []v1.NodeAddress{
+				{Type: v1.NodeInternalIP, Address: ipv4},
+				{Type: v1.NodeInternalIP, Address: ipv6},
+			},
+		},
+	}
+	return node
+}
+
 var _ = DescribeTable("Node IP detection failure cases",
 	func(networkingBackend string, expectedExitCode int, rrCId string) {
 		os.Setenv("CALICO_NETWORKING_BACKEND", networkingBackend)
@@ -100,7 +113,8 @@ var _ = DescribeTable("Node IP detection failure cases",
 		if rrCId != "" {
 			node.Spec.BGP = &libapi.NodeBGPSpec{RouteReflectorClusterID: rrCId}
 		}
-		_ = configureAndCheckIPAddressSubnets(context.Background(), c, &node)
+
+		_ = configureAndCheckIPAddressSubnets(context.Background(), c, &node, &v1.Node{})
 		Expect(my_ec).To(Equal(expectedExitCode))
 		if rrCId != "" {
 			Expect(node.Spec.BGP).NotTo(BeNil())
@@ -879,7 +893,11 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 				os.Setenv(item.key, item.value)
 			}
 
-			check, err := configureIPsAndSubnets(node)
+			mockGetInterface := func([]string, []string, int) ([]autodetection.Interface, error) {
+				return []autodetection.Interface{}, nil
+			}
+
+			check, err := configureIPsAndSubnets(node, &v1.Node{}, mockGetInterface)
 
 			Expect(check).To(Equal(expected))
 			Expect(err).NotTo(HaveOccurred())
@@ -893,6 +911,34 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 		Entry("Test with \"IP6\" env var set to IP", &libapi.Node{}, []EnvItem{{"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, true),
 		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with same IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, false),
 		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with different IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7349/32"}}, true),
+	)
+})
+
+var _ = Describe("UT for autodetection method k8s-internal-ip", func() {
+
+	DescribeTable("Test variations on k8s-internal-ip",
+		func(node *libapi.Node, k8sNode *v1.Node, items []EnvItem, expected bool) {
+
+			for _, item := range items {
+				os.Setenv(item.key, item.value)
+			}
+
+			mockGetInterface := func([]string, []string, int) ([]autodetection.Interface, error) {
+				return []autodetection.Interface{
+					{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("192.168.1.10/24"), net.MustParseCIDR("2001:db8:85a3:8d3:1319:8a2e:370:7348/128")}}}, nil
+			}
+
+			check, _ := configureIPsAndSubnets(node, k8sNode, mockGetInterface)
+
+			Expect(check).To(Equal(expected))
+
+			os.Unsetenv("IP")
+			os.Unsetenv("IP_AUTODETECTION_METHOD")
+		},
+
+		Entry("Test with \"IP\" env = autodetect ,IP_AUTODETECTION_METHOD = k8s-internal-ip. k8snode = nil", &libapi.Node{}, nil, []EnvItem{{"IP", "autodetect"}, {"IP_AUTODETECTION_METHOD", "kubernetes-internal-ip"}}, false),
+		Entry("Test with \"IP\" env = autodetect ,IP_AUTODETECTION_METHOD = k8s-internal-ip. k8snode = valid addr", &libapi.Node{}, makeK8sNode("192.168.1.10", "2001:db8:85a3:8d3:1319:8a2e:370:7348"), []EnvItem{{"IP", "autodetect"}, {"IP_AUTODETECTION_METHOD", "kubernetes-internal-ip"}}, true),
+		Entry("Test with \"IP\" env = autodetect ,IP_AUTODETECTION_METHOD = k8s-internal-ip. k8snode = addr mismatch", &libapi.Node{}, makeK8sNode("192.168.1.1", "2001:db8:85a3:8d3:1319:8a2e:370:7349"), []EnvItem{{"IP", "autodetect"}, {"IP_AUTODETECTION_METHOD", "kubernetes-internal-ip"}}, false),
 	)
 })
 
@@ -1123,7 +1169,7 @@ var _ = Describe("UT for IP and IP6", func() {
 			return []autodetection.Interface{
 				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1.2.3.4/24")}}}, nil
 		}
-		ipv4CIDROrIP, _ := getLocalCIDR(ipv4Env, version, ipv4MockInterfaces)
+		ipv4CIDROrIP, _ := autodetection.GetLocalCIDR(ipv4Env, version, ipv4MockInterfaces)
 		Expect(ipv4CIDROrIP).To(Equal(exceptValue))
 	},
 		Entry("get the local cidr", "1.2.3.4", 4, "1.2.3.4/24"),
@@ -1136,7 +1182,7 @@ var _ = Describe("UT for IP and IP6", func() {
 			return []autodetection.Interface{
 				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1:2:3:4::5/120")}}}, nil
 		}
-		ipv4CIDROrIP, _ := getLocalCIDR(ipv6Env, version, ipv6MockInterfaces)
+		ipv4CIDROrIP, _ := autodetection.GetLocalCIDR(ipv6Env, version, ipv6MockInterfaces)
 		Expect(ipv4CIDROrIP).To(Equal(exceptValue))
 	},
 		Entry("get the local cidr", "1:2:3:4::5", 6, "1:2:3:4::5/120"),
