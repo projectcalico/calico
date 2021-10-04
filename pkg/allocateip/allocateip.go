@@ -374,6 +374,7 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	ipAddr := net.ParseIP(addr)
 	if ipAddr == nil {
 		log.Fatalf("Failed to parse node tunnel address '%s'", addr)
+		return nil
 	}
 
 	// Release the old allocation.

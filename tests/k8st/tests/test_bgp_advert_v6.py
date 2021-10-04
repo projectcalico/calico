@@ -255,29 +255,36 @@ EOF
             retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
             retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
 
+            # TODO: This assertion is actually incorrect. Kubernetes performs
+            # SNAT on all traffic destined to a service ClusterIP that doesn't
+            # originate from within the cluster's pod CIDR. This assertion
+            # pass for External / LoadBalancer IPs, though.
+            #
             # Create a network policy that only accepts traffic from the external node.
-            kubectl("""apply -f - << EOF
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-tcp-80-ex
-  namespace: bgp-test
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - ipBlock: { cidr: %s/128 }
-    ports:
-    - protocol: TCP
-      port: 80
-EOF
-""" % self.external_node_ip)
+            # Applying this policy asserts that traffic is not being SNAT'd by kube-proxy
+            # when it reaches the destination node.
+            # kubectl("""apply -f - << EOF
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+  # name: allow-tcp-80-ex
+  # namespace: bgp-test
+# spec:
+  # podSelector: {}
+  # policyTypes:
+  # - Ingress
+  # ingress:
+  # - from:
+    # - ipBlock: { cidr: %s/128 }
+    # ports:
+    # - protocol: TCP
+      # port: 80
+# EOF
+# """ % self.external_node_ip)
 
             # Connectivity to nginx-local should always succeed.
             for i in range(attempts):
-              retry_until_success(curl, function_args=[local_svc_ip])
+              retry_until_success(curl, retries=200, wait_time=5, function_args=[local_svc_ip])
 
             # NOTE: Unlike in the IPv6 case (in test_bgp_advert.py) we cannot successfully test that
             # connectivity to nginx-cluster is load-balanced across all nodes (and hence, with the
@@ -516,7 +523,8 @@ metadata:
     app: nginx
     run: nginx-rr
 spec:
-  ipFamily: IPv6
+  ipFamilies:
+  - IPv6
   externalIPs:
   - fd5f:1234:175:200::1
   ports:

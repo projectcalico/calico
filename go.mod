@@ -19,6 +19,7 @@ require (
 	k8s.io/api v0.21.0-rc.0
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
+	sigs.k8s.io/kind v0.11.1 // indirect
 )
 
 replace (
