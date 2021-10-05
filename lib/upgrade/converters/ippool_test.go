@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,6 +67,10 @@ var poolTable = []TableEntry{
 				Disabled:     false,
 				BlockSize:    26,
 				NodeSelector: "all()",
+				AllowedUses: []apiv3.IPPoolAllowedUse{
+					apiv3.IPPoolAllowedUseWorkload,
+					apiv3.IPPoolAllowedUseTunnel,
+				},
 			},
 		},
 	),
@@ -109,6 +113,10 @@ var poolTable = []TableEntry{
 				Disabled:     true,
 				BlockSize:    122,
 				NodeSelector: "all()",
+				AllowedUses: []apiv3.IPPoolAllowedUse{
+					apiv3.IPPoolAllowedUseWorkload,
+					apiv3.IPPoolAllowedUseTunnel,
+				},
 			},
 		},
 	),
@@ -151,6 +159,10 @@ var poolTable = []TableEntry{
 				Disabled:     true,
 				BlockSize:    26,
 				NodeSelector: "all()",
+				AllowedUses: []apiv3.IPPoolAllowedUse{
+					apiv3.IPPoolAllowedUseWorkload,
+					apiv3.IPPoolAllowedUseTunnel,
+				},
 			},
 		},
 	),
@@ -190,6 +202,10 @@ var poolTable = []TableEntry{
 				Disabled:     true,
 				BlockSize:    26,
 				NodeSelector: "all()",
+				AllowedUses: []apiv3.IPPoolAllowedUse{
+					apiv3.IPPoolAllowedUseWorkload,
+					apiv3.IPPoolAllowedUseTunnel,
+				},
 			},
 		},
 	),
@@ -232,6 +248,10 @@ var poolTable = []TableEntry{
 				Disabled:     true,
 				BlockSize:    26,
 				NodeSelector: "all()",
+				AllowedUses: []apiv3.IPPoolAllowedUse{
+					apiv3.IPPoolAllowedUseWorkload,
+					apiv3.IPPoolAllowedUseTunnel,
+				},
 			},
 		},
 	),

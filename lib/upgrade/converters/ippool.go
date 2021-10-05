@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,6 +77,10 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 		NATOutgoing:  pool.Masquerade,
 		Disabled:     pool.Disabled,
 		NodeSelector: "all()",
+		AllowedUses: []apiv3.IPPoolAllowedUse{
+			apiv3.IPPoolAllowedUseWorkload,
+			apiv3.IPPoolAllowedUseTunnel,
+		},
 	}
 
 	// Set the blocksize based on IP address family.

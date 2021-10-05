@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -211,8 +211,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Allocating an IP address and checking that we get an allocation block")
 				v4ia1, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-					Num4:     1,
-					Hostname: "127.0.0.1",
+					Num4:        1,
+					Hostname:    "127.0.0.1",
+					IntendedUse: apiv3.IPPoolAllowedUseWorkload,
 				})
 				Expect(v4ia1).ToNot(BeNil())
 				Expect(err).NotTo(HaveOccurred())
@@ -247,8 +248,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				syncTester.ExpectCacheSize(expectedCacheSize)
 
 				v4ia2, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-					Num4:     1,
-					Hostname: hostname,
+					Num4:        1,
+					Hostname:    hostname,
+					IntendedUse: apiv3.IPPoolAllowedUseWorkload,
 				})
 				Expect(v4ia2).ToNot(BeNil())
 				Expect(err).NotTo(HaveOccurred())

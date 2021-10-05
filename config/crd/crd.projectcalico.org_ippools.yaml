@@ -32,6 +32,12 @@ spec:
           spec:
             description: IPPoolSpec contains the specification for an IPPool resource.
             properties:
+              allowedUses:
+                description: AllowedUse controls what the IP pool will be used for.  If
+                  not specified or empty, defaults to ["Tunnel", "Workload"] for back-compatibility
+                items:
+                  type: string
+                type: array
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 112 for IPv6.

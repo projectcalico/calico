@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package ipam
 import (
 	"net"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -79,6 +80,10 @@ type AutoAssignArgs struct {
 
 	// If specified, the attributes of reserved IPv6 addresses in the block.
 	HostReservedAttrIPv6s *HostReservedAttr
+
+	// The intended use for the IP address.  Used to filter the available IP pools on their AllowedUses field.
+	// This field is required.
+	IntendedUse v3.IPPoolAllowedUse
 }
 
 // IPAMConfig contains global configuration options for Calico IPAM.
