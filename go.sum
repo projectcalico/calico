@@ -183,10 +183,10 @@ github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7
 github.com/evanphx/json-patch v4.9.0+incompatible h1:kLcOMZeuLAJvL2BPWLMIj5oaZQobrkAqrL+WFZwQses=
 github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/evanphx/json-patch/v5 v5.2.0/go.mod h1:G79N1coSVB93tBe7j6PhzjmR3/2VvlbKOFpnXhI9Bw4=
-github.com/fasaxc/api v0.0.0-20210927163059-c89aa9ffedfb h1:YvR6p+AaKN8DCNolYVURMbpSkAX0oAt77xGH0F2uUxg=
-github.com/fasaxc/api v0.0.0-20210927163059-c89aa9ffedfb/go.mod h1:EBa6i7/+w/4iyw3BYrkXhqZkZh1juR//oO2zHgToG5E=
-github.com/fasaxc/libcalico-go v0.0.0-20210927122827-ed28aafc526b h1:9UHoURUStZGmaB0dYBRH1XcbT3C6qowGv/o6vg+JBs0=
-github.com/fasaxc/libcalico-go v0.0.0-20210927122827-ed28aafc526b/go.mod h1:Rd25TRQ3H5CNI4EXBXxbHOeLEMVLHaSqRnFWTj4+pEU=
+github.com/fasaxc/api v0.0.0-20210928133302-83ae15a10bd0 h1:u4P21p6yV43WlTCrsms6E5tN14Ms1jlft2bRh/hulYk=
+github.com/fasaxc/api v0.0.0-20210928133302-83ae15a10bd0/go.mod h1:EBa6i7/+w/4iyw3BYrkXhqZkZh1juR//oO2zHgToG5E=
+github.com/fasaxc/libcalico-go v0.0.0-20211005093526-25bf6f4766c9 h1:GkuT/GVQUhlCtJJRRVq4JDyZ+T7cITFC0srGDlkiC5U=
+github.com/fasaxc/libcalico-go v0.0.0-20211005093526-25bf6f4766c9/go.mod h1:eco52FyMQMjywEEjNCtil5u7r9k3L05HHNULyKVevyE=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/structs v1.1.0/go.mod h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga6PJ7M=
 github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568/go.mod h1:xEzjJPgXI435gkrCt3MPfRiAkVrwSbHsst4LCFVfpJc=

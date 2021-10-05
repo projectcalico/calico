@@ -32,6 +32,6 @@ require (
 	k8s.io/client-go v0.21.0-rc.0
 )
 
-replace github.com/projectcalico/libcalico-go => github.com/fasaxc/libcalico-go v0.0.0-20210927122827-ed28aafc526b
+replace github.com/projectcalico/api => github.com/fasaxc/api v0.0.0-20210928133302-83ae15a10bd0
 
-replace github.com/projectcalico/api => github.com/fasaxc/api v0.0.0-20210927163059-c89aa9ffedfb
+replace github.com/projectcalico/libcalico-go => github.com/fasaxc/libcalico-go v0.0.0-20211005093526-25bf6f4766c9

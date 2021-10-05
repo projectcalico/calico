@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -486,6 +486,7 @@ class TestCalicoctlCommands(TestBase):
 
     @parameterized.expand([
         (ippool_name1_rev1_v4,),
+        (ipresv_name1_rev1_v4,),
         (profile_name1_rev1,),
         (globalnetworkpolicy_name1_rev1,),
         (globalnetworkset_name1_rev1,),
@@ -528,6 +529,32 @@ class TestCalicoctlCommands(TestBase):
         # Delete the resource
         rc = calicoctl("delete", data=data1)
         rc.assert_no_error()
+
+    def test_ip_reservation_no_truncation(self):
+        """
+        Test that the list of CIDRd is truncated if it's too long.
+        """
+        rc = calicoctl("create", ipresv_name1_rev1_v4)
+        rc.assert_no_error()
+
+        kind = ipresv_name1_rev1_v4['kind']
+        rc = calicoctl("get %s -o wide" % kind)
+
+        rc.assert_no_error()
+        rc.assert_output_contains("10.0.1.0/24,11.0.0.1/32")
+
+    def test_ip_reservation_truncation(self):
+        """
+        Test that the list of CIDRs is truncated if it's too long.
+        """
+        rc = calicoctl("create", ipresv_name1_rev1_v4_long)
+        rc.assert_no_error()
+
+        kind = ipresv_name1_rev1_v4['kind']
+        rc = calicoctl("get %s -o wide" % kind)
+
+        rc.assert_no_error()
+        rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
     @parameterized.expand([
         (globalnetworkset_name1_rev1_large,),
