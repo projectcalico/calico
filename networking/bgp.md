@@ -47,7 +47,7 @@ To build large clusters of internal BGP (iBGP), **BGP route reflectors** can be 
 
 #### Top of Rack (ToR)
 
-In **on-premises deployments**, you can configure {{site.prodname}} to peer directly with your physical network infrastructure. Typically, this involves disabling {{site.prodname}}’s default full-mesh behavior, and instead peer {{site.prodname}} with your L3 ToR routers. There are many ways to build an on-premises BGP network. How you configure your BGP is up to you - {{site.prodname}} works well with both iBGP and eBGP configurations, and you can effectively treat {{site.prodname}} like any other router in your netwok design.
+In **on-premises deployments**, you can configure {{site.prodname}} to peer directly with your physical network infrastructure. Typically, this involves disabling {{site.prodname}}’s default full-mesh behavior, and instead peer {{site.prodname}} with your L3 ToR routers. There are many ways to build an on-premises BGP network. How you configure your BGP is up to you - {{site.prodname}} works well with both iBGP and eBGP configurations, and you can effectively treat {{site.prodname}} like any other router in your network design.
 
 Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically needed only if the number of nodes in each L2 domain is large (> 100).
 
