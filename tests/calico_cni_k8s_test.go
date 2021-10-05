@@ -1154,9 +1154,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			v4ia, _, err := calicoClient.IPAM().AutoAssign(
 				context.Background(),
 				ipam.AutoAssignArgs{
-					Num4:      256,
-					HandleID:  &handle,
-					IPv4Pools: []cnet.IPNet{cnet.IPNet{IPNet: *pool1CIDR}},
+					Num4:        256,
+					HandleID:    &handle,
+					IPv4Pools:   []cnet.IPNet{cnet.IPNet{IPNet: *pool1CIDR}},
+					IntendedUse: api.IPPoolAllowedUseWorkload,
 				},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -1211,9 +1212,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			v4ia, _, err := calicoClient.IPAM().AutoAssign(
 				context.Background(),
 				ipam.AutoAssignArgs{
-					Num4:      256,
-					HandleID:  &handle,
-					IPv4Pools: []cnet.IPNet{cnet.IPNet{IPNet: *pool1CIDR}},
+					Num4:        256,
+					HandleID:    &handle,
+					IPv4Pools:   []cnet.IPNet{cnet.IPNet{IPNet: *pool1CIDR}},
+					IntendedUse: api.IPPoolAllowedUseWorkload,
 				},
 			)
 			Expect(err).NotTo(HaveOccurred())

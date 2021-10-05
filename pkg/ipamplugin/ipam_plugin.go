@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,19 +30,18 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/gofrs/flock"
-	"github.com/prometheus/common/log"
-	"github.com/sirupsen/logrus"
-
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/cni-plugin/pkg/types"
+	"github.com/projectcalico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/cni-plugin/pkg/types"
-	"github.com/projectcalico/cni-plugin/pkg/upgrade"
+	"github.com/prometheus/common/log"
+	"github.com/sirupsen/logrus"
 )
 
 func Main(version string) {
@@ -252,6 +251,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			IPv6Pools:        v6pools,
 			MaxBlocksPerHost: maxBlocks,
 			Attrs:            attrs,
+			IntendedUse:      v3.IPPoolAllowedUseWorkload,
 		}
 		if runtime.GOOS == "windows" {
 			rsvdAttrWindows := &ipam.HostReservedAttr{
