@@ -7,6 +7,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 |--------|--------|
 | Aaron Roydhouse                          | @whereisaaron |
 | Abhishek Jaisingh                        | @abhishekjiitr |
+| Adam Hoheisel                            | @adamhoheisel |
 | Adam Leskis                              | @lpmi-13 |
 | Alan                                     | @zgfh |
 | Alban Crequy                             | @alban |
@@ -110,6 +111,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Jack Kleeman                             | @jackkleeman |
 | Jade Chunnananda                         | @jadech32 |
 | James Lucktaylor                         | @jlucktay |
+| Jamie                                    | @91jme |
 | Jan Ivar Beddari                         | @beddari |
 | jay vyas                                 | @jayunit100 |
 | Jeff Schroeder                           | @SEJeff |
@@ -126,6 +128,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Jonathan Sabo                            | @jsabo |
 | Jonathan Sokolowski                      | @jsok |
 | Jonathan Wilbur                          | @JonathanWilbur |
+| Joseph Gu                                | @Aceralon |
 | Josh Conant                              | @insequent |
 | Justin Nauman                            | @jrnt30 |
 | Justin Sievenpiper                       | @jsievenpiper |
@@ -162,6 +165,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Marlinc                                  | @Marlinc |
 | Marshall Ford                            | @marshallford |
 | Martin Evgeniev                          | @suizman |
+| Martin Vladev                            | @mvladev |
 | Mat Meredith                             | @MatMeredith |
 | Mateusz Gozdek                           | @invidian |
 | Matt Dupre                               | @matthewdupre |
@@ -172,10 +176,11 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Maxim Ivanov                             | @redbaron |
 | Maxime Guyot                             | @Miouge1 |
 | Maximilian Bischoff                      | @maxbischoff |
-| Mayo                                     | @mayocream |
+| Mayo/IO                                  | @mayocream |
 | Mazdak Nasab                             | @mazdakn |
 | meijin                                   | @marviniter |
 | Michael Stowe                            | @mikestowe |
+| Michael Vierling                         | @mikev |
 | Mike Frisch                              | @EmmEff |
 | Mike Kostersitz                          | @mkostersitz |
 | Mike Palmer                              | @mkhpalm |
@@ -278,7 +283,6 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @DomDeMarc |
 | ---                                      | @emanic |
 | ---                                      | @fcuello-fudo |
-| ---                                      | @fen4o |
 | ---                                      | @frnkdny |
 | ---                                      | @gauravsinhatigera |
 | ---                                      | @gdziwoki |
@@ -287,7 +291,6 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @marvin-tigera |
 | ---                                      | @maxkudosh |
 | ---                                      | @mchtech |
-| ---                                      | @mikev |
 | ---                                      | @mofelee |
 | ---                                      | @oldtree2k |
 | ---                                      | @OwenTuz |
@@ -298,8 +301,8 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @sedefsavas |
 | ---                                      | @sridhartigera |
 | ---                                      | @Stanislav-Galchynski |
+| ---                                      | @strigie |
 | ---                                      | @tathagatachowdhury |
-| ---                                      | @Teller-Ulam |
 | ---                                      | @vixns |
 | ---                                      | @weizhouBlue |
 | ---                                      | @wwgfhf |
