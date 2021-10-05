@@ -23,6 +23,9 @@ spec:
   natOutgoing: true
   disabled: false
   nodeSelector: all()
+  allowedUses:
+  - Workload
+  - Tunnel 
 ```
 
 ### IP pool definition
@@ -44,11 +47,25 @@ spec:
 | natOutgoing | When enabled, packets sent from {{site.prodname}} networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
 | disabled | When set to true, {{site.prodname}} IPAM will not assign addresses from this pool. | true, false | boolean | `false` |
 | nodeSelector | Selects the nodes that {{site.prodname}} IPAM should assign addresses from this pool to. | | [selector](#node-selector) | all() |
+| allowedUses _(since v3.21.0)_ | Controls whether the pool will be used for automatic assignments of certain types.  See [below](#allowed-uses). | Workload, Tunnel | list of strings | `["Workload", "Tunnel"]` |
 
 > **Important**: Do not use a custom `blockSize` until **all** {{site.prodname}} components have been updated to a version that
 > supports it (at least v3.3.0).  Older versions of components do not understand the field so they may corrupt the
 > IP pool by creating blocks of incorrect size.
 {: .alert .alert-danger}
+
+#### Allowed uses _(since v3.21.0)_
+
+When automatically assigning IP addresses to workloads, only pools with "Workload" in their `allowedUses` field are 
+consulted.  Similarly, when assigning IPs for tunnel devices, only "Tunnel" pools are eligible.
+
+If the `allowedUses` field is not specified, it defaults to `["Workload", "Tunnel"]` for compatibility with older
+versions of Calico.  Hence it is not possible to specify a pool with no allowed used. 
+
+The `allowedUses` field is only consulted for new allocations, changing the field has no effect on previously allocated
+addresses.
+
+{{site.prodname}} supports Kubernetes [annotations that force the use of specific IP addresses](../cni-plugin/configuration#requesting-a-specific-ip-address). These annotations take precedence over the `allowedUses` field.
 
 #### IPIP
 
@@ -111,3 +128,8 @@ For details on configuring IP pool node selectors, please read the
 |-----------------------|---------------|--------|----------|------
 | etcdv3                | Yes           | Yes    | Yes      |
 | Kubernetes API server | Yes           | Yes    | Yes      |
+
+### See also
+
+The [`IPReservation` resource](./ipreservation) allows for small parts of an IP pool to be reserved so that they will 
+not be used for automatic IPAM assignments.
