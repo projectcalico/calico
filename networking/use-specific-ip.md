@@ -31,7 +31,7 @@ IP pools are ranges of IP addresses from which Calico assigns pod IPs. Static IP
 
 ### Before you begin...
 
-You must be using the Calico IPAM.
+You must be using Calico IPAM.
 
 If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.
 
@@ -47,7 +47,7 @@ Look for the entry:
           },
 </pre>
 
-If it is present, you are using the Calico IPAM. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
+If it is present, you are using Calico IPAM. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
 
 ### How to
 
@@ -62,6 +62,22 @@ Note the use of the escaped `\"` for the inner double quotes around the addresse
 The address must be within a configured Calico IP pool and not currently in use. The annotation must be present when the pod is created; adding it later has no effect.
 
 Note that currently only a single IP address is supported per-pod using this annotation.
+
+#### Reserving IPs for manual assignments
+
+The `cni.projectcalico.org/ipAddrs` annotation requires the IP address to be within an IP pool.  This means that,
+by default, {{site.prodname}} may decide to use the IP address that you select for another workload or for an internal
+tunnel address.  To prevent this, there are several options:
+
+* To reserve a whole IPPool for manual allocations, you can set its [node selector](../reference/resources/ippool) to `"!all()"`.  Since the `!all()`  
+  cannot match any nodes, the IPPool will not be used for any automatic assignments.
+
+* To reserve part of a pool, you can create an [`IPReservation` resource](../reference/ipreservation). This allows for certain IPs to be reserved so
+  that Calico IPAM will not use them automatically.  However, manual assignments (using the annotation) can still use 
+  IPs that are "reserved".
+
+* To prevent {{site.prodname}} from using IPs from a certain pool for internal IPIP and/or VXLAN tunnel addresses, you 
+  can set the `allowedUses` field on the [IPPool](../reference/resources/ippool) to `["Workload"]`.
 
 ### Above and beyond
 
