@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package status
+package populator
 
 import (
 	"fmt"
@@ -22,45 +22,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type BirdConnType string
-
-const (
-	BirdConnTypeV4 BirdConnType = "4"
-	BirdConnTypeV6              = "6"
-)
-
-func (c BirdConnType) String() string {
-	return string(c)
-}
-
-func (c BirdConnType) Suffix() string {
-	if c == BirdConnTypeV4 {
-		return ""
-	} else if c == BirdConnTypeV6 {
-		return "6"
-	} else {
-		log.Fatal("Unknown BirdConnType")
-	}
-	return ""
-}
-
-func (c BirdConnType) Separator() string {
-	if c == BirdConnTypeV4 {
-		return "."
-	} else if c == BirdConnTypeV6 {
-		return ":"
-	} else {
-		log.Fatal("Unknown BirdConnType")
-	}
-	return "."
-}
-
 // Timeout for querying BIRD
 var birdTimeOut = 2 * time.Second
 
 type birdConn struct {
 	conn net.Conn
-	ipv  BirdConnType
+	ipv  IPFamily
 }
 
 func (bc *birdConn) Close() {
@@ -71,8 +38,8 @@ func (bc *birdConn) Close() {
 }
 
 // getBirdConn return a connection to bird socket.
-func getBirdConn(ipv BirdConnType) (*birdConn, error) {
-	birdSuffix := ipv.Suffix()
+func getBirdConn(ipv IPFamily) (*birdConn, error) {
+	birdSuffix := ipv.BirdSuffix()
 
 	// Try connecting to the bird socket in `/var/run/calico/` first to get the data
 	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))

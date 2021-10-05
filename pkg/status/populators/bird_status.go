@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package status
+package populator
 
 import (
 	"bufio"
@@ -40,19 +40,25 @@ type birdStatus struct {
 	lastReconfigTime string
 }
 
-func (b *birdStatus) toNodeStatusAPI() apiv3.CalicoNodeBirdStatus {
-	return apiv3.CalicoNodeBirdStatus{
-		Ready:            b.ready,
-		Version:          b.version,
-		RouteID:          b.routeID,
-		ServerTime:       b.serverTime,
-		LastBootTime:     b.lastBootTime,
-		LastReconfigTime: b.lastReconfigTime,
+func (b *birdStatus) toNodeStatusAPI() apiv3.BGPDaemonStatus {
+	var state apiv3.BGPDaemonState
+	if b.ready {
+		state = apiv3.BGPDaemonStateReady
+	} else {
+		state = apiv3.BGPDaemonStateNotReady
+	}
+
+	return apiv3.BGPDaemonStatus{
+		State:                   state,
+		Version:                 b.version,
+		RouterID:                b.routeID,
+		LastBootTime:            b.lastBootTime,
+		LastReconfigurationTime: b.lastReconfigTime,
 	}
 }
 
-// Unmarshal from a line in the BIRD protocol output.  Returns true if
-// successful, false otherwise.
+// Unmarshal from a line in the BIRD protocol output.
+// Returns true if successful, false otherwise.
 func (b *birdStatus) unmarshalBIRD(line string) bool {
 	// Peer names will be of the format described by bgpPeerRegex.
 	log.Debugf("Parsing line: %s", line)
@@ -141,7 +147,9 @@ func scanBIRDStatus(conn net.Conn) (*birdStatus, error) {
 			status.unmarshalBIRD(str[1:])
 		} else {
 			// Format of row is unexpected.
-			return nil, errors.New("unexpected output line from BIRD")
+			// For example "0024-Graceful restart recovery in progress"
+			log.Warnf("unexpected output line from BIRD: %s", str)
+			break
 		}
 
 		// Before reading the next line, adjust the time-out for
@@ -155,7 +163,7 @@ func scanBIRDStatus(conn net.Conn) (*birdStatus, error) {
 	return status, scanner.Err()
 }
 
-func getBirdStatus(ipv BirdConnType) (*birdStatus, error) {
+func getBirdStatus(ipv IPFamily) (*birdStatus, error) {
 	bc, err := getBirdConn(ipv)
 	if err != nil {
 		return nil, err
@@ -170,21 +178,26 @@ func getBirdStatus(ipv BirdConnType) (*birdStatus, error) {
 	return status, nil
 }
 
-// BirdInfo implement statusPopulator interface.
+// BirdInfo implement populator interface.
 type BirdInfo struct {
-	ipv BirdConnType
+	ipv IPFamily
+}
+
+func NewBirdInfo(ipv IPFamily) BirdInfo {
+	return BirdInfo{ipv: ipv}
 }
 
 func (b BirdInfo) Populate(status *apiv3.CalicoNodeStatus) error {
 	birdStatus, err := getBirdStatus(b.ipv)
 	if err != nil {
+		log.WithError(err).Errorf("failed to get bird status")
 		return err
 	}
 
-	if b.ipv == BirdConnTypeV4 {
-		status.Status.Agent.Bird4 = birdStatus.toNodeStatusAPI()
+	if b.ipv == IPFamilyV4 {
+		status.Status.Agent.BIRDV4 = birdStatus.toNodeStatusAPI()
 	} else {
-		status.Status.Agent.Bird6 = birdStatus.toNodeStatusAPI()
+		status.Status.Agent.BIRDV6 = birdStatus.toNodeStatusAPI()
 	}
 
 	return nil
@@ -193,7 +206,7 @@ func (b BirdInfo) Populate(status *apiv3.CalicoNodeStatus) error {
 func (b BirdInfo) Show() {
 	birdStatus, err := getBirdStatus(b.ipv)
 	if err != nil {
-		fmt.Println("Error getting birdStatus: %v", err)
+		fmt.Printf("Error getting birdStatus: %v\n", err)
 		return
 	}
 
