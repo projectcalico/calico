@@ -16,10 +16,10 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
-	github.com/projectcalico/api v0.0.0-20210908204226-36fbcf68f1c8
+	github.com/projectcalico/api v0.0.0-20211005123650-be8650baf048
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/projectcalico/libcalico-go v1.7.2-0.20210924171343-658c80ee8a34
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211005125516-43b35ddc2f4a
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -31,7 +31,3 @@ require (
 	k8s.io/apimachinery v0.21.0-rc.0
 	k8s.io/client-go v0.21.0-rc.0
 )
-
-replace github.com/projectcalico/libcalico-go => github.com/fasaxc/libcalico-go v0.0.0-20210927122827-ed28aafc526b
-
-replace github.com/projectcalico/api => github.com/fasaxc/api v0.0.0-20210927163059-c89aa9ffedfb
