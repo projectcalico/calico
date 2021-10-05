@@ -302,6 +302,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", interfaceName), "1")
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Assert sysctl values are set for what we would expect for an endpoint.
+			err = checkInterfaceConfig(interfaceName, "4")
+			Expect(err).ShouldNot(HaveOccurred())
+
 			// Assert if the host side route is programmed correctly.
 			hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -456,6 +460,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						Port:     555,
 					}},
 				}))
+
+				// Assert sysctl values are set for what we would expect for an endpoint.
+				err = checkInterfaceConfig(interfaceName, "4")
+				Expect(err).ShouldNot(HaveOccurred())
 
 				// Delete container
 				_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
@@ -1673,6 +1681,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Orchestrator:       api.OrchestratorKubernetes,
 			}))
 
+			// Assert sysctl values are set for what we would expect for an endpoint.
+			err = checkInterfaceConfig(interfaceName, "4")
+			Expect(err).ShouldNot(HaveOccurred())
+
 			// Delete the container.
 			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -1873,6 +1885,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Check the pod's IP annotations.
 			checkPodIPAnnotations(clientset, testutils.K8S_TEST_NS, name, "20.0.0.111/32", "20.0.0.111/32")
+
+			// Assert sysctl values are set for what we would expect for an endpoint.
+			err = checkInterfaceConfig(interfaceName, "4")
+			Expect(err).ShouldNot(HaveOccurred())
 
 			// Delete the container.
 			_, err = testutils.DeleteContainer(netconfCalicoIPAM, netNS.Path(), name, testutils.K8S_TEST_NS)
@@ -2788,6 +2804,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				}},
 			}))
 
+			// Assert sysctl values are set for what we would expect for an endpoint.
+			err = checkInterfaceConfig(interfaceName, "4")
+			Expect(err).ShouldNot(HaveOccurred())
+
 			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 
@@ -2941,6 +2961,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				}},
 			}))
 
+			// Assert sysctl values are set for what we would expect for an endpoint.
+			err = checkInterfaceConfig(interfaceName, "4")
+			Expect(err).ShouldNot(HaveOccurred())
+
 			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
@@ -3028,4 +3052,46 @@ func checkPodIPAnnotations(clientset *kubernetes.Clientset, ns, name, expectedIP
 		Expect(pod.Annotations["cni.projectcalico.org/podIP"]).To(Equal(expectedIP))
 		Expect(pod.Annotations["cni.projectcalico.org/podIPs"]).To(Equal(expectedIPs))
 	}
+}
+
+func checkInterfaceConfig(name, ipVersion string) error {
+	err := testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name), "0")
+	if err != nil {
+		return err
+	}
+
+	if ipVersion == "4" {
+		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		if err != nil {
+			return err
+		}
+
+		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		if err != nil {
+			return err
+		}
+
+		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		if err != nil {
+			return err
+		}
+
+		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
+		if err != nil {
+			return err
+		}
+	} else if ipVersion == "6" {
+		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
+		if err != nil {
+			return err
+		}
+
+		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
 }
