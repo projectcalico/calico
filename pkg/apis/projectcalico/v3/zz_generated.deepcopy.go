@@ -1297,6 +1297,11 @@ func (in *IPPoolSpec) DeepCopyInto(out *IPPoolSpec) {
 		*out = new(IPIPConfiguration)
 		**out = **in
 	}
+	if in.AllowedUses != nil {
+		in, out := &in.AllowedUses, &out.AllowedUses
+		*out = make([]IPPoolAllowedUse, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

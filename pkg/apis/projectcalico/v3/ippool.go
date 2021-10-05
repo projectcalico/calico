@@ -78,7 +78,18 @@ type IPPoolSpec struct {
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
 	NATOutgoingV1 bool `json:"nat-outgoing,omitempty" validate:"omitempty,mustBeFalse"`
+
+	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
+	// ["Tunnel", "Workload"] for back-compatibility
+	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`
 }
+
+type IPPoolAllowedUse string
+
+const (
+	IPPoolAllowedUseWorkload IPPoolAllowedUse = "Workload"
+	IPPoolAllowedUseTunnel                    = "Tunnel"
+)
 
 type VXLANMode string
 
