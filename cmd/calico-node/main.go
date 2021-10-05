@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/node/pkg/allocateip"
 	"github.com/projectcalico/node/pkg/cni"
 	"github.com/projectcalico/node/pkg/health"
+	"github.com/projectcalico/node/pkg/hostpathinit"
 	"github.com/projectcalico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/node/pkg/lifecycle/startup"
 )
@@ -70,6 +71,9 @@ var runConfd = flagSet.Bool("confd", false, "Run confd")
 var confdRunOnce = flagSet.Bool("confd-run-once", false, "Run confd in oneshot mode")
 var confdKeep = flagSet.Bool("confd-keep-stage-file", false, "Keep stage file when running confd")
 var confdConfDir = flagSet.String("confd-confdir", "/etc/calico/confd", "Confd configuration directory.")
+
+// non-root hostpath init flags
+var initHostpaths = flagSet.Bool("hostpath-init", false, "Initialize hostpaths for non-root access")
 
 func main() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
@@ -151,6 +155,9 @@ func main() {
 	} else if *monitorToken {
 		logrus.SetFormatter(&logutils.Formatter{Component: "cni-config-monitor"})
 		cni.Run()
+	} else if *initHostpaths {
+		logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
+		hostpathinit.Run()
 	} else {
 		fmt.Println("No valid options provided. Usage:")
 		flagSet.PrintDefaults()
