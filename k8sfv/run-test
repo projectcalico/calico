@@ -137,34 +137,44 @@ etcd_ip=$(get_container_ip ${prefix}-etcd)
 # "cluster-admin" role).
 # Enable insecure connection from controller manager to API server port 8080.
 docker run --detach --name ${prefix}-apiserver \
-       -v ${PRIVATE_KEY}:/private.key \
+       -v ${PWD}/fv/certs:/home/user/certs \
        $FV_K8SIMAGE \
        kube-apiserver \
        --etcd-servers=http://${etcd_ip}:2379 \
        --service-cluster-ip-range=10.101.0.0/16 -v=10 \
        --authorization-mode=RBAC \
-       --insecure-port=8080 \
-       --insecure-bind-address=0.0.0.0 \
-       --service-account-key-file=/private.key
+       --service-account-key-file=/home/user/certs/service-account.pem \
+       --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+       --service-account-issuer=https://localhost:443 \
+       --api-audiences=kubernetes.default \
+       --client-ca-file=/home/user/certs/ca.pem \
+       --tls-cert-file=/home/user/certs/kubernetes.pem \
+       --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+       --enable-priority-and-fairness=false \
+       --max-mutating-requests-inflight=0 \
+       --max-requests-inflight=0
+
 k8s_ip=$(get_container_ip ${prefix}-apiserver)
 k8s_api_endpoint=https://${k8s_ip}:6443
 
-while ! docker exec ${prefix}-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
+while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/kubeconfig create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
     sleep 2
 done
 
 docker run --detach --name ${prefix}-controller-manager \
-	  -v ${PRIVATE_KEY}:/private.key \
+          -v ${PWD}/fv/certs:/home/user/certs \
           $FV_K8SIMAGE \
 	  kube-controller-manager \
-            --master=${k8s_ip}:8080 \
+            --master=https://${k8s_ip}:6443 \
+	    --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
 	    --min-resync-period=3m \
 	    --allocate-node-cidrs=true \
 	    --cluster-cidr=192.168.0.0/16 \
 	    --v=5 \
-	    --service-account-private-key-file=/private.key
+	    --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+	    --root-ca-file=/home/user/certs/ca.pem
 
-while ! docker exec ${prefix}-apiserver kubectl get serviceaccounts default; do
+while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/kubeconfig get serviceaccounts default; do
     sleep 2
 done
 
@@ -180,15 +190,15 @@ while ! docker cp ${CRD_PATH} ${prefix}-apiserver:/crds; do
 done
 
 # Apply CRD manifest to pre-create resource definitions
-while ! docker exec ${prefix}-apiserver kubectl apply -f /crds; do
+while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/kubeconfig apply -f /crds/; do
     sleep 2
 done
 
-# Get the API server's (self-signed) TLS certificate.  (This is needed
+# Get the API server's TLS certificate.  (This is needed
 # for the clients to authenticate the _API_server_ - which is entirely
 # independent of the _client_ authorization discussed above.)
 mkdir -p k8sfv/output
-while ! docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/output/; do
+while ! docker cp ${prefix}-apiserver:/home/user/certs/kubernetes.pem k8sfv/output/; do
     sleep 2
 done
 
@@ -199,7 +209,7 @@ if ${USE_TYPHA}; then
        -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
        -e TYPHA_DATASTORETYPE=kubernetes \
        -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
-       -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
+       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
        --restart=on-failure:2 \
@@ -226,7 +236,7 @@ docker run --detach --privileged --name ${prefix}-felix \
        -e FELIX_USAGEREPORTINGENABLED=false \
        -e FELIX_DEBUGMEMORYPROFILEPATH="heap-<timestamp>" \
        -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
-       -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
+       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
        -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \

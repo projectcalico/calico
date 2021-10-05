@@ -1684,12 +1684,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									externalIP, srcIPRange)
 								k8sUpdateService(k8sClient, testSvcNamespace, testSvcName, testSvc, testSvcLB)
 							})
-							It("should have connectivity from workload 0 to service via external IP and not via nodeport", func() {
+							It("should have connectivity from workload 0 to service via external IP and via nodeport", func() {
 								node1IP := felixes[1].IP
-								cc.ExpectNone(w[0][1], TargetIP(node1IP), npPort)
-								cc.ExpectNone(w[1][0], TargetIP(node1IP), npPort)
-								cc.ExpectNone(w[1][1], TargetIP(node1IP), npPort)
 
+								// Note: the behaviour expected here changed around k8s v1.20.  Previously, the API
+								// server would allocate a new node port when we applied the load balancer update.
+								// Now, it merges the two so the service keeps its existing NodePort.
+								cc.ExpectSome(w[0][1], TargetIP(node1IP), npPort)
+								cc.ExpectSome(w[1][0], TargetIP(node1IP), npPort)
+								cc.ExpectSome(w[1][1], TargetIP(node1IP), npPort)
+
+								// Either way, we expect the load balancer to show up.
 								ip := testSvcLB.Spec.ExternalIPs
 								port := uint16(testSvcLB.Spec.Ports[0].Port)
 								cc.ExpectSome(w[1][0], TargetIP(ip[0]), port)
@@ -3203,11 +3208,16 @@ func k8sUpdateService(k8sClient kubernetes.Interface, nameSpace, svcName string,
 	svc, err := k8sClient.CoreV1().
 		Services(nameSpace).
 		Get(context.Background(), svcName, metav1.GetOptions{})
+	log.WithField("origSvc", svc).Info("Read original service befor updating it")
 	newsvc.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
 	_, err = k8sClient.CoreV1().Services(nameSpace).Update(context.Background(), newsvc, metav1.UpdateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(k8sGetEpsForServiceFunc(k8sClient, oldsvc), "10s").Should(HaveLen(1),
 		"Service endpoints didn't get created? Is controller-manager happy?")
+
+	updatedSvc, err := k8sClient.CoreV1().Services(nameSpace).Get(context.Background(), svcName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	log.WithField("updatedSvc", updatedSvc).Info("Read back updated Service")
 }
 
 func k8sCreateLBServiceWithEndPoints(k8sClient kubernetes.Interface, name, clusterIP string, w *workload.Workload, port,

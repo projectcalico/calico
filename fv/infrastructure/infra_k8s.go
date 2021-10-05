@@ -175,16 +175,21 @@ func runK8sApiserver(etcdIp string) *containers.Container {
 			AutoRemove: true,
 			StopSignal: "SIGKILL",
 		},
-		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
+		"-v", os.Getenv("PWD")+"/certs:/home/user/certs", // Mount in location of certificates.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=RBAC",
-		"--insecure-port=8080", // allow insecure connection from controller manager.
-		"--insecure-bind-address=0.0.0.0",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdIp),
-		"--service-account-key-file=/private.key",
+		"--service-account-key-file=/home/user/certs/service-account.pem",
+		"--service-account-signing-key-file=/home/user/certs/service-account-key.pem",
+		"--service-account-issuer=https://localhost:443",
+		"--api-audiences=kubernetes.default",
+		"--client-ca-file=/home/user/certs/ca.pem",
+		"--tls-cert-file=/home/user/certs/kubernetes.pem",
+		"--tls-private-key-file=/home/user/certs/kubernetes-key.pem",
+		"--enable-priority-and-fairness=false",
 		"--max-mutating-requests-inflight=0",
 		"--max-requests-inflight=0",
 	)
@@ -196,10 +201,11 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 			AutoRemove: true,
 			StopSignal: "SIGKILL",
 		},
-		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
+		"-v", os.Getenv("PWD")+"/certs:/home/user/certs", // Mount in location of certificates.
 		utils.Config.K8sImage,
 		"kube-controller-manager",
-		fmt.Sprintf("--master=%v:8080", apiserverIp),
+		fmt.Sprintf("--master=https://%v:6443", apiserverIp),
+		"--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig",
 		// We run trivially small clusters, so increase the QPS to get the
 		// cluster to start up as fast as possible.
 		"--kube-api-qps=100",
@@ -210,7 +216,8 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 		"--allocate-node-cidrs=false",
 		"--leader-elect=false",
 		"--v=0",
-		"--service-account-private-key-file=/private.key",
+		"--service-account-private-key-file=/home/user/certs/service-account-key.pem",
+		"--root-ca-file=/home/user/certs/ca.pem",
 		"--concurrent-gc-syncs=50",
 	)
 	return c
@@ -277,6 +284,10 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		err := kds.k8sApiContainer.ExecMayFail(
 			"kubectl", "create", "clusterrolebinding",
 			"anonymous-admin",
+			"--insecure-skip-tls-verify=true",
+			"--client-key=/home/user/certs/admin-key.pem",
+			"--client-certificate=/home/user/certs/admin.pem",
+			fmt.Sprintf("--server=https://%s:6443", kds.k8sApiContainer.IP),
 			"--clusterrole=cluster-admin",
 			"--user=system:anonymous",
 		)
@@ -327,7 +338,8 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		TearDownK8sInfra(kds)
 		return nil, err
 	}
-	err = kds.k8sApiContainer.ExecMayFail("kubectl", "apply", "-f", "/crds/")
+
+	err = kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
 	if err != nil {
 		TearDownK8sInfra(kds)
 		return nil, err
@@ -365,7 +377,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	start = time.Now()
 	for {
 		cmd := utils.Command("docker", "cp",
-			kds.k8sApiContainer.Name+":/var/run/kubernetes/apiserver.crt",
+			kds.k8sApiContainer.Name+":/home/user/certs/kubernetes.pem",
 			kds.CertFileName,
 		)
 		err = cmd.Run()

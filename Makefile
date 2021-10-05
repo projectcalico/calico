@@ -28,7 +28,7 @@
 #
 ###############################################################################
 PACKAGE_NAME?=github.com/projectcalico/felix
-GO_BUILD_VER?=v0.54
+GO_BUILD_VER?=v0.56
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_FELIX_PROJECT_ID)
@@ -83,14 +83,13 @@ Makefile.common.$(MAKE_BRANCH):
 include Makefile.common
 
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
-FV_K8SIMAGE?=gcr.io/google_containers/hyperkube-$(BUILDARCH):$(K8S_VERSION)
 FV_TYPHAIMAGE?=calico/typha:master-$(BUILDARCH)
+FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
 FV_FELIXIMAGE?=$(FELIX_IMAGE)-test:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
 	FV_ETCDIMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
-	FV_K8SIMAGE=gcr.io/google_containers/hyperkube:$(K8S_VERSION)
 	FV_TYPHAIMAGE=calico/typha:master
 endif
 
