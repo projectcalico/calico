@@ -84,10 +84,11 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	// Assign some IPs.
 	var v4, v6 []cnet.IPNet
 	v4Assignments, v6Assignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-		Num4:     5,
-		Num6:     7,
-		Attrs:    map[string]string{"note": "reserved by migrate_ipam_test.go"},
-		Hostname: "node4",
+		Num4:        5,
+		Num6:        7,
+		Attrs:       map[string]string{"note": "reserved by migrate_ipam_test.go"},
+		Hostname:    "node4",
+		IntendedUse: v3.IPPoolAllowedUseWorkload,
 	})
 	Expect(err).NotTo(HaveOccurred())
 	if v4Assignments != nil {
@@ -111,9 +112,10 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	// Assign some IPs.
 	var v4More, v6More []cnet.IPNet
 	v4MoreAssignments, v6MoreAssignments, err := client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
-		Num4:      11,
-		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
-		Hostname:  "node4",
+		Num4:        11,
+		IPv4Pools:   []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
+		Hostname:    "node4",
+		IntendedUse: v3.IPPoolAllowedUseWorkload,
 	})
 	Expect(err).NotTo(HaveOccurred())
 	if v4MoreAssignments != nil {

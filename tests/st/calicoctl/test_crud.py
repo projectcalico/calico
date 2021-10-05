@@ -175,7 +175,7 @@ class TestCalicoctlCommands(TestBase):
 
         rc= calicoctl("get ippool -o yaml")
         rc.assert_no_error()
-        rc.assert_output_equals(rcYaml.output)
+        rc.assert_output_equals_ignore_res_version(rcYaml.output)
 
     def test_reject_unknown_resource(self):
         """
