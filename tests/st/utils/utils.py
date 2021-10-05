@@ -13,6 +13,7 @@
 # limitations under the License.
 import copy
 import os
+import re
 import socket
 import sys
 import tempfile
@@ -160,6 +161,22 @@ class CalicoctlOutput:
             return
         assert text == self.output, "Expected output to exactly match; \n" + \
                                     "command=" + self.command + "\noutput=\n" + self.output + \
+                                    "\nexpected=\n" + text
+
+    def assert_output_equals_ignore_res_version(self, text):
+        """
+        Assert the calicoctl command output is exactly the supplied text.
+        Args:
+            text:   Expected text in the command output.
+        """
+        if not text:
+            return
+
+        text = re.sub('resourceVersion: ".*?"', 'resourceVersion: "<ignored>"', text)
+        out = re.sub('resourceVersion: ".*?"', 'resourceVersion: "<ignored>"', self.output)
+
+        assert text == out, "Expected output to match after ignoring resource version; \n" + \
+                                    "command=" + self.command + "\noutput=\n" + out + \
                                     "\nexpected=\n" + text
 
     def assert_output_contains(self, text):
