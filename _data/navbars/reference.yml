@@ -92,6 +92,8 @@ section:
     path: /reference/resources/hostendpoint
   - title: IP pool
     path: /reference/resources/ippool
+  - title: IP reservation
+    path: /reference/resources/ipreservation
   - title: Kubernetes controllers configuration
     path: /reference/resources/kubecontrollersconfig
   - title: Network policy
