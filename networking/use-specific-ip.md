@@ -72,7 +72,7 @@ tunnel address.  To prevent this, there are several options:
 * To reserve a whole IPPool for manual allocations, you can set its [node selector](../reference/resources/ippool) to `"!all()"`.  Since the `!all()`  
   cannot match any nodes, the IPPool will not be used for any automatic assignments.
 
-* To reserve part of a pool, you can create an [`IPReservation` resource](../reference/ipreservation). This allows for certain IPs to be reserved so
+* To reserve part of a pool, you can create an [`IPReservation` resource](../reference/resources/ipreservation). This allows for certain IPs to be reserved so
   that Calico IPAM will not use them automatically.  However, manual assignments (using the annotation) can still use 
   IPs that are "reserved".
 
