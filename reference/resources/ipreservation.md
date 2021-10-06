@@ -54,3 +54,7 @@ released back to the pool.  The reservation check is only done at auto allocatio
 
 {{site.prodname}} supports Kubernetes [annotations that force the use of specific IP addresses](../cni-plugin/configuration#requesting-a-specific-ip-address). These annotations override any `IPReservation`s that 
 are in place.
+
+When Windows nodes claim blocks of IPs they automatically assign the first three IPs
+in each block and the final IP for internal purposes.  These assignments cannot be blocked by an `IPReservation`.
+However, if a whole IPAM block is reserved with an `IPReservation`, Windows nodes will not claim such a block.
