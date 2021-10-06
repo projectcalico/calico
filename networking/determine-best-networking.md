@@ -77,7 +77,7 @@ If you aren’t using an overlay network, then whether pod IPs are routable outs
 #### BGP
 BGP (Border Gateway Protocol) is a standards based networking protocol for sharing routes across a network.  It’s one of the fundamental building blocks of the internet, with exceptional scaling characteristics.
 
-{{site.prodname}} has built in support for BGP.  In an on-prem deployment, this allows {{site.prodname}} to peer with the physical network (typically to Top or Rack routers) to exchange routes, making a non-overlay network where pod IP addresses routable across the broader network, just like any other workload attached to the network.
+{{site.prodname}} has built in support for BGP.  In an on-prem deployment, this allows {{site.prodname}} to peer with the physical network (typically to Top of Rack routers) to exchange routes, making a non-overlay network where pod IP addresses routable across the broader network, just like any other workload attached to the network.
 
 ### About {{site.prodname}} Networking
 {{site.prodname}}’s flexible modular architecture for networking includes the following.
