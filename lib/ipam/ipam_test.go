@@ -492,7 +492,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			BeforeEach(func() {
 				resv1 := v3.NewIPReservation()
 				resv1.Name = "resv1"
-				resv1.Spec.ReservedCIDRs = []string{"10.0.0.16/32", "10.0.0.32/30"}
+				resv1.Spec.ReservedCIDRs = []string{"10.0.0.1/32", "10.0.0.32/30"}
 				resv2 := v3.NewIPReservation()
 				resv2.Name = "resv2"
 				resv2.Spec.ReservedCIDRs = []string{"11.0.0.0/30", "10.0.0.17/32"}
@@ -510,6 +510,29 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				v4, _, err := ic.AutoAssign(context.Background(), args)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(v4.IPs).To(HaveLen(58))
+			})
+
+			It("should deal with IPReservations and Windows reservations", func() {
+				// Windows will reserve the first 3 IPs in the block and the last IP.
+				// One Windows IP overlaps with our IPReservation but the block allocation code ignores that
+				// for now.  It's not clear if we should abandon a whole block just because Windows reserves the
+				// same IP.
+				_, _, err := ic.EnsureBlock(context.Background(), BlockArgs{
+					Hostname:              hostname,
+					HostReservedAttrIPv4s: rsvdAttrWindows,
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				handle := "my-test-handle"
+				args := AutoAssignArgs{
+					Num4:        64, // Try to get all the IPs
+					Hostname:    hostname,
+					HandleID:    &handle,
+					IntendedUse: v3.IPPoolAllowedUseWorkload,
+				}
+				v4, _, err := ic.AutoAssign(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v4.IPs).To(HaveLen(64 - 4 /*windows*/ - 5 /*IPReservation less 1 overlap*/))
 			})
 		})
 	})

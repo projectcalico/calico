@@ -26,7 +26,7 @@ type addrFilter interface {
 	MatchesIP(ip net.IP) bool
 	// MatchesWholeCIDR returns true if every address within the CIDR is matched by the filter.
 	MatchesWholeCIDR(ip *net.IPNet) bool
-	// MatchesSome returns true if any part of hte given CIDR is matched by this filter.
+	// MatchesSome returns true if any part of the given CIDR is matched by this filter.
 	MatchesSome(ip *net.IPNet) bool
 }
 
@@ -84,12 +84,22 @@ func (c cidrSliceFilter) MatchesWholeCIDR(candidateCIDR *net.IPNet) bool {
 	// If we get here, we have some CIDRs that overlap candidateCIDR but none that completely cover it.
 	// Check if, together they cover it.
 
-	// Remove duplicates and overlapping CIDRs in the overlapping set.
-	cidrsOverlappingCandidate = cidrsOverlappingCandidate.filterOutDuplicates()
 	// Now, everything that remains in cidrsOverlappingCandidate is non-overlapping and contained within the
 	// candidate CIDR.  If the candidate CIDR contains the same number of IPs as the overlapping set then
 	// we know that the overlapping set covers the candidate CIDR.
-	return cidrsOverlappingCandidate.numCoveredIPs().Cmp(candidateCIDR.NumAddrs()) == 0
+	cidrsOverlappingCandidate, numCoveredIPs := cidrsOverlappingCandidate.filterDupesAndGetNumCoveredIPs()
+	return numCoveredIPs.Cmp(candidateCIDR.NumAddrs()) == 0
+}
+
+// filterDupesAndGetNumCoveredIPs returns the sum of the number of IPs covered by each CIDR in the slice.
+// As aside effect is filters out duplicate and overlapping CIDRs and returns the updates slice.
+func (c cidrSliceFilter) filterDupesAndGetNumCoveredIPs() (cidrSliceFilter, *big.Int) {
+	filtered := c.filterOutDuplicates()
+	num := big.NewInt(0)
+	for _, cidr := range filtered {
+		num = num.Add(num, cidr.NumAddrs())
+	}
+	return filtered, num
 }
 
 // filterOutDuplicates returns a cidrSliceFilter with duplicate CIDRs and overlapping CIDRs pruned out.
@@ -109,16 +119,6 @@ outer:
 		filteredOverlaps = append(filteredOverlaps, cidr)
 	}
 	return filteredOverlaps
-}
-
-// numCoveredIPs returns the sum of the number of IPs covered by each CIDR in the slice. To be useful, should
-// be called on a slice with no duplicates or overlapping CIDRs.
-func (c cidrSliceFilter) numCoveredIPs() *big.Int {
-	num := big.NewInt(0)
-	for _, cidr := range c {
-		num = num.Add(num, cidr.NumAddrs())
-	}
-	return num
 }
 
 var _ addrFilter = cidrSliceFilter(nil)
