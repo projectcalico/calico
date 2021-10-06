@@ -108,7 +108,7 @@ func findContainingPool(pools []v3.IPPool, addr net.IP) (*v3.IPPool, error) {
 //
 // Note that the block may become claimed between receiving the CIDR from this function and attempting to claim the corresponding
 // block as this function does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, version int, pools []v3.IPPool, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("no configured Calico pools for node %s", host)
@@ -130,7 +130,7 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, ve
 	exists := map[string]blockInfo{}
 	for _, e := range existingBlocks.KVPairs {
 		hostAff := e.Value.(*model.AllocationBlock).Host()
-		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses()
+		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses(reservations)
 		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{numFree: numFree, affinity: hostAff}
 	}
 
@@ -141,13 +141,19 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, ve
 		log.Debugf("Looking for blocks in pool %+v", pool)
 		blocks := randomBlockGenerator(pool, host)
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
+			// Check if the whole subnet is reserved.
+			if reservations.MatchesWholeCIDR(subnet) {
+				log.WithField("cidr", subnet).Debug("Skipping block that is entirely reserved.")
+				continue
+			}
+
 			// Check if a block already exists for this subnet.
 			log.Debugf("Getting block: %s", subnet.String())
 			if info, ok := exists[subnet.String()]; !ok {
 				log.Infof("Found free block: %+v", *subnet)
 				return subnet, nil
 			} else if info.affinity == host && info.numFree != 0 {
-				// Belongs to this host and has free allocations.
+				// Belongs to this host and has free allocations.  Check that the IPs really are free (not reserved).
 				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
 				return subnet, nil
 			}

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,16 +114,21 @@ func IPToBigInt(ip IP) *big.Int {
 	}
 }
 
-func BigIntToIP(ipInt *big.Int) IP {
-	ip := net.IP(ipInt.Bytes())
-	if ip.To4() != nil {
-		return IP{ip}
+func BigIntToIP(ipInt *big.Int, v6 bool) IP {
+	var netIP net.IP
+	// Older versions of this code tried to guess v4/v6 based on the length of the big.Int
+	// but then we can't tell the difference between 0.0.0.0/0 and ::/0.
+	if v6 {
+		netIP = make(net.IP, 16)
+	} else {
+		netIP = make(net.IP, 4)
 	}
-	a := ipInt.FillBytes(make([]byte, 16))
-	return IP{net.IP(a)}
+	ipInt.FillBytes(netIP)
+	return IP{netIP}
 }
 
 func IncrementIP(ip IP, increment *big.Int) IP {
+	expectingV6 := ip.To4() == nil
 	sum := big.NewInt(0).Add(IPToBigInt(ip), increment)
-	return BigIntToIP(sum)
+	return BigIntToIP(sum, expectingV6)
 }

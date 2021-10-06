@@ -27,8 +27,10 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -39,10 +41,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
-
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 // Implement an IP pools accessor for the IPAM client.  This is a "mock" version
@@ -135,6 +135,14 @@ type testArgsClaimAff struct {
 	expError                    error
 }
 
+type fakeReservations struct {
+	Reservations []v3.IPReservation
+}
+
+func (f *fakeReservations) List(ctx context.Context, opts options.ListOptions) (*v3.IPReservationList, error) {
+	return &v3.IPReservationList{Items: f.Reservations}, nil
+}
+
 var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	// Create a new backend client and an IPAM Client using the IP Pools Accessor.
 	// Tests that need to ensure a clean datastore should invoke Clean() on the datastore at the start of the
@@ -142,12 +150,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	var bc bapi.Client
 	var ic Interface
 	var kc *kubernetes.Clientset
+	var reservations *fakeReservations
 	BeforeEach(func() {
 		var err error
 		config.Spec.K8sClientQPS = 500
 		bc, err = backend.NewClient(config)
 		Expect(err).NotTo(HaveOccurred())
-		ic = NewIPAMClient(bc, ipPools)
+		reservations = &fakeReservations{}
+		ic = NewIPAMClient(bc, ipPools, reservations)
 
 		// If running in KDD mode, extract the k8s clientset.
 		if config.Spec.DatastoreType == "kubernetes" {
@@ -213,7 +223,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -230,7 +240,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool26, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -247,7 +257,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool20, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -264,7 +274,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				Expect(outErr).NotTo(HaveOccurred())
@@ -281,7 +291,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
 				Expect(err).NotTo(HaveOccurred())
-				ic = NewIPAMClient(bc, pa)
+				ic = NewIPAMClient(bc, pa, &fakeReservations{})
 
 				v4ia, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, IntendedUse: v3.IPPoolAllowedUseWorkload})
 				v4IP := make([]cnet.IP, 0, 0)
@@ -446,6 +456,87 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 	})
 
+	Describe("Reservation tests", func() {
+		var hostname string
+		BeforeEach(func() {
+			// Remove all data in the datastore.
+			bc.Clean()
+
+			// Create an IP pool
+			deleteAllPools()
+			applyPool("10.0.0.0/26", true, "all()")
+
+			// Create the node object.
+			hostname = "allocation-attributes"
+			applyNode(bc, kc, hostname, nil)
+		})
+
+		AfterEach(func() {
+			bc.Clean()
+		})
+
+		It("before adding reservation, should assign all IPs", func() {
+			handle := "my-test-handle"
+			args := AutoAssignArgs{
+				Num4:        64, // Try to get all the IPs
+				Hostname:    hostname,
+				HandleID:    &handle,
+				IntendedUse: v3.IPPoolAllowedUseWorkload,
+			}
+			v4, _, err := ic.AutoAssign(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4.IPs).To(HaveLen(64))
+		})
+
+		Describe("with reservations", func() {
+			BeforeEach(func() {
+				resv1 := v3.NewIPReservation()
+				resv1.Name = "resv1"
+				resv1.Spec.ReservedCIDRs = []string{"10.0.0.1/32", "10.0.0.32/30"}
+				resv2 := v3.NewIPReservation()
+				resv2.Name = "resv2"
+				resv2.Spec.ReservedCIDRs = []string{"11.0.0.0/30", "10.0.0.17/32"}
+				reservations.Reservations = []v3.IPReservation{*resv1, *resv2}
+			})
+
+			It("should assign non-reserved IPs only", func() {
+				handle := "my-test-handle"
+				args := AutoAssignArgs{
+					Num4:        64, // Try to get all the IPs
+					Hostname:    hostname,
+					HandleID:    &handle,
+					IntendedUse: v3.IPPoolAllowedUseWorkload,
+				}
+				v4, _, err := ic.AutoAssign(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v4.IPs).To(HaveLen(58))
+			})
+
+			It("should deal with IPReservations and Windows reservations", func() {
+				// Windows will reserve the first 3 IPs in the block and the last IP.
+				// One Windows IP overlaps with our IPReservation but the block allocation code ignores that
+				// for now.  It's not clear if we should abandon a whole block just because Windows reserves the
+				// same IP.
+				_, _, err := ic.EnsureBlock(context.Background(), BlockArgs{
+					Hostname:              hostname,
+					HostReservedAttrIPv4s: rsvdAttrWindows,
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				handle := "my-test-handle"
+				args := AutoAssignArgs{
+					Num4:        64, // Try to get all the IPs
+					Hostname:    hostname,
+					HandleID:    &handle,
+					IntendedUse: v3.IPPoolAllowedUseWorkload,
+				}
+				v4, _, err := ic.AutoAssign(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v4.IPs).To(HaveLen(64 - 4 /*windows*/ - 5 /*IPReservation less 1 overlap*/))
+			})
+		})
+	})
+
 	Describe("Affinity FV tests", func() {
 		var err error
 		var hostname string
@@ -539,7 +630,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(blocks.KVPairs)).To(Equal(1))
 		})
 
-		It("should release host affinifies even if the pool has been deleted", func() {
+		It("should release host affinities even if the pool has been deleted", func() {
 			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
 			// per each block.
 			handle := "test-handle"
@@ -1515,7 +1606,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		// Tests behavior when there are no more blocks available. For nodes which are selected by an
 		// IP pool, addresses should be borrowed from other blocks within the pool. For nodes which are
-		// not selected by that IP pool, an error should be returned and addresses should no be borrowed.
+		// not selected by that IP pool, an error should be returned and addresses should not be borrowed.
 		It("should handle changing node selectors between two nodes with no available blocks", func() {
 			node1 := "host1"
 			node2 := "host2"
@@ -2114,7 +2205,25 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				remainingAffineBlocks: affBlocks,
 				hostReservedAttr:      rsvdAttr,
 				allowNewClaim:         true,
+				reservations:          nilAddrFilter{},
 			}
+		})
+
+		It("Should skip blocks that are reserved", func() {
+			// Reserve the whole first block.
+			s.reservations = cidrSliceFilter{
+				cnet.MustParseCIDR("10.0.0.0/30"),
+			}
+
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			Expect(outErr).NotTo(HaveOccurred())
+			// Should allocate from host-affine blocks.
+			Expect(newlyClaimed).To(BeFalse())
+			// Should find second block.
+			Expect(b.Key.(model.BlockKey).CIDR.String()).To(Equal("10.0.0.4/30"))
+			// uncheckedAffBlocks has no elements.
+			Expect(len(s.remainingAffineBlocks)).To(Equal(0))
+			Expect(s.datastoreRetryCount).To(Equal(0))
 		})
 
 		It("Should find or claim blocks", func() {
@@ -2828,7 +2937,7 @@ var _ = DescribeTable("determinePools tests IPV4",
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools)
+		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
 		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
@@ -2897,7 +3006,7 @@ var _ = DescribeTable("determinePools tests IPV6",
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
-		ic := NewIPAMClient(nil, ipPools)
+		ic := NewIPAMClient(nil, ipPools, &fakeReservations{})
 
 		// Create a node object for the test.
 		node := libapiv3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}

@@ -22,19 +22,18 @@ import (
 	"runtime"
 	"strings"
 
-	"golang.org/x/sync/semaphore"
-
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/set"
-
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
@@ -61,13 +60,19 @@ var (
 	ErrStrictAffinity  = errors.New("global strict affinity should not be false for Windows node")
 )
 
+// IPReservationInterface is the subset of clientv3.IPReservationInterface that we need.
+type IPReservationInterface interface {
+	List(ctx context.Context, opts options.ListOptions) (*v3.IPReservationList, error)
+}
+
 // NewIPAMClient returns a new ipamClient, which implements Interface.
 // Consumers of the Calico API should not create this directly, but should
 // access IPAM through the main client IPAM accessor (e.g. clientv3.IPAM())
-func NewIPAMClient(client bapi.Client, pools PoolAccessorInterface) Interface {
+func NewIPAMClient(client bapi.Client, pools PoolAccessorInterface, reservations IPReservationInterface) Interface {
 	return &ipamClient{
-		client: client,
-		pools:  pools,
+		client:       client,
+		pools:        pools,
+		reservations: reservations,
 		blockReaderWriter: blockReaderWriter{
 			client: client,
 			pools:  pools,
@@ -80,6 +85,7 @@ type ipamClient struct {
 	client            bapi.Client
 	pools             PoolAccessorInterface
 	blockReaderWriter blockReaderWriter
+	reservations      IPReservationInterface
 }
 
 // AutoAssign automatically assigns one or more IP addresses as specified by the
@@ -175,7 +181,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair,
 		return nil, err
 	}
 
-	// If the block doesn't match the affinity, it means we've got a stale affininty hanging around.
+	// If the block doesn't match the affinity, it means we've got a stale affinity hanging around.
 	// We should remove it.
 	blockAffinity := b.Value.(*model.AllocationBlock).Affinity
 	if blockAffinity == nil || *blockAffinity != fmt.Sprintf("host:%s", host) {
@@ -448,6 +454,7 @@ type blockAssignState struct {
 	remainingAffineBlocks []net.IPNet
 	hostReservedAttr      *HostReservedAttr
 	allowNewClaim         bool
+	reservations          addrFilter
 
 	// For UT purpose, how many times datastore retry has been triggered.
 	datastoreRetryCount int
@@ -465,6 +472,11 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 		// Pop first cidr.
 		cidr := s.remainingAffineBlocks[0]
 		s.remainingAffineBlocks = s.remainingAffineBlocks[1:]
+
+		if s.reservations.MatchesWholeCIDR(&cidr) {
+			log.WithField("cidr", cidr).Debug("Ignoring block, it is entirely reserved.")
+			continue
+		}
 
 		// Checking this block - if we hit a CAS error, we'll try this block again.
 		// For any other error, we'll break out and try the next affine block.
@@ -491,11 +503,12 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 
 			// Pull out the block.
 			block := allocationBlock{b.Value.(*model.AllocationBlock)}
-			if block.NumFreeAddresses() >= minFreeIps {
-				logCtx.Debugf("Block '%s' has %d free ips which is more than %d ips required.", cidr.String(), block.NumFreeAddresses(), minFreeIps)
+			numFreeAddresses := block.NumFreeAddresses(s.reservations)
+			if numFreeAddresses >= minFreeIps {
+				logCtx.Debugf("Block '%s' has %d free ips which is more than %d ips required.", cidr.String(), numFreeAddresses, minFreeIps)
 				return b, false, nil
 			} else {
-				logCtx.Debugf("Block '%s' has %d free ips which is less than %d ips required.", cidr.String(), block.NumFreeAddresses(), minFreeIps)
+				logCtx.Debugf("Block '%s' has %d free ips which is less than %d ips required.", cidr.String(), numFreeAddresses, minFreeIps)
 				break
 			}
 		}
@@ -519,7 +532,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
 			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
 			logCtx.Info("Tried all affine blocks. Looking for an affine block with space, or a new unclaimed block")
-			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.host, s.version, s.pools, *config)
+			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.host, s.version, s.pools, s.reservations, *config)
 			if err != nil {
 				if _, ok := err.(noFreeBlocksError); ok {
 					// No free blocks.  Break.
@@ -563,11 +576,14 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 
 				// Claim successful.
 				block := allocationBlock{b.Value.(*model.AllocationBlock)}
-				if block.NumFreeAddresses() >= minFreeIps {
-					logCtx.Infof("Block '%s' has %d free ips which is more than %d ips required.", b.Key.(model.BlockKey).CIDR, block.NumFreeAddresses(), minFreeIps)
+				numFree := block.NumFreeAddresses(s.reservations)
+				if numFree >= minFreeIps {
+					logCtx.Infof("Block '%s' has %d free ips which is more than %d ips required.",
+						b.Key.(model.BlockKey).CIDR, numFree, minFreeIps)
 					return b, true, nil
 				} else {
-					errString := fmt.Sprintf("Block '%s' has %d free ips which is less than %d ips required.", b.Key.(model.BlockKey).CIDR, block.NumFreeAddresses(), minFreeIps)
+					errString := fmt.Sprintf("Block '%s' has %d free ips which is less than %d ips required.",
+						b.Key.(model.BlockKey).CIDR, numFree, minFreeIps)
 					logCtx.Errorf(errString)
 					return nil, false, errors.New(errString)
 				}
@@ -626,6 +642,9 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		return nil, ErrUseRequired
 	}
 
+	// Load the set of reserved IPs/CIDRs.
+	reservations, err := c.getReservedIPs(ctx)
+
 	// Get the existing host-affine blocks.
 	logCtx := log.WithFields(log.Fields{"host": host})
 	if handleID != nil {
@@ -681,6 +700,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		remainingAffineBlocks: affBlocks,
 		hostReservedAttr:      rsvdAttr,
 		allowNewClaim:         true,
+		reservations:          reservations,
 	}
 
 	// Allocate the IPs.
@@ -717,7 +737,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 		// We have got a block b.
 		for i := 0; i < datastoreRetries; i++ {
-			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, config.StrictAffinity)
+			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, config.StrictAffinity, reservations)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					log.WithError(err).Debug("CAS Error assigning from new block - retry")
@@ -779,6 +799,11 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 					break
 				}
 
+				if reservations.MatchesWholeCIDR(blockCIDR) {
+					log.WithField("cidr", blockCIDR).Debug("Skipping over reserved block")
+					continue
+				}
+
 				for i := 0; i < datastoreRetries; i++ {
 					b, err := c.blockReaderWriter.queryBlock(ctx, *blockCIDR, "")
 					if err != nil {
@@ -788,7 +813,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 					// Attempt to assign from the block.
 					logCtx.Infof("Attempting to assign IPs from non-affine block %s", blockCIDR.String())
-					newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, false)
+					newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, false, reservations)
 					if err != nil {
 						if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 							logCtx.WithError(err).Debug("CAS error assigning from non-affine block - retry")
@@ -1116,7 +1141,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[strin
 	return nil, errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
-func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, host string, affCheck bool) ([]net.IPNet, error) {
+func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, host string, affCheck bool, reservations addrFilter) ([]net.IPNet, error) {
 	blockCIDR := block.Key.(model.BlockKey).CIDR
 	logCtx := log.WithFields(log.Fields{"host": host, "block": blockCIDR})
 	if handleID != nil {
@@ -1127,7 +1152,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	// Pull out the block.
 	b := allocationBlock{block.Value.(*model.AllocationBlock)}
 
-	ips, err := b.autoAssign(num, handleID, host, attrs, affCheck)
+	ips, err := b.autoAssign(num, handleID, host, attrs, affCheck, reservations)
 	if err != nil {
 		logCtx.WithError(err).Errorf("Error in auto assign")
 		return nil, err
@@ -2064,6 +2089,9 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 
 	logCtx.Debugf("Found %d affine IPv%d blocks for host: %v", len(affBlocks), version, affBlocks)
 
+	// Load the set of reserved IPs/CIDRs.
+	reservations, err := c.getReservedIPs(ctx)
+
 	s := &blockAssignState{
 		client:                c,
 		version:               version,
@@ -2072,6 +2100,7 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 		remainingAffineBlocks: affBlocks,
 		hostReservedAttr:      rsvdAttr,
 		allowNewClaim:         true,
+		reservations:          reservations,
 	}
 
 	// Ensure a block
@@ -2084,4 +2113,31 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 	blockCIDR := b.Key.(model.BlockKey).CIDR
 	logCtx.Infof("Host's block '%s' ", blockCIDR.String())
 	return &blockCIDR, nil
+}
+
+func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
+	reservations, err := c.reservations.List(ctx, options.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if len(reservations.Items) == 0 {
+		return nilAddrFilter{}, nil
+	}
+	var cidrs cidrSliceFilter
+	for _, r := range reservations.Items {
+		for _, cidrStr := range r.Spec.ReservedCIDRs {
+			cidrStr = strings.TrimSpace(cidrStr)
+			if len(cidrStr) == 0 {
+				// Defensive, validation should prevent.
+				continue
+			}
+			_, cidr, err := net.ParseCIDROrIP(cidrStr)
+			if err != nil {
+				// Defensive, validation should prevent.
+				log.WithError(err).WithField("cidr", cidr).Error("Ignoring malformed CIDR in IPReservation.")
+			}
+			cidrs = append(cidrs, *cidr)
+		}
+	}
+	return cidrs, nil
 }

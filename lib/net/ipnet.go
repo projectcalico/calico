@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package net
 
 import (
 	"encoding/json"
+	"math/big"
 	"net"
 )
 
@@ -59,6 +60,21 @@ func (i *IPNet) Version() int {
 // IsNetOverlap is a utility function that returns true if the two subnet have an overlap.
 func (i IPNet) IsNetOverlap(n net.IPNet) bool {
 	return n.Contains(i.IP) || i.Contains(n.IP)
+}
+
+// Covers returns true if the whole of n is covered by this CIDR.
+func (i IPNet) Covers(n net.IPNet) bool {
+	if !i.Contains(n.IP) {
+		return false
+	} // else start of n is within our bounds, what about the end...
+	nPrefixLen, _ := n.Mask.Size()
+	iPrefixLen, _ := i.Mask.Size()
+	return iPrefixLen <= nPrefixLen
+}
+
+func (i IPNet) NthIP(n int) IP {
+	bigN := big.NewInt(int64(n))
+	return IncrementIP(IP{i.IP}, bigN)
 }
 
 // Network returns the masked IP network.
@@ -116,6 +132,13 @@ func ParseCIDROrIP(c string) (*IP, *IPNet, error) {
 func (i IPNet) String() string {
 	ip := &i.IPNet
 	return ip.String()
+}
+
+func (i IPNet) NumAddrs() *big.Int {
+	ones, bits := i.Mask.Size()
+	zeros := bits - ones
+	numAddrs := big.NewInt(1)
+	return numAddrs.Lsh(numAddrs, uint(zeros))
 }
 
 // MustParseNetwork parses the string into an IPNet.  The IP address in the

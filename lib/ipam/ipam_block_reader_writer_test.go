@@ -146,6 +146,11 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 	return nil, nil
 }
 
+// backendClientAccessor is an interface used to access the backend client from the main clientv3.
+type backendClientAccessor interface {
+	Backend() api.Client
+}
+
 var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
 	log.SetLevel(log.DebugLevel)
@@ -158,6 +163,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			ctx          context.Context
 			hostA, hostB string
 			fc           *fakeClient
+			resv         *fakeReservations
 			pools        *ipPoolAccessor
 			rw           blockReaderWriter
 			ic           *ipamClient
@@ -176,6 +182,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			if config.Spec.DatastoreType == "kubernetes" {
 				kc = bc.(*k8s.KubeClient).ClientSet
 			}
+
+			resv = &fakeReservations{}
 
 			hostA = "host-a"
 			hostB = "host-b"
@@ -196,6 +204,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				pls := &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/22": {enabled: true}}}
 				rw = blockReaderWriter{client: bc, pools: pls}
 				ic = &ipamClient{
+					reservations:      resv,
 					client:            bc,
 					pools:             pls,
 					blockReaderWriter: rw,
@@ -211,6 +220,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					j := i
 					go func() {
 						defer GinkgoRecover()
+						defer wg.Done()
 
 						testhost := fmt.Sprintf("host-%d", j)
 						applyNode(bc, kc, testhost, nil)
@@ -226,8 +236,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							log.WithError(err).Errorf("No IPs assigned for host %s", testhost)
 							testErr = fmt.Errorf("No IPs assigned to %s", testhost)
 						}
-
-						wg.Done()
 					}()
 				}
 
@@ -290,6 +298,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pls,
 					blockReaderWriter: rw,
+					reservations:      resv,
 				}
 			})
 
@@ -303,6 +312,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
+						defer wg.Done()
 
 						ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0, nil, v3.IPPoolAllowedUseWorkload)
 						if err != nil {
@@ -313,8 +323,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							log.WithError(err).Errorf("No IPs assigned for host %s", testhost)
 							testErr = fmt.Errorf("No IPs assigned to %s", testhost)
 						}
-
-						wg.Done()
 					}()
 				}
 
@@ -356,6 +364,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pls,
 					blockReaderWriter: rw,
+					reservations:      resv,
 				}
 
 				var err error
@@ -371,6 +380,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
+						defer wg.Done()
 
 						testhost := "same-host"
 						success, failed, err := ic.ClaimAffinity(ctx, *net, testhost)
@@ -383,8 +393,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							log.WithError(err).Error(s)
 							testErr = fmt.Errorf(s)
 						}
-
-						wg.Done()
 					}()
 				}
 
@@ -422,6 +430,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
+						defer wg.Done()
 
 						testhost := "same-host"
 						err := ic.ReleaseAffinity(ctx, *net, testhost, false)
@@ -430,7 +439,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							testErr = err
 						}
 
-						wg.Done()
 					}()
 				}
 
@@ -492,6 +500,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pools,
 					blockReaderWriter: rw,
+					reservations:      resv,
 				}
 			})
 
@@ -586,6 +595,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pools,
 					blockReaderWriter: rw,
+					reservations:      resv,
 				}
 			})
 
@@ -714,6 +724,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client:            bc,
 				pools:             pools,
 				blockReaderWriter: rw,
+				reservations:      resv,
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
@@ -810,7 +821,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							return nil, err
 						}
 						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
-						b1.autoAssign(1, nil, hostA, nil, false)
+						b1.autoAssign(1, nil, hostA, nil, false, nilAddrFilter{})
 						if _, err := bc.Update(ctx, kvpb); err != nil {
 							return nil, err
 						}
@@ -832,6 +843,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					client:            bc,
 					pools:             pools,
 					blockReaderWriter: rw,
+					reservations:      resv,
 				}
 			})
 
@@ -1000,7 +1012,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		It("should allocate new block", func() {
 			b := newBlock(*net, rsvdAttr)
 			// Block should have one unallocated IP and one attribute.
-			Expect(b.NumFreeAddresses()).To(Equal(1))
+			Expect(b.NumFreeAddresses(nilAddrFilter{})).To(Equal(1))
 			Expect(len(b.Attributes)).To(Equal(1))
 			// First two IPs should point at the reservation, as should the last.
 			// The only IP available for allocation is the third one.
@@ -1019,6 +1031,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				client:            bc,
 				pools:             p,
 				blockReaderWriter: rw,
+				reservations:      &fakeReservations{},
 			}
 			ia, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, host, 0, rsvdAttr, v3.IPPoolAllowedUseTunnel /* for variety */)
 			Expect(err).ShouldNot(HaveOccurred())

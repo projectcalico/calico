@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -180,8 +180,7 @@ func (b *AllocationBlock) IPToOrdinal(ip net.IP) (int, error) {
 
 // Calculates the IP at the given position within the block.  ord=0 gives the first IP in the block.
 func (b *AllocationBlock) OrdinalToIP(ord int) net.IP {
-	sum := big.NewInt(0).Add(net.IPToBigInt(net.IP{IP: b.CIDR.IP}), big.NewInt(int64(ord)))
-	return net.BigIntToIP(sum)
+	return b.CIDR.NthIP(ord)
 }
 
 type AllocationAttribute struct {

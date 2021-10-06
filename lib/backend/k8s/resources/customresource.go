@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,7 +106,6 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 		"Value":    kvp.Value,
 		"Resource": c.resource,
 	})
-	logContext.Debug("Update custom Kubernetes resource")
 
 	// Create storage for the updated resource.
 	resOut := reflect.New(c.k8sResourceType).Interface().(Resource)
