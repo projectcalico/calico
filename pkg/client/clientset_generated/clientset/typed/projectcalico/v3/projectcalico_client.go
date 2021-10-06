@@ -21,6 +21,7 @@ type ProjectcalicoV3Interface interface {
 	GlobalNetworkSetsGetter
 	HostEndpointsGetter
 	IPPoolsGetter
+	IPReservationsGetter
 	KubeControllersConfigurationsGetter
 	NetworkPoliciesGetter
 	NetworkSetsGetter
@@ -62,6 +63,10 @@ func (c *ProjectcalicoV3Client) HostEndpoints() HostEndpointInterface {
 
 func (c *ProjectcalicoV3Client) IPPools() IPPoolInterface {
 	return newIPPools(c)
+}
+
+func (c *ProjectcalicoV3Client) IPReservations() IPReservationInterface {
+	return newIPReservations(c)
 }
 
 func (c *ProjectcalicoV3Client) KubeControllersConfigurations() KubeControllersConfigurationInterface {

@@ -26,6 +26,8 @@ type Interface interface {
 	HostEndpoints() HostEndpointInformer
 	// IPPools returns a IPPoolInformer.
 	IPPools() IPPoolInformer
+	// IPReservations returns a IPReservationInformer.
+	IPReservations() IPReservationInformer
 	// KubeControllersConfigurations returns a KubeControllersConfigurationInformer.
 	KubeControllersConfigurations() KubeControllersConfigurationInformer
 	// NetworkPolicies returns a NetworkPolicyInformer.
@@ -85,6 +87,11 @@ func (v *version) HostEndpoints() HostEndpointInformer {
 // IPPools returns a IPPoolInformer.
 func (v *version) IPPools() IPPoolInformer {
 	return &iPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IPReservations returns a IPReservationInformer.
+func (v *version) IPReservations() IPReservationInformer {
+	return &iPReservationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // KubeControllersConfigurations returns a KubeControllersConfigurationInformer.
