@@ -11,13 +11,13 @@ require (
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20211005123650-be8650baf048
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211005125516-43b35ddc2f4a
+	github.com/projectcalico/api v0.0.0-20211006181607-6c171671b99a
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211006193733-972f2b1cc5e9
 	github.com/prometheus/client_golang v1.4.0
 	github.com/sirupsen/logrus v1.4.2
-	k8s.io/api v0.21.0-rc.0
-	k8s.io/apimachinery v0.21.0-rc.0
-	k8s.io/client-go v0.21.0-rc.0
+	k8s.io/api v0.22.0
+	k8s.io/apimachinery v0.22.0
+	k8s.io/client-go v0.22.0
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
