@@ -89,7 +89,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 		}
 
 		// Add endpoint slices.
-		epss, err := cs.DiscoveryV1beta1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
+		epss, err := cs.DiscoveryV1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		for _, eps := range epss.Items {
 			// Endpoints slices get updated frequently, so don't include the revision info.
@@ -115,11 +115,13 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			})
 
 			// Expect profile labels for each namespace as well. The labels should include the name
-			// of the namespace.
+			// of the namespace. As of Kubernetes v1.21, k8s also includes a label for the namespace name
+			// that will be inherited by the profile.
 			expected = append(expected, model.KVPair{
 				Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
 				Value: map[string]string{
-					"pcns.projectcalico.org/name": ns.Name,
+					"pcns.projectcalico.org/name":      ns.Name,
+					"pcns.kubernetes.io/metadata.name": ns.Name,
 				},
 			})
 
@@ -129,7 +131,8 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 				ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
 				Spec: apiv3.ProfileSpec{
 					LabelsToApply: map[string]string{
-						"pcns.projectcalico.org/name": ns.Name,
+						"pcns.projectcalico.org/name":      ns.Name,
+						"pcns.kubernetes.io/metadata.name": ns.Name,
 					},
 					Ingress: []apiv3.Rule{{Action: apiv3.Allow}},
 					Egress:  []apiv3.Rule{{Action: apiv3.Allow}},
