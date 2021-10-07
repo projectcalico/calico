@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,12 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -31,7 +33,7 @@ const (
 func main() {
 	fs, _ := ioutil.ReadDir("../../../config/crd")
 	out, _ := os.Create("../../commands/crds/crds.go")
-	_, _ = out.Write([]byte(`// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+	_, _ = out.Write([]byte(fmt.Sprintf(`// Copyright (c) %s Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +47,7 @@ func main() {
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-`))
+`, time.Now().Format("2006"))))
 	_, _ = out.Write([]byte("package crds \n\n//DO NOT CHANGE. This is a generated file. In order to update, run `make gen-crds`.\n\nconst (\n"))
 	for _, f := range fs {
 		if strings.HasSuffix(f.Name(), fileSuffix) && strings.HasPrefix(f.Name(), crdPrefix) {

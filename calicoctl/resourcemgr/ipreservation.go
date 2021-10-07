@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,46 +26,45 @@ import (
 
 func init() {
 	registerResource(
-		api.NewGlobalNetworkPolicy(),
-		newGlobalNetworkPolicyList(),
+		api.NewIPReservation(),
+		newIPReservationList(),
 		false,
-		[]string{"globalnetworkpolicy", "globalnetworkpolicies", "gnp", "gnps"},
+		[]string{"ipreservation", "ipreservations", "reservation", "reservations"},
 		[]string{"NAME"},
-		[]string{"NAME", "ORDER", "SELECTOR"},
+		[]string{"NAME", "CIDRS"},
 		map[string]string{
-			"NAME":     "{{.ObjectMeta.Name}}",
-			"ORDER":    "{{.Spec.Order}}",
-			"SELECTOR": "{{.Spec.Selector}}",
+			"NAME":  "{{.ObjectMeta.Name}}",
+			"CIDRS": "{{joinAndTruncate .Spec.ReservedCIDRs \",\" 80}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkPolicy)
-			return client.GlobalNetworkPolicies().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.IPReservation)
+			return client.IPReservations().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkPolicy)
-			return client.GlobalNetworkPolicies().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.IPReservation)
+			return client.IPReservations().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkPolicy)
-			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.IPReservation)
+			return client.IPReservations().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkPolicy)
-			return client.GlobalNetworkPolicies().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.IPReservation)
+			return client.IPReservations().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.GlobalNetworkPolicy)
-			return client.GlobalNetworkPolicies().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
+			r := resource.(*api.IPReservation)
+			return client.IPReservations().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }
 
-// newGlobalNetworkPolicyList creates a new (zeroed) GlobalNetworkPolicyList struct with the TypeMetadata initialised to the current
+// newIPReservationList creates a new (zeroed) IPReservationList struct with the TypeMetadata initialised to the current
 // version.
-func newGlobalNetworkPolicyList() *api.GlobalNetworkPolicyList {
-	return &api.GlobalNetworkPolicyList{
+func newIPReservationList() *api.IPReservationList {
+	return &api.IPReservationList{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       api.KindGlobalNetworkPolicyList,
+			Kind:       api.KindIPReservationList,
 			APIVersion: api.GroupVersionCurrent,
 		},
 	}

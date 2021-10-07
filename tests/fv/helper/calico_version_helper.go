@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+
 	clientv3 "github.com/projectcalico/libcalico-go/lib/clientv3"
 
 	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/clientmgr"

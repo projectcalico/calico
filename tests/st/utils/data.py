@@ -28,6 +28,11 @@ import netaddr
 
 from utils import API_VERSION
 
+# Large list of CIDRs for testing truncation of certain fields.
+many_nets = []
+for i in xrange(10000):
+    many_nets.append("10.%s.%s.0/28" % (i >> 8, i % 256))
+
 #
 # IPPools
 #
@@ -93,6 +98,31 @@ ippool_name2_rev1_table = (
     "ippool-name2   fed0:8001::/64   all()"
 )
 
+#
+# IP Reservations
+#
+
+ipresv_name1_rev1_v4 = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPReservation',
+    'metadata': {
+        'name': 'ipreservation-name1'
+    },
+    'spec': {
+        'reservedCIDRs': ["10.0.1.0/24", "11.0.0.1/32"],
+    }
+}
+
+ipresv_name1_rev1_v4_long = {
+    'apiVersion': API_VERSION,
+    'kind': 'IPReservation',
+    'metadata': {
+        'name': 'ipreservation-name1'
+    },
+    'spec': {
+        'reservedCIDRs': many_nets,
+    }
+}
 
 #
 # BGPPeers
@@ -437,9 +467,6 @@ globalnetworkset_name1_rev1 = {
 #
 # - Kubernetes' gRPC API has a 4MB message size limit.
 # - etcdv3 has a 1MB value size limit.
-many_nets = []
-for i in xrange(10000):
-    many_nets.append("10.%s.%s.0/28" % (i >> 8, i % 256))
 globalnetworkset_name1_rev1_large = {
     'apiVersion': API_VERSION,
     'kind': 'GlobalNetworkSet',

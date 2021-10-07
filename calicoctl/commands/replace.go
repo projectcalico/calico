@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,11 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
-
-	"fmt"
 
 	log "github.com/sirupsen/logrus"
 
@@ -72,6 +71,7 @@ Description:
     * globalNetworkSet
     * hostEndpoint
     * ipPool
+    * ipReservation
     * kubeControllersConfiguration
     * networkPolicy
     * networkSet
