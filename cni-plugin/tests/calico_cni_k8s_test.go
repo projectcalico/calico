@@ -61,12 +61,12 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 
 func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1.Pod) *v1.Pod {
 	pod, err := clientset.CoreV1().Pods(namespace).Create(context.Background(), pod, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 	// Immediately try to get the pod, and retry until we do. This prevents race
 	// conditions where the API Server has accepted the create, but isn't ready
 	// to find the pod on a get. These races can cause the tests to be flaky.
-	Eventually(func() error {
+	EventuallyWithOffset(1, func() error {
 		_, err := clientset.CoreV1().Pods(namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
 		return err
 	}, 2*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
@@ -137,6 +137,17 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 	}, "5s", "200ms").Should(BeNil())
 }
 
+func getKubernetesClient() *kubernetes.Clientset {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		panic(err)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	return clientset
+}
+
 var _ = Describe("Kubernetes CNI tests", func() {
 	// Create a random seed
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -150,14 +161,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	if err != nil {
 		panic(err)
 	}
-	config, err := clientcmd.DefaultClientConfig.ClientConfig()
-	if err != nil {
-		panic(err)
-	}
-	k8sClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
+	k8sClient := getKubernetesClient()
 
 	BeforeEach(func() {
 		testutils.WipeDatastore()
@@ -196,7 +200,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8080"
+			    "kubeconfig": "/home/user/certs/kubeconfig"
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
@@ -204,15 +208,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 		It("successfully networks the namespace", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			if err != nil {
-				panic(err)
-			}
-			clientset, err := kubernetes.NewForConfig(config)
-
-			if err != nil {
-				panic(err)
-			}
+			clientset := getKubernetesClient()
 
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 
@@ -367,15 +363,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		Context("when a named port is set", func() {
 			It("it is added to the workload endpoint", func() {
-				config, err := clientcmd.DefaultClientConfig.ClientConfig()
-				if err != nil {
-					panic(err)
-				}
-				clientset, err := kubernetes.NewForConfig(config)
-
-				if err != nil {
-					panic(err)
-				}
+				clientset := getKubernetesClient()
 
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
@@ -487,11 +475,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		Context("when the same hostVeth exists", func() {
 			It("successfully networks the namespace", func() {
-				config, err := clientcmd.DefaultClientConfig.ClientConfig()
-				Expect(err).NotTo(HaveOccurred())
-
-				clientset, err := kubernetes.NewForConfig(config)
-				Expect(err).NotTo(HaveOccurred())
+				clientset := getKubernetesClient()
 
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
@@ -532,7 +516,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8080"
+			    "kubeconfig": "/home/user/certs/kubeconfig"
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
@@ -540,11 +524,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}`
 
 			It("should create pods with the right MTU", func() {
-				config, err := clientcmd.DefaultClientConfig.ClientConfig()
-				Expect(err).NotTo(HaveOccurred())
-
-				clientset, err := kubernetes.NewForConfig(config)
-				Expect(err).NotTo(HaveOccurred())
+				clientset := getKubernetesClient()
 
 				// Create the /var/lib/calico/mtu file with MTU 3000
 
@@ -595,7 +575,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8080"
+			    "kubeconfig": "/home/user/certs/kubeconfig"
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
@@ -603,11 +583,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}`
 
 			It("creates pods with the new mtu", func() {
-				config, err := clientcmd.DefaultClientConfig.ClientConfig()
-				Expect(err).NotTo(HaveOccurred())
-
-				clientset, err := kubernetes.NewForConfig(config)
-				Expect(err).NotTo(HaveOccurred())
+				clientset := getKubernetesClient()
 
 				// Create a K8s pod/container with non-default MTU
 				name1 := fmt.Sprintf("mtutest%d", rand.Uint32())
@@ -678,7 +654,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					    "subnet": "usePodCidr"
 					  },
 					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
+                                           "kubeconfig": "/home/user/certs/kubeconfig"
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"info"
@@ -719,7 +695,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					    ]
 					  },
 					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
+                                           "kubeconfig": "/home/user/certs/kubeconfig"
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"info"
@@ -779,7 +755,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					    ]
 					  },
 					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
+                                           "kubeconfig": "/home/user/certs/kubeconfig"
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"info"
@@ -839,7 +815,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					    ]
 					  },
 					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
+                                           "kubeconfig": "/home/user/certs/kubeconfig"
 					  },
 					  "policy": {"type": "k8s"},
 					  "log_level":"info"
@@ -866,11 +842,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				It("should successfully assign IP both times and successfully release it in the middle", func() {
 					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
-					config, err := clientcmd.DefaultClientConfig.ClientConfig()
-					Expect(err).NotTo(HaveOccurred())
-
-					clientset, err := kubernetes.NewForConfig(config)
-					Expect(err).NotTo(HaveOccurred())
+					clientset := getKubernetesClient()
 
 					ensureNamespace(clientset, testutils.K8S_TEST_NS)
 
@@ -996,7 +968,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -1015,11 +987,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			_, pool2CIDR, err = net.ParseCIDR(pool2)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Set up clients.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			// Create client set.
+			clientset = getKubernetesClient()
 		})
 
 		AfterEach(func() {
@@ -1248,7 +1217,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -1264,10 +1233,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create clients.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 		})
 
 		AfterEach(func() {
@@ -1342,7 +1308,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -1361,10 +1327,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a kubernetes clientset.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 
 			// Ensure a namespace exists.
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
@@ -1458,7 +1421,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -1474,10 +1437,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// Build kubernetes clients.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 
 			// Now create a K8s pod passing in a floating IP.
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
@@ -1565,10 +1525,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		BeforeEach(func() {
 			// Set up clients.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 
 			// Create a network config.
 			nc = types.NetConf{
@@ -1577,7 +1534,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -1685,11 +1642,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			netconf = string(ncb)
 
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset := getKubernetesClient()
 
 			// Now create a K8s pod passing in an IP address.
 			name = fmt.Sprintf("run%d", rand.Uint32())
@@ -1760,10 +1713,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		BeforeEach(func() {
 			// Set up clients.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 		})
 
 		It("should successfully assign the annotated IP address", func() {
@@ -1781,7 +1731,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					   "assign_ipv6": "true"
 				   },
 					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
+                                          "kubeconfig": "/home/user/certs/kubeconfig"
 					 },
 					"policy": {"type": "k8s"},
 					"log_level":"info"
@@ -1888,10 +1838,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		BeforeEach(func() {
 			// Set up clients.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 			testutils.MustCreateNewIPPool(calicoClient, ipPool4, false, false, true)
 			testutils.MustCreateNewIPPool(calicoClient, ipPool6, false, false, true)
 		})
@@ -1919,7 +1866,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					   "assign_ipv6": "true"
 				   },
 					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
+                                          "kubeconfig": "/home/user/certs/kubeconfig"
 					 },
 					"policy": {"type": "k8s"},
 					"log_level":"info"
@@ -2036,10 +1983,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		BeforeEach(func() {
 			// Set up clients.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 
 			// Create a network config.
 			nc = types.NetConf{
@@ -2048,7 +1992,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -2320,7 +2264,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -2331,10 +2275,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			netconf = string(ncb)
 
 			// Now create a K8s pod.
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err = kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset = getKubernetesClient()
 			name = fmt.Sprintf("run%d", rand.Uint32())
 			pod := ensurePodCreated(clientset, testutils.K8S_TEST_NS,
 				&v1.Pod{
@@ -2460,7 +2401,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				    "type": "calico-ipam"
 				  },
 				  "kubernetes": {
-				    "k8s_api_root": "http://127.0.0.1:8080"
+				    "kubeconfig": "/home/user/certs/kubeconfig"
 				  },
 				  "policy": {"type": "k8s"}
 				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
@@ -2469,11 +2410,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Create a new ipPool.
 			testutils.MustCreateNewIPPool(calicoClient, "10.0.0.0/24", false, false, true)
 
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			clientset := getKubernetesClient()
 
 			// Now create a K8s pod.
 			name := "mypod-1"
@@ -2662,7 +2599,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -2675,6 +2612,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Create an IPPool for the test.
 			testutils.MustCreateNewIPPool(calicoClient, pool, false, false, true)
 			Expect(err).NotTo(HaveOccurred())
+
+			clientset = getKubernetesClient()
 		})
 
 		AfterEach(func() {
@@ -2685,15 +2624,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		It("should add a service account profile to the workload endpoint", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			if err != nil {
-				panic(err)
-			}
-			clientset, err = kubernetes.NewForConfig(config)
-			if err != nil {
-				panic(err)
-			}
-
 			name = fmt.Sprintf("run%d", rand.Uint32())
 
 			// Make sure the namespace exists.
@@ -2832,7 +2762,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Type:                 "calico",
 				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
 				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
-				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
 				Policy:               types.Policy{PolicyType: "k8s"},
 				NodenameFileOptional: true,
 				LogLevel:             "info",
@@ -2845,6 +2775,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Create an IPPool for the test.
 			testutils.MustCreateNewIPPool(calicoClient, pool, false, false, true)
 			Expect(err).NotTo(HaveOccurred())
+
+			clientset = getKubernetesClient()
 		})
 
 		AfterEach(func() {
@@ -2855,15 +2787,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		It("should add a workload endpoint with the GenerateName", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			if err != nil {
-				panic(err)
-			}
-			clientset, err = kubernetes.NewForConfig(config)
-			if err != nil {
-				panic(err)
-			}
-
 			// Make sure the namespace exists.
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 
@@ -2965,7 +2888,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8080"
+			    "kubeconfig": "/home/user/certs/kubeconfig"
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
@@ -3000,7 +2923,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8081"
+			    "kubeconfig": "/home/user/certs/kubeconfig",
+			    "k8s_api_root": "https://127.0.0.1:6446"
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,

@@ -51,7 +51,7 @@ var expectedAlternateConfig string = `{
     },
     "policy": {
         "type": "k8s",
-        "k8s_api_root": "https://127.0.0.1:8080",
+        "k8s_api_root": "https://127.0.0.1:6443",
         "k8s_auth_token": "my-secret-key"
     },
     "kubernetes": {
@@ -76,7 +76,7 @@ func runCniContainer(tempDir string, extraArgs ...string) error {
 		"run", "--rm", "--name", name,
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
-		"-e", "KUBERNETES_SERVICE_PORT=8080",
+		"-e", "KUBERNETES_SERVICE_PORT=6443",
 		"-e", "KUBERNETES_NODE_NAME=my-node",
 		"-v", tempDir + "/bin:/host/opt/cni/bin",
 		"-v", tempDir + "/net.d:/host/etc/cni/net.d",
