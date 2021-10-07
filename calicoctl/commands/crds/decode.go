@@ -109,7 +109,7 @@ func CalicoCRDs() ([]*v1.CustomResourceDefinition, error) {
 	crds = append(crds, &ipPool)
 
 	ipResv := v1.CustomResourceDefinition{}
-	err = yaml.Unmarshal([]byte(ipreservations), &ipPool)
+	err = yaml.Unmarshal([]byte(ipreservations), &ipResv)
 	if err != nil {
 		return crds, err
 	}
