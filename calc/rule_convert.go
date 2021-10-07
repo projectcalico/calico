@@ -122,6 +122,8 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		OriginalDstNamespaceSelector: in.OriginalDstNamespaceSelector,
 		OriginalNotSrcSelector:       in.OriginalNotSrcSelector,
 		OriginalNotDstSelector:       in.OriginalNotDstSelector,
+		OriginalSrcService:           in.OriginalSrcService,
+		OriginalSrcServiceNamespace:  in.OriginalSrcServiceNamespace,
 		OriginalDstService:           in.OriginalDstService,
 		OriginalDstServiceNamespace:  in.OriginalDstServiceNamespace,
 	}
