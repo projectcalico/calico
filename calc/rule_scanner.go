@@ -95,6 +95,9 @@ type IPSetData struct {
 	NamedPort string
 	// The service that this IP set represents, in namespace/name format.
 	Service string
+	// Type of the ip set to represent for this service. This allows us to create service
+	// IP sets with and without port information.
+	ServiceIncludePorts bool
 	// cachedUID holds the calculated unique ID of this IP set, or "" if it hasn't been calculated
 	// yet.
 	cachedUID string
@@ -104,7 +107,13 @@ func (d *IPSetData) UniqueID() string {
 	if d.cachedUID == "" {
 		if d.Service != "" {
 			// Service based IP set.
-			d.cachedUID = hash.MakeUniqueID("svc", d.Service)
+			if d.ServiceIncludePorts {
+				// Service IP set including its ports
+				d.cachedUID = hash.MakeUniqueID("svc", d.Service)
+			} else {
+				// Service IP set with only its CIDR
+				d.cachedUID = hash.MakeUniqueID("svcnoport", d.Service)
+			}
 		} else {
 			// Selector / named-port based IP set.
 			selID := d.Selector.UniqueID()
@@ -126,7 +135,9 @@ func (d *IPSetData) DataplaneProtocolType() proto.IPSetUpdate_IPSetType {
 		return proto.IPSetUpdate_IP_AND_PORT
 	}
 	if d.Service != "" {
-		return proto.IPSetUpdate_IP_AND_PORT
+		if d.ServiceIncludePorts {
+			return proto.IPSetUpdate_IP_AND_PORT
+		}
 	}
 	return proto.IPSetUpdate_NET
 }
@@ -313,6 +324,8 @@ type ParsedRule struct {
 	OriginalSrcServiceAccountSelector string
 	OriginalDstServiceAccountNames    []string
 	OriginalDstServiceAccountSelector string
+	OriginalSrcService                string
+	OriginalSrcServiceNamespace       string
 	OriginalDstService                string
 	OriginalDstServiceNamespace       string
 
@@ -383,7 +396,12 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 	var dstIPPortSets []*IPSetData
 	if rule.DstService != "" {
 		svc := fmt.Sprintf("%s/%s", rule.DstServiceNamespace, rule.DstService)
-		dstIPPortSets = append(dstIPPortSets, &IPSetData{Service: svc})
+		dstIPPortSets = append(dstIPPortSets, &IPSetData{Service: svc, ServiceIncludePorts: true})
+	}
+
+	if rule.SrcService != "" {
+		svc := fmt.Sprintf("%s/%s", rule.SrcServiceNamespace, rule.SrcService)
+		srcSelIPSets = append(srcSelIPSets, &IPSetData{Service: svc, ServiceIncludePorts: false})
 	}
 
 	notSrcSelIPSets := selectorsToIPSets(notSrcSels)
@@ -436,6 +454,8 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 		OriginalSrcServiceAccountSelector: rule.OriginalSrcServiceAccountSelector,
 		OriginalDstServiceAccountNames:    rule.OriginalDstServiceAccountNames,
 		OriginalDstServiceAccountSelector: rule.OriginalDstServiceAccountSelector,
+		OriginalSrcService:                rule.SrcService,
+		OriginalSrcServiceNamespace:       rule.SrcServiceNamespace,
 		OriginalDstService:                rule.DstService,
 		OriginalDstServiceNamespace:       rule.DstServiceNamespace,
 		HTTPMatch:                         rule.HTTPMatch,
