@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -107,6 +107,13 @@ func CalicoCRDs() ([]*v1.CustomResourceDefinition, error) {
 		return crds, err
 	}
 	crds = append(crds, &ipPool)
+
+	ipResv := v1.CustomResourceDefinition{}
+	err = yaml.Unmarshal([]byte(ipreservations), &ipPool)
+	if err != nil {
+		return crds, err
+	}
+	crds = append(crds, &ipResv)
 
 	kubeControllerConfig := v1.CustomResourceDefinition{}
 	err = yaml.Unmarshal([]byte(kubecontrollersconfigurations), &kubeControllerConfig)
