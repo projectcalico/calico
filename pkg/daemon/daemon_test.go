@@ -354,6 +354,10 @@ func (b *mockDatastore) Backend() bapi.Client {
 	panic("not implemented")
 }
 
+func (m *mockDatastore) IPReservations() clientv3.IPReservationInterface {
+	panic("not implemented") // TODO: Implement
+}
+
 func (b *mockDatastore) getNumInitCalls() int {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
