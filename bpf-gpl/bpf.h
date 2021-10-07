@@ -30,30 +30,21 @@
 #define BPF_REDIR_EGRESS 0
 #define BPF_REDIR_INGRESS 1
 
-#ifndef __LIBBPF_LOADER__
-/* Extended map definition for compatibility with iproute2 loader. */
 struct bpf_map_def_extended {
 	__u32 type;
 	__u32 key_size;
 	__u32 value_size;
 	__u32 max_entries;
 	__u32 map_flags;
+#if defined(__BPFTOOL_LOADER__) || defined (__IPTOOL_LOADER__)
 	__u32 map_id;
-#ifndef __BPFTOOL_LOADER__
+#endif
+#ifdef __IPTOOL_LOADER__
 	__u32 pinning_strategy;
 	__u32 unused1;
 	__u32 unused2;
 #endif
 };
-#else
-struct bpf_map_def_extended {
-	__u32 type;
-	__u32 key_size;
-	__u32 value_size;
-	__u32 max_entries;
-	__u32 map_flags;
-};
-#endif
 
 /* These constants must be kept in sync with the calculate-flags script. */
 
@@ -300,8 +291,8 @@ static CALI_BPF_INLINE int name##_delete_elem(const void* key)	\
 	return bpf_map_delete_elem(&map_symbol(name, ver), key);	\
 }
 
-#ifndef __LIBBPF_LOADER__
-#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin) 		\
+#if defined(__BPFTOOL_LOADER__) || defined (__IPTOOL_LOADER__)
+#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)		\
 struct bpf_map_def_extended __attribute__((section("maps"))) map_symbol(name, ver) = {	\
 	.type = map_type,								\
 	.key_size = sizeof(key_type),							\
@@ -310,25 +301,24 @@ struct bpf_map_def_extended __attribute__((section("maps"))) map_symbol(name, ve
 	.max_entries = size,								\
 	CALI_MAP_TC_EXT_PIN(pin)							\
 };											\
-											\
 	MAP_LOOKUP_FN(name, ver)							\
 	MAP_UPDATE_FN(name, ver)							\
 	MAP_DELETE_FN(name, ver)
 #else
-#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)            \
-struct {                                                                                \
-        __uint(type, map_type);                                                         \
-        __type(key, key_type);                                                          \
-        __type(value, val_type);                                                        \
-        __uint(max_entries, size);                                                      \
-        __uint(map_flags, flags);							\
-}map_symbol(name, ver) SEC(".maps");                                                    \
-        MAP_LOOKUP_FN(name, ver)                                                        \
-        MAP_UPDATE_FN(name, ver)                                                        \
-        MAP_DELETE_FN(name, ver)
-#endif
+#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)		\
+struct {										\
+	__uint(type, map_type);								\
+	__type(key, key_type);								\
+	__type(value, val_type);							\
+	__uint(max_entries, size);							\
+	__uint(map_flags, flags);							\
+}map_symbol(name, ver) SEC(".maps");							\
+	MAP_LOOKUP_FN(name, ver)							\
+	MAP_UPDATE_FN(name, ver)							\
+	MAP_DELETE_FN(name, ver)
 
-#define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags, pin) 	\
+#endif
+#define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags, pin)		\
 		CALI_MAP(name,, map_type, key_type, val_type, size, flags, pin)
 
 

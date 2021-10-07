@@ -51,26 +51,16 @@ union ip4_set_lpm_key {
 	struct ip4_set_key ip;
 };
 
-#ifdef __LIBBPF_LOADER__
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ip_sets = {
 	.type           = BPF_MAP_TYPE_LPM_TRIE,
 	.key_size       = sizeof(union ip4_set_lpm_key),
 	.value_size     = sizeof(__u32),
 	.max_entries    = 1024*1024,
 	.map_flags      = BPF_F_NO_PREALLOC,
-};
-#else
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ip_sets = {
-	.type           = BPF_MAP_TYPE_LPM_TRIE,
-	.key_size       = sizeof(union ip4_set_lpm_key),
-	.value_size     = sizeof(__u32),
-	.max_entries    = 1024*1024,
-	.map_flags      = BPF_F_NO_PREALLOC,
-#ifndef __BPFTOOL_LOADER__
+#if !defined(__BPFTOOL_LOADER__) && defined(__IPTOOL_LOADER__)
 	.pinning_strategy        = MAP_PIN_GLOBAL,
 #endif
 };
-#endif
 
 #define RULE_START(id) \
 	CALI_DEBUG("Rule " #id " \n");

@@ -70,17 +70,17 @@ flags=0
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
   ((flags |= CALI_TC_HOST_EP))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO" "-D__LIBBPF_LOADER__")
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="host"
 elif [[ "${filename}" =~ .*tnl.* ]]; then
   # Tunnel.
   ((flags |= CALI_TC_TUNNEL | CALI_TC_HOST_EP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO" "-D__LIBBPF_LOADER__")
+  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="tunnel"
 elif [[ "${filename}" =~ .*wg.* ]]; then
   # Wireguard.
   ((flags |= CALI_TC_WIREGUARD | CALI_TC_HOST_EP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO" "-D__LIBBPF_LOADER__")
+  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
   ep_type="wireguard"
 elif [[ "${filename}" =~ .*connect.* ]]; then
   # Connect-time load balancer (CGROUP attached).
@@ -89,12 +89,12 @@ elif [[ "${filename}" =~ .*connect.* ]]; then
 elif [[ "${filename}" =~ .*wep.* ]]; then
   # Workload endpoint; recognised by CALI_TC_HOST_EP bit being 0.
   ep_type="workload"
-  args+=("-DCALI_LOG_PFX=CALICOLO" "-D__LIBBPF_LOADER__")
+  args+=("-DCALI_LOG_PFX=CALICOLO")
 elif [[ "${filename}" =~ .*xdp.* ]]; then
   # XDP, so host endpoint.
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_XDP_PROG))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO" "-D__IPTOOL_LOADER__")
   ep_type="host"
 else
   echo "Can't recognise endpoint type"
