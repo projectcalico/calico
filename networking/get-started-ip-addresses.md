@@ -37,7 +37,7 @@ You can control which pools Calico uses for each pod using
 - an annotation on the pod’s namespace, or
 - an annotation on the pod
 
-Calico also supports the **host-local** IPAM plugin. However, when using the host-local IPAM plugin some Calico features are not available. 
+Calico also supports the **host-local** IPAM plugin. However, when using the host-local IPAM plugin some Calico features are not available.
 
 #### Calico IPAM blocks
 
