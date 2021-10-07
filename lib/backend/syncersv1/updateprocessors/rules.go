@@ -149,10 +149,16 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		dstServiceAcctMatch = *ar.Destination.ServiceAccounts
 	}
 
-	var service, serviceNS string
+	var dstService, dstServiceNS string
 	if ar.Destination.Services != nil {
-		service = ar.Destination.Services.Name
-		serviceNS = ar.Destination.Services.Namespace
+		dstService = ar.Destination.Services.Name
+		dstServiceNS = ar.Destination.Services.Namespace
+	}
+
+	var srcService, srcServiceNS string
+	if ar.Source.Services != nil {
+		srcService = ar.Source.Services.Name
+		srcServiceNS = ar.Source.Services.Namespace
 	}
 
 	r := model.Rule{
@@ -168,11 +174,13 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		SrcNets:             ConvertStringsToNets(ar.Source.Nets),
 		SrcSelector:         sourceSelector,
 		SrcPorts:            ar.Source.Ports,
+		SrcService:          srcService,
+		SrcServiceNamespace: srcServiceNS,
 		DstNets:             NormalizeIPNets(ar.Destination.Nets),
 		DstSelector:         destSelector,
 		DstPorts:            ar.Destination.Ports,
-		DstService:          service,
-		DstServiceNamespace: serviceNS,
+		DstService:          dstService,
+		DstServiceNamespace: dstServiceNS,
 
 		NotSrcNets:     ConvertStringsToNets(ar.Source.NotNets),
 		NotSrcSelector: ar.Source.NotSelector,
