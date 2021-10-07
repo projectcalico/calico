@@ -52,11 +52,11 @@ func ReachDestination(dest string, version int) (*net.IPNet, error) {
 		return nil, err
 	}
 	for _, iface := range ifaces {
-		log.WithField("Name", iface.Name).Info("Checking interface CIDRs")
+		log.WithField("Name", iface.Name).Debug("Checking interface CIDRs")
 		for _, cidr := range iface.Cidrs {
-			log.WithField("CIDR", cidr.String()).Info("Checking CIDR")
+			log.WithField("CIDR", cidr.String()).Debug("Checking CIDR")
 			if cidr.IP.Equal(udpAddr.IP) {
-				log.WithField("CIDR", cidr.String()).Info("Found matching interface CIDR")
+				log.WithField("CIDR", cidr.String()).Debug("Found matching interface CIDR")
 				return &cidr, nil
 			}
 		}
