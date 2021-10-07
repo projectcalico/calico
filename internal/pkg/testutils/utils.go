@@ -28,6 +28,7 @@ import (
 	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	log "github.com/sirupsen/logrus"
@@ -38,30 +39,25 @@ const TEST_DEFAULT_NS = "default"
 
 // Delete everything under /calico from etcd.
 func WipeDatastore() {
-	spec := apiconfig.CalicoAPIConfig{
-		Spec: apiconfig.CalicoAPIConfigSpec{
-			EtcdConfig: apiconfig.EtcdConfig{
-				EtcdEndpoints: os.Getenv("ETCD_ENDPOINTS"),
-			},
-			KubeConfig: apiconfig.KubeConfig{
-				K8sAPIEndpoint: os.Getenv("K8S_API_ENDPOINT"),
-			},
-		},
-	}
-	if os.Getenv("DATASTORE_TYPE") == "etcdv3" {
-		spec.Spec.DatastoreType = apiconfig.EtcdV3
-	} else {
-		spec.Spec.DatastoreType = apiconfig.Kubernetes
-	}
-
-	be, err := backend.NewClient(spec)
+	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		panic(err)
 	}
-	_ = be.Clean()
+
+	be, err := backend.NewClient(*cfg)
+	if err != nil {
+		panic(err)
+	}
+	err = be.Clean()
+	if err != nil {
+		panic(err)
+	}
 
 	// Set the ready flag so calls to the CNI plugin can proceed
-	calicoClient, _ := client.NewFromEnv()
+	calicoClient, err := client.New(*cfg)
+	if err != nil {
+		panic(err)
+	}
 	newClusterInfo := api.NewClusterInformation()
 	newClusterInfo.Name = "default"
 	datastoreReady := true
@@ -162,17 +158,21 @@ func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 }
 
 func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
-	var err error = nil
+	var err error
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
 		// delete the node in Kubernetes.
-		deleteErr := kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
-		log.WithError(deleteErr).Info("node deleted")
+		err = kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
+		log.WithError(err).Info("node deleted")
 	} else {
 		// Otherwise, delete it in Calico.
 		n := libapi.NewNode()
 		n.Name = host
 		_, err = c.Nodes().Delete(context.Background(), host, options.DeleteOptions{})
 		log.WithError(err).Info("node deleted")
+	}
+	if _, ok := err.(errors.ErrorResourceDoesNotExist); ok || kerrors.IsNotFound(err) {
+		// Ignore does not exist.
+		return nil
 	}
 	return err
 }
