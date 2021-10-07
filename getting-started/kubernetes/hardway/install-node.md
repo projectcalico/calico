@@ -296,6 +296,12 @@ spec:
           resources:
             requests:
               cpu: 250m
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - /bin/calico-node
+                - -shutdown
           livenessProbe:
             httpGet:
               path: /liveness
