@@ -35,7 +35,7 @@ func NewCalicoNodeStatusClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sR
 		restClient:      r,
 		name:            CalicoNodeStatusCRDName,
 		resource:        CalicoNodeStatusResourceName,
-		description:     "Calico CalicoNodeStatus",
+		description:     "CalicoNodeStatus",
 		k8sResourceType: reflect.TypeOf(apiv3.CalicoNodeStatus{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindCalicoNodeStatus,

@@ -67,7 +67,7 @@ var _ = testutils.E2eDatastoreDescribe("Calico node status syncer tests", testut
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Creating an CalicoNodeStatus")
-			seconds := 15
+			seconds := uint32(15)
 			status, err := c.CalicoNodeStatus().Create(
 				ctx,
 				&apiv3.CalicoNodeStatus{
@@ -79,7 +79,7 @@ var _ = testutils.E2eDatastoreDescribe("Calico node status syncer tests", testut
 							apiv3.NodeStatusClassTypeBGP,
 							apiv3.NodeStatusClassTypeRoutes,
 						},
-						UpdateIntervalInSeconds: &seconds,
+						UpdatePeriodSeconds: &seconds,
 					},
 				},
 				options.SetOptions{},
@@ -103,7 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("Calico node status syncer tests", testut
 							apiv3.NodeStatusClassTypeBGP,
 							apiv3.NodeStatusClassTypeRoutes,
 						},
-						UpdateIntervalInSeconds: &seconds,
+						UpdatePeriodSeconds: &seconds,
 					},
 				},
 				Revision: status.ResourceVersion,

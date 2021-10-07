@@ -38,8 +38,8 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 	ctx := context.Background()
 	name1 := "caliconodestatus-1"
 	name2 := "caliconodestatus-2"
-	seconds1 := 11
-	seconds2 := 12
+	seconds1 := uint32(11)
+	seconds2 := uint32(12)
 	spec1 := apiv3.CalicoNodeStatusSpec{
 		Node: "node1",
 		Classes: []apiv3.NodeStatusClassType{
@@ -47,7 +47,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			apiv3.NodeStatusClassTypeBGP,
 			apiv3.NodeStatusClassTypeRoutes,
 		},
-		UpdateIntervalInSeconds: &seconds1,
+		UpdatePeriodSeconds: &seconds1,
 	}
 	spec2 := apiv3.CalicoNodeStatusSpec{
 		Node: "node2",
@@ -56,56 +56,52 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			apiv3.NodeStatusClassTypeBGP,
 			apiv3.NodeStatusClassTypeRoutes,
 		},
-		UpdateIntervalInSeconds: &seconds2,
+		UpdatePeriodSeconds: &seconds2,
 	}
 
 	updateTime := metav1.Time{Time: justBeforeTheHour()}
 	status1 := apiv3.CalicoNodeStatusStatus{
 		LastUpdated: updateTime,
 		Agent: apiv3.CalicoNodeAgentStatus{
-			Birdv4: apiv3.CalicoNodeBirdStatus{
-				Ready:            true,
-				Version:          "birdv1.23",
-				RouterID:         "123456",
-				ServerTime:       "servertime1",
-				LastBootTime:     "lastboottime1",
-				LastReconfigTime: "lastreconfigtime1",
+			BIRDV4: apiv3.BGPDaemonStatus{
+				State:                   apiv3.BGPDaemonStateReady,
+				Version:                 "birdv1.23",
+				RouterID:                "123456",
+				LastBootTime:            "lastboottime1",
+				LastReconfigurationTime: "lastreconfigtime1",
 			},
-			Birdv6: apiv3.CalicoNodeBirdStatus{
-				Ready:            true,
-				Version:          "birdv1.23",
-				RouterID:         "123456",
-				ServerTime:       "servertime1",
-				LastBootTime:     "lastboottime1",
-				LastReconfigTime: "lastreconfigtime1",
+			BIRDV6: apiv3.BGPDaemonStatus{
+				State:                   apiv3.BGPDaemonStateNotReady,
+				Version:                 "birdv1.23",
+				RouterID:                "123456",
+				LastBootTime:            "lastboottime1",
+				LastReconfigurationTime: "lastreconfigtime1",
 			},
 		},
 		BGP: apiv3.CalicoNodeBGPStatus{
-			V4NumEstablished:    2,
-			V4NumNotEstablished: 0,
-			V6NumEstablished:    0,
-			V6NumNotEstablished: 0,
-			V4Peers: []apiv3.CalicoNodePeer{
+			NumberEstablishedV4:    2,
+			NumberNotEstablishedV4: 0,
+			NumberEstablishedV6:    0,
+			NumberNotEstablishedV6: 0,
+			PeersV4: []apiv3.CalicoNodePeer{
 				{
 					PeerIP: "172.17.0.5",
 					Type:   "nodeMesh",
-					State:  "up",
+					State:  apiv3.BGPSessionStateEstablished,
 					Since:  "09:19:28",
-					Info:   "Established",
 				},
 			},
-			V6Peers: []apiv3.CalicoNodePeer{
+			PeersV6: []apiv3.CalicoNodePeer{
 				{
 					PeerIP: "2001:20::8",
 					Type:   "nodeMesh",
-					State:  "up",
+					State:  apiv3.BGPSessionStateEstablished,
 					Since:  "09:19:28",
-					Info:   "Established",
 				},
 			},
 		},
 		Routes: apiv3.CalicoNodeBGPRouteStatus{
-			V4Routes: []apiv3.CalicoNodeRoute{
+			RoutesV4: []apiv3.CalicoNodeRoute{
 				{
 					Type:        "FIB",
 					Destination: "192.168.110.128/26",
@@ -113,7 +109,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 					Interface:   "eth0",
 					LearnedFrom: apiv3.CalicoNodeRouteLearnedFrom{
 						SourceType: apiv3.RouteSourceTypeNodeMesh,
-						Node:       "node1",
+						PeerIP:     "172.17.0.5",
 					},
 				},
 				{
@@ -131,62 +127,60 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 	status2 := apiv3.CalicoNodeStatusStatus{
 		LastUpdated: updateTime,
 		Agent: apiv3.CalicoNodeAgentStatus{
-			Birdv4: apiv3.CalicoNodeBirdStatus{
-				Ready:            true,
-				Version:          "birdv1.23",
-				RouterID:         "654321",
-				ServerTime:       "servertime1",
-				LastBootTime:     "lastboottime1",
-				LastReconfigTime: "lastreconfigtime1",
+			BIRDV4: apiv3.BGPDaemonStatus{
+				State:                   apiv3.BGPDaemonStateReady,
+				Version:                 "birdv1.23",
+				RouterID:                "654321",
+				LastBootTime:            "lastboottime1",
+				LastReconfigurationTime: "lastreconfigtime1",
 			},
-			Birdv6: apiv3.CalicoNodeBirdStatus{
-				Ready:            true,
-				Version:          "birdv1.23",
-				RouterID:         "654321",
-				ServerTime:       "servertime1",
-				LastBootTime:     "lastboottime1",
-				LastReconfigTime: "lastreconfigtime1",
+			BIRDV6: apiv3.BGPDaemonStatus{
+				State:                   apiv3.BGPDaemonStateNotReady,
+				Version:                 "birdv1.23",
+				RouterID:                "654321",
+				LastBootTime:            "lastboottime1",
+				LastReconfigurationTime: "lastreconfigtime1",
 			},
 		},
 		BGP: apiv3.CalicoNodeBGPStatus{
-			V4NumEstablished:    2,
-			V4NumNotEstablished: 0,
-			V6NumEstablished:    0,
-			V6NumNotEstablished: 0,
-			V4Peers: []apiv3.CalicoNodePeer{
+			NumberEstablishedV4:    2,
+			NumberNotEstablishedV4: 0,
+			NumberEstablishedV6:    0,
+			NumberNotEstablishedV6: 0,
+			PeersV4: []apiv3.CalicoNodePeer{
 				{
 					PeerIP: "172.17.0.6",
 					Type:   "nodeMesh",
-					State:  "up",
-					Since:  "09:19:26",
-					Info:   "Established",
+					State:  apiv3.BGPSessionStateEstablished,
+					Since:  "09:19:28",
 				},
 			},
-			V6Peers: []apiv3.CalicoNodePeer{
+			PeersV6: []apiv3.CalicoNodePeer{
 				{
-					PeerIP: "2001:26::8",
+					PeerIP: "2001:10::8",
 					Type:   "nodeMesh",
-					State:  "up",
-					Since:  "09:19:26",
-					Info:   "Established",
+					State:  apiv3.BGPSessionStateEstablished,
+					Since:  "09:19:28",
 				},
 			},
 		},
 		Routes: apiv3.CalicoNodeBGPRouteStatus{
-			V4Routes: []apiv3.CalicoNodeRoute{
+			RoutesV4: []apiv3.CalicoNodeRoute{
 				{
-					Destination: "192.168.110.126/26",
+					Type:        "FIB",
+					Destination: "192.168.112.128/26",
 					Gateway:     "172.17.0.6",
 					Interface:   "eth0",
 					LearnedFrom: apiv3.CalicoNodeRouteLearnedFrom{
 						SourceType: apiv3.RouteSourceTypeNodeMesh,
-						Node:       "node2",
+						PeerIP:     "172.17.0.6",
 					},
 				},
 				{
-					Destination: "192.168.162.126/32",
+					Type:        "FIB",
+					Destination: "192.168.182.129/32",
 					Gateway:     "N/A",
-					Interface:   "calie58e37f9a76",
+					Interface:   "calie58e37f9a7f",
 					LearnedFrom: apiv3.CalicoNodeRouteLearnedFrom{
 						SourceType: apiv3.RouteSourceTypeKernel,
 					},
