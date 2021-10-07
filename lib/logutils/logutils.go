@@ -207,6 +207,11 @@ func shouldSkipFrame(frame runtime.Frame) bool {
 			return true
 		}
 	}
+	if strings.HasSuffix(frame.File, "/lib/logutils/ratelimitedlogger.go") {
+		if strings.Contains(frame.File, "/libcalico-go") {
+			return true
+		}
+	}
 	return false
 }
 
