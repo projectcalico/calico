@@ -644,6 +644,9 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 	// Load the set of reserved IPs/CIDRs.
 	reservations, err := c.getReservedIPs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to look up reserved IPs: %w", err)
+	}
 
 	// Get the existing host-affine blocks.
 	logCtx := log.WithFields(log.Fields{"host": host})
