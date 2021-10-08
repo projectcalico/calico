@@ -565,6 +565,7 @@ execute_tests_daemon() {
         run_individual_test 'mesh/ipip-always'
         run_individual_test 'mesh/ipip-cross-subnet'
         run_individual_test 'mesh/ipip-off'
+        run_individual_test 'mesh/route-reflector-mesh-enabled'
         run_individual_test 'mesh/static-routes'
         run_individual_test 'mesh/static-routes-exclude-node'
         run_individual_test 'mesh/communities'
