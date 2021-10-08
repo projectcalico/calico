@@ -87,23 +87,6 @@ func TestMultiCluster(t *testing.T) {
 	out = Calicoctl(true, "--context", "main", "ipam", "show")
 	Expect(out).To(ContainSubstring("CIDR"))
 
-	// Context node tests fails in semaphore with: Need super user privileges: Operation not permitted
-	//
-	// out, err = CalicoctlMayFail(true, "--context", "main", "node", "status")
-	// Expect(err).To(HaveOccurred())
-	// Expect(out).To(ContainSubstring("Calico"))
-
-	// out, err = CalicoctlMayFail(true, "--context", "main", "node", "run")
-	// Expect(err).To(HaveOccurred())
-	// Expect(out).To(ContainSubstring("Error"))
-
-	// out = Calicoctl(true, "--context", "main", "node", "diags")
-	// Expect(out).To(ContainSubstring("Collecting"))
-
-	// out, err = CalicoctlMayFail(true, "--context", "main", "node", "checksystem")
-	// Expect(err).To(HaveOccurred())
-	// Expect(out).To(ContainSubstring("Checking"))
-
 	out = Calicoctl(true, "delete", "-f", "/go/src/github.com/projectcalico/calicoctl/test-data/v3/bgppeer-global.yaml", "--context", "main")
 	Expect(out).To(ContainSubstring("Successfully"))
 

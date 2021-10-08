@@ -4,7 +4,7 @@ GO_BUILD_VER=v0.57
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
 
-KUBE_APISERVER_PORT?=8080
+KUBE_APISERVER_PORT?=6443
 KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
 KUBE_CLUSTERINFO_CRD_MANIFEST?=crd.projectcalico.org_clusterinformations.yaml
 
@@ -175,15 +175,20 @@ ut: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64
 ## Run the tests in a container. Useful for CI, Mac dev.
 fv: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) run-etcd-host
+
 	# We start two API servers in order to test multiple kubeconfig support
-	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=8080 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
-	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=8082 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
+	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
+	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6444 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
+
+	# Ensure anonymous is permitted to be admin.
+	while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
+
 	# Run the tests
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test ./tests/fv'
 	# Cleanup
 	$(MAKE) stop-etcd
-	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=8080
-	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=8082
+	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=6443
+	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=6444
 
 ###############################################################################
 # STs
@@ -208,6 +213,7 @@ st: bin/calicoctl-linux-amd64 version-helper
 	docker run --net=host --privileged \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
 		   --rm -t \
+		   -v $(CURDIR)/tests/certs:/home/user/certs \
 		   -v $(CURDIR):/code \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
@@ -241,63 +247,64 @@ run-etcd-host:
 stop-etcd:
 	@-docker rm -f calico-etcd
 
-## Run a local kubernetes master with API via hyperkube
+## Run a local kubernetes master with API
 run-kubernetes-master: stop-kubernetes-master
 	# Run a Kubernetes apiserver using Docker.
-	docker run \
-		--net=host --name st-apiserver-${KUBE_APISERVER_PORT} \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-apiserver \
-			--bind-address=0.0.0.0 \
-			--secure-port=1${KUBE_APISERVER_PORT} \
-			--insecure-bind-address=0.0.0.0 \
-			--port=${KUBE_APISERVER_PORT} \
-	        	--etcd-servers=http://127.0.0.1:2379 \
+	docker run --net=host --detach \
+		--name st-apiserver-${KUBE_APISERVER_PORT} \
+		-v $(CURDIR):/code \
+		-v `pwd`/tests/certs:/home/user/certs \
+		-e KUBECONFIG=/home/user/certs/kubeconfig \
+		${CALICO_BUILD} kube-apiserver \
+			--secure-port=${KUBE_APISERVER_PORT} \
 			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
-			--service-cluster-ip-range=10.101.0.0/16 \
-			--v=10 \
-			--logtostderr=true
+			--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+                        --service-cluster-ip-range=10.101.0.0/16 \
+                        --authorization-mode=RBAC \
+                        --service-account-key-file=/home/user/certs/service-account.pem \
+                        --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+                        --service-account-issuer=https://localhost:443 \
+                        --api-audiences=kubernetes.default \
+                        --client-ca-file=/home/user/certs/ca.pem \
+                        --tls-cert-file=/home/user/certs/kubernetes.pem \
+                        --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+                        --enable-priority-and-fairness=false \
+                        --max-mutating-requests-inflight=0 \
+                        --max-requests-inflight=0
+
 
 	# Wait until the apiserver is accepting requests.
-	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl --server=https://127.0.0.1:${KUBE_APISERVER_PORT} get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 
 	# And run the controller manager.
-	docker run \
-		--net=host --name st-controller-manager-${KUBE_APISERVER_PORT} \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-controller-manager \
-                        --master=127.0.0.1:${KUBE_APISERVER_PORT} \
-                        --min-resync-period=3m \
-                        --allocate-node-cidrs=true \
-                        --cluster-cidr=10.10.0.0/16 \
-                        --v=5
+	docker run --detach --net=host \
+	  --name st-controller-manager-${KUBE_APISERVER_PORT} \
+	  -v $(PWD)/tests/certs:/home/user/certs \
+	  $(CALICO_BUILD) kube-controller-manager \
+	    --master=https://127.0.0.1:${KUBE_APISERVER_PORT} \
+            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+            --min-resync-period=3m \
+            --allocate-node-cidrs=true \
+            --cluster-cidr=10.10.0.0/16 \
+            --v=5 \
+            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+            --root-ca-file=/home/user/certs/ca.pem
 
 	# Create a Node in the API for the tests to use.
-	while ! docker run \
-	    --net=host \
-	    --rm \
-		-v $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /manifests/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
+	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
+		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
-	# Apply ClusterInformation CRD because the tests now require it
-	while ! docker run \
-	    --net=host \
-	    --rm \
-		-v $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /manifests/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
+	# Apply ClusterInformation CRD because the tests require it
+	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
+		apply -f /code/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
 		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
-	-docker run \
-	    --net=host \
-	    --rm \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
+	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 	
 ## Stop the local kubernetes master
