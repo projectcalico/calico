@@ -34,9 +34,10 @@ func getEnv(kdd bool) []string {
 		if ok {
 			env = []string{"KUBECONFIG=" + val, "DATASTORE_TYPE=kubernetes"}
 		} else {
-			env = []string{"K8S_API_ENDPOINT=http://localhost:8080", "DATASTORE_TYPE=kubernetes"}
+			env = []string{"K8S_API_ENDPOINT=https://localhost:6443", "DATASTORE_TYPE=kubernetes"}
 		}
 	}
+	env = append(env, "K8S_INSECURE_SKIP_TLS_VERIFY=true")
 
 	return env
 }
