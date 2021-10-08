@@ -242,8 +242,8 @@ spec:
                   in the specific branch of the Node on "bird.cfg".
                 type: boolean
               maxRestartTime:
-                description: Time to allow for software restart.  When specified, this
-                  is configured as the graceful restart timeout.  When not specified,
+                description: Time to allow for software restart.  When specified,
+                  this is configured as the graceful restart timeout.  When not specified,
                   the BIRD default of 120s is used.
                 type: string
               node:
@@ -482,7 +482,7 @@ spec:
                 type: boolean
               awsSrcDstCheck:
                 description: 'Set source-destination-check on AWS EC2 instances. Accepted
-                  value must be one of "DoNothing", "Enabled" or "Disabled". [Default:
+                  value must be one of "DoNothing", "Enable" or "Disable". [Default:
                   DoNothing]'
                 enum:
                 - DoNothing
@@ -516,6 +516,13 @@ spec:
                 description: 'BPFEnabled, if enabled Felix will use the BPF dataplane.
                   [Default: false]'
                 type: boolean
+              bpfExtToServiceConnmark:
+                description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
+                  mark that is set on connections from an external client to a local
+                  service. This mark allows us to control how packets of that connection
+                  are routed within the host and how is routing intepreted by RPF
+                  check. [Default: 0]'
+                type: integer
               bpfExternalServiceMode:
                 description: 'BPFExternalServiceMode in BPF mode, controls how connections
                   from outside the cluster to services (node ports and cluster IPs)
@@ -526,14 +533,6 @@ spec:
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
-              bpfExtToServiceConnmark:
-                description: 'BPFExtToServiceConnmark in BPF mode, controls a
-                  32bit mark that is set on connections from an external client to
-                  a local service. This mark allows us to control how packets of
-                  that connection are routed within the host and how is routing
-                  intepreted by RPF check. [Default: 0]'
-                type: integer
-
               bpfKubeProxyEndpointSlicesEnabled:
                 description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
                   whether Felix's embedded kube-proxy accepts EndpointSlices or not.
@@ -882,6 +881,12 @@ spec:
                   to false. This reduces the number of metrics reported, reducing
                   Prometheus load. [Default: true]'
                 type: boolean
+              prometheusWireGuardMetricsEnabled:
+                description: 'PrometheusWireGuardMetricsEnabled disables wireguard
+                  metrics collection, which the Prometheus client does by default,
+                  when set to false. This reduces the number of metrics reported,
+                  reducing Prometheus load. [Default: true]'
+                type: boolean
               removeExternalRoutes:
                 description: Whether or not to remove device routes that have not
                   been programmed by Felix. Disabling this will allow external applications
@@ -962,6 +967,10 @@ spec:
               wireguardEnabled:
                 description: 'WireguardEnabled controls whether Wireguard is enabled.
                   [Default: false]'
+                type: boolean
+              wireguardHostEncryptionEnabled:
+                description: 'WireguardHostEncryptionEnabled controls whether Wireguard
+                  host-to-host encryption is enabled. [Default: false]'
                 type: boolean
               wireguardInterfaceName:
                 description: 'WireguardInterfaceName specifies the name to use for
@@ -2242,6 +2251,12 @@ spec:
           spec:
             description: IPPoolSpec contains the specification for an IPPool resource.
             properties:
+              allowedUses:
+                description: AllowedUse controls what the IP pool will be used for.  If
+                  not specified or empty, defaults to ["Tunnel", "Workload"] for back-compatibility
+                items:
+                  type: string
+                type: array
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 112 for IPv6.
@@ -2297,6 +2312,57 @@ spec:
                 type: string
             required:
             - cidr
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ipreservations.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: IPReservation
+    listKind: IPReservationList
+    plural: ipreservations
+    singular: ipreservation
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: IPReservationSpec contains the specification for an IPReservation
+              resource.
+            properties:
+              reservedCIDRs:
+                description: ReservedCIDRs is a list of CIDRs and/or IP addresses
+                  that Calico IPAM will exclude from new allocations.
+                items:
+                  type: string
+                type: array
             type: object
         type: object
     served: true
@@ -3543,7 +3609,7 @@ rules:
     resources:
     - secrets
     verbs:
-    - get 
+    - get
     - list
     - watch
   # The CNI plugin needs to get pods, nodes, and namespaces.
@@ -3617,6 +3683,7 @@ rules:
       - globalbgpconfigs
       - bgpconfigurations
       - ippools
+      - ipreservations
       - ipamblocks
       - globalnetworkpolicies
       - globalnetworksets
@@ -3747,7 +3814,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: quay.io/calico/cni:master
+          image: docker.io/calico/cni:master
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
           - configMapRef:
@@ -3774,7 +3841,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:master
+          image: docker.io/calico/cni:master
           command: ["/opt/cni/bin/install"]
           envFrom:
           - configMapRef:
@@ -3815,7 +3882,7 @@ spec:
         # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
-          image: quay.io/calico/pod2daemon-flexvol:master
+          image: docker.io/calico/pod2daemon-flexvol:master
           volumeMounts:
           - name: flexvol-driver-host
             mountPath: /host/driver
@@ -3901,6 +3968,12 @@ spec:
           resources:
             requests:
               cpu: 250m
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - /bin/calico-node
+                - -shutdown
           livenessProbe:
             exec:
               command:
@@ -4039,7 +4112,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/kube-controllers:master
+          image: docker.io/calico/kube-controllers:master
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS

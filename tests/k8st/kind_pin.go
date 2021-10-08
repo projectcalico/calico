@@ -18,4 +18,4 @@
 
 package k8st
 
-import _ "sigs.k8s.io/kind/pkg/apis/config/defaults"
+import _ "sigs.k8s.io/kind/cmd/kind/app"
