@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/app-policy
-GO_BUILD_VER?=v0.53
+GO_BUILD_VER?=v0.57
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_APP_POLICY_PROJECT_ID)
