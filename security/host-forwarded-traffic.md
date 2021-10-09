@@ -42,15 +42,20 @@ In contrast, if applyOnForward is set to true for a policy that selects a HEP, t
 - Egress policy on HEP eth1 affects connections 2, 3, and 4
 
 There are also different default action semantics for **applyOnForward: true policy** versus **applyOnForward: false policy**.
-An applyOnForward: true policy affects all traffic through the HEP (connections 1-4). If no applyOnForward policy selects the HEP and direction (ingress versus egress), then forwarded traffic is allowed.  If no policy (regardless of applyOnForward) selects the HEP and direction, then local traffic is denied.
+An applyOnForward: true policy affects all traffic through the HEP (connections 1-4). If no applyOnForward policy selects the HEP and direction (ingress versus egress), then forwarded traffic is allowed.  If no policy (regardless of applyOnForward) selects the HEP and direction, then local traffic is denied unless if the HEP has the `projectcalico-default-allow` profile.
 
-| **HEP defined?** | **Traffic Type** | **applyOnForward defined?** | **Any policy defined?** | **Default Action** |
-| ---------------- | ---------------- | --------------------------- | ----------------------- | ------------------ |
-| No               | Any              | n/a                         | n/a                     | Allow              |
-| Yes              | Forwarded        | No                          | Any                     | Allow              |
-| Yes              | Forwarded        | Yes                         | Yes                     | Deny               |
-| Yes              | Local            | n/a                         | No                      | Deny               |
-| Yes              | Local            | n/a                         | Yes                     | Deny               |
+| **HEP defined?** | **Traffic Type** | **applyOnForward defined?** | **Any policy defined?** | **Has allow-all profile** | **Default Action** |
+| ---------------- | ---------------- | --------------------------- | ----------------------- | ------------------------- | ------------------ |
+| No               | Any              | N/A                         | N/A                     | N/A                       | Allow              |
+| Yes              | Forwarded        | No                          | Any                     | N/A                       | Allow              |
+| Yes              | Forwarded        | Yes                         | Yes                     | N/A                       | Deny               |
+| Yes              | Local            | N/A                         | No                      | No                        | Deny               |
+| Yes              | Local            | N/A                         | No                      | Yes                       | Allow              |
+| Yes              | Local            | N/A                         | Yes                     | N/A                       | Deny               |
+
+> **Note**: The `projectcalico-default-allow` is a built-in profile provided by {{site.prodname}} that consists of allow-all ingress and egress rules.
+> HEPs with this profile will have an Allow default action instead of Deny, in the absence of policy. [Auto host endpoints]({{site.baseurl}}/security/kubernetes-nodes#automatic-host-endpoints) always have this profile. For more information about the default behavior for traffic originating/terminating at the host, see the [host endpoint reference]({{site.baseurl}}/reference/resources/hostendpoint#default-behavior-of-external-traffic-tofrom-host).
+{: .alert .alert-info}
 
 **{{site.prodname}} namespaced network policies** do not have an applyOnForward setting. HEPs are always cluster global, not namespaced, so network policies cannot select them.
 

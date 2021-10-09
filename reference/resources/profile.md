@@ -9,7 +9,7 @@ policy rules, but that feature is deprecated in favor of the much more
 flexible [NetworkPolicy]({{ site.baseurl }}/reference/resources/networkpolicy) and
 [GlobalNetworkPolicy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) resources.
 
-Each {{site.prodname}} endpoint or host endpoint can be assigned to zero or more profiles.
+Each {{site.prodname}} endpoint or host endpoint can be assigned to zero or more profiles. {{site.prodname}} provides a default profile resource named `projectcalico-default-allow` that consists of allow-all ingress and egress rules. Adding that profile to host endpoints will change the default behaviour of traffic originating from or terminating at the host. See the [host endpoint reference]({{site.baseurl}}/reference/resources/hostendpoint#default-behavior-of-external-traffic-tofrom-host) for more information.
 
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `profile`, `profiles`, `pro`, `pros`.
