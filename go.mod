@@ -9,10 +9,10 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211006144010-18285c8ad10a
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211009015314-42baa127b4c3
 	github.com/sirupsen/logrus v1.4.2
-	golang.org/x/net v0.0.0-20210224082022-3d97a244fca7
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
+	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
+	google.golang.org/genproto v0.0.0-20201019141844-1ed22bb0c154
 	google.golang.org/grpc v1.27.1
 	k8s.io/kube-openapi v0.0.0-20210817084001-7fbd8d59e5b8 // indirect
 )
