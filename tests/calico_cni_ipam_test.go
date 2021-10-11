@@ -12,8 +12,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	uuid "github.com/satori/go.uuid"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -29,17 +27,8 @@ var defaultIPv4Pool = "192.168.0.0/16"
 var _ = Describe("Calico IPAM Tests", func() {
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
 	calicoClient, err := client.NewFromEnv()
-	if err != nil {
-		panic(err)
-	}
-	config, err := clientcmd.DefaultClientConfig.ClientConfig()
-	if err != nil {
-		panic(err)
-	}
-	k8sClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
+	Expect(err).NotTo(HaveOccurred())
+	k8sClient := getKubernetesClient()
 
 	var cid string
 	BeforeEach(func() {
@@ -99,7 +88,7 @@ var _ = Describe("Calico IPAM Tests", func() {
               "type": "calico",
               "etcd_endpoints": "http://%s:2379",
               "kubernetes": {
-                  "k8s_api_root": "http://127.0.0.1:8080"
+                  "kubeconfig": "/home/user/certs/kubeconfig"
               },
               "log_level": "debug",
               "datastore_type": "%s",
@@ -114,7 +103,7 @@ var _ = Describe("Calico IPAM Tests", func() {
               "type": "calico",
               "etcd_endpoints": "http://%s:2379",
               "kubernetes": {
-                 "k8s_api_root": "http://127.0.0.1:8080"
+                 "kubeconfig": "/home/user/certs/kubeconfig"
                   },
               "datastore_type": "%s",
               "ipam": {
@@ -129,7 +118,7 @@ var _ = Describe("Calico IPAM Tests", func() {
               "type": "calico",
               "etcd_endpoints": "http://%s:2379",
               "kubernetes": {
-                 "k8s_api_root": "http://127.0.0.1:8080"
+                 "kubeconfig": "/home/user/certs/kubeconfig"
               },
               "datastore_type": "%s",
               "ipam": {
@@ -145,7 +134,7 @@ var _ = Describe("Calico IPAM Tests", func() {
               "type": "calico",
               "etcd_endpoints": "http://%s:2379",
               "kubernetes": {
-                 "k8s_api_root": "http://127.0.0.1:8080"
+                 "kubeconfig": "/home/user/certs/kubeconfig"
               },
               "datastore_type": "%s",
               "log_level": "debug",
@@ -172,7 +161,7 @@ var _ = Describe("Calico IPAM Tests", func() {
               "type": "calico",
               "etcd_endpoints": "http://%s:2379",
               "kubernetes": {
-                 "k8s_api_root": "http://127.0.0.1:8080"
+                 "kubeconfig": "/home/user/certs/kubeconfig"
               },
               "datastore_type": "%s",
               "log_level": "debug",
@@ -208,7 +197,7 @@ var _ = Describe("Calico IPAM Tests", func() {
               "type": "calico",
               "etcd_endpoints": "http://%s:2379",
               "kubernetes": {
-                 "k8s_api_root": "http://127.0.0.1:8080"
+                 "kubeconfig": "/home/user/certs/kubeconfig"
               },
               "datastore_type": "%s",
               "log_level": "debug",
@@ -242,7 +231,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                   "type": "calico",
                   "etcd_endpoints": "http://%s:2379",
                   "kubernetes": {
-                    "k8s_api_root": "http://127.0.0.1:8080"
+                    "kubeconfig": "/home/user/certs/kubeconfig"
                     },
                   "datastore_type": "%s",
                   "ipam": {
@@ -267,7 +256,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
                         "kubernetes": {
-                           "k8s_api_root": "http://127.0.0.1:8080"
+                           "kubeconfig": "/home/user/certs/kubeconfig"
                       },
                       "datastore_type": "%s",
                       "ipam": {
@@ -290,7 +279,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
                         "kubernetes": {
-                         "k8s_api_root": "http://127.0.0.1:8080"
+                         "kubeconfig": "/home/user/certs/kubeconfig"
                       },
                       "datastore_type": "%s",
                       "ipam": {
@@ -338,7 +327,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
                         "kubernetes": {
-                         "k8s_api_root": "http://127.0.0.1:8080"
+                         "kubeconfig": "/home/user/certs/kubeconfig"
                       },
                       "datastore_type": "%s",
                       "ipam": {
@@ -360,7 +349,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
                         "kubernetes": {
-                         "k8s_api_root": "http://127.0.0.1:8080"
+                         "kubeconfig": "/home/user/certs/kubeconfig"
                       },
                       "datastore_type": "%s",
                       "ipam": {
@@ -384,7 +373,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
                       "kubernetes": {
-                        "k8s_api_root": "http://127.0.0.1:8080"
+                        "kubeconfig": "/home/user/certs/kubeconfig"
                       },
                       "datastore_type": "%s",
                       "ipam": {
@@ -424,7 +413,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
                       "kubernetes": {
-                        "k8s_api_root": "http://127.0.0.1:8080"
+                        "kubeconfig": "/home/user/certs/kubeconfig"
                       },
                       "datastore_type": "%s",
                       "ipam": {

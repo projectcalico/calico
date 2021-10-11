@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.55
+GO_BUILD_VER=v0.57
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
@@ -188,9 +188,9 @@ ut-datastore: $(LOCAL_BUILD_DEP)
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
-	-e K8S_API_ENDPOINT=http://127.0.0.1:8080 \
-	-e GO111MODULE=on \
+	-e KUBECONFIG=/home/user/certs/kubeconfig \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	-v $(CURDIR)/tests/certs:/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
@@ -223,12 +223,24 @@ config/crd: mod-download
 run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	  -v `pwd`/config:/config \
-	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
-	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) kube-apiserver \
+	  -v $(CURDIR)/config:/config \
+	  -v $(CURDIR)/tests/certs:/home/user/certs \
+	  -e KUBECONFIG=/home/user/certs/kubeconfig \
+	  $(CALICO_BUILD) kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 	    --service-cluster-ip-range=10.101.0.0/16 \
-	    --service-account-key-file=/private.key
+            --authorization-mode=RBAC \
+            --service-account-key-file=/home/user/certs/service-account.pem \
+            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+            --service-account-issuer=https://localhost:443 \
+            --api-audiences=kubernetes.default \
+            --client-ca-file=/home/user/certs/ca.pem \
+            --tls-cert-file=/home/user/certs/kubernetes.pem \
+            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+            --enable-priority-and-fairness=false \
+            --max-mutating-requests-inflight=0 \
+            --max-requests-inflight=0
+
 	# Wait until the apiserver is accepting requests.
 	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 	while ! docker exec calico-k8s-apiserver kubectl apply -f /config/crd; do echo "Waiting for CRDs..."; sleep 2; done
@@ -237,14 +249,16 @@ run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
-	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
-	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) kube-controller-manager \
-	    --master=127.0.0.1:8080 \
-	    --min-resync-period=3m \
-	    --allocate-node-cidrs=true \
-	    --cluster-cidr=192.168.0.0/16 \
-	    --v=5 \
-	    --service-account-private-key-file=/private.key
+	  -v $(PWD)/tests/certs:/home/user/certs \
+	  $(CALICO_BUILD) kube-controller-manager \
+            --master=https://127.0.0.1:6443 \
+            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+            --min-resync-period=3m \
+            --allocate-node-cidrs=true \
+            --cluster-cidr=192.168.0.0/16 \
+            --v=5 \
+            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+            --root-ca-file=/home/user/certs/ca.pem
 
 ## Stop Kubernetes apiserver
 stop-k8s-apiserver:
@@ -410,11 +424,6 @@ endif
 ###############################################################################
 # Developer helper scripts (not used by build or test)
 ###############################################################################
-## Run kube-proxy
-run-kube-proxy:
-	-docker rm -f calico-kube-proxy
-	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:$(K8S_VERSION) kube-proxy --master=http://127.0.0.1:8080 --v=2
-
 .PHONY: test-watch
 ## Run the unit tests, watching for changes.
 test-watch: $(BIN)/install run-etcd run-k8s-apiserver
