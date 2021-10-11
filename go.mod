@@ -20,21 +20,21 @@ require (
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20211005123650-be8650baf048
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211005125516-43b35ddc2f4a
+	github.com/projectcalico/api v0.0.0-20211009013658-8812f5264fce
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211011094501-892ed947fa87
 	github.com/prometheus/common v0.10.0
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.6.0
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20201125193152-8a03d2e9614b
-	golang.org/x/net v0.0.0-20210224082022-3d97a244fca7
-	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
+	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
+	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22
 	google.golang.org/grpc v1.27.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
-	k8s.io/api v0.21.0-rc.0
-	k8s.io/apimachinery v0.21.0-rc.0
-	k8s.io/client-go v0.21.0-rc.0
+	k8s.io/api v0.22.0
+	k8s.io/apimachinery v0.22.0
+	k8s.io/client-go v0.22.0
 	k8s.io/utils v0.0.0-20210802155522-efc7438f0176
 )
 
