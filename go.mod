@@ -16,10 +16,10 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/osrg/gobgp v0.0.0-20170802061517-bbd1d99396fe
-	github.com/projectcalico/api v0.0.0-20211005125605-f9ef2784d7a8
+	github.com/projectcalico/api v0.0.0-20211009013658-8812f5264fce
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211006144010-18285c8ad10a
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211011094501-892ed947fa87
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -28,6 +28,6 @@ require (
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	k8s.io/apiextensions-apiserver v0.18.12
-	k8s.io/apimachinery v0.21.0-rc.0
-	k8s.io/client-go v0.21.0-rc.0
+	k8s.io/apimachinery v0.22.0
+	k8s.io/client-go v0.22.0
 )
