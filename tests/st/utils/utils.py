@@ -39,7 +39,7 @@ ETCD_CA = os.environ.get("ETCD_CA_CERT_FILE", "")
 ETCD_CERT = os.environ.get("ETCD_CERT_FILE", "")
 ETCD_KEY = os.environ.get("ETCD_KEY_FILE", "")
 ETCD_HOSTNAME_SSL = "etcd-authority-ssl"
-K8S_API_ENDPOINT = "http://localhost:8080"
+KUBECONFIG = "/home/user/certs/kubeconfig"
 
 API_VERSION = 'projectcalico.org/v3'
 ERROR_CONFLICT = "update conflict"
@@ -261,8 +261,8 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
                  "etcdv3", stdin, calicoctl_bin)
     if kdd:
         calicoctl_env_cmd = "export DATASTORE_TYPE=kubernetes; " \
-                "export K8S_API_ENDPOINT=%s; %s %s" % \
-                (K8S_API_ENDPOINT, stdin, calicoctl_bin)
+                "export KUBECONFIG=%s; %s %s" % \
+                (KUBECONFIG, stdin, calicoctl_bin)
     if no_config :
         calicoctl_env_cmd = calicoctl_bin
     full_cmd = calicoctl_env_cmd + " " + command + option_file
@@ -552,8 +552,8 @@ def set_cluster_version(calico_version="", kdd=False):
          "etcdv3", calico_helper_bin)
     if kdd:
         full_cmd = "export DATASTORE_TYPE=kubernetes; " \
-            "export K8S_API_ENDPOINT=%s; %s" % \
-            (K8S_API_ENDPOINT, calico_helper_bin)
+            "export KUBECONFIG=%s; %s" % \
+            (KUBECONFIG, calico_helper_bin)
     if calico_version:
         full_cmd += " -v " + calico_version
 
