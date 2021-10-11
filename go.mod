@@ -14,7 +14,7 @@ require (
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20211009013658-8812f5264fce
+	github.com/projectcalico/api v0.0.0-20211011193936-5bcbc3a5e8a9
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba // indirect
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
 	github.com/prometheus/client_golang v1.4.0
@@ -37,7 +37,4 @@ require (
 	sigs.k8s.io/kind v0.11.1
 )
 
-replace (
-	github.com/projectcalico/api => github.com/song-jiang/api v0.1.2-0.20211011175636-78821969fc31
-	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
-)
+replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
