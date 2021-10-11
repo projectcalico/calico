@@ -57,7 +57,7 @@ type CalicoNodeStatusSpec struct {
 
 	// UpdatePeriodSeconds is the period at which CalicoNodeStatus should be updated.
 	// Set to 0 to disable CalicoNodeStatus refresh. Maximum update period is one day.
-	UpdatePeriodSeconds *uint32 `json:"updatePeriodSeconds,omitempty" validate:"required,gte=0,lte=86,400"`
+	UpdatePeriodSeconds *uint32 `json:"updatePeriodSeconds,omitempty" validate:"required,gte=0,lte=86400"`
 }
 
 // CalicoNodeStatusStatus defines the observed state of CalicoNodeStatus.
