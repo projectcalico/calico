@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
 
 FROM scratch
 
@@ -26,6 +28,11 @@ LABEL name="Calico Networking for CNI" \
 
 ADD licenses/ /licenses
 ADD LICENSE /licenses/
+
+# Include libraries from UBI for dynamic linking.
+COPY --from=base /usr/include /usr/include
+COPY --from=base /lib64 /lib64
+COPY --from=base /lib /lib
 
 ADD bin/amd64/ /opt/cni/bin/
 
