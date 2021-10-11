@@ -1,5 +1,5 @@
 PACKAGE_NAME    ?= github.com/projectcalico/apiserver
-GO_BUILD_VER    ?= v0.55
+GO_BUILD_VER    ?= v0.57
 GOMOD_VENDOR    := false
 GIT_USE_SSH      = true
 LOCAL_CHECKS     = lint-cache-dir goimports check-copyright
@@ -235,34 +235,41 @@ hack-lib:
 ## Run a local kubernetes server with API via hyperkube
 run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 	# Run a Kubernetes apiserver using Docker.
-	docker run \
-		--net=host --name st-apiserver \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
-		kube-apiserver \
-			--bind-address=0.0.0.0 \
-			--insecure-bind-address=0.0.0.0 \
-			--etcd-servers=http://127.0.0.1:2379 \
-			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
-			--authorization-mode=RBAC \
-			--service-cluster-ip-range=10.101.0.0/16 \
-			--v=10 \
-			--logtostderr=true
+	docker run --detach --net=host \
+	  --name st-apiserver \
+	  -v `pwd`/test/certs:/home/user/certs \
+	  -e KUBECONFIG=/home/user/certs/kubeconfig \
+	  $(CALICO_BUILD) kube-apiserver \
+	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+	    --service-cluster-ip-range=10.101.0.0/16 \
+            --authorization-mode=RBAC \
+            --service-account-key-file=/home/user/certs/service-account.pem \
+            --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+            --service-account-issuer=https://localhost:443 \
+            --api-audiences=kubernetes.default \
+            --client-ca-file=/home/user/certs/ca.pem \
+            --tls-cert-file=/home/user/certs/kubernetes.pem \
+            --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+            --enable-priority-and-fairness=false \
+            --max-mutating-requests-inflight=0 \
+            --max-requests-inflight=0
 
 	# Wait until we can configure a cluster role binding which allows anonymous auth.
 	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
 
 	# And run the controller manager.
-	docker run \
-		--net=host --name st-controller-manager \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
-		/hyperkube controller-manager \
-			--master=127.0.0.1:8080 \
-			--min-resync-period=3m \
-			--allocate-node-cidrs=true \
-			--cluster-cidr=10.10.0.0/16 \
-			--v=5
+	docker run --detach --net=host \
+	  --name st-controller-manager \
+	  -v $(PWD)/test/certs:/home/user/certs \
+	  $(CALICO_BUILD) kube-controller-manager \
+            --master=https://127.0.0.1:6443 \
+            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+            --min-resync-period=3m \
+            --allocate-node-cidrs=true \
+            --cluster-cidr=192.168.0.0/16 \
+            --v=5 \
+            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+            --root-ca-file=/home/user/certs/ca.pem
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	# from the manifest crds.yaml
@@ -270,8 +277,9 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
+		-v $(PWD)/test/certs:/home/user/certs \
 		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
-		--server=http://127.0.0.1:8080 \
+		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/config/crd/
 
 	# Create a Node in the API for the tests to use.
@@ -279,8 +287,9 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
+		-v $(PWD)/test/certs:/home/user/certs \
 		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
-		--server=http://127.0.0.1:8080 \
+		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/mock-node.yaml
 
 	# Create Namespaces required by namespaced Calico `NetworkPolicy`
@@ -289,8 +298,9 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
+		-v $(PWD)/test/certs:/home/user/certs \
 		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
-		--server=http://127.0.0.1:8080 \
+		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/namespaces.yaml
 
 ## Stop the local kubernetes server
@@ -311,13 +321,19 @@ fv: fv-kdd
 
 .PHONY: fv-etcd
 fv-etcd: run-kubernetes-server hack-lib
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) \
+		-v $(PWD)/test/certs:/home/user/certs \
+		-e KUBECONFIG=/home/user/certs/kubeconfig \
+		$(CALICO_BUILD) \
 		sh -c 'ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" test/integration.sh'
 
 .PHONY: fv-kdd
 fv-kdd: run-kubernetes-server hack-lib
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-		sh -c 'K8S_API_ENDPOINT="http://127.0.0.1:8080" DATASTORE_TYPE="kubernetes" test/integration.sh'
+	$(DOCKER_RUN) \
+		-v $(PWD)/test/certs:/home/user/certs \
+		-e KUBECONFIG=/home/user/certs/kubeconfig \
+		$(CALICO_BUILD) \
+		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
 
 .PHONY: clean
 clean: clean-bin clean-build-image clean-hack-lib
