@@ -19,6 +19,7 @@
 package testutils
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -37,14 +38,20 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 )
 
-const KubeconfigTemplate = `apiVersion: v1
+// KubeconfigTemplate is the template used to build a temporary Kubeconfig file for each test
+// iteration.
+const kubeconfigTemplate = `apiVersion: v1
 kind: Config
 clusters:
 - name: test
   cluster:
-    server: http://%s:8080
+    insecure-skip-tls-verify: true
+    server: https://%s:6443
 users:
 - name: calico
+  user:
+    client-certificate-data: %s
+    client-key-data: %s
 contexts:
 - name: test-context
   context:
@@ -52,34 +59,66 @@ contexts:
     user: calico
 current-context: test-context`
 
+func BuildKubeconfig(apiserverIP string) string {
+	// Load contents of test cert / key and fill them into the kubeconfig.
+	adminCertBytes, err := os.ReadFile(os.Getenv("CERTS") + "/admin.pem")
+	Expect(err).NotTo(HaveOccurred())
+	encodedAdminCert := base64.StdEncoding.EncodeToString(adminCertBytes)
+
+	adminKeyBytes, err := os.ReadFile(os.Getenv("CERTS") + "/admin-key.pem")
+	Expect(err).NotTo(HaveOccurred())
+	encodedAdminKey := base64.StdEncoding.EncodeToString(adminKeyBytes)
+
+	// Put it all together.
+	return fmt.Sprintf(kubeconfigTemplate, apiserverIP, encodedAdminCert, encodedAdminKey)
+}
+
 func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
 		containers.RunOpts{AutoRemove: true},
-		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
+		"-v", os.Getenv("CERTS")+":/home/user/certs", // Mount in location of certificates.
 		"-v", os.Getenv("CRDS")+":/crds",
-		os.Getenv("HYPERKUBE_IMAGE"),
+		"-e", "KUBECONFIG=/home/user/certs/kubeconfig", // We run kubectl from within this container.
+		os.Getenv("KUBE_IMAGE"),
 		"kube-apiserver",
+		"--v=0",
 		"--service-cluster-ip-range=10.101.0.0/16",
-		"--authorization-mode=AlwaysAllow",
-		"--insecure-port=8080",
-		"--insecure-bind-address=0.0.0.0",
+		"--authorization-mode=RBAC",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdIp),
-		"--service-account-key-file=/private.key",
+		"--service-account-key-file=/home/user/certs/service-account.pem",
+		"--service-account-signing-key-file=/home/user/certs/service-account-key.pem",
+		"--service-account-issuer=https://localhost:443",
+		"--api-audiences=kubernetes.default",
+		"--client-ca-file=/home/user/certs/ca.pem",
+		"--tls-cert-file=/home/user/certs/kubernetes.pem",
+		"--tls-private-key-file=/home/user/certs/kubernetes-key.pem",
+		"--enable-priority-and-fairness=false",
+		"--max-mutating-requests-inflight=0",
+		"--max-requests-inflight=0",
 	)
 }
 
 func RunK8sControllerManager(apiserverIp string) *containers.Container {
 	c := containers.Run("st-controller-manager",
 		containers.RunOpts{AutoRemove: true},
-		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
-		os.Getenv("HYPERKUBE_IMAGE"),
+		"-v", os.Getenv("CERTS")+":/home/user/certs", // Mount in location of certificates.
+		os.Getenv("KUBE_IMAGE"),
 		"kube-controller-manager",
-		fmt.Sprintf("--master=%v:8080", apiserverIp),
+		fmt.Sprintf("--master=https://%v:6443", apiserverIp),
+		"--cluster-cidr=192.168.0.0/16",
+		"--min-resync-period=3m",
+		"--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig",
+		// We run trivially small clusters, so increase the QPS to get the
+		// cluster to start up as fast as possible.
+		"--kube-api-qps=100",
+		"--kube-api-burst=200",
 		"--min-resync-period=3m",
 		"--allocate-node-cidrs=true",
-		"--cluster-cidr=192.168.0.0/16",
+		"--leader-elect=false",
 		"--v=5",
-		"--service-account-private-key-file=/private.key",
+		"--service-account-private-key-file=/home/user/certs/service-account-key.pem",
+		"--root-ca-file=/home/user/certs/ca.pem",
+		"--concurrent-gc-syncs=50",
 	)
 	return c
 }

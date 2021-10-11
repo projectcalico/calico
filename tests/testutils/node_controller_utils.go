@@ -47,6 +47,9 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		autoHep = "enabled"
 	}
 
+	admin := os.Getenv("CERTS") + "/admin.pem"
+	adminKey := os.Getenv("CERTS") + "/admin-key.pem"
+
 	return containers.Run("calico-kube-controllers",
 		containers.RunOpts{AutoRemove: true},
 		"--privileged",
@@ -59,6 +62,8 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
+		"-v", fmt.Sprintf("%s:/admin.pem", admin),
+		"-v", fmt.Sprintf("%s:/admin-key.pem", adminKey),
 		os.Getenv("CONTAINER_NAME"))
 }
 

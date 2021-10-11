@@ -105,7 +105,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 		kconfigfile, err = ioutil.TempFile("", "ginkgo-migrationcontroller")
 		Expect(err).NotTo(HaveOccurred())
 
-		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
+		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
 

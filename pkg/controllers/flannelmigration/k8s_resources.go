@@ -226,7 +226,7 @@ func (p k8spod) RunPodOnNodeTillComplete(k8sClientset *kubernetes.Clientset, nam
 					SecurityContext: &v1.SecurityContext{Privileged: &privileged},
 				},
 			},
-			Tolerations:   []v1.Toleration{{Operator: v1.TolerationOpExists}},  // Tolerate everything
+			Tolerations:   []v1.Toleration{{Operator: v1.TolerationOpExists}}, // Tolerate everything
 			HostNetwork:   hostNetwork,
 			NodeName:      nodeName,
 			RestartPolicy: v1.RestartPolicyNever,
@@ -408,7 +408,8 @@ func (n k8snode) deletePodsForNode(k8sClientset *kubernetes.Clientset, filter fu
 
 func isPodRunningAndReady(pod *v1.Pod) bool {
 	if pod == nil {
-		log.Fatalf("isPodRunningAndReady get a nil pointer")
+		log.Fatalf("isPodRunningAndReady received a nil pointer")
+		return false
 	}
 	if pod.Status.Phase != v1.PodRunning {
 		return false
