@@ -46,6 +46,8 @@ var (
 		&ClusterInformationList{},
 		&NetworkSet{},
 		&NetworkSetList{},
+		&CalicoNodeStatus{},
+		&CalicoNodeStatusList{},
 	}
 )
 

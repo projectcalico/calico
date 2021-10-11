@@ -14,6 +14,8 @@ type Interface interface {
 	BGPConfigurations() BGPConfigurationInformer
 	// BGPPeers returns a BGPPeerInformer.
 	BGPPeers() BGPPeerInformer
+	// CalicoNodeStatuses returns a CalicoNodeStatusInformer.
+	CalicoNodeStatuses() CalicoNodeStatusInformer
 	// ClusterInformations returns a ClusterInformationInformer.
 	ClusterInformations() ClusterInformationInformer
 	// FelixConfigurations returns a FelixConfigurationInformer.
@@ -57,6 +59,11 @@ func (v *version) BGPConfigurations() BGPConfigurationInformer {
 // BGPPeers returns a BGPPeerInformer.
 func (v *version) BGPPeers() BGPPeerInformer {
 	return &bGPPeerInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// CalicoNodeStatuses returns a CalicoNodeStatusInformer.
+func (v *version) CalicoNodeStatuses() CalicoNodeStatusInformer {
+	return &calicoNodeStatusInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterInformations returns a ClusterInformationInformer.
