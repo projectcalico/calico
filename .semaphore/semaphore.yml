@@ -2,7 +2,7 @@ version: v1.0
 name: Typha
 
 execution_time_limit:
-  hours: 2
+  hours: 4
 
 agent:
   machine:
@@ -14,6 +14,14 @@ global_job_config:
   - name: docker-hub
   prologue:
     commands:
+      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+      # how much we churn docker containers during the build.  Disable it.
+      - sudo systemctl stop docker
+      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+      - sudo systemctl start docker
+      # make some room on the disk
+      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - checkout
       # Note that the 'cache restore' commands require that the "Build" block has been run. The "Build" block is what populates
@@ -27,8 +35,14 @@ blocks:
   - name: 'Build'
     dependencies: []
     task:
+      agent:
+        machine:
+          type: e1-standard-4
+          os_image: ubuntu1804
       jobs:
         - name: Build
+          execution_time_limit:
+            minutes: 30
           commands:
             - make build
             - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
@@ -40,6 +54,8 @@ blocks:
     task:
       jobs:
         - name: Run UT
+          execution_time_limit:
+            minutes: 120
           commands:
             - make ci EXCEPT=k8sfv-test
 
@@ -48,6 +64,8 @@ blocks:
     task:
       jobs:
         - name: Run FV
+          execution_time_limit:
+            minutes: 120
           commands:
             - make image
             - cd .. && git clone https://github.com/projectcalico/felix.git && cd felix
@@ -60,6 +78,8 @@ blocks:
         - name: foss-api-key
       jobs:
         - name: Foss Checks
+          execution_time_limit:
+            minutes: 30
           commands:
             - if [ -z "${PULL_REQUEST_NUMBER}" ]; then make foss-checks; fi
 
@@ -78,6 +98,8 @@ blocks:
           - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       jobs:
         - name: Run CD
+          execution_time_limit:
+            minutes: 15
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
@@ -91,6 +113,8 @@ blocks:
         - name: semaphore-api
       jobs:
         - name: Trigger pin updates
+          execution_time_limit:
+            minutes: 5
           commands:
             - checkout
             - make semaphore-run-auto-pin-update-workflows
