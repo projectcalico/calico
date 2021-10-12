@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/typha
-GO_BUILD_VER=v0.57
+GO_BUILD_VER=v0.58
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_TYPHA_PROJECT_ID)
@@ -55,6 +55,9 @@ CGO_ENABLED=1
 else
 CGO_ENABLED=0
 endif
+
+# Add in local static-checks
+LOCAL_CHECKS=check-boring-ssl
 
 include Makefile.common
 
@@ -153,6 +156,11 @@ endif
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage
+
+check-boring-ssl: bin/calico-typha-amd64
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		go tool nm bin/calico-typha-amd64 > bin/tags.txt && grep '_Cfunc__goboringcrypto_' bin/tags.txt 1> /dev/null
+	-rm -f bin/tags.txt
 
 ###############################################################################
 # CI/CD
