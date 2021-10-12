@@ -89,7 +89,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 		}
 
 		// Add endpoint slices.
-		epss, err := cs.DiscoveryV1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
+		epss, err := cs.DiscoveryV1beta1().EndpointSlices("").List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		for _, eps := range epss.Items {
 			// Endpoints slices get updated frequently, so don't include the revision info.
