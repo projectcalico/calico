@@ -25,6 +25,8 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 		return NewHostEndpointStorage(opts)
 	case "projectcalico.org/ippools":
 		return NewIPPoolStorage(opts)
+	case "projectcalico.org/ipreservations":
+		return NewIPReservationStorage(opts)
 	case "projectcalico.org/bgpconfigurations":
 		return NewBGPConfigurationStorage(opts)
 	case "projectcalico.org/bgppeers":

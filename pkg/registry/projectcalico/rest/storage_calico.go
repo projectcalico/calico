@@ -31,6 +31,7 @@ import (
 	calicogpolicy "github.com/projectcalico/apiserver/pkg/registry/projectcalico/globalpolicy"
 	calicohostendpoint "github.com/projectcalico/apiserver/pkg/registry/projectcalico/hostendpoint"
 	calicoippool "github.com/projectcalico/apiserver/pkg/registry/projectcalico/ippool"
+	calicoipreservation "github.com/projectcalico/apiserver/pkg/registry/projectcalico/ipreservation"
 	calicokubecontrollersconfig "github.com/projectcalico/apiserver/pkg/registry/projectcalico/kubecontrollersconfig"
 	calicopolicy "github.com/projectcalico/apiserver/pkg/registry/projectcalico/networkpolicy"
 	caliconetworkset "github.com/projectcalico/apiserver/pkg/registry/projectcalico/networkset"
@@ -184,6 +185,28 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
+	ipReservationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipreservations"))
+	if err != nil {
+		return nil, err
+	}
+	ipReservationSetOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   ipReservationRESTOptions,
+			Capacity:      10,
+			ObjectType:    calicoipreservation.EmptyObject(),
+			ScopeStrategy: calicoipreservation.NewStrategy(scheme),
+			NewListFunc:   calicoipreservation.NewList,
+			GetAttrsFunc:  calicoipreservation.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: ipReservationRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{},
+	)
+
 	bgpConfigurationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("bgpconfigurations"))
 	if err != nil {
 		return nil, err
@@ -323,6 +346,7 @@ func (p RESTStorageProvider) NewV3Storage(
 	storage["networksets"] = rESTInPeace(caliconetworkset.NewREST(scheme, *networksetOpts))
 	storage["hostendpoints"] = rESTInPeace(calicohostendpoint.NewREST(scheme, *hostEndpointOpts))
 	storage["ippools"] = rESTInPeace(calicoippool.NewREST(scheme, *ipPoolSetOpts))
+	storage["ipreservations"] = rESTInPeace(calicoipreservation.NewREST(scheme, *ipReservationSetOpts))
 	storage["bgpconfigurations"] = rESTInPeace(calicobgpconfiguration.NewREST(scheme, *bgpConfigurationOpts))
 	storage["bgppeers"] = rESTInPeace(calicobgppeer.NewREST(scheme, *bgpPeerOpts))
 	storage["profiles"] = rESTInPeace(calicoprofile.NewREST(scheme, *profileOpts))
