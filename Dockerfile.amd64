@@ -30,7 +30,6 @@ ADD licenses/ /licenses
 ADD LICENSE /licenses/
 
 # Include libraries from UBI for dynamic linking.
-COPY --from=base /usr/include /usr/include
 COPY --from=base /lib64 /lib64
 COPY --from=base /lib /lib
 

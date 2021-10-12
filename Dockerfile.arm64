@@ -21,11 +21,6 @@ ADD LICENSE /licenses/
 
 LABEL maintainer "maintainers@projectcalico.org"
 
-# Include libraries from UBI for dynamic linking.
-COPY --from=base /usr/include /usr/include
-COPY --from=base /lib64 /lib64
-COPY --from=base /lib /lib
-
 ADD bin/arm64 /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
