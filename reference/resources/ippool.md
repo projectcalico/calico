@@ -60,7 +60,7 @@ When automatically assigning IP addresses to workloads, only pools with "Workloa
 consulted.  Similarly, when assigning IPs for tunnel devices, only "Tunnel" pools are eligible.
 
 If the `allowedUses` field is not specified, it defaults to `["Workload", "Tunnel"]` for compatibility with older
-versions of Calico.  Hence it is not possible to specify a pool with no allowed used. 
+versions of Calico.  It is not possible to specify a pool with no allowed uses. 
 
 The `allowedUses` field is only consulted for new allocations, changing the field has no effect on previously allocated
 addresses.
