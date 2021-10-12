@@ -18,6 +18,8 @@ DEV_REGISTRIES ?=quay.io docker.io
 endif
 
 BUILD_IMAGES ?=$(NODE_IMAGE)
+LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/node/bin/third-party/libbpf/src
+LIBBPF_PATH=./bin/third-party/libbpf/src
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
@@ -175,6 +177,7 @@ clean:
 	rm -rf filesystem/etc/calico/confd/conf.d filesystem/etc/calico/confd/config filesystem/etc/calico/confd/templates
 	rm -rf config/
 	rm -rf vendor
+	rm -rf bin
 	rm Makefile.common*
 	# Delete images that we built in this repo
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
@@ -197,6 +200,7 @@ remote-deps: mod-download
 	rm -rf config
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
+	rm -rf bin/third-party
 	rm -rf filesystem/usr/lib/calico/bpf/
 	mkdir -p filesystem/usr/lib/calico/bpf/
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
@@ -215,17 +219,31 @@ remote-deps: mod-download
 		cp bin/bpf/bpf-apache/bin/* filesystem/usr/lib/calico/bpf/; \
 		chmod -R +w filesystem/etc/calico/confd/ config/ filesystem/usr/lib/calico/bpf/'
 
+$(LIBBPF_PATH)/libbpf.a: go.mod
+	$(MAKE) mod-download
+	mkdir -p bin/third-party
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+		$(GIT_CONFIG_SSH) \
+		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl/include/libbpf bin/third-party; \
+		chmod -R +w bin/third-party; \
+		make -j 16 -C $(LIBBPF_PATH) BUILD_STATIC_ONLY=1'
+
 # We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
 # Currently CGO can be enbaled in ARM64 and AMD64 builds.
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
+CGO_LDFLAGS="-L$(LIBBPF_DOCKER_PATH) -lbpf -lelf -lz"
+CGO_CFLAGS="-I$(LIBBPF_DOCKER_PATH)"
 else
 CGO_ENABLED=0
+CGO_LDFLAGS=""
+CGO_CFLAGS=""
 endif
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): $(LOCAL_BUILD_DEP) $(SRC_FILES) go.mod
+$(NODE_CONTAINER_BINARY): $(LIBBPF_PATH)/libbpf.a $(LOCAL_BUILD_DEP) $(SRC_FILES) go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
