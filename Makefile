@@ -75,14 +75,14 @@ RELEASE_IMAGES?=
 
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube-$(BUILDARCH):$(K8S_VERSION)
-FV_TYPHAIMAGE?=calico/typha:master-$(BUILDARCH)
+FV_TYPHAIMAGE?=calico/typha:release-v3.17-$(BUILDARCH)
 FV_FELIXIMAGE?=$(BUILD_IMAGE)-test:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
 	FV_ETCDIMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
 	FV_K8SIMAGE=gcr.io/google_containers/hyperkube:$(K8S_VERSION)
-	FV_TYPHAIMAGE=calico/typha:master
+	FV_TYPHAIMAGE=calico/typha:release-v3.17
 endif
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
