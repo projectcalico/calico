@@ -63,6 +63,11 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		aapi := &aapi.IPPool{}
 		IPPoolConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
+	case *api.IPReservation:
+		lcg := libcalicoObject.(*api.IPReservation)
+		aapi := &aapi.IPReservation{}
+		IPReservationConverter{}.convertToAAPI(lcg, aapi)
+		return aapi
 	case *api.BGPConfiguration:
 		lcg := libcalicoObject.(*api.BGPConfiguration)
 		aapi := &aapi.BGPConfiguration{}

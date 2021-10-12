@@ -646,6 +646,75 @@ func testIPPoolClient(client calicoclient.Interface, name string) error {
 	return nil
 }
 
+// TestIPReservationClient exercises the IPReservation client.
+func TestIPReservationClient(t *testing.T) {
+	const name = "test-ipreservation"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.IPReservation{}
+			})
+			defer shutdownServer()
+			if err := testIPReservationClient(client, name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-ipreservation test failed")
+	}
+}
+
+func testIPReservationClient(client calicoclient.Interface, name string) error {
+	ipreservationClient := client.ProjectcalicoV3().IPReservations()
+	ipreservation := &v3.IPReservation{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v3.IPReservationSpec{
+			ReservedCIDRs: []string{"192.168.0.0/16"},
+		},
+	}
+	ctx := context.Background()
+
+	// start from scratch
+	ipreservations, err := ipreservationClient.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error listing ipreservations (%s)", err)
+	}
+	if ipreservations.Items == nil {
+		return fmt.Errorf("items field should not be set to nil")
+	}
+
+	ipreservationServer, err := ipreservationClient.Create(ctx, ipreservation, metav1.CreateOptions{})
+	if nil != err {
+		return fmt.Errorf("error creating the ipreservation '%v' (%v)", ipreservation, err)
+	}
+	if name != ipreservationServer.Name {
+		return fmt.Errorf("didn't get the same ipreservation back from the server \n%+v\n%+v", ipreservation, ipreservationServer)
+	}
+
+	ipreservations, err = ipreservationClient.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error listing ipreservations (%s)", err)
+	}
+
+	ipreservationServer, err = ipreservationClient.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting ipreservation %s (%s)", name, err)
+	}
+	if name != ipreservationServer.Name &&
+		ipreservation.ResourceVersion == ipreservationServer.ResourceVersion {
+		return fmt.Errorf("didn't get the same ipreservation back from the server \n%+v\n%+v", ipreservation, ipreservationServer)
+	}
+
+	err = ipreservationClient.Delete(ctx, name, metav1.DeleteOptions{})
+	if nil != err {
+		return fmt.Errorf("ipreservation should be deleted (%s)", err)
+	}
+
+	return nil
+}
+
 // TestBGPConfigurationClient exercises the BGPConfiguration client.
 func TestBGPConfigurationClient(t *testing.T) {
 	const name = "test-bgpconfig"
