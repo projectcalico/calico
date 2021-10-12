@@ -20,3 +20,16 @@ version.
 {%- endif %}
 {%- endfor %}
 {% endif %}
+<div id="release-list" class="hidden" markdown="0">
+    <li><a href="/">{% if site.data.versions.first.title == "master" %}nightly{% else %}{{site.data.versions.first.title | regex_replace: site.version_pattern,"Version \1"}}{% endif %}<span class="badge release-badge latest">latest</span></a></li>
+    <li role="separator" class="divider"></li>
+    <li><a href="/master">nightly<span class="badge release-badge nightly">master</span></a></li>
+    {%- for version in site.data.archives %}
+        {%- if version.first %}
+        {% continue %}
+        {%- else %}
+        <li><a href="/{{ version }}">Version {{ version | replace: "v", ""  }}</a></li>
+        {%- endif %}
+    {%- endfor %}
+    <li><a href="/releases">Earlier versions</a></li>
+</div>
