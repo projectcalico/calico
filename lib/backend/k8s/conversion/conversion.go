@@ -209,6 +209,9 @@ func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 	} else if ip := pod.Annotations[AnnotationPodIP]; ip != "" {
 		log.WithField("ip", ip).Debug("No PodStatus IPs, use Calico singular annotation")
 		podIPs = append(podIPs, ip)
+	} else if ips := pod.Annotations[AnnotationAWSPodIPs]; ips != "" {
+		log.WithField("ip", ip).Debug("No PodStatus IPs, use AWS VPC annotation")
+		podIPs = append(podIPs, ip)
 	} else {
 		log.Debug("Pod has no IP")
 		return nil, nil

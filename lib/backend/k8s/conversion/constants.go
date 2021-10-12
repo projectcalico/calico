@@ -29,8 +29,13 @@ const (
 	// We set this annotation to the empty string when the WEP is deleted by the CNI plugin.
 	// That signals that the IP no longer belongs to this pod.
 	AnnotationPodIP = "cni.projectcalico.org/podIP"
+
 	// AnnotationPodIPs is similar for the plural PodIPs field.
 	AnnotationPodIPs = "cni.projectcalico.org/podIPs"
+
+	// AnnotationPodIPs is the annotation set by the Amazon VPC CNI plugin.
+	AnnotationAWSPodIPs = "vpc.amazonaws.com/pod-ips"
+
 	// AnnotationContainerID stores the container ID of the pod.  This allows us to disambiguate different pods
 	// that have the same name and namespace.  For example, stateful set pod that is restarted.  May be missing
 	// on older Pods.
