@@ -53,6 +53,7 @@ func ResourceWithStatus(kind, namespace, name string, spec, status interface{}, 
 
 // Another name for the same matcher (which reads better when checking a single item).
 var MatchResource = Resource
+var MatchResourceWithStatus = ResourceWithStatus
 
 func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
 	// 'actual' here may be a resource struct like v3.HostEndpoint, or a pointer to a resource
@@ -72,7 +73,7 @@ func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
 		(res.GetObjectKind().GroupVersionKind().Kind == m.kind) &&
 		(res.GetObjectKind().GroupVersionKind().Group == apiv3.Group) &&
 		(res.GetObjectKind().GroupVersionKind().Version == apiv3.VersionCurrent) &&
-		reflect.DeepEqual(getSpec(res), m.spec) &&
+		(m.spec == nil || reflect.DeepEqual(getSpec(res), m.spec)) &&
 		(m.status == nil || reflect.DeepEqual(getStatus(res), m.status))
 	return
 }
@@ -291,11 +292,12 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		Expect(actualEvent.Type).To(Equal(expectedEvent.Type), traceString)
 		if expectedEvent.Object != nil {
 			Expect(actualEvent.Object).NotTo(BeNil(), traceString)
-			Expect(actualEvent.Object).To(MatchResource(
+			Expect(actualEvent.Object).To(MatchResourceWithStatus(
 				kind,
 				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
 				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 				getSpec(expectedEvent.Object),
+				getStatus(expectedEvent.Object),
 				traceString,
 			))
 		} else {
@@ -306,11 +308,12 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		// check for that if the datastore is KDD.
 		if expectedEvent.Previous != nil && (expectedEvent.Type == watch.Deleted || t.datastoreType != apiconfig.Kubernetes) {
 			Expect(actualEvent.Previous).NotTo(BeNil(), traceString)
-			Expect(actualEvent.Previous).To(MatchResource(
+			Expect(actualEvent.Previous).To(MatchResourceWithStatus(
 				kind,
 				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
 				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 				getSpec(expectedEvent.Previous),
+				getStatus(expectedEvent.Previous),
 				traceString,
 			))
 		} else {
@@ -357,6 +360,9 @@ func getSpec(res runtime.Object) interface{} {
 	Expect(err).NotTo(HaveOccurred())
 
 	spec := v.FieldByName("Spec")
+	if !spec.IsValid() {
+		return nil
+	}
 	return spec.Interface()
 }
 
@@ -366,5 +372,8 @@ func getStatus(res runtime.Object) interface{} {
 	Expect(err).NotTo(HaveOccurred())
 
 	status := v.FieldByName("Status")
+	if !status.IsValid() {
+		return nil
+	}
 	return status.Interface()
 }

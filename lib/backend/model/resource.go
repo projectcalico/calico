@@ -130,6 +130,11 @@ func init() {
 		reflect.TypeOf(libapiv3.Node{}),
 	)
 	registerResourceInfo(
+		apiv3.KindCalicoNodeStatus,
+		"caliconodestatuses",
+		reflect.TypeOf(apiv3.CalicoNodeStatus{}),
+	)
+	registerResourceInfo(
 		apiv3.KindProfile,
 		"profiles",
 		reflect.TypeOf(apiv3.Profile{}),

@@ -54,6 +54,8 @@ type Interface interface {
 	// KubeControllersConfiguration returns an interface for managing the
 	// KubeControllersConfiguration resource.
 	KubeControllersConfiguration() KubeControllersConfigurationInterface
+	// CalicoNodeStatus returns an interface for managing CalicoNodeStatus resources.
+	CalicoNodeStatus() CalicoNodeStatusInterface
 
 	// EnsureInitialized is used to ensure the backend datastore is correctly
 	// initialized for use by Calico.  This method may be called multiple times, and
