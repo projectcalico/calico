@@ -24,8 +24,13 @@
         $(document).ready(function () {
             initializeInstantSearch(currentDocVersion, poweredBySelector, searchInputSelector, searchResultsSelector,
                 searchPaginationSelector);
-            initializePopover(searchContentSelector, searchInputSelector);
-            hidePopoversOnClickOutside();
+            $('.search-input-container').append('<input type="button" class="btn btn-default search-modal-close" data-dismiss="modal" value="Close"/>')
+            $(".ais-SearchBox-input").on("input",function() {
+                $('#mainpage-searchbox').val($(".ais-SearchBox-input").val())
+            });
+            $('#SearchModal').on('shown.bs.modal', function () {
+                $('.ais-SearchBox-input').focus();
+            });
         });
     };
 
@@ -47,7 +52,7 @@
         }));
         search.addWidget(instantsearch.widgets.searchBox({
             container: inputSelector,
-            placeholder: 'Search in the documentation',
+            placeholder: 'Search',
             autofocus: false,
             poweredBy: true
         }));
@@ -110,34 +115,6 @@
             scrollTo: false
         }));
         search.start();
-    }
-
-    function initializePopover(searchContentSelector, searchInputSelector) {
-        var content = $(searchContentSelector).children();
-        $(searchInputSelector).popover({
-            html: true,
-            placement: 'bottom',
-            trigger: 'manual',
-            viewport: { selector: ".container-fluid", padding: 10 },
-            content: function () {
-                return content;
-            }
-        });
-    }
-
-    function hidePopoversOnClickOutside() {
-        $("[data-toggle='popover']").popover({trigger: "click"}).click(function (event) {
-            $("[data-toggle='popover']").popover('show');
-            event.stopPropagation();
-        }).on('inserted.bs.popover', function () {
-            $(".popover").click(function (event) {
-                event.stopPropagation();
-            })
-        })
-        
-        $(document).click(function () {
-            $("[data-toggle='popover']").popover('hide');
-        })
     }
 
     function renderHits(renderOptions) {
