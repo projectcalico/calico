@@ -74,6 +74,7 @@ rules:
       - globalnetworkpolicies
       - globalnetworksets
       - ippools
+      - ipreservations
       - kubecontrollersconfigurations
       - networkpolicies
       - networksets
