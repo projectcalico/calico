@@ -173,6 +173,7 @@ rules:
   - felixconfigurations
   - kubecontrollersconfigurations
   - ippools
+  - ipreservations
   - ipamblocks
   - blockaffinities
   verbs:
