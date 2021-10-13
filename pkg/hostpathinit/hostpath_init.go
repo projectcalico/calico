@@ -37,7 +37,7 @@ func Run() {
 	}
 
 	// Create the calico directory in /var/lib/
-	err = os.Mkdir("/var/lib/calico/", 0700)
+	err = os.MkdirAll("/var/lib/calico/", 0700)
 	if err != nil {
 		log.Panic("Unable to create directory /var/lib/calico/")
 	}
@@ -49,7 +49,7 @@ func Run() {
 	}
 
 	// Create the calico directory in /var/run/
-	err = os.Mkdir("/var/run/calico/", 0700)
+	err = os.MkdirAll("/var/run/calico/", 0700)
 	if err != nil {
 		log.Panic("Unable to create directory /var/run/calico/")
 	}
