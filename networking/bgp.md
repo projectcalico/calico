@@ -137,7 +137,7 @@ spec:
 
 #### Disable the default BGP node-to-node mesh
 
-The default **node-to-node BGP mesh** must be turned off to enable other BGP topologies. To do this, modify the default **BGP configuration** resource.
+The default **node-to-node BGP mesh** may be turned off to enable other BGP topologies. To do this, modify the default **BGP configuration** resource.
 
 Run the following command to disable the BGP full-mesh:
 
@@ -164,11 +164,11 @@ Follow these steps to do so:
 
 1. [Provision new nodes to be route reflectors.](#configure-a-node-to-act-as-a-route-reflector) They should have `routeReflectorClusterID` in their spec. These won't be part of the existing
 node-to-node BGP mesh, and will be the route reflectors when the mesh is disabled. These nodes should also have a label like
-`route-reflector` in order to select them for the BGP peerings. Optionally, you can run `kubectl drain` on existing nodes in your cluster,
-but this will cause a network disruption on the workloads on those nodes as they are drained.
+`route-reflector` in order to select them for the BGP peerings. Alternatively, you can run `kubectl drain` on existing nodes in your cluster,
+but this will cause a disruption on the workloads on those nodes as they are drained. Also set up a BGPPeer spec to configure route
+reflector nodes to peer with each other and other non-route-reflector nodes using label selectors.
 
-2. [Set up a BGPPeer spec](#configure-a-node-to-act-as-a-route-reflector) to configure route reflector nodes to peer with each other and other non-route-reflector nodes using label selectors.
-Wait for these peerings to be established. This can be [verified](#view-bgp-peering-status-for-a-node) with `sudo calicoctl node status`.
+2. Wait for these peerings to be established. This can be [verified](#view-bgp-peering-status-for-a-node) by running `sudo calicoctl node status` on the nodes.
 
 3. [Disable the BGP node-to-node mesh.](#disable-the-default-bgp-node-to-node-mesh)
 
