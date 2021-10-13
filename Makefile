@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/kube-controllers
-GO_BUILD_VER=v0.57
+GO_BUILD_VER=v0.58
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_KUBE_CONTROLLERS_PROJECT_ID)
@@ -23,6 +23,9 @@ $(LOCAL_BUILD_DEP):
 	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
 		-replace=github.com/projectcalico/felix=../felix
 endif
+
+# Add in local static-checks
+LOCAL_CHECKS=check-boring-ssl
 
 ###############################################################################
 # Download and include Makefile.common
@@ -48,6 +51,13 @@ ifeq ($(BUILDARCH),amd64)
 endif
 
 SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
+
+# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
+CGO_ENABLED=1
+else
+CGO_ENABLED=0
+endif
 
 ###############################################################################
 
@@ -80,11 +90,13 @@ sub-build-%:
 
 bin/kube-controllers-linux-$(ARCH): $(LOCAL_BUILD_DEP) $(SRC_FILES)
 	$(DOCKER_RUN) \
+	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/
 
 bin/check-status-linux-$(ARCH): $(LOCAL_BUILD_DEP) $(SRC_FILES)
 	$(DOCKER_RUN) \
+	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) go build -v -o bin/check-status-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/check-status/
 
@@ -126,6 +138,11 @@ remote-deps: mod-download
 # Make sure that a copyright statement exists on all go files.
 check-copyright:
 	./check-copyrights.sh
+
+check-boring-ssl: bin/kube-controllers-linux-amd64
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		go tool nm bin/kube-controllers-linux-amd64 > bin/tags.txt && grep '_Cfunc__goboringcrypto_' bin/tags.txt 1> /dev/null
+	-rm -f bin/tags.txt
 
 ###############################################################################
 # Tests
