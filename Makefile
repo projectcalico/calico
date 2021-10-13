@@ -1,8 +1,8 @@
 PACKAGE_NAME    ?= github.com/projectcalico/apiserver
-GO_BUILD_VER    ?= v0.57
+GO_BUILD_VER    ?= v0.58
 GOMOD_VENDOR    := false
 GIT_USE_SSH      = true
-LOCAL_CHECKS     = lint-cache-dir goimports check-copyright
+LOCAL_CHECKS     = lint-cache-dir goimports check-copyright check-boring-ssl
 # Used by Makefile.common
 LIBCALICO_REPO   = github.com/projectcalico/libcalico-go
 # Used only when doing local build
@@ -64,7 +64,7 @@ VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERS
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION)
 
 BUILD_LDFLAGS = -ldflags "$(VERSION_FLAGS)"
-RELEASE_LDFLAGS = -ldflags "$(VERSION_FLAGS) -s -w"
+RELEASE_LDFLAGS = -ldflags "$(VERSION_FLAGS) -w"
 KUBECONFIG_DIR? = /etc/kubernetes/admin.conf
 
 ##############################################################################
@@ -83,6 +83,13 @@ Makefile.common.$(MAKE_BRANCH):
 	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
 include Makefile.common
+
+# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
+CGO_ENABLED=1
+else
+CGO_ENABLED=0
+endif
 
 ###############################################################################
 # Managing the upstream library pins
@@ -136,11 +143,8 @@ else
 endif
 	@echo Building k8sapiserver...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/apiserver" && \
-		( ldd $(BINDIR)/apiserver 2>&1 | \
-	        grep -q -e "Not a valid dynamic program" -e "not a dynamic executable" || \
-		( echo "Error: $(BINDIR)/apiserver was not statically linked"; false ) )'
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/apiserver'
 
 $(BINDIR)/filecheck: $(K8SAPISERVER_GO_FILES)
 ifndef RELEASE_BUILD
@@ -149,11 +153,8 @@ else
 	$(eval LDFLAGS:=$(BUILD_LDFLAGS))
 endif
 	@echo Building filecheck...
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/filecheck" && \
-		( ldd $(BINDIR)/filecheck 2>&1 | \
-	        grep -q -e "Not a valid dynamic program" -e "not a dynamic executable" || \
-		( echo "Error: $(BINDIR)/filecheck was not statically linked"; false ) )'
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/filecheck'
 
 ###############################################################################
 # Building the image
@@ -187,6 +188,11 @@ calico/apiserver: $(BINDIR)/apiserver $(BINDIR)/filecheck
 .PHONY: lint-cache-dir
 lint-cache-dir:
 	mkdir -p $(CURDIR)/.lint-cache
+
+check-boring-ssl: $(BINDIR)/apiserver
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		go tool nm $(BINDIR)/apiserver > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
+	-rm -f $(BINDIR)/tags.txt
 
 .PHONY: ut 
 ut: lint-cache-dir run-etcd

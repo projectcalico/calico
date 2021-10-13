@@ -10,6 +10,9 @@ RUN mkdir /tmp
 FROM scratch
 COPY  --from=ubi /code /code
 COPY  --from=ubi /tmp /tmp
+COPY  --from=ubi /lib /lib
+COPY  --from=ubi /lib64 /lib64
+
 ADD  bin/apiserver /code
 ADD  bin/filecheck /code
 
