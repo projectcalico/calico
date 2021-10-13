@@ -274,21 +274,28 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					if err != nil {
 						return err
 					}
-					wgPubKeyOrig = node.Status.WireguardPublicKey
-					if wgPubKeyOrig == "" {
+					if node.Status.WireguardPublicKey == "" {
 						return errors.New("node.Status.WireguardPublicKey not set yet")
+					} else if wgPubKeyOrig == "" {
+						// Seeing the original public key for the first time.
+						wgPubKeyOrig = node.Status.WireguardPublicKey
 					}
+
+					// overwrite public-key by fake but valid Wireguard key.
+					node.Status.WireguardPublicKey = fakeWireguardPubKey
+					_, err = client.Nodes().Update(context.Background(), node, options.SetOptions{})
+					if err != nil {
+						return err
+					}
+
 					return nil
 				}, "5s", "300ms").ShouldNot(HaveOccurred())
 
-				// overwrite public-key by fake but valid Wireguard key.
-				node.Status.WireguardPublicKey = fakeWireguardPubKey
-				_, err = client.Nodes().Update(context.Background(), node, options.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
 				Eventually(func() string {
 					node, err = client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
-					Expect(err).NotTo(HaveOccurred())
+					if err != nil {
+						return "ERROR: " + err.Error()
+					}
 					return node.Status.WireguardPublicKey
 				}, "5s", "100ms").Should(Equal(wgPubKeyOrig))
 			}
