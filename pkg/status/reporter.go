@@ -16,6 +16,7 @@ package status
 
 import (
 	"context"
+	"math"
 	"reflect"
 	"time"
 
@@ -85,6 +86,8 @@ func newReporter(name string,
 		ch:         make(chan *apiv3.CalicoNodeStatus, 10),
 		status:     request,
 		populators: populators,
+		ticker:     time.NewTicker(time.Duration(math.MaxUint32) * time.Second),
+		interval:   math.MaxUint32,
 		done:       make(chan struct{}),
 		term:       make(chan struct{}),
 		logCtx:     log.WithField("object", name),
