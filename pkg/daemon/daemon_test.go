@@ -135,7 +135,7 @@ var _ = Describe("Daemon", func() {
 
 			It("should create the server components", func() {
 				d.CreateServer()
-				Expect(d.SyncerPipelines).To(HaveLen(3))
+				Expect(d.SyncerPipelines).To(HaveLen(4))
 				for _, p := range d.SyncerPipelines {
 					Expect(p.SyncerToValidator).ToNot(BeNil())
 					Expect(p.Syncer).ToNot(BeNil())
@@ -148,6 +148,7 @@ var _ = Describe("Daemon", func() {
 				Expect(datastore.bgpSyncerCalled).To(BeTrue())
 				Expect(datastore.felixSyncerCalled).To(BeTrue())
 				Expect(datastore.allocateTunnelIpSyncerCalled).To(BeTrue())
+				Expect(datastore.nodestatusSyncerCalled).To(BeTrue())
 			})
 
 			It("should start a working server", func() {
@@ -240,6 +241,7 @@ type mockDatastore struct {
 	allocateTunnelIpSyncerCalled bool
 	bgpSyncerCalled              bool
 	felixSyncerCalled            bool
+	nodestatusSyncerCalled       bool
 	initCalled                   int
 	failInit                     bool
 }
@@ -262,6 +264,13 @@ func (b *mockDatastore) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Sy
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	b.bgpSyncerCalled = true
+	return &dummySyncer{}
+}
+
+func (b *mockDatastore) NodeStatusSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.nodestatusSyncerCalled = true
 	return &dummySyncer{}
 }
 
@@ -347,6 +356,11 @@ func (b *mockDatastore) NetworkSets() clientv3.NetworkSetInterface {
 
 // KubeControllersConfiguration returns an interface for managing the kubecontrollers configuration resources.
 func (b *mockDatastore) KubeControllersConfiguration() clientv3.KubeControllersConfigurationInterface {
+	panic("not implemented")
+}
+
+// CalicoNodeStatus returns an interface for managing the Calico node status resources.
+func (b *mockDatastore) CalicoNodeStatus() clientv3.CalicoNodeStatusInterface {
 	panic("not implemented")
 }
 
