@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.57
+GO_BUILD_VER=v0.58
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
@@ -48,6 +48,9 @@ $(LOCAL_BUILD_DEP):
 	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
 endif
 
+# Add in local static-checks
+LOCAL_CHECKS=check-boring-ssl
+
 include Makefile.common
 
 ###############################################################################
@@ -67,6 +70,13 @@ ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 # If building on amd64 omit the arch in the container name.
 ifeq ($(BUILDARCH),amd64)
 	ETCD_CONTAINER=quay.io/coreos/etcd:$(ETCD_VERSION)
+endif
+
+# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
+CGO_ENABLED=1
+else
+CGO_ENABLED=0
 endif
 
 .PHONY: clean
@@ -113,8 +123,9 @@ sub-build-%:
 $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
 	-mkdir -p $(BIN)
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -w" $(PACKAGE_NAME)/cmd/calico && \
+		go tool nm $(BIN)/install > $(BIN)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BIN)/tags.txt 1> /dev/null
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(LOCAL_BUILD_DEP) $(SRC_FILES)
@@ -163,6 +174,11 @@ $(BIN)/flannel:
 ut: run-k8s-controller $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
+
+check-boring-ssl: $(BIN)/install
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		go tool nm $(BIN)/install > $(BIN)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BIN)/tags.txt 1> /dev/null
+	-rm -f $(BIN)/tags.txt
 
 $(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
 	cp "$<" "$@"
