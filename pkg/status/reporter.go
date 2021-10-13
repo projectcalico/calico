@@ -222,7 +222,7 @@ func (r *reporter) reportStatus() error {
 	var updatedResource *apiv3.CalicoNodeStatus
 	// Update resource
 	for i := 0; i < 3; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		status.Status.LastUpdated = metav1.Time{Time: time.Now()}
 		updatedResource, err = r.client.CalicoNodeStatus().Update(ctx, &status, options.SetOptions{})
@@ -233,13 +233,23 @@ func (r *reporter) reportStatus() error {
 				// Just return and wait for syncer update to go through.
 				return nil
 			}
+
 			log.WithError(err).Warnf("Failed to update node status resource; will retry")
+
+			// If we hit an error but update interval is small,
+			// we don't need to retry here since the reporter will
+			// try to update the resource again anyway.
+			if r.interval <= 30 {
+				return err
+			}
+
+			// Retry within this loop
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
 		// Success!
-		r.logCtx.Info("Latest status updated")
+		r.logCtx.Debug("Latest status updated")
 		r.status = updatedResource
 		return nil
 	}

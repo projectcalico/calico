@@ -3,7 +3,6 @@ module github.com/projectcalico/node
 go 1.15
 
 require (
-	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/onsi/ginkgo v1.14.1
@@ -13,12 +12,11 @@ require (
 	github.com/projectcalico/cni-plugin v1.11.1-0.20211005140845-210477e44941
 	github.com/projectcalico/felix v0.0.0-20211007135718-64f16d9ab9f0
 	github.com/projectcalico/libcalico-go v1.7.2-0.20211012171813-c1a137c5065e
-	github.com/projectcalico/typha v0.7.3-0.20211005131105-524c8635da7f
-	github.com/shirou/gopsutil v3.21.9+incompatible
+	github.com/projectcalico/typha v0.7.3-0.20211013083525-4227e77dd895
 	github.com/sirupsen/logrus v1.7.0
-	github.com/tklauser/go-sysconf v0.3.9 // indirect
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sys v0.0.0-20210816074244-15123e1e1f71 // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
 	k8s.io/api v0.22.0
 	k8s.io/apimachinery v0.22.0
@@ -29,8 +27,6 @@ require (
 replace (
 	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
 	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20211008154454-16ae5d51f22f
-
-	github.com/projectcalico/typha => github.com/song-jiang/typha v0.4.1-0.20211012102830-b587ceb81359
 
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 

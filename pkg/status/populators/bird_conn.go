@@ -46,7 +46,7 @@ func getBirdConn(ipv IPFamily) (*birdConn, error) {
 	if err != nil {
 		// If that fails, try connecting to bird socket in `/var/run/bird` (which is the
 		// default socket location for bird install) for non-containerized installs
-		log.Debugln("Failed to connect to BIRD socket in /var/run/calic, trying /var/run/bird")
+		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
 		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
 		if err != nil {
 			return nil, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)

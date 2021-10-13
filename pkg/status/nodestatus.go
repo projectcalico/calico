@@ -40,10 +40,6 @@ import (
 	"github.com/projectcalico/node/pkg/calicoclient"
 )
 
-const (
-	DefaultIntervalInSeconds = 10
-)
-
 // This file contains the main processing and common logic for node status reporter.
 
 // Run runs the node status reporter.
@@ -260,10 +256,6 @@ func (r *nodeStatusReporter) onUpdates(updates []bapi.Update) {
 // processPendingUpdates processes pending updates in main loop.
 // It is called when we are in-sync.
 func (r *nodeStatusReporter) processPendingUpdates() {
-	if len(r.pendingUpdates) == 0 {
-		return
-	}
-
 	for name, data := range r.pendingUpdates {
 		if data == nil {
 			// we have a deletion of the resource.
