@@ -50,7 +50,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	cmd := exec.Command("bpftool", "-j", "-p", "cgroup", "show", cgroupPath)
 	log.WithField("args", cmd.Args).Info("Running bpftool to look up programs attached to cgroup")
 	out, err := cmd.Output()
-	if err != nil {
+	if err != nil || strings.TrimSpace(string(out)) == "" {
 		log.WithError(err).WithField("output", string(out)).Info(
 			"Failed to list BPF programs.  Assuming not supported/nothing to clean up.")
 		return err
