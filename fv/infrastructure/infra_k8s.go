@@ -1009,7 +1009,7 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 				continue
 			}
 			err := endpointsInterface.Delete(context.Background(), ep.Name, metav1.DeleteOptions{})
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "not found") {
 				panic(err)
 			}
 		}
