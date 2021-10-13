@@ -14,7 +14,7 @@
 
 ARG GIT_VERSION=unknown
 
-FROM alpine as build
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as build
 RUN mkdir -p /tmp/dikastes
 RUN chmod 0777 /tmp/dikastes
 
@@ -35,6 +35,11 @@ LABEL name="Calico Dikastes" \
 COPY --from=build /licenses /licenses
 ADD bin/dikastes-amd64 /dikastes
 ADD bin/healthz-amd64 /healthz
+
+# Include libraries from UBI for dynamic linking.
+COPY --from=base /lib64 /lib64
+COPY --from=base /lib /lib
+
 # Typical Linux systems start numbering human users at 1000, reserving 1-999
 # for services, so we pick 999 to be least likely to overlap.  It's not a big
 # deal if we happen to overlap, as it would take a container escape for
