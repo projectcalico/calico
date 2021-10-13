@@ -52,20 +52,11 @@ func Run() {
 	// Load the client config from environment.
 	cfg, c := calicoclient.CreateClient()
 
-	// This is running as a daemon. Create a long-running nodeStatusReporter.
-	r := &nodeStatusReporter{
-		nodename:       nodename,
-		cfg:            cfg,
-		client:         c,
-		syncerC:        make(chan interface{}, 1),
-		reporter:       make(map[string]*reporter),
-		pendingUpdates: make(map[string]*apiv3.CalicoNodeStatus),
-		populators:     GetPopulators(),
-		done:           make(chan struct{}),
-	}
+	// This is running as a daemon. Create a long-running NodeStatusReporter.
+	r := NewNodeStatusReporter(nodename, cfg, c, GetPopulators())
 
 	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
-	// nodeStatusReporter to trigger updates when necessary.
+	// NodeStatusReporter to trigger updates when necessary.
 
 	// Read Typha settings from the environment.
 	// When Typha is in use, there will already be variables prefixed with FELIX_, so it's
@@ -84,17 +75,17 @@ func Run() {
 		syncer.Start()
 	}
 
-	// Run the nodeStatusReporter.
-	r.run()
+	// Run the NodeStatusReporter.
+	r.Run()
 }
 
 // Map IPFamily to a map from each class to a populator.
 // Currently all the reporters would have the same populator for each class but
 // it can be extended in the future.
-type populatorRegistry map[populator.IPFamily]map[apiv3.NodeStatusClassType]populator.Interface
+type PopulatorRegistry map[populator.IPFamily]map[apiv3.NodeStatusClassType]populator.Interface
 
-// getPopulators get current populatorRegistry.
-func GetPopulators() populatorRegistry {
+// getPopulators get current PopulatorRegistry.
+func GetPopulators() PopulatorRegistry {
 	// Get all the populator.Interface
 	populators := make(map[populator.IPFamily]map[apiv3.NodeStatusClassType]populator.Interface)
 
@@ -124,8 +115,8 @@ func Show() {
 	}
 }
 
-// nodeStatusReporter watches node status resource and creates/maintains reporter for each request.
-type nodeStatusReporter struct {
+// NodeStatusReporter watches node status resource and creates/maintains reporter for each request.
+type NodeStatusReporter struct {
 	// Node name.
 	nodename string
 
@@ -146,7 +137,7 @@ type nodeStatusReporter struct {
 	reporter map[string]*reporter
 
 	// Map IPFamily to a map from each class to a populator.
-	populators populatorRegistry
+	populators PopulatorRegistry
 
 	// Channel to indicate node status reporter routine is not needed anymore.
 	done chan struct{}
@@ -155,7 +146,41 @@ type nodeStatusReporter struct {
 	inSync bool
 }
 
-// run is the main reconciliation loop, it loops until done.
+// NewNodeStatusReporter creates a node status reporter.
+func NewNodeStatusReporter(node string,
+	cfg *apiconfig.CalicoAPIConfig,
+	client client.Interface,
+	populators PopulatorRegistry) *NodeStatusReporter {
+	return &NodeStatusReporter{
+		nodename:       node,
+		cfg:            cfg,
+		client:         client,
+		syncerC:        make(chan interface{}, 1),
+		reporter:       make(map[string]*reporter),
+		pendingUpdates: make(map[string]*apiv3.CalicoNodeStatus),
+		populators:     populators,
+		done:           make(chan struct{}),
+	}
+}
+
+// Return number of current reporters.
+func (r *NodeStatusReporter) GetNumberOfReporters() int {
+	return len(r.reporter)
+}
+
+// cleanup releases current reporters.
+func (r *NodeStatusReporter) cleanup() {
+	for name, reporter := range r.reporter {
+		reporter.KillAndWait()
+		delete(r.reporter, name)
+	}
+}
+
+func (r *NodeStatusReporter) Stop() {
+	r.done <- struct{}{}
+}
+
+// Run is the main reconciliation loop, it loops until done.
 // Here the logic for handling syncer updates is
 // - If we get a value update, cache it to pendingUpdates.
 // - If we get a inSync message, set inSync to true.
@@ -163,7 +188,7 @@ type nodeStatusReporter struct {
 //   getting a non-in sync status after an in-sync isn't important here, there's no real impact.
 //   It'd just mean that we've got slightly old data.
 // - After handling syncer event, process pendingUpdates if we are in-sync.
-func (r *nodeStatusReporter) run() {
+func (r *NodeStatusReporter) Run() {
 	// Loop forever, updating whenever we get a kick. The first kick will happen as soon as the syncer is in sync.
 	for {
 		select {
@@ -179,6 +204,7 @@ func (r *nodeStatusReporter) run() {
 				log.Panicf("Unknown type %T in syncer channel", event)
 			}
 		case <-r.done:
+			r.cleanup()
 			return
 		}
 
@@ -189,19 +215,19 @@ func (r *nodeStatusReporter) run() {
 }
 
 // OnUpdated handles the syncer update callback method.
-func (r *nodeStatusReporter) OnUpdates(updates []bapi.Update) {
+func (r *NodeStatusReporter) OnUpdates(updates []bapi.Update) {
 	r.syncerC <- updates
 }
 
 // OnStatusUpdated handles the syncer status callback method.
-func (r *nodeStatusReporter) OnStatusUpdated(status bapi.SyncStatus) {
+func (r *NodeStatusReporter) OnStatusUpdated(status bapi.SyncStatus) {
 	if status == bapi.InSync {
 		r.syncerC <- status
 	}
 }
 
 // onUpdates caches the syncer resource updates in main loop.
-func (r *nodeStatusReporter) onUpdates(updates []bapi.Update) {
+func (r *NodeStatusReporter) onUpdates(updates []bapi.Update) {
 	for _, u := range updates {
 		var name string
 		// Get resource name from the key.
@@ -226,7 +252,7 @@ func (r *nodeStatusReporter) onUpdates(updates []bapi.Update) {
 					log.Errorf("UpdatePeriodSeconds not set for node status resource: %s", u.Key)
 					continue
 				}
-				log.Infof("Updated node status resource: %s", u.Key)
+				log.Debugf("Updated node status resource: %s", u.Key)
 				r.pendingUpdates[name] = v
 			default:
 				log.Warningf("Unexpected resource update: %s", u.Key)
@@ -245,7 +271,7 @@ func (r *nodeStatusReporter) onUpdates(updates []bapi.Update) {
 
 // processPendingUpdates processes pending updates in main loop.
 // It is called when we are in-sync.
-func (r *nodeStatusReporter) processPendingUpdates() {
+func (r *NodeStatusReporter) processPendingUpdates() {
 	for name, data := range r.pendingUpdates {
 		if data == nil {
 			// we have a deletion of the resource.

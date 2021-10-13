@@ -1,4 +1,4 @@
-package status_test
+package populator
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -17,6 +17,6 @@ func init() {
 
 func TestCommands(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/caliconodestatus_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "CalicoNodeStatus Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/statuspopulators_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "StatusPopulators Suite", []Reporter{junitReporter})
 }
