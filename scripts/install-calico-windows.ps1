@@ -288,12 +288,17 @@ $BaseDir="c:\k"
 $RootDir="c:\{{rootDir}}"
 $CalicoZip="c:\{{zipFileName}}"
 
-{%- if site.prodname != "Calico" %}
 if (!(Test-Path $CalicoZip))
 {
-throw "Cannot find {{installName}} zip file $CalicoZip."
-}
+{%- if site.prodname == "Calico Enterprise" %}
+    throw "Cannot find {{installName}} zip file $CalicoZip."
+{%- else if site.prodname == "Calico" %}
+    Write-Host "$CalicoZip not found, downloading {{installName}} release..."
+    DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\calico-windows.zip
+{%- else %}
+    throw "Invalid product name - did prodname in _config.yml change?"
 {%- endif %}
+}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -316,11 +321,6 @@ $platform=GetPlatformType
 if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
     PrepareKubernetes
 }
-
-{%- if site.prodname == "Calico" %}
-Write-Host "Download {{installName}} release..."
-DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\{{zipFileName}}
-{%- endif %}
 
 if ((Get-Service | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
 Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
