@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.57
+GO_BUILD_VER?=v0.58
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_NODE_PROJECT_ID)
@@ -38,6 +38,9 @@ $(LOCAL_BUILD_DEP):
 		-replace=github.com/projectcalico/typha=../typha \
 		-replace=github.com/kelseyhightower/confd=../confd
 endif
+
+# Add in local static-checks
+LOCAL_CHECKS=check-boring-ssl
 
 ###############################################################################
 # Download and include Makefile.common
@@ -557,6 +560,12 @@ ci: mod-download static-checks fv image-all build-windows-archive st
 
 ## Deploys images to registry
 cd: cd-common
+
+
+check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		go tool nm $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64 > $(NODE_CONTAINER_BIN_DIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(NODE_CONTAINER_BIN_DIR)/tags.txt 1> /dev/null
+	-rm -f $(NODE_CONTAINER_BIN_DIR)/tags.txt
 
 ###############################################################################
 # Release
