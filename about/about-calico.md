@@ -6,6 +6,8 @@ canonical_url: '/about/about-calico'
 custom_css: css/intro.css
 ---
 
+![calico-anniversary-banner]({{site.baseurl}}/images/calico-anniversary-banner.png)
+
 <div id="why-use-calico-1" class="row">
   <div class="col-md-6">
     <img style="max-width: 330px" class="img-responsive center-block" src="{{ site.baseurl }}/images/felix_icon.png">
