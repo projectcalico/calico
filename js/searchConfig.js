@@ -47,7 +47,7 @@
         }));
         search.addWidget(instantsearch.widgets.searchBox({
             container: inputSelector,
-            placeholder: 'Search in the documentation',
+            placeholder: 'Search',
             autofocus: false,
             poweredBy: true
         }));
