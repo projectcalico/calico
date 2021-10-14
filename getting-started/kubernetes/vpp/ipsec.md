@@ -35,7 +35,7 @@ kubectl -n calico-vpp-dataplane create secret generic calicovpp-ipsec-secret \
 
 To enable IPsec, you need to configure two environment variables on the `calico-vpp-node` pod. You can do so with the following kubectl command:
 ````bash
-kubectl -n calico-vpp-dataplane patch daemonset calico-vpp-node --patch "$(curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/yaml/patches/ipsec.yaml)"
+kubectl -n calico-vpp-dataplane patch daemonset calico-vpp-node --patch "$(curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.16.0-calicov3.20.0/yaml/patches/ipsec.yaml)"
 ````
 
 Once IPsec is enabled, all the traffic that uses IP-in-IP encapsulation in the cluster will be automatically encrypted.
