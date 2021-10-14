@@ -438,13 +438,13 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
       padding: 6px 10px !important;
-      margin: -8px 78px 0px 0px;
+      margin: -8px 0px 0px 0px;
   }
 
   color: white !important;
   background-color: #ff9e16;
   padding: 9px 15px !important;
-  margin: -11px 78px 0px 0px;
+  margin: -11px 0px 0px 0px;
   border-width: 2px;
   border-style: solid;
   border-color: #ff9e16;
@@ -721,3 +721,136 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
   background-color: #e6e6e6;
   color: #666;
 }
+
+#tigera-navbar-footer > ul > li.dropdown.version-combo > ul > li.divider {
+  height: 5px !important;
+  min-height: 5px !important;
+  padding: 0;
+  margin: 0;
+}
+
+#tigera-navbar-header ul.nav li a,
+#tigera-navbar-footer ul.nav li a {
+// Shrink as we approach hamburger mode
+    @media (min-width: $screen-sm-min) and (max-width: 1260px) {
+        padding: 0 6px;
+        font-size: 13px;
+    }
+    @media (min-width: 1261px) and (max-width: 1265px) {
+      padding: 0 10px;
+    }
+  
+    padding: 0 20px;
+    font-family: "Poppins", Poppins;
+    font-size: 14px;
+    font-weight: 700;    
+    transition: .4s;    
+    -webkit-font-smoothing: antialiased;        
+}
+
+
+#tigera-navbar-footer > ul > div {
+    min-width: 4%;
+    float:right;
+    margin-right:40px;
+}
+
+// Overlay searchbox overides begins here
+.release-badge {
+  margin-left: 5px;
+}
+
+.latest {
+  background-color: #004078;
+}
+
+.nightly {
+  background-color: #f0ad4e;
+}
+
+
+.search {
+  @media (max-width: $screen-xs-max) {
+      display:none;
+  }
+}
+
+.search input {
+height: 25px;
+}
+
+.ais-Pagination-link {
+  color:#0096db !important;
+  background-color: #fff;
+}
+
+.ais-Pagination-link:hover {
+  color:#fff !important;
+  color:#ff9e16 !important;
+}
+
+.ais-Pagination-item--selected .ais-Pagination-link {
+  color:#ff9e16 !important;
+}
+
+.form-control-feedback-left{
+  position: absolute;
+  display: block;
+  width: 25px;
+  line-height: 25px;
+  text-align: center;
+  pointer-events: none;
+  color: #9D9D9D;
+}
+
+.icon-search {
+  display: block;
+  width: 22px;
+  height: 14px;
+  border-radius: 1px;
+  margin: 0 0 1px 0;
+  color: #ddd;
+}
+
+#mainpage-searchbox[readonly] {
+  background-color:#fff;
+}
+
+input[type="search"] {
+  padding-left:25px;
+  margin-bottom:5px;
+  font-size: 2rem;
+  border:none;
+  border-right:1px solid #c4c8d8;
+  border-radius: 0;
+  height:50px;
+}
+
+.ais-SearchBox-submit {
+  top: 25px;
+}
+
+.ais-SearchBox-reset {
+  right: 3rem;
+  top:25px;
+}
+
+.search-input-container {
+  width:90%;
+}
+
+.modal-body {
+  padding-top:0;
+}
+
+.search-modal-close {
+  position:absolute;
+  right:0;
+  top:0;
+  width: 10.2rem;
+  height: 5rem;
+  border:none;
+  border-top-left-radius: 0px;
+  border-bottom-left-radius: 0px;
+}
+// Overlay searchbox overides ends here
