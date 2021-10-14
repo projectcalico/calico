@@ -19,6 +19,7 @@ package fv_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -47,6 +48,7 @@ import (
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -262,19 +264,38 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 		It("v3 node resource annotations should automatically heal", func() {
 			for _, felix := range felixes {
-				// Get the original public-key.
-				node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				wgPubKeyOrig := node.Status.WireguardPublicKey
+				var wgPubKeyOrig string
+				var node *v3.Node
+				var err error
 
-				// overwrite public-key by fake but valid Wireguard key.
-				node.Status.WireguardPublicKey = fakeWireguardPubKey
-				_, err = client.Nodes().Update(context.Background(), node, options.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
+				// Get the original public-key.
+				Eventually(func() error {
+					node, err = client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
+					if err != nil {
+						return err
+					}
+					if node.Status.WireguardPublicKey == "" {
+						return errors.New("node.Status.WireguardPublicKey not set yet")
+					} else if wgPubKeyOrig == "" {
+						// Seeing the original public key for the first time.
+						wgPubKeyOrig = node.Status.WireguardPublicKey
+					}
+
+					// overwrite public-key by fake but valid Wireguard key.
+					node.Status.WireguardPublicKey = fakeWireguardPubKey
+					_, err = client.Nodes().Update(context.Background(), node, options.SetOptions{})
+					if err != nil {
+						return err
+					}
+
+					return nil
+				}, "5s", "300ms").ShouldNot(HaveOccurred())
 
 				Eventually(func() string {
-					node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
-					Expect(err).NotTo(HaveOccurred())
+					node, err = client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
+					if err != nil {
+						return "ERROR: " + err.Error()
+					}
 					return node.Status.WireguardPublicKey
 				}, "5s", "100ms").Should(Equal(wgPubKeyOrig))
 			}
