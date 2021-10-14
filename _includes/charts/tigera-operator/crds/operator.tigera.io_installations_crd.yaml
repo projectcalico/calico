@@ -489,6 +489,10 @@ spec:
                       or "OnDelete". Default is RollingUpdate.
                     type: string
                 type: object
+              nonPrivileged:
+                description: NonPrivileged configures Calico to be run in non-privileged
+                  containers as non-root users where possible.
+                type: string
               registry:
                 description: "Registry is the default Docker registry used for component
                   Docker images. If specified, all images will be pulled from this
@@ -1193,6 +1197,10 @@ spec:
                           or "OnDelete". Default is RollingUpdate.
                         type: string
                     type: object
+                  nonPrivileged:
+                    description: NonPrivileged configures Calico to be run in non-privileged
+                      containers as non-root users where possible.
+                    type: string
                   registry:
                     description: "Registry is the default Docker registry used for
                       component Docker images. If specified, all images will be pulled
