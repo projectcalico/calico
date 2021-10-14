@@ -84,7 +84,7 @@ Before you get started, make sure you have downloaded and configured the {% incl
 1. Now that you have a cluster configured, you can install {{site.prodname}}.
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.16.0-calicov3.20.0/yaml/generated/calico-vpp-eks.yaml
+   kubectl apply -f https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{site.vppbranch}}/yaml/generated/calico-vpp-eks.yaml
    ```
 
 1. Finally, add nodes to the cluster.
@@ -115,7 +115,7 @@ DPDK provides better performance compared to the standard install but it require
 1. Download the helper script
 
    ```bash
-   curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.16.0-calicov3.20.0/scripts/create_eks_cluster.sh -o create_eks_cluster.sh
+   curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{site.vppbranch}}/scripts/create_eks_cluster.sh -o create_eks_cluster.sh
    ```
 
 
@@ -137,10 +137,10 @@ DPDK provides better performance compared to the standard install but it require
    INSTANCE_TYPE=m5.large                  # EC2 instance type
    INSTANCE_NUM=2                          # Number of instances in cluster
    ## Calico/VPP deployment yaml; could be url or local file
-   CALICO_VPP_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.16.0-calicov3.20.0/yaml/generated/calico-vpp-eks-dpdk.yaml
+   CALICO_VPP_YAML=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{site.vppbranch}}/yaml/generated/calico-vpp-eks-dpdk.yaml
    #CALICO_VPP_YAML=<full path>/calico-vpp-eks-dpdk.yaml
    ## init_eks.sh script location; could be url or local file
-   INIT_EKS_SCRIPT=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.16.0-calicov3.20.0/scripts/init_eks.sh
+   INIT_EKS_SCRIPT=https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{site.vppbranch}}/scripts/init_eks.sh
    #INIT_EKS_SCRIPT=<full path>/init_eks.sh
    ###############################################################################
    ```
@@ -211,11 +211,11 @@ For some hardware, the following hugepages configuration may enable VPP to use m
 Start by getting the appropriate yaml manifest for the {{ site.prodname }} VPP dataplane:
 ```bash
 # If you have configured hugepages on your machines
-curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.16.0-calicov3.20.0/yaml/generated/calico-vpp.yaml
+curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{site.vppbranch}}/yaml/generated/calico-vpp.yaml
 ```
 ```bash
 # If not, or if you're unsure
-curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/v0.16.0-calicov3.20.0/yaml/generated/calico-vpp-nohuge.yaml
+curl -o calico-vpp.yaml https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{site.vppbranch}}/yaml/generated/calico-vpp-nohuge.yaml
 ```
 
 Then configure these parameters in the `calico-vpp-config` ConfigMap in the yaml manifest.

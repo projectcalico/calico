@@ -13,7 +13,7 @@ The VPP dataplane integration is split in two components, `vpp-manager` which ha
 
 #### vpp-manager
 
-VPP Manager is a very light process responsible for the bootstrap of VPP, including uplink interface addressing and routing configuration. It also restores the Linux configuration on shutdown. The code can be found in this directory: [https://github.com/projectcalico/vpp-dataplane/tree/v0.16.0-calicov3.20.0/vpp-manager](https://github.com/projectcalico/vpp-dataplane/tree/v0.16.0-calicov3.20.0/vpp-manager).
+VPP Manager is a very light process responsible for the bootstrap of VPP, including uplink interface addressing and routing configuration. It also restores the Linux configuration on shutdown. The code can be found in this directory: [https://github.com/projectcalico/vpp-dataplane/tree/{{site.vppbranch}}/vpp-manager](https://github.com/projectcalico/vpp-dataplane/tree/{{site.vppbranch}}/vpp-manager).
 
 On startup, vpp-manager starts by determining the desired configuration for the VPP uplink by checking it's configuration in Linux, including addresses and routes. It then renders an appropriate configuration file for VPP, and starts the VPP process.
 
@@ -28,7 +28,7 @@ vpp-manager is voluntarily kept as simple as possible, in order to minimize the 
 
 #### calico-vpp-agent
 
-The {{ site.prodname }} VPP agent is the process responsible for all the {{ site.prodname }}-specific configuration in VPP. Its code lives in this directory: [https://github.com/projectcalico/vpp-dataplane/tree/v0.16.0-calicov3.20.0/calico-vpp-agent](https://github.com/projectcalico/vpp-dataplane/tree/v0.16.0-calicov3.20.0/calico-vpp-agent).
+The {{ site.prodname }} VPP agent is the process responsible for all the {{ site.prodname }}-specific configuration in VPP. Its code lives in this directory: [https://github.com/projectcalico/vpp-dataplane/tree/{{site.vppbranch}}/calico-vpp-agent](https://github.com/projectcalico/vpp-dataplane/tree/{{site.vppbranch}}/calico-vpp-agent).
 
 This agent is split in four main components, which interact with the k8s and {{ site.prodname }} APIs to configure VPP. These components are the routing manager, the CNI server, the services manager and the policies manager.
 
