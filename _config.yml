@@ -72,6 +72,7 @@ defaults:
       show_read_time: true
       show_toc: true
       version: v3.20
+      vppbranch: v0.16.0-calicov3.20.0  # The branch in vpp repo that these docs should point to for manifests, etc
       sitemap: true
       registry:
       # A lookup map for imageNames based on component names.
