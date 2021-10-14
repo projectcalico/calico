@@ -20,19 +20,13 @@ import (
 	"reflect"
 	"time"
 
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-
-	populator "github.com/projectcalico/node/pkg/status/populators"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/projectcalico/libcalico-go/lib/options"
-
-	log "github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/options"
+	populator "github.com/projectcalico/node/pkg/status/populators"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // reporter contains all the data/method about reporting back node status based on a single node status resource.

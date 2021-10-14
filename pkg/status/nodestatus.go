@@ -18,26 +18,19 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/projectcalico/node/pkg/lifecycle/startup"
-
-	populator "github.com/projectcalico/node/pkg/status/populators"
-
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
-
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/typha/pkg/syncclientutils"
-	"github.com/projectcalico/typha/pkg/syncproto"
-
 	"github.com/projectcalico/node/buildinfo"
 	"github.com/projectcalico/node/pkg/calicoclient"
+	"github.com/projectcalico/node/pkg/lifecycle/startup"
+	populator "github.com/projectcalico/node/pkg/status/populators"
+	"github.com/projectcalico/typha/pkg/syncclientutils"
+	"github.com/projectcalico/typha/pkg/syncproto"
+	log "github.com/sirupsen/logrus"
 )
 
 // This file contains the main processing and common logic for node status reporter.
@@ -221,17 +214,7 @@ func (r *nodeStatusReporter) onUpdates(updates []bapi.Update) {
 			continue
 		}
 
-		switch u.UpdateType {
-		case bapi.UpdateTypeKVDeleted:
-			// Resource is deleted. Set nil pointer for pending updates.
-			r.pendingUpdates[name] = nil
-			log.Infof("Deleted node status resource: %s", u.Key)
-		case bapi.UpdateTypeKVNew, bapi.UpdateTypeKVUpdated:
-			if u.Value == nil {
-				// Value could be nil if typha failed to validate the resource.
-				log.Debugf("Nil value on new or updated KV: %s", u.Key)
-				continue
-			}
+		if u.Value != nil {
 			// Resource is created or updated. Cache latest value to pending updates.
 			switch v := u.Value.(type) {
 			case *apiv3.CalicoNodeStatus:
@@ -249,6 +232,13 @@ func (r *nodeStatusReporter) onUpdates(updates []bapi.Update) {
 				log.Warningf("Unexpected resource update: %s", u.Key)
 				continue
 			}
+		} else {
+			// In some corner cases, Value could be nil if validations failed in typha
+			// even for KVNew / KVUpdated messages. We treat the update as a deletion.
+
+			// Resource is deleted. Set nil pointer for pending updates.
+			r.pendingUpdates[name] = nil
+			log.Infof("Deleted node status resource: %s", u.Key)
 		}
 	}
 }
