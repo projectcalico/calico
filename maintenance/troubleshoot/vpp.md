@@ -16,7 +16,7 @@ If you're encountering issues with the VPP dataplane, feel free to reach out to 
 
 * With curl
 ````bash
-curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/master/test/scripts/vppdev.sh \
+curl https://raw.githubusercontent.com/projectcalico/vpp-dataplane/{{page.vppbranch}}/test/scripts/vppdev.sh \
   | tee /usr/bin/calivppctl
 chmod +x /usr/bin/calivppctl
 ````
@@ -221,7 +221,7 @@ Packet 1
 # We need to do some NATing as it's Kubernetes
   found: session:[20.0.0.1;6443 -> 11.0.166.133;34112, TCP] => 11.96.0.1;443 -> 11.0.166.133;34112 lb:-1 age:4190
 00:09:46:518879: ip4-rewrite
-# We rewrite the ip packet 
+# We rewrite the ip packet
 # mac addresses only when coming / going to a PHY, as tun interfaces are L3-only
   tx_sw_if_index 6 dpo-idx 7 : ipv4 via 0.0.0.0 tun4: mtu:9000 next:8 flow hash: 0x00000000
   00000000: 450002b056fd40003f0625650b6000010b00a68501bb8540a1f93599818eb1c1
@@ -244,7 +244,7 @@ Packet 2
 
 ##### Traffic from the phy
 
-If you want to capture traffic coming from the physical NIC, you should use `trace add` but with a different source node a.k.a `dpdk-input` `af-packet-input` `af_xdp-input` `avf-input` instead of `virtio-input`. 
+If you want to capture traffic coming from the physical NIC, you should use `trace add` but with a different source node a.k.a `dpdk-input` `af-packet-input` `af_xdp-input` `avf-input` instead of `virtio-input`.
 
 `show run` should give you a hint of the `X-input` node you want to trace from.
 
