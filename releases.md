@@ -28,7 +28,7 @@ version.
         {%- if version.first %}
         {% continue %}
         {%- else %}
-        <li><a href="/{{ version }}">Version {{ version | replace: "v", ""  }}</a></li>
+        <li><a href="/archive/{{ version }}">Version {{ version | replace: "v", ""  }}</a></li>
         {%- endif %}
     {%- endfor %}
     <li><a href="/releases">Earlier versions</a></li>
