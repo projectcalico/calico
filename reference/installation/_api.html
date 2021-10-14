@@ -12,6 +12,8 @@ Resource Types:
 </li><li>
 <a href="#operator.tigera.io/v1.Installation">Installation</a>
 </li><li>
+<a href="#operator.tigera.io/v1.Monitor">Monitor</a>
+</li><li>
 <a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>
 </li></ul>
 <h3 id="operator.tigera.io/v1.ImageSet">ImageSet
@@ -423,6 +425,20 @@ to obtain TLS certificates. This feature requires that you bring your own CSR si
 pods will be stuck during initialization.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>nonPrivileged</code><br>
+<em>
+<a href="#operator.tigera.io/v1.NonPrivilegedType">
+NonPrivilegedType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NonPrivileged configures Calico to be run in non-privileged containers as non-root users where possible.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -437,6 +453,79 @@ InstallationStatus
 </td>
 <td>
 <p>Most recently observed state for the Calico or Calico Enterprise installation.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.Monitor">Monitor
+</h3>
+<p>Monitor is the Schema for the monitor API. At most one instance
+of this resource is supported. It must be named &ldquo;tigera-secure&rdquo;.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code><br>
+string</td>
+<td>
+<code>
+operator.tigera.io/v1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code><br>
+string
+</td>
+<td><code>Monitor</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code><br>
+<em>
+<a href="#operator.tigera.io/v1.MonitorSpec">
+MonitorSpec
+</a>
+</em>
+</td>
+<td>
+<br/>
+<br/>
+<table>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code><br>
+<em>
+<a href="#operator.tigera.io/v1.MonitorStatus">
+MonitorStatus
+</a>
+</em>
+</td>
+<td>
 </td>
 </tr>
 </tbody>
@@ -804,6 +893,8 @@ Default: SHA256WithRSA</p>
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.CollectProcessPathOption">CollectProcessPathOption
+(<code>string</code> alias)</h3>
 <h3 id="operator.tigera.io/v1.ComponentName">ComponentName
 (<code>string</code> alias)</h3>
 <p>
@@ -1375,6 +1466,20 @@ to obtain TLS certificates. This feature requires that you bring your own CSR si
 pods will be stuck during initialization.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>nonPrivileged</code><br>
+<em>
+<a href="#operator.tigera.io/v1.NonPrivilegedType">
+NonPrivilegedType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NonPrivileged configures Calico to be run in non-privileged containers as non-root users where possible.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.InstallationStatus">InstallationStatus
@@ -1454,6 +1559,41 @@ InstallationSpec
 </p>
 <p>LinuxDataplaneOption controls which dataplane is to be used on Linux nodes.</p>
 <p>One of: Iptables, BPF</p>
+<h3 id="operator.tigera.io/v1.MonitorSpec">MonitorSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.Monitor">Monitor</a>)
+</p>
+<p>MonitorSpec defines the desired state of Tigera monitor.</p>
+<h3 id="operator.tigera.io/v1.MonitorStatus">MonitorStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.Monitor">Monitor</a>)
+</p>
+<p>MonitorStatus defines the observed state of Tigera monitor.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>state</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>State provides user-readable status.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="operator.tigera.io/v1.MultiInterfaceMode">MultiInterfaceMode
 (<code>string</code> alias)</h3>
 <p>
@@ -1610,6 +1750,14 @@ may or may not try to eventually evict the pod from its node.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.NonPrivilegedType">NonPrivilegedType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>NonPrivilegedType specifies whether Calico runs as permissioned or not</p>
+<p>One of: Enabled, Disabled</p>
 <h3 id="operator.tigera.io/v1.OIDCType">OIDCType
 (<code>string</code> alias)</h3>
 <p>OIDCType defines how OIDC is configured for Tigera Enterprise. Dex should be the best option for most use-cases.
