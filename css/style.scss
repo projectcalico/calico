@@ -732,12 +732,9 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
 #tigera-navbar-header ul.nav li a,
 #tigera-navbar-footer ul.nav li a {
 // Shrink as we approach hamburger mode
-    @media (min-width: $screen-sm-min) and (max-width: 1230px) {
+    @media (min-width: $screen-sm-min) and (max-width: 1362px) {
         padding: 0 6px;
         font-size: 13px;
-    }
-    @media (min-width: 1231px) and (max-width: 1235px) {
-        padding: 0 10px;
     }
 
     padding: 0 20px;
@@ -756,10 +753,10 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
     }
 
     @media (min-width: $screen-sm-min) and (max-width: 1482px) {
-      width: 10%;
+      width: 23%;
     }
 
-    width:26%;
+    width:28%;
     min-width: 4%;
     float:right;
     margin-right:40px;
