@@ -2094,6 +2094,9 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 
 	// Load the set of reserved IPs/CIDRs.
 	reservations, err := c.getReservedIPs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to look up reserved IPs: %w", err)
+	}
 
 	s := &blockAssignState{
 		client:                c,
