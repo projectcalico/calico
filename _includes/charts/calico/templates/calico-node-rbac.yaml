@@ -81,6 +81,7 @@ rules:
       - ippools
       - ipreservations
       - ipamblocks
+      - ipamhandles
       - globalnetworkpolicies
       - globalnetworksets
       - networkpolicies
