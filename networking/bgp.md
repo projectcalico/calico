@@ -162,17 +162,21 @@ provision route reflector nodes and bring their BGP sessions up before tearing d
 
 Follow these steps to do so:
 
-1. [Provision new nodes to be route reflectors.](#configure-a-node-to-act-as-a-route-reflector) They should have `routeReflectorClusterID` in their spec. These won't be part of the existing
+1. [Provision new nodes to be route reflectors.](#configure-a-node-to-act-as-a-route-reflector) The nodes [should not be schedulable](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
+and they should have `routeReflectorClusterID` in their spec. These won't be part of the existing
 node-to-node BGP mesh, and will be the route reflectors when the mesh is disabled. These nodes should also have a label like
-`route-reflector` in order to select them for the BGP peerings. Alternatively, you can run `kubectl drain` on existing nodes in your cluster,
-but this will cause a disruption on the workloads on those nodes as they are drained. Also set up a BGPPeer spec to configure route
-reflector nodes to peer with each other and other non-route-reflector nodes using label selectors.
+`route-reflector` in order to select them for the BGP peerings. [Alternatively](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/),
+you can run `kubectl drain <NODE>` on existing nodes in your cluster, but this will cause a disruption on the workloads on those nodes as they
+are drained.
 
-2. Wait for these peerings to be established. This can be [verified](#view-bgp-peering-status-for-a-node) by running `sudo calicoctl node status` on the nodes.
+2. Also set up a [BGPPeer](#configure-a-node-to-act-as-a-route-reflector) spec to configure route reflector nodes to peer with each other and other non-route-reflector nodes
+using label selectors.
 
-3. [Disable the BGP node-to-node mesh.](#disable-the-default-bgp-node-to-node-mesh)
+3. Wait for these peerings to be established. This can be [verified](#view-bgp-peering-status-for-a-node) by running `sudo calicoctl node status` on the nodes.
 
-4. If you did drain workloads from the nodes, mark the nodes as schedulable again by running `kubectl uncordon`.
+4. [Disable the BGP node-to-node mesh for the cluster.](#disable-the-default-bgp-node-to-node-mesh)
+
+5. If you did drain workloads from the nodes or created them as unschedulable, mark the nodes as schedulable again (e.g. by running `kubectl uncordon <NODE>`).
 
 #### View BGP peering status for a node
 
