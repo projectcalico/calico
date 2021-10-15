@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
+	github.com/olekukonko/tablewriter v0.0.4
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/pkg/errors v0.9.1
@@ -11,10 +12,11 @@ require (
 	github.com/projectcalico/cni-plugin v1.11.1-0.20211005140845-210477e44941
 	github.com/projectcalico/felix v0.0.0-20211007135718-64f16d9ab9f0
 	github.com/projectcalico/libcalico-go v1.7.2-0.20211012171813-c1a137c5065e
-	github.com/projectcalico/typha v0.7.3-0.20211005131105-524c8635da7f
+	github.com/projectcalico/typha v0.7.3-0.20211013083525-4227e77dd895
 	github.com/sirupsen/logrus v1.7.0
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sys v0.0.0-20210816074244-15123e1e1f71 // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
 	k8s.io/api v0.22.0
 	k8s.io/apimachinery v0.22.0

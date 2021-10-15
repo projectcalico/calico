@@ -1058,10 +1058,11 @@ func (c shimClient) KubeControllersConfiguration() client.KubeControllersConfigu
 	return c.client.KubeControllersConfiguration()
 }
 
-func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
-	return nil
-}
-
+// CalicoNodeStatus returns an interface for managing the calico node status resource.
 func (c shimClient) CalicoNodeStatus() client.CalicoNodeStatusInterface {
 	return c.client.CalicoNodeStatus()
+}
+
+func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
+	return nil
 }
