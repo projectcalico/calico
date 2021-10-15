@@ -45,6 +45,17 @@ h4 {
   font-size: 20px;
 }
 
+// Make h5 stand out from normal text.
+h5 {
+  font-weight: bold;
+  color: #444;
+}
+
+// Prevent nested list items from bunching up against the next top-level list item.
+.article-container li li:last-child {
+  margin-bottom: 1em;
+}
+
 // Default blockquotes are too big in Bootstrap.
 // Shrink them down
 blockquote {
