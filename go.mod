@@ -12,7 +12,7 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/projectcalico/api v0.0.0-20211015200158-15cbe046d41e
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211015231900-c0af3f09c944
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211015234849-c8a63c4c4579
 	github.com/prometheus/client_golang v1.4.0
 	github.com/sirupsen/logrus v1.4.2
 	k8s.io/api v0.22.0
