@@ -54,7 +54,8 @@ clean:
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
 	./lib/apis/v3/openapi_generated.go \
-	./lib/apis/v1/openapi_generated.go
+	./lib/apis/v1/openapi_generated.go \
+	./config/crd/*
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
