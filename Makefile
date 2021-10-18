@@ -54,8 +54,7 @@ clean:
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
 	./lib/apis/v3/openapi_generated.go \
-	./lib/apis/v1/openapi_generated.go \
-	./config/crd/*
+	./lib/apis/v1/openapi_generated.go
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
@@ -112,6 +111,8 @@ LINT_ARGS += --disable gosimple,unused,structcheck,errcheck,deadcode,varcheck,in
 .PHONY: check-gen-files
 check-gen-files: $(GENERATED_FILES) fix gen-crds
 	git diff --exit-code -- $(GENERATED_FILES) || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
+	@if [ "$$(git status --porcelain config/crd)" != "" ]; then \
+	echo "The following CRD file updates to be added"; git status --porcelain config/crd; exit 1; fi
 
 .PHONY: check-format
 check-format:
