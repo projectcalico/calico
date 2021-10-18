@@ -9,19 +9,19 @@ require (
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/projectcalico/api v0.0.0-20211005123650-be8650baf048
-	github.com/projectcalico/felix v0.0.0-20211006002504-5b2b00af96aa
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211005125516-43b35ddc2f4a
+	github.com/projectcalico/api v0.0.0-20211015200158-15cbe046d41e
+	github.com/projectcalico/felix v0.0.0-20211018095850-a37298deb17d
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211016010322-1d9f1da31ab7
 	github.com/prometheus/client_golang v1.7.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/pflag v1.0.5
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20201125193152-8a03d2e9614b
 	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
-	k8s.io/api v0.21.0-rc.0
-	k8s.io/apimachinery v0.21.0-rc.0
+	k8s.io/api v0.22.0
+	k8s.io/apimachinery v0.22.0
 	k8s.io/apiserver v0.21.0-rc.0
-	k8s.io/client-go v0.21.0-rc.0
+	k8s.io/client-go v0.22.0
 	k8s.io/klog v1.0.0
 )
 
