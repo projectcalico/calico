@@ -371,13 +371,12 @@ github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZ
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
-github.com/projectcalico/libcalico-go v1.7.2-0.20211015231900-c0af3f09c944/go.mod h1:4t3rU/FdMEO4TnpFArucAIo7irTt5OLKaQUx3AYnXTU=
-github.com/projectcalico/libcalico-go v1.7.2-0.20211015234849-c8a63c4c4579 h1:+smJy8T4X5hhS0kpc4NkGue9eeKcS65E18kv7/Wv0DI=
-github.com/projectcalico/libcalico-go v1.7.2-0.20211015234849-c8a63c4c4579/go.mod h1:4t3rU/FdMEO4TnpFArucAIo7irTt5OLKaQUx3AYnXTU=
+github.com/projectcalico/libcalico-go v1.7.2-0.20211016010322-1d9f1da31ab7 h1:BTJMHiiW8wGNIBwYbDPKWa8tCNgcisYswG2KTk/uU5w=
+github.com/projectcalico/libcalico-go v1.7.2-0.20211016010322-1d9f1da31ab7/go.mod h1:4t3rU/FdMEO4TnpFArucAIo7irTt5OLKaQUx3AYnXTU=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
-github.com/projectcalico/typha v0.7.3-0.20211015233337-bc2b21e91d60 h1:8BQfi81XnE8Ya39K8BxQKlg3SRqlU7Em1Z+1uQaIIUA=
-github.com/projectcalico/typha v0.7.3-0.20211015233337-bc2b21e91d60/go.mod h1:V1KpeX5pZIpUKDZusKUX/11RLZXH3bz8EPjwSqNVDl4=
+github.com/projectcalico/typha v0.7.3-0.20211016011846-0f06d9bab7c4 h1:0MVLKNdUBPutbyxBJB9RAh1naXmtaWkGSA8wR/AOuo0=
+github.com/projectcalico/typha v0.7.3-0.20211016011846-0f06d9bab7c4/go.mod h1:y+J50nDnR2hsFo0HhX+LA/4USREfWvIWIzJbYJgWJFM=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
