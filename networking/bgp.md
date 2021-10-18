@@ -148,17 +148,15 @@ calicoctl patch bgpconfiguration default -p '{"spec": {"nodeToNodeMeshEnabled": 
 >**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{ site.baseurl }}/reference/resources/bgpconfig) for more information.
 {: .alert .alert-info}
 
->**Note**: Always configure replacement BGP peerings (e.g. route reflectors) before disabling node-to-node mesh. Depending on cluster
->          configuration, disabling the node-to-node mesh may remove all routes (by tearing down all BGP sessions), rendering the cluster's
->          network completely unavailable. See the [BGP configuration section of the "Calico the hard way" guide]({{ site.baseurl }}/getting-started/kubernetes/hardway/configure-bgp-peering)
->          for a more detailed step by step guide on replacing the node-to-node mesh with route reflectors.
+>**Note**: Disabling the node-to-node mesh will break pod networking until/unless you configure replacement BGP peerings using BGPPeer resources.
+>          You may configure the BGPPeer resources before disabling the node-to-node mesh to avoid pod networking breakage.
 {: .alert .alert-danger}
 
 #### Change from node-to-node mesh to route reflectors without any traffic disruption
 
 Switching from node-to-node BGP mesh to BGP route reflectors involves tearing down BGP sessions and bringing up new ones. This causes a short
-dataplane network disruption (of about 2 seconds) for workloads running on the nodes where this happens. In order to avoid this, you may
-provision route reflector nodes and bring their BGP sessions up before tearing down the node-to-node sessions.
+dataplane network disruption (of about 2 seconds) for workloads running on the nodes in the cluster. In order to avoid this, you may provision
+route reflector nodes and bring their BGP sessions up before tearing down the node-to-node mesh sessions.
 
 Follow these steps to do so:
 
@@ -166,8 +164,8 @@ Follow these steps to do so:
 and they should have `routeReflectorClusterID` in their spec. These won't be part of the existing
 node-to-node BGP mesh, and will be the route reflectors when the mesh is disabled. These nodes should also have a label like
 `route-reflector` in order to select them for the BGP peerings. [Alternatively](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/),
-you can run `kubectl drain <NODE>` on existing nodes in your cluster, but this will cause a disruption on the workloads on those nodes as they
-are drained.
+you can drain workloads from existing nodes in your cluster by running `kubectl drain <NODE>` in order to configure them to be route reflectors,
+but this will cause a disruption on the workloads on those nodes as they are drained.
 
 2. Also set up a [BGPPeer](#configure-a-node-to-act-as-a-route-reflector) spec to configure route reflector nodes to peer with each other and other non-route-reflector nodes
 using label selectors.
