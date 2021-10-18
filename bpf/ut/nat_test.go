@@ -1914,7 +1914,7 @@ func TestNATSourceCollision(t *testing.T) {
 	// Test random port conflict by sending another SYN packet. To avoid the
 	// complexity of VXLAN encap in the test, send it with a different node IP,
 	// which in fact mimics as if this node had 2 IPs. That is a realistic
-	// scenario, but the main reason is to excercise the conflict after the
+	// scenario, but the main reason is to exercise the conflict after the
 	// packet is unpacked and DNATed and that a retransmit eventually picks a
 	// different port.
 
