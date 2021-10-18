@@ -74,7 +74,7 @@ blocks:
 
   - name: 'Push Images (non-PR builds only)'
     execution_time_limit:
-      minutes: 15
+      minutes: 45
     dependencies: ["Static Checks", "UT", "FV"]
     skip:
       # Only run on branches, not PRs.
@@ -90,7 +90,7 @@ blocks:
       jobs:
         - name: Run CD
           execution_time_limit:
-            minutes: 15
+            minutes: 45
           commands:
             - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
