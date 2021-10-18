@@ -7,9 +7,9 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20211015200158-15cbe046d41e
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211018162449-19e5875e42a7
-	github.com/projectcalico/typha v0.7.3-0.20211018164507-420636539f7d
+	github.com/projectcalico/api v0.0.0-20211018181539-356e1052869a
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211018183545-c5aa565967b6
+	github.com/projectcalico/typha v0.7.3-0.20211018185219-9187fab9d8a4
 	github.com/sirupsen/logrus v1.4.2
 	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
 	k8s.io/api v0.22.0
