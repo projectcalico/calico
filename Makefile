@@ -219,7 +219,12 @@ ut-kdd: run-k8s-controller build $(BIN)/host-local
 .PHONY: test-cni-versions
 test-cni-versions:
 	for cniversion in "0.2.0" "0.3.1" ; do \
-		make ut CNI_SPEC_VERSION=$$cniversion; \
+		if make ut CNI_SPEC_VERSION=$$cniversion; then \
+			echo "CNI version $$cniversion PASSEED"; \
+		else \
+			echo "CNI version $$cniversion FAILED"; \
+			exit 1; \
+		fi; \
 	done
 
 config/crd: mod-download
