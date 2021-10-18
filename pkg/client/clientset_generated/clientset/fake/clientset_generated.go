@@ -61,10 +61,7 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 	return c.tracker
 }
 
-var (
-	_ clientset.Interface = &Clientset{}
-	_ testing.FakeClient  = &Clientset{}
-)
+var _ clientset.Interface = &Clientset{}
 
 // ProjectcalicoV3 retrieves the ProjectcalicoV3Client
 func (c *Clientset) ProjectcalicoV3() projectcalicov3.ProjectcalicoV3Interface {
