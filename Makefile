@@ -220,7 +220,7 @@ ut-kdd: run-k8s-controller build $(BIN)/host-local
 test-cni-versions:
 	for cniversion in "0.2.0" "0.3.1" ; do \
 		if make ut CNI_SPEC_VERSION=$$cniversion; then \
-			echo "CNI version $$cniversion PASSEED"; \
+			echo "CNI version $$cniversion PASSED"; \
 		else \
 			echo "CNI version $$cniversion FAILED"; \
 			exit 1; \
