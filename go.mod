@@ -1,12 +1,15 @@
 module github.com/projectcalico/cni-plugin
 
-go 1.14
+go 1.16
 
 require (
 	github.com/Microsoft/hcsshim v0.8.6
 	github.com/buger/jsonparser v1.0.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.5
+	github.com/go-openapi/jsonpointer v0.19.5 // indirect
+	github.com/go-openapi/jsonreference v0.19.5 // indirect
+	github.com/go-openapi/swag v0.19.14 // indirect
 	github.com/gofrs/flock v0.8.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/howeyc/fsnotify v0.9.0
@@ -20,8 +23,8 @@ require (
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20211015200158-15cbe046d41e
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211018162449-19e5875e42a7
+	github.com/projectcalico/api v0.0.0-20211018181539-356e1052869a
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211018200233-b533a742a142
 	github.com/prometheus/common v0.10.0
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
@@ -30,12 +33,17 @@ require (
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20201125193152-8a03d2e9614b
 	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
 	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22
+	golang.org/x/tools v0.1.2 // indirect
 	google.golang.org/grpc v1.27.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
-	k8s.io/api v0.22.0
-	k8s.io/apimachinery v0.22.0
-	k8s.io/client-go v0.22.0
+	k8s.io/api v0.21.0
+	k8s.io/apimachinery v0.21.0
+	k8s.io/client-go v0.21.0
 	k8s.io/utils v0.0.0-20210802155522-efc7438f0176
 )
 
-replace github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
+replace (
+	github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
+	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
+)
