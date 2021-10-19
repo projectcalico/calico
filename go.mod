@@ -3,6 +3,7 @@ module github.com/projectcalico/node
 go 1.15
 
 require (
+	github.com/distribution/distribution v2.7.1+incompatible
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/onsi/ginkgo v1.14.1

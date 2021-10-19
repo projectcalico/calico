@@ -125,6 +125,19 @@ Set-StoredLastBootTime $lastBootTime
 $Stored = Get-StoredLastBootTime
 Write-Host "Stored new lastBootTime $Stored"
 
+# The old version of Calico upgrade service may still be running.
+while (Get-UpgradeService)
+{
+
+    Remove-UpgradeService
+    if ($LastExitCode -EQ 0) {
+        Write-Host "CalicoUpgrade service removed"
+        break
+    }
+    Start-Sleep 5
+    Write-Host "Failed to clean up old CalicoUpgrade service, retrying..."
+}
+
 # Run the startup script whenever kubelet (re)starts. This makes sure that we refresh our Node annotations if
 # kubelet recreates the Node resource.
 $kubeletPid = -1
@@ -144,6 +157,10 @@ while ($True)
                 if ($LastExitCode -EQ 0)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."
+
+                    # At this point, we can run the (possibly new) CalicoUpgrade service.
+                    Install-UpgradeService
+                    Start-Service CalicoUpgrade
                     break
                 }
 

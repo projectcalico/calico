@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2021 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,28 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ipmo "$PSScriptRoot\libs\calico\calico.psm1" -Force
+# This script is run from the main Calico folder.
+. .\config.ps1
 
-. $PSScriptRoot\config.ps1
-
-Test-CalicoConfiguration
-
-$ErrorActionPreference = 'SilentlyContinue'
-
-Write-Host "Stopping Calico if it is running..."
-& $PSScriptRoot\stop-calico.ps1
-
-if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
-{
-    Remove-ConfdService
-}
-
-if ($env:CALICO_NETWORKING_BACKEND -NE "none")
-{
-    Remove-CNIPlugin
-}
-
-Remove-NodeService
-Remove-FelixService
-
-Write-Host "Done."
+.\calico-node.exe -upgrade-windows

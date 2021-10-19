@@ -292,6 +292,64 @@ function Remove-ConfdService() {
     & $NSSMPath remove CalicoConfd confirm
 }
 
+function Install-UpgradeService()
+{
+    Write-Host "Installing Calico Upgrade startup service..."
+
+    ensureRegistryKey
+
+    # Ensure our service file can run.
+    Unblock-File $baseDir\upgrade\upgrade-service.ps1
+
+    & $NSSMPath install CalicoUpgrade $powerShellPath
+    & $NSSMPath set CalicoUpgrade AppParameters $baseDir\upgrade\upgrade-service.ps1
+    & $NSSMPath set CalicoUpgrade AppDirectory $baseDir
+    & $NSSMPath set CalicoUpgrade DisplayName "Calico Windows Upgrade"
+    & $NSSMPath set CalicoUpgrade Description "Calico Windows Upgrade monitors and manages upgrades"
+
+    # Configure it to auto-start by default.
+    & $NSSMPath set CalicoUpgrade Start SERVICE_AUTO_START
+    & $NSSMPath set CalicoUpgrade ObjectName LocalSystem
+    & $NSSMPath set CalicoUpgrade Type SERVICE_WIN32_OWN_PROCESS
+
+    # Throttle process restarts if Felix restarts in under 1500ms.
+    & $NSSMPath set CalicoUpgrade AppThrottle 1500
+
+    # Create the log directory if needed.
+    if (-Not(Test-Path "$env:CALICO_LOG_DIR"))
+    {
+        write "Creating log directory."
+        md -Path "$env:CALICO_LOG_DIR"
+    }
+    & $NSSMPath set CalicoUpgrade AppStdout $env:CALICO_LOG_DIR\calico-upgrade.log
+    & $NSSMPath set CalicoUpgrade AppStderr $env:CALICO_LOG_DIR\calico-upgrade.err.log
+
+    # Configure online file rotation.
+    & $NSSMPath set CalicoUpgrade AppRotateFiles 1
+    & $NSSMPath set CalicoUpgrade AppRotateOnline 1
+    # Rotate once per day.
+    & $NSSMPath set CalicoUpgrade AppRotateSeconds 86400
+    # Rotate after 10MB.
+    & $NSSMPath set CalicoUpgrade AppRotateBytes 10485760
+
+    Write-Host "Done installing upgrade service."
+}
+
+function Remove-UpgradeService()
+{
+    $svc = Get-Service | where Name -EQ 'CalicoUpgrade'
+    if ($svc -NE $null)
+    {
+        if ($svc.Status -EQ 'Running')
+        {
+            Write-Host "CalicoUpgrade service is running, stopping it..."
+            & $NSSMPath stop CalicoUpgrade confirm
+        }
+        Write-Host "Removing CalicoUpgrade service..."
+        & $NSSMPath remove CalicoUpgrade confirm
+    }
+}
+
 function Wait-ForManagementIP($NetworkName)
 {
     while ((Get-HnsNetwork | ? Name -EQ $NetworkName).ManagementIP -EQ $null)
@@ -422,6 +480,12 @@ function Set-MetaDataServerRoute($mgmtIP)
             Write-Host "Warning! Failed to restore metadata server route."
         }
     }
+}
+
+function Get-UpgradeService()
+{
+    # Don't use get-wmiobject since that is not available in Powershell 7.
+    return Get-CimInstance -Query "SELECT * from Win32_Service WHERE name = 'CalicoUpgrade'"
 }
 
 # Assume same relative path for containerd CNI bin/conf dir

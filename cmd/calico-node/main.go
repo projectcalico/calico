@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/node/pkg/lifecycle/startup"
 	"github.com/projectcalico/node/pkg/status"
+	"github.com/projectcalico/node/pkg/upgrade"
 )
 
 // Create a new flag set.
@@ -48,6 +49,7 @@ var runFelix = flagSet.Bool("felix", false, "Run Felix")
 var runBPF = flagSet.Bool("bpf", false, "Run BPF debug tool")
 var runInit = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
 var runStartup = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
+var runWinUpgrade = flagSet.Bool("upgrade-windows", false, "Run Windows upgrade service.")
 var runShutdown = flagSet.Bool("shutdown", false, "Do shutdown routine.")
 var monitorAddrs = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
 var runAllocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
@@ -136,6 +138,9 @@ func main() {
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
 		shutdown.Run()
+	} else if *runWinUpgrade {
+		logrus.SetFormatter(&logutils.Formatter{Component: "windows-upgrade"})
+		upgrade.Run()
 	} else if *monitorAddrs {
 		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
 		startup.ConfigureLogging()
