@@ -73,6 +73,7 @@ defaults:
       show_read_time: true
       show_toc: true
       version: master
+      vppbranch: master  # The branch in vpp repo that these docs should point to for manifests, etc
       sitemap: true
       registry:
       # A lookup map for imageNames based on component names.
