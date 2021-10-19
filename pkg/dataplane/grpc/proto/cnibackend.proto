@@ -43,6 +43,8 @@ message Port {
     string name = 1;
     string protocol = 2;
     uint32 port = 3;
+    uint32 host_port = 4;
+    string host_ip = 5;
 }
 
 message AddReply {
