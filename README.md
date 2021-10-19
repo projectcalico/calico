@@ -106,10 +106,10 @@ make st DEBUG_FAILURES=true
 ## Linux Dependencies
 Below is a listing of userspace tools packaged into the node container. The list is not exhaustive, but highlights some of the key dependencies required for node to operate correctly.
 
-- [`/user/sbin/arp`](http://man7.org/linux/man-pages/man8/arp.8.html)
+- [`/usr/sbin/arp`](http://man7.org/linux/man-pages/man8/arp.8.html)
     - Manipulate the system ARP cache
     - Package: `net-tools`
-- [`/user/sbin/conntrack`](http://man7.org/linux/man-pages/man8/arp.8.html)
+- [`/usr/sbin/conntrack`](http://man7.org/linux/man-pages/man8/arp.8.html)
     - Netfilter connection tracking
     - Package: `conntrack`
 - [`/bin/ip`](https://linux.die.net/man/8/ip)
