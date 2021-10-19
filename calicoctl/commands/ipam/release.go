@@ -38,12 +38,16 @@ import (
 // IPAM takes keyword with an IP address then calls the subcommands.
 func Release(args []string, version string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam release [--ip=<IP>] [--from-report=<REPORT>] [--config=<CONFIG>] [--force] [--allow-version-mismatch]
+  <BINARY_NAME> ipam release [--ip=<IP>] [--from-report=<REPORT>]... [--config=<CONFIG>] [--force] [--allow-version-mismatch]
 
 Options:
   -h --help                    Show this screen.
      --ip=<IP>                 IP address to release.
-     --from-report=<REPORT>    Release all leaked addresses from the report.
+     --from-report=<REPORT>    Release all leaked addresses from the report.  If multiple reports are specified then
+                               only leaked IPs common to all reports will be released - by generating reports at 
+                               different times, e.g. separated by an hour, this can be used to provide additional 
+                               certainty that the IPs are truly leaked rather than in a transient state of assignment.
+                               At least one of the reports should be newly generated.
      --force                   Force release of leaked addresses.
   -c --config=<CONFIG>         Path to the file containing connection configuration in
                                YAML or JSON format.
@@ -98,17 +102,19 @@ Description:
 	ipamClient := client.IPAM()
 
 	if report := parsedArgs["--from-report"]; report != nil {
-		reportFile := parsedArgs["--from-report"].(string)
-		force := false
-		if parsedArgs["--force"] != nil {
-			force = parsedArgs["--force"].(bool)
+		reportFiles := parsedArgs["--from-report"].([]string)
+		if len(reportFiles) > 0 {
+			force := false
+			if parsedArgs["--force"] != nil {
+				force = parsedArgs["--force"].(bool)
+			}
+			err = releaseFromReports(ctx, client, force, reportFiles, version)
+			if err != nil {
+				return err
+			}
+			fmt.Println("You may now unlock the data store.")
+			return nil
 		}
-		err = releaseFromReport(ctx, client, force, reportFile, version)
-		if err != nil {
-			return err
-		}
-		fmt.Println("You may now unlock the data store.")
-		return nil
 	}
 
 	if ip := parsedArgs["--ip"]; ip != nil {
@@ -136,30 +142,54 @@ Description:
 	return nil
 }
 
-func releaseFromReport(ctx context.Context, c client.Interface, force bool, reportFile string, version string) error {
-	// Load the report into memory.
-	r := Report{}
-	bytes, err := ioutil.ReadFile(reportFile)
-	if err != nil {
-		return err
-	}
-	err = json.Unmarshal(bytes, &r)
-	if err != nil {
-		return err
-	}
-
-	// Make sure the metadata from the report matches the cluster.
+func releaseFromReports(ctx context.Context, c client.Interface, force bool, reportFiles []string, version string) error {
+	// Grab the cluster info for checking against the report metadata.
 	clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
 		return err
 	}
-	if clusterInfo.Spec.ClusterGUID != r.ClusterGUID {
-		// This check cannot be overridden using the --force option, because it is critical.
-		return fmt.Errorf("Cluster does not match the provided report: mismatched cluster GUID. Refusing to release.")
+
+	// Load the reports.
+	var foundCurrent bool
+	var reports []Report
+	for _, reportFile := range reportFiles {
+		r := Report{}
+		bytes, err := ioutil.ReadFile(reportFile)
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(bytes, &r)
+		if err != nil {
+			return err
+		}
+
+		// Make sure the metadata from the report matches the cluster.
+		if clusterInfo.Spec.ClusterGUID != r.ClusterGUID {
+			// This check cannot be overridden using the --force option, because it is critical.
+			return fmt.Errorf("Cluster does not match the provided report (%s): mismatched cluster GUID. Refusing to release.", reportFile)
+		}
+		if version != r.Version {
+			if !force {
+				return fmt.Errorf("The provided report (%s) was produced using a different version (%s) of calicoctl. Refusing to release.", reportFile, r.Version)
+			} else {
+				fmt.Println("WARNING: Report was produced using a different version of calicoctl. Ignoring due to --force option")
+			}
+		}
+
+		// At least one of the reports should have the current cluster info resource version.
+		if clusterInfo.ResourceVersion == r.ClusterInfoRevision {
+			foundCurrent = true
+		}
+
+		reports = append(reports, r)
 	}
-	if clusterInfo.ResourceVersion != r.ClusterInfoRevision {
-		return fmt.Errorf("The provided report is stale, please generate a new report while the data store is locked and try again.")
+
+	// At least one of the reports should match the current cluster info revision.
+	if !foundCurrent {
+		return fmt.Errorf("The provided reports are all stale - at least one should be up-to-date. Please generate a new report while the data store is locked and try again.")
 	}
+
+	// Datastore should be locked unless forcing.
 	if clusterInfo.Spec.DatastoreReady == nil || *clusterInfo.Spec.DatastoreReady {
 		if !force {
 			return fmt.Errorf("Data store is not locked. Either lock the data store, or re-run with --force.")
@@ -167,24 +197,29 @@ func releaseFromReport(ctx context.Context, c client.Interface, force bool, repo
 			fmt.Println("WARNING: Data store is not locked. Ignoring due to --force option")
 		}
 	}
-	if version != r.Version {
-		if !force {
-			return fmt.Errorf("The provided report was produced using a different version (%s) of calicoctl. Refusing to release.", r.Version)
-		} else {
-			fmt.Println("WARNING: Report was produced using a different version of calicoctl. Ignoring due to --force option")
-		}
-	}
 
 	// For each address that needs to be released, do so.
-	ipsToRelease := []net.IP{}
-	for _, allocations := range r.Allocations {
-		for _, a := range allocations {
-			if !a.InUse {
-				ipsToRelease = append(ipsToRelease, argutils.ValidateIP(a.IP))
+	var notInUse map[string]struct{}
+	for _, report := range reports {
+		merged := make(map[string]struct{})
+		for _, allocations := range report.Allocations {
+			for _, a := range allocations {
+				if a.InUse {
+					continue
+				}
+				if _, ok := notInUse[a.IP]; notInUse != nil && !ok {
+					continue
+				}
+				merged[a.IP] = struct{}{}
 			}
 		}
+		notInUse = merged
 	}
 
+	ipsToRelease := []net.IP{}
+	for ip := range notInUse {
+		ipsToRelease = append(ipsToRelease, argutils.ValidateIP(ip))
+	}
 	if len(ipsToRelease) == 0 {
 		fmt.Println("No addresses need to be released.")
 		return nil
