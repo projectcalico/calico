@@ -278,6 +278,7 @@ func (ap AttachPoint) patchBinary(logCtx *log.Entry, ifile, ofile string) error 
 	}
 	b.PatchVXLANPort(vxlanPort)
 	b.PatchExtToServiceConnmark(uint32(ap.ExtToServiceConnmark))
+	b.PatchPSNATPorts(uint32(ap.PSNATStart), uint32(ap.PSNATEnd))
 
 	err = b.PatchIntfAddr(ap.IntfIP)
 	if err != nil {
