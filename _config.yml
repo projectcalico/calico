@@ -72,7 +72,7 @@ defaults:
       show_title: true
       show_read_time: true
       show_toc: true
-      version: master
+      version: v3.21 
       vppbranch: master  # The branch in vpp repo that these docs should point to for manifests, etc
       sitemap: true
       registry:
