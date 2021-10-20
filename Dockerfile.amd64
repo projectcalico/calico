@@ -170,6 +170,7 @@ COPY --from=bird /bird* /bin/
 
 # Set the suid bit on bird to allow our user to execute them with root permissions.
 RUN chmod u+s /bin/bird
+RUN chmod u+s /bin/bird6
 
 # Copy in the filesystem - this contains felix, calico-bgp-daemon, licenses, etc...
 COPY filesystem/ /

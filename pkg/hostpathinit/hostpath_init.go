@@ -14,7 +14,10 @@
 package hostpathinit
 
 import (
+	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	log "github.com/sirupsen/logrus"
@@ -58,5 +61,36 @@ func Run() {
 	err = os.Chown("/var/run/calico/", uid, 0)
 	if err != nil {
 		log.Panic("Unable to chown /var/run/calico/")
+	}
+
+	// Create the calico directory in /var/log/ and the cni log directory in /var/log/calico/
+	err = os.MkdirAll("/var/log/calico/cni", 0700)
+	if err != nil {
+		log.Panic("Unable to create directory /var/log/calico/cni")
+	}
+
+	// Change ownership of /var/log/calico/ to  our non-root user
+	err = os.Chown("/var/log/calico/", uid, 0)
+	if err != nil {
+		log.Panic("Unable to chown /var/log/calico/")
+	}
+
+	// Change ownership of the cni log directory and all files in the cni log directory.
+	// There will likely be files here since logs might have been created
+	// separately by the CNI plugin.
+	err = filepath.Walk("/var/log/calico/cni", func(path string, info fs.FileInfo, walkErr error) error {
+		// There was an error related to the path. Directory will not be explored so skip
+		if walkErr != nil && path != "/var/log/calico/cni" {
+			return nil
+		}
+
+		err := os.Chown(path, uid, 0)
+		if err != nil {
+			return fmt.Errorf("Unable to chown %s: %s", path, err)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Panicf("Unable to chown cni log file: %s", err)
 	}
 }
