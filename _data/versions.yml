@@ -1,31 +1,30 @@
-- title: master
-  note: ""
+- title: v3.21.0
   chart:
     version: 1
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: master
+   version: release-v1.23
   components:
      typha:
-      version: master
+      version: release-v3.21
      calicoctl:
-      version: master
+      version: release-v3.21
      calico/node:
-      version: master
+      version: release-v3.21
      calico/cni:
-      version: master
+      version: release-v3.21
      calico/apiserver:
-      version: master
+      version: release-v3.21
      calico/kube-controllers:
-      version: master
+      version: release-v3.21
      calico/flannel-migration-controller:
-      version: master
+      version: release-v3.21
      networking-calico:
-      version: master
+      version: release-v3.21
      flannel:
       version: v0.13.0
      calico/dikastes:
-      version: master
+      version: release-v3.21
      flexvol:
-      version: master
+      version: release-v3.21

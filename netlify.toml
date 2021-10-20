@@ -41,7 +41,7 @@
 
 [build.environment]
   RUBY_VERSION = "2.5.4"
-  RELEASE_VERSION = "master"
+  RELEASE_VERSION = "v3.21"
 
 [context.deploy-preview]
   command = '''
@@ -69,6 +69,28 @@
    to = "https://calico-public.s3.amazonaws.com/charts/:splat"
    status = 200
    headers = {X-From = "Netlify"}
+
+# proxy redirects for website and manifests for v3.21
+[[redirects]]
+  from = "/archive/v3.21/*"
+  to = "https://calico-v3-21.netlify.app/archive/v3.21/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/v3.21/*"
+  to = "https://calico-v3-21.netlify.app/v3.21/:splat"
+  status = 200
+
+# proxy redirects for website and manifests for v3.20
+[[redirects]]
+  from = "/archive/v3.20/*"
+  to = "https://calico-v3-20.netlify.app/archive/v3.20/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/v3.20/*"
+  to = "https://calico-v3-20.netlify.app/v3.20/:splat"
+  status = 200
 
 # proxy redirects for website and manifests for v3.19
 [[redirects]]
