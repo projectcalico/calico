@@ -32,6 +32,8 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
 
+	tcdefs "github.com/projectcalico/felix/bpf/tc/defs"
+
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/arp"
@@ -1134,7 +1136,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// Bypass is a strong signal from the BPF program, it means that the flow is approved
 				// by the program at both ingress and egress.
 				Comment: []string{"Pre-approved by BPF programs."},
-				Match:   iptables.Match().MarkMatchesWithMask(tc.MarkSeenBypass, tc.MarkSeenBypassMask),
+				Match:   iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypass, tcdefs.MarkSeenBypassMask),
 				Action:  iptables.AcceptAction{},
 			},
 		}
@@ -1146,13 +1148,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		inputRules = append(inputRules,
 			iptables.Rule{
 				Match: iptables.Match().
-					MarkMatchesWithMask(tc.MarkSeenFallThrough, tc.MarkSeenFallThroughMask).
+					MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
 					ConntrackState("ESTABLISHED,RELATED"),
 				Comment: []string{"Accept packets from flows that pre-date BPF."},
 				Action:  iptables.AcceptAction{},
 			},
 			iptables.Rule{
-				Match:   iptables.Match().MarkMatchesWithMask(tc.MarkSeenFallThrough, tc.MarkSeenFallThroughMask),
+				Match:   iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
 				Comment: []string{"Drop packets from unknown flows."},
 				Action:  iptables.DropAction{},
 			},
@@ -1165,8 +1167,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					ConntrackState("ESTABLISHED,RELATED"),
 				Comment: []string{"Mark pre-established host flows."},
 				Action: iptables.SetMaskedMarkAction{
-					Mark: tc.MarkLinuxConntrackEstablished,
-					Mask: tc.MarkLinuxConntrackEstablishedMask,
+					Mark: tcdefs.MarkLinuxConntrackEstablished,
+					Mask: tcdefs.MarkLinuxConntrackEstablishedMask,
 				},
 			},
 		)
@@ -1175,7 +1177,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			fwdRules = append(fwdRules,
 				// Drop packets that have come from a workload but have not been through our BPF program.
 				iptables.Rule{
-					Match:   iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
+					Match:   iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
 					Action:  iptables.DropAction{},
 					Comment: []string{"From workload without BPF seen mark"},
 				},
@@ -1185,14 +1187,14 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// Only need to worry about ACCEPT here.  Drop gets compiled into the BPF program and
 				// RETURN would be a no-op since there's nothing to RETURN from.
 				inputRules = append(inputRules, iptables.Rule{
-					Match:  iptables.Match().InInterface(prefix+"+").MarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
+					Match:  iptables.Match().InInterface(prefix+"+").MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
 					Action: iptables.AcceptAction{},
 				})
 			}
 
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
-				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tc.MarkSeen, tc.MarkSeenMask),
+				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
 				Action: iptables.DropAction{},
 			})
 		}
@@ -1214,8 +1216,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 						ConntrackState("ESTABLISHED,RELATED"),
 					Comment: []string{"Mark pre-established flows."},
 					Action: iptables.SetMaskedMarkAction{
-						Mark: tc.MarkLinuxConntrackEstablished,
-						Mask: tc.MarkLinuxConntrackEstablishedMask,
+						Mark: tcdefs.MarkLinuxConntrackEstablished,
+						Mask: tcdefs.MarkLinuxConntrackEstablishedMask,
 					},
 				},
 			)
@@ -1263,19 +1265,19 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	for _, t := range d.iptablesRawTables {
 		// Do not RPF check what is marked as to be skipped by RPF check.
 		rpfRules := []iptables.Rule{{
-			Match:  iptables.Match().MarkMatchesWithMask(tc.MarkSeenBypassSkipRPF, tc.MarkSeenBypassSkipRPFMask),
+			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassSkipRPF, tcdefs.MarkSeenBypassSkipRPFMask),
 			Action: iptables.ReturnAction{},
 		}}
 
 		// For anything we approved for forward, permit accept_local as it is
 		// traffic encapped for NodePort, ICMP replies etc. - stuff we trust.
 		rpfRules = append(rpfRules, iptables.Rule{
-			Match:  iptables.Match().MarkMatchesWithMask(tc.MarkSeenBypassForward, tc.MarksMask).RPFCheckPassed(true),
+			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenBypassForward, tcdefs.MarksMask).RPFCheckPassed(true),
 			Action: iptables.ReturnAction{},
 		})
 
 		// Do the full RPF check and dis-allow accept_local for anything else.
-		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, tc.MarkSeen, tc.MarkSeenMask,
+		rpfRules = append(rpfRules, rules.RPFilter(t.IPVersion, tcdefs.MarkSeen, tcdefs.MarkSeenMask,
 			rulesConfig.OpenStackSpecialCasesEnabled, false)...)
 
 		rpfChain := []*iptables.Chain{{
@@ -1313,7 +1315,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 		if t.IPVersion == 4 {
 			// Iptables for untracked policy.
-			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tc.MarkSeenBypass)))
+			t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion, uint32(tcdefs.MarkSeenBypass)))
 			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 			}})
@@ -1328,8 +1330,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		for _, t := range d.iptablesMangleTables {
 			t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 				Match: iptables.Match().MarkMatchesWithMask(
-					tc.MarkSeen|mark,
-					tc.MarkSeenMask|mark,
+					tcdefs.MarkSeen|mark,
+					tcdefs.MarkSeenMask|mark,
 				),
 				Comment: []string{"Mark connections with ExtToServiceConnmark"},
 				Action:  iptables.SetConnMarkAction{Mark: mark, Mask: mark},

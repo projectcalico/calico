@@ -162,7 +162,7 @@ func testDelDuringIterN(numEntries int) {
 		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
 		seenKeys[key] = true
 		delete(expectedKeys, key)
-		if insertClock % 3 == 0 {
+		if insertClock%3 == 0 {
 			err := insertNumberedKey(insertIdx)
 			Expect(err).NotTo(HaveOccurred())
 			insertIdx++
@@ -198,7 +198,7 @@ func insertNumberedKey(n int) error {
 	k := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), uint16(n), net.ParseIP("10.0.0.2"), uint16(n>>16))
 	v := conntrack.Value{}
 	for i := range v {
-		v[i] = uint8(i+n)
+		v[i] = uint8(i + n)
 	}
 	return ctMap.Update(k.AsBytes(), v[:])
 }

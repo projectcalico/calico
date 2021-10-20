@@ -15,11 +15,12 @@
 package serviceindex_test
 
 import (
-	"github.com/projectcalico/felix/labelindex"
-	. "github.com/projectcalico/felix/serviceindex"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/projectcalico/felix/labelindex"
+	. "github.com/projectcalico/felix/serviceindex"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
