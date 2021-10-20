@@ -125,7 +125,7 @@ Yaml that user read back from the same resource after all the status is populate
 
 | Field          | Description                 | Accepted Values   | Schema | 
 |----------------|-----------------------------|-------------------|--------|
-| classes  | List of classes that declare the types of information to monitor for this node and allows for selective status reporting about certain subsets of information. Required. | List of [Classes](#classes) | list |
+| classes  | List of classes that declare the types of information to monitor for this node and allows for selective status reporting about certain subsets of information. Required. | List of [Classes](#classes) | list of string |
 | node  | The node name identifies the Calico node instance for node status. Required. | valid Kubernetes node name | string |
 | updatePeriodSeconds  | Period in seconds at which CalicoNodeStatus should be updated. Set to 0 to disable CalicoNodeStatus refresh. Maximum update period is one day. Required. | 0 - 86400 | int |
 
@@ -140,19 +140,65 @@ Yaml that user read back from the same resource after all the status is populate
 
 #### Classes
 
-| Accepted Values    | Description                            | Schema |
-|--------------------|----------------------------------------|--------|
-| Agent              | Status of BGP daemon agent | string |
-| BGP                | Status of BGP sessions | string |
-| Routes             | Status of routes exposed to BGP daemon | string |
+| Accepted Values    | Description                            |
+|--------------------|----------------------------------------|
+| Agent              | Status of BGP daemon agent | 
+| BGP                | Status of BGP sessions | 
+| Routes             | Status of routes exposed to BGP daemon |
 
 #### BgpDaemonStatus
 
-| Field   | Description                            | Schema |
+| Field              | Description                            | Schema | Possible Values |
+|--------------------|----------------------------------------|--------|-----------------|
+| state              | State of BGP daemon.                    | string | Ready, NotReady |
+| version            | Version of BGP daemon                  | string |                 |
+| routerID           | Router ID used by BGP daemon           | string |                 | 
+| lastBootTime       | Last boot time of BGP daemon           | string |                 |
+| lastReconfigurationTime| Last reconfiguration time of BGP daemon | string |            |
+
+#### BgpStatus
+
+| Field              | Description                            | Schema |
 |--------------------|----------------------------------------|--------|
-| Agent              | Status of BGP daemon agent | string |
-| BGP                | Status of BGP sessions | string |
-| Routes             | Status of routes exposed to BGP daemon | string |
+| numberEstablishedV4      | The total number of IPv4 established bgp sessions. | int |
+| numberNotEstablishedV4   | The total number of IPv4 non-established bgp sessions. | int |
+| numberEstablishedV6      | The total number of IPv6 established bgp sessions. | int |
+| numberNotEstablishedV6   | The total number of IPv6 non-established bgp sessions. | int | 
+| peersV4  | IPv4 BGP peers status on the node. | List of [BGP peer](#bgppeer) | 
+| peersV6  | IPv6 BGP peers status on the node. | List of [BGP peer](#bgppeer) | 
+
+#### RouteStatus
+
+| Field              | Description                            | Schema |
+|--------------------|----------------------------------------|--------|
+| routesV4  | IPv4 routes learned by BGP daemon on the node.  | List of [route](#route) | 
+| routesV6  | IPv6 routes learned by BGP daemon on the node.  | List of [route](#route) | 
+
+#### BgpPeer
+
+| Field              | Description                            | Schema | Possible Values |
+|--------------------|----------------------------------------|--------|-----------------|
+| peerIP              | IP address of the peer whose condition we are reporting.  | `ip` | |
+| type            | Type indicates whether this peer is configured via the node-to-node mesh, or via en explicit global or per-node BGPPeer object. | string |  NodeMesh, NodePeer, GlobalPeer |
+| state          | BGP session state. Value of an empty string means BGP session state is unknown. | string |  Idle, Connect, Active, OpenSent, OpenConfirm, Established, Close | 
+| since       | Timestamp of last BGP session state change.  | `time` |      |
+
+#### Route
+
+| Field              | Description                            | Schema | Possible Values |
+|--------------------|----------------------------------------|--------|-----------------|
+| type             | Type indicates if the route is being used for forwarding or not.  | string | FIB, RIB |
+| destination      | Destination IP of the route. | `ip` |  |
+| gateway          | Gateway IP of the route. If the route does not involve a gateway, for example a direct route, the value is `N/A`.  | `ip` or `N/A` |  | 
+| interface      | Network interface for the destination. For a blackhole route, the value is `blackhole`. For a unreachable route, the value is `unreachable`.  | string |      |
+| learnedFrom      | Information regarding where this route originated. | [learned from](#learnedfrom) |  |
+
+#### LearnedFrom
+
+| Field              | Description                            | Schema | Possible Values |
+|--------------------|----------------------------------------|--------|-----------------|
+| sourceType         | Type of the source where a route is learned from. | string | Kernel, Static, Direct, NodeMesh, BGPPeer |
+| peerIP             | If sourceType is NodeMesh or BGPPeer, IP address of the router that sent us this route. | `ip` |  |
 
 #### Notes
 
