@@ -49,7 +49,7 @@ blocks:
     jobs:
     - name: Build and run UT, k8sfv
       execution_time_limit:
-        minutes: 20
+        minutes: 30
       commands:
       - checkout
       - cache restore go-pkg-cache
