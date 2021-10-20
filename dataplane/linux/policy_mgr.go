@@ -17,8 +17,9 @@ package intdataplane
 import (
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
