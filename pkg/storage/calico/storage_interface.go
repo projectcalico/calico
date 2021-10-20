@@ -39,6 +39,8 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 		return NewKubeControllersConfigurationStorage(opts)
 	case "projectcalico.org/clusterinformations":
 		return NewClusterInformationStorage(opts)
+	case "projectcalico.org/caliconodestatuses":
+		return NewCalicoNodeStatusStorage(opts)
 	default:
 		klog.Fatalf("Unable to create storage for resource %v", opts.RESTOptions.ResourcePrefix)
 		return registry.DryRunnableStorage{}, nil

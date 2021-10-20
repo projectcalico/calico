@@ -1190,3 +1190,71 @@ func testClusterInformationClient(client calicoclient.Interface, name string) er
 
 	return nil
 }
+
+// TestCalicoNodeStatusClient exercises the CalicoNodeStatus client.
+func TestCalicoNodeStatusClient(t *testing.T) {
+	const name = "test-caliconodestatus"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.CalicoNodeStatus{}
+			})
+			defer shutdownServer()
+			if err := testCalicoNodeStatusClient(client, name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-caliconodestatus test failed")
+	}
+}
+
+func testCalicoNodeStatusClient(client calicoclient.Interface, name string) error {
+	seconds := uint32(11)
+	caliconodestatusClient := client.ProjectcalicoV3().CalicoNodeStatuses()
+	caliconodestatus := &v3.CalicoNodeStatus{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+
+		Spec: v3.CalicoNodeStatusSpec{
+			Node: "node1",
+			Classes: []v3.NodeStatusClassType{
+				v3.NodeStatusClassTypeAgent,
+				v3.NodeStatusClassTypeBGP,
+				v3.NodeStatusClassTypeRoutes,
+			},
+			UpdatePeriodSeconds: &seconds,
+		},
+	}
+	ctx := context.Background()
+
+	// start from scratch
+	caliconodestatuses, err := caliconodestatusClient.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error listing caliconodestatuses (%s)", err)
+	}
+	if caliconodestatuses.Items == nil {
+		return fmt.Errorf("items field should not be set to nil")
+	}
+
+	caliconodestatusNew, err := caliconodestatusClient.Create(ctx, caliconodestatus, metav1.CreateOptions{})
+	if nil != err {
+		return fmt.Errorf("error creating the object '%v' (%v)", caliconodestatus, err)
+	}
+	if name != caliconodestatusNew.Name {
+		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", caliconodestatus, caliconodestatusNew)
+	}
+
+	caliconodestatusNew, err = caliconodestatusClient.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting object %s (%s)", name, err)
+	}
+
+	err = caliconodestatusClient.Delete(ctx, name, metav1.DeleteOptions{})
+	if nil != err {
+		return fmt.Errorf("object should be deleted (%s)", err)
+	}
+
+	return nil
+}

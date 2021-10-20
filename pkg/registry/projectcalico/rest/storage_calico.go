@@ -25,6 +25,7 @@ import (
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicobgpconfiguration "github.com/projectcalico/apiserver/pkg/registry/projectcalico/bgpconfiguration"
 	calicobgppeer "github.com/projectcalico/apiserver/pkg/registry/projectcalico/bgppeer"
+	"github.com/projectcalico/apiserver/pkg/registry/projectcalico/caliconodestatus"
 	calicoclusterinformation "github.com/projectcalico/apiserver/pkg/registry/projectcalico/clusterinformation"
 	calicofelixconfig "github.com/projectcalico/apiserver/pkg/registry/projectcalico/felixconfig"
 	calicognetworkset "github.com/projectcalico/apiserver/pkg/registry/projectcalico/globalnetworkset"
@@ -339,6 +340,28 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"clusterinfo"},
 	)
 
+	caliconodestatusRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("caliconodestatuses"))
+	if err != nil {
+		return nil, err
+	}
+	caliconodestatusOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   caliconodestatusRESTOptions,
+			Capacity:      1000,
+			ObjectType:    caliconodestatus.EmptyObject(),
+			ScopeStrategy: caliconodestatus.NewStrategy(scheme),
+			NewListFunc:   caliconodestatus.NewList,
+			GetAttrsFunc:  caliconodestatus.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: caliconodestatusRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{"caliconodestatus"},
+	)
+
 	storage := map[string]rest.Storage{}
 	storage["networkpolicies"] = rESTInPeace(calicopolicy.NewREST(scheme, *policyOpts))
 	storage["globalnetworkpolicies"] = rESTInPeace(calicogpolicy.NewREST(scheme, *gpolicyOpts))
@@ -352,6 +375,7 @@ func (p RESTStorageProvider) NewV3Storage(
 	storage["profiles"] = rESTInPeace(calicoprofile.NewREST(scheme, *profileOpts))
 	storage["felixconfigurations"] = rESTInPeace(calicofelixconfig.NewREST(scheme, *felixConfigOpts))
 	storage["clusterinformations"] = rESTInPeace(calicoclusterinformation.NewREST(scheme, *clusterInformationOpts))
+	storage["caliconodestatuses"] = rESTInPeace(caliconodestatus.NewREST(scheme, *caliconodestatusOpts))
 
 	kubeControllersConfigsStorage, kubeControllersConfigsStatusStorage, err := calicokubecontrollersconfig.NewREST(scheme, *kubeControllersConfigsOpts)
 	if err != nil {
