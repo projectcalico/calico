@@ -4,10 +4,9 @@ description: API for this Calico resource.
 canonical_url: '/reference/resources/caliconodestatus'
 ---
 
-An Calico node status resource (`CalicoNodeStatus`) represents a collection of status information for a node that {{site.prodname}} should 
-reports back to the user.
+A Calico node status resource (`CalicoNodeStatus`) represents a collection of status information for a node that {{site.prodname}} reports back to the user.
 
-As of today, BGP status information including status of BGP agents, BGP sessions and routes exposed to BGP agents are collected. 
+As of today, status of BGP agents, BGP sessions and routes exposed to BGP agents are collected. 
 Calico node status resource is only valid when {{site.prodname}} BGP networking is in use.
 
 ### Sample YAML
@@ -134,8 +133,8 @@ Yaml that user read back from the same resource after all the status is populate
 | Field          | Description                 | Values   |
 |----------------|-----------------------------|----------|
 | lastUpdated  | Timestamp representing the server time when CalicoNodeStatus object last updated. It is represented in RFC3339 form and is in UTC. |
-| agent  | List of [BGP daemon status](#bgpagentdaemonstatus) on the node. | 'birdV4' holds status of IPv4 bird daemon, 'birdV6' holds status of IPv6 bird daemon |
-| bpg  | List of [BGP status](#bgptatus) on the node. | 'peersV4' holds status of IPv4 BGP peers, 'peersV6' holds status of IPv6 BGP peers |
+| agent  | List of [BGP daemon status](#bgpdaemonstatus) on the node. | 'birdV4' holds status of IPv4 bird daemon, 'birdV6' holds status of IPv6 bird daemon |
+| bpg  | List of [BGP status](#bgpstatus) on the node. | 'peersV4' holds status of IPv4 BGP peers, 'peersV6' holds status of IPv6 BGP peers |
 | routes  | List of [Route status](#routestatus) learned by BGP daemon on the node. | 'routesV4' holds status of IPv4 routes , 'routesV6' holds status of IPv6 routes |
 
 #### Classes
@@ -146,7 +145,7 @@ Yaml that user read back from the same resource after all the status is populate
 | BGP                | Status of BGP sessions | 
 | Routes             | Status of routes exposed to BGP daemon |
 
-#### BgpDaemonStatus
+#### BGPDaemonStatus
 
 | Field              | Description                            | Schema | Possible Values |
 |--------------------|----------------------------------------|--------|-----------------|
@@ -156,7 +155,7 @@ Yaml that user read back from the same resource after all the status is populate
 | lastBootTime       | Last boot time of BGP daemon           | string |                 |
 | lastReconfigurationTime| Last reconfiguration time of BGP daemon | string |            |
 
-#### BgpStatus
+#### BGPStatus
 
 | Field              | Description                            | Schema |
 |--------------------|----------------------------------------|--------|
@@ -174,7 +173,7 @@ Yaml that user read back from the same resource after all the status is populate
 | routesV4  | IPv4 routes learned by BGP daemon on the node.  | List of [route](#route) | 
 | routesV6  | IPv6 routes learned by BGP daemon on the node.  | List of [route](#route) | 
 
-#### BgpPeer
+#### BGPPeer
 
 | Field              | Description                            | Schema | Possible Values |
 |--------------------|----------------------------------------|--------|-----------------|
