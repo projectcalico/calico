@@ -2059,8 +2059,7 @@ func init() {
 				},
 			}, false,
 		),
-
-		Entry("disallow a Service match in an ingress rule",
+		Entry("allow a Service match in an ingress rule source",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.NetworkPolicySpec{
@@ -2076,7 +2075,25 @@ func init() {
 						},
 					},
 				},
-			}, false,
+			}, true,
+		),
+		Entry("disallow a Service match in an ingress rule destination",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Egress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, true,
 		),
 		Entry("disallow a Service match AND a ServiceAccount match",
 			&api.NetworkPolicy{
@@ -2099,11 +2116,11 @@ func init() {
 				},
 			}, false,
 		),
-		Entry("disallow a Service match AND a Ports match",
+		Entry("disallow a Service match AND a Ports match on an egress destination rule",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.NetworkPolicySpec{
-					Ingress: []api.Rule{
+					Egress: []api.Rule{
 						{
 							Action: "Allow",
 							Destination: api.EntityRule{
@@ -2120,11 +2137,11 @@ func init() {
 				},
 			}, false,
 		),
-		Entry("disallow a Service match AND a NotPorts match",
+		Entry("disallow a Service match AND a NotPorts match on an egress destination rule",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.NetworkPolicySpec{
-					Ingress: []api.Rule{
+					Egress: []api.Rule{
 						{
 							Action: "Allow",
 							Destination: api.EntityRule{
@@ -2140,6 +2157,50 @@ func init() {
 					},
 				},
 			}, false,
+		),
+		Entry("allow a Service match AND a Ports match specified on the source on an ingress source rule",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action:   "Allow",
+							Protocol: protocolFromString("TCP"),
+							Source: api.EntityRule{
+								Ports: []numorstring.Port{
+									{MinPort: 80, MaxPort: 80},
+								},
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, true,
+		),
+		Entry("allow a Service match AND a NotPorts match on an ingress source rule",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action:   "Allow",
+							Protocol: protocolFromString("TCP"),
+							Source: api.EntityRule{
+								NotPorts: []numorstring.Port{
+									{MinPort: 80, MaxPort: 80},
+								},
+								Services: &api.ServiceMatch{
+									Name:      "service1",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}, true,
 		),
 		Entry("disallow a Service match AND a Nets match",
 			&api.NetworkPolicy{
@@ -2258,7 +2319,7 @@ func init() {
 			&api.GlobalNetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.GlobalNetworkPolicySpec{
-					Ingress: []api.Rule{
+					Egress: []api.Rule{
 						{
 							Action: "Allow",
 							Destination: api.EntityRule{

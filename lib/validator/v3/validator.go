@@ -1059,6 +1059,17 @@ func validateRule(structLevel validator.StructLevel) {
 		structLevel.ReportError(alpValue, alpField,
 			"", reason("only valid for Allow rules"), "")
 	}
+
+	// Check that destination service rules do not use ports.
+	// Destination service rules use ports specified on the endpoints.
+	if rule.Destination.Services != nil && len(rule.Destination.Ports) != 0 {
+		structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
+			"Destination.Ports", "", reason("cannot specify ports with a service selector"), "")
+	}
+	if rule.Destination.Services != nil && len(rule.Destination.NotPorts) != 0 {
+		structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
+			"Destination.NotPorts", "", reason("cannot specify notports with a service selector"), "")
+	}
 }
 
 func validateEntityRule(structLevel validator.StructLevel) {
@@ -1101,13 +1112,8 @@ func validateEntityRule(structLevel validator.StructLevel) {
 			structLevel.ReportError(reflect.ValueOf(rule.Services),
 				"Services field", "", reason("cannot specify ServiceAccounts and Services on the same rule"), "")
 		}
-		if len(rule.Ports) != 0 || len(rule.NotPorts) != 0 {
-			// Service rules use ports specified on the endpoints.
-			structLevel.ReportError(reflect.ValueOf(rule.Services),
-				"Services field", "", reason("cannot specify Ports/NotPorts and Services on the same rule"), "")
-		}
 		if len(rule.Nets) != 0 || len(rule.NotNets) != 0 {
-			// Service rules use ports specified on the endpoints.
+			// Service rules use IPs specified on the endpoints.
 			structLevel.ReportError(reflect.ValueOf(rule.Services),
 				"Services field", "", reason("cannot specify Nets/NotNets and Services on the same rule"), "")
 		}
@@ -1266,7 +1272,7 @@ func validateNetworkPolicy(structLevel validator.StructLevel) {
 	validateObjectMetaLabels(structLevel, np.Labels)
 
 	for _, r := range spec.Egress {
-		// Services are only allowed as a destination.
+		// Services are only allowed in the destination on Egress rules.
 		if r.Source.Services != nil {
 			structLevel.ReportError(
 				reflect.ValueOf(r.Source.Services), "Services", "",
@@ -1281,18 +1287,12 @@ func validateNetworkPolicy(structLevel validator.StructLevel) {
 		}
 	}
 
-	// Services are only allowed on egress rules.
+	// Services are only allowed in the source on Ingress rules.
 	for _, r := range spec.Ingress {
-		if r.Source.Services != nil {
-			structLevel.ReportError(
-				reflect.ValueOf(r.Source.Services), "Services", "",
-				reason("not allowed in ingress rule"), "",
-			)
-		}
 		if r.Destination.Services != nil {
 			structLevel.ReportError(
 				reflect.ValueOf(r.Destination.Services), "Services", "",
-				reason("not allowed in ingress rule"), "",
+				reason("not allowed in ingress rule destination"), "",
 			)
 		}
 	}
@@ -1418,7 +1418,7 @@ func validateGlobalNetworkPolicy(structLevel validator.StructLevel) {
 	}
 
 	for _, r := range spec.Egress {
-		// Services are only allowed as a destination.
+		// Services are only allowed as a destination on Egress rules.
 		if r.Source.Services != nil {
 			structLevel.ReportError(
 				reflect.ValueOf(r.Source.Services), "Services", "",
@@ -1433,18 +1433,12 @@ func validateGlobalNetworkPolicy(structLevel validator.StructLevel) {
 		}
 	}
 
-	// Services are only allowed on egress rules.
+	// Services are only allowed as a source on Ingress rules.
 	for _, r := range spec.Ingress {
-		if r.Source.Services != nil {
-			structLevel.ReportError(
-				reflect.ValueOf(r.Source.Services), "Services", "",
-				reason("not allowed in ingress rule"), "",
-			)
-		}
 		if r.Destination.Services != nil {
 			structLevel.ReportError(
 				reflect.ValueOf(r.Destination.Services), "Services", "",
-				reason("not allowed in ingress rule"), "",
+				reason("not allowed in ingress rule destination"), "",
 			)
 		}
 	}
@@ -1455,6 +1449,14 @@ func validateGlobalNetworkPolicy(structLevel validator.StructLevel) {
 		if r.Destination.Services != nil && r.Destination.Services.Namespace == "" {
 			structLevel.ReportError(
 				reflect.ValueOf(r.Destination.Services.Namespace), "Namespace", "",
+				reason("must specify a namespace"), "",
+			)
+		}
+	}
+	for _, r := range spec.Ingress {
+		if r.Source.Services != nil && r.Source.Services.Namespace == "" {
+			structLevel.ReportError(
+				reflect.ValueOf(r.Source.Services.Namespace), "Namespace", "",
 				reason("must specify a namespace"), "",
 			)
 		}
