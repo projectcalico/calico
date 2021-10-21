@@ -24,6 +24,8 @@ global_job_config:
       - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       - checkout
+      # Unshallow the clone so the "git describe" can see all the tags.
+      - git fetch --unshallow
       # Note that the 'cache restore' commands require that the "Build" block has been run. The "Build" block is what populates
       # the cache, therefore every block that requires the use of these cached items must make the "Build" block one of
       # it's dependencies.
