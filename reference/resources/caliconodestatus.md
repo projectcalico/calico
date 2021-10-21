@@ -200,22 +200,14 @@ Yaml that user read back from the same resource after all the status is populate
 | sourceType         | Type of the source where a route is learned from. | string | Kernel, Static, Direct, NodeMesh, BGPPeer |
 | peerIP             | If sourceType is NodeMesh or BGPPeer, IP address of the router that sent us this route. | `ip` |  |
 
+
 #### Notes
 
-The implementation of `IPReservation`s is designed to handle reservation of a small number of IP addresses/CIDRs from
-(generally much larger) IP pools.  If a significant portion of an IP pool is reserved (say more than 10%) then 
-{{site.prodname}} may become significantly slower when searching for free IPAM blocks.
+Updating `CalicoNodeStatus` could have some performance impact on CPU/Memory usage of the node as well as adding loads to kube-apiserver. 
+Based on our testing result of a ten nodes full mesh cluster, each node was assigned with a `CalicoNodeStatus` resource with which update interval is set to one second, a 5% increase of one vCPU and an increase of 4M memory on each node was observed.
 
-Since `IPReservations` must be consulted for every IPAM assignment request, it's best to have one or two 
-`IPReservation` resources with multiple addresses per `IPReservation` resource (rather than having many IPReservation
-resources), each with one address inside.
+> **Warning**: The implementation of `CalicoNodeStatus` is designed to handle a small number of nodes (less than 10 is recommended) reporting back status in the same time. If `CalicoNodeStatus` are created for a large number of nodes, and with short update interval,
+kube-apiserver may become significantly slower and unresponsive.
+{: .alert .alert-warning}
 
-If an `IPReservation` is created after an IP from its range is already in use then the IP is not automatically 
-released back to the pool.  The reservation check is only done at auto allocation time.
-
-{{site.prodname}} supports Kubernetes [annotations that force the use of specific IP addresses](../cni-plugin/configuration#requesting-a-specific-ip-address). These annotations override any `IPReservation`s that 
-are in place.
-
-When Windows nodes claim blocks of IPs they automatically assign the first three IPs
-in each block and the final IP for internal purposes.  These assignments cannot be blocked by an `IPReservation`.
-However, if a whole IPAM block is reserved with an `IPReservation`, Windows nodes will not claim such a block.
+You should create `CalicoNodeStatus` for the node you are interested in and for debugging purpose only. `CalicoNodeStatus` resource should be deleted upon the completion of the debugging process.
