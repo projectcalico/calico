@@ -82,8 +82,6 @@ section:
     path: /reference/resources/bgpconfig
   - title: BGP peer
     path: /reference/resources/bgppeer
-  - title: Calico node status
-    path: /reference/resources/caliconodestatus
   - title: Felix configuration
     path: /reference/resources/felixconfig
   - title: Global network policy
