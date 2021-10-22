@@ -88,6 +88,7 @@ func (gc CalicoNodeStatusConverter) convertToAAPI(libcalicoObject resourceObject
 	lcgCalicoNodeStatus := libcalicoObject.(*api.CalicoNodeStatus)
 	aapiCalicoNodeStatus := aapiObj.(*aapi.CalicoNodeStatus)
 	aapiCalicoNodeStatus.Spec = lcgCalicoNodeStatus.Spec
+	aapiCalicoNodeStatus.Status = lcgCalicoNodeStatus.Status
 	aapiCalicoNodeStatus.TypeMeta = lcgCalicoNodeStatus.TypeMeta
 	aapiCalicoNodeStatus.ObjectMeta = lcgCalicoNodeStatus.ObjectMeta
 }
