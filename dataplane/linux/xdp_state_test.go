@@ -106,6 +106,8 @@ var knownProtoRuleFields = set.From(
 	"OriginalDstNamespaceSelector",
 	"OriginalNotSrcSelector",
 	"OriginalNotDstSelector",
+	"OriginalSrcService",
+	"OriginalSrcServiceNamespace",
 	"OriginalDstService",
 	"OriginalDstServiceNamespace",
 	"DstServiceAccountMatch",
