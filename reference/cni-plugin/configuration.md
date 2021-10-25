@@ -490,3 +490,15 @@ take on the following precedence, 1 being the highest:
 > a newly configured IP pool, they must be recreated. We recommmend doing this
 > before going into production or during a maintenance window.
 {: .alert .alert-info}
+
+### Specify num_queues for veth interfaces
+
+`num_rx_queues` and `num_tx_queues` can be set using the `num_queues` option in the CNI configuration. Default: 1
+
+For example:
+
+```json
+{
+  "num_queues": 3,
+}
+```
