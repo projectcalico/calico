@@ -14,10 +14,6 @@ Using {{site.prodname}} network policy, you can leverage Kubernetes Service name
 - Allow or deny access to the Kubernetes API service.
 - Reference port information already declared by the application, making it easier to keep policy up-to-date as application requirements change.
 
-### Limitations
-
-Service rules in network policy are not implemented on Windows nodes. This will be included in a future release.
-
 ### Features
 
 This how-to guide uses the following {{site.prodname}} features:
