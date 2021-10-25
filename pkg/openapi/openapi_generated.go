@@ -3128,6 +3128,13 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"disableBGPExport": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Disable exporting routes from this IP Pool’s CIDR over BGP. [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"blockSize": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 112 for IPv6.",
