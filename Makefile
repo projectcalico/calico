@@ -144,7 +144,7 @@ $(TYPHA_IMAGE): bin/calico-typha-$(ARCH) register
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	docker build --pull -t $(TYPHA_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image
+	docker buildx build --platform linux/$(ARCH) -t $(TYPHA_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
 ifeq ($(ARCH),amd64)
 	docker tag $(TYPHA_IMAGE):latest-$(ARCH) $(TYPHA_IMAGE):latest
 endif
