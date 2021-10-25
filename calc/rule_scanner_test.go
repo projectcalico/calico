@@ -167,6 +167,13 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 			OriginalDstService:          "svc",
 			OriginalDstServiceNamespace: "default",
 		}),
+	Entry("src service",
+		model.Rule{SrcService: "svc", SrcServiceNamespace: "default"},
+		ParsedRule{
+			SrcIPSetIDs:                 []string{"svcnoport:T03S_6hogdrGKrNFBcbKTFsH_uKwDHEo8JddOg"},
+			OriginalSrcService:          "svc",
+			OriginalSrcServiceNamespace: "default",
+		}),
 
 	// Tags/Selectors.
 	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),
@@ -276,7 +283,7 @@ var _ = Describe("ParsedRule", func() {
 			if strings.Contains(name, "IPSetIDs") || strings.Contains(name, "IPPortSetIDs") {
 				continue
 			}
-			if name == "OriginalDstService" || name == "OriginalDstServiceNamespace" {
+			if name == "OriginalDstService" || name == "OriginalDstServiceNamespace" || name == "OriginalSrcService" || name == "OriginalSrcServiceNamespace" {
 				// These don't exist on the model.Rule, as there is no translation done
 				// on the Service / ServiceNamespace fields that requires them.
 				continue
@@ -298,9 +305,9 @@ var _ = Describe("ParsedRule", func() {
 					!strings.Contains(name, "Service")) {
 				continue
 			}
-			if name == "DstService" || name == "DstServiceNamespace" {
+			if name == "DstService" || name == "DstServiceNamespace" || name == "SrcService" || name == "SrcServiceNamespace" {
 				// Service name and namespace are rendered on the ParsedRule
-				// as IPPortIPSetIDs.
+				// as either IPPortIPSetIDs or IPSetIDs.
 				continue
 			}
 			if strings.HasSuffix(name, "Net") {
