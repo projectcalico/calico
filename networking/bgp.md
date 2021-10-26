@@ -170,7 +170,7 @@ but this will cause a disruption on the workloads on those nodes as they are dra
 2. Also set up a [BGPPeer](#configure-a-node-to-act-as-a-route-reflector) spec to configure route reflector nodes to peer with each other and other non-route-reflector nodes
 using label selectors.
 
-3. Wait for these peerings to be established. This can be [verified](#view-bgp-peering-status-for-a-node) by running `sudo calicoctl node status` on the nodes.
+3. Wait for these peerings to be established. This can be [verified](#view-bgp-peering-status-for-a-node) by running `sudo calicoctl node status` on the nodes. Alternatively, you can create a [`CalicoNodeStatus` resource](../reference/resources/caliconodestatus) to get BGP session status for the node.
 
 4. [Disable the BGP node-to-node mesh for the cluster.](#disable-the-default-bgp-node-to-node-mesh)
 
@@ -189,6 +189,8 @@ A table that lists all of the neighbors and their current status is displayed. S
 
 >**Note**: This command communicates with the local {{site.prodname}} agent, so you must execute it on the node whose status you are attempting to view.
 {: .alert .alert-info}
+
+Alternatively, you can create a [`CalicoNodeStatus` resource](../reference/resources/caliconodestatus) to get BGP session status for the node.
 
 #### Change the default global AS number
 
