@@ -97,6 +97,8 @@ No IPv6 peers found.
 ```
 {: .no-select-button}
 
+Alternatively, you can create a [`CalicoNodeStatus` resource](../reference/resources/caliconodestatus) to get BGP session status for the node.
+
 If you do not see this, please check the following.
 
 - Make sure there is IP connectivity between your hosts.

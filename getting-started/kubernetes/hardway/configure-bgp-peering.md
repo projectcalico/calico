@@ -43,6 +43,8 @@ No IPv6 peers found.
 ```
 {: .no-select-button}
 
+Alternatively, you can create a [`CalicoNodeStatus` resource](../reference/resources/caliconodestatus) to get BGP session status for the node.
+
 Notice there are four BGP sessions, one to each other node in the cluster. In a small cluster, this
 works well and is highly resilient. However, the total number of BGP sessions scales as the square
 of the number of nodes, and in a large cluster this creates a lot of overhead.
@@ -152,6 +154,8 @@ IPv6 BGP status
 No IPv6 peers found.
 ```
 {: .no-select-button}
+
+Alternatively, you can create a [`CalicoNodeStatus` resource](../reference/resources/caliconodestatus) to get BGP session status for the node.
 
 ## Next
 
