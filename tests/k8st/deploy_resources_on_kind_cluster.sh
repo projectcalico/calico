@@ -104,6 +104,17 @@ done
 echo "client and webserver pods are running."
 echo
 
+echo "Deploy Calico apiserver"
+${kubectl} create -f https://docs.projectcalico.org/master/manifests/apiserver.yaml
+openssl req -x509 -nodes -newkey rsa:4096 -keyout apiserver.key -out apiserver.crt -days 365 -subj "/" -addext "subjectAltName = DNS:calico-api.calico-apiserver.svc"
+${kubectl} create secret -n calico-apiserver generic calico-apiserver-certs --from-file=apiserver.key --from-file=apiserver.crt
+${kubectl} patch apiservice v3.projectcalico.org -p \
+    "{\"spec\": {\"caBundle\": \"$(${kubectl} get secret -n calico-apiserver calico-apiserver-certs -o go-template='{{ index .data "apiserver.crt" }}')\"}}"
+time ${kubectl} wait pod -l k8s-app=calico-apiserver --for=condition=Ready -n calico-apiserver --timeout=30s
+echo "Patch Calico apiserver to run on master, this would make sure communications to Calico apiserver won't be affected by test cases"
+${kubectl} patch deployment calico-apiserver -n calico-apiserver -p '{"spec":{"template":{"spec":{"nodeSelector":{ "kubernetes.io/hostname": "kind-control-plane" }}}}}'
+echo "Calico apiserver is running."
+
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
 
