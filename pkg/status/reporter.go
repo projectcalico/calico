@@ -49,7 +49,7 @@ type reporter struct {
 	ticker   *time.Ticker
 
 	// populators
-	populators populatorRegistry
+	populators PopulatorRegistry
 
 	// channel to indicate this reporter is not needed anymore.
 	// It should start termination process.
@@ -66,7 +66,7 @@ type reporter struct {
 // A new reporter is created when there is a new object.
 func newReporter(name string,
 	client client.Interface,
-	populators populatorRegistry,
+	populators PopulatorRegistry,
 	request *apiv3.CalicoNodeStatus) *reporter {
 	if request == nil {
 		// Should not happen.

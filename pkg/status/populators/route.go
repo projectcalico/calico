@@ -32,9 +32,10 @@ import (
 )
 
 var (
-	viaRegex       = regexp.MustCompile(`(?P<dest>\S*)\s*via\s(?P<gateway>\S*)\s*on\s(?P<iface>.*)\s\[(?P<from>\S*)\s.*\].*`)
-	devRegex       = regexp.MustCompile(`(?P<dest>\S*)\s*dev\s(?P<iface>.*)\s\[(?P<from>\S*)\s.*\].*`)
-	blackholeRegex = regexp.MustCompile(`(?P<dest>\S*)\s*blackhole\s\[(?P<from>\S*)\s.*\].*`)
+	viaRegex         = regexp.MustCompile(`(?P<dest>\S*)\s*via\s(?P<gateway>\S*)\s*on\s(?P<iface>.*)\s\[(?P<from>\S*)\s.*\].*`)
+	devRegex         = regexp.MustCompile(`(?P<dest>\S*)\s*dev\s(?P<iface>.*)\s\[(?P<from>\S*)\s.*\].*`)
+	blackholeRegex   = regexp.MustCompile(`(?P<dest>\S*)\s*blackhole\s\[(?P<from>\S*)\s.*\].*`)
+	unreachableRegex = regexp.MustCompile(`(?P<dest>\S*)\s*unreachable\s\[(?P<from>\S*)\s.*\].*`)
 )
 
 // route is a structure containing details about a route.
@@ -135,6 +136,16 @@ func (r *route) unmarshalBIRD(line, ipSep, previousDest string) (string, bool) {
 		r.gateway = "N/A"
 		r.iface = "blackhole"
 		r.learnedFrom = m["from"]
+	} else if strings.Contains(line, " unreachable ") {
+		m := getGroupValues(unreachableRegex, line)
+		if len(m) == 0 {
+			log.Errorf("Failed to parse (%s)", line)
+			return "", false
+		}
+		r.dest = m["dest"]
+		r.gateway = "N/A"
+		r.iface = "unreachable"
+		r.learnedFrom = m["from"]
 	}
 
 	if len(r.dest) == 0 {
@@ -230,8 +241,7 @@ func scanBIRDRoutes(ipv IPFamily, conn net.Conn) ([]route, error) {
 	// 0000
 
 	scanner := bufio.NewScanner(conn)
-	gwRoutes := []route{}
-	devRoutes := []route{}
+	routes := []route{}
 
 	// Set a time-out for reading from the socket connection.
 	err := conn.SetReadDeadline(time.Now().Add(birdTimeOut))
@@ -255,21 +265,13 @@ func scanBIRDRoutes(ipv IPFamily, conn net.Conn) ([]route, error) {
 			// "1007" code means first row of data.
 			route := route{}
 			if previousDest, ok = route.unmarshalBIRD(str[5:], ipSep, previousDest); ok {
-				if route.gateway != "N/A" {
-					gwRoutes = append(gwRoutes, route)
-				} else {
-					devRoutes = append(devRoutes, route)
-				}
+				routes = append(routes, route)
 			}
 		} else if strings.HasPrefix(str, " ") {
 			// Row starting with a " " is another row of data.
 			route := route{}
 			if previousDest, ok = route.unmarshalBIRD(str[1:], ipSep, previousDest); ok {
-				if route.gateway != "N/A" {
-					gwRoutes = append(gwRoutes, route)
-				} else {
-					devRoutes = append(devRoutes, route)
-				}
+				routes = append(routes, route)
 			}
 		} else {
 			// Format of row is unexpected.
@@ -285,7 +287,7 @@ func scanBIRDRoutes(ipv IPFamily, conn net.Conn) ([]route, error) {
 		}
 	}
 
-	return append(gwRoutes, devRoutes...), scanner.Err()
+	return routes, scanner.Err()
 }
 
 func getRoutes(ipv IPFamily) ([]route, error) {

@@ -34,7 +34,7 @@ import (
 type birdStatus struct {
 	ready            bool
 	version          string
-	routeID          string
+	routerID         string
 	serverTime       string
 	lastBootTime     string
 	lastReconfigTime string
@@ -51,7 +51,7 @@ func (b *birdStatus) toNodeStatusAPI() apiv3.BGPDaemonStatus {
 	return apiv3.BGPDaemonStatus{
 		State:                   state,
 		Version:                 b.version,
-		RouterID:                b.routeID,
+		RouterID:                b.routerID,
 		LastBootTime:            b.lastBootTime,
 		LastReconfigurationTime: b.lastReconfigTime,
 	}
@@ -68,7 +68,7 @@ func (b *birdStatus) unmarshalBIRD(line string) bool {
 	} else if strings.HasPrefix(line, "BIRD v") {
 		b.version = strings.TrimPrefix(line, "BIRD ")
 	} else if strings.HasPrefix(line, "Router ID is ") {
-		b.routeID = strings.TrimPrefix(line, "Router ID is ")
+		b.routerID = strings.TrimPrefix(line, "Router ID is ")
 	} else if strings.HasPrefix(line, "Current server time is ") {
 		b.serverTime = strings.TrimPrefix(line, "Current server time is ")
 	} else if strings.HasPrefix(line, "Last reboot on ") {
@@ -222,7 +222,7 @@ func printStatus(status *birdStatus) {
 	row := []string{
 		fmt.Sprintf("%t", status.ready),
 		status.version,
-		status.routeID,
+		status.routerID,
 		status.serverTime,
 		status.lastBootTime,
 		status.lastReconfigTime,
