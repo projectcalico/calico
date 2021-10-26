@@ -71,3 +71,11 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 func (o *Obj) Close() error {
 	panic("LIBBPF syscall stub")
 }
+
+func (m *Map) IsMapInternal() bool {
+	panic("LIBBPF syscall stub")
+}
+
+func SetGlobalVars(m *Map, hostIP, intfIP, extToSvcMark uint32, tmtu, vxlanPort, psNatStart, psNatLen uint16) error {
+	panic("LIBBPF syscall stub")
+}
