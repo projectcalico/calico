@@ -148,10 +148,10 @@ type EntityRule struct {
 	// If specified, only traffic that originates from or terminates at endpoints within the selected
 	// service(s) will be matched, and only to/from each endpoint's port.
 	//
-	// Services cannot be specified on the same rule as Selector, NotSelector, NamespaceSelector, Ports,
-	// NotPorts, Nets, NotNets or ServiceAccounts.
+	// Services cannot be specified on the same rule as Selector, NotSelector, NamespaceSelector, Nets,
+	// NotNets or ServiceAccounts.
 	//
-	// Only valid on egress rules.
+	// Ports and NotPorts can only be specified with Services on ingress rules.
 	Services *ServiceMatch `json:"services,omitempty" validate:"omitempty"`
 
 	// Ports is an optional field that restricts the rule to only apply to traffic that has a
