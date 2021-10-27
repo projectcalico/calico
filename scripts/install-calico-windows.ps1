@@ -322,7 +322,7 @@ if (-Not [string]::IsNullOrEmpty($KubeVersion) -and $platform -NE "eks") {
     PrepareKubernetes
 }
 
-if ((Get-Service | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
+if ((Get-Service -exclude 'CalicoUpgrade' | where Name -Like 'Calico*' | where Status -EQ Running) -NE $null) {
 Write-Host "Calico services are still running. In order to re-run the installation script, stop the CalicoNode and CalicoFelix services or uninstall them by running: $RootDir\uninstall-calico.ps1"
 Exit
 }
