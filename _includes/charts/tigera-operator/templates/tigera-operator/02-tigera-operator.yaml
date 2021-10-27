@@ -33,6 +33,7 @@ spec:
           imagePullPolicy: IfNotPresent
           command:
             - operator
+            - $(CMD_FLAGS)
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
@@ -48,6 +49,12 @@ spec:
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
               value: {{.Values.tigeraOperator.version}}
+            - name: CMD_FLAGS
+              valueFrom:
+                configMapKeyRef:
+                  name: tigera-operator-flags
+                  key: flags
+                  optional: true
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
