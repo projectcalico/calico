@@ -24,6 +24,7 @@
 #include <bpf_endian.h>    /* For bpf_ntohX etc. */
 #include <stddef.h>
 #include <linux/ip.h>
+#include "globals.h"
 
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
@@ -236,7 +237,11 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 }
 
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
-
+#if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
+extern const volatile struct cali_global_data global_data;
+#define CALI_CONFIGURABLE_DEFINE(name, pattern)
+#define CALI_CONFIGURABLE(name)  global_data.name
+#else
 #define CALI_CONFIGURABLE_DEFINE(name, pattern)							\
 static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
 {												\
@@ -244,8 +249,9 @@ static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
 	asm("%0 = " #pattern ";" : "=r"(ret) /* output */ : /* no inputs */ : /* no clobber */);\
 	return ret;										\
 }
-
 #define CALI_CONFIGURABLE(name)	cali_configurable_##name()
+#endif
+
 
 CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* be 0x54534f48 = ASCII(HOST) */
 CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(TMTU) */

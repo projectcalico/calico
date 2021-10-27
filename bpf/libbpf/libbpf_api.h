@@ -18,6 +18,7 @@
 #include <bpf.h>
 #include <stdlib.h>
 #include <errno.h>
+#include "globals.h"
 
 static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
@@ -101,3 +102,18 @@ int bpf_tc_update_jump_map(struct bpf_object *obj, char* mapName, char *progName
 	return bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
 }
 
+void bpf_set_global_vars(struct bpf_map *map, uint hostIP, uint intfIP, uint ext_to_svc_mark, ushort tmtu, ushort vxlanPort, ushort psnat_start, ushort psnat_len) {
+	struct cali_global_data data = {
+	    .host_ip = hostIP,
+	    .tunnel_mtu = tmtu,
+	    .vxlan_port = vxlanPort,
+	    .intf_ip = intfIP,
+	    .ext_to_svc_mark = ext_to_svc_mark,
+	    .psnat_start = psnat_start,
+	    .psnat_len = psnat_len,
+	};
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(struct cali_global_data)));
+	return;
+}
+
+	

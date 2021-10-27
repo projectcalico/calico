@@ -65,6 +65,10 @@ func (m *Map) SetPinPath(path string) error {
 	return nil
 }
 
+func (m *Map) IsMapInternal() bool {
+	return bool(C.bpf_map__is_internal(m.bpfMap))
+}
+
 func OpenObject(filename string) (*Obj, error) {
 	bpf.IncreaseLockedMemoryQuota()
 	cFilename := C.CString(filename)
@@ -181,4 +185,10 @@ func (o *Obj) Close() error {
 		return nil
 	}
 	return fmt.Errorf("error: libbpf obj nil")
+}
+
+func SetGlobalVars(m *Map, hostIP, intfIP, extToSvcMark uint32, tmtu, vxlanPort, psNatStart, psNatLen uint16) error {
+	_, err := C.bpf_set_global_vars(m.bpfMap, C.uint(hostIP), C.uint(intfIP), C.uint(extToSvcMark),
+		C.ushort(tmtu), C.ushort(vxlanPort), C.ushort(psNatStart), C.ushort(psNatLen))
+	return err
 }
