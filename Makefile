@@ -19,6 +19,7 @@ endif
 
 BUILD_IMAGES ?=$(NODE_IMAGE)
 LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/node/bin/third-party/libbpf/src
+BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/node/bin/bpf/bpf-gpl
 LIBBPF_PATH=./bin/third-party/libbpf/src
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
@@ -194,15 +195,22 @@ update-pins: update-api-pin update-libcalico-pin update-felix-pin update-confd-p
 ###############################################################################
 # Building the binary
 ###############################################################################
-build:  $(NODE_CONTAINER_BINARY)
+build: $(NODE_CONTAINER_BINARY)
 
-remote-deps: mod-download
+remote-deps-copy-bpf: mod-download
+	rm -rf bin/bpf
+	mkdir -p bin/bpf
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+		$(GIT_CONFIG_SSH) \
+		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl bin/bpf; \
+		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-apache bin/bpf; \
+		chmod -R +w bin/bpf'
+
+remote-deps: remote-deps-copy-bpf
 	# Recreate the directory so that we are sure to clean up any old files.
 	rm -rf filesystem/etc/calico/confd
 	mkdir -p filesystem/etc/calico/confd
 	rm -rf config
-	rm -rf bin/bpf
-	mkdir -p bin/bpf
 	rm -rf bin/third-party
 	rm -rf filesystem/usr/lib/calico/bpf/
 	mkdir -p filesystem/usr/lib/calico/bpf/
@@ -212,9 +220,6 @@ remote-deps: mod-download
 		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/config filesystem/etc/calico/confd/config; \
 		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/templates filesystem/etc/calico/confd/templates; \
 		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config config; \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl bin/bpf; \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-apache bin/bpf; \
-		chmod -R +w bin/bpf; \
 		chmod +x bin/bpf/bpf-gpl/list-* bin/bpf/bpf-gpl/calculate-*; \
 		make -j 16 -C ./bin/bpf/bpf-apache/ all; \
 		make -j 16 -C ./bin/bpf/bpf-gpl/ all; \
@@ -236,7 +241,7 @@ $(LIBBPF_PATH)/libbpf.a: go.mod
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_DOCKER_PATH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_DOCKER_PATH)"
+CGO_CFLAGS="-I$(LIBBPF_DOCKER_PATH) -I$(BPF_GPL_DOCKER_PATH)"
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
@@ -246,7 +251,7 @@ endif
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): $(LIBBPF_PATH)/libbpf.a $(LOCAL_BUILD_DEP) $(SRC_FILES) go.mod
+$(NODE_CONTAINER_BINARY): remote-deps-copy-bpf $(LIBBPF_PATH)/libbpf.a $(LOCAL_BUILD_DEP) $(SRC_FILES) go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
