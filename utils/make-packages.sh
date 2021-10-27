@@ -71,7 +71,7 @@ EOF
 
 		excludes="${DPKG_EXCL:--I}"
 
-		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage ${excludes} -S
+		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage ${excludes} -S -d
 	    done
 
 	    cat <<EOF
