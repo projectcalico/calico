@@ -1568,7 +1568,7 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 					},
 					"services": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Services is an optional field that contains options for matching Kubernetes Services. If specified, only traffic that originates from or terminates at endpoints within the selected service(s) will be matched, and only to/from each endpoint's port.\n\nServices cannot be specified on the same rule as Selector, NotSelector, NamespaceSelector, Ports, NotPorts, Nets, NotNets or ServiceAccounts.\n\nOnly valid on egress rules.",
+							Description: "Services is an optional field that contains options for matching Kubernetes Services. If specified, only traffic that originates from or terminates at endpoints within the selected service(s) will be matched, and only to/from each endpoint's port.\n\nServices cannot be specified on the same rule as Selector, NotSelector, NamespaceSelector, Nets, NotNets or ServiceAccounts.\n\nPorts and NotPorts can only be specified with Services on ingress rules.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceMatch"),
 						},
 					},
