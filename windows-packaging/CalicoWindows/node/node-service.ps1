@@ -171,7 +171,7 @@ while ($True)
         $kubeletPid = -1
     }
 
-    if !(Get-UpgradeService) {
+    if (!(Get-UpgradeService)) {
         # If upgrade service has not been running, check if we should run upgrade service.
         .\calico-node.exe -should-install-windows-upgrade
         if ($LastExitCode -EQ 0) {
