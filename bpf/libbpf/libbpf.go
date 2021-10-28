@@ -138,6 +138,22 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 	return int(progId), nil
 }
 
+type Link struct {
+	link *C.struct_bpf_link
+}
+
+func (l *Link) Close() error {
+	if l.link != nil {
+		err := C.bpf_link_destroy(l.link)
+		if err != 0 {
+			return fmt.Errorf("error destroying link: %v", err)
+		}
+		l.link = nil
+		return nil
+	}
+	return fmt.Errorf("link nil")
+}
+
 func CreateQDisc(ifName string) error {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))

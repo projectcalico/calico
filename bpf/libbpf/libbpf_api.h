@@ -102,6 +102,10 @@ int bpf_tc_update_jump_map(struct bpf_object *obj, char* mapName, char *progName
 	return bpf_map_update_elem(map_fd, &progIndex, &prog_fd, 0);
 }
 
+int bpf_link_destroy(struct bpf_link *link) {
+	return bpf_link__destroy(link);
+}
+
 void bpf_tc_set_globals(struct bpf_map *map,
 			uint hostIP,
 			uint intfIP,
