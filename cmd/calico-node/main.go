@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/node/pkg/lifecycle/startup"
 	"github.com/projectcalico/node/pkg/status"
-	"github.com/projectcalico/node/pkg/upgrade"
+	"github.com/projectcalico/node/pkg/winupgrade"
 )
 
 // Create a new flag set.
@@ -141,10 +141,10 @@ func main() {
 		shutdown.Run()
 	} else if *runWinUpgrade {
 		logrus.SetFormatter(&logutils.Formatter{Component: "windows-upgrade"})
-		upgrade.Run()
+		winupgrade.Run()
 	} else if *runShouldInstallWindowsUpgrade {
 		logrus.SetFormatter(&logutils.Formatter{Component: "should-install-windows-upgrade"})
-		upgrade.ShouldInstallUpgradeService()
+		winupgrade.ShouldInstallUpgradeService()
 	} else if *monitorAddrs {
 		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
 		startup.ConfigureLogging()

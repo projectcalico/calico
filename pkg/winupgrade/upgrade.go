@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package upgrade
+package winupgrade
 
 import (
 	"bytes"
@@ -41,8 +41,7 @@ import (
 const (
 	CalicoKubeConfigFile    = "calico-kube-config"
 	CalicoUpgradeDir        = "c:\\CalicoUpgrade"
-	CalicoBaseDir           = "c:\\CalicoWindows"
-	EnterpriseBaseDir       = "c:\\TigeraCalico"
+	EnterpriseDir           = "TigeraCalico"
 	CalicoUpgradeLabel      = "projectcalico.org/windows-upgrade"
 	CalicoUpgradeInProgress = "in-progress"
 	CalicoVersionAnnotation = "projectcalico.org/version"
@@ -89,24 +88,6 @@ func Run() {
 		log.WithError(err).Fatal("Failed to interact with powershell")
 	}
 
-	// Update annotations for running variant and version.
-	node := k8snode(nodeName)
-	log.Infof("Setting version annotation on node %s", version)
-	err = node.addRemoveNodeAnnotations(clientSet,
-		map[string]string{CalicoVersionAnnotation: version},
-		[]string{})
-	if err != nil {
-		log.WithError(err).Fatal("Failed to set version annotation")
-	}
-
-	log.Infof("Setting variant annotation on node %s", variant)
-	err = node.addRemoveNodeAnnotations(clientSet,
-		map[string]string{CalicoVariantAnnotation: variant},
-		[]string{})
-	if err != nil {
-		log.WithError(err).Fatal("Failed to set variant annotation")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	go loop(ctx, clientSet, nodeName)
 
@@ -136,7 +117,7 @@ func loop(ctx context.Context, cs kubernetes.Interface, nodeName string) {
 		case <-ticker.C:
 			upgrade, err := upgradeTriggered(ctx, cs, nodeName)
 			if err != nil {
-				log.WithError(err).Fatal("Failed to check node upgrade status")
+				log.WithError(err).Error("Failed to check node upgrade status, will retry")
 				break
 			}
 			// If upgrade not triggered yet just silently continue.
@@ -145,7 +126,7 @@ func loop(ctx context.Context, cs kubernetes.Interface, nodeName string) {
 			}
 
 			if !pathExists(upgradeScript) {
-				log.Info("Upgrade triggered but upgrade artifacts not ready yet")
+				log.Info("Upgrade triggered but upgrade artifacts not ready yet, will retry")
 				break
 			}
 
@@ -215,7 +196,7 @@ func baseDir() string {
 
 // Return if the monitor service is running as part of Enterprise installation.
 func runningEnterprise() bool {
-	return baseDir() == EnterpriseBaseDir
+	return strings.Contains(baseDir(), EnterpriseDir)
 }
 
 // Return kubeconfig file path for Calico
