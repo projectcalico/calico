@@ -50,30 +50,33 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 	}
 	spec1_2 := apiv3.IPPoolSpec{
-		CIDR:         "1.2.3.0/24",
-		NATOutgoing:  true,
-		IPIPMode:     apiv3.IPIPModeNever,
-		VXLANMode:    apiv3.VXLANModeAlways,
-		BlockSize:    26,
-		NodeSelector: `foo == "bar"`,
-		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		CIDR:             "1.2.3.0/24",
+		NATOutgoing:      true,
+		IPIPMode:         apiv3.IPIPModeNever,
+		VXLANMode:        apiv3.VXLANModeAlways,
+		BlockSize:        26,
+		NodeSelector:     `foo == "bar"`,
+		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		DisableBGPExport: true,
 	}
 	spec2 := apiv3.IPPoolSpec{
-		CIDR:         "2001::/120",
-		NATOutgoing:  true,
-		IPIPMode:     apiv3.IPIPModeNever,
-		VXLANMode:    apiv3.VXLANModeNever,
-		BlockSize:    122,
-		NodeSelector: "all()",
-		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		CIDR:             "2001::/120",
+		NATOutgoing:      true,
+		IPIPMode:         apiv3.IPIPModeNever,
+		VXLANMode:        apiv3.VXLANModeNever,
+		BlockSize:        122,
+		NodeSelector:     "all()",
+		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		DisableBGPExport: true,
 	}
 	spec2_1 := apiv3.IPPoolSpec{
-		CIDR:         "2001::/120",
-		IPIPMode:     apiv3.IPIPModeNever,
-		VXLANMode:    apiv3.VXLANModeNever,
-		BlockSize:    122,
-		NodeSelector: "all()",
-		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		CIDR:             "2001::/120",
+		IPIPMode:         apiv3.IPIPModeNever,
+		VXLANMode:        apiv3.VXLANModeNever,
+		BlockSize:        122,
+		NodeSelector:     "all()",
+		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		DisableBGPExport: false,
 	}
 
 	It("should error when creating an IPPool with no name", func() {
