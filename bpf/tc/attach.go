@@ -521,7 +521,9 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if err != nil {
 		return err
 	}
-	return libbpf.SetGlobalVars(m, hostIP, intfIP, ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
+
+	return libbpf.TcSetGlobals(m, hostIP, intfIP,
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
 }
 
 // nolint

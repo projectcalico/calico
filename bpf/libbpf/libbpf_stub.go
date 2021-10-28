@@ -76,6 +76,6 @@ func (m *Map) IsMapInternal() bool {
 	panic("LIBBPF syscall stub")
 }
 
-func SetGlobalVars(m *Map, hostIP, intfIP, extToSvcMark uint32, tmtu, vxlanPort, psNatStart, psNatLen uint16) error {
+func TcSetGlobals(m *Map, hostIP, intfIP, extToSvcMark uint32, tmtu, vxlanPort, psNatStart, psNatLen uint16) error {
 	panic("LIBBPF syscall stub")
 }
