@@ -288,20 +288,8 @@ $BaseDir="c:\k"
 $RootDir="c:\{{rootDir}}"
 $CalicoZip="c:\{{zipFileName}}"
 
-if (!(Test-Path $CalicoZip))
-{
-{%- if site.prodname == "Calico Enterprise" %}
-    throw "Cannot find {{installName}} zip file $CalicoZip."
-{%- else if site.prodname == "Calico" %}
-    Write-Host "$CalicoZip not found, downloading {{installName}} release..."
-    DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\calico-windows.zip
-{%- else %}
-    throw "Invalid product name - did prodname in _config.yml change?"
-{%- endif %}
-}
-
+# Must load the helper modules before doing anything else.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
 $helper = "$BaseDir\helper.psm1"
 $helperv2 = "$BaseDir\helper.v2.psm1"
 md $BaseDir -ErrorAction Ignore
@@ -315,6 +303,18 @@ if (!(Test-Path $helperv2))
 }
 ipmo -force $helper
 ipmo -force $helperv2
+
+if (!(Test-Path $CalicoZip))
+{
+{%- if site.prodname == "Calico Enterprise" %}
+    throw "Cannot find {{installName}} zip file $CalicoZip."
+{%- else if site.prodname == "Calico" %}
+    Write-Host "$CalicoZip not found, downloading {{installName}} release..."
+    DownloadFile -Url $ReleaseBaseURL/$ReleaseFile -Destination c:\calico-windows.zip
+{%- else %}
+    throw "Invalid product name - did prodname in _config.yml change?"
+{%- endif %}
+}
 
 $platform=GetPlatformType
 
