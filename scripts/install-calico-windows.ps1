@@ -329,7 +329,7 @@ Exit
 
 Remove-Item $RootDir -Force  -Recurse -ErrorAction SilentlyContinue
 Write-Host "Unzip {{installName}} release..."
-Expand-Archive $CalicoZip c:\
+Expand-Archive -Force $CalicoZip c:\
 
 Write-Host "Setup Calico for Windows..."
 SetConfigParameters -OldString '<your datastore type>' -NewString $Datastore
