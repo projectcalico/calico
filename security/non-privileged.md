@@ -1,5 +1,5 @@
 ---
-title: Run Calico in non-privileged and non-root containers
+title: Run Calico node as non-privileged and non-root
 description: Run long-lived Calico components without root or system admin privileges.
 ---
 
@@ -9,32 +9,32 @@ Run long-lived {{site.prodname}} components in non-privileged and non-root conta
 
 ### Value
 
-In order to run {{site.prodname}} as securely as possible, long-running {{site.prodname}}
-components such as `calico/node` can be run without privileged and root permissions in their
-respective containers. In order to set up these long-running components, the init containers
-will still need to run with privileged and root permissions but the risk to cluster security
-they pose is minimal since they are ephemeral.
+Running {{site.prodname}} in non-privileged and non-root mode is an option for users who
+want to secure {{site.prodname}} as much as possible, and who do not care about
+{{site.prodname}} features beyond the basic {{site.prodname}} networking and network policy.
+The tradeoff for more security is the overhead of {{site.prodname}} networking management.
+For example, you no longer receive {{site.prodname}} corrections to misconfigurations caused
+by other components within your cluster, along with limited support for new features. 
 
-This comes at the cost of some network management functionality that allowed {{site.prodname}}
-to correct any misconfigurations that other components running a cluster might create as well
-as limited support for newer features being added to {{site.prodname}}. Running {{site.prodname}}
-in non-privileged and non-root mode is for users who want to secure {{site.prodname}} as much
-as possible who do not care for {{site.prodname}} features outside of basic {{site.prodname}}
-networking and network policy.
+### Concepts
 
-### Before you begin
+To run {{site.prodname}} as securely as possible, long-running {{site.prodname}} components
+(for example calico/node), can be run without privileged and root permissions in their respective
+containers. Note that to set up these components, the init containers still need to run with
+privileged and root permissions, but the risk to cluster security is minimal because of the
+ephemeral nature of init containers.
 
-{{site.prodname}} running in non-privileged and non-root containers is only supported through
-operator installations of {{site.prodname}}. Ensure that you are fine installing {{site.prodname}}
-via the operator before continuing. The operator provides lifecycle management for {{site.prodname}}
-exposed via the Kubernetes API defined as a custom resource definition.
+### Supported
 
-The following features are not supported in non-privileged and non-root {{site.prodname}}:
-* Any {{site.prodname}} Enterprise features
+* Operator installation only.
+
+### Unsupported
+
+* {{site.prodname}} Enterprise
 * eBPF dataplane
 
-Feature support for features added after Calico v3.21 is also not guaranteed for {{site.prodname}}
-running in non-privileged and non-root containers.
+> **Note:** Feature support for features added after Calico v3.21 is not guaranteed.
+{: .alert .alert-info }
 
 ### How to
 
