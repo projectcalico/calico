@@ -157,10 +157,6 @@ while ($True)
                 if ($LastExitCode -EQ 0)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."
-
-                    # At this point, we can run the (possibly new) CalicoUpgrade service.
-                    Install-UpgradeService
-                    Start-Service CalicoUpgrade
                     break
                 }
 
@@ -174,5 +170,15 @@ while ($True)
         Write-Host "Kubelet not running, waiting for Kubelet to start..."
         $kubeletPid = -1
     }
+
+    if !(Get-UpgradeService) {
+        # If upgrade service has not been running, check if we should run upgrade service.
+        .\calico-node.exe -should-install-windows-upgrade
+        if ($LastExitCode -EQ 0) {
+            Install-UpgradeService
+            Start-Service CalicoUpgrade
+        }
+    }
+
     Start-Sleep 10
 }
