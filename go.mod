@@ -8,8 +8,8 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/projectcalico/api v0.0.0-20211027233830-6b11a0f525e1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211020232207-b5bb2d6970f0
-	github.com/projectcalico/typha v0.7.3-0.20211028003437-7c7a18e47a03
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211028190301-9b43eae22410
+	github.com/projectcalico/typha v0.7.3-0.20211028192208-eae8120e135a
 	github.com/sirupsen/logrus v1.4.2
 	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
 	k8s.io/api v0.21.0
