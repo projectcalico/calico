@@ -4,6 +4,8 @@ order: 3
 section:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust
+- title: Run Calico node as non-privileged and non-root
+  path: /security/non-privileged
 - title: Get started with policy
   path: /security/get-started
   section:
