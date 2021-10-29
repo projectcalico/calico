@@ -44,10 +44,10 @@ K8S_VERSION=v1.17.0
 
 test: ut test-kdd test-etcd
 
-CALICOCTL_VER=master
-CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
-TYPHA_VER=master
-TYPHA_CONTAINER_NAME=calico/typha:$(TYPHA_VER)-$(ARCH)
+CALICOCTL_VER?=master
+CALICOCTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
+TYPHA_VER?=master
+TYPHA_CONTAINER_NAME?=calico/typha:$(TYPHA_VER)-$(ARCH)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)"
