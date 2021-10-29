@@ -190,6 +190,16 @@ func NewBirdInfo(ipv IPFamily) BirdInfo {
 func (b BirdInfo) Populate(status *apiv3.CalicoNodeStatus) error {
 	birdStatus, err := getBirdStatus(b.ipv)
 	if err != nil {
+		// If it is a connection error, e.g. BGP is not enabled,
+		// set NotReady state.
+		if _, ok := err.(ErrorSocketConnection); ok {
+			if b.ipv == IPFamilyV4 {
+				status.Status.Agent.BIRDV4 = apiv3.BGPDaemonStatus{State: apiv3.BGPDaemonStateNotReady}
+			} else {
+				status.Status.Agent.BIRDV6 = apiv3.BGPDaemonStatus{State: apiv3.BGPDaemonStateNotReady}
+			}
+			return nil
+		}
 		log.WithError(err).Errorf("failed to get bird status")
 		return err
 	}

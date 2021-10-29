@@ -49,9 +49,19 @@ func getBirdConn(ipv IPFamily) (*birdConn, error) {
 		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
 		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
 		if err != nil {
-			return nil, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
+			return nil, ErrorSocketConnection{Err: err, ipv: ipv}
 		}
 	}
 
 	return &birdConn{conn: c, ipv: ipv}, nil
+}
+
+// Error indicating connection to bird socket failed.
+type ErrorSocketConnection struct {
+	Err error
+	ipv IPFamily
+}
+
+func (e ErrorSocketConnection) Error() string {
+	return fmt.Sprintf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", e.ipv, e.Err)
 }
