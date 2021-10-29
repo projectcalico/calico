@@ -63,21 +63,28 @@ To install WireGuard on the default Amazon Machine Image (AMI):
    sudo yum install wireguard-dkms wireguard-tools -y
    ```
 
-Additionally, you will need to enable host-to-host encryption mode for WireGuard using the following command.
+Additionally, you may optionally enable host-to-host encryption mode for WireGuard using the following command.
 
 ```bash
-kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
+calicoctl patch felixconfiguration default --type='merge' -p '{"spec": {"wireguardHostEncryptionEnabled": true}}'
 ```
+
+> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is only intended for use on clusters with hidden master nodes, such as EKS and AKS. Enabling this flag on a cluster with a visible master node is not supported and will likely lead to networking deadlock, as critical kube-system traffic will begin encrypting before workers have a chance to whitelist it.
+{: .alert .alert-warning}
+
 %>
 <label:AKS>
 <%
 AKS cluster nodes run Ubuntu with a kernel that has WireGuard installed already, so there is no manual installation required.
-
-You will need to enable host-to-host encryption mode for WireGuard using the following command.
+However, you will need to enable host-to-host encryption mode for WireGuard using the following command.
 
 ```bash
-kubectl -n calico-system set env daemonset/calico-node --containers="calico-node" FELIX_WIREGUARDHOSTENCRYPTIONENABLED="true"
+calicoctl patch felixconfiguration default --type='merge' -p '{"spec": {"wireguardHostEncryptionEnabled": true}}'
 ```
+
+> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is only intended for use on clusters with hidden master nodes, such as EKS and AKS. Enabling this flag on a cluster with a visible master node is not supported and will likely lead to networking deadlock, as critical kube-system traffic will begin encrypting before workers have a chance to whitelist it.
+{: .alert .alert-warning}
+
 %>
 <label:OpenShift>
 <%
