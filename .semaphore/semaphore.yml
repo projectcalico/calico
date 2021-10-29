@@ -32,11 +32,16 @@ blocks:
     dependencies: []
     task:
       jobs:
-        - name: "Build All Images"
+        - name: "Build all node images"
           execution_time_limit:
             minutes: 120
           commands:
             - TEST_IMAGE_BUILD=true make image-all
+        - name: "Build Windows images"
+          execution_time_limit:
+            minutes: 120
+          commands:
+            - make build-windows-upgrade-archive image-tar-windows-all
 
   - name: "General Tests"
     dependencies: []
@@ -130,7 +135,11 @@ blocks:
         - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make image-all cd CONFIRM=true; fi
+        - >-
+          if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then
+              make image-all cd CONFIRM=true
+              make build-windows-upgrade-archive image-tar-windows-all cd-windows-upgrade CONFIRM=true
+          fi
 
   - name: "build windows archive"
     dependencies: ["General Tests", "System Tests", "Specialized Tests"]
@@ -142,6 +151,7 @@ blocks:
         commands:
         - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
         - make release-windows-archive VERSION=${BRANCH_NAME}
+        - make build-windows-upgrade-archive
 
 promotions:
   # Run the pin update process in case there were a backlog of pin update requests
