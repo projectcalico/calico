@@ -63,7 +63,7 @@ To install WireGuard on the default Amazon Machine Image (AMI):
    sudo yum install wireguard-dkms wireguard-tools -y
    ```
 
-Additionally, you will may optionally enable host-to-host encryption mode for WireGuard using the following command.
+Additionally, you may optionally enable host-to-host encryption mode for WireGuard using the following command.
 
 ```bash
 calicoctl patch felixconfiguration default --type='merge' -p '{"spec": {"wireguardHostEncryptionEnabled": true}}'
