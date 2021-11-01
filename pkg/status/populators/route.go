@@ -201,7 +201,7 @@ func readBIRDRoutes(bc *birdConn) ([]route, error) {
 
 	// If no routes were returned then just print a message.
 	if len(routes) == 0 {
-		fmt.Printf("No IPv%s routes found.\n", ipv)
+		log.Debugf("No IPv%s routes found.\n", ipv)
 		return routes, nil
 	}
 
@@ -317,6 +317,17 @@ func NewBirdRoutes(ipv IPFamily) BirdRoutes {
 func (b BirdRoutes) Populate(status *apiv3.CalicoNodeStatus) error {
 	routes, err := getRoutes(b.ipv)
 	if err != nil {
+		// If it is a connection error, e.g. BGP is not enabled,
+		// set empty status.
+		if _, ok := err.(ErrorSocketConnection); ok {
+			if b.ipv == IPFamilyV4 {
+				status.Status.Routes = apiv3.CalicoNodeBGPRouteStatus{}
+			} else {
+				status.Status.Routes = apiv3.CalicoNodeBGPRouteStatus{}
+			}
+			return nil
+		}
+		log.WithError(err).Errorf("failed to get bird BGP routes")
 		return err
 	}
 

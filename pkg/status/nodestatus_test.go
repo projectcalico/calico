@@ -137,148 +137,196 @@ var _ = Describe("Node status FV tests", func() {
 	var r *status.NodeStatusReporter
 	var mock *mockBird
 
-	BeforeEach(func() {
-		err = be.Clean()
-		Expect(err).ToNot(HaveOccurred())
-
-		mock = newMockBird(v4Status, v6Status, v4Peer, v6Peer, v4Route, v6Route)
-		r = status.NewNodeStatusReporter(nodeName, cfg, c, getPopulators(mock))
-		mock.setLastBootTime(BootTimeFirst)
-		mock.setError(nil)
-
-		syncer := nodestatussyncer.New(be, r)
-		syncer.Start()
-
-		go r.Run()
-	})
-
-	AfterEach(func() {
-		r.Stop()
-	})
-
 	getCurrentStatus := func() *apiv3.CalicoNodeStatus {
 		status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		return status
 	}
 
-	checkPeersRoutes := func(status *apiv3.CalicoNodeStatus) {
-		Expect(status.Status.BGP).To(Equal(*bgpPeers))
-		Expect(status.Status.Routes).To(Equal(*routes))
-	}
+	Context("Mock bird connections", func() {
 
-	It("should update status just once if interval is 0", func() {
-		// Create a node status request with interval of 0 seconds.
-		createCalicoNodeStatus(c, nodeName, name, 0)
+		BeforeEach(func() {
+			err = be.Clean()
+			Expect(err).ToNot(HaveOccurred())
 
-		// We should see an status update immediately.
-		Eventually(func() *apiv3.CalicoNodeAgentStatus {
-			status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
+			mock = newMockBird(v4Status, v6Status, v4Peer, v6Peer, v4Route, v6Route)
+			r = status.NewNodeStatusReporter(nodeName, cfg, c, getPopulators(mock))
+			mock.setLastBootTime(BootTimeFirst)
+			mock.setError(nil)
+
+			syncer := nodestatussyncer.New(be, r)
+			syncer.Start()
+
+			go r.Run()
+		})
+
+		AfterEach(func() {
+			r.Stop()
+		})
+
+		checkPeersRoutes := func(status *apiv3.CalicoNodeStatus) {
+			Expect(status.Status.BGP).To(Equal(*bgpPeers))
+			Expect(status.Status.Routes).To(Equal(*routes))
+		}
+
+		It("should update status just once if interval is 0", func() {
+			// Create a node status request with interval of 0 seconds.
+			createCalicoNodeStatus(c, nodeName, name, 0)
+
+			// We should see an status update immediately.
+			Eventually(func() *apiv3.CalicoNodeAgentStatus {
+				status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				return &status.Status.Agent
+			}, 2*time.Second, 500*time.Millisecond).Should(Equal(agentStatus))
+
+			saved := getCurrentStatus()
+			checkPeersRoutes(saved)
+
+			// Update lastBootTime so new status can be populated if required
+			mock.setLastBootTime(BootTimeSecond)
+
+			// We should not see any update consistently for more than 10 seconds.
+			Consistently(func() string {
+				latest := getCurrentStatus()
+				return latest.ResourceVersion
+			}, 10*time.Second, 500*time.Millisecond).Should(Equal(saved.ResourceVersion))
+		})
+
+		It("should get updated status object at the correct interval", func() {
+			// Create a node status request with interval of 5 seconds.
+			createCalicoNodeStatus(c, nodeName, name, 5)
+
+			// We should see an status update immediately.
+			Eventually(func() *apiv3.CalicoNodeAgentStatus {
+				status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				return &status.Status.Agent
+			}, 2*time.Second, 500*time.Millisecond).Should(Equal(agentStatus))
+
+			// Save value of lastUpdated.
+			saved := getCurrentStatus()
+			checkPeersRoutes(saved)
+
+			// Update lastBootTime so new status can be populated if required
+			mock.setLastBootTime(BootTimeSecond)
+
+			// Sleep 6 seconds so status should be updated.
+			time.Sleep(6 * time.Second)
+
+			// Should get a new update
+			new := getCurrentStatus()
+
+			// New update should have new values.
+			Expect(new.Status.Agent.BIRDV4.LastBootTime).To(Equal(BootTimeSecond))
+			Expect(new.Status.Agent.BIRDV6.LastBootTime).To(Equal(BootTimeSecond))
+			Expect((&saved.Status.LastUpdated).Before(&new.Status.LastUpdated)).To(BeTrue())
+			checkPeersRoutes(new)
+
+			// We should not see any update consistently for more than 10 seconds.
+			Consistently(func() string {
+				latest := getCurrentStatus()
+				return latest.ResourceVersion
+			}, 10*time.Second, 500*time.Millisecond).Should(Equal(new.ResourceVersion))
+		})
+
+		It("should not update status object if populator hitting an error", func() {
+			// Create a node status request with interval of 5 seconds.
+			createCalicoNodeStatus(c, nodeName, name, 5)
+
+			// We should see an status update immediately.
+			Eventually(func() *apiv3.CalicoNodeAgentStatus {
+				status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				return &status.Status.Agent
+			}, 2*time.Second, 500*time.Millisecond).Should(Equal(agentStatus))
+
+			// Save value of lastUpdated.
+			new := getCurrentStatus()
+
+			// Update lastBootTime so new status can be populated if required
+			mock.setLastBootTime(BootTimeSecond)
+			testErr := errors.New("mock a test error")
+			mock.setError(&testErr)
+
+			// We should not see any update consistently for more than 10 seconds.
+			Consistently(func() string {
+				latest := getCurrentStatus()
+				return latest.ResourceVersion
+			}, 10*time.Second, 500*time.Millisecond).Should(Equal(new.ResourceVersion))
+		})
+
+		It("should create and release correct number of reporters", func() {
+			// Create a node status request with interval of 10 seconds.
+			createCalicoNodeStatus(c, nodeName, name, 5)
+			createCalicoNodeStatus(c, nodeName, "new-status", 10)
+			createCalicoNodeStatus(c, "wrong-node-name", "another-status", 10)
+
+			// We should see two reporters.
+			Eventually(func() int {
+				return r.GetNumberOfReporters()
+			}, 2*time.Second, 500*time.Millisecond).Should(Equal(2))
+
+			_, err := c.CalicoNodeStatus().Delete(context.Background(), name, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			return &status.Status.Agent
-		}, 2*time.Second, 500*time.Millisecond).Should(Equal(agentStatus))
 
-		saved := getCurrentStatus()
-		checkPeersRoutes(saved)
+			Eventually(func() int {
+				return r.GetNumberOfReporters()
+			}, 2*time.Second, 500*time.Millisecond).Should(Equal(1))
 
-		// Update lastBootTime so new status can be populated if required
-		mock.setLastBootTime(BootTimeSecond)
+			_, err = c.CalicoNodeStatus().Delete(context.Background(), "new-status", options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
 
-		// We should not see any update consistently for more than 10 seconds.
-		Consistently(func() string {
-			latest := getCurrentStatus()
-			return latest.ResourceVersion
-		}, 10*time.Second, 500*time.Millisecond).Should(Equal(saved.ResourceVersion))
+			Eventually(func() int {
+				return r.GetNumberOfReporters()
+			}, 2*time.Second, 500*time.Millisecond).Should(Equal(0))
+
+		})
 	})
 
-	It("should get updated status object at the correct interval", func() {
-		// Create a node status request with interval of 5 seconds.
-		createCalicoNodeStatus(c, nodeName, name, 5)
+	Context("Broken BIRD connections", func() {
+		// We use real status populators for broken BIRD connections test.
+		// There is no bird daemon running locally, hence populators will get
+		// bad BIRD connections.
+		notReady := apiv3.CalicoNodeAgentStatus{
+			BIRDV4: apiv3.BGPDaemonStatus{State: apiv3.BGPDaemonStateNotReady},
+			BIRDV6: apiv3.BGPDaemonStatus{State: apiv3.BGPDaemonStateNotReady},
+		}
+		emptyBGP := apiv3.CalicoNodeBGPStatus{}
+		emptyRoutes := apiv3.CalicoNodeBGPRouteStatus{}
 
-		// We should see an status update immediately.
-		Eventually(func() *apiv3.CalicoNodeAgentStatus {
-			status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			return &status.Status.Agent
-		}, 2*time.Second, 500*time.Millisecond).Should(Equal(agentStatus))
+		BeforeEach(func() {
+			err = be.Clean()
+			Expect(err).ToNot(HaveOccurred())
 
-		// Save value of lastUpdated.
-		saved := getCurrentStatus()
-		checkPeersRoutes(saved)
+			r = status.NewNodeStatusReporter(nodeName, cfg, c, status.GetPopulators())
 
-		// Update lastBootTime so new status can be populated if required
-		mock.setLastBootTime(BootTimeSecond)
+			syncer := nodestatussyncer.New(be, r)
+			syncer.Start()
 
-		// Sleep 6 seconds so status should be updated.
-		time.Sleep(6 * time.Second)
+			go r.Run()
+		})
 
-		// Should get a new update
-		new := getCurrentStatus()
+		AfterEach(func() {
+			r.Stop()
+		})
 
-		// New update should have new values.
-		Expect(new.Status.Agent.BIRDV4.LastBootTime).To(Equal(BootTimeSecond))
-		Expect(new.Status.Agent.BIRDV6.LastBootTime).To(Equal(BootTimeSecond))
-		Expect((&saved.Status.LastUpdated).Before(&new.Status.LastUpdated)).To(BeTrue())
-		checkPeersRoutes(new)
+		It("should report BGP daemon not ready", func() {
+			// Create a node status request with interval of 5 seconds.
+			createCalicoNodeStatus(c, nodeName, name, 5)
 
-		// We should not see any update consistently for more than 10 seconds.
-		Consistently(func() string {
-			latest := getCurrentStatus()
-			return latest.ResourceVersion
-		}, 10*time.Second, 500*time.Millisecond).Should(Equal(new.ResourceVersion))
-	})
+			// We should see an status update immediately.
+			Eventually(func() apiv3.CalicoNodeAgentStatus {
+				status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				return status.Status.Agent
+			}, 2*time.Second, 500*time.Millisecond).Should(Equal(notReady))
 
-	It("should not update status object if populator hitting an error", func() {
-		// Create a node status request with interval of 5 seconds.
-		createCalicoNodeStatus(c, nodeName, name, 5)
-
-		// We should see an status update immediately.
-		Eventually(func() *apiv3.CalicoNodeAgentStatus {
-			status, err := c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			return &status.Status.Agent
-		}, 2*time.Second, 500*time.Millisecond).Should(Equal(agentStatus))
-
-		// Save value of lastUpdated.
-		new := getCurrentStatus()
-
-		// Update lastBootTime so new status can be populated if required
-		mock.setLastBootTime(BootTimeSecond)
-		testErr := errors.New("mock a test error")
-		mock.setError(&testErr)
-
-		// We should not see any update consistently for more than 10 seconds.
-		Consistently(func() string {
-			latest := getCurrentStatus()
-			return latest.ResourceVersion
-		}, 10*time.Second, 500*time.Millisecond).Should(Equal(new.ResourceVersion))
-	})
-
-	It("should create and release correct number of reporters", func() {
-		// Create a node status request with interval of 10 seconds.
-		createCalicoNodeStatus(c, nodeName, name, 5)
-		createCalicoNodeStatus(c, nodeName, "new-status", 10)
-		createCalicoNodeStatus(c, "wrong-node-name", "another-status", 10)
-
-		// We should see two reporters.
-		Eventually(func() int {
-			return r.GetNumberOfReporters()
-		}, 2*time.Second, 500*time.Millisecond).Should(Equal(2))
-
-		_, err := c.CalicoNodeStatus().Delete(context.Background(), name, options.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		Eventually(func() int {
-			return r.GetNumberOfReporters()
-		}, 2*time.Second, 500*time.Millisecond).Should(Equal(1))
-
-		_, err = c.CalicoNodeStatus().Delete(context.Background(), "new-status", options.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
-
-		Eventually(func() int {
-			return r.GetNumberOfReporters()
-		}, 2*time.Second, 500*time.Millisecond).Should(Equal(0))
-
+			// Save value of lastUpdated.
+			new := getCurrentStatus()
+			Expect(new.Status.BGP).To(Equal(emptyBGP))
+			Expect(new.Status.Routes).To(Equal(emptyRoutes))
+		})
 	})
 })
 

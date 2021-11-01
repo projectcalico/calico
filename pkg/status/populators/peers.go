@@ -239,7 +239,7 @@ func readBIRDPeers(bc *birdConn) ([]*bgpPeer, error) {
 
 	// If no peers were returned then just print a message.
 	if len(peers) == 0 {
-		fmt.Printf("No IPv%s peers found.\n", ipv)
+		log.Debugf("No IPv%s peers found.\n", ipv)
 		return peers, nil
 	}
 
@@ -354,6 +354,16 @@ func NewBirdBGPPeers(ipv IPFamily) BirdBGPPeers {
 func (b BirdBGPPeers) Populate(status *apiv3.CalicoNodeStatus) error {
 	peers, err := getBGPPeers(b.ipv)
 	if err != nil {
+		// If it is a connection error, e.g. BGP is not enabled,
+		// set empty status.
+		if _, ok := err.(ErrorSocketConnection); ok {
+			if b.ipv == IPFamilyV4 {
+				status.Status.BGP = apiv3.CalicoNodeBGPStatus{}
+			} else {
+				status.Status.BGP = apiv3.CalicoNodeBGPStatus{}
+			}
+			return nil
+		}
 		log.WithError(err).Errorf("failed to get bird BGP peers")
 		return err
 	}
