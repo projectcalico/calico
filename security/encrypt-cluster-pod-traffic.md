@@ -69,7 +69,7 @@ Additionally, you may optionally enable host-to-host encryption mode for WireGua
 calicoctl patch felixconfiguration default --type='merge' -p '{"spec": {"wireguardHostEncryptionEnabled": true}}'
 ```
 
-> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is only intended for use on clusters with hidden master nodes, such as EKS and AKS. Enabling this flag on a cluster with a visible master node is not supported and will likely lead to networking deadlock, as critical kube-system traffic will begin encrypting before workers have a chance to whitelist it.
+> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is currently only supported on managed clusters such an EKS and AKS, where WireGuard *cannot* be enabled on the cluster's master node. Enabling this flag while WireGuard is enabled on the master node can lead to a broken cluster, and neworking deadlock.
 {: .alert .alert-warning}
 
 %>
@@ -82,7 +82,7 @@ However, you will need to enable host-to-host encryption mode for WireGuard usin
 calicoctl patch felixconfiguration default --type='merge' -p '{"spec": {"wireguardHostEncryptionEnabled": true}}'
 ```
 
-> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is only intended for use on clusters with hidden master nodes, such as EKS and AKS. Enabling this flag on a cluster with a visible master node is not supported and will likely lead to networking deadlock, as critical kube-system traffic will begin encrypting before workers have a chance to whitelist it.
+> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is currently only supported on managed clusters such an EKS and AKS, where WireGuard *cannot* be enabled on the cluster's master node. Enabling this flag while WireGuard is enabled on the master node can lead to a broken cluster, and neworking deadlock.
 {: .alert .alert-warning}
 
 %>
