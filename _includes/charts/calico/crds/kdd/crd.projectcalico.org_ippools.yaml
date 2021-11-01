@@ -47,6 +47,10 @@ spec:
                 description: When disabled is true, Calico IPAM will not assign addresses
                   from this pool.
                 type: boolean
+              disableBGPExport:
+                description: 'Disable exporting routes from this IP Pool’s CIDR over
+                  BGP. [Default: false]'
+                type: boolean
               ipip:
                 description: 'Deprecated: this field is only used for APIv1 backwards
                   compatibility. Setting this field is not allowed, this field is
