@@ -24,6 +24,10 @@ type IPFamily = ipsets.IPFamily
 type IPSetType = ipsets.IPSetType
 
 const (
+	IPSetTypeHashIPPort = ipsets.IPSetTypeHashIPPort
+)
+
+const (
 	IPFamilyV4 = ipsets.IPFamilyV4
 	IPFamilyV6 = ipsets.IPFamilyV6
 )

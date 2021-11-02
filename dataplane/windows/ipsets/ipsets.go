@@ -17,9 +17,8 @@ package ipsets
 import (
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/libcalico-go/lib/set"
+	log "github.com/sirupsen/logrus"
 )
 
 type CallBackFunc func(ipSetId string)
@@ -56,7 +55,7 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 		"setID":   setMetadata.SetID,
 		"setType": setMetadata.Type,
 	}).Info("Creating IP set")
-	filteredMembers := s.filterMembers(members)
+	filteredMembers := s.filterMembers(members, setMetadata.Type)
 
 	// Create the IP set struct and stores it by id
 	setID := setMetadata.SetID
@@ -82,7 +81,7 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 	}
 
 	ipSet := s.ipSetIDToIPSet[setID]
-	filteredMembers := s.filterMembers(newMembers)
+	filteredMembers := s.filterMembers(newMembers, ipSet.Type)
 	if filteredMembers.Len() == 0 {
 		return
 	}
@@ -104,7 +103,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 	}
 
 	ipSet := s.ipSetIDToIPSet[setID]
-	filteredMembers := s.filterMembers(removedMembers)
+	filteredMembers := s.filterMembers(removedMembers, ipSet.Type)
 	if filteredMembers.Len() == 0 {
 		return
 	}
@@ -142,12 +141,26 @@ func (s *IPSets) GetIPSetMembers(setID string) []string {
 
 // filterMembers filters out any members which are not of the correct
 // ip family for the IPSet
-func (s *IPSets) filterMembers(members []string) set.Set {
+func (s *IPSets) filterMembers(members []string, setType IPSetType) set.Set {
 	filtered := set.New()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
+
+	// IPSet members can come in two forms: IP, or IP and port.
+	// To determine the address family for an IP set member, we must first
+	// determine which type of IP set this is.
+	memberIsIPv6 := func(m string) bool {
+		addr := m
+		if setType == IPSetTypeHashIPPort {
+			// IP+port - we need to split the address out to determine its family.
+			// Split out address. Member format is addr,proto:port
+			splits := strings.Split(m, ",")
+			addr = splits[0]
+		}
+		return strings.Contains(addr, ":")
+	}
+
 	for _, member := range members {
-		isIPV6 := strings.Contains(member, ":")
-		if wantIPV6 != isIPV6 {
+		if wantIPV6 != memberIsIPv6(member) {
 			continue
 		}
 		filtered.Add(member)
