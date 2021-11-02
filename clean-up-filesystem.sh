@@ -245,10 +245,12 @@ packages_to_keep=(
   libcrypto
   libelf
   libgcc
+  libibverbs
   libmnl
   libnetfilter
   libnfnetlink
   libnftnl
+  libnl3
   libnss
   libpcap
   libpwquality
