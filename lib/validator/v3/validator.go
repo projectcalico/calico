@@ -951,6 +951,17 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
 			"IPpool.CIDR", "", reason(overlapsV6LinkLocal), "")
 	}
+
+	// Allowed use must be one of the enums.
+	for _, a := range pool.AllowedUses {
+		switch a {
+		case api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel:
+			continue
+		default:
+			structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
+			"IPpool.AllowedUses", "", reason("unknown use: " + string(a)), "")
+		}
+	}
 }
 
 func vxLanModeEnabled(mode api.VXLANMode) bool {
