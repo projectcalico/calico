@@ -46,6 +46,7 @@ spec:
 | vxlanMode | The mode defining when VXLAN will be used. Cannot be set at the same time as `ipipMode`. | Always, CrossSubnet, Never | string| `Never` |
 | natOutgoing | When enabled, packets sent from {{site.prodname}} networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
 | disabled | When set to true, {{site.prodname}} IPAM will not assign addresses from this pool. | true, false | boolean | `false` |
+| disableBGPExport _(since v3.21.0)_ | Disable exporting routes from this IP Pool’s CIDR over BGP. | true, false | boolean | `false` |
 | nodeSelector | Selects the nodes that {{site.prodname}} IPAM should assign addresses from this pool to. | | [selector](#node-selector) | all() |
 | allowedUses _(since v3.21.0)_ | Controls whether the pool will be used for automatic assignments of certain types.  See [below](#allowed-uses). | Workload, Tunnel | list of strings | `["Workload", "Tunnel"]` |
 
