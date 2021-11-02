@@ -62,6 +62,7 @@ func init() {
 type Metrics struct {
 	hostname           string
 	newWireguardClient func() (netlinkshim.Wireguard, error)
+	wireguardClient    netlinkshim.Wireguard
 	logCtx             *logrus.Entry
 
 	peerRx, peerTx map[wgtypes.Key]int64
@@ -145,8 +146,20 @@ func NewWireguardMetricsWithShims(hostname string, newWireguardClient func() (ne
 	}
 }
 
+func (collector *Metrics) getWireguardClient() (netlinkshim.Wireguard, error) {
+	// lazily create wireguard client and cache it for future use
+	if collector.wireguardClient == nil {
+		wgClient, err := collector.newWireguardClient()
+		if err != nil {
+			return nil, err
+		}
+		collector.wireguardClient = wgClient
+	}
+	return collector.wireguardClient, nil
+}
+
 func (collector *Metrics) getDevices() []*wgtypes.Device {
-	wgClient, err := collector.newWireguardClient()
+	wgClient, err := collector.getWireguardClient()
 	if err != nil {
 		collector.logCtx.WithError(err).Debug("something went wrong initializing wireguard rpc client")
 		return nil
@@ -155,6 +168,8 @@ func (collector *Metrics) getDevices() []*wgtypes.Device {
 	devices, err := wgClient.Devices()
 	if err != nil {
 		collector.logCtx.WithError(err).Debug("something went wrong enumerating wireguard devices")
+		wgClient.Close()
+		collector.wireguardClient = nil
 		return nil
 	}
 	return devices

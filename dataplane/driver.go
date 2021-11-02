@@ -408,7 +408,7 @@ func ServePrometheusMetrics(configParams *config.Config) {
 			log.Info("Discarding process metrics")
 			prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 		}
-		if !configParams.PrometheusWireGuardMetricsEnabled {
+		if !configParams.PrometheusWireGuardMetricsEnabled || !configParams.WireguardEnabled {
 			log.Info("Discarding WireGuard metrics")
 			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}
