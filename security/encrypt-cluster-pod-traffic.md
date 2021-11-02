@@ -69,7 +69,7 @@ Additionally, you may optionally enable host-to-host encryption mode for WireGua
 calicoctl patch felixconfiguration default --type='merge' -p '{"spec": {"wireguardHostEncryptionEnabled": true}}'
 ```
 
-> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is currently only supported on managed clusters such an EKS and AKS, where WireGuard *cannot* be enabled on the cluster's master node. Enabling this flag while WireGuard is enabled on the master node can lead to a broken cluster, and neworking deadlock.
+> **Warning**: `wireguardHostEncryptionEnabled` is an experimental flag that extends WireGuard encryption to host-network IP addresses. It is currently only supported on managed clusters deployed on EKS and AKS, where WireGuard *cannot* be enabled on the cluster's control-plane node. Enabling this flag while WireGuard is enabled on the master node can lead to a broken cluster, and neworking deadlock.
 {: .alert .alert-warning}
 
 %>
