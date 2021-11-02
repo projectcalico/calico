@@ -26,10 +26,10 @@ static void set_errno(int ret) {
 
 struct bpf_object* bpf_obj_open(char *filename) {
 	struct bpf_object *obj;
-	int err = 0;
 	obj = bpf_object__open(filename);
-	if (!obj) {
-		err = libbpf_get_error(obj);
+	int err = libbpf_get_error(obj);
+	if (err) {
+		obj = NULL;
 	}
 	set_errno(err);
 	return obj;
