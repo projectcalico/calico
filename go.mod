@@ -12,7 +12,7 @@ require (
 	github.com/projectcalico/api v0.0.0-20211027235807-eaa2ea75260d
 	github.com/projectcalico/cni-plugin v1.11.1-0.20211021170516-911e1b1b73d6
 	github.com/projectcalico/felix v0.0.0-20211025214327-bd0f9d069a78
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211021162903-deb8f60d6d79
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211028190313-7fe3e72d76bf
 	github.com/projectcalico/typha v0.7.3-0.20211021164745-2c79df117e83
 	github.com/sirupsen/logrus v1.7.0
 	github.com/vishvananda/netlink v1.1.1-0.20210703095558-21f2c55a7727
