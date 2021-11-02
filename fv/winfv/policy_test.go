@@ -137,14 +137,14 @@ var _ = Describe("Windows policy test", func() {
 			Expect(err).To(HaveOccurred())
 		})
 		It("porter pod can connect to kube apiserver after creating service egress policy", func() {
-			// Assert API is not reachable.
-			err := kubectlExec(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 https://kubernetes.default.svc.cluster.local'`)
+			// Assert nginx-b is not reachable.
+			err := kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 			Expect(err).To(HaveOccurred())
 
-			// Create a policy allowing to the k8s API
+			// Create a policy allowing to the nginx-b service.
 			client := newClient()
 			p := v3.NetworkPolicy{}
-			p.Name = "allow-apiserver"
+			p.Name = "allow-nginx-b"
 			p.Namespace = "demo"
 			p.Spec.Selector = "all()"
 			p.Spec.Egress = []v3.Rule{
@@ -152,8 +152,8 @@ var _ = Describe("Windows policy test", func() {
 					Action: v3.Allow,
 					Destination: v3.EntityRule{
 						Services: &v3.ServiceMatch{
-							Name:      "kubernetes",
-							Namespace: "default",
+							Name:      "nginx-b",
+							Namespace: "demo",
 						},
 					},
 				},
@@ -162,7 +162,7 @@ var _ = Describe("Windows policy test", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Assert that it's now reachable.
-			err = kubectlExec(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -SkipCertificateCheck -TimeoutSec 5 https://kubernetes.default.svc.cluster.local'`)
+			err = kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
