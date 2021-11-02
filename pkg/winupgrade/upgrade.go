@@ -295,13 +295,51 @@ func verifyImagesSharePathPrefix(first, second string) error {
 }
 
 func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, hostPath string) error {
-	// Get pod list for all pods on this node.
-	list, err := cs.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
+	// Get pod list for calico-system pods on this node.
+	list, err := cs.CoreV1().Pods("calico-system").List(context.TODO(), metav1.ListOptions{
 		FieldSelector: "spec.nodeName=" + nodeName,
 	})
 	if err != nil {
 		return err
 	}
+
+	// Find the calico-node pod.
+	var calicoPod v1.Pod
+	var found bool
+	for _, pod := range list.Items {
+		if strings.HasPrefix(pod.Name, "calico-node") && pod.Spec.ServiceAccountName == "calico-node" {
+			calicoPod = pod
+			found = true
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("could not find calico-node pod")
+	}
+
+	// Ensure the pod is owned by the calico-node daemonset.
+	var ownedByCalicoDs bool
+	for _, ownerRef := range calicoPod.ObjectMeta.OwnerReferences {
+		if ownerRef.Kind == "DaemonSet" && ownerRef.Name == "calico-node" && *ownerRef.Controller {
+			ownedByCalicoDs = true
+		}
+	}
+	if !ownedByCalicoDs {
+		return fmt.Errorf("calico-node pod not owned by calico-node daemonset")
+	}
+
+	// Get the calico node nodeImage
+	var nodeImage string
+	for _, c := range calicoPod.Spec.Containers {
+		if c.Name == "calico-node" {
+			nodeImage = c.Image
+		}
+	}
+	if nodeImage == "" {
+		return fmt.Errorf("calico-node container image not found")
+	}
+
+	log.Infof("Found node container image is %v", nodeImage)
 
 	hasHostPathVolume := func(pod v1.Pod, hostPath string) bool {
 		for _, v := range pod.Spec.Volumes {
@@ -315,14 +353,6 @@ func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, 
 		}
 		return false
 	}
-
-	// Get the calico node image
-	nodeDs := daemonset("calico-node")
-	nodeImage, err := nodeDs.getContainerImage(cs, "calico-system", "calico-node")
-	if err != nil {
-		return err
-	}
-	log.Infof("Found node container image is %v\n", nodeImage)
 
 	// Walk through pods
 	for _, pod := range list.Items {
