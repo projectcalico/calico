@@ -65,6 +65,9 @@ type IPPoolSpec struct {
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
 	Disabled bool `json:"disabled,omitempty"`
 
+	// Disable exporting routes from this IP Pool’s CIDR over BGP. [Default: false]
+	DisableBGPExport bool `json:"disableBGPExport,omitempty" validate:"omitempty"`
+
 	// The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 112 for IPv6.
 	BlockSize int `json:"blockSize,omitempty"`
 
