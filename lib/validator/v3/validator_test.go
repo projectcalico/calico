@@ -901,6 +901,28 @@ func init() {
 		Entry("should reject IPv6 pool with a CIDR range overlapping with Link Local range",
 			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "fe80::/120"}}, false),
 
+		Entry("should accept IP pool with valid allowed uses",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR:      netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseWorkload,
+						api.IPPoolAllowedUseTunnel,
+					},
+				},
+			}, true),
+		Entry("should reject IP pool with invalid allowed uses",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR:      netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						"Garbage",
+					},
+				},
+			}, false),
+
 		// (API) IPReservation
 		Entry("should accept IPReservation with an IP",
 			api.IPReservation{
