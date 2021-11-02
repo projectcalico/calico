@@ -17,10 +17,8 @@ package ipsets
 import (
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/libcalico-go/lib/set"
+	log "github.com/sirupsen/logrus"
 )
 
 type CallBackFunc func(ipSetId string)
@@ -143,7 +141,7 @@ func (s *IPSets) GetIPSetMembers(setID string) []string {
 
 // filterMembers filters out any members which are not of the correct
 // ip family for the IPSet
-func (s *IPSets) filterMembers(members []string, setType ipsets.IPSetType) set.Set {
+func (s *IPSets) filterMembers(members []string, setType IPSetType) set.Set {
 	filtered := set.New()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
 
@@ -152,7 +150,7 @@ func (s *IPSets) filterMembers(members []string, setType ipsets.IPSetType) set.S
 	// determine which type of IP set this is.
 	memberIsIPv6 := func(m string) bool {
 		addr := m
-		if setType == ipsets.IPSetTypeHashIPPort {
+		if setType == IPSetTypeHashIPPort {
 			// IP+port - we need to split the address out to determine its family.
 			// Split out address. Member format is addr,proto:port
 			splits := strings.Split(m, ",")
