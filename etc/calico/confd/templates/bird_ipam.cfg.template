@@ -14,9 +14,13 @@ filter calico_export_to_bgp_peers {
   {{- end}}
 {{- end}}
 {{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
+{{- if $data.disableBGPExport}}
+  # Skip {{$data.cidr}} as BGP export is disabled for it
+{{- else}}
   if ( net ~ {{$data.cidr}} ) then {
     accept;
   }
+{{- end}}
 {{- end}}
   reject;
 }
