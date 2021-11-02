@@ -208,6 +208,20 @@ ending with an alphanumeric character.
 For more information on how to use and set these variables, refer to
 [Connections from Felix to Typha (Kubernetes)](../../security/comms/crypto-auth#connections-from-felix-to-typha-kubernetes).
 
+#### WireGuard configuration
+
+| Configuration parameter | Environment variable   | Description | Schema |
+| ----------------------- | ---------------------- | ----------- | ------ |
+| wireguardEnabled                   | Enable encryption on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
+| wireguardInterfaceName             | Name of the WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wireguard.cali |
+| wireguardListeningPort             | Port used by WireGuard tunnels. Felix sets up WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51820 |
+| wireguardMTU                       | MTU set on the WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
+| wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
+| wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
+
+For more information on encrypting in-cluster traffic with WireGuard, refer to
+[Encrypt cluster pod traffic](../../security/encrypt-cluster-pod-traffic)
+
 ### Environment variables
 
 The highest priority of configuration is that read from environment
