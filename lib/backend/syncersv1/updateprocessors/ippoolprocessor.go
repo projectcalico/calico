@@ -78,13 +78,14 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	return &model.KVPair{
 		Key: v1key,
 		Value: &model.IPPool{
-			CIDR:          *cidr,
-			IPIPInterface: ipipInterface,
-			IPIPMode:      ipipMode,
-			VXLANMode:     vxlanMode,
-			Masquerade:    v3res.Spec.NATOutgoing,
-			IPAM:          !v3res.Spec.Disabled,
-			Disabled:      v3res.Spec.Disabled,
+			CIDR:             *cidr,
+			IPIPInterface:    ipipInterface,
+			IPIPMode:         ipipMode,
+			VXLANMode:        vxlanMode,
+			Masquerade:       v3res.Spec.NATOutgoing,
+			IPAM:             !v3res.Spec.Disabled,
+			Disabled:         v3res.Spec.Disabled,
+			DisableBGPExport: v3res.Spec.DisableBGPExport,
 		},
 		Revision: kvp.Revision,
 	}, nil

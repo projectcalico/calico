@@ -63,11 +63,12 @@ var _ = Describe("Test the IPPool update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1PoolKeyCidr1,
 			Value: &model.IPPool{
-				CIDR:       v1PoolKeyCidr1.CIDR,
-				IPIPMode:   encap.Undefined,
-				Masquerade: false,
-				IPAM:       true,
-				Disabled:   false,
+				CIDR:             v1PoolKeyCidr1.CIDR,
+				IPIPMode:         encap.Undefined,
+				Masquerade:       false,
+				IPAM:             true,
+				Disabled:         false,
+				DisableBGPExport: false,
 			},
 			Revision: "abcde",
 		}))
@@ -101,26 +102,55 @@ var _ = Describe("Test the IPPool update processor", func() {
 			{
 				Key: v1PoolKeyCidr1,
 				Value: &model.IPPool{
-					CIDR:          v1PoolKeyCidr1.CIDR,
-					IPIPInterface: "tunl0",
-					IPIPMode:      encap.Always,
-					Masquerade:    true,
-					IPAM:          false,
-					Disabled:      true,
+					CIDR:             v1PoolKeyCidr1.CIDR,
+					IPIPInterface:    "tunl0",
+					IPIPMode:         encap.Always,
+					Masquerade:       true,
+					IPAM:             false,
+					Disabled:         true,
+					DisableBGPExport: false,
 				},
 				Revision: "1234",
 			},
 			{
 				Key: v1PoolKeyCidr2,
 				Value: &model.IPPool{
-					CIDR:          v1PoolKeyCidr2.CIDR,
-					IPIPInterface: "",
-					IPIPMode:      encap.Undefined,
-					Masquerade:    false,
-					IPAM:          true,
-					Disabled:      false,
+					CIDR:             v1PoolKeyCidr2.CIDR,
+					IPIPInterface:    "",
+					IPIPMode:         encap.Undefined,
+					Masquerade:       false,
+					IPAM:             true,
+					Disabled:         false,
+					DisableBGPExport: false,
 				},
 				Revision: "abcdef",
+			},
+		}))
+
+		By("updating the first IPPool to have disableBGPExport = true - expect an update")
+		res = apiv3.NewIPPool()
+		res.Name = v3PoolKey1.Name
+		res.Spec.CIDR = cidr2str
+		res.Spec.DisableBGPExport = true
+		kvps, err = up.Process(&model.KVPair{
+			Key:      v3PoolKey1,
+			Value:    res,
+			Revision: "abcdefg",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(Equal([]*model.KVPair{
+			{
+				Key: v1PoolKeyCidr2,
+				Value: &model.IPPool{
+					CIDR:             v1PoolKeyCidr2.CIDR,
+					IPIPInterface:    "",
+					IPIPMode:         encap.Undefined,
+					Masquerade:       false,
+					IPAM:             true,
+					Disabled:         false,
+					DisableBGPExport: true,
+				},
+				Revision: "abcdefg",
 			},
 		}))
 
@@ -169,12 +199,13 @@ var _ = Describe("Test the IPPool update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1PoolKeyCidr1,
 			Value: &model.IPPool{
-				CIDR:       v1PoolKeyCidr1.CIDR,
-				IPIPMode:   encap.Undefined,
-				Masquerade: false,
-				IPAM:       true,
-				Disabled:   false,
-				VXLANMode:  encap.CrossSubnet,
+				CIDR:             v1PoolKeyCidr1.CIDR,
+				IPIPMode:         encap.Undefined,
+				Masquerade:       false,
+				IPAM:             true,
+				Disabled:         false,
+				DisableBGPExport: false,
+				VXLANMode:        encap.CrossSubnet,
 			},
 			Revision: "abcde",
 		}))
