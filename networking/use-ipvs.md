@@ -43,7 +43,7 @@ To police traffic in IPVS mode, {{site.prodname}} uses additional iptables mark 
 
 #### {{site.prodname}} auto detects ipvs mode
 
-When {{site.prodname}} detects that kube-proxy is running in IPVS mode (during or after installation), IPVS support is automatically activated.
+When {{site.prodname}} detects that kube-proxy is running in IPVS mode (during or after installation), IPVS support is automatically activated.  Detection happens when calico-node starts up, so if you change kube-proxy's mode in a running cluster, you will need to restart your calico-node instances.
 
 ### Before you begin...
 
@@ -54,7 +54,7 @@ When {{site.prodname}} detects that kube-proxy is running in IPVS mode (during o
 
 ### How to
 
-As previously discussed, there is nothing you need to do in {{site.prodname}} to use IPVS mode; if enabled, the mode is automatically detected. However, if your default Kubernetes NodePort range changes, use the following instructions to update {{site.prodname}} nodeport ranges to stay in sync.
+As previously discussed, there is nothing you need to do in {{site.prodname}} to use IPVS mode; if enabled, the mode is automatically detected. However, if your default Kubernetes NodePort range changes, use the following instructions to update {{site.prodname}} nodeport ranges to stay in sync.  Detection happens when calico-node starts up, so if you change kube-proxy's mode in a running cluster, you will need to restart your calico-node instances.
 
 #### Change {{site.prodname}} default nodeport range
 
