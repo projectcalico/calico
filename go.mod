@@ -14,8 +14,8 @@ require (
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20211027233830-6b11a0f525e1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211102121704-35877b364e75
+	github.com/projectcalico/api v0.0.0-20211102181812-edfaf495a5c8
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211102193334-45c7e116840b
 	github.com/prometheus/client_golang v1.4.0
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/tools v0.1.2 // indirect
