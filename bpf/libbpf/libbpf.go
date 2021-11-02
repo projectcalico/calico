@@ -16,6 +16,7 @@ package libbpf
 
 import (
 	"fmt"
+	"os"
 	"unsafe"
 
 	"github.com/projectcalico/felix/bpf"
@@ -99,7 +100,7 @@ func (o *Obj) FirstMap() (*Map, error) {
 }
 
 // NextMap returns the successive maps given the first map.
-// Returns nil if the map is nil, no error as this is the last map.
+// Returns nil, no error at the end of the list.
 func (m *Map) NextMap() (*Map, error) {
 	bpfMap, err := C.bpf_map__next(m.bpfMap, m.bpfObj)
 	if err != nil {
@@ -201,6 +202,25 @@ func (o *Obj) Close() error {
 		return nil
 	}
 	return fmt.Errorf("error: libbpf obj nil")
+}
+
+func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+
+	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
+	}
+	defer f.Close()
+	fd := int(f.Fd())
+
+	link, err := C.bpf_program_attach_cgroup(o.obj, C.int(fd), cProgName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach %s to cgroup %s: %w", progName, cgroup, err)
+	}
+
+	return &Link{link: link}, nil
 }
 
 func TcSetGlobals(

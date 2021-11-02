@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/libbpf"
 )
 
 type cgroupProgs struct {
@@ -84,50 +85,61 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	return nil
 }
 
-func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, maps ...bpf.Map) error {
+func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string) error {
 
 	progPinDir := path.Join(bpfMount, "calico_connect4")
 	_ = os.RemoveAll(progPinDir)
 
 	var filename string
-
 	if ipver == "6" {
 		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 6))
 	} else {
 		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 4))
 	}
-	args := []string{"prog", "loadall", filename, progPinDir, "type", "cgroup/" + name + ipver}
-	for _, m := range maps {
-		args = append(args, "map", "name", m.GetName(), "pinned", m.Path())
-	}
 
-	cmd := exec.Command("bpftool", args...)
-	log.WithField("args", cmd.Args).Info("About to run bpftool")
+	// nolint
 	progName := "calico_" + name + "_v" + ipver
-	out, err := cmd.CombinedOutput()
+
+	log.WithField("filename", filename).Debug("Loading object file")
+	obj, err := libbpf.OpenObject(filename)
 	if err != nil {
-		err = errors.Wrapf(err, "failed to load program %s", progName)
-		goto out
+		return fmt.Errorf("failed to load program %s from %s: %w", progName, filename, err)
+	}
+	defer obj.Close()
+
+	baseDir := "/sys/fs/bpf/tc/globals/"
+	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
+		// The values are read only for the BPF programs, but can be set to a value from
+		// userspace before the program is loaded.
+		if m.IsMapInternal() {
+			log.WithField("prog", progName).Warn("Load-time configuration not supported, using defaults.")
+			continue
+		}
+
+		pinPath := baseDir + m.Name()
+		if err := m.SetPinPath(pinPath); err != nil {
+			return fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		}
+		log.WithFields(log.Fields{"program": progName, "map": m.Name()}).Debug("Pinned map")
 	}
 
-	cmd = exec.Command("bpftool", "cgroup", "attach", cgroupPath,
-		name+ipver, "pinned", path.Join(progPinDir, progName))
-	log.WithField("args", cmd.Args).Info("About to run bpftool")
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		err = errors.Wrapf(err, "failed to attach program %s", progName)
-		goto out
+	if err := obj.Load(); err != nil {
+		return fmt.Errorf("error loading program %s: %w", progName, err)
 	}
 
-out:
-	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("Failed install cgroup program.")
+	// N.B. no need to remember the link since we are never going to detach
+	// these programs unless Felix restarts.
+	if _, err := obj.AttachCGroup(cgroupPath, progName); err != nil {
+		return fmt.Errorf("failed to attach program %s: %w", progName, err)
 	}
+
+	log.WithFields(log.Fields{"program": progName, "cgroup": cgroupPath}).Info("Loaded cgroup program")
 
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgroupv2 string, logLevel string) error {
+func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string) error {
 	bpfMount, err := bpf.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
@@ -139,39 +151,17 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
-	repin := false
-	if pm, ok := frontendMap.(*bpf.PinnedMap); ok {
-		repin = pm.RepinningEnabled()
-	}
-
-	sendrecvMap := SendRecvMsgMap(&bpf.MapContext{
-		RepinningEnabled: repin,
-	})
-	err = sendrecvMap.EnsureExists()
-	if err != nil {
-		return errors.WithMessage(err, "failed to create sendrecv BPF Map")
-	}
-	allNATsMap := AllNATsMsgMap(&bpf.MapContext{
-		RepinningEnabled: repin,
-	})
-	err = allNATsMap.EnsureExists()
-	if err != nil {
-		return errors.WithMessage(err, "failed to create all-NATs BPF Map")
-	}
-
-	maps := []bpf.Map{frontendMap, backendMap, rtMap, sendrecvMap, allNATsMap}
-
-	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, maps...)
+	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, maps...)
+	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, maps...)
+	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel)
 	if err != nil {
 		return err
 	}
@@ -181,7 +171,7 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		return err
 	}
 
-	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, sendrecvMap)
+	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel)
 	if err != nil {
 		return err
 	}

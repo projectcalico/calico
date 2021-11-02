@@ -26,10 +26,10 @@ static void set_errno(int ret) {
 
 struct bpf_object* bpf_obj_open(char *filename) {
 	struct bpf_object *obj;
+	int err = 0;
 	obj = bpf_object__open(filename);
-	int err = libbpf_get_error(obj);
-	if (err) {
-		obj = NULL;
+	if (!obj) {
+		err = libbpf_get_error(obj);
 	}
 	set_errno(err);
 	return obj;
@@ -126,4 +126,25 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	};
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(struct cali_global_data)));
 	return;
+}
+
+struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd, char *name)
+{
+	int err = 0;
+	struct bpf_link *link = NULL;
+	struct bpf_program *prog;
+
+	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
+		err = ENOENT;
+		goto out;
+	}
+
+	if (!(link = bpf_program__attach_cgroup(prog, cgroup_fd))) {
+		err = errno;
+		goto out;
+	}
+
+out:
+	set_errno(err);
+	return link;
 }

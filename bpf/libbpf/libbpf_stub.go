@@ -24,6 +24,9 @@ type Obj struct {
 type Map struct {
 }
 
+type Link struct {
+}
+
 func (m *Map) Name() string {
 	panic("LIBBPF syscall stub")
 }
@@ -53,6 +56,10 @@ func (m *Map) NextMap() (*Map, error) {
 }
 
 func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }
 
