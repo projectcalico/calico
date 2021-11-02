@@ -44,16 +44,16 @@ In contrast, if applyOnForward is set to true for a policy that selects a HEP, t
 There are also different default action semantics for **applyOnForward: true policy** versus **applyOnForward: false policy**.
 An applyOnForward: true policy affects all traffic through the HEP (connections 1-4). If no applyOnForward policy selects the HEP and direction (ingress versus egress), then forwarded traffic is allowed.  If no policy (regardless of applyOnForward) selects the HEP and direction, then local traffic is denied unless if the HEP has the `projectcalico-default-allow` profile.
 
-| **HEP defined?** | **Traffic Type** | **applyOnForward defined?** | **Any policy defined?** | **Has allow-all profile** | **Default Action** |
-| ---------------- | ---------------- | --------------------------- | ----------------------- | ------------------------- | ------------------ |
-| No               | Any              | N/A                         | N/A                     | N/A                       | Allow              |
-| Yes              | Forwarded        | No                          | Any                     | N/A                       | Allow              |
-| Yes              | Forwarded        | Yes                         | Yes                     | N/A                       | Deny               |
-| Yes              | Local            | N/A                         | No                      | No                        | Deny               |
-| Yes              | Local            | N/A                         | No                      | Yes                       | Allow              |
-| Yes              | Local            | N/A                         | Yes                     | N/A                       | Deny               |
+| **HEP defined?** | **Traffic Type** | **applyOnForward defined?** | **Any policy defined?** | **Has projectcalico-default-allow profile** [†](##note-about-default-allow-profile) | **Default Action** |
+| ---------------- | ---------------- | --------------------------- | ----------------------- | ----------------------------------------------------------------------------------- | ------------------ |
+| No               | Any              | N/A                         | N/A                     | N/A                                                                                 | Allow              |
+| Yes              | Forwarded        | No                          | Either                  | N/A                                                                                 | Allow              |
+| Yes              | Forwarded        | Yes                         | Yes                     | N/A                                                                                 | Deny               |
+| Yes              | Local            | N/A                         | No                      | No                                                                                  | Deny               |
+| Yes              | Local            | N/A                         | No                      | Yes                                                                                 | Allow              |
+| Yes              | Local            | N/A                         | Yes                     | N/A                                                                                 | Deny               |
 
-> **Note**: The `projectcalico-default-allow` is a built-in profile provided by {{site.prodname}} that consists of allow-all ingress and egress rules.
+> **[Note †](#note-about-default-allow-profile)**: The `projectcalico-default-allow` is a built-in profile provided by {{site.prodname}} that consists of allow-all ingress and egress rules.
 > HEPs with this profile will have an Allow default action instead of Deny, in the absence of policy. [Auto host endpoints]({{site.baseurl}}/security/kubernetes-nodes#automatic-host-endpoints) always have this profile. For more information about the default behavior for traffic originating/terminating at the host, see the [host endpoint reference]({{site.baseurl}}/reference/resources/hostendpoint#default-behavior-of-external-traffic-tofrom-host).
 {: .alert .alert-info}
 
