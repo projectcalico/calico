@@ -296,9 +296,7 @@ func verifyImagesSharePathPrefix(first, second string) error {
 
 func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, hostPath string) error {
 	// Get pod list for calico-system pods on this node.
-	list, err := cs.CoreV1().Pods("calico-system").List(context.TODO(), metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
+	list, err := cs.CoreV1().Pods("calico-system").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -310,11 +308,12 @@ func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, 
 		if strings.HasPrefix(pod.Name, "calico-node") && pod.Spec.ServiceAccountName == "calico-node" {
 			calicoPod = pod
 			found = true
+			break
 		}
 	}
 
 	if !found {
-		return fmt.Errorf("could not find calico-node pod")
+		return fmt.Errorf("could not find a calico-node pod")
 	}
 
 	// Ensure the pod is owned by the calico-node daemonset.
@@ -333,6 +332,7 @@ func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, 
 	for _, c := range calicoPod.Spec.Containers {
 		if c.Name == "calico-node" {
 			nodeImage = c.Image
+			break
 		}
 	}
 	if nodeImage == "" {
@@ -354,28 +354,33 @@ func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, 
 		return false
 	}
 
-	// Walk through pods
+	var podWithHostPath v1.Pod
+	count := 0
 	for _, pod := range list.Items {
-		if !hasHostPathVolume(pod, hostPath) {
-			continue
+		if hasHostPathVolume(pod, hostPath) {
+			podWithHostPath = pod
+			count++
 		}
-
-		if len(pod.Spec.Containers) != 1 {
-			return fmt.Errorf("Pod with hostpath volume has more than one container")
-		}
-
-		upgradeImage := pod.Spec.Containers[0].Image
-		log.Infof("Found upgrade image: %v", upgradeImage)
-
-		err = verifyImagesSharePathPrefix(nodeImage, upgradeImage)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
-	return fmt.Errorf("Failed to find calico-windows-upgrade pod")
+	if count == 0 {
+		return fmt.Errorf("Failed to find pod with expected host path")
+	}
+
+	if count > 1 {
+		return fmt.Errorf("More than one pod has expected host path")
+	}
+
+	if len(podWithHostPath.Spec.Containers) != 1 {
+		return fmt.Errorf("Pod with hostpath volume has more than one container")
+	}
+	upgradeImage := podWithHostPath.Spec.Containers[0].Image
+	log.Infof("Found upgrade image: %v", upgradeImage)
+	err = verifyImagesSharePathPrefix(nodeImage, upgradeImage)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func powershell(args ...string) (string, string, error) {
