@@ -15,10 +15,8 @@ package winupgrade
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -72,38 +70,4 @@ func (n k8snode) addRemoveNodeAnnotations(k8sClientset *kubernetes.Clientset,
 		// no update needed
 		return true, nil
 	})
-}
-
-// daemonset holds a collection of helper functions for Kubernetes daemonset.
-type daemonset string
-
-// Get spec of a container from a daemonset.
-func (d daemonset) getContainerSpec(cs kubernetes.Interface, namespace, containerName string) (*v1.Container, error) {
-	ds, err := cs.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, c := range ds.Spec.Template.Spec.InitContainers {
-		if c.Name == containerName {
-			return &c, nil
-		}
-	}
-
-	for _, c := range ds.Spec.Template.Spec.Containers {
-		if c.Name == containerName {
-			return &c, nil
-		}
-	}
-	return nil, fmt.Errorf("No container with name %s found in daemonset", containerName)
-}
-
-// Get container image from a container spec.
-func (d daemonset) getContainerImage(cs kubernetes.Interface, namespace, containerName string) (string, error) {
-	container, err := d.getContainerSpec(cs, namespace, containerName)
-	if err != nil {
-		return "", err
-	}
-
-	return container.Image, nil
 }

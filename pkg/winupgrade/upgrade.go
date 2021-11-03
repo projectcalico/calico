@@ -295,13 +295,51 @@ func verifyImagesSharePathPrefix(first, second string) error {
 }
 
 func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, hostPath string) error {
-	// Get pod list for all pods on this node.
-	list, err := cs.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
+	// Get pod list for calico-system pods.
+	list, err := cs.CoreV1().Pods("calico-system").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
+
+	// Find the calico-node pod.
+	var calicoPod v1.Pod
+	var found bool
+	for _, pod := range list.Items {
+		if strings.HasPrefix(pod.Name, "calico-node") && pod.Spec.ServiceAccountName == "calico-node" {
+			calicoPod = pod
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("could not find a calico-node pod")
+	}
+
+	// Ensure the pod is owned by the calico-node daemonset.
+	var ownedByCalicoDs bool
+	for _, ownerRef := range calicoPod.ObjectMeta.OwnerReferences {
+		if ownerRef.Kind == "DaemonSet" && ownerRef.Name == "calico-node" && *ownerRef.Controller {
+			ownedByCalicoDs = true
+		}
+	}
+	if !ownedByCalicoDs {
+		return fmt.Errorf("calico-node pod not owned by calico-node daemonset")
+	}
+
+	// Get the calico node nodeImage
+	var nodeImage string
+	for _, c := range calicoPod.Spec.Containers {
+		if c.Name == "calico-node" {
+			nodeImage = c.Image
+			break
+		}
+	}
+	if nodeImage == "" {
+		return fmt.Errorf("calico-node container image not found")
+	}
+
+	log.Infof("Found node container image is %v", nodeImage)
 
 	hasHostPathVolume := func(pod v1.Pod, hostPath string) bool {
 		for _, v := range pod.Spec.Volumes {
@@ -316,36 +354,37 @@ func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, 
 		return false
 	}
 
-	// Get the calico node image
-	nodeDs := daemonset("calico-node")
-	nodeImage, err := nodeDs.getContainerImage(cs, "calico-system", "calico-node")
+	var podWithHostPath v1.Pod
+	count := 0
+	for _, pod := range list.Items {
+		// Only look at pods on this node.
+		if pod.Spec.NodeName != nodeName {
+			continue
+		}
+		if hasHostPathVolume(pod, hostPath) {
+			podWithHostPath = pod
+			count++
+		}
+	}
+
+	if count == 0 {
+		return fmt.Errorf("Failed to find pod with expected host path")
+	}
+
+	if count > 1 {
+		return fmt.Errorf("More than one pod has expected host path")
+	}
+
+	if len(podWithHostPath.Spec.Containers) != 1 {
+		return fmt.Errorf("Pod with hostpath volume has more than one container")
+	}
+	upgradeImage := podWithHostPath.Spec.Containers[0].Image
+	log.Infof("Found upgrade image: %v", upgradeImage)
+	err = verifyImagesSharePathPrefix(nodeImage, upgradeImage)
 	if err != nil {
 		return err
 	}
-	log.Infof("Found node container image is %v\n", nodeImage)
-
-	// Walk through pods
-	for _, pod := range list.Items {
-		if !hasHostPathVolume(pod, hostPath) {
-			continue
-		}
-
-		if len(pod.Spec.Containers) != 1 {
-			return fmt.Errorf("Pod with hostpath volume has more than one container")
-		}
-
-		upgradeImage := pod.Spec.Containers[0].Image
-		log.Infof("Found upgrade image: %v", upgradeImage)
-
-		err = verifyImagesSharePathPrefix(nodeImage, upgradeImage)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	return fmt.Errorf("Failed to find calico-windows-upgrade pod")
+	return nil
 }
 
 func powershell(args ...string) (string, string, error) {
