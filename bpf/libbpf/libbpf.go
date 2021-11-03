@@ -16,6 +16,7 @@ package libbpf
 
 import (
 	"fmt"
+	"os"
 	"unsafe"
 
 	"github.com/projectcalico/felix/bpf"
@@ -99,7 +100,7 @@ func (o *Obj) FirstMap() (*Map, error) {
 }
 
 // NextMap returns the successive maps given the first map.
-// Returns nil if the map is nil, no error as this is the last map.
+// Returns nil, no error at the end of the list.
 func (m *Map) NextMap() (*Map, error) {
 	bpfMap, err := C.bpf_map__next(m.bpfMap, m.bpfObj)
 	if err != nil {
@@ -136,6 +137,22 @@ func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
 		return -1, fmt.Errorf("Error querying interface %s: %w", ifName, err)
 	}
 	return int(progId), nil
+}
+
+type Link struct {
+	link *C.struct_bpf_link
+}
+
+func (l *Link) Close() error {
+	if l.link != nil {
+		err := C.bpf_link_destroy(l.link)
+		if err != 0 {
+			return fmt.Errorf("error destroying link: %v", err)
+		}
+		l.link = nil
+		return nil
+	}
+	return fmt.Errorf("link nil")
 }
 
 func CreateQDisc(ifName string) error {
@@ -187,8 +204,43 @@ func (o *Obj) Close() error {
 	return fmt.Errorf("error: libbpf obj nil")
 }
 
-func SetGlobalVars(m *Map, hostIP, intfIP, extToSvcMark uint32, tmtu, vxlanPort, psNatStart, psNatLen uint16) error {
-	_, err := C.bpf_set_global_vars(m.bpfMap, C.uint(hostIP), C.uint(intfIP), C.uint(extToSvcMark),
-		C.ushort(tmtu), C.ushort(vxlanPort), C.ushort(psNatStart), C.ushort(psNatLen))
+func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+
+	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
+	}
+	defer f.Close()
+	fd := int(f.Fd())
+
+	link, err := C.bpf_program_attach_cgroup(o.obj, C.int(fd), cProgName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach %s to cgroup %s: %w", progName, cgroup, err)
+	}
+
+	return &Link{link: link}, nil
+}
+
+func TcSetGlobals(
+	m *Map,
+	hostIP uint32,
+	intfIP uint32,
+	extToSvcMark uint32,
+	tmtu uint16,
+	vxlanPort uint16,
+	psNatStart uint16,
+	psNatLen uint16,
+) error {
+	_, err := C.bpf_tc_set_globals(m.bpfMap,
+		C.uint(hostIP),
+		C.uint(intfIP),
+		C.uint(extToSvcMark),
+		C.ushort(tmtu),
+		C.ushort(vxlanPort),
+		C.ushort(psNatStart),
+		C.ushort(psNatLen))
+
 	return err
 }

@@ -118,9 +118,8 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		// The values are read only for the BPF programs, but can be set to a value from
 		// userspace before the program is loaded.
 		if m.IsMapInternal() {
-			perr := ap.ConfigureProgram(m)
-			if perr != nil {
-				return "", perr
+			if err := ap.ConfigureProgram(m); err != nil {
+				return "", fmt.Errorf("failed to configure %s: %w", filename, err)
 			}
 			continue
 		}
@@ -133,15 +132,13 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 			}
 		}
 		pinPath := path.Join(baseDir, subDir, m.Name())
-		perr := m.SetPinPath(pinPath)
-		if perr != nil {
-			return "", fmt.Errorf("error pinning map %v errno %v", m.Name(), perr)
+		if err := m.SetPinPath(pinPath); err != nil {
+			return "", fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
 
-	err = obj.Load()
-	if err != nil {
-		return "", fmt.Errorf("error loading program %v", err)
+	if err := obj.Load(); err != nil {
+		return "", fmt.Errorf("error loading program: %w", err)
 	}
 
 	isHost := false
@@ -521,7 +518,9 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if err != nil {
 		return err
 	}
-	return libbpf.SetGlobalVars(m, hostIP, intfIP, ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
+
+	return libbpf.TcSetGlobals(m, hostIP, intfIP,
+		ap.ExtToServiceConnmark, ap.TunnelMTU, vxlanPort, ap.PSNATStart, ap.PSNATEnd)
 }
 
 // nolint

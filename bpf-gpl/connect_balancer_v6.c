@@ -30,16 +30,16 @@
 
 #include "sendrecv.h"
 
-__attribute__((section("calico_sendmsg_v6")))
-int cali_ctlb_sendmsg_v6(struct bpf_sock_addr *ctx)
+SEC("cgroup/sendmsg6")
+int calico_sendmsg_v6(struct bpf_sock_addr *ctx)
 {
 	CALI_DEBUG("sendmsg_v6\n");
 
 	return 1;
 }
 
-__attribute__((section("calico_recvmsg_v6")))
-int cali_ctlb_recvmsg_v6(struct bpf_sock_addr *ctx)
+SEC("cgroup/recvmsg6")
+int calico_recvmsg_v6(struct bpf_sock_addr *ctx)
 {
 	__be32 ipv4;
 
