@@ -603,6 +603,7 @@ execute_tests_oneshot() {
     # is true, perform the mesh tests first.  Then run the explicit peering tests - we should
     # see confd terminate when we turn of the mesh.
     for i in $(seq 1 2); do
+        run_individual_test_oneshot 'mesh/bgp-export'
         run_individual_test_oneshot 'mesh/ipip-always'
         run_individual_test_oneshot 'mesh/ipip-cross-subnet'
         run_individual_test_oneshot 'mesh/ipip-off'
