@@ -117,8 +117,6 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 1. Install Calico for Windows for your datastore with using the default parameters or [customize installation parameters]. (#configure-installation-parameters).
    The PowerShell script downloads Calico for Windows release binary, Kubernetes binaries, Windows utilities files, configures Calico for Windows, and starts the Calico service.
 
-   You do not need to pass a parameter if the default value of the parameter is correct for your cluster.
-
    **Kubernetes datastore (default)**
 
    ```powershell
