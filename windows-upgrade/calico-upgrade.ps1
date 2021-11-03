@@ -25,7 +25,7 @@ function Log {
 }
 
 Log "Starting calico upgrade"
-$zipFile = $Get-ChildItem -path . -filter calico-windows-upgrade*.zip | Select -expandproperty Name
+$zipFile = Get-ChildItem -path . -filter calico-windows-upgrade*.zip | Select -expandproperty Name
 Expand-Archive -Path $zipFile -DestinationPath $PSScriptRoot
 Remove-Item -Path $zipFile
 
