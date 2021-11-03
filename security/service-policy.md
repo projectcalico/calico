@@ -24,6 +24,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 - [Allow access to the Kubernetes API for a specific namespace](#allow-access-to-the-kubernetes-api-for-a-specific-namespace)
 - [Allow access to Kubernetes DNS for the entire cluster](#allow-access-to-kubernetes-dns-for-the-entire-cluster)
+- [Allow access from a specified service](#allow-access-from-a-specified-service)
 
 #### Allow access to the Kubernetes API for a specific namespace
 
@@ -70,6 +71,49 @@ spec:
 
 > **Note**: This policy also enacts a default-deny behavior for all pods, so make sure any other required application traffic is allowed by a policy.
 {: .alert .alert-info}
+
+### Allow access from a specified service
+
+In the following example, ingress traffic is allowed from the `frontend-service` service in the `frontend` namespace for all pods in the namespace `backend`.
+This allows all pods that back the `frontend-service` service to send traffic to all pods in the `backend` namespace.
+
+```yaml
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-service-access
+  namespace: backend
+spec:
+  selector: all()
+  ingress:
+    - action: Allow
+      source:
+        services:
+          name: frontend-service
+          namespace: frontend
+```
+
+We can also further specify the ports that the `frontend-service` service is allowed to access. The following example limits access from the `frontend-service`
+service to port 80.
+
+```yaml
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-service-access
+  namespace: backend
+spec:
+  selector: all()
+  ingress:
+    - action: Allow
+      protocol: TCP
+      source:
+        services:
+          name: frontend-service
+          namespace: frontend
+      destination:
+        ports: [80]
+```
 
 ### Above and beyond
 
