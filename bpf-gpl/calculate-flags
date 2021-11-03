@@ -85,7 +85,7 @@ elif [[ "${filename}" =~ .*wg.* ]]; then
 elif [[ "${filename}" =~ .*connect.* ]]; then
   # Connect-time load balancer (CGROUP attached).
   ((flags |= CALI_CGROUP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL" "-D__BPFTOOL_LOADER__" "-DCALI_LOG_PFX=CALI")
+  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALI")
 elif [[ "${filename}" =~ .*wep.* ]]; then
   # Workload endpoint; recognised by CALI_TC_HOST_EP bit being 0.
   ep_type="workload"
