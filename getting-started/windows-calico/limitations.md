@@ -12,6 +12,7 @@ canonical_url: '/getting-started/windows-calico/limitations'
 | Install and upgrade | **Supported**: Manifest with manual upgrade<br /><br />**Not supported**: <br />- Operator install<br />- Non-cluster hosts<br />- Typha component for scaling (Linux-based feature) |
 | Networking          | **Supported**:<br />- Calico VXLAN, no cross-subnet or VXLAN MTU settings with [limitations](#{{site.prodname}}-vxlan-networking-limitations)<br />- Calico non-overlay mode with BGP peering with [limitations](#{{site.prodname}}-bgp-networking-limitations)<br />- IPv4<br /><br />**Not supported**: <br />- Overlay mode with BGP peering<br />- IP in IP overlay with BPG routing<br />- Cross-subnet support and MTU setting for VXLAN<br />- IPv6 and dual stack<br />- Service advertisement |
 | Security            | **Not supported**: <br />- Application Layer Policy (ALP) for Istio<br />- Policy for hosts (host endpoints, including automatic host endpoints)<br />- Encryption with WireGuard |
+| Operations          | **Not supported**: <br />- Calico node status |
 | Metrics             | **Not supported**: Prometheus monitoring                     |
 | eBPF                | **Not supported**: (Linux-based feature)                     |
 
