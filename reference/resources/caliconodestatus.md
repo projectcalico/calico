@@ -6,7 +6,7 @@ canonical_url: '/reference/resources/caliconodestatus'
 
 A Calico node status resource (`CalicoNodeStatus`) represents a collection of status information for a node that {{site.prodname}} reports back to the user for use during troubleshooting.
 
-As of today, status of BGP agents, BGP sessions and routes exposed to BGP agents are collected.
+As of today, status of BGP agents, BGP sessions and routes exposed to BGP agents are collected from Linux nodes only. **Windows nodes are not supported at this time.**
 Calico node status resource is only valid when {{site.prodname}} BGP networking is in use.
 
 #### Notes
