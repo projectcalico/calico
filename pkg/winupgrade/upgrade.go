@@ -295,7 +295,7 @@ func verifyImagesSharePathPrefix(first, second string) error {
 }
 
 func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, hostPath string) error {
-	// Get pod list for calico-system pods on this node.
+	// Get pod list for calico-system pods.
 	list, err := cs.CoreV1().Pods("calico-system").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return err
@@ -357,6 +357,10 @@ func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, 
 	var podWithHostPath v1.Pod
 	count := 0
 	for _, pod := range list.Items {
+		// Only look at pods on this node.
+		if pod.Spec.NodeName != nodeName {
+			continue
+		}
 		if hasHostPathVolume(pod, hostPath) {
 			podWithHostPath = pod
 			count++
