@@ -562,6 +562,7 @@ execute_tests_daemon() {
 
     # Run the node-mesh-enabled tests.
     for i in $(seq 1 2); do
+        run_individual_test 'mesh/bgp-export'
         run_individual_test 'mesh/ipip-always'
         run_individual_test 'mesh/ipip-cross-subnet'
         run_individual_test 'mesh/ipip-off'
