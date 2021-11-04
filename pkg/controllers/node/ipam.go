@@ -94,6 +94,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
 		allocationsByNode:           make(map[string]map[string]*allocation),
+		handleTracker:               newHandleTracker(),
 		kubernetesNodesByCalicoName: make(map[string]string),
 		confirmedLeaks:              make(map[string]*allocation),
 		podCache:                    make(map[string]*v1.Pod),
@@ -132,6 +133,7 @@ type ipamController struct {
 	// Store allocations broken out from the raw blocks by their handle.
 	allocationsByBlock map[string]map[string]*allocation
 	allocationsByNode  map[string]map[string]*allocation
+	handleTracker      *handleTracker
 	nodesByBlock       map[string]string
 	blocksByNode       map[string]map[string]bool
 	emptyBlocks        map[string]string
@@ -414,6 +416,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			}
 			c.allocationsByNode[node][handle] = &alloc
 		}
+		c.handleTracker.setAllocation(&alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
@@ -428,6 +431,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 	for handle, alloc := range c.allocationsByBlock[blockCIDR] {
 		if _, ok := allocatedHandles[handle]; !ok {
 			// Needs release.
+			c.handleTracker.removeAllocation(alloc)
 			delete(c.allocationsByBlock[blockCIDR], handle)
 
 			// Also remove from the node view.
@@ -897,6 +901,12 @@ func (c *ipamController) garbageCollectIPs() error {
 			logc.Info("Leaked IP has been resurrected after querying latest state")
 			delete(c.confirmedLeaks, handle)
 			a.markValid()
+			continue
+		}
+
+		// Ensure that all of the IPs with this handle are in fact leaked.
+		if !c.handleTracker.isConfirmedLeak(handle) {
+			logc.Info("Some IPs with this handle are still valid, skipping")
 			continue
 		}
 
