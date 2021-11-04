@@ -18,7 +18,7 @@
 
 #include "sendrecv.h"
 
-static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, __u8 proto)
+static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, bool connect)
 {
 	/* We do not know what the source address is yet, we only know that it
 	 * is the localhost, so we might just use 0.0.0.0. That would not
@@ -31,7 +31,9 @@ static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, __u8 proto)
 	nat_lookup_result res = NAT_LOOKUP_ALLOW;
 	__u16 dport_he = (__u16)(bpf_ntohl(ctx->user_port)>>16);
 	struct calico_nat_dest *nat_dest;
-	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he, &res);
+	nat_dest = calico_v4_nat_lookup3(0, ctx->user_ip4, proto, dport_he, false, &res,
+			proto == IPPROTO_UDP && !connect, /* enforce affinity UDP */
+		 	proto == IPPROTO_UDP && !connect /* update affinity timer */);
 	if (!nat_dest) {
 		CALI_INFO("NAT miss.\n");
 		goto out;
@@ -115,7 +117,7 @@ int calico_connect_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	do_nat_common(ctx, ip_proto);
+	do_nat_common(ctx, ip_proto, true);
 
 out:
 	return 1;
@@ -132,7 +134,7 @@ int calico_sendmsg_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	do_nat_common(ctx, IPPROTO_UDP);
+	do_nat_common(ctx, IPPROTO_UDP, false);
 
 out:
 	return 1;
