@@ -72,6 +72,32 @@ func (ap AttachPoint) Log() *log.Entry {
 	})
 }
 
+func (ap AttachPoint) AlreadyAttached(object string) (string, bool) {
+	logCxt := log.WithField("attachPoint", ap)
+	progID, err := ap.ProgramID()
+	if err != nil {
+		logCxt.WithError(err).Debugf("Couldn't get the attached TC program ID.")
+		return "", false
+	}
+
+	progsToClean, err := ap.listAttachedPrograms()
+	if err != nil {
+		logCxt.WithError(err).Debugf("Couldn't get the list of already attached TC programs")
+		return "", false
+	}
+
+	isAttached, err := bpf.AlreadyAttachedProg(ap.IfaceName(), string(ap.Hook), object, progID)
+	if err != nil {
+		logCxt.WithError(err).Debugf("Failed to check if BPF program was already attached.")
+		return "", false
+	}
+
+	if isAttached && len(progsToClean) == 1 {
+		return progID, true
+	}
+	return "", false
+}
+
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap AttachPoint) AttachProgram() (string, error) {
 	logCxt := log.WithField("attachPoint", ap)
@@ -137,6 +163,14 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		}
 	}
 
+	// Check if the bpf object is already attached, and we should skip re-attaching it
+	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
+	if isAttached {
+		logCxt.Debugf("Program already attached, skip reattaching %s", ap.FileName())
+		return progID, nil
+	}
+	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
+
 	if err := obj.Load(); err != nil {
 		return "", fmt.Errorf("error loading program: %w", err)
 	}
@@ -180,6 +214,14 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 
 	if len(progErrs) != 0 {
 		return "", fmt.Errorf("failed to clean up one or more old calico programs: %v", progErrs)
+	}
+
+	// Store information of object in a json file so in future we can skip reattaching it.
+	// If the process fails, the json file with the correct name and program details
+	// is not stored on disk, and during Felix restarts the same program will be reattached
+	// which leads to an unnecessary load time
+	if err = bpf.RememberAttachedProg(ap.IfaceName(), string(ap.Hook), preCompiledBinary, strconv.Itoa(progId)); err != nil {
+		logCxt.WithError(err).Error("Failed to record hash of BPF program on disk; ignoring.")
 	}
 	return strconv.Itoa(progId), nil
 }
@@ -283,6 +325,33 @@ func (ap AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 // ProgramName returns the name of the program associated with this AttachPoint
 func (ap AttachPoint) ProgramName() string {
 	return SectionName(ap.Type, ap.ToOrFrom)
+}
+
+var ErrNoTC = errors.New("no TC program attached")
+
+// TODO: we should try to not get the program ID via 'tc' binary and rather
+// we should use libbpf to obtain it.
+func (ap *AttachPoint) ProgramID() (string, error) {
+	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), string(ap.Hook))
+	if err != nil {
+		return "", fmt.Errorf("Failed to check interface %s program ID: %w", ap.Iface, err)
+	}
+
+	s := strings.Fields(string(out))
+	for i := range s {
+		// Example of output:
+		//
+		// filter protocol all pref 49152 bpf chain 0
+		// filter protocol all pref 49152 bpf chain 0 handle 0x1 calico_from_hos:[61] direct-action not_in_hw id 61 tag 4add0302745d594c jited
+		if s[i] == "id" && len(s) > i+1 {
+			_, err := strconv.Atoi(s[i+1])
+			if err != nil {
+				return "", fmt.Errorf("Couldn't parse ID in 'tc filter' command err=%w out=\n%v", err, string(out))
+			}
+			return s[i+1], nil
+		}
+	}
+	return "", fmt.Errorf("Couldn't find 'id <ID> in 'tc filter' command out=\n%v err=%w", string(out), ErrNoTC)
 }
 
 // FileName return the file the AttachPoint will load the program from
@@ -491,6 +560,15 @@ func RemoveQdisc(ifaceName string) error {
 	if !hasQdisc {
 		return nil
 	}
+
+	// Remove the json files of the programs attached to the interface for both directions
+	if err = bpf.ForgetAttachedProg(ifaceName, "ingress"); err != nil {
+		return fmt.Errorf("Failed to remove runtime json file of ingress direction: %w", err)
+	}
+	if err = bpf.ForgetAttachedProg(ifaceName, "egress"); err != nil {
+		return fmt.Errorf("Failed to remove runtime json file of egress direction: %w", err)
+	}
+
 	return libbpf.RemoveQDisc(ifaceName)
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,10 @@ type MapInfo struct {
 	ValueSize int
 }
 
-const ObjectDir = "/usr/lib/calico/bpf"
+const (
+	ObjectDir      = "/usr/lib/calico/bpf"
+	RuntimeProgDir = "/var/run/calico/bpf/prog"
+)
 
 // ErrIterationFinished is returned by the MapIterator's Next() method when there are no more keys.
 var ErrIterationFinished = errors.New("iteration finished")

@@ -64,6 +64,31 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
+func (ap *AttachPoint) AlreadyAttached(object string) (string, bool) {
+	progID, err := ap.ProgramID()
+	if err != nil {
+		ap.Log().Debugf("Couldn't get the attached XDP program ID. err=%v", err)
+		return "", false
+	}
+
+	somethingAttached, err := ap.IsAttached()
+	if err != nil {
+		ap.Log().Debugf("Failed to verify if any program is attached to interface. err=%v", err)
+		return "", false
+	}
+
+	isAttached, err := bpf.AlreadyAttachedProg(ap.IfaceName(), "xdp", object, progID)
+	if err != nil {
+		ap.Log().Debugf("Failed to check if BPF program was already attached. err=%v", err)
+		return "", false
+	}
+
+	if isAttached && somethingAttached {
+		return progID, true
+	}
+	return "", false
+}
+
 func (ap *AttachPoint) AttachProgram() (string, error) {
 	preCompiledBinary := path.Join(bpf.ObjectDir, ap.FileName())
 	sectionName := ap.SectionName()
@@ -82,6 +107,14 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 		ap.Log().WithError(err).Error("Failed to patch binary")
 		return "", err
 	}
+
+	// Check if the bpf object is already attached, and we should skip re-attaching it
+	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
+	if isAttached {
+		ap.Log().Infof("Programs already attached, skip reattaching %s", ap.FileName())
+		return progID, nil
+	}
+	ap.Log().Infof("Continue with attaching BPF program %s", ap.FileName())
 
 	// Note that there are a few considerations here.
 	//
@@ -141,10 +174,16 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	if !attachmentSucceeded {
 		return "", fmt.Errorf("Couldn't attach XDP program %v section %v to iface %v; modes=%v errs=%v", tempBinary, sectionName, ap.Iface, ap.Modes, errs)
 	}
-	progID, err := ap.ProgramID()
+	progID, err = ap.ProgramID()
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the attached XDP program ID err=%v", err)
 	}
+
+	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
+	if err = bpf.RememberAttachedProg(ap.IfaceName(), "xdp", preCompiledBinary, progID); err != nil {
+		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
+	}
+
 	return progID, nil
 }
 
@@ -212,6 +251,10 @@ func (ap AttachPoint) DetachProgram() error {
 		}
 	}
 
+	// Program is detached, now remove the json file we saved for it
+	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
+		return fmt.Errorf("Failed to delete hash of BPF program from disk. err=%w", err)
+	}
 	return nil
 }
 
@@ -238,6 +281,8 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 
 var ErrNoXDP = errors.New("no XDP program attached")
 
+// TODO: we should try to not get the program ID via 'ip' binary and rather
+// we should use libbpf to obtain it.
 func (ap *AttachPoint) ProgramID() (string, error) {
 	cmd := exec.Command("ip", "link", "show", "dev", ap.Iface)
 	ap.Log().Debugf("Running: %v %v", cmd.Path, cmd.Args)
