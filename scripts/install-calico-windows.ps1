@@ -273,6 +273,30 @@ function SetConfigParameters {
     (Get-Content $RootDir\config.ps1).replace($OldString, $NewString) | Set-Content $RootDir\config.ps1 -Force
 }
 
+function SetAKSCalicoStaticRules {
+    $fileName  = [Io.path]::Combine("$RootDir", "static-rules.json")
+    echo '{
+    "Provider": "AKS",
+    "Rules": [
+        {
+            "Name": "EndpointPolicy",
+            "Rule": {
+                "Action": "Block",
+                "Direction": "Out",
+                "Id": "block-wireserver",
+                "Priority": 200,
+                "Protocol": 6,
+                "RemoteAddresses": "168.63.129.16/32",
+                "RemotePorts": "80",
+                "RuleType": "Switch",
+                "Type": "ACL"
+            }
+        }
+    ],
+    "version": "0.1.0"
+}' | Out-File -encoding ASCII -filepath $fileName
+}
+
 function StartCalico()
 {
     Write-Host "`nStart {{installName}}...`n"
@@ -351,8 +375,10 @@ if ($platform -EQ "aks") {
     SetConfigParameters -OldString 'CALICO_NETWORKING_BACKEND="vxlan"' -NewString 'CALICO_NETWORKING_BACKEND="none"'
     SetConfigParameters -OldString 'KUBE_NETWORK = "Calico.*"' -NewString 'KUBE_NETWORK = "azure.*"'
 
-    $calicoNs = GetCalicoNamespace
-    GetCalicoKubeConfig -CalicoNamespace $calicoNs -SecretName 'calico-windows'
+    $calicoNs = "calico-system"
+    GetCalicoKubeConfig -CalicoNamespace $calicoNs
+
+    SetAKSCalicoStaticRules
 }
 if ($platform -EQ "eks") {
     EnableWinDsrForEKS
