@@ -249,7 +249,7 @@ fi
 BPF_GPL_DIR='./bpf-gpl'
 BPF_APACHE_DIR='./bpf-apache'
 
-c_gpl_license_check_failed=false
+c_dual_license_check_failed=false
 c_apache_license_check_failed=false
 c_copyright_check_failed=false
 
@@ -273,12 +273,12 @@ for filename in $changed_h_files; do
   fi
 done
 
-echo "Checking C files for GPL license statements..."
+echo "Checking C files for Apache/GPL license statements..."
 files=$(find $BPF_GPL_DIR -name "*.c" -o -name "*.h" | grep -v include)
 for file in $files; do
-  if ! grep -q -E "under the terms of the GNU General Public License" "${file}"; then
-    echo "  File is missing GPL license: bpf-gpl/"`basename $file`
-    c_gpl_license_check_failed=true
+  if ! grep -q -E "SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later" "${file}"; then
+    echo "  File is missing Apache/GPL license: bpf-gpl/"`basename $file`
+    c_dual_license_check_failed=true
   fi
 done
 
@@ -303,23 +303,11 @@ if $c_copyright_check_failed; then
   echo 
 fi
 
-if $c_gpl_license_check_failed; then
+if $c_dual_license_check_failed; then
   echo
-  echo "GPL license header should be"
+  echo "Apache/GPL dual license header should be"
   echo 
-  echo // This program is free software';' you can redistribute it and/or modify
-  echo // it under the terms of the GNU General Public License as published by
-  echo // the Free Software Foundation';' either version 2 of the License, or
-  echo // '('at your option')' any later version.
-  echo //
-  echo // This program is distributed in the hope that it will be useful,
-  echo // but WITHOUT ANY WARRANTY';' without even the implied warranty of
-  echo // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  echo // GNU General Public License for more details.
-  echo //
-  echo // You should have received a copy of the GNU General Public License along
-  echo // with this program';' if not, write to the Free Software Foundation, Inc.,
-  echo // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+  echo "// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later"
   echo 
 fi
 
@@ -345,7 +333,7 @@ if $go_apache_check_failed || $go_copyright_check_failed || \
    $py_apache_check_failed || $py_copyright_check_failed || \
    $logrus_hook_check_failed || $focussing_check_failed || \
    $junit_hook_check_failed || $stale_file_in_skip_files || \
-   $c_copyright_check_failed || $c_gpl_license_check_failed || \
+   $c_copyright_check_failed || $c_dual_license_check_failed || \
    $c_apache_license_check_failed; then
   exit 1
 fi

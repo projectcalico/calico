@@ -1,5 +1,9 @@
-This directory contains the source code and build system for the GPL-licensed BPF
-programs that Calico uses to implement its BPF dataplane.
+SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+
+This directory contains the source code and build system for the BPF programs that Calico uses to implement its
+BPF dataplane.  Except for the third-party projects under the include subdirectory, the files in this directory
+are dual licensed: GPLv2 or later and Apache v2.0.  The licenses for third-party projects are documented in their
+subdirectory under the include directory.
 
 The build requires
 
