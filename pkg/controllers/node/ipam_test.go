@@ -35,6 +35,17 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+const (
+	// Shorten the grace period of the controller to speed up tests. With a grace period
+	// of 1 second, we expect periodically triggered sync's every 500ms, and that IPs will
+	// move from candidate -> confirmed leak after one second.
+	gracePeriod = 1 * time.Second
+
+	// Asserting on GC output should allow for three grace periods to occur.
+	// This ensures we don't hit race conditions with the internal GC loop.
+	assertionTimeout = 3 * gracePeriod
+)
+
 var _ = Describe("IPAM controller UTs", func() {
 
 	var c *ipamController
@@ -51,7 +62,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Config for the test.
 		cfg := config.NodeControllerConfig{
-			LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second},
+			LeakGracePeriod: &metav1.Duration{Duration: gracePeriod},
 		}
 
 		// stopChan is used in AfterEach to stop the controller in each test.
@@ -227,7 +238,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			done := c.pause()
 			defer done()
 			return c.nodesByBlock["10.0.0.0/30"]
-		}, 5*time.Second, time.Second).Should(Equal("cnode"))
+		}, assertionTimeout, time.Second).Should(Equal("cnode"))
 		Eventually(func() map[string]*allocation {
 			done := c.pause()
 			defer done()
@@ -319,10 +330,10 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.handlesReleased[handle]
-		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		Eventually(func() bool {
 			return fakeClient.affinityReleased("cnode")
-		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should clean up leaked IP addresses", func() {
@@ -387,12 +398,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.handlesReleased[handle]
-		}, 15*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 
 		// The block should remain.
 		Consistently(func() bool {
 			return fakeClient.affinityReleased("cnode")
-		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
 	It("should handle blocks losing their affinity", func() {
@@ -677,7 +688,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				defer done()
 				a := c.allocationsByNode["cnode"]["test-handle/10.0.0.0"]
 				return a.isConfirmedLeak()
-			}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+			}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 
 			// The IPv6 IP should be marked as a leak.
 			Eventually(func() bool {
@@ -685,7 +696,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				defer done()
 				a := c.allocationsByNode["cnode"]["test-handle/fe80::"]
 				return a.isConfirmedLeak()
-			}, 5*time.Second, 1*time.Second).Should(BeTrue())
+			}, assertionTimeout, 1*time.Second).Should(BeTrue())
 
 			// The handle used for the allocation should not be considered a leak because the IPv4 address
 			// is still valid.
@@ -693,12 +704,12 @@ var _ = Describe("IPAM controller UTs", func() {
 				done := c.pause()
 				defer done()
 				return c.handleTracker.isConfirmedLeak(handle)
-			}, 5*time.Second, 1*time.Second).Should(BeFalse())
+			}, assertionTimeout, 1*time.Second).Should(BeFalse())
 
 			// Confirm the IPs were NOT released.
 			Eventually(func() bool {
 				return fakeClient.handlesReleased[handle]
-			}, 5*time.Second, 500*time.Millisecond).Should(BeFalse())
+			}, assertionTimeout, 500*time.Millisecond).Should(BeFalse())
 		})
 
 		By("Deleting the pod", func() {
@@ -715,12 +726,12 @@ var _ = Describe("IPAM controller UTs", func() {
 				done := c.pause()
 				defer done()
 				return c.handleTracker.isConfirmedLeak(handle)
-			}, 15*time.Second, 1*time.Second).Should(BeTrue())
+			}, assertionTimeout, 1*time.Second).Should(BeTrue())
 
 			// Confirm the IPs were released.
 			Eventually(func() bool {
 				return fakeClient.handlesReleased[handle]
-			}, 15*time.Second, 100*time.Millisecond).Should(BeTrue())
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		})
 	})
 
@@ -789,12 +800,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.handlesReleased[handle]
-		}, 15*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 
 		// The block should remain.
 		Consistently(func() bool {
 			return fakeClient.affinityReleased("cnode")
-		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
 	It("should clean up empty blocks", func() {
@@ -899,7 +910,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
-		}, 15*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should NOT clean up empty blocks if the node is full", func() {
@@ -1004,7 +1015,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Consistently(func() bool {
 			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
-		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
 	It("should NOT clean up all blocks assigned to a node", func() {
@@ -1077,15 +1088,15 @@ var _ = Describe("IPAM controller UTs", func() {
 			defer done()
 			return len(c.blocksByNode["cnode"])
 		}
-		Eventually(numBlocks, 15*time.Second, 100*time.Millisecond).Should(Equal(1))
-		Consistently(numBlocks, 5*time.Second, 100*time.Millisecond).Should(Equal(1))
+		Eventually(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
 		numBlocks = func() int {
 			done := c.pause()
 			defer done()
 			return len(c.emptyBlocks)
 		}
 		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
-		Consistently(numBlocks, 3*time.Second, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
 
 	})
 
