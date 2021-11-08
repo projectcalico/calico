@@ -2,6 +2,7 @@
 title: About Kubernetes Networking
 description: Learn about Kubernetes networking!
 canonical_url: 'https://www.tigera.io/learn/guides/kubernetes-networking/'
+redirect_to: 'https://www.tigera.io/learn/guides/kubernetes-networking/'
 ---
 
 {% comment %}
