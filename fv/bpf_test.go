@@ -2084,6 +2084,46 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal))
 						})
 					}
+
+					It("should have connectivity after a backend is gone", func() {
+						By("make connection to a service and set affinity")
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ExpectSome(w[0][1], TargetIP(ip), port)
+						cc.CheckConnectivity()
+
+						By("checking that affinity was created")
+						aff := dumpAffMap(felixes[0])
+						Expect(aff).To(HaveLen(1))
+
+						// Stop the original backends so that they are not
+						// reachable with the set affinity.
+						w[0][0].Stop()
+						w[1][0].Stop()
+
+						By("changing the service backend to completely different ones")
+						testSvc8056 := k8sService(testSvcName, "10.101.0.10", w[1][1], 80, 8056, 0, testOpts.protocol)
+						testSvc8056.Spec.SessionAffinity = "ClientIP"
+						k8sUpdateService(k8sClient, testSvcNamespace, testSvcName, testSvc, testSvc8056)
+
+						By("checking the the affinity is cleaned up")
+						Eventually(func() int {
+							aff := dumpAffMap(felixes[0])
+							return len(aff)
+						}).Should(Equal(0))
+
+						By("making another connection to a new backend")
+						ip = testSvc.Spec.ClusterIP
+						port = uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ResetExpectations()
+						ip = testSvc8056.Spec.ClusterIP
+						port = uint16(testSvc8056.Spec.Ports[0].Port)
+
+						cc.ExpectSome(w[0][1], TargetIP(ip), port)
+						cc.CheckConnectivity()
+					})
 				})
 
 				npPort := uint16(30333)

@@ -172,13 +172,17 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 
 	now = bpf_ktime_get_ns();
 	affval = cali_v4_nat_aff_lookup_elem(&affkey);
-	if (affval && now - affval->ts <= nat_lv1_val->affinity_timeo * 1000000000ULL) {
-		CALI_DEBUG("NAT: using affinity backend %x:%d\n",
-				bpf_ntohl(affval->nat_dest.addr), affval->nat_dest.port);
+	if (affval) {
+		if (now - affval->ts <= nat_lv1_val->affinity_timeo * 1000000000ULL) {
+			CALI_DEBUG("NAT: using affinity backend %x:%d\n",
+					bpf_ntohl(affval->nat_dest.addr), affval->nat_dest.port);
 
-		return &affval->nat_dest;
+			return &affval->nat_dest;
+		}
+		CALI_DEBUG("NAT: affinity expired for %x:%d\n", bpf_ntohl(ip_dst), dport);
+	} else {
+		CALI_DEBUG("no previous affinity for %x:%d", bpf_ntohl(ip_dst), dport);
 	}
-	CALI_DEBUG("NAT: affinity invalid, new lookup for %x\n", bpf_ntohl(ip_dst));
 	/* To be k8s conformant, fall through to pick a random backend. */
 
 skip_affinity:
