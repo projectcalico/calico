@@ -73,7 +73,14 @@ def extract_release_notes(issue):
     # Look for a release note section in the body.
     matches = re.findall(r'```release-note(.*?)```', issue.body, re.DOTALL)
     if matches:
-        return [m.strip() for m in matches]
+        # If the contents are "none required", just use the title.
+        notes = []
+        for m in matches:
+            if m.strip() == "None required":
+                notes.append(issue.title.strip())
+            else:
+                notes.append(m.strip())
+        return notes
     else:
         print("WARNING: %s has no release-note section" % (issue.number))
         return [issue.title.strip()]
