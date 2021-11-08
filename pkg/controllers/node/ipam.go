@@ -94,6 +94,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
 		allocationsByNode:           make(map[string]map[string]*allocation),
+		handleTracker:               newHandleTracker(),
 		kubernetesNodesByCalicoName: make(map[string]string),
 		confirmedLeaks:              make(map[string]*allocation),
 		podCache:                    make(map[string]*v1.Pod),
@@ -132,6 +133,7 @@ type ipamController struct {
 	// Store allocations broken out from the raw blocks by their handle.
 	allocationsByBlock map[string]map[string]*allocation
 	allocationsByNode  map[string]map[string]*allocation
+	handleTracker      *handleTracker
 	nodesByBlock       map[string]string
 	blocksByNode       map[string]map[string]bool
 	emptyBlocks        map[string]string
@@ -374,7 +376,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 
 	// Update allocations contributed from this block.
 	numAllocationsInBlock := 0
-	allocatedHandles := map[string]bool{}
+	currentAllocations := map[string]bool{}
 	for ord, idx := range b.Allocations {
 		if idx == nil {
 			// Not allocated.
@@ -389,31 +391,34 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			continue
 		}
 		handle := *attr.AttrPrimary
-		allocatedHandles[handle] = true
 
-		// Check if we already know about this allocation.
-		if _, ok := c.allocationsByBlock[blockCIDR][handle]; ok {
-			continue
-		}
-
-		// This is a new allocation.
 		alloc := allocation{
 			ip:     ordinalToIP(b, ord).String(),
 			handle: handle,
 			attrs:  attr.AttrSecondary,
 		}
+
+		currentAllocations[alloc.id()] = true
+
+		// Check if we already know about this allocation.
+		if _, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
+			continue
+		}
+
+		// This is a new allocation.
 		if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
 			c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
 		}
-		c.allocationsByBlock[blockCIDR][handle] = &alloc
+		c.allocationsByBlock[blockCIDR][alloc.id()] = &alloc
 
 		// Update the allocations-by-node view.
 		if node := alloc.node(); node != "" {
 			if _, ok := c.allocationsByNode[node]; !ok {
 				c.allocationsByNode[node] = map[string]*allocation{}
 			}
-			c.allocationsByNode[node][handle] = &alloc
+			c.allocationsByNode[node][alloc.id()] = &alloc
 		}
+		c.handleTracker.setAllocation(&alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
@@ -425,22 +430,23 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 	}
 
 	// Remove any previously assigned allocations that have since been released.
-	for handle, alloc := range c.allocationsByBlock[blockCIDR] {
-		if _, ok := allocatedHandles[handle]; !ok {
+	for id, alloc := range c.allocationsByBlock[blockCIDR] {
+		if _, ok := currentAllocations[id]; !ok {
 			// Needs release.
-			delete(c.allocationsByBlock[blockCIDR], handle)
+			c.handleTracker.removeAllocation(alloc)
+			delete(c.allocationsByBlock[blockCIDR], id)
 
 			// Also remove from the node view.
 			node := alloc.node()
 			if node != "" {
-				delete(c.allocationsByNode[node], handle)
+				delete(c.allocationsByNode[node], id)
 			}
 			if len(c.allocationsByNode[node]) == 0 {
 				delete(c.allocationsByNode, node)
 			}
 
 			// And to be safe, remove from confirmed leaks just in case.
-			delete(c.confirmedLeaks, handle)
+			delete(c.confirmedLeaks, id)
 		}
 	}
 
@@ -454,10 +460,10 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 
 	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
-	for handle, alloc := range allocations {
+	for id, alloc := range allocations {
 		node := alloc.node()
 		if node != "" {
-			delete(c.allocationsByNode[node], handle)
+			delete(c.allocationsByNode[node], id)
 		}
 		if len(c.allocationsByNode[node]) == 0 {
 			delete(c.allocationsByNode, node)
@@ -702,11 +708,11 @@ func (c *ipamController) checkAllocations() ([]string, error) {
 
 			if a.isConfirmedLeak() {
 				// If the address is determined to be a confirmed leak, add it to the index.
-				c.confirmedLeaks[a.handle] = a
-			} else if _, ok := c.confirmedLeaks[a.handle]; ok {
+				c.confirmedLeaks[a.id()] = a
+			} else if _, ok := c.confirmedLeaks[a.id()]; ok {
 				// Address used to be a leak, but is no longer.
 				logc.Info("Leaked IP has been resurrected")
-				delete(c.confirmedLeaks, a.handle)
+				delete(c.confirmedLeaks, a.id())
 			}
 		}
 
@@ -720,7 +726,7 @@ func (c *ipamController) checkAllocations() ([]string, error) {
 			// Mark the node's tunnel addresses for GC.
 			for _, a := range tunnelAddresses {
 				a.markConfirmedLeak()
-				c.confirmedLeaks[a.handle] = a
+				c.confirmedLeaks[a.id()] = a
 			}
 
 			// The node is ready have its IPAM affinities released. It exists in Calico IPAM, but
@@ -839,7 +845,7 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 func (c *ipamController) syncIPAM() error {
 	// Skip if not InSync yet.
 	if c.syncStatus != bapi.InSync {
-		log.Debug("Have not yet received InSync notification, skipping IPAM sync.")
+		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")
 		return nil
 	}
 
@@ -888,19 +894,25 @@ func (c *ipamController) syncIPAM() error {
 
 // garbageCollectIPs checks all known allocations and garbage collects any confirmed leaks.
 func (c *ipamController) garbageCollectIPs() error {
-	for handle, a := range c.confirmedLeaks {
+	for id, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
 
 		// Final check that the allocation is leaked, this time ignoring our cache
 		// to make sure we're working with up-to-date information.
 		if c.allocationIsValid(a, false) {
 			logc.Info("Leaked IP has been resurrected after querying latest state")
-			delete(c.confirmedLeaks, handle)
+			delete(c.confirmedLeaks, id)
 			a.markValid()
 			continue
 		}
 
-		logc.Info("Garbage collecting leaked IP address")
+		// Ensure that all of the IPs with this handle are in fact leaked.
+		if !c.handleTracker.isConfirmedLeak(a.handle) {
+			logc.Debug("Some IPs with this handle are still valid, skipping")
+			continue
+		}
+
+		logc.Info("Garbage collecting leaked IP address, and any IPs with its handle")
 		if err := c.client.IPAM().ReleaseByHandle(context.TODO(), a.handle); err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				logc.WithField("handle", a.handle).Debug("IP already released")
@@ -912,11 +924,11 @@ func (c *ipamController) garbageCollectIPs() error {
 
 		// No longer a leak. Remove it from the map here so we're not dependent on receiving
 		// the update from the syncer (which we will do eventually, this is just cleaner).
-		delete(c.allocationsByNode[a.node()], handle)
+		delete(c.allocationsByNode[a.node()], id)
 		if len(c.allocationsByNode[a.node()]) == 0 {
 			delete(c.allocationsByNode, a.node())
 		}
-		delete(c.confirmedLeaks, handle)
+		delete(c.confirmedLeaks, id)
 	}
 	return nil
 }
