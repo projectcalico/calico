@@ -25,7 +25,7 @@ canonical_url: '/calico-cloud/index'
 ### Don't have a Calico cluster? Easy...<a href="https://www.tigera.io/tigera-products/cloud-trial" class="request-demo-button" target="_blank" rel="noopener noreferreer">Try it now!</a>
 
 
-### Already have a Calico cluster? You are **~5 minutes** away from connection!
+### Already have a Calico cluster? You are about **5 minutes** away from connection!
 
 1. Identify the cluster you want to use and apply the following manifest.
 
