@@ -20,7 +20,7 @@ canonical_url: '/calico-cloud/index'
 
   Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service
 
-## then take your cluster into Calico Cloud and see for yourself...
+## then take your cluster into Calico Cloud and see for yourself!
    
 ### Don't have a Calico cluster? Easy...<a href="https://www.tigera.io/tigera-products/cloud-trial" class="request-demo-button" target="_blank" rel="noopener noreferreer">Try it now!</a>
 
