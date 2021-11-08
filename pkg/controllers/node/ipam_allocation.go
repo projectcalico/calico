@@ -21,6 +21,49 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// handleTracker is used to aggregate information about all known IP addresses with the given
+// handle. It can be used to ensure that all IPs with the given handle are ready for GC.
+type handleTracker struct {
+	allocationsByHandle map[string]map[string]*allocation
+}
+
+func (t *handleTracker) setAllocation(a *allocation) {
+	if _, ok := t.allocationsByHandle[a.handle]; !ok {
+		t.allocationsByHandle[a.handle] = map[string]*allocation{}
+	}
+	t.allocationsByHandle[a.handle][a.id()] = a
+}
+
+func (t *handleTracker) removeAllocation(a *allocation) {
+	delete(t.allocationsByHandle[a.handle], a.id())
+	if len(t.allocationsByHandle[a.handle]) == 0 {
+		delete(t.allocationsByHandle, a.handle)
+	}
+}
+
+func (t *handleTracker) isConfirmedLeak(handle string) bool {
+	if len(t.allocationsByHandle) == 0 {
+		// We shouldn't ever hit this, but handle it just in case.
+		log.WithField("handle", handle).Warn("No allocations with handle")
+		return false
+	}
+	for _, a := range t.allocationsByHandle[handle] {
+		if !a.isConfirmedLeak() {
+			// If any IP with this handle is still valid, the whole
+			// handle is valid.
+			log.WithFields(a.fields()).Debug("IP allocation that shares a handle is still valid")
+			return false
+		}
+	}
+	return true
+}
+
+func newHandleTracker() *handleTracker {
+	return &handleTracker{
+		allocationsByHandle: map[string]map[string]*allocation{},
+	}
+}
+
 // allocation is an internal structure used by the IPAM garbage collector to track IPAM
 // allocations and their status with respect to garbage collection.
 type allocation struct {
@@ -38,6 +81,11 @@ type allocation struct {
 	// confirmedLeak is set to true when we are confident this allocation
 	// is a leaked IP.
 	confirmedLeak bool
+}
+
+// id returns a unique ID for this allocation.
+func (a *allocation) id() string {
+	return fmt.Sprintf("%s/%s", a.handle, a.ip)
 }
 
 func (a *allocation) fields() log.Fields {
