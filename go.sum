@@ -611,8 +611,8 @@ github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prY
 github.com/projectcalico/api v0.0.0-20211027233830-6b11a0f525e1/go.mod h1:QUvycRdtbC3tSCzePX7+gxA0ZebEeHcW8ojpVwEdQVk=
 github.com/projectcalico/api v0.0.0-20211102181812-edfaf495a5c8 h1:tf883nciQPUZut8Br0Cdkw/JTakiizX+eq2XTNHzJS0=
 github.com/projectcalico/api v0.0.0-20211102181812-edfaf495a5c8/go.mod h1:QUvycRdtbC3tSCzePX7+gxA0ZebEeHcW8ojpVwEdQVk=
-github.com/projectcalico/felix v0.0.0-20211105153745-b539c64b28f8 h1:wPp0BqXB2c/upyshO2qyfL3YfeK+C/I1IkZuRusCOts=
-github.com/projectcalico/felix v0.0.0-20211105153745-b539c64b28f8/go.mod h1:kB/3ALzpX/GO3LOfHsrrVHVBH2mWag1rewD46059Lws=
+github.com/projectcalico/felix v0.0.0-20211108162507-edaab7b95bd0 h1:nUBUoP/T8hpd68LjEjZNBtNNUY/MSqxpJKVrleNhI+E=
+github.com/projectcalico/felix v0.0.0-20211108162507-edaab7b95bd0/go.mod h1:kB/3ALzpX/GO3LOfHsrrVHVBH2mWag1rewD46059Lws=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
