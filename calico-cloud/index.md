@@ -1,6 +1,6 @@
 ---
 title: Calico Cloud
-description: Learn about Calico Cloud
+description: Learn about Calico Cloud.
 canonical_url: '/calico-cloud/index'
 ---
 
@@ -23,6 +23,7 @@ canonical_url: '/calico-cloud/index'
 ## then take your cluster into Calico Cloud and see for yourself...
    
 ### Don't have a Calico cluster? Easy...<a href="https://www.tigera.io/tigera-products/cloud-trial" class="request-demo-button" target="_blank" rel="noopener noreferreer">Try it now!</a>
+
 
 ### Already have a Calico cluster? You are **~5 minutes** away from connection!
 

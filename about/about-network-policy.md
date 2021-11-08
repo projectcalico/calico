@@ -138,7 +138,7 @@ workloads from compromised infrastructure. This also avoids the need for dual pr
 mesh and infrastructure layers, or having to learn different policy models for each layer.
 
 #### Extendable with Calico Enterprise
-[Calico Enterprise]({{site.baseurl}}/calico-enterprise/) adds even richer network policy capabilities, with the ability
+Calico Enterprise adds even richer network policy capabilities, with the ability
 to specify hierarchical policies, with each team have particular boundaries of trust, and FQDN / domain names in policy
 rules for restricting access to specific external services.
 
