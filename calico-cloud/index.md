@@ -1,11 +1,7 @@
 ---
 title: Calico Cloud
 description: Learn about Calico Cloud
-show_read_time: false
-show_toc: false
-show_title: false
-calico_enterprise: true
-calico_cloud_header: true
+canonical_url: '/calico-cloud/index'
 ---
 
 ![Calico-Cloud]({{site.baseurl}}/images/calico-cloud-small.png)
