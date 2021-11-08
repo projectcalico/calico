@@ -4,7 +4,7 @@ description: Learn about Calico Cloud
 canonical_url: '/calico-cloud/index'
 ---
 
-![Calico-Cloud]({{site.baseurl}}/images/calico-cloud-small.png)
+![calico-cloud]({{site.baseurl}}/images/calico-cloud-small.png)
 
 ## If you could solve these 3 problems today...
 
@@ -38,7 +38,7 @@ canonical_url: '/calico-cloud/index'
    ```bash
    kubectl apply -f https://storage.googleapis.com/dev-calicocloud-installer/manifests/cc-operator/latest/deploy.yaml
    ```  
-1. Accept your invite to join Calico Cloud.
+1. Accept your invite to join {{site.prodname}}.
 
     Open the email, fill in the brief onboarding dialog, and in about 5 minutes, your cluster will appear in the Calico Cloud Manager UI drop-down menu. That's it! You're ready to go! 
 
