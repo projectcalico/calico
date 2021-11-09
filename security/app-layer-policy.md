@@ -44,9 +44,8 @@ See [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tuto
 Following Istio versions have been verified to work with application layer policies:
 - Istio v1.10.2
 - Istio v1.9.6
-- Istio v1.7.4
 
-Istio v1.6.x and lower are **not** supported.
+Istio v1.7.x and lower are **not** supported.
 
 Although we expect future minor versions to work with the corresponding manifest below (for example, v1.9.7 or v1.10.3), manifest compatibility depends entirely on the upstream changes in the respective Istio release.
 
@@ -80,15 +79,7 @@ cd $(ls -d istio-* --color=never)
 ./bin/istioctl install
 ```
 
-For Istio v1.7.4, Istio can be installed in both strict mode or permissive mode. Application layer policies work with both Istio in strict or permissive mode. When dealing with mTLS traffic, {{site.prodname}} will cryptographically verify identity while making an authorization decision. When {{site.prodname}} receives plain-text instead, it will fall back on using IP addresses to verify identity.
-
-Strict mode is strongly suggested when creating a new cluster. For example, to install Istio in strict mode:
-
-```bash
-./bin/istioctl install --set values.global.controlPlaneSecurityEnabled=true
-```
-
-next, create the following {% include open-new-window.html text='PeerAuthentication' url='https://istio.io/latest/docs/reference/config/security/peer_authentication/' %} policy.
+Next, create the following {% include open-new-window.html text='PeerAuthentication' url='https://istio.io/latest/docs/reference/config/security/peer_authentication/' %} policy.
 
 Replace `namespace` below by `rootNamespace` value, if it's customized in your environment.
 
@@ -131,15 +122,6 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 
 [View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.9.yaml" | absolute_url }}){:target="_blank"}
 %>
-<label:Istio v1.7.x>
-<%
-```bash
-curl {{ "/manifests/alp/istio-inject-configmap-1.7.yaml" | absolute_url }} -o istio-inject-configmap.yaml
-kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
-```
-
-[View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.7.yaml" | absolute_url }}){:target="_blank"}
-%>
 {% endtabs %}
 
 #### Add Calico authorization services to the mesh
@@ -153,13 +135,6 @@ Apply the following manifest to configure Istio to query {{site.prodname}} for a
 kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}
 ```
 [View sample manifest]({{ "/manifests/alp/istio-app-layer-policy-envoy-v3.yaml" | absolute_url }}){:target="_blank"}
-%>
-<label: Istio v1.7.x>
-<%
-```bash
-kubectl apply -f {{ "/manifests/alp/istio-app-layer-policy-v1.7.yaml" | absolute_url }}
-```
-[View sample manifest]({{ "/manifests/alp/istio-app-layer-policy-v1.7.yaml" | absolute_url }}){:target="_blank"}
 %>
 {% endtabs %}
 
