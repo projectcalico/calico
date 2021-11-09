@@ -28,6 +28,14 @@ rules:
     resources:
       - resourcequotas
     verbs:
+      - list
+      - get
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+    verbs:
       - create
       - get
       - list
