@@ -20,16 +20,12 @@ Create compliance policies for any compliance framework including PCI, SOC 2, an
 
 Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service
 
-<<<<<<< HEAD
    
-### Don't have a Calico cluster? Easy...[
+### Don't have a Calico cluster? Easy...
     
     [Try it now](https://www.tigera.io/tigera-products/cloud-trial)
-=======
-## then take your cluster into Calico Cloud and see for yourself!
 
 ### Don't have a Calico cluster? Easy...[Try it now](https://www.tigera.io/tigera-products/cloud-trial)
->>>>>>> 3e72866478ede00d54b5e4cf330b2d6bb13c9bda
 
 ### Already have a Calico cluster? You are about **5 minutes** away from connection!
 
