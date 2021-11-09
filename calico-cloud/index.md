@@ -8,17 +8,17 @@ canonical_url: '/calico-cloud/index'
 
 ## You can solve these 3 problems today...with Calico Cloud
 
-#### Workload access controls
+- Workload access controls
 
-Implement pod-level workload access controls and protect containerized environments in the Kubernetes cluster from outside threats, while enabling applications and workloads to securely communicate with resources outside the cluster behind a firewall or other control point.
+    Implement pod-level workload access controls and protect containerized environments in the Kubernetes cluster from outside threats, while enabling applications and workloads to securely communicate with resources outside the cluster behind a firewall or other control point.
 
-#### Compliance
+- Compliance
 
-Create compliance policies for any compliance framework including PCI, SOC 2, and more. Continuously monitor compliance for your container, Kubernetes, and cloud environment. Retain a daily history of your compliance status. Generate on-demand or scheduled audit reports.
+    Create compliance policies for any compliance framework including PCI, SOC 2, and more. Continuously monitor compliance for your container, Kubernetes, and cloud environment. Retain a daily history of your compliance status. Generate on-demand or scheduled audit reports.
 
-#### Faster troubleshooting
+- Faster troubleshooting
 
-Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service
+    Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service
 
 #### Don't have a Calico cluster? Easy...
 
