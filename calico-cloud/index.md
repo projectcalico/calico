@@ -25,8 +25,6 @@ Enable faster troubleshooting of Kubernetes workloads and applications with Serv
     
     [Try it now](https://www.tigera.io/tigera-products/cloud-trial)
 
-### Don't have a Calico cluster? Easy...[Try it now](https://www.tigera.io/tigera-products/cloud-trial)
-
 ### Already have a Calico cluster? You are about **5 minutes** away from connection!
 
 1. Identify the cluster you want to use and apply the following manifest.
