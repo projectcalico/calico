@@ -6,7 +6,7 @@ canonical_url: '/calico-cloud/index'
 
 ![calico-cloud]({{site.baseurl}}/images/calico-cloud-small.png)
 
-## If you could solve these 3 problems today...
+## If you could solve these 3 problems today...then take your cluster into Calico Cloud and see for yourself!
 
   #### Workload access controls
 
@@ -20,9 +20,10 @@ canonical_url: '/calico-cloud/index'
 
   Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service
 
-## then take your cluster into Calico Cloud and see for yourself!
    
-### Don't have a Calico cluster? Easy...[Try it now](https://www.tigera.io/tigera-products/cloud-trial)
+### Don't have a Calico cluster? Easy...[
+    
+    [Try it now](https://www.tigera.io/tigera-products/cloud-trial)
 
 ### Already have a Calico cluster? You are about **5 minutes** away from connection!
 
