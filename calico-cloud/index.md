@@ -18,7 +18,7 @@ canonical_url: '/calico-cloud/index'
 
 - **Faster troubleshooting**
 
-    Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service
+    Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service.
 
 #### Don't have a Calico cluster? Easy...
 
@@ -45,6 +45,3 @@ canonical_url: '/calico-cloud/index'
     Open the email, fill in the brief onboarding dialog, and in about 5 minutes, your cluster will appear in the Calico Cloud Manager UI drop-down menu. That's it! You're ready to go!
 
     **Can I disconnect my cluster at any time?** Yes. Whether you’ve finished with your {{site.prodname}} Trial or decided to disconnect your cluster earlier, we know you want your cluster to remain functional. We have a doc with steps to run a simple script to {% include open-new-window.html text='migrate your cluster back to open-source Project Calico' url='https://docs.calicocloud.io/operations/disconnect' %}.
-
-
-
