@@ -6,7 +6,7 @@ canonical_url: '/calico-cloud/index'
 
 ![calico-cloud]({{site.baseurl}}/images/calico-cloud-small.png)
 
-## If you could solve these 3 problems today...then take your cluster into Calico Cloud and see for yourself!
+## You can solve these 3 problems today...with Calico Cloud
 
 #### Workload access controls
 
@@ -20,14 +20,11 @@ Create compliance policies for any compliance framework including PCI, SOC 2, an
 
 Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, Packet Capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service
 
-   
-### Don't have a Calico cluster? Easy...
-    
-    [Try it now](https://www.tigera.io/tigera-products/cloud-trial)
+#### Don't have a Calico cluster? Easy...
 
-### Don't have a Calico cluster? Easy...[Try it now](https://www.tigera.io/tigera-products/cloud-trial)
+{% include open-new-window.html text='Try it now' url='https://www.tigera.io/tigera-products/cloud-trial' %}
 
-### Already have a Calico cluster? You are about **5 minutes** away from connection!
+#### Already have a Calico cluster? You are **5 minutes** away from connecting to Calico Cloud
 
 1. Identify the cluster you want to use and apply the following manifest.
 
