@@ -21,7 +21,6 @@ from tests.st.utils.utils import check_bird_status, retry_until_success
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
-
 class TestReadiness(TestBase):
     def test_readiness(self):
         """
@@ -203,3 +202,75 @@ class TestReadiness(TestBase):
             retry_until_success(host2.assert_is_ready, retries=30)
             check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
             check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
+
+class TestDisableBGPExport(TestBase):
+    def test_disable_bgp_export(self):
+        """
+        Verify that disableBGPExport in an IP pool makes bird not export it correctly.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
+             DockerHost('host2',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host2:
+
+            # Wait until both hosts are ready
+            retry_until_success(host1.assert_is_ready, retries=30)
+            retry_until_success(host2.assert_is_ready, retries=30)
+
+            # Create IPPool pool1 with disableBGPExport=true
+            pool1 = {'apiVersion': 'projectcalico.org/v3',
+                        'kind': 'IPPool',
+                        'metadata': {'name': 'ippool-name-1'},
+                        'spec': {'cidr': '192.168.1.0/24',
+                                 'ipipMode': 'Always',
+                                 'disableBGPExport': True},
+                        }
+            host1.writejson("pool1.json", pool1)
+            host1.calicoctl("create -f pool1.json")
+
+            # Create IPPool pool2 with explicit disableBGPExport=false
+            pool2 = {'apiVersion': 'projectcalico.org/v3',
+                        'kind': 'IPPool',
+                        'metadata': {'name': 'ippool-name-2'},
+                        'spec': {'cidr': '192.168.2.0/24',
+                                 'ipipMode': 'Always',
+                                 'disableBGPExport': False},
+                        }
+            host1.writejson("pool2.json", pool2)
+            host1.calicoctl("create -f pool2.json")
+
+            # Create IPPool pool3 with no disableBGPExport (false is the default)
+            pool3 = {'apiVersion': 'projectcalico.org/v3',
+                        'kind': 'IPPool',
+                        'metadata': {'name': 'ippool-name-3'},
+                        'spec': {'cidr': '192.168.3.0/24',
+                                 'ipipMode': 'Always'},
+                        }
+            host1.writejson("pool3.json", pool3)
+            host1.calicoctl("create -f pool3.json")
+
+            # Create one workload on each IP pool
+            network1 = host1.create_network("subnet1")
+            workload1 = host1.create_workload("workload1", network=network1,
+                                              ip='192.168.1.1')
+            workload2 = host1.create_workload("workload2", network=network1,
+                                              ip='192.168.2.1')
+            workload3 = host1.create_workload("workload3", network=network1,
+                                              ip='192.168.3.1')
+
+            # host2's name in host1's bird cfg is Mesh_xxx_xxx_xxx_xxx (based on its IP address)
+            nameHost2 = 'Mesh_' + host2.ip.replace('.', '_')
+
+            # Verify that pool2 and pool3 are exported and pool1 is not
+            output = host1.execute("docker exec calico-node birdcl show route export %s" % nameHost2)
+            for block in ['192.168.2.0/26', '192.168.3.0/26']:
+                self.assertIn(block, output, "block '%s' should be present in 'birdcl show route export'")
+            for block in ['192.168.1.0/26']:
+                self.assertNotIn(block, output, "block '%s' should not be present in 'birdcl show route export'")
+
+            # Verify that pool1 is filtered from being exported and pool2 and pool3 are not
+            output = host1.execute("docker exec calico-node birdcl show route noexport %s" % nameHost2)
+            for block in ['192.168.1.0/26']:
+                self.assertIn(block, output, "block '%s' should be present in 'birdcl show route noexport'")
+            for block in ['192.168.2.0/26', '192.168.3.0/26']:
+                self.assertNotIn(block, output, "block '%s' should not be present in 'birdcl show route noexport'")
