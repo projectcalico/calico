@@ -14,7 +14,6 @@ rules:
       - endpoints
       - events
       - configmaps
-      - resourcequotas
       - secrets
       - serviceaccounts
     verbs:
@@ -24,6 +23,20 @@ rules:
       - update
       - delete
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+    verbs:
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
+    resourceNames:
+      - calico-critical-pods
+      - tigera-critical-pods
   - apiGroups:
       - ""
     resources:
