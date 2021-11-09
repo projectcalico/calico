@@ -193,6 +193,8 @@ at the same time that subcomponent release branches are cut, often well before t
 1. In [netlify/_redirects](_redirects) add a new for the new release following the other examples (Note: This page may vary with release, also just non-slash to slash redirects doesn't work. It needs to point to a page).
 This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't fail with 404.
 
+1. In netlify/sitemap-index.xml append a new sitemap location to the sitemap index for the release version.
+
 1. Create the the release notes file. This does not need to be populated now but does need to exist.
 
    ```
