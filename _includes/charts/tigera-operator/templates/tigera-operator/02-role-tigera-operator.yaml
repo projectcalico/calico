@@ -26,6 +26,28 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - resourcequotas
+    verbs:
+      - list
+      - get
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+    verbs:
+      - create
+      - get
+      - list
+      - update
+      - delete
+      - watch
+    resourceNames:
+      - calico-critical-pods
+      - tigera-critical-pods
+  - apiGroups:
+      - ""
+    resources:
       - nodes
     verbs:
       # Need to update node labels when migrating nodes.
