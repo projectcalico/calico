@@ -136,7 +136,7 @@ var _ = Describe("Windows policy test", func() {
 			err := kubectlExec(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 www.google.com'`)
 			Expect(err).To(HaveOccurred())
 		})
-		It("porter pod can connect to kube apiserver after creating service egress policy", func() {
+		It("porter pod can connect to nginxB after creating service egress policy", func() {
 			// Assert nginx-b is not reachable.
 			err := kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 			Expect(err).To(HaveOccurred())
@@ -163,6 +163,10 @@ var _ = Describe("Windows policy test", func() {
 
 			// Assert that it's now reachable.
 			err = kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Remove resources
+			_, err = client.NetworkPolicies().Delete(context.Background(), "demo", "allow-nginx-b", options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
