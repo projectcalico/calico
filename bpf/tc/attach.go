@@ -166,7 +166,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	// Check if the bpf object is already attached, and we should skip re-attaching it
 	progID, isAttached := ap.AlreadyAttached(preCompiledBinary)
 	if isAttached {
-		logCxt.Debugf("Program already attached, skip reattaching %s", ap.FileName())
+		logCxt.Infof("Program already attached to TC, skip reattaching %s", ap.FileName())
 		return progID, nil
 	}
 	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
@@ -189,6 +189,7 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	logCxt.Info("Program attached to TC.")
 
 	var progErrs []error
 	for _, p := range progsToClean {
