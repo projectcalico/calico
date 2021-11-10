@@ -68,10 +68,12 @@ func Run() {
 				k8sNodeName = nodeRef
 			}
 
-			// Set node condition, the timeout value is 5 seconds.
-			// Depends on how we configure termination grace period, this operation
-			// may not be successful if it takes too long to update node condition.
-			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, true, 5*time.Second)
+			hundredYears := 876600 * time.Hour
+			// Set node condition with a big timeout value (100 years).
+			// The maximum execution time for the shutdown process is defined by terminationGracePeriod of calico-node.
+			// Depends on how we configure terminationGracePeriod (currently 5 seconds with operator install),
+			// this operation may not be successful if it takes too long to update node condition.
+			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, true, hundredYears)
 			if err != nil {
 				log.WithError(err).Error("Unable to set NetworkUnavailable to true")
 				return
