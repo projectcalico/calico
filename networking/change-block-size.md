@@ -24,7 +24,7 @@ This how-to guide uses the following {{site.prodname}} features:
 By default, {{site.prodname}} uses an IPAM block size of 64 addresses – /26 for IPv4, and /122 for IPv6. However, the block size can be changed depending on the IP pool address family.
 
 - IPv4: 20-32, inclusive
-- IPv6: 116-128, inclusive
+- IPv6: 64-128, inclusive
 
 You can have **only one default IP pool for per protocol** in your installation manifest. In this example, there is one IP pool for IPv4 (/26), and one IP pool for IPv6 (/122).
 
