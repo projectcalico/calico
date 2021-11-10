@@ -34,12 +34,13 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/mcuadros/go-version"
-	"github.com/projectcalico/cni-plugin/pkg/k8s"
-	plugintypes "github.com/projectcalico/cni-plugin/pkg/types"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/projectcalico/cni-plugin/pkg/k8s"
+	plugintypes "github.com/projectcalico/cni-plugin/pkg/types"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 
 	"golang.org/x/sys/windows/registry"
 )
