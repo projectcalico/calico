@@ -154,6 +154,12 @@ func init() {
 			Protocol: protoUDP,
 			Port:     1234,
 		}, false),
+		Entry("should accept EndpointPort with empty name but HostPort specified", libapiv3.WorkloadEndpointPort{
+			Name:     "",
+			Protocol: protoUDP,
+			Port:     1234,
+			HostPort: 2345,
+		}, true),
 		Entry("should reject EndpointPort with no protocol", libapiv3.WorkloadEndpointPort{
 			Name: "a-valid-port",
 			Port: 1234,
@@ -905,7 +911,7 @@ func init() {
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:      netv4_4,
+					CIDR: netv4_4,
 					AllowedUses: []api.IPPoolAllowedUse{
 						api.IPPoolAllowedUseWorkload,
 						api.IPPoolAllowedUseTunnel,
@@ -916,7 +922,7 @@ func init() {
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:      netv4_4,
+					CIDR: netv4_4,
 					AllowedUses: []api.IPPoolAllowedUse{
 						"Garbage",
 					},
