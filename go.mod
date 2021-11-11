@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
 	github.com/projectcalico/api v0.0.0-20211102223522-996da60fc572
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211102231546-af45b1fd0cb4
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211111164224-2f7d4c7d7a1f
 	github.com/prometheus/client_golang v1.4.0
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/tools v0.1.2 // indirect
