@@ -122,11 +122,15 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 	// Convert the EndpointPort type from the API pkg to the v1 model equivalent type
 	ports := []model.EndpointPort{}
 	for _, port := range v3res.Spec.Ports {
-		ports = append(ports, model.EndpointPort{
-			Name:     port.Name,
-			Protocol: port.Protocol.ToV1(),
-			Port:     port.Port,
-		})
+		// The v1 API doesn't yet support ports which have no name. However, this is allowed on the
+		// v3 API and used by the CNI plugin only. Filter these out since Felix doesn't use them anyway.
+		if port.Name != "" {
+			ports = append(ports, model.EndpointPort{
+				Name:     port.Name,
+				Protocol: port.Protocol.ToV1(),
+				Port:     port.Port,
+			})
+		}
 	}
 
 	// Make sure there are no "namespace" or "serviceaccount" labels on the wep
