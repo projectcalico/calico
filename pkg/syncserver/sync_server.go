@@ -308,6 +308,9 @@ func (s *Server) serve(cxt context.Context) {
 		// worrying about back-compatibility with old browsers (for example).
 		tlsConfig.MinVersion = tls.VersionTLS12
 
+		// Set allowed cipher suites.
+		tlsConfig.CipherSuites = s.allowedCiphers()
+
 		// Arrange for server to verify the clients' certificates.
 		logCxt.Info("Will verify client certificates")
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
@@ -486,6 +489,19 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 		case <-healthTicks:
 			s.reportHealth()
 		}
+	}
+}
+
+// allowedCiphers returns the set of allowed cipher suites for the server.
+// The list is taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
+func (s *Server) allowedCiphers() []uint16 {
+	return []uint16{
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 	}
 }
 
