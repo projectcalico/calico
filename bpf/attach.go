@@ -31,10 +31,19 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// AttachedProgInfo describes what we store about an attached program.
 type AttachedProgInfo struct {
 	Object string `json:"object"`
 	Hash   string `json:"hash"`
 	ID     string `json:"id"`
+	Config string `json:"config"`
+}
+
+// AttachPointInfo describes what we need to know about an attach point
+type AttachPointInfo interface {
+	IfaceName() string
+	HookName() string
+	Config() string
 }
 
 var (
@@ -43,11 +52,10 @@ var (
 	runtimeJSONsuffixes = []string{"ingress", "egress", "xdp"}
 )
 
-// Compute a sha265 hash of the bpf object we are going to attach to an interface and
-// match it against the hash we potentially stored before in a json file. Also verify that
-// the content of the file matches the Attach Point's fields including program ID, object name
-func AlreadyAttachedProg(iface, hook, object, id string) (bool, error) {
-	bytesToRead, err := ioutil.ReadFile(RuntimeJSONFilename(iface, hook))
+// AlreadyAttachedProg checks that the program we are going to attach has the
+// same parameters as what we remembered about the currently attached.
+func AlreadyAttachedProg(a AttachPointInfo, object, id string) (bool, error) {
+	bytesToRead, err := ioutil.ReadFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()))
 	if err != nil {
 		// If file does not exist, just ignore the err code, and return false
 		if os.IsNotExist(err) {
@@ -66,18 +74,15 @@ func AlreadyAttachedProg(iface, hook, object, id string) (bool, error) {
 		return false, err
 	}
 
-	// Check the hash and other information we stored before, matches
-	// the object we are going to attach now
-	if progInfo.Hash == hash && progInfo.Object == object && progInfo.ID == id {
-		return true, nil
-	}
-
-	return false, nil
+	return progInfo.Hash == hash &&
+			progInfo.Object == object &&
+			progInfo.ID == id &&
+			progInfo.Config == a.Config(),
+		nil
 }
 
-// Store an Attach Point's object name and its hash in a file
-// to skip reattaching it in future.
-func RememberAttachedProg(iface, hook, object, id string) error {
+// RememberAttachedProg stores the attached programs parameters in a file.
+func RememberAttachedProg(a AttachPointInfo, object, id string) error {
 	hash, err := sha256OfFile(object)
 	if err != nil {
 		return err
@@ -87,6 +92,7 @@ func RememberAttachedProg(iface, hook, object, id string) error {
 		Object: object,
 		Hash:   hash,
 		ID:     id,
+		Config: a.Config(),
 	}
 
 	if err := os.MkdirAll(RuntimeProgDir, 0600); err != nil {
@@ -98,14 +104,15 @@ func RememberAttachedProg(iface, hook, object, id string) error {
 		return err
 	}
 
-	if err = ioutil.WriteFile(RuntimeJSONFilename(iface, hook), bytesToWrite, 0600); err != nil {
+	if err = ioutil.WriteFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()), bytesToWrite, 0600); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// Remove the hash file of an Attach Point from disk
+// ForgetAttachedProg removes what we store about the iface/hook
+// program.
 func ForgetAttachedProg(iface, hook string) error {
 	err := os.Remove(RuntimeJSONFilename(iface, hook))
 	// If the hash file does not exist, just ignore the err code, and return false
@@ -115,7 +122,8 @@ func ForgetAttachedProg(iface, hook string) error {
 	return nil
 }
 
-// Remove any hash file related to an interface
+// ForgetIfaceAttachedProg removes information we store about any programs
+// associated with an iface.
 func ForgetIfaceAttachedProg(iface string) error {
 	for _, hook := range runtimeJSONsuffixes {
 		err := ForgetAttachedProg(iface, hook)
@@ -126,8 +134,8 @@ func ForgetIfaceAttachedProg(iface string) error {
 	return nil
 }
 
-// Make sure /var/run/calico/bpf/prog exists. Then remove the
-// json files related to interfaces that do not exist
+// CleanAttachedProgDir makes sure /var/run/calico/bpf/prog exists and removes
+// json files related to interfaces that do not exist.
 func CleanAttachedProgDir() {
 	if err := os.MkdirAll(RuntimeProgDir, 0600); err != nil {
 		log.Errorf("Failed to create BPF hash directory. err=%v", err)
@@ -167,7 +175,9 @@ func CleanAttachedProgDir() {
 	}
 }
 
-// The file name is [iface name]_[tc_hook name | xdp].json, for example, eth0_tc_egress.json
+// RuntimeJSONFilename returns filename where we store information about
+// attached program. The filename is [iface name]_[tc_hook name | xdp].json, for
+// example, eth0_tc_egress.json
 func RuntimeJSONFilename(iface, hook string) string {
 	filename := path.Join(RuntimeProgDir, iface+"_tc_"+hook+".json")
 	if strings.ToLower(hook) == "xdp" {

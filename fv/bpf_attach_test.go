@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -69,7 +68,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		// These should happen at first execution of felix, since there is no program attached
 		firstRunProg1 := felix.WatchStdoutFor(regexp.MustCompile("Continue with attaching BPF program to_hep_debug.o"))
 		firstRunProg2 := felix.WatchStdoutFor(regexp.MustCompile("Continue with attaching BPF program from_hep_fib_debug.o"))
-		log.Info("Starting Felix")
+		By("Starting Felix")
 		felix.TriggerDelayedStart()
 		Eventually(firstRunProg1, "10s", "100ms").Should(BeClosed())
 		Eventually(firstRunProg2, "10s", "100ms").Should(BeClosed())
@@ -78,9 +77,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		// This should not happen at initial execution of felix, since there is no program attached
 		secondRunBase := felix.WatchStdoutFor(regexp.MustCompile("Continue with attaching BPF program"))
 		// These should happen after restart of felix, since BPF programs are already attached
-		secondRunProg1 := felix.WatchStdoutFor(regexp.MustCompile("Program already attached, skip reattaching to_hep_debug.o"))
-		secondRunProg2 := felix.WatchStdoutFor(regexp.MustCompile("Program already attached, skip reattaching from_hep_fib_debug.o"))
-		log.Info("Restartin Felix")
+		secondRunProg1 := felix.WatchStdoutFor(regexp.MustCompile("Program already attached to TC, skip reattaching to_hep_debug.o"))
+		secondRunProg2 := felix.WatchStdoutFor(regexp.MustCompile("Program already attached to TC, skip reattaching from_hep_fib_debug.o"))
+		By("Restarting Felix")
 		felix.Restart()
 		Eventually(secondRunProg1, "10s", "100ms").Should(BeClosed())
 		Eventually(secondRunProg2, "10s", "100ms").Should(BeClosed())

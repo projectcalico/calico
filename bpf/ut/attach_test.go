@@ -87,7 +87,7 @@ func TestReattachPrograms(t *testing.T) {
 	ap1.IntfIP = net.ParseIP("10.0.0.2")
 	err = tc.EnsureQdisc(ap1.Iface)
 	Expect(err).NotTo(HaveOccurred())
-	_, err = ap1.AttachProgram()
+	ap1ProgIdOld, err := ap1.AttachProgram()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
 	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
@@ -96,14 +96,21 @@ func TestReattachPrograms(t *testing.T) {
 
 	// Reattach the same TC program
 	t.Log("Replacing program should not add another map and dir")
-	ap1.HostIP = net.ParseIP("10.0.0.3")
-	ap1.IntfIP = net.ParseIP("10.0.0.4")
-	_, err = ap1.AttachProgram()
+	ap1ProgIdNew, err := ap1.AttachProgram()
 	Expect(err).NotTo(HaveOccurred())
+	Expect(ap1ProgIdOld).To(Equal(ap1ProgIdNew)) // no change, no reload
 	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
 	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
 	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+1), "unexpected number of hash files")
 	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), "ingress")).To(BeARegularFile())
+
+	t.Log("Replacing program should not add another map and dir")
+	ap1.HostIP = net.ParseIP("10.0.0.3")
+	ap1.IntfIP = net.ParseIP("10.0.0.4")
+	ap1ProgIdOld = ap1ProgIdNew
+	ap1ProgIdNew, err = ap1.AttachProgram()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ap1ProgIdOld).NotTo(Equal(ap1ProgIdNew)) // because we changed configuration, so reloaded
 
 	// Attach the second TC program
 	t.Log("Adding another program, should add one dir and one map")

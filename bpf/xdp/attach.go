@@ -40,6 +40,14 @@ func (ap *AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
+func (ap *AttachPoint) HookName() string {
+	return "xdp"
+}
+
+func (ap *AttachPoint) Config() string {
+	return fmt.Sprintf("%+v", ap)
+}
+
 func (ap *AttachPoint) JumpMapFDMapKey() string {
 	return "xdp"
 }
@@ -77,7 +85,7 @@ func (ap *AttachPoint) AlreadyAttached(object string) (string, bool) {
 		return "", false
 	}
 
-	isAttached, err := bpf.AlreadyAttachedProg(ap.IfaceName(), "xdp", object, progID)
+	isAttached, err := bpf.AlreadyAttachedProg(ap, object, progID)
 	if err != nil {
 		ap.Log().Debugf("Failed to check if BPF program was already attached. err=%v", err)
 		return "", false
@@ -180,7 +188,7 @@ func (ap *AttachPoint) AttachProgram() (string, error) {
 	}
 
 	// program is now attached. Now we should store its information to prevent unnecessary reloads in future
-	if err = bpf.RememberAttachedProg(ap.IfaceName(), "xdp", preCompiledBinary, progID); err != nil {
+	if err = bpf.RememberAttachedProg(ap, preCompiledBinary, progID); err != nil {
 		ap.Log().Errorf("Failed to record hash of BPF program on disk; Ignoring. err=%v", err)
 	}
 
