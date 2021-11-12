@@ -199,33 +199,34 @@ func (c converter) HasIPAddress(pod *kapiv1.Pod) bool {
 // and/or a single IPv6.  getPodIPs loads the IPs either from the PodIPs and PodIP field, if
 // present, or the calico podIP annotation.
 func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
+	logc := log.WithFields(log.Fields{"pod": pod.Name, "namespace": pod.Namespace})
 	var podIPs []string
 	if ips := pod.Status.PodIPs; len(ips) != 0 {
-		log.WithField("ips", ips).Debug("PodIPs field filled in")
+		logc.WithField("ips", ips).Debug("PodIPs field filled in")
 		for _, ip := range ips {
 			podIPs = append(podIPs, ip.IP)
 		}
 	} else if ip := pod.Status.PodIP; ip != "" {
-		log.WithField("ip", ip).Debug("PodIP field filled in")
+		logc.WithField("ip", ip).Debug("PodIP field filled in")
 		podIPs = append(podIPs, ip)
 	} else if ips := pod.Annotations[AnnotationPodIPs]; ips != "" {
-		log.WithField("ips", ips).Debug("No PodStatus IPs, use Calico plural annotation")
+		logc.WithField("ips", ips).Debug("No PodStatus IPs, use Calico plural annotation")
 		podIPs = append(podIPs, strings.Split(ips, ",")...)
 	} else if ip := pod.Annotations[AnnotationPodIP]; ip != "" {
-		log.WithField("ip", ip).Debug("No PodStatus IPs, use Calico singular annotation")
+		logc.WithField("ip", ip).Debug("No PodStatus IPs, use Calico singular annotation")
 		podIPs = append(podIPs, ip)
 	} else if ips := pod.Annotations[AnnotationAWSPodIPs]; ips != "" {
-		log.WithField("ips", ips).Debug("No PodStatus IPs, use AWS VPC annotation")
+		logc.WithField("ips", ips).Debug("No PodStatus IPs, use AWS VPC annotation")
 		podIPs = append(podIPs, strings.Split(ips, ",")...)
 	} else {
-		log.Debug("Pod has no IP")
+		logc.Debug("Pod has no IP")
 		return nil, nil
 	}
 	var podIPNets []*cnet.IPNet
 	for _, ip := range podIPs {
 		_, ipNet, err := cnet.ParseCIDROrIP(ip)
 		if err != nil {
-			log.WithFields(log.Fields{"ip": ip, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
+			logc.WithFields(log.Fields{"ip": ip}).WithError(err).Error("Failed to parse pod IP")
 			return nil, err
 		}
 		podIPNets = append(podIPNets, ipNet)
