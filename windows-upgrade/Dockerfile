@@ -30,13 +30,14 @@ USER ContainerAdministrator
 
 ENTRYPOINT cmd.exe \
 	/C \
-	copy /y c:\\CalicoBin\\calico-windows-upgrade.zip c:\\CalicoUpgrade & \
-	tar -x -f c:\\CalicoUpgrade\calico-windows-upgrade.zip -C c:\\CalicoUpgrade & \
-	del c:\\CalicoUpgrade\calico-windows-upgrade.zip & \
-	icacls.exe c:\\CalicoUpgrade & \
-	icacls.exe c:\\CalicoUpgrade /inheritance:r & \
-	icacls.exe c:\\CalicoUpgrade /grant:r SYSTEM:(OI)(CI)(F) & \
-	icacls.exe c:\\CalicoUpgrade /grant:r BUILTIN\Administrators:(OI)(CI)(F) & \
-	icacls.exe c:\\CalicoUpgrade /grant:r BUILTIN\Users:(OI)(CI)(RX) & \
-	icacls.exe c:\\CalicoUpgrade & \
+	copy /y c:\CalicoBin\calico-windows-upgrade.zip c:\CalicoUpgrade & \
+	tar -x -f c:\CalicoUpgrade\calico-windows-upgrade.zip -C c:\CalicoUpgrade & \
+	del c:\CalicoUpgrade\calico-windows-upgrade.zip & \
+	dir c:\CalicoUpgrade & \
+	icacls.exe c:\CalicoUpgrade & \
+	icacls.exe c:\CalicoUpgrade /inheritance:r & \
+	icacls.exe c:\CalicoUpgrade /grant:r SYSTEM:(OI)(CI)(F) & \
+	icacls.exe c:\CalicoUpgrade /grant:r BUILTIN\Administrators:(OI)(CI)(F) & \
+	icacls.exe c:\CalicoUpgrade /grant:r BUILTIN\Users:(OI)(CI)(RX) & \
+	icacls.exe c:\CalicoUpgrade & \
 	ping -t localhost > NUL
