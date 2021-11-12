@@ -2221,7 +2221,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testSvc = k8sService(testSvcName, "10.101.0.10",
 							w[0][0], 80, 8055, int32(npPort), testOpts.protocol)
 						if localOnly {
-							testSvc.Spec.ExternalTrafficPolicy = "Local"
+							testSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+							internalLocal := v1.ServiceInternalTrafficPolicyLocal
+							testSvc.Spec.InternalTrafficPolicy = &internalLocal
 						}
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
@@ -2733,7 +2735,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// FIXME connect time shares the same NAT table and it is a lottery which one it gets
 				if !testOpts.connTimeEnabled {
 					Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort))+
-						" ExternalTrafficPolicy=local", func() {
+						" Internal / ExternalTrafficPolicy=local", func() {
 						nodePortsTest(true)
 					})
 				}
