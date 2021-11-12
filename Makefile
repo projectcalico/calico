@@ -342,7 +342,7 @@ $(UPLOAD_DIR):
 	mkdir -p $(UPLOAD_DIR)
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR)
+release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
@@ -360,6 +360,16 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
+
+## Updates helm-index with the new release chart
+helm-index: release-prereqs
+	rm -rf  charts
+	mkdir -p charts/$(CALICO_VER)/
+	cp $(RELEASE_HELM_CHART) charts/$(CALICO_VER)/
+	wget https://calico-public.s3.amazonaws.com/charts/index.yaml -O charts/index.yaml.bak
+	cd charts/ && helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
+	aws --profile helm s3 cp index.yaml s3://calico-public/charts/ --acl public-read
+	rm -rf charts
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
