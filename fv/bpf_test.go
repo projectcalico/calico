@@ -931,6 +931,52 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity()
 				})
 
+				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
+					testOpts.connTimeEnabled && !testOpts.dsr {
+
+					It("should fail connect if there is no backed or a service", func() {
+						By("setting up a service without backends")
+
+						testSvc := k8sService("svc-no-backends", "10.101.0.111", w[0][0], 80, 1234, 0, testOpts.protocol)
+						testSvcNamespace := testSvc.ObjectMeta.Namespace
+						testSvc.Spec.Selector = map[string]string{"somelabel": "somevalue"}
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(),
+							testSvc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+						natK := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+
+						Eventually(func() bool {
+							natmaps, _ := dumpNATmaps(felixes)
+							for _, m := range natmaps {
+								if _, ok := m[natK]; !ok {
+									return false
+								}
+							}
+							return true
+						}, "5s").Should(BeTrue(), "service NAT key didn't show up")
+
+						By("starting tcpdump")
+						tcpdump := w[0][0].AttachTCPDump()
+						tcpdump.SetLogEnabled(true)
+						pattern := fmt.Sprintf(`IP %s.\d+ > %s\.80: Flags \[S\]`, w[0][0].IP, testSvc.Spec.ClusterIP)
+						tcpdump.AddMatcher("no-backend", regexp.MustCompile(pattern))
+						tcpdump.Start()
+						defer tcpdump.Stop()
+
+						By("testing connectivity")
+
+						cc.Expect(None, w[0][0], TargetIP(testSvc.Spec.ClusterIP), ExpectWithPorts(80))
+						cc.CheckConnectivity()
+
+						// If connect never succeeded, no packets were sent and
+						// therefore we must see none.
+						Expect(tcpdump.MatchCount("no-backend")).To(Equal(0))
+					})
+				}
+
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof TCP", func() {
