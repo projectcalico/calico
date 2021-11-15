@@ -207,7 +207,7 @@ func kubeConfigFile() string {
 func uninstall() error {
 	path := filepath.Join(baseDir(), "uninstall-calico.ps1")
 	log.Infof("Start uninstall script %s\n", path)
-	stdout, stderr, err := powershell(path)
+	stdout, stderr, err := powershell(path + " -ExceptUpgradeService $true")
 	fmt.Println(stdout, stderr)
 	if err != nil {
 		return err
