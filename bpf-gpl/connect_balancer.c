@@ -34,8 +34,7 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 	struct calico_nat_dest *nat_dest;
 	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he, false, &res,
 			proto == IPPROTO_UDP && !connect, /* enforce affinity UDP */
-			proto == IPPROTO_UDP && !connect /* update affinity timer */,
-			true /* always cluster local traffic */);
+			proto == IPPROTO_UDP && !connect /* update affinity timer */);
 	if (!nat_dest) {
 		CALI_INFO("NAT miss.\n");
 		if (res == NAT_NO_BACKEND) {

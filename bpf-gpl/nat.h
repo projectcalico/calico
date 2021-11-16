@@ -66,8 +66,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 								    bool from_tun,
 								    nat_lookup_result *res,
 								    bool affinity_always,
-								    bool affinity_tmr_update,
-								    bool local_traffic)
+								    bool affinity_tmr_update)
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
@@ -149,11 +148,24 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 	}
 	__u32 count = nat_lv1_val->count;
 
-	CALI_DEBUG("local_traffic %d count %d flags 0x%x\n", local_traffic, count, nat_lv1_val->flags);
-	if (from_tun || (local_traffic && (nat_lv1_val->flags & NAT_FLG_INTERNAL_LOCAL)) ||
-			(!local_traffic && (nat_lv1_val->flags & NAT_FLG_EXTERNAL_LOCAL))) {
-		CALI_DEBUG("using local count %d\n", count);
+	if (from_tun) {
 		count = nat_lv1_val->local;
+	} else if (nat_lv1_val->flags & (NAT_FLG_INTERNAL_LOCAL | NAT_FLG_EXTERNAL_LOCAL)) {
+		bool local_traffic = true;
+
+		if (CALI_F_FROM_HEP) {
+			struct cali_rt *rt = cali_rt_lookup(ip_src);
+
+			if (!rt || (!cali_rt_is_host(rt) && !cali_rt_is_workload(rt))) {
+				local_traffic = false;
+			}
+		}
+
+		if ((local_traffic && (nat_lv1_val->flags & NAT_FLG_INTERNAL_LOCAL)) ||
+				(!local_traffic && (nat_lv1_val->flags & NAT_FLG_EXTERNAL_LOCAL))) {
+			count = nat_lv1_val->local;
+			CALI_DEBUG("local_traffic %d count %d flags 0x%x\n", local_traffic, count, nat_lv1_val->flags);
+		}
 	}
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
@@ -234,10 +246,9 @@ skip_affinity:
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src, __be32 ip_dst,
 								    __u8 ip_proto, __u16 dport,
 								    bool from_tun,
-								    nat_lookup_result *res,
-								    bool local_traffic)
+								    nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, false, false, local_traffic);
+	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, false, false);
 }
 
 static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_src, __be32 ip_dst)
