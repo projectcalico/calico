@@ -65,6 +65,10 @@ func assertConsistentState(c *ipamController) {
 			Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks", cidr))
 		}
 	}
+	for cidr := range c.allocationsByBlock {
+		_, ok := c.allBlocks[cidr]
+		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks, but is present in allocationsByBlock", cidr))
+	}
 
 	// Make sure blocksByNode and nodesByBlock are consistent.
 	for n, blocks := range c.blocksByNode {
@@ -75,6 +79,7 @@ func assertConsistentState(c *ipamController) {
 	for cidr, n := range c.nodesByBlock {
 		ExpectWithOffset(1, c.blocksByNode[n][cidr]).To(BeTrue(), fmt.Sprintf("Block %s not present in blocksByNode", cidr))
 	}
+
 }
 
 var _ = Describe("IPAM controller UTs", func() {
