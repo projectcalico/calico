@@ -47,6 +47,7 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
 	k8s.io/api v0.22.0
 	k8s.io/apimachinery v0.22.0
+	k8s.io/apiserver v0.21.0
 	k8s.io/client-go v0.22.0
 	k8s.io/kubernetes v1.21.0
 	modernc.org/memory v1.0.4

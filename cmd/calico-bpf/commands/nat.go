@@ -94,8 +94,12 @@ func dumpNice(printf printfFn, natMap nat.MapMem, back nat.BackendMapMem) {
 		count := nv.Count()
 		local := nv.LocalCount()
 		id := nv.ID()
-		printf("%s port %d proto %d id %d count %d local %d\n",
-			nk.Addr(), nk.Port(), nk.Proto(), id, count, local)
+		flags := nv.FlagsAsString()
+		if flags != "" {
+			flags = " flags " + flags
+		}
+		printf("%s port %d proto %d id %d count %d local %d%s\n",
+			nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
 		for i := uint32(0); i < count; i++ {
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]

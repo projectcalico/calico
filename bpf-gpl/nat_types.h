@@ -53,9 +53,13 @@ struct calico_nat_v4_value {
 	__u32 count;
 	__u32 local;
 	__u32 affinity_timeo;
+	__u32 flags;
 };
 
-CALI_MAP(cali_v4_nat_fe, 2,
+#define NAT_FLG_EXTERNAL_LOCAL	0x1
+#define NAT_FLG_INTERNAL_LOCAL	0x2
+
+CALI_MAP(cali_v4_nat_fe, 3,
 		BPF_MAP_TYPE_LPM_TRIE,
 		union calico_nat_v4_lpm_key, struct calico_nat_v4_value,
 		511000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)

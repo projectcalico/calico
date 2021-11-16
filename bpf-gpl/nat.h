@@ -59,14 +59,15 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	return ret;
 }
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup3(__be32 ip_src,
-								     __be32 ip_dst,
-								     __u8 ip_proto,
-								     __u16 dport,
-								     bool from_tun,
-								     nat_lookup_result *res,
-								     bool affinity_always,
-								     bool affinity_tmr_update)
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src,
+								    __be32 ip_dst,
+								    __u8 ip_proto,
+								    __u16 dport,
+								    bool from_tun,
+								    nat_lookup_result *res,
+								    bool affinity_always,
+								    bool affinity_tmr_update,
+								    bool local_traffic)
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
@@ -146,7 +147,14 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup3(__be32 ip_s
 		*res = NAT_FE_LOOKUP_DROP;
 		return NULL;
 	}
-	__u32 count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
+	__u32 count = nat_lv1_val->count;
+
+	CALI_DEBUG("local_traffic %d count %d flags 0x%x\n", local_traffic, count, nat_lv1_val->flags);
+	if (from_tun || (local_traffic && (nat_lv1_val->flags & NAT_FLG_INTERNAL_LOCAL)) ||
+			(!local_traffic && (nat_lv1_val->flags & NAT_FLG_EXTERNAL_LOCAL))) {
+		CALI_DEBUG("using local count %d\n", count);
+		count = nat_lv1_val->local;
+	}
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
 
@@ -223,18 +231,13 @@ skip_affinity:
 	return nat_lv2_val;
 }
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport, nat_lookup_result *res)
-{
-	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, false, res, false, false);
-}
-
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src, __be32 ip_dst,
 								    __u8 ip_proto, __u16 dport,
 								    bool from_tun,
-								    nat_lookup_result *res)
+								    nat_lookup_result *res,
+								    bool local_traffic)
 {
-	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, from_tun, res, false, false);
+	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, false, false, local_traffic);
 }
 
 static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_src, __be32 ip_dst)

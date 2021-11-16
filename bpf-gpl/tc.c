@@ -264,6 +264,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		goto skip_policy;
 	}
 
+	bool is_local_traffic = true;
+
 	/* Unlike from WEP where we can do RPF by comparing to calico routing
 	 * info, we must rely in Linux to do it for us when receiving packets
 	 * from outside of the host. We enforce RPF failed on every new flow.
@@ -271,13 +273,19 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 */
 	if (CALI_F_FROM_HEP) {
 		ct_result_set_flag(ctx.state->ct_result.rc, CALI_CT_RPF_FAILED);
+
+		struct cali_rt *rt = cali_rt_lookup(ctx.state->ip_src);
+
+		if (!rt || (!cali_rt_is_host(rt) && !cali_rt_is_workload(rt))) {
+			is_local_traffic = false;
+		}
 	}
 
 	/* No conntrack entry, check if we should do NAT */
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
 	ctx.nat_dest = calico_v4_nat_lookup2(ctx.state->ip_src, ctx.state->ip_dst,
 					     ctx.state->ip_proto, ctx.state->dport,
-					     ctx.state->tun_ip != 0, &nat_res);
+					     ctx.state->tun_ip != 0, &nat_res, is_local_traffic);
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
