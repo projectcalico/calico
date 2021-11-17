@@ -46,6 +46,42 @@ const (
 	assertionTimeout = 3 * gracePeriod
 )
 
+// assertConsistenteState performs checks on the provided IPAM controller's internal
+// caches to ensure that they are consistent with each other. Useful for ensuring that
+// at any arbitrary point in time, we're not in an unknown state.
+func assertConsistentState(c *ipamController) {
+	// Stop the world so we can inspect it.
+	done := c.pause()
+	defer done()
+
+	// Make sure that allBlocks contains all of the blocks.
+	for cidr := range c.emptyBlocks {
+		_, ok := c.allBlocks[cidr]
+		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks", cidr))
+	}
+	for _, blocks := range c.blocksByNode {
+		for cidr := range blocks {
+			_, ok := c.allBlocks[cidr]
+			Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks", cidr))
+		}
+	}
+	for cidr := range c.allocationsByBlock {
+		_, ok := c.allBlocks[cidr]
+		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks, but is present in allocationsByBlock", cidr))
+	}
+
+	// Make sure blocksByNode and nodesByBlock are consistent.
+	for n, blocks := range c.blocksByNode {
+		for cidr := range blocks {
+			ExpectWithOffset(1, c.nodesByBlock[cidr]).To(Equal(n), fmt.Sprintf("Block %s on wrong node", cidr))
+		}
+	}
+	for cidr, n := range c.nodesByBlock {
+		ExpectWithOffset(1, c.blocksByNode[n][cidr]).To(BeTrue(), fmt.Sprintf("Block %s not present in blocksByNode", cidr))
+	}
+
+}
+
 var _ = Describe("IPAM controller UTs", func() {
 
 	var c *ipamController
@@ -74,6 +110,10 @@ var _ = Describe("IPAM controller UTs", func() {
 	})
 
 	AfterEach(func() {
+		// Assert test leaves the controller with a consistent internal state.
+		assertConsistentState(c)
+
+		// Stop the controller.
 		close(stopChan)
 	})
 
@@ -217,7 +257,6 @@ var _ = Describe("IPAM controller UTs", func() {
 			defer done()
 			return c.allocationsByBlock[blockCIDR][id]
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(expectedAllocation))
-
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
