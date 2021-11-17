@@ -25,6 +25,7 @@
 #include "policy.h"
 #include "conntrack.h"
 #include "nat.h"
+#include "nat_lookup.h"
 #include "routes.h"
 #include "jump.h"
 #include "reasons.h"

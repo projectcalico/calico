@@ -14,7 +14,7 @@
 
 #include "bpf.h"
 #include "log.h"
-#include "nat.h"
+#include "nat_lookup.h"
 
 #include "sendrecv.h"
 
