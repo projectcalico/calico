@@ -17,7 +17,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup3(__be32 ip_s
 								     __u16 dport,
 								     bool from_tun,
 								     nat_lookup_result *res,
-								     bool affinity_always,
+								     int affinity_always_timeo,
 								     bool affinity_tmr_update)
 {
 	struct calico_nat_v4_key nat_key = {
@@ -127,7 +127,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup3(__be32 ip_s
 	now = bpf_ktime_get_ns();
 	affval = cali_v4_nat_aff_lookup_elem(&affkey);
 	if (affval) {
-		int timeo = (affinity_always ? 60 /* default udp not seen */ : nat_lv1_val->affinity_timeo);
+		int timeo = (affinity_always_timeo ? : nat_lv1_val->affinity_timeo);
 		if (now - affval->ts <= timeo  * 1000000000ULL) {
 			CALI_DEBUG("NAT: using affinity backend %x:%d\n",
 					bpf_ntohl(affval->nat_dest.addr), affval->nat_dest.port);
@@ -158,7 +158,7 @@ skip_affinity:
 
 	CALI_DEBUG("NAT: backend selected %x:%d\n", bpf_ntohl(nat_lv2_val->addr), nat_lv2_val->port);
 
-	if (nat_lv1_val->affinity_timeo != 0 || affinity_always) {
+	if (nat_lv1_val->affinity_timeo != 0 || affinity_always_timeo) {
 		int err;
 		struct calico_nat_v4_affinity_val val = {
 			.ts = now,
@@ -178,7 +178,7 @@ skip_affinity:
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
 								    __u8 ip_proto, __u16 dport, nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, false, res, false, false);
+	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, false, res, 0, false);
 }
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src, __be32 ip_dst,
@@ -186,7 +186,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_s
 								    bool from_tun,
 								    nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, from_tun, res, false, false);
+	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false);
 }
 
 #endif /* __CALI_NAT_LOOKUP_H__ */

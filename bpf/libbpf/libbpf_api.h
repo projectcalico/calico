@@ -107,25 +107,25 @@ int bpf_link_destroy(struct bpf_link *link) {
 }
 
 void bpf_tc_set_globals(struct bpf_map *map,
-			uint hostIP,
-			uint intfIP,
+			uint host_ip,
+			uint intf_ip,
 			uint ext_to_svc_mark,
 			ushort tmtu,
 			ushort vxlanPort,
 			ushort psnat_start,
 			ushort psnat_len)
 {
-	struct cali_global_data data = {
-	    .host_ip = hostIP,
+	struct cali_tc_globals data = {
+	    .host_ip = host_ip,
 	    .tunnel_mtu = tmtu,
 	    .vxlan_port = vxlanPort,
-	    .intf_ip = intfIP,
+	    .intf_ip = intf_ip,
 	    .ext_to_svc_mark = ext_to_svc_mark,
 	    .psnat_start = psnat_start,
 	    .psnat_len = psnat_len,
 	};
-	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(struct cali_global_data)));
-	return;
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
 struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd, char *name)
@@ -147,4 +147,13 @@ struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd
 out:
 	set_errno(err);
 	return link;
+}
+
+void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo)
+{
+	struct cali_ctlb_globals data = {
+		.udp_not_seen_timeo = udp_not_seen_timeo,
+	};
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
