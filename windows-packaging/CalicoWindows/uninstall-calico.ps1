@@ -11,6 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+param
+(
+    [bool][parameter(Mandatory=$false)]$ExceptUpgradeService = $false
+)
 
 ipmo "$PSScriptRoot\libs\calico\calico.psm1" -Force
 
@@ -35,5 +39,9 @@ if ($env:CALICO_NETWORKING_BACKEND -NE "none")
 
 Remove-NodeService
 Remove-FelixService
+
+if (-Not $ExceptUpgradeService) {
+    Remove-UpgradeService
+}
 
 Write-Host "Done."

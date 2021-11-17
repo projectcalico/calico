@@ -16,6 +16,9 @@ package winupgrade
 import (
 	"context"
 	"os"
+	"strings"
+
+	"github.com/projectcalico/libcalico-go/lib/names"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -31,7 +34,7 @@ func ShouldInstallUpgradeService() {
 	variant := getVariant()
 
 	// Determine the name for this node.
-	nodeName := utils.DetermineNodeName()
+	nodeName := determineNodeName()
 	log.Debugf("Check if Calico upgrade service should be installed on node: %s. Version: %s, Variant: %s, baseDir: %s", nodeName, version, variant, baseDir())
 
 	config, err := clientcmd.BuildConfigFromFlags("", kubeConfigFile())
@@ -63,4 +66,33 @@ func ShouldInstallUpgradeService() {
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+// DetermineNodeName is copied from utils package but with logging in DEBUG level.
+func determineNodeName() string {
+	var nodeName string
+	var err error
+
+	// Determine the name of this node.  Precedence is:
+	// -  NODENAME
+	// -  Value stored in our nodename file.
+	// -  HOSTNAME (lowercase)
+	// -  os.Hostname (lowercase).
+	// We use the names.Hostname which lowercases and trims the name.
+	if nodeName = strings.TrimSpace(os.Getenv("NODENAME")); nodeName != "" {
+		log.Debugf("Using NODENAME environment for node name %s", nodeName)
+	} else if nodeName = utils.NodenameFromFile(); nodeName != "" {
+		log.Debugf("Using stored node name %s", nodeName)
+	} else if nodeName = strings.ToLower(strings.TrimSpace(os.Getenv("HOSTNAME"))); nodeName != "" {
+		log.Debugf("Using HOSTNAME environment (lowercase) for node name %s", nodeName)
+	} else if nodeName, err = names.Hostname(); err != nil {
+		log.WithError(err).Error("Unable to determine hostname")
+		utils.Terminate()
+	} else {
+		log.Warn("Using auto-detected node name. It is recommended that an explicit value is supplied using " +
+			"the NODENAME environment variable.")
+	}
+	log.Debugf("Determined node name: %s", nodeName)
+
+	return nodeName
 }
