@@ -472,6 +472,10 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 	delete(c.allocationsByBlock, blockCIDR)
 
 	// Remove from raw block storage.
+	if n := c.nodesByBlock[blockCIDR]; n != "" {
+		// The block was assigned to a node, make sure to update internal cache.
+		delete(c.blocksByNode[n], blockCIDR)
+	}
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
 	delete(c.emptyBlocks, blockCIDR)
