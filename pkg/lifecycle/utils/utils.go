@@ -124,7 +124,7 @@ func DetermineNodeName() string {
 	// We use the names.Hostname which lowercases and trims the name.
 	if nodeName = strings.TrimSpace(os.Getenv("NODENAME")); nodeName != "" {
 		log.Infof("Using NODENAME environment for node name %s", nodeName)
-	} else if nodeName = nodenameFromFile(); nodeName != "" {
+	} else if nodeName = NodenameFromFile(); nodeName != "" {
 		log.Infof("Using stored node name %s from %s", nodeName, nodenameFileName())
 	} else if nodeName = strings.ToLower(strings.TrimSpace(os.Getenv("HOSTNAME"))); nodeName != "" {
 		log.Infof("Using HOSTNAME environment (lowercase) for node name %s", nodeName)
@@ -152,9 +152,9 @@ func nodenameFileName() string {
 	return fn
 }
 
-// nodenameFromFile reads the nodename file if it exists and
+// NodenameFromFile reads the nodename file if it exists and
 // returns the nodename within.
-func nodenameFromFile() string {
+func NodenameFromFile() string {
 	filename := nodenameFileName()
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {

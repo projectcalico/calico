@@ -11,6 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+param
+(
+    [bool][parameter(Mandatory=$false)]$ExceptUpgradeService = $false
+)
 
 . $PSScriptRoot\config.ps1
 
@@ -22,3 +26,7 @@ if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
 }
 Stop-Service CalicoFelix
 Stop-Service CalicoNode
+
+if (-Not $ExceptUpgradeService) {
+    Stop-Service CalicoUpgrade
+}
