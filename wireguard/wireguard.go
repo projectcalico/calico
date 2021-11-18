@@ -657,7 +657,7 @@ func (w *Wireguard) Apply() (err error) {
 		if netlinkshim.IsNotSupported(err) {
 			// Wireguard is not supported, set everything to "in-sync" since there is not a lot of point doing anything
 			// else. We don't return an error in this case, instead we'll retry every resync period.
-			log.Info("Wireguard is not supported - publishing no public key")
+			log.Debug("Wireguard is not supported - publishing no public key")
 			w.setNotSupported()
 			return nil
 		} else if err != nil {
@@ -675,7 +675,7 @@ func (w *Wireguard) Apply() (err error) {
 	// Get the wireguard client. This may not always be possible.
 	wireguardClient, err := w.getWireguardClient()
 	if netlinkshim.IsNotSupported(err) {
-		log.Info("Wireguard is not supported - send zero-key status")
+		log.Debug("Wireguard is not supported - send zero-key status")
 		w.setNotSupported()
 		return nil
 	} else if err != nil {
@@ -692,7 +692,7 @@ func (w *Wireguard) Apply() (err error) {
 
 	// Update link address if out of sync.
 	if !w.inSyncInterfaceAddr {
-		log.Info("Ensure wireguard interface address is correct")
+		log.Debug("Ensure wireguard interface address is correct")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
