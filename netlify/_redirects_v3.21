@@ -1,0 +1,62 @@
+# These redirects are specific to release-v3.21, which is the last production version hosted at docs.projectcalico.org.
+# All future versions will be hosted at https://projectcalico.docs.tigera.io/
+# Following proxy 200 rules ensures continued access to manifests (for v3.21 and below) hosted at docs.projectcalico.org.
+# Last rule in this file is a forced 301 redirect (301!) to new domain, for everything else that's not specified in proxy.
+
+/archive/v3.21/manifests/*                                      https://calico-v3-21.netlify.app/v3.21/manifests/:splat                                 200
+/v3.21/manifests/*                                              https://calico-v3-21.netlify.app/v3.21/manifests/:splat                                 200
+/archive/v3.21/getting-started/kubernetes/installation/*        https://calico-v3-21.netlify.app/v3.21/getting-started/kubernetes/installation/:splat   200
+/v3.21/getting-started/kubernetes/installation/*                https://calico-v3-21.netlify.app/v3.21/getting-started/kubernetes/installation/:splat   200
+
+/archive/v3.20/manifests/*                                      https://calico-v3-20.netlify.app/archive/v3.20/manifests/:splat                                 200
+/v3.20/manifests/*                                              https://calico-v3-20.netlify.app/v3.20/manifests/:splat                                         200
+
+/archive/v3.19/manifests/*                                      https://calico-v3-19.netlify.app/archive/v3.19/manifests/:splat                                 200
+/v3.19/manifests/*                                              https://calico-v3-19.netlify.app/v3.19/manifests/:splat                                         200
+
+/archive/v3.18/manifests/*                                      https://calico-v3-18.netlify.app/archive/v3.18/manifests/:splat                                 200
+/v3.18/manifests/*                                              https://calico-v3-18.netlify.app/v3.18/manifests/:splat                                         200
+
+/archive/v3.17/manifests/*                                      https://calico-v3-17.netlify.app/archive/v3.17/manifests/:splat                                 200
+/v3.17/manifests/*                                              https://calico-v3-17.netlify.app/v3.17/manifests/:splat                                         200
+
+/archive/v3.16/manifests/*                                      https://calico-v3-16.netlify.app/archive/v3.16/manifests/:splat                                 200
+/v3.16/manifests/*                                              https://calico-v3-16.netlify.app/v3.16/manifests/:splat                                         200
+
+/archive/v3.15/manifests/*                                      https://calico-v3-15.netlify.app/archive/v3.15/manifests/:splat                                 200
+/v3.15/manifests/*                                              https://calico-v3-15.netlify.app/v3.15/manifests/:splat                                         200
+
+/archive/v3.14/manifests/*                                      https://calico-v3-14.netlify.app/archive/v3.14/manifests/:splat                                 200
+/v3.14/manifests/*                                              https://calico-v3-14.netlify.app/v3.14/manifests/:splat                                         200
+
+/archive/v3.13/manifests/*                                      https://calico-v3-13.netlify.app/archive/v3.13/manifests/:splat                                 200
+/v3.13/manifests/*                                              https://calico-v3-13.netlify.app/v3.13/manifests/:splat                                         200
+
+/archive/v3.12/manifests/*                                      https://calico-v3-12.netlify.app/archive/v3.12/manifests/:splat                                 200
+/v3.12/manifests/*                                              https://calico-v3-12.netlify.app/v3.12/manifests/:splat                                         200
+
+/archive/v3.11/manifests/*                                      https://calico-legacy.netlify.app/archive/v3.11/manifests/:splat                                200
+/v3.11/manifests/*                                              https://calico-legacy.netlify.app/v3.11/manifests/:splat                                        200
+
+/archive/v3.10/manifests/*                                      https://calico-legacy.netlify.app/archive/v3.10/manifests/:splat                                200
+/v3.10/manifests/*                                              https://calico-legacy.netlify.app/v3.10/manifests/:splat                                        200
+
+/archive/v3.9/manifests/*                                       https://calico-legacy.netlify.app/archive/v3.9/manifests/:splat                                 200
+/v3.9/manifests/*                                               https://calico-legacy.netlify.app/v3.9/manifests/:splat                                         200
+
+/archive/v3.8/manifests/*                                       https://calico-legacy.netlify.app/archive/v3.8/manifests/:splat                                 200
+/v3.8/manifests/*                                               https://calico-legacy.netlify.app/v3.8/manifests/:splat                                         200
+
+/archive/v3.7/manifests/*                                       https://calico-legacy.netlify.app/archive/v3.7/manifests/:splat                                 200
+/v3.7/manifests/*                                               https://calico-legacy.netlify.app/v3.7/manifests/:splat                                         200
+
+/archive/v3.6/manifests/*                                       https://calico-legacy.netlify.app/archive/v3.6/manifests/:splat                                 200
+/v3.6/manifests/*                                               https://calico-legacy.netlify.app/v3.6/manifests/:splat                                         200
+
+/archive/v3.5/manifests/*                                       https://calico-legacy.netlify.app/archive/v3.5/manifests/:splat                                 200
+/v3.5/manifests/*                                               https://calico-legacy.netlify.app/v3.5/manifests/:splat                                         200
+
+/archive/v3.4/manifests/*                                       https://calico-legacy.netlify.app/archive/v3.4/manifests/:splat                                 200
+/v3.4/manifests/*                                               https://calico-legacy.netlify.app/v3.4/manifests/:splat                                         200
+
+/*                                                              https://projectcalico.docs.tigera.io/:splat                                                     301!

@@ -32,10 +32,7 @@
     # generate the website which is served at /archive/<version>/
     jekyll build --config _config.yml,$(pwd)/netlify/_config_noindex.yml --baseurl /archive/$RELEASE_VERSION --destination _site/archive/$RELEASE_VERSION
 
-    mv _site/sitemap.xml _site/release-legacy-sitemap.xml
-    mv _site/sitemap.xml _site/latest-sitemap.xml
-    mv netlify/sitemap-index.xml _site/sitemap.xml
-    mv netlify/_redirects _site/_redirects
+    mv netlify/_redirects_v3.21 _site/_redirects
   fi
   '''
 
@@ -50,7 +47,7 @@
   export PATH=$PATH:$(pwd)/bin
   echo "url: $DEPLOY_PRIME_URL" > _config_url.yml
   jekyll build --config _config.yml,_config_url.yml
-  mv netlify/_redirects _site/_redirects
+  mv netlify/_redirects_v3.21 _site/_redirects
   '''
 
 # Deploys master branch as a seperate individual site, master build is diffrent from branch deploys
