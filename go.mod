@@ -32,7 +32,7 @@ require (
 	github.com/projectcalico/api v0.0.0-20211118201430-2b5c594e8003
 	github.com/projectcalico/libcalico-go v1.7.2-0.20211112232635-2960718561b8
 	github.com/projectcalico/pod2daemon v0.0.0-20211020230039-cbd1482bd13b
-	github.com/projectcalico/typha v0.7.3-0.20211119191319-fc4bf3d66325
+	github.com/projectcalico/typha v0.7.3-0.20211119205224-22903717c2dd
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.10.0
 	github.com/sirupsen/logrus v1.7.0
