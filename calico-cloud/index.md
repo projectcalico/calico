@@ -34,7 +34,7 @@ What happens when you connect/disconnect your cluster to Calico Cloud? See {% in
    You can use any {{site.prodname}} operator-installed cluster that is configure with `kubectl`.
 
    ```bash
-   kubectl apply -f https://storage.googleapis.com/dev-calicocloud-installer/manifests/cc-operator/latest/deploy.yaml
+   kubectl apply -f https://installer.calicocloud.io/manifests/cc-operator/v1.0.0/deploy.yaml
    ```
 
 1. Set your email address ($EMAIL) in the installer resource to get an invite and a license.
@@ -54,7 +54,7 @@ What happens when you connect/disconnect your cluster to Calico Cloud? See {% in
 
 1. Accept your invite to join {{site.prodname}}.
 
-    Open the email, fill in the brief onboarding dialog, and in about 5 minutes, your cluster will open in the Calico Cloud user interface. That's it! You're ready to go!
+    Open the email, fill in the brief onboarding dialog, and in about 5 minutes, your cluster will open in the Calico Cloud user interface. That's it, You're ready to go!
 
     **Tip**: To monitor the install, run this command:
 
