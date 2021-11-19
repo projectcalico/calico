@@ -3,10 +3,10 @@
 # Following proxy 200 rules ensures continued access to manifests (for v3.21 and below) hosted at docs.projectcalico.org.
 # Last rule in this file is a forced 301 redirect (301!) to new domain, for everything else that's not specified in proxy.
 
-/archive/v3.21/manifests/*                                      https://calico-v3-21.netlify.app/archive/v3.21/manifests/:splat                                 200
-/archive/v3.21/security/tutorials/*                             https://calico-v3-21.netlify.app/archive/v3.21/security/tutorials/:splat                        200
-/archive/v3.21/getting-started/kubernetes/installation/*        https://calico-v3-21.netlify.app/archive/v3.21/getting-started/kubernetes/installation/:splat   200
-/v3.21/manifests/*                                              https://calico-v3-21.netlify.app/v3.21/manifests/:splat                                         200
+/archive/v3.21/manifests/*                                      https://calico-v3-21.netlify.app/v3.21/manifests/:splat                                 200
+/v3.21/manifests/*                                              https://calico-v3-21.netlify.app/v3.21/manifests/:splat                                 200
+/archive/v3.21/getting-started/kubernetes/installation/*        https://calico-v3-21.netlify.app/v3.21/getting-started/kubernetes/installation/:splat   200
+/v3.21/getting-started/kubernetes/installation/*                https://calico-v3-21.netlify.app/v3.21/getting-started/kubernetes/installation/:splat   200
 
 /archive/v3.20/manifests/*                                      https://calico-v3-20.netlify.app/archive/v3.20/manifests/:splat                                 200
 /v3.20/manifests/*                                              https://calico-v3-20.netlify.app/v3.20/manifests/:splat                                         200
