@@ -59,6 +59,12 @@ Before you get started, make sure you have downloaded and configured the {% incl
    kubectl apply -f {{ "/manifests/calico-vxlan.yaml" | absolute_url }}
    ```
 
+1. Configure {{site.prodname}} to disable AWS src/dst checks.
+
+   ```bash
+   kubectl -n kube-system set env daemonset/calico-node FELIX_AWSSRCDSTCHECK=Disable
+   ```
+
 1. Finally, add nodes to the cluster.
 
    ```bash
