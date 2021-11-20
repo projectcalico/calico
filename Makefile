@@ -13,10 +13,13 @@ ifeq ($(RELEASE),true)
 NODE_IMAGE            ?=node
 WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
 DEV_REGISTRIES        ?=quay.io/calico calico $(RELEASE_REGISTRIES)
+# Do not push release windows upgrade images to gcr.
+WINDOWS_REGISTRIES    ?=quay.io/calico calico
 else
 NODE_IMAGE            ?=calico/node
 WINDOWS_UPGRADE_IMAGE ?=calico/windows-upgrade
 DEV_REGISTRIES        ?=quay.io docker.io
+WINDOWS_REGISTRIES    ?=$(DEV_REGISTRIES)
 endif
 
 WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
@@ -872,7 +875,7 @@ sub-image-tar-windows-%:
 #   correct image in manifest.
 # - Finally we push the manifest, "purging" the local manifest.
 cd-windows-upgrade:
-	for registry in $(DEV_REGISTRIES); do \
+	for registry in $(WINDOWS_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
 		manifest_image="$${registry}/$(WINDOWS_UPGRADE_IMAGE):$(GIT_VERSION)"; \
