@@ -57,7 +57,7 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 	readinessChecks := bird || felixReady || bird6
 
 	if !livenessChecks && !readinessChecks {
-		fmt.Printf("calico/node check error: must specify at least one of -bird-live, -bird6-live, -felix-live, -bird, -bird6, or -felix")
+		fmt.Printf("calico/node check error: must specify at least one of -bird-live, -bird6-live, -felix-live, -bird, -bird6, or -felix\n")
 		os.Exit(1)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), thresholdTime)
@@ -118,7 +118,7 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 		})
 	}
 	if err := g.Wait(); err != nil {
-		fmt.Printf("%s", err)
+		fmt.Printf("%s\n", err)
 		os.Exit(1)
 	}
 }
