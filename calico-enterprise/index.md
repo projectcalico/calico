@@ -2,7 +2,6 @@
 title: Calico Cloud
 description: Learn about Calico Cloud.
 canonical_url: '/calico-enterprise/index'
-redirect_from: '/calico-enterprise'
 ---
 
 ![calico-cloud]({{site.baseurl}}/images/calico-cloud-small.png)
