@@ -287,19 +287,19 @@ run-kubernetes-master: stop-kubernetes-master
             --root-ca-file=/home/user/certs/ca.pem
 
 	# Create a Node in the API for the tests to use.
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec -i st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
 	# Apply ClusterInformation CRD because the tests require it
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec -i st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /code/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
 		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
-	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	-docker exec -i st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 	
