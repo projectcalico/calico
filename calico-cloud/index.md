@@ -54,7 +54,7 @@ What happens when you connect/disconnect your cluster to Calico Cloud? See {% in
 
 1. Accept your invite to join {{site.prodname}}.
 
-    Open the email, fill in the brief onboarding dialog, and in about 5 minutes, your cluster will open in the Calico Cloud user interface. That's it, You're ready to go!
+    Open the email, fill in the brief onboarding dialog, and in about 5 minutes, your cluster will open in the Calico Cloud user interface. That's it. You're ready to go!
 
     **Tip**: To monitor the install, run this command:
 
