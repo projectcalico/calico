@@ -1,135 +1,62 @@
 ---
 title: Calico Cloud
-description: Learn about Calico Cloud
-show_read_time: false
-show_toc: false
-show_title: false
-calico_enterprise: true
-calico_cloud_header: true
+description: Learn about Calico Cloud.
+canonical_url: '/calico-enterprise/index'
 ---
-<br>
-<h3 style="font-style: italic;">If you like Calico, you'll love Calico Cloud!</h3>
-<br>
-<table style="max-width: 900px;">
-  <thead>
-    <tr>
-      <th></th>
-      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-logo-64px.png" alt="Calico" style="margin: auto;"></th>
-      <th style="text-align: center"><img src="{{site.baseurl}}/images/calico-cloud-small.png" alt="Calico Cloud" style="margin: auto;"></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr class="table-header">
-      <th colspan="3">Networking</th>
-    </tr>
-    <tr>
-      <td>High performance scalable pod networking</td>
-      <td style="text-align: center">✓</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Advanced IP address management</td>
-      <td style="text-align: center">✓</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Direct infrastructure peering without the overlay</td>
-      <td style="text-align: center">✓</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>eBPF dataplane</td>
-      <td style="text-align: center">✓</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Windows dataplane</td>
-      <td style="text-align: center">✓</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr class="table-header">
-      <th colspan="3">Security</th>
-    </tr>
-    <tr>
-      <td>Security policy enforcement</td>
-      <td style="text-align: center">✓</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Data-in-transit encryption</td>
-      <td style="text-align: center">✓</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Hierarchical tiers</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>FQDN / DNS based policy</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Microsegmentation across host/VMs/containers</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Security policy preview, staging, and recommendation</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Compliance reporting & alerts</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Intrusion detection & prevention (IDS / IPS) for Kubernetes</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>SIEM integrations</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr class="table-header">
-      <th colspan="3">Observability</th>
-    </tr>
-    <tr>
-      <td>Dynamic service graph</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Application Layer observability</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Dynamic packet capture</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>DNS dashboards</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr>
-      <td>Flow visualizer</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-    <tr class="table-header">
-      <th colspan="3">Management</th>
-    </tr>
-    <tr>
-      <td>Multi cluster, multi-cloud & hybrid cloud networking</td>
-      <td style="text-align: center">&nbsp;</td>
-      <td style="text-align: center">✓</td>
-    </tr>
-  </tbody>
-</table>
+
+![calico-cloud]({{site.baseurl}}/images/calico-cloud-small.png)
+
+## You can solve these 3 problems today...with Calico Cloud
+
+- **Workload access controls**
+
+    Implement pod-level workload access controls and protect containerized environments in the Kubernetes cluster from outside threats, while enabling applications and workloads to securely communicate with resources outside the cluster behind a firewall or other control point.
+
+- **Compliance**
+
+    Create compliance policies for any compliance framework including PCI, SOC 2, and more. Continuously monitor compliance for your container, Kubernetes, and cloud environment. Retain a daily history of your compliance status. Generate on-demand or scheduled audit reports.
+
+- **Faster troubleshooting**
+
+    Enable faster troubleshooting of Kubernetes workloads and applications with Service Graph, packet capture, anomaly detection, and performance hotspots, leading to shorter time-to-resolution, less application downtime, and improved quality of service.
+
+#### Don't have a {{site.prodname}} cluster? Easy...
+
+{% include open-new-window.html text='Try it now' url='https://www.tigera.io/tigera-products/cloud-trial' %}
+
+#### Already have a {{site.prodname}} cluster? You are **5 minutes** away from connecting to Calico Cloud. 
+
+What happens when you connect/disconnect your cluster to Calico Cloud? See {% include open-new-window.html text='Connect your cluster to Calico Cloud' url='https://docs.calicocloud.io/get-started/connect-cluster' %}.
+
+1. Identify the cluster you want to use and apply the following manifest.
+
+   You can use any {{site.prodname}} operator-installed cluster. Ensure `kubectl` is connected to it, and then execute the following:
+
+   ```bash
+   kubectl apply -f https://installer.calicocloud.io/manifests/cc-operator/latest/deploy.yaml
+   ```
+
+1. Set your email address ($EMAIL) in the installer resource to get an invite and a license.
+
+   ```bash
+
+   kubectl apply -f - <<EOF
+   apiVersion: operator.calicocloud.io/v1
+   kind: Installer
+   metadata:
+     name: default
+     namespace: calico-cloud
+   spec:
+     ownerEmail: '$EMAIL'
+   EOF
+   ```
+
+1. Accept your invite to join {{site.prodname}}.
+
+    Open the email, fill in the brief onboarding dialog, and in about 5 minutes, your cluster will open in the Calico Cloud user interface. That's it. You're ready to go!
+
+    **Tip**: To monitor the install, run this command:
+
+    ```bash
+    kubectl get installers.operator.calicocloud.io -n calico-cloud default -o jsonpath='{.status.state}'
+    ```
