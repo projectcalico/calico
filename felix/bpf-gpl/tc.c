@@ -277,9 +277,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* No conntrack entry, check if we should do NAT */
 	nat_lookup_result nat_res = NAT_LOOKUP_ALLOW;
-	ctx.nat_dest = calico_v4_nat_lookup2(ctx.state->ip_src, ctx.state->ip_dst,
-					     ctx.state->ip_proto, ctx.state->dport,
-					     ctx.state->tun_ip != 0, &nat_res);
+
+	/* Skip NAT lookup for traffic leaving the host namespace. */
+	if (CALI_F_TO_HOST) {
+		ctx.nat_dest = calico_v4_nat_lookup2(ctx.state->ip_src, ctx.state->ip_dst,
+						     ctx.state->ip_proto, ctx.state->dport,
+						     ctx.state->tun_ip != 0, &nat_res);
+	}
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
