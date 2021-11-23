@@ -33,7 +33,7 @@ What happens when you connect/disconnect your cluster to Calico Cloud? See {% in
    You can use any {{site.prodname}} operator-installed cluster that is configure with `kubectl`.
 
    ```bash
-   kubectl apply -f https://installer.calicocloud.io/manifests/cc-operator/v1.0.0/deploy.yaml
+   kubectl apply -f https://installer.calicocloud.io/manifests/cc-operator/latest/deploy.yaml
    ```
 
 1. Set your email address ($EMAIL) in the installer resource to get an invite and a license.
