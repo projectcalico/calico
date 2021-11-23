@@ -14,6 +14,9 @@ Use command line tools to get status and troubleshoot.
 - [Routing](#routing)
 - [Network policy](#network-policy)
 
+>**Note**: In commands, `calico-system` is for operator-based installs; for manifest-based install, use `kube-system`.
+{: .alert .alert-info}
+
 See [Calico architecture and components]({{site.baseurl}}/reference/architecture/overview) for help with components.
 
 ### Hosts
@@ -201,18 +204,8 @@ NAME     AVAILABLE   PROGRESSING   DEGRADED   SINCE
 calico   True        False         False      27h
 ```
 
-#### Get tigera operator details
 
-```bash
-kubectl get tigerastatus
-```
-
-```
-NAME     AVAILABLE   PROGRESSING   DEGRADED   SINCE
-calico   True        False         False      27h
-```
-
-#### Verify component availability
+#### Check if operator pod is running
 
 ```bash
 kubectl get pod -n tigera-operator
@@ -224,7 +217,7 @@ kubectl get pod -n tigera-operator
 kubectl get pod -n calico-system -o wide
 ```
 
-#### View cluster information
+#### View {{site.prodname}} installation parameters
 
 ```bash
 kubectl get installation -o yaml
