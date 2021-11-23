@@ -170,7 +170,7 @@ kubectl describe pod kube-scheduler-ip-10-0-1-20.eu-west-1.compute.internal -n k
 
 ### Calico components
 
-#### View cluster CNI, IPAM, and policy 
+#### View Calico CNI configuration on a node 
 
 ```bash
 cat /etc/cni/net.d/10-calico.conflist
