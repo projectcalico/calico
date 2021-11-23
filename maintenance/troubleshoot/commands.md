@@ -14,7 +14,7 @@ Use command line tools to get status and troubleshoot.
 - [Routing](#routing)
 - [Network policy](#network-policy)
 
->**Note**: In commands, `calico-system` is for operator-based installs; for manifest-based install, use `kube-system`.
+>**Note**: `calico-system` is used for operator-based commands and examples; for manifest-based install, use `kube-system`.
 {: .alert .alert-info}
 
 See [Calico architecture and components]({{site.baseurl}}/reference/architecture/overview) for help with components.
@@ -204,7 +204,6 @@ NAME     AVAILABLE   PROGRESSING   DEGRADED   SINCE
 calico   True        False         False      27h
 ```
 
-
 #### Check if operator pod is running
 
 ```bash
@@ -281,7 +280,7 @@ calico-node-wm5m2
 Defaulted container "calico-node" out of: calico-node, flexvol-driver (init), install-cni (init)
 ```
 
-#### View pod info of pod that is not running
+#### View pod info
 
 ```bash
 kubectl describe pods `<pod_name>`  -n `<namespace> `
@@ -302,7 +301,7 @@ Events:
   Normal  Started    18s   kubelet, ip-10-0-0-11  Started container busybox
 ```
 
-#### View logs of a pod that is not running
+#### View logs of a pod
 
 ```bash
 kubectl logs `<pod_name>`  -n `<namespace>`
@@ -312,7 +311,7 @@ kubectl logs `<pod_name>`  -n `<namespace>`
 kubectl logs busybox -n default
 ```
 
-#### View kernel logs
+#### View kubelet logs
 
 ```bash
 journalctl -u kubelet
@@ -321,8 +320,6 @@ journalctl -u kubelet
 ### Routing
 
 #### Verify routing table on the node
-
-Look for common issues like TCP port XXX is not open between instances.
 
 ```bash
 ip route
@@ -447,20 +444,6 @@ client        knp.default.default-deny     1000    projectcalico.org/orchestrato
 stars         knp.default.allow-ui         1000    projectcalico.org/orchestrator == 'k8s'                        
 stars         knp.default.backend-policy   1000    projectcalico.org/orchestrator == 'k8s' 
 stars         knp.default.default-deny     1000    projectcalico.org/orchestrator == 'k8s'                        
-```
-
-#### Verify existing Kubernetes global network policies
-
-```bash
-kubectl get globalnetworkpolicies 
-```
-
-```
-NAME                          AGE
-default.default-app-policy    20d
-default.egress-lockdown       20d
-default.default-node-policy   19d
-default.nodeport-policy       19d
 ```
 
 #### Verify existing {{site.prodname}} global network policies
