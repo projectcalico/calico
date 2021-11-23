@@ -30,7 +30,7 @@ What happens when you connect/disconnect your cluster to Calico Cloud? See {% in
 
 1. Identify the cluster you want to use and apply the following manifest.
 
-   You can use any {{site.prodname}} operator-installed cluster that is configure with `kubectl`.
+   You can use any {{site.prodname}} operator-installed cluster. Ensure `kubectl` is connected to it, and then execute the following:
 
    ```bash
    kubectl apply -f https://installer.calicocloud.io/manifests/cc-operator/latest/deploy.yaml
