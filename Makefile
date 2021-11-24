@@ -354,9 +354,9 @@ Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_S
 
 Attached to this release are the following artifacts:
 
-- `release-v$(CALICO_VER).tgz`: docker images and kubernetes manifests.
-- `calico-windows-v$(CALICO_VER).zip`: Calico for Windows.
-- `tigera-operator-v$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
+- `release-$(CALICO_VER).tgz`: docker images and kubernetes manifests.
+- `calico-windows-$(CALICO_VER).zip`: Calico for Windows.
+- `tigera-operator-$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
 
 endef
 export RELEASE_BODY
