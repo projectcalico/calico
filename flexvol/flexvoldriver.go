@@ -158,7 +158,7 @@ var (
 		Long:  "Flex volume unmount command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 1 {
-				return fmt.Errorf("mount takes 1 args.")
+				return fmt.Errorf("unmount takes 1 args.")
 			}
 			return unmount(args[0])
 		},
