@@ -14,6 +14,12 @@ global_job_config:
   - name: docker-hub
   prologue:
     commands:
+      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+      # how much we churn docker containers during the build.  Disable it.
+      - sudo systemctl stop docker
+      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+      - sudo systemctl start docker
       # make some room on the disk
       - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
