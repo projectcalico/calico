@@ -25,6 +25,7 @@
 #include "policy.h"
 #include "conntrack.h"
 #include "nat.h"
+#include "nat_lookup.h"
 #include "routes.h"
 #include "jump.h"
 #include "reasons.h"
@@ -40,8 +41,9 @@
 #include "bpf_helpers.h"
 
 #if !defined(__BPFTOOL_LOADER__) && !defined (__IPTOOL_LOADER__)
-const volatile struct cali_global_data global_data;
+const volatile struct cali_tc_globals __globals;
 #endif
+
 /* calico_tc is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
  */
