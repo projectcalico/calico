@@ -644,8 +644,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20211112232635-2960718561b8 h1:pi
 github.com/projectcalico/libcalico-go v1.7.2-0.20211112232635-2960718561b8/go.mod h1:Od2lOyBncO6TUXfIAUMl+wtOzf7Y7NX3hcyYP74J8cg=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799 h1:9jp4YoHqZvEKDW3Z9464x/whSRCWEinIo4/JifaKR+g=
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
-github.com/projectcalico/pod2daemon v0.0.0-20211020230039-cbd1482bd13b h1:fthE+r7qg7KBM21PYk9Fw5k60KQ2nW5cxAsBA93sW8c=
-github.com/projectcalico/pod2daemon v0.0.0-20211020230039-cbd1482bd13b/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
+github.com/projectcalico/pod2daemon v0.0.0-20211124090526-dc251bd941c7 h1:Sm3hKvSQm4TZVisQ2rHq1Pmc+tkR5shPASg/vAKinQQ=
+github.com/projectcalico/pod2daemon v0.0.0-20211124090526-dc251bd941c7/go.mod h1:96lk2GRh7Z5QdPGRmZMC6DRxEOToaAlS+emdl4WiMPM=
 github.com/projectcalico/typha v0.7.3-0.20211119205224-22903717c2dd h1:Nj+8B12WhjGAAfTWmTTCCwXruhCOljj/Shfz6t9f7kI=
 github.com/projectcalico/typha v0.7.3-0.20211119205224-22903717c2dd/go.mod h1:dV19u0joWP0ID+NNrke7f13Z0KZRDbi9yDAW4/YF6D0=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
