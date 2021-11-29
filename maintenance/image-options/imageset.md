@@ -97,11 +97,17 @@ spec:
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "calico/pod2daemon-flexvol"
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  - image: "calico/windows-upgrade"
+    digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "tigera/operator"
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   - image: "tigera/key-cert-provisioner"
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
+
+>**Note**: The calico/windows-upgrade image is only if your cluster is running on AKS and has Windows nodes.
+If that does not apply to your cluster, you may choose to use a dummy digest value for the calico/windows-upgrade image. E.g. `sha256:notused`
+{: .alert .alert-info}
 
 You can create an ImageSet manifest manually or by script.
 
@@ -146,7 +152,7 @@ Copy the following script into a file, make it executable, and run the script. T
 ```
 #!/bin/bash -e
 
-images=(calico/apiserver calico/cni calico/kube-controllers calico/node calico/typha calico/pod2daemon-flexvol tigera/key-cert-provisioner tigera/operator)
+images=(calico/apiserver calico/cni calico/kube-controllers calico/node calico/typha calico/pod2daemon-flexvol calico/windows-upgrade tigera/key-cert-provisioner tigera/operator)
 
 OPERATOR_IMAGE={{ operator.registry }}/{{ operator.image }}:{{ operator.version }}
 echo "Pulling $OPERATOR_IMAGE"
