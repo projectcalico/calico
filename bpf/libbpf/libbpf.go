@@ -17,6 +17,7 @@ package libbpf
 import (
 	"fmt"
 	"os"
+	"time"
 	"unsafe"
 
 	"github.com/projectcalico/felix/bpf"
@@ -241,6 +242,13 @@ func TcSetGlobals(
 		C.ushort(vxlanPort),
 		C.ushort(psNatStart),
 		C.ushort(psNatLen))
+
+	return err
+}
+
+func CTLBSetGlobals(m *Map, udpNotSeen time.Duration) error {
+	udpNotSeen /= time.Second // Convert to seconds
+	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen))
 
 	return err
 }

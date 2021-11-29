@@ -22,6 +22,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -85,7 +86,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	return nil
 }
 
-func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string) error {
+func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSeen time.Duration) error {
 
 	progPinDir := path.Join(bpfMount, "calico_connect4")
 	_ = os.RemoveAll(progPinDir)
@@ -113,7 +114,9 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string) error {
 		// The values are read only for the BPF programs, but can be set to a value from
 		// userspace before the program is loaded.
 		if m.IsMapInternal() {
-			log.WithField("prog", progName).Warn("Load-time configuration not supported, using defaults.")
+			if err := libbpf.CTLBSetGlobals(m, udpNotSeen); err != nil {
+				return fmt.Errorf("error setting globals: %w", err)
+			}
 			continue
 		}
 
@@ -139,7 +142,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string) error {
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string) error {
+func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen time.Duration) error {
 	bpfMount, err := bpf.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
@@ -151,27 +154,27 @@ func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string) error {
 		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
-	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel)
+	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, udpNotSeen)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel)
+	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel)
+	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel)
+	err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen)
 	if err != nil {
 		return err
 	}
 
-	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel)
+	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen)
 	if err != nil {
 		return err
 	}
