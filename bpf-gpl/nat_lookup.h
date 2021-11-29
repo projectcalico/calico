@@ -15,14 +15,14 @@
 #include "routes.h"
 #include "nat_types.h"
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup3(__be32 ip_src,
-								     __be32 ip_dst,
-								     __u8 ip_proto,
-								     __u16 dport,
-								     bool from_tun,
-								     nat_lookup_result *res,
-								     int affinity_always_timeo,
-								     bool affinity_tmr_update)
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src,
+								    __be32 ip_dst,
+								    __u8 ip_proto,
+								    __u16 dport,
+								    bool from_tun,
+								    nat_lookup_result *res,
+								    int affinity_always_timeo,
+								    bool affinity_tmr_update)
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
@@ -102,7 +102,27 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup3(__be32 ip_s
 		*res = NAT_FE_LOOKUP_DROP;
 		return NULL;
 	}
-	__u32 count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
+	__u32 count = nat_lv1_val->count;
+
+	if (from_tun) {
+		count = nat_lv1_val->local;
+	} else if (nat_lv1_val->flags & (NAT_FLG_INTERNAL_LOCAL | NAT_FLG_EXTERNAL_LOCAL)) {
+		bool local_traffic = true;
+
+		if (CALI_F_FROM_HEP) {
+			struct cali_rt *rt = cali_rt_lookup(ip_src);
+
+			if (!rt || (!cali_rt_is_host(rt) && !cali_rt_is_workload(rt))) {
+				local_traffic = false;
+			}
+		}
+
+		if ((local_traffic && (nat_lv1_val->flags & NAT_FLG_INTERNAL_LOCAL)) ||
+				(!local_traffic && (nat_lv1_val->flags & NAT_FLG_EXTERNAL_LOCAL))) {
+			count = nat_lv1_val->local;
+			CALI_DEBUG("local_traffic %d count %d flags 0x%x\n", local_traffic, count, nat_lv1_val->flags);
+		}
+	}
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
 
@@ -179,18 +199,12 @@ skip_affinity:
 	return nat_lv2_val;
 }
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport, nat_lookup_result *res)
-{
-	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, false, res, 0, false);
-}
-
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src, __be32 ip_dst,
 								    __u8 ip_proto, __u16 dport,
 								    bool from_tun,
 								    nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup3(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false);
+	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false);
 }
 
 #endif /* __CALI_NAT_LOOKUP_H__ */

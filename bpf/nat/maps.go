@@ -51,8 +51,9 @@ const frontendAffKeySize = 8
 //    uint32_t count;
 //    uint32_t local;
 //    uint32_t affinity_timeo;
+//    uint32_t flags;
 // };
-const frontendValueSize = 16
+const frontendValueSize = 20
 
 // struct calico_nat_secondary_v4_key {
 //   uint32_t id;
@@ -138,6 +139,16 @@ func (k FrontendKey) String() string {
 	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v SrcAddr:%v}", k.Proto(), k.Addr(), k.Port(), k.SrcCIDR())
 }
 
+const (
+	NATFlgExternalLocal = 0x1
+	NATFlgInternalLocal = 0x2
+)
+
+var flgTostr = map[int]string{
+	NATFlgExternalLocal: "external-local",
+	NATFlgInternalLocal: "internal-local",
+}
+
 type FrontendValue [frontendValueSize]byte
 
 func NewNATValue(id uint32, count, local, affinityTimeo uint32) FrontendValue {
@@ -146,6 +157,12 @@ func NewNATValue(id uint32, count, local, affinityTimeo uint32) FrontendValue {
 	binary.LittleEndian.PutUint32(v[4:8], count)
 	binary.LittleEndian.PutUint32(v[8:12], local)
 	binary.LittleEndian.PutUint32(v[12:16], affinityTimeo)
+	return v
+}
+
+func NewNATValueWithFlags(id uint32, count, local, affinityTimeo, flags uint32) FrontendValue {
+	v := NewNATValue(id, count, local, affinityTimeo)
+	binary.LittleEndian.PutUint32(v[16:20], flags)
 	return v
 }
 
@@ -166,9 +183,32 @@ func (v FrontendValue) AffinityTimeout() time.Duration {
 	return time.Duration(secs) * time.Second
 }
 
+func (v FrontendValue) Flags() uint32 {
+	return binary.LittleEndian.Uint32(v[16:20])
+}
+
+func (v FrontendValue) FlagsAsString() string {
+	flgs := v.Flags()
+	fstr := ""
+
+	for i := 0; i < 32; i++ {
+		flg := uint32(1 << i)
+		if flgs&flg != 0 {
+			fstr += flgTostr[int(flg)]
+		}
+		flgs &= ^flg
+		if flgs == 0 {
+			break
+		}
+		fstr += ", "
+	}
+
+	return fstr
+}
+
 func (v FrontendValue) String() string {
-	return fmt.Sprintf("NATValue{ID:%d,Count:%d,LocalCount:%d,AffinityTimeout:%d}",
-		v.ID(), v.Count(), v.LocalCount(), v.AffinityTimeout())
+	return fmt.Sprintf("NATValue{ID:%d,Count:%d,LocalCount:%d,AffinityTimeout:%d,Flags:{%s}}",
+		v.ID(), v.Count(), v.LocalCount(), v.AffinityTimeout(), v.FlagsAsString())
 }
 
 func (v FrontendValue) AsBytes() []byte {
@@ -237,7 +277,7 @@ var FrontendMapParameters = bpf.MapParameters{
 	MaxEntries: 511000,
 	Name:       "cali_v4_nat_fe",
 	Flags:      unix.BPF_F_NO_PREALLOC,
-	Version:    2,
+	Version:    3,
 }
 
 func FrontendMap(mc *bpf.MapContext) bpf.Map {

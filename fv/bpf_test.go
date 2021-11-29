@@ -2208,7 +2208,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				npPort := uint16(30333)
 
-				nodePortsTest := func(localOnly bool) {
+				nodePortsTest := func(extLocal, intLocal bool) {
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
@@ -2220,8 +2220,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 						testSvc = k8sService(testSvcName, "10.101.0.10",
 							w[0][0], 80, 8055, int32(npPort), testOpts.protocol)
-						if localOnly {
-							testSvc.Spec.ExternalTrafficPolicy = "Local"
+						if extLocal {
+							testSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+						}
+						if intLocal {
+							internalLocal := v1.ServiceInternalTrafficPolicyLocal
+							testSvc.Spec.InternalTrafficPolicy = &internalLocal
 						}
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
@@ -2240,7 +2244,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 					})
 
-					if localOnly {
+					if intLocal {
 						It("should not have connectivity from all workloads via a nodeport to non-local workload 0", func() {
 							By("Checking connectivity")
 
@@ -2300,7 +2304,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Expect(be.LocalCount()).To(Equal(uint32(0)))
 							}
 						})
-					} else {
+					} else if !extLocal && !intLocal {
 						It("should have connectivity from all workloads via a nodeport to workload 0", func() {
 							node0IP := felixes[0].IP
 							node1IP := felixes[1].IP
@@ -2367,7 +2371,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					}
 
-					if !localOnly {
+					if !intLocal {
 						It("should have connectivity from a workload via a nodeport on another node to workload 0", func() {
 							ip := felixes[1].IP
 
@@ -2408,14 +2412,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pol = updatePolicy(pol)
 						})
 
-						if localOnly && !testOpts.connTimeEnabled {
+						if extLocal && !testOpts.connTimeEnabled {
 							It("should not have connectivity from external to w[0] via node1->node0 fwd", func() {
 								cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
 								// Include a check that goes via the nodeport with a local backing pod to make sure the dataplane has converged.
 								cc.ExpectSome(externalClient, TargetIP(felixes[0].IP), npPort)
 								cc.CheckConnectivity()
 							})
-						} else if !testOpts.connTimeEnabled {
+						} else if !testOpts.connTimeEnabled && !intLocal /* irrelevant option for extClient */ {
 							It("should have connectivity from external to w[0] via node1->node0 fwd", func() {
 								By("checking the connectivity and thus populating the  neigh table", func() {
 									cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
@@ -2727,14 +2731,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 
 				Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort)), func() {
-					nodePortsTest(false)
+					nodePortsTest(false, false)
 				})
 
 				// FIXME connect time shares the same NAT table and it is a lottery which one it gets
 				if !testOpts.connTimeEnabled {
 					Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort))+
 						" ExternalTrafficPolicy=local", func() {
-						nodePortsTest(true)
+						nodePortsTest(true, false)
+					})
+					Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort))+
+						" InternalTrafficPolicy=local", func() {
+						nodePortsTest(false, true)
 					})
 				}
 

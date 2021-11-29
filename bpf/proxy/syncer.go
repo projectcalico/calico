@@ -489,13 +489,15 @@ func (s *Syncer) applyDerived(
 	local := svc.localCount
 
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP().String()))
+	flags := uint32(0)
+
 	switch t {
-	case svcTypeLoadBalancer:
-		// Handle LB services the same as NodePort type.
-		fallthrough
-	case svcTypeNodePort:
+	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
 		if sinfo.NodeLocalExternal() {
-			count = local // use only local eps
+			flags |= nat.NATFlgExternalLocal
+		}
+		if sinfo.NodeLocalInternal() {
+			flags |= nat.NATFlgInternalLocal
 		}
 	}
 
@@ -506,11 +508,11 @@ func (s *Syncer) applyDerived(
 		svc:        sinfo,
 	}
 
-	if err := s.writeSvc(sinfo, svc.id, count, local); err != nil {
+	if err := s.writeSvc(sinfo, svc.id, count, local, flags); err != nil {
 		return err
 	}
 	if svcTypeLoadBalancer == t || svcTypeExternalIP == t {
-		err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local)
+		err := s.writeLBSrcRangeSvcNATKeys(sinfo, svc.id, count, local, flags)
 		if err != nil {
 			log.Debug("Failed to write LB source range NAT keys")
 		}
@@ -587,7 +589,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				npInfo := serviceInfoFromK8sServicePort(sinfo)
 				npInfo.clusterIP = npip
 				npInfo.port = nport
-				if npip.Equal(podNPIP) && sinfo.NodeLocalExternal() {
+				if npip.Equal(podNPIP) && sinfo.NodeLocalInternal() {
 					// do not program the meta entry, program each node
 					// separately
 					continue
@@ -598,7 +600,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					continue
 				}
 			}
-			if sinfo.NodeLocalExternal() {
+			if sinfo.NodeLocalInternal() {
 				if miss := s.expandAndApplyNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
 					expNPMisses = append(expNPMisses, miss)
 				}
@@ -718,7 +720,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, e
 		cnt++
 	}
 
-	if err := s.writeSvc(sinfo, id, cnt, local); err != nil {
+	if err := s.writeSvc(sinfo, id, cnt, local, 0); err != nil {
 		return 0, 0, err
 	}
 
@@ -800,7 +802,7 @@ func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
 	return keys, nil
 }
 
-func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, count, local int) error {
+func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, count, local int, flags uint32) error {
 	var key nat.FrontendKey
 	affinityTimeo := uint32(0)
 	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
@@ -814,7 +816,7 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 	if err != nil {
 		return err
 	}
-	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
+	val := nat.NewNATValueWithFlags(svcID, uint32(count), uint32(local), affinityTimeo, flags)
 	for _, key := range keys {
 		if log.GetLevel() >= log.DebugLevel {
 			log.Debugf("bpf map writing %s:%s", key, val)
@@ -830,7 +832,7 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 	return nil
 }
 
-func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) error {
+func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, flags uint32) error {
 	key, err := getSvcNATKey(svc)
 	if err != nil {
 		return err
@@ -841,7 +843,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
 	}
 
-	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
+	val := nat.NewNATValueWithFlags(svcID, uint32(count), uint32(local), affinityTimeo, flags)
 
 	if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("bpf map writing %s:%s", key, val)
@@ -1416,6 +1418,7 @@ func K8sSvcWithNodePort(np int) K8sServicePortOption {
 func K8sSvcWithLocalOnly() K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*serviceInfo).nodeLocalExternal = true
+		s.(*serviceInfo).nodeLocalInternal = true
 	}
 }
 
