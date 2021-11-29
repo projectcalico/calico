@@ -160,13 +160,13 @@ var _ = Describe("Windows policy test", func() {
 			}
 			_, err = client.NetworkPolicies().Create(context.Background(), &p, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				_, err = client.NetworkPolicies().Delete(context.Background(), "demo", "allow-nginx-b", options.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}()
 
 			// Assert that it's now reachable.
 			err = kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
-			Expect(err).NotTo(HaveOccurred())
-
-			// Remove resources
-			_, err = client.NetworkPolicies().Delete(context.Background(), "demo", "allow-nginx-b", options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
