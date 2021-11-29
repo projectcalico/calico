@@ -175,12 +175,7 @@ EOF
 for x in "${imagelist[@]}"; do
   for y in ${images[*]}; do
     if [[ $x =~ $y: ]]; then
-      echo "Pulling $x"
-      docker pull $x -q > /dev/null
-      {% raw %}digests=$(docker inspect $x -f '{{range .RepoDigests}}{{printf "%s\n" .}}{{end}}'){% endraw %}
-      name=$(echo $x | sed -e 's|docker.io/||' -e 's|:.*$||')
-      imgdigest=$(echo -e $digests | grep $name)
-      digest=$(echo -e $imgdigest | sed -e 's|^.*@||')
+      digest=$(docker run --rm gcr.io/go-containerregistry/crane digest ${x})
       echo "Adding digest for $x"
       echo 
       echo "  - image: \"$(echo $x | sed -e 's|^.*/\([^/]*/[^/]*\):.*$|\1|')\"" >> ./imageset.yaml
