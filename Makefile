@@ -676,8 +676,7 @@ install-calico-windows-script $(WINDOWS_INSTALL_SCRIPT): $(WINDOWS_GEN_INSTALL_S
 		-product "$(WINDOWS_INSTALL_SCRIPT_PRODUCT)" \
 		-version $(GIT_VERSION) \
 		-templatePath windows-packaging/install-calico-windows.ps1.tpl \
-		-baseUrl $(WINDOWS_ARCHIVE_BASE_URL) \
-		-debug true > $(WINDOWS_INSTALL_SCRIPT)
+		-baseUrl $(WINDOWS_ARCHIVE_BASE_URL) > $(WINDOWS_INSTALL_SCRIPT)
 
 ###############################################################################
 # Utilities
