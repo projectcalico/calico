@@ -32,30 +32,31 @@ type install struct {
 	ZipFileName string `json:"zipFileName"`
 }
 
+var installs = map[string]install{
+	"Calico": {
+		Product:     "Calico",
+		ProductName: "Calico for Windows",
+		RootDir:     "CalicoWindows",
+		ZipFileName: "calico-windows.zip",
+	},
+	"Calico Enterprise": {
+		Product:     "Calico Enterprise",
+		ProductName: "Tigera Calico for Windows",
+		RootDir:     "TigeraCalico",
+		ZipFileName: "tigera-calico-windows.zip",
+	},
+}
+
 func newInstall(product, version, baseUrl string) (install, error) {
-	data := install{
-		Product: product,
-		Version: version,
-		BaseUrl: baseUrl,
-	}
-	var productName, rootDir, zipFileName string
+	var data install
 
-	if product == "Calico" {
-		productName = "Calico for Windows"
-		rootDir = "CalicoWindows"
-		zipFileName = "calico-windows.zip"
-	} else if product == "Calico Enterprise" {
-		productName = "Tigera Calico for Windows"
-		rootDir = "TigeraCalico"
-		zipFileName = "tigera-calico-windows.zip"
-	} else {
-		return data, fmt.Errorf("invalid product: %v", product)
+	if install, ok := installs[product]; ok {
+		data = install
+		data.Version = version
+		data.BaseUrl = baseUrl
+		return data, nil
 	}
-
-	data.ProductName = productName
-	data.RootDir = rootDir
-	data.ZipFileName = zipFileName
-	return data, nil
+	return data, fmt.Errorf("invalid product: %v", product)
 }
 
 var (
@@ -63,7 +64,6 @@ var (
 	version      string
 	templatePath string
 	baseUrl      string
-	debug        bool
 )
 
 func main() {
@@ -71,12 +71,9 @@ func main() {
 	flag.StringVar(&version, "version", "", `version`)
 	flag.StringVar(&templatePath, "templatePath", "", `path to the template for the installation script`)
 	flag.StringVar(&baseUrl, "baseUrl", "", `URL where the installation zip file will be hosted. Required for Calico only`)
-	flag.BoolVar(&debug, "debug", false, `enable debug logging`)
 	flag.Parse()
 
-	if debug {
-		log.Printf("product: %v, version: %v, templatePath: %v, baseUrl: %v", product, version, templatePath, baseUrl)
-	}
+	log.Printf("product: %v, version: %v, templatePath: %v, baseUrl: %v", product, version, templatePath, baseUrl)
 
 	if product == "" || version == "" || templatePath == "" {
 		log.Fatalf("product, version, templatePath, and baseUrl must all be specified")
@@ -95,9 +92,7 @@ func main() {
 		log.Fatalf("error generating installation script data: %v", err)
 	}
 
-	if debug {
-		log.Printf("using install data: %+v", data)
-	}
+	log.Printf("using install data: %+v", data)
 
 	t, err := template.ParseFiles(templatePath)
 	if err != nil {
