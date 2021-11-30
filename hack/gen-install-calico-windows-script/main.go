@@ -66,6 +66,26 @@ var (
 	baseUrl      string
 )
 
+// This program generates the Calico for Windows installation script for a given product, version and baseUrl.
+//
+// Examples:
+//
+// For Calico v3.21.1:
+//
+// gen-install-calico-windows-script \
+//    -product Calico \
+//    -version v3.21.1 \
+//    -templatePath windows-packaging/install-calico-windows.ps1.tpl \
+//    -baseUrl https://docs.projectcalico.org > install-calico-windows.ps1
+//
+//
+// For Calico Enterprise v3.11.0:
+//
+// gen-install-calico-windows-script \
+//    -product "Calico Enterprise" \
+//    -version v3.11.0 \
+//    -templatePath windows-packaging/install-calico-windows.ps1.tpl \
+//    -baseUrl https://docs.tigera.io > install-calico-windows.ps1
 func main() {
 	flag.StringVar(&product, "product", "", `product to generate install script for. either "Calico" or "Calico Enterprise"`)
 	flag.StringVar(&version, "version", "", `version`)
