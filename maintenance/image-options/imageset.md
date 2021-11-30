@@ -105,10 +105,6 @@ spec:
     digest: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
->**Note**: The calico/windows-upgrade image is only if your cluster is running on AKS and has Windows nodes.
-If that does not apply to your cluster, you may choose to use a dummy digest value for the calico/windows-upgrade image. E.g. `sha256:notused`
-{: .alert .alert-info}
-
 You can create an ImageSet manifest manually or by script.
 
 {% tabs tab-group:grp1 %}
@@ -175,7 +171,7 @@ EOF
 for x in "${imagelist[@]}"; do
   for y in ${images[*]}; do
     if [[ $x =~ $y: ]]; then
-      digest=$(docker run --rm gcr.io/go-containerregistry/crane digest ${x})
+      digest=$(docker run --rm gcr.io/go-containerregistry/crane:v0.7.0 digest ${x})
       echo "Adding digest for $x"
       echo 
       echo "  - image: \"$(echo $x | sed -e 's|^.*/\([^/]*/[^/]*\):.*$|\1|')\"" >> ./imageset.yaml
