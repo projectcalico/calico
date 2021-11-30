@@ -247,11 +247,36 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   content: none;
 }
 
-.glyphicon.glyphicon-menu-down.sub-arrow {
+#tigera-navbar-header ul.dropdown-menu li,
+#tigera-navbar-footer ul.dropdown-menu li {
+  position: relative;
+}
+
+#tigera-navbar-header ul.dropdown-menu.sub-menu,
+#tigera-navbar-footer ul.dropdown-menu.sub-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -14px;
+  border-radius: 0;
+  width: fit-content;
+}
+
+.dropdown-menu.open,
+.dropdown-menu.sub-menu.open {
+  display: block;
+}
+
+.dropdown-menu.sub-menu ,.dropdown-toggle {
+  display: none;
+}
+
+.glyphicon.glyphicon-menu-down.sub-arrow,
+.glyphicon.glyphicon-menu-right.sub-arrow {
   transition: all 0.1s ease;
 }
 
-.dropdown-toggle:hover .glyphicon.glyphicon-menu-down.sub-arrow {
+.dropdown-toggle:hover .glyphicon.glyphicon-menu-down.sub-arrow,
+.dropdown-toggle:hover .glyphicon.glyphicon-menu-right.sub-arrow {
   transform: rotateZ(-180deg);
 }
 
@@ -264,7 +289,7 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 #tigera-navbar-header,
 #tigera-navbar-footer {
   // Constrains nav menu height when in hamburger mode
-  max-height: 355px;
+  max-height: unset;
 }
 #tigera-navbar ul.nav,
 #tigera-navbar-header ul.nav,
@@ -276,14 +301,14 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   padding: 15px 0 0 0;
 }
   
-#tigera-navbar ul.nav li,
-#tigera-navbar-header ul.nav li,
-#tigera-navbar-footer ul.nav li {
+#tigera-navbar ul.nav > li,
+#tigera-navbar-header ul.nav > li,
+#tigera-navbar-footer ul.nav > li {
   margin: 0 0 0 0;
   @media (min-width: $screen-sm-min) {
     // When displaying in full size mode we must extend to the bottom of the nav-bar otherwise sub-menu disappears as move mouse towards it
     padding: 0;
-    height: 48px;
+    height: 46px;
   }
 
   // When displaying in hamburger mode we cannot set the height because that breaks the inlining of sub-menu items so use padding instead
@@ -392,6 +417,10 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
         font-size: 14px;
       }
 
+      a.white-space-normal {
+        white-space: normal;
+      }
+
       a:hover {
         color: $navbar-default-link-hover-color !important;
         background-color: transparent;
@@ -400,10 +429,26 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     }
   }
 
-  #tigera-navbar ul.nav li:hover ul,
-  #tigera-navbar-header ul.nav li:hover ul,
-  #tigera-navbar-footer ul.nav li:hover ul {
+  #tigera-navbar ul.nav li:hover > ul,
+  #tigera-navbar-header ul.nav li:hover > ul,
+  #tigera-navbar-footer ul.nav li:hover > ul {
    display: block;
+  }
+}
+
+@media (max-width: $screen-sm-min) {
+  #tigera-navbar-header ul.dropdown-menu.sub-menu,
+  #tigera-navbar-footer ul.dropdown-menu.sub-menu {
+    margin-top: 0;
+    padding: 0;
+  }
+
+  .dropdown-toggle .glyphicon.glyphicon-menu-right.sub-arrow {
+    transform: rotateZ(90deg);
+  }
+
+  .dropdown-toggle:hover .glyphicon.glyphicon-menu-right.sub-arrow {
+    transform: rotateZ(-90deg);
   }
 }
 
