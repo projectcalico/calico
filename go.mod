@@ -6,7 +6,7 @@ require (
 	github.com/go-openapi/spec v0.19.5
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/projectcalico/api v0.0.0-20211102223522-996da60fc572
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211111164224-2f7d4c7d7a1f
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211201231514-3402eca9d274
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
