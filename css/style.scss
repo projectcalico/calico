@@ -489,18 +489,20 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
 #tigera-navbar-footer .get-certified {
   @media (max-width: $screen-sm-min) {
-    margin: 0px 0px 0px 20px;
+    width: 200px;
+    margin: 0 0 0 20px;
+    text-align: center;
   }
 
   @media (min-width: $screen-sm-min) and (max-width: 1100px) {
       padding: 6px 10px !important;
-      margin: -8px 0px 0px 0px;
+      margin: -8px 0px 0px 30px;
   }
 
   color: white !important;
   background-color: #ff9e16;
   padding: 9px 15px !important;
-  margin: -11px 0px 0px 0px;
+  margin: -11px 0px 0px 30px;
   border-width: 2px;
   border-style: solid;
   border-color: #ff9e16;
