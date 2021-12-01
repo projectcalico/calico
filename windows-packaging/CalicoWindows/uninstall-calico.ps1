@@ -25,7 +25,7 @@ Test-CalicoConfiguration
 $ErrorActionPreference = 'SilentlyContinue'
 
 Write-Host "Stopping Calico if it is running..."
-& $PSScriptRoot\stop-calico.ps1
+& $PSScriptRoot\stop-calico.ps1 -ExceptUpgradeService $ExceptUpgradeService
 
 if ($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
 {
