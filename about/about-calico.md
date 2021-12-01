@@ -6,7 +6,19 @@ canonical_url: '/about/about-calico'
 custom_css: css/intro.css
 ---
 
-![calico-anniversary-banner]({{site.baseurl}}/images/calico-anniversary-banner.png)
+<div id="ebook-banner" class="row">
+  <div class="ebook-banner-image col-md-3 col-xs-3">
+    <img src="{{ site.baseurl }}/images/oreilly-book-mockup.png">
+  </div>
+  <div class="ebook-banner-info col-md-9 col-xs-9">
+    <div class="ebook-banner-info__header">O'REILLY<span>&reg;</span> ebook:</div>
+    <div class="ebook-banner-info__text" style="text-align: center">
+      <h3>Kubernetes security and observability</h3>
+      <p>A holistic approach to securing containers and cloud-native applications</p>
+      <a href="https://www.tigera.io/lp/kubernetes-security-and-observability-ebook/">Download Now</a>
+    </div>
+  </div>
+</div>
 
 <div id="why-use-calico-1" class="row">
   <div class="col-md-6">
