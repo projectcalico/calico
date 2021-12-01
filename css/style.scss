@@ -824,3 +824,57 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
 .nightly {
   background-color: #f0ad4e;
 }
+
+#ebook-banner {
+  margin-top: 10px;
+
+  .ebook-banner-info {
+    margin-top: 10px;
+    margin-left: -45px;
+
+    &__header {
+      position: relative;
+      padding: 7px 0;
+      background-color: #d30000;
+      color: #fff;
+      font-size: 25px;
+      text-align: center;
+
+      span {
+        position: absolute;
+        font-size: 7px;
+        margin-left: 1px;
+        bottom: 27px;
+      }
+    }
+
+    &__text {
+      h3 {
+        font-weight: 700;
+        color: #363636;
+        font-size: 35px;
+      }
+
+      p {
+        margin-bottom: 30px;
+        color: #545454;
+        font-size: 18px;
+      }
+
+      a {
+        text-decoration: none;
+        padding: 10px 35px;
+        color: #363636;
+        border: 1px solid #363636;
+        transition: .4s;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a:hover {
+        text-decoration: none;
+        background-color: #363636;
+        color: #fff;
+      }
+    }
+  }
+}
