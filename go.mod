@@ -39,4 +39,7 @@ require (
 	sigs.k8s.io/kind v0.11.1
 )
 
-replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
+replace (
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt/v4 v4.1.0
+	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
+)
