@@ -146,13 +146,13 @@ dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
 # Dynamically declare new make targets for all calico subprojects...
 $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
 	echo "TARGET:"
-	echo $< 
+	echo $<
 	@cd $< && export TAG=$$($(TAG_COMMAND)); make image retag-build-images-with-registries \
 		ARCHES=amd64 \
 		BUILD_IMAGE=$(REGISTRY)/$* \
 		PUSH_IMAGES=$(REGISTRY)/$* \
 		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG 
+		IMAGETAG=$$TAG
 
 ## Push locally built images.
 dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
@@ -362,7 +362,7 @@ endef
 export RELEASE_BODY
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR) helm-index
+release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
@@ -380,16 +380,12 @@ release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
+	$(MAKE) helm-index
 
-## Updates helm-index with the new release chart
-helm-index: release-prereqs
-	rm -rf  charts
-	mkdir -p charts/$(CALICO_VER)/
-	cp $(RELEASE_HELM_CHART) charts/$(CALICO_VER)/
-	wget https://calico-public.s3.amazonaws.com/charts/index.yaml -O charts/index.yaml.bak
-	cd charts/ && helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
-	aws --profile helm s3 cp index.yaml s3://calico-public/charts/ --acl public-read
-	rm -rf charts
+## Kicks semaphore job which syncs github released helm charts with helm index file
+.PHONY: helm-index
+helm-index:
+	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea SEMAPHORE_WORKFLOW_BRANCH=master SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml $(MAKE) semaphore-run-workflow
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
