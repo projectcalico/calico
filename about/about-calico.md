@@ -11,7 +11,9 @@ custom_css: css/intro.css
     <img src="{{ site.baseurl }}/images/oreilly-book-mockup.png">
   </div>
   <div class="ebook-banner-info col-md-9 col-xs-9">
-    <div class="ebook-banner-info__header">O'REILLY<span>&reg;</span> ebook:</div>
+    <div class="ebook-banner-info__header">
+      <h3>O'REILLY</h3><span>&reg;</span> ebook:
+    </div>
     <div class="ebook-banner-info__text" style="text-align: center">
       <h3>Kubernetes security and observability</h3>
       <p>A holistic approach to securing containers and cloud-native applications</p>
