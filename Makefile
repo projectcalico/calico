@@ -19,7 +19,7 @@ ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-GO_BUILD_VER?=v0.40
+GO_BUILD_VER?=v0.62
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calico
@@ -46,6 +46,23 @@ DIKASTES_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].component
 FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/flannel-migration-controller.version')
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.typha.version')
 CHART_RELEASE := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].chart.version')
+
+###############################################################################
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH):
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
+
+include Makefile.common
 
 ##############################################################################
 
@@ -114,7 +131,7 @@ _site build: bin/helm
 
 ## Clean enough that a new release build will be clean
 clean:
-	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
+	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml Makefile.common*
 
 ########################################################################################################################
 # Builds locally checked out code using local versions of libcalico, felix, and confd.
@@ -146,13 +163,13 @@ dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
 # Dynamically declare new make targets for all calico subprojects...
 $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
 	echo "TARGET:"
-	echo $< 
+	echo $<
 	@cd $< && export TAG=$$($(TAG_COMMAND)); make image retag-build-images-with-registries \
 		ARCHES=amd64 \
 		BUILD_IMAGE=$(REGISTRY)/$* \
 		PUSH_IMAGES=$(REGISTRY)/$* \
 		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG 
+		IMAGETAG=$$TAG
 
 ## Push locally built images.
 dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
@@ -362,7 +379,7 @@ endef
 export RELEASE_BODY
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR) helm-index
+release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
@@ -376,20 +393,17 @@ release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(UPLOAD_DIR)
 
+	$(MAKE) helm-index
 	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
 
-## Updates helm-index with the new release chart
-helm-index: release-prereqs
-	rm -rf  charts
-	mkdir -p charts/$(CALICO_VER)/
-	cp $(RELEASE_HELM_CHART) charts/$(CALICO_VER)/
-	wget https://calico-public.s3.amazonaws.com/charts/index.yaml -O charts/index.yaml.bak
-	cd charts/ && helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
-	aws --profile helm s3 cp index.yaml s3://calico-public/charts/ --acl public-read
-	rm -rf charts
+## Kicks semaphore job which syncs github released helm charts with helm index file
+.PHONY: helm-index
+helm-index:
+	@echo "Triggering semaphore workflow to update helm index."
+	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea SEMAPHORE_WORKFLOW_BRANCH=master SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml $(MAKE) semaphore-run-workflow
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
