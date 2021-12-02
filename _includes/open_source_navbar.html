@@ -116,15 +116,6 @@
 					<ul class="dropdown-menu dropdown-menu-left" aria-labelledby="nav-version-dropdown" style="margin:0"></ul>
 				</li>
 			</ul>
-			<form class="navbar-form visible-xs">
-				<ul class="nav navbar-nav navbar-right">
-					{% for navbar in navbars %}
-						<li {% if this_pages_navbar == navbar %} class="active"{% endif %}>
-							<a href="{{site.baseurl}}{{navbar.path}}">{{ navbar.title }}</a>
-						</li>
-					{% endfor %}
-				</ul>
-			</form>
 		</div>
 	</div>
 </nav>
