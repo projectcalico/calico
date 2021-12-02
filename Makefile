@@ -394,15 +394,16 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(UPLOAD_DIR)
 
+	$(MAKE) helm-index
 	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
-	$(MAKE) helm-index
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index
 helm-index:
+	@echo "Triggering semaphore workflow to update helm index."
 	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea SEMAPHORE_WORKFLOW_BRANCH=master SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml $(MAKE) semaphore-run-workflow
 
 ## Generates release notes for the given version.
