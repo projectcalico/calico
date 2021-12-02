@@ -827,24 +827,38 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
 
 #ebook-banner {
   margin-top: 10px;
+  font-family: "Poppins", Poppins;
+
+  .ebook-banner-image {
+    padding-right: 0;
+  }
 
   .ebook-banner-info {
     margin-top: 10px;
-    margin-left: -45px;
+    padding-left: 0;
 
     &__header {
-      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
       padding: 7px 0;
-      background-color: #d30000;
+      background-color: #326DE6;
+      background: linear-gradient(to right, #326DE6, #08A2C4);
       color: #fff;
-      font-size: 25px;
+      font-size: 20px;
+      font-weight: 600;
       text-align: center;
 
+      h3 {
+        font-size: 30px;
+        font-weight: 500;
+        margin: 0;
+      }
+
       span {
-        position: absolute;
-        font-size: 7px;
-        margin-left: 1px;
-        bottom: 27px;
+        font-size: 11px;
+        align-self: flex-start;
+        padding: 2px;
       }
     }
 
@@ -852,28 +866,30 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
       h3 {
         font-weight: 700;
         color: #363636;
-        font-size: 35px;
+        font-size: 32px;
       }
 
       p {
         margin-bottom: 30px;
         color: #545454;
-        font-size: 18px;
+        font-size: 16px;
       }
 
       a {
+        padding: 7px 35px;
+        background-color: #ff9e16;
+        border: 1px solid #ff9e16;
+        color: #fff;
+        font-weight: 700;
         text-decoration: none;
-        padding: 10px 35px;
-        color: #363636;
-        border: 1px solid #363636;
         transition: .4s;
         -webkit-font-smoothing: antialiased;
       }
 
       a:hover {
+        background-color: transparent;
+        color: #ff9e16;
         text-decoration: none;
-        background-color: #363636;
-        color: #fff;
       }
     }
   }
