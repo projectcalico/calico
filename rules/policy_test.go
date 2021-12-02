@@ -1082,7 +1082,7 @@ var _ = Describe("rule metadata tests", func() {
 						Match: nil,
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
-							"Policy long-policy-name-that-gets-hashed (ingress)",
+							"Policy long-policy-name-that-gets-hashed ingress",
 						},
 					},
 					{
@@ -1096,7 +1096,7 @@ var _ = Describe("rule metadata tests", func() {
 				Rules: []iptables.Rule{
 					{
 						Comment: []string{
-							"Policy long-policy-name-that-gets-hashed (egress)",
+							"Policy long-policy-name-that-gets-hashed egress",
 						},
 					},
 				},
@@ -1122,7 +1122,7 @@ var _ = Describe("rule metadata tests", func() {
 						Match: nil,
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
-							"Profile long-policy-name-that-gets-hashed (ingress)",
+							"Profile long-policy-name-that-gets-hashed ingress",
 						},
 					},
 					{
@@ -1136,7 +1136,7 @@ var _ = Describe("rule metadata tests", func() {
 				Rules: []iptables.Rule{
 					{
 						Comment: []string{
-							"Profile long-policy-name-that-gets-hashed (egress)",
+							"Profile long-policy-name-that-gets-hashed egress",
 						},
 					},
 				},

@@ -114,7 +114,6 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 
 	Context("with an ingress policy with no rules", func() {
-
 		BeforeEach(func() {
 			policy := api.NewNetworkPolicy()
 			policy.Namespace = "fv"
@@ -131,6 +130,13 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[0], w[2])
 			cc.CheckConnectivity()
+		})
+
+		It("should have the expected comment in iptables", func() {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("iptables-save")
+				return out
+			}).Should(ContainSubstring("Policy fv/default.policy-1 ingress"))
 		})
 	})
 
@@ -158,6 +164,13 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 			cc.ExpectSome(w[2], w[0])
 			cc.ExpectSome(w[0], w[1])
 			cc.CheckConnectivity()
+		})
+
+		It("should have the expected comment in iptables", func() {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("iptables-save")
+				return out
+			}).Should(ContainSubstring("Policy fv/default.policy-1 egress"))
 		})
 	})
 
