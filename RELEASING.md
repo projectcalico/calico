@@ -327,8 +327,8 @@ This will cause `docs.projectcalico.org` to be updated (after a few minutes). Va
 
 1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI.
 
-1. Once reviewed and CI is passing, run the following on your local branch in order to build and publish the release
-   at the newly created commit.
+1. Once reviewed and CI is passing, merge your pull request. After your pull request has merged, run the
+   following on the release branch in order to build and publish the release at the newly created commit.
 
    ```
    make release
