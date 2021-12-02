@@ -572,16 +572,12 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
 
 ## Create the vendor directory
-vendor: glide.yaml
-	# Ensure that the glide cache directory exists.
-	mkdir -p $(HOME)/.glide
-
+vendor:
 	docker run --rm -i \
 	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	  -v $(HOME)/.glide:/home/user/.glide:rw \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) glide install -strip-vendor
+	  $(CALICO_BUILD) go mod vendor
 
 .PHONY: help
 ## Display this help text
