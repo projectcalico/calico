@@ -113,6 +113,27 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		})
 	})
 
+	Context("with an ingress policy with no rules", func() {
+
+		BeforeEach(func() {
+			policy := api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
+			policy.Spec.Ingress = []api.Rule{}
+			policy.Spec.Selector = w[0].NameSelector()
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("no-one can connect to w0, but egress from w0 is unrestricted", func() {
+			cc.ExpectNone(w[2], w[0])
+			cc.ExpectNone(w[1], w[0])
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[0], w[2])
+			cc.CheckConnectivity()
+		})
+	})
+
 	Context("with egress-only restriction for workload 0", func() {
 
 		BeforeEach(func() {
