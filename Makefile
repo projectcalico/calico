@@ -21,6 +21,7 @@ ifeq ($(DEV_NULL),true)
 endif
 
 GO_BUILD_VER?=v0.62
+GOMOD_VENDOR=true
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calico
