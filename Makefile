@@ -1,5 +1,6 @@
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 GIT_HASH=$(shell git rev-parse --short=9 HEAD)
+GIT_UPSTREAM=$(shell git remote -v | grep github.com/projectcalico.*\(push\) | awk '{print $$1}')
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 IMAGES_FILE=
 JEKYLL_VERSION=pages
@@ -65,7 +66,7 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
 ifdef RELEASE_CHART
 # the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
-chartVersion:=$(CALICO_VER)
+chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
 appVersion:=$(CALICO_VER)
 else
 # otherwise, it's a nightly build.
@@ -364,7 +365,7 @@ export RELEASE_BODY
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 	# Push the git tag.
-	git push origin $(CALICO_VER)
+	git push $(GIT_UPSTREAM) $(CALICO_VER)
 
 	cp $(RELEASE_HELM_CHART) $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
 
