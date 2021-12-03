@@ -905,7 +905,7 @@ func init() {
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:      netv4_4,
+					CIDR: netv4_4,
 					AllowedUses: []api.IPPoolAllowedUse{
 						api.IPPoolAllowedUseWorkload,
 						api.IPPoolAllowedUseTunnel,
@@ -916,7 +916,7 @@ func init() {
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:      netv4_4,
+					CIDR: netv4_4,
 					AllowedUses: []api.IPPoolAllowedUse{
 						"Garbage",
 					},
