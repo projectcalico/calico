@@ -428,6 +428,9 @@ endif
 release-prereqs: charts
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
+		exit 1; \
+	elif [ -z $(GIT_UPSTREAM) ]; then \
+		echo "At least one git remote must reference the projectcalico repo"; \
 		exit 1; fi
 ifeq (, $(shell which ghr))
 	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
