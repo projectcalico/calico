@@ -110,7 +110,7 @@ Description:
   input to all of the resource management commands (create, apply, replace,
   delete, get).
 
-  Please refer to the docs at https://docs.projectcalico.org for more details on
+  Please refer to the docs at https://projectcalico.docs.tigera.io for more details on
   the output formats, including example outputs, resource structure (required
   for the golang template definitions) and the valid column names (required for
   the custom-columns option).

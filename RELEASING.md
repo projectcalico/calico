@@ -41,7 +41,7 @@ To release Calico, you need **the following permissions**:
 
 - You must be able to access binaries.projectcalico.org.
 
-- You must have admin access to docs.projectcalico.org site on netlify.
+- You must have admin access to projectcalico.docs.tigera.io site on netlify.
 
 - To publish the helm release to the repo, you’ll need an AWS helm profile:
   Add this to your ~/.aws/config
@@ -53,7 +53,7 @@ To release Calico, you need **the following permissions**:
       region = us-east-2
       ```
   Your user will need permission for assuming the helm admin role in the production account.
-  
+
 You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
 
 Some of the release scripts also require **tools to be installed** in your dev environment:
@@ -89,7 +89,7 @@ Before attempting to create a Calico release you must do the following.
 
 1. Select the appropriate component version numbers, and create any necessary releases. Follow the instructions
    in each repository for further information. (See recent release information, e.g. at
-   https://docs.projectcalico.org/v3.7/release-notes/, for the set of components to consider releasing.)
+   https://projectcalico.docs.tigera.io/archive/v3.7/release-notes/, for the set of components to consider releasing.)
 
    The following components _must_ use the same version number as the Calico version number
    chosen above, and thus must be re-released for every Calico release.
@@ -245,7 +245,7 @@ This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't 
 
 1. Ensure that these proxy rules are cherry-picked to master branch as well so that future releases, which would be cut from master, will have references to this releases.
 
-1. Open a pull request to upstream production branch, get it reviewed and merged. This would make the candidate site docs available at `docs.projectcalico.org/archive/vX.Y/` (Note: the trailing slash)
+1. Open a pull request to upstream production branch, get it reviewed and merged. This would make the candidate site docs available at `projectcalico.docs.tigera.io/archive/vX.Y/` (Note: the trailing slash)
 
 ### Promoting to be the latest release in the docs
 
@@ -299,13 +299,13 @@ as described in the section above.
 
 1. Merge the PR.
 
-1. On netlify locate `docs.projectcalico.org` site and the update `Production branch` in `Settings -> Build & deploy -> Deploy contexts` to `release-vX.Y` in  site settings and trigger the deployment.
+1. On netlify locate `projectcalico.docs.tigera.io` site and the update `Production branch` in `Settings -> Build & deploy -> Deploy contexts` to `release-vX.Y` in  site settings and trigger the deployment.
 (Note: This site contains `LATEST_RELEASE` environment variable in netlify UI, using which `netlify.toml` picks up the correct build for latest release.)
-This will cause `docs.projectcalico.org` to be updated (after a few minutes). Validate that everything looks correct.
+This will cause `projectcalico.docs.tigera.io` to be updated (after a few minutes). Validate that everything looks correct.
 
 ## Confirm the previous release is archived
 
-1. Ensure that the site is accessible by visiting `docs.projectcalico.org/archive/<version>/`.
+1. Ensure that the site is accessible by visiting `projectcalico.docs.tigera.io/archive/<version>/`.
 
 ## <a name="patch"></a> Performing a "patch" release
 
