@@ -13,7 +13,7 @@ plugins:
   - jekyll-seo-tag
   - jekyll-sitemap
 
-url: https://docs.projectcalico.org
+url: https://projectcalico.docs.tigera.io
 
 repository: projectcalico/calico
 

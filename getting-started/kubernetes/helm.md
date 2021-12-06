@@ -37,7 +37,7 @@ In this guide, you install the Tigera {{site.prodname}} operator and custom reso
 
 1. Add the {{site.prodname}} helm repo:
 ```
-helm repo add projectcalico https://docs.projectcalico.org/charts
+helm repo add projectcalico https://projectcalico.docs.tigera.io/charts
 ```
 
 #### Customize the Helm chart
