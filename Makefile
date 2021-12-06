@@ -265,7 +265,7 @@ dev-versions-yaml:
 ci: htmlproofer kubeval helm-tests
 
 htmlproofer: _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --assume-extension --check-html --empty-alt-ignore --file-ignore $(HP_IGNORE_LOCAL_DIRS) --internal_domains "docs.projectcalico.org" --disable_external --allow-hash-href
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --assume-extension --check-html --empty-alt-ignore --file-ignore $(HP_IGNORE_LOCAL_DIRS) --internal_domains "docs.projectcalico.org,projectcalico.docs.tigera.io" --disable_external --allow-hash-href
 
 kubeval: _site
 	# Run kubeval to check master manifests are valid Kubernetes resources.
@@ -299,7 +299,7 @@ helm-tests: vendor bin/helm values.yaml
 HP_IGNORE_URLS="/docs.openshift.org/,/localhost/"
 
 check_external_links: _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --external_only --file-ignore $(HP_IGNORE_LOCAL_DIRS) --assume-extension --url-ignore $(HP_IGNORE_URLS) --internal_domains "docs.projectcalico.org"
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --external_only --file-ignore $(HP_IGNORE_LOCAL_DIRS) --assume-extension --url-ignore $(HP_IGNORE_URLS) --internal_domains "docs.projectcalico.org,projectcalico.docs.tigera.io"
 
 strip_redirects:
 	find \( -name '*.md' -o -name '*.html' \) -exec sed -i'' '/redirect_from:/d' '{}' \;
@@ -369,7 +369,7 @@ $(UPLOAD_DIR):
 # We need to export it as an env var to properly format it.
 # See here: https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile/5887751
 define RELEASE_BODY
-Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/
+Release notes can be found at https://projectcalico.docs.tigera.io/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/
 
 Attached to this release are the following artifacts:
 
@@ -471,7 +471,7 @@ $(RELEASE_DIR_BIN): $(RELEASE_DIR_BIN)/calicoctl $(RELEASE_DIR_BIN)/calicoctl-wi
 
 $(RELEASE_DIR)/README:
 	@echo "This directory contains a complete release of Calico $(CALICO_VER)" >> $@
-	@echo "Documentation for this release can be found at http://docs.projectcalico.org/$(RELEASE_STREAM)" >> $@
+	@echo "Documentation for this release can be found at https://projectcalico.docs.tigera.io/$(RELEASE_STREAM)" >> $@
 	@echo "" >> $@
 	@echo "Docker images (under 'images'). Load them with 'docker load'" >> $@
 	@echo "* The calico/node docker image  (version $(NODE_VERS))" >> $@
