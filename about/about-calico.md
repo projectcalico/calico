@@ -7,17 +7,17 @@ custom_css: css/intro.css
 ---
 
 <div id="ebook-banner" class="row">
-  <div class="ebook-banner-image col-md-3 col-xs-3">
+  <div class="ebook-banner-image col-md-2 col-xs-2">
     <img src="{{ site.baseurl }}/images/oreilly-book-mockup.png">
   </div>
-  <div class="ebook-banner-info col-md-9 col-xs-9">
+  <div class="ebook-banner-info col-md-10 col-xs-10">
     <div class="ebook-banner-info__header">
       <h3>O'REILLY</h3><span>&reg;</span> ebook:
     </div>
     <div class="ebook-banner-info__text" style="text-align: center">
       <h3>Kubernetes security and observability</h3>
       <p>A holistic approach to securing containers and cloud-native applications</p>
-      <a href="https://www.tigera.io/lp/kubernetes-security-and-observability-ebook/">Download Now</a>
+      <a href="https://link.tigera.io/ud139">Download Now</a>
     </div>
   </div>
 </div>
