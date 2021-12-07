@@ -200,6 +200,7 @@ var _ = Describe("BackgroundHook log flushing tests", func() {
 
 		It("should filter debug logs", func() {
 			logger.Debug("Hello")
+			Consistently(c).ShouldNot(Receive())
 			debugFromAnotherFile(logger, "What?")
 			var ql QueuedLog
 			Eventually(c).Should(Receive(&ql))
@@ -539,14 +540,15 @@ func (s *mockSyslogWriter) Crit(m string) error {
 	return err
 }
 
-var benchOut bool
+// Benchmark "result" variables, reading/writing global variable prevents the loop from being optimised away.
+var BenchOut bool
 var BenchIn bool
 
 func BenchmarkRegexpEmpty(b *testing.B) {
 	re := regexp.MustCompile("")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchOut = benchOut != re.MatchString("endpoint_mgr.go")
+		BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
 	}
 }
 
@@ -558,7 +560,7 @@ func BenchmarkRegexpNilcheck(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if re != nil {
-			benchOut = benchOut != re.MatchString("endpoint_mgr.go")
+			BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
 		}
 	}
 }
@@ -567,6 +569,6 @@ func BenchmarkRegexpStar(b *testing.B) {
 	re := regexp.MustCompile(".*")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchOut = benchOut != re.MatchString("endpoint_mgr.go")
+		BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
 	}
 }
