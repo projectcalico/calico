@@ -255,6 +255,10 @@ type Config struct {
 	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
+	// Only logs from files with names that match the given regular expression are included.  The filter only applies
+	// to Debug level logs.
+	LogDebugFilenameRegex *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
 	VXLANEnabled        bool   `config:"bool;false"`
 	VXLANPort           int    `config:"int;4789"`
@@ -733,7 +737,9 @@ func loadParams() {
 				Msg:                 "list contains invalid Linux interface name or regex pattern",
 			}
 		case "regexp":
-			param = &RegexpPatternParam{}
+			param = &RegexpPatternParam{
+				Flags: strings.Split(kindParams, ","),
+			}
 		case "iface-param":
 			param = &RegexpParam{Regexp: IfaceParamRegexp,
 				Msg: "invalid Linux interface parameter"}

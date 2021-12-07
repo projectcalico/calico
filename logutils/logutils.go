@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -130,7 +130,13 @@ func ConfigureLogging(configParams *config.Config) {
 		}
 	}
 
-	hook := logutils.NewBackgroundHook(logutils.FilterLevels(mostVerboseLevel), logLevelSyslog, dests, counterDroppedLogs)
+	hook := logutils.NewBackgroundHook(
+		logutils.FilterLevels(mostVerboseLevel),
+		logLevelSyslog,
+		dests,
+		counterDroppedLogs,
+		logutils.WithDebugFileRegexp(configParams.LogDebugFilenameRegex),
+	)
 	hook.Start()
 	log.AddHook(hook)
 

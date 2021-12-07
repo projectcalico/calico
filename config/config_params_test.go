@@ -15,17 +15,15 @@
 package config_test
 
 import (
+	"net"
+	"reflect"
 	"regexp"
+	"strings"
+	"time"
 
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/testutils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-
-	"net"
-	"reflect"
-	"time"
-
-	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -299,6 +297,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogSeveritySys", "LogSeveritySys", "warning", "WARNING"),
 	Entry("LogSeveritySys", "LogSeveritySys", "error", "ERROR"),
 	Entry("LogSeveritySys", "LogSeveritySys", "fatal", "FATAL"),
+
+	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", "", (*regexp.Regexp)(nil)),
+	Entry("LogDebugFilenameRegex", "LogDebugFilenameRegex", ".*", regexp.MustCompile(".*")),
 
 	Entry("IpInIpEnabled", "IpInIpEnabled", "true", true),
 	Entry("IpInIpEnabled", "IpInIpEnabled", "y", true),
