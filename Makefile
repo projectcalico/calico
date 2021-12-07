@@ -66,7 +66,9 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
 ifdef RELEASE_CHART
 # the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
-chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
+# Helm charts will be built with the chart version matching the corresponding Calico version.
+# Any functional changes to the helm chart will require a patch release of Calico.
+chartVersion:=$(CALICO_VER)
 appVersion:=$(CALICO_VER)
 else
 # otherwise, it's a nightly build.
@@ -87,6 +89,9 @@ chart/%: _includes/charts/%/values.yaml bin/helm3
 	--destination ./bin/ \
 	--version $(chartVersion) \
 	--app-version $(appVersion)
+	# The actual chart bundle will include a chart release version appended as a semver
+	# prerelease version in order to differentiate MINOR semantic issues caused by releasing.
+	mv ./bin/$(@F)-$(chartVersion).tgz ./bin/$(@F)-$(chartVersion)-$(CHART_RELEASE).tgz
 
 serve: bin/helm
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
@@ -382,15 +387,13 @@ release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
 
-## Updates helm-index with the new release chart
-helm-index: release-prereqs
-	rm -rf  charts
-	mkdir -p charts/$(CALICO_VER)/
-	cp $(RELEASE_HELM_CHART) charts/$(CALICO_VER)/
-	wget https://calico-public.s3.amazonaws.com/charts/index.yaml -O charts/index.yaml.bak
-	cd charts/ && helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
-	aws --profile helm s3 cp index.yaml s3://calico-public/charts/ --acl public-read
-	rm -rf charts
+## Kicks semaphore job which syncs github released helm charts with helm index file.
+## The helm index will point to the latest helm chart release for that Calico release
+## (in case there are multiple charts).
+.PHONY: helm-index
+helm-index:
+	@echo "Triggering semaphore workflow to update helm index."
+	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea SEMAPHORE_WORKFLOW_BRANCH=master SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml $(MAKE) semaphore-run-workflow
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
