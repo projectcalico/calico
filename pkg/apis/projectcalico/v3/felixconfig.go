@@ -179,6 +179,10 @@ type FelixConfigurationSpec struct {
 	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
 	// [Default: Info]
 	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
+	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
+	// Only logs from files with names that match the given regular expression are included.  The filter only applies
+	// to Debug level logs.
+	LogDebugFilenameRegex string `json:"logDebugFilenameRegex,omitempty" validate:"omitempty,regexp"`
 
 	IPIPEnabled *bool `json:"ipipEnabled,omitempty" confignamev1:"IpInIpEnabled"`
 	// IPIPMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
