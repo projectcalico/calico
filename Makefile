@@ -84,7 +84,7 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
 ifdef RELEASE_CHART
 # the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
-chartVersion:=$(CALICO_VER)-$(CHART_RELEASE)
+chartVersion:=$(CALICO_VER)
 appVersion:=$(CALICO_VER)
 else
 # otherwise, it's a nightly build.
@@ -105,6 +105,7 @@ chart/%: _includes/charts/%/values.yaml bin/helm3
 	--destination ./bin/ \
 	--version $(chartVersion) \
 	--app-version $(appVersion)
+	mv ./bin/$(@F)-$(chartVersion).tgz ./bin/$(@F)-$(chartVersion)-$(CHART_RELEASE).tgz
 
 serve: bin/helm
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
