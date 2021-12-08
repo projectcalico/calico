@@ -1240,6 +1240,17 @@ func (m *endpointManager) configureInterface(name string) error {
 		}
 	}
 
+	if m.bpfEnabled && m.ipVersion == 4 {
+		// N.B. a pod may send packets with a service's IP when it respondes to
+		// a connection from the local node to that service IP. We do a proper
+		// RPF check for any other traffic in BPF program, so this does not open
+		// up any extra door.
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "0")
+		if err != nil {
+			return err
+		}
+	}
+
 	return configureInterface(name, int(m.ipVersion), m.writeProcSys)
 }
 
