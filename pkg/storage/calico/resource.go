@@ -361,6 +361,7 @@ func decode(
 func (rs *resourceStore) GuaranteedUpdate(
 	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
 	precondtions *storage.Preconditions, userUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
+	klog.V(6).Infof("GuaranteedUpdate called with key: %v on resource %v\n", key, rs.resourceName)
 	// If a cachedExistingObject was passed, use that as the initial object, otherwise use Get() to retrieve it
 	var initObj runtime.Object
 	if cachedExistingObject != nil {
@@ -378,6 +379,11 @@ func (rs *resourceStore) GuaranteedUpdate(
 	if err != nil {
 		klog.Errorf("getting state from initial object (%s)", err)
 		return err
+	}
+
+	shouldCreateOnUpdate := func() bool {
+		// return true if initObj has zero revision (object not found) and ignoreNotFound is true.
+		return (curState.rev == 0) && ignoreNotFound
 	}
 
 	// Loop until update succeeds or we get an error
@@ -419,8 +425,10 @@ func (rs *resourceStore) GuaranteedUpdate(
 		}
 		revInt, _ := strconv.Atoi(accessor.GetResourceVersion())
 		updatedRes := updatedObj.(resourceObject)
-		if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < int(curState.rev) {
-			updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatInt(curState.rev, 10))
+		if !shouldCreateOnUpdate() {
+			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < int(curState.rev) {
+				updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatInt(curState.rev, 10))
+			}
 		}
 		libcalicoObj := rs.converter.convertToLibcalico(updatedRes)
 
@@ -428,6 +436,17 @@ func (rs *resourceStore) GuaranteedUpdate(
 		if ttl != nil {
 			opts = options.SetOptions{TTL: time.Duration(*ttl) * time.Second}
 		}
+		if shouldCreateOnUpdate() {
+			klog.V(6).Infof("Create on Update with key: %v on resource %v\n", key, rs.resourceName)
+			createdLibcalicoObj, err := rs.create(ctx, rs.client, libcalicoObj, opts)
+			if err != nil {
+				klog.Errorf("creating new object (%s) on PATCH", err)
+				return err
+			}
+			rs.converter.convertToAAPI(createdLibcalicoObj, out)
+			return nil
+		}
+
 		createdLibcalicoObj, err := rs.update(ctx, rs.client, libcalicoObj, opts)
 		if err != nil {
 			switch err.(type) {

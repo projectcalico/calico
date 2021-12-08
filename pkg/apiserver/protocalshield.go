@@ -22,10 +22,10 @@ func newProtocolShieldSerializer(codecs *serializer.CodecFactory) *protocolShiel
 		accepts:      []runtime.SerializerInfo{},
 	}
 	for _, info := range codecs.SupportedMediaTypes() {
-		if info.MediaType != runtime.ContentTypeJSON {
-			continue
+		// Calico apiserver supports JSON and YAML (server-side apply) media types.
+		if (info.MediaType == runtime.ContentTypeJSON) || (info.MediaType == runtime.ContentTypeYAML) {
+			pss.accepts = append(pss.accepts, info)
 		}
-		pss.accepts = append(pss.accepts, info)
 	}
 	return pss
 }

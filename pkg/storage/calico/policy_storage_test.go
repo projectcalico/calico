@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -339,6 +341,7 @@ func TestNetworkPolicyGuaranteedUpdate(t *testing.T) {
 		expectInvalidObjErr: false,
 		expectNoUpdate:      false,
 	}, { // GuaranteedUpdate on non-existing key with ignoreNotFound=true
+		// This would update datastore revision.
 		key:                 "projectcalico.org/networkpolicies/default/non-existing",
 		ignoreNotFound:      true,
 		precondition:        nil,
@@ -384,20 +387,33 @@ func TestNetworkPolicyGuaranteedUpdate(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
+		klog.Infof("Start to run test on tt: %+v", tt)
 		out := &calico.NetworkPolicy{}
 		selector := fmt.Sprintf("my_label == \"foo-%d\"", i)
 		if tt.expectNoUpdate {
 			selector = ""
 		}
 		version := storeObj.ResourceVersion
-		err := store.GuaranteedUpdate(ctx, tt.key, out, tt.ignoreNotFound, tt.precondition,
+		versionInt, err := strconv.Atoi(version)
+		if err != nil {
+			t.Errorf("#%d: failed to convert original version %s to int", i, version)
+		}
+		err = store.GuaranteedUpdate(ctx, tt.key, out, tt.ignoreNotFound, tt.precondition,
 			storage.SimpleUpdate(func(obj runtime.Object) (runtime.Object, error) {
 				if tt.expectNotFoundErr && tt.ignoreNotFound {
 					if policy := obj.(*calico.NetworkPolicy); policy.Spec.Selector != "" {
 						t.Errorf("#%d: expecting zero value, but get=%#v", i, policy)
 					}
 				}
+
 				policy := *storeObj
+				// Set correct resource name, don't update "non-existing" to "foo"
+				if strings.Contains(tt.key, "non-existing") {
+					policy.Name = "non-existing"
+					// Clean resource version for non-existing object
+					policy.GetObjectMeta().SetResourceVersion("")
+
+				}
 				if !tt.expectNoUpdate {
 					policy.Spec.Selector = selector
 				}
@@ -426,7 +442,13 @@ func TestNetworkPolicyGuaranteedUpdate(t *testing.T) {
 		}
 		switch tt.expectNoUpdate {
 		case true:
-			if version != out.ResourceVersion {
+			outInt, err := strconv.Atoi(out.ResourceVersion)
+			if err != nil {
+				t.Errorf("#%d: failed to convert out resource version %s to int", i, out.ResourceVersion)
+			}
+			// After creation of a "non-existing" object by previous test, the resource version has increased by 1 for
+			// new updates.
+			if outInt != (versionInt + 1) {
 				t.Errorf("#%d: expect no version change, before=%s, after=%s", i, version, out.ResourceVersion)
 			}
 		case false:
