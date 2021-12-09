@@ -26,7 +26,7 @@ To use this function, the user creates a CalicoNodeStatus object for the node, s
 
 ```yaml
 kubectl apply -f -<<EOF
-apiVersion: projectcalico.org/v3
+apiVersion: crd.projectcalico.org/v1
 kind: CalicoNodeStatus
 metadata:
   name: my-caliconodestatus-1
@@ -41,7 +41,7 @@ EOF
 ```
 The user then reads back the same resource using the command `kubectl get caliconodestatus my-caliconodestatus-1 -o yaml`, and the information collected can be found in the `status` field.  For example:
 ```yaml
-apiVersion: projectcalico.org/v3
+apiVersion: crd.projectcalico.org/v1
 kind: CalicoNodeStatus
 metadata:
   annotations:
