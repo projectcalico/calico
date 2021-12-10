@@ -151,10 +151,12 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 		}
 		subDir := "globals"
 		if m.Type() == libbpf.MapTypeProgrArray && strings.Contains(m.Name(), "cali_jump") {
+			// Remove period in the interface name if any
+			ifName := strings.ReplaceAll(ap.Iface, ".", "")
 			if ap.Hook == HookIngress {
-				subDir = ap.Iface + "_igr/"
+				subDir = ifName + "_igr/"
 			} else {
-				subDir = ap.Iface + "_egr/"
+				subDir = ifName + "_egr/"
 			}
 		}
 		pinPath := path.Join(baseDir, subDir, m.Name())
