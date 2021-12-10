@@ -51,16 +51,11 @@ import (
 )
 
 const (
-	DEFAULT_IPV4_POOL_CIDR              = "192.168.0.0/16"
-	DEFAULT_IPV4_POOL_BLOCK_SIZE        = 26
-	DEFAULT_IPV6_POOL_BLOCK_SIZE        = 122
-	DEFAULT_IPV4_POOL_NAME              = "default-ipv4-ippool"
-	DEFAULT_IPV6_POOL_NAME              = "default-ipv6-ippool"
-	AUTODETECTION_METHOD_FIRST          = "first-found"
-	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
-	AUTODETECTION_METHOD_INTERFACE      = "interface="
-	AUTODETECTION_METHOD_SKIP_INTERFACE = "skip-interface="
-	AUTODETECTION_METHOD_CIDR           = "cidr="
+	DEFAULT_IPV4_POOL_CIDR       = "192.168.0.0/16"
+	DEFAULT_IPV4_POOL_BLOCK_SIZE = 26
+	DEFAULT_IPV6_POOL_BLOCK_SIZE = 122
+	DEFAULT_IPV4_POOL_NAME       = "default-ipv4-ippool"
+	DEFAULT_IPV6_POOL_NAME       = "default-ipv6-ippool"
 
 	DEFAULT_MONITOR_IP_POLL_INTERVAL = 60 * time.Second
 
@@ -123,6 +118,14 @@ func Run() {
 
 	var clientset *kubernetes.Clientset
 	var kubeadmConfig, rancherState *v1.ConfigMap
+	var k8sNode *v1.Node
+
+	// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
+	// value is provided.
+	k8sNodeName := nodeName
+	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
+		k8sNodeName = nodeRef
+	}
 
 	// If running under kubernetes with secrets to call k8s API
 	if config, err := rest.InClusterConfig(); err == nil {
@@ -170,9 +173,15 @@ func Run() {
 				utils.Terminate()
 			}
 		}
+
+		k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
+		if err != nil {
+			log.WithError(err).Error("Failed to read Node from datastore")
+			utils.Terminate()
+		}
 	}
 
-	configureAndCheckIPAddressSubnets(ctx, cli, node)
+	configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
 
 	// If Calico is running in policy only mode we don't need to write BGP related details to the Node.
 	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
@@ -217,13 +226,6 @@ func Run() {
 	// node condition will trigger node-controller updating node taints.
 	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
 		if clientset != nil {
-			// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
-			// value is provided.
-			k8sNodeName := nodeName
-			if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
-				k8sNodeName = nodeRef
-			}
-
 			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
 			if err != nil {
 				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
@@ -254,9 +256,9 @@ func getMonitorPollInterval() time.Duration {
 	return interval
 }
 
-func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface, node *libapi.Node) bool {
+func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface, node *libapi.Node, k8sNode *v1.Node) bool {
 	// Configure and verify the node IP addresses and subnets.
-	checkConflicts, err := configureIPsAndSubnets(node)
+	checkConflicts, err := configureIPsAndSubnets(node, k8sNode, autodetection.GetInterfaces)
 	if err != nil {
 		// If this is auto-detection error, do a cleanup before returning
 		clearv4 := os.Getenv("IP") == "autodetect"
@@ -312,10 +314,36 @@ func MonitorIPAddressSubnets() {
 
 	pollInterval := getMonitorPollInterval()
 
+	var clientset *kubernetes.Clientset
+	var config *rest.Config
+	var k8sNode *v1.Node
+	var err error
+
+	// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
+	// value is provided.
+	k8sNodeName := nodeName
+	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
+		k8sNodeName = nodeRef
+	}
+	if config, err = rest.InClusterConfig(); err == nil {
+		// Create the k8s clientset.
+		clientset, err = kubernetes.NewForConfig(config)
+		if err != nil {
+			log.WithError(err).Error("Failed to create clientset")
+			return
+		}
+
+		k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
+		if err != nil {
+			log.WithError(err).Error("Failed to read Node from datastore")
+			return
+		}
+	}
+
 	for {
 		<-time.After(pollInterval)
 		log.Debugf("Checking node IP address every %v", pollInterval)
-		updated := configureAndCheckIPAddressSubnets(ctx, cli, node)
+		updated := configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
 		if updated {
 			// Apply the updated node resource.
 			// we try updating the resource up to 3 times, in case of transient issues.
@@ -446,7 +474,7 @@ func getNode(ctx context.Context, client client.Interface, nodeName string) *lib
 
 // configureIPsAndSubnets updates the supplied node resource with IP and Subnet
 // information to use for BGP.  This returns true if we detect a change in Node IP address.
-func configureIPsAndSubnets(node *libapi.Node) (bool, error) {
+func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces func([]string, []string, int) ([]autodetection.Interface, error)) (bool, error) {
 	// If the node resource currently has no BGP configuration, add an empty
 	// set of configuration as it makes the processing below easier, and we
 	// must end up configuring some BGP fields before we complete.
@@ -467,7 +495,7 @@ func configureIPsAndSubnets(node *libapi.Node) (bool, error) {
 	ipv4Env := os.Getenv("IP")
 	if ipv4Env == "autodetect" || (ipv4Env == "" && node.Spec.BGP.IPv4Address == "") {
 		adm := os.Getenv("IP_AUTODETECTION_METHOD")
-		cidr := autoDetectCIDR(adm, 4)
+		cidr := autodetection.AutoDetectCIDR(adm, 4, k8sNode, getInterfaces)
 		if cidr != nil {
 			// We autodetected an IPv4 address so update the value in the node.
 			node.Spec.BGP.IPv4Address = cidr.String()
@@ -488,7 +516,7 @@ func configureIPsAndSubnets(node *libapi.Node) (bool, error) {
 	} else if ipv4Env != "none" {
 		if ipv4Env != "" {
 			// Attempt to get the local CIDR of ipv4Env
-			ipv4CIDROrIP, err := getLocalCIDR(ipv4Env, 4, autodetection.GetInterfaces)
+			ipv4CIDROrIP, err := autodetection.GetLocalCIDR(ipv4Env, 4, getInterfaces)
 			if err != nil {
 				log.Warnf("Attempt to get the local CIDR: %s failed, %s", ipv4Env, err)
 			}
@@ -500,7 +528,7 @@ func configureIPsAndSubnets(node *libapi.Node) (bool, error) {
 	ipv6Env := os.Getenv("IP6")
 	if ipv6Env == "autodetect" {
 		adm := os.Getenv("IP6_AUTODETECTION_METHOD")
-		cidr := autoDetectCIDR(adm, 6)
+		cidr := autodetection.AutoDetectCIDR(adm, 6, k8sNode, getInterfaces)
 		if cidr != nil {
 			// We autodetected an IPv6 address so update the value in the node.
 			node.Spec.BGP.IPv6Address = cidr.String()
@@ -650,126 +678,6 @@ func evaluateENVBool(envVar string, defaultValue bool) bool {
 	}
 	log.Infof("%s is %t (defaulted) through environment variable", envVar, defaultValue)
 	return defaultValue
-}
-
-// autoDetectCIDR auto-detects the IP and Network using the requested
-// detection method.
-func autoDetectCIDR(method string, version int) *cnet.IPNet {
-	if method == "" || method == AUTODETECTION_METHOD_FIRST {
-		// Autodetect the IP by enumerating all interfaces (excluding
-		// known internal interfaces).
-		return autoDetectCIDRFirstFound(version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
-		// Autodetect the IP from the specified interface.
-		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
-		// Regexes are passed in as a string separated by ","
-		ifRegexes := regexp.MustCompile(`\s*,\s*`).Split(ifStr, -1)
-		return autoDetectCIDRByInterface(ifRegexes, version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CIDR) {
-		// Autodetect the IP by filtering interface by its address.
-		cidrStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CIDR)
-		// CIDRs are passed in as a string separated by ","
-		matches := []cnet.IPNet{}
-		for _, r := range regexp.MustCompile(`\s*,\s*`).Split(cidrStr, -1) {
-			_, cidr, err := cnet.ParseCIDR(r)
-			if err != nil {
-				log.Errorf("Invalid CIDR %q for IP autodetection method: %s", r, method)
-				return nil
-			}
-			matches = append(matches, *cidr)
-		}
-		return autoDetectCIDRByCIDR(matches, version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
-		// Autodetect the IP by connecting a UDP socket to a supplied address.
-		destStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
-		return autoDetectCIDRByReach(destStr, version)
-	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE) {
-		// Autodetect the Ip by enumerating all interfaces (excluding
-		// known internal interfaces and any interfaces whose name
-		// matches the given regexes).
-		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE)
-		// Regexes are passed in as a string separated by ","
-		ifRegexes := regexp.MustCompile(`\s*,\s*`).Split(ifStr, -1)
-		return autoDetectCIDRBySkipInterface(ifRegexes, version)
-	}
-
-	// The autodetection method is not recognised and is required.  Exit.
-	log.Errorf("Invalid IP autodetection method: %s", method)
-	utils.Terminate()
-	return nil
-}
-
-// autoDetectCIDRFirstFound auto-detects the first valid Network it finds across
-// all interfaces (excluding common known internal interface names).
-func autoDetectCIDRFirstFound(version int) *cnet.IPNet {
-	incl := []string{}
-
-	iface, cidr, err := autodetection.FilteredEnumeration(incl, DEFAULT_INTERFACES_TO_EXCLUDE, nil, version)
-	if err != nil {
-		log.Warnf("Unable to auto-detect an IPv%d address: %s", version, err)
-		return nil
-	}
-
-	log.Infof("Using autodetected IPv%d address on interface %s: %s", version, iface.Name, cidr.String())
-
-	return cidr
-}
-
-// autoDetectCIDRByInterface auto-detects the first valid Network on the interfaces
-// matching the supplied interface regex.
-func autoDetectCIDRByInterface(ifaceRegexes []string, version int) *cnet.IPNet {
-	iface, cidr, err := autodetection.FilteredEnumeration(ifaceRegexes, nil, nil, version)
-	if err != nil {
-		log.Warnf("Unable to auto-detect an IPv%d address using interface regexes %v: %s", version, ifaceRegexes, err)
-		return nil
-	}
-
-	log.Infof("Using autodetected IPv%d address %s on matching interface %s", version, cidr.String(), iface.Name)
-
-	return cidr
-}
-
-// autoDetectCIDRByCIDR auto-detects the first valid Network on the interfaces
-// matching the supplied cidr.
-func autoDetectCIDRByCIDR(matches []cnet.IPNet, version int) *cnet.IPNet {
-	iface, cidr, err := autodetection.FilteredEnumeration(nil, nil, matches, version)
-	if err != nil {
-		log.Warnf("Unable to auto-detect an IPv%d address using interface cidr %s: %s", version, matches, err)
-		return nil
-	}
-
-	log.Infof("Using autodetected IPv%d address %s on interface %s matching cidrs %+v", version, cidr.String(), iface.Name, matches)
-
-	return cidr
-}
-
-// autoDetectCIDRByReach auto-detects the IP and Network by setting up a UDP
-// connection to a "reach" address.
-func autoDetectCIDRByReach(dest string, version int) *cnet.IPNet {
-	if cidr, err := autodetection.ReachDestination(dest, version); err != nil {
-		log.Warnf("Unable to auto-detect IPv%d address by connecting to %s: %s", version, dest, err)
-		return nil
-	} else {
-		log.Infof("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dest)
-		return cidr
-	}
-}
-
-// autoDetectCIDRBySkipInterface auto-detects the first valid Network on the interfaces
-// matching the supplied interface regexes.
-func autoDetectCIDRBySkipInterface(ifaceRegexes []string, version int) *cnet.IPNet {
-	incl := []string{}
-	excl := DEFAULT_INTERFACES_TO_EXCLUDE
-	excl = append(excl, ifaceRegexes...)
-
-	iface, cidr, err := autodetection.FilteredEnumeration(incl, excl, nil, version)
-	if err != nil {
-		log.Warnf("Unable to auto-detect an IPv%d address while excluding %v: %s", version, ifaceRegexes, err)
-		return nil
-	}
-
-	log.Infof("Using autodetected IPv%d address on interface %s: %s while skipping matching interfaces", version, iface.Name, cidr.String())
-	return cidr
 }
 
 // configureASNumber configures the Node resource with the AS number specified
@@ -1290,49 +1198,4 @@ func extractKubeadmCIDRs(kubeadmConfig *v1.ConfigMap) (string, string, error) {
 	}
 
 	return v4, v6, err
-}
-
-// getLocalCIDR attempts to merge CIDR information from the host with the given IP address.
-// If a CIDR is provided, then it is simply returned.
-// If an IP is provided, it attempts to find the matching interface on the host to detect the appropriate prefix length.
-// If no match is found, the IP will be returned unmodified.
-func getLocalCIDR(ip string, version int, getInterfaces func([]string, []string, int) ([]autodetection.Interface, error)) (string, error) {
-	if strings.Contains(ip, "/") {
-		// Already a CIDR
-		return ip, nil
-	}
-
-	var destCIDR net.IP
-	if version == 4 {
-		destCIDR = net.ParseIP(ip).To4()
-	} else {
-		destCIDR = net.ParseIP(ip).To16()
-	}
-
-	if destCIDR == nil {
-		return ip, fmt.Errorf("%s is invalid.", ip)
-	}
-
-	// Get a full list of interface and IPs and find the CIDR matching the
-	// found IP.
-	interfaces, err := getInterfaces(nil, nil, version)
-	if err != nil {
-		return ip, err
-	}
-
-	log.Debugf("Auto-detecting IPv%d CIDR of %s", version, ip)
-	for _, iface := range interfaces {
-		log.WithField("Name", iface.Name).Debug("Checking interface")
-		for _, cidr := range iface.Cidrs {
-			log.WithField("CIDR", cidr.String()).Debug("Found")
-			if cidr.IP.Equal(destCIDR) {
-				log.WithField("CIDR", cidr.String()).Info("Including CIDR information from host interface.")
-				return cidr.String(), nil
-			}
-		}
-	}
-
-	// Even if no CIDR is found, it doesn't think it needs to throw an exception
-	log.Warnf("Unable to find matching host interface for IP %s", ip)
-	return ip, nil
 }

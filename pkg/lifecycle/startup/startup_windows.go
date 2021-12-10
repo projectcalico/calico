@@ -30,14 +30,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 )
 
-var DEFAULT_INTERFACES_TO_EXCLUDE = []string{
-	".*cbr.*",
-	".*[Dd]ocker.*",
-	".*\\(nat\\).*",
-	".*Calico.*_ep", // Exclude our management endpoint.
-	"Loopback.*",
-}
-
 func getOSType() string {
 	return OSTypeWindows
 }
