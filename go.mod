@@ -12,7 +12,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211207150613-1da58452872f
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211210163335-7182823c203f
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
 	google.golang.org/genproto v0.0.0-20201019141844-1ed22bb0c154
