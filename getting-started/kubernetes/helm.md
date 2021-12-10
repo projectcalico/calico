@@ -49,7 +49,7 @@ echo '{installation.kubernetesProvider: EKS}' > values.yaml
 ```
 1. Add any other customizations you require to `values.yaml`.  You might like to refer to the [helm docs](https://helm.sh/docs/) or run 
    ```
-   helm show values projectcalico/tigera-operator --version {{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}
+   helm show values projectcalico/tigera-operator --version {{site.data.versions[0].title}}
    ``` 
    to see the values that can be customized in the chart.
 
@@ -58,11 +58,11 @@ echo '{installation.kubernetesProvider: EKS}' > values.yaml
 1. Install the Tigera {{site.prodname}} operator and custom resource definitions using the Helm chart:
 
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}}
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}}
    ```
    or if you created a `values.yaml` above:
    ```
-   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}}-{{site.data.versions[0].chart.version}} -f values.yaml
+   helm install {{site.prodname | downcase}} projectcalico/tigera-operator --version {{site.data.versions[0].title}} -f values.yaml
    ```
 
 1. Confirm that all of the pods are running with the following command.
