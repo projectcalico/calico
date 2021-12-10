@@ -1318,6 +1318,31 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	return nil
 }
 
+// Releases the affinity for the given block.
+func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.AllocationBlock, mustBeEmpty bool) error {
+	blockCIDR := block.CIDR.String()
+	logCtx := log.WithField("cidr", blockCIDR)
+
+	if block.Affinity == nil {
+		logCtx.Info("Block is already released")
+		return nil
+	}
+	hostname := getHostAffinity(block)
+
+	err := c.blockReaderWriter.releaseBlockAffinity(ctx, hostname, block.CIDR, mustBeEmpty)
+	if err != nil {
+		if _, ok := err.(errBlockClaimConflict); ok {
+			// Not claimed by this host - ignore.
+		} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			// Block does not exist - ignore.
+		} else {
+			logCtx.WithError(err).Errorf("Failed to release block affinity")
+			return err
+		}
+	}
+	return nil
+}
+
 // ReleaseHostAffinities releases affinity for all blocks that are affine
 // to the given host.  If an empty string is passed as the host,
 // then the hostname is automatically detected.

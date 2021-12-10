@@ -593,6 +593,45 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(blocks.KVPairs)).To(Equal(0))
 		})
 
+		It("should release by exact block", func() {
+			// Allocate an IP address in a block.
+			handle := "test-handle"
+			v4ia, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, HandleID: &handle, IntendedUse: v3.IPPoolAllowedUseWorkload})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4ia).ToNot(BeNil())
+			Expect(len(v4ia.IPs)).To(Equal(1))
+
+			// Get the block that was allocated. It should have an affinity matching the host.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			Expect(*blocks.KVPairs[0].Value.(*model.AllocationBlock).Affinity).To(Equal(fmt.Sprintf("host:%s", hostname)))
+
+			// Try to release the block's affinity, requiring it to be empty. It should fail.
+			err = ic.ReleaseBlockAffinity(context.Background(), blocks.KVPairs[0].Value.(*model.AllocationBlock), true)
+			Expect(err).To(HaveOccurred())
+
+			// The block should still have an affinity to the host.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			Expect(*blocks.KVPairs[0].Value.(*model.AllocationBlock).Affinity).To(Equal(fmt.Sprintf("host:%s", hostname)))
+
+			// Release the IP.
+			err = ic.ReleaseByHandle(context.Background(), handle)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Try to release the block's affinity, requiring it to be empty. This time, the block is empty
+			// and it should succeed.
+			err = ic.ReleaseBlockAffinity(context.Background(), blocks.KVPairs[0].Value.(*model.AllocationBlock), true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Releasing the block affinity should have deleted it.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(0))
+		})
+
 		It("should release all non-empty blocks if there are multiple", func() {
 			// Allocate several blocks to the node. The pool is a /30, so 4 addresses
 			// per each block.
