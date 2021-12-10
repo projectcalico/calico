@@ -20,7 +20,8 @@ ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-GO_BUILD_VER?=v0.40
+GO_BUILD_VER?=v0.62
+GOMOD_VENDOR=true
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calico
@@ -47,6 +48,23 @@ DIKASTES_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].component
 FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/flannel-migration-controller.version')
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.typha.version')
 CHART_RELEASE := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].chart.version')
+
+###############################################################################
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH):
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
+
+include Makefile.common
 
 ##############################################################################
 
@@ -120,7 +138,7 @@ _site build: bin/helm
 
 ## Clean enough that a new release build will be clean
 clean:
-	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
+	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml Makefile.common*
 
 ########################################################################################################################
 # Builds locally checked out code using local versions of libcalico, felix, and confd.
@@ -368,7 +386,7 @@ endef
 export RELEASE_BODY
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR) helm-index
+release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
 	git push $(GIT_UPSTREAM) $(CALICO_VER)
 
@@ -382,6 +400,7 @@ release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(UPLOAD_DIR)
 
+	$(MAKE) helm-index
 	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
@@ -560,7 +579,7 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
 
 ## Create the vendor directory
-vendor: glide.yaml
+vendor:
 	# Ensure that the glide cache directory exists.
 	mkdir -p $(HOME)/.glide
 
@@ -569,7 +588,7 @@ vendor: glide.yaml
 	  -v $(HOME)/.glide:/home/user/.glide:rw \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) glide install -strip-vendor
+	  $(CALICO_BUILD) go mod vendor
 
 .PHONY: help
 ## Display this help text
