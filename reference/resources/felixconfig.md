@@ -34,7 +34,7 @@ spec:
 |-------------|-----------------------------|-------------------|--------|
 | name     | Unique name to describe this resource instance. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
-- {{site.prodname}} automatically creates a resource named `default` containing the global default configuration settings for Felix. You can use [calicoctl]({{ site.baseurl }}/reference/calicoctl/overview) to view and edit these settings
+- {{site.prodname}} automatically creates a resource named `default` containing the global default configuration settings for Felix. {%- if site.include_calicoctl_resource %}You can use [calicoctl]({{ site.baseurl }}/reference/calicoctl/overview) to view and edit these settings.{%- endif %}
 - The resources with the name `node.<nodename>` contain the node-specific overrides, and will be applied to the node `<nodename>`. When deleting a node the FelixConfiguration resource associated with the node will also be deleted.
 
 #### Spec
