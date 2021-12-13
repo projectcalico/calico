@@ -14,9 +14,11 @@ match the name configured in the Node resource.
 By default, starting a `{{site.nodecontainer}}` instance will automatically create a node resource
 using the `hostname` of the compute host.
 
+{%- if site.include_calicoctl_resource %}
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that
 specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `node`, `nodes`, `no`, `nos`.
+{%- endif %}
 
 ### Sample YAML
 
@@ -62,7 +64,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| asNumber    | The AS Number of your `{{site.nodecontainer}}`. | Optional. If omitted the global value is used (see [example modifying Global BGP settings](/networking/bgp) for details about modifying the `asNumber` setting). | integer |
+| asNumber    | The AS Number of your `{{site.nodecontainer}}`. | Optional. If omitted the global value is used, see example modifying Global BGP settings {%- if site.include_calicoctl_resource %}[example modifying Global BGP settings](/networking/bgp){%- endif %} for details about modifying the `asNumber` setting). | integer |
 | ipv4Address | The IPv4 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
 | ipv6Address | The IPv6 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | Optional | string |
 | ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel. This is system configured and should not be updated manually. | Optional IPv4 address | string |
