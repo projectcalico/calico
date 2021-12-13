@@ -7,17 +7,19 @@ canonical_url: '/reference/resources/globalnetworkpolicy'
 A global network policy resource (`GlobalNetworkPolicy`) represents an ordered set of rules which are applied
 to a collection of endpoints that match a [label selector](#selectors).
 
-`GlobalNetworkPolicy` is not a namespaced resource. `GlobalNetworkPolicy` applies to [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint) in all namespaces, and to [host endpoint resources]({{ site.baseurl }}/reference/resources/hostendpoint).
+`GlobalNetworkPolicy` is not a namespaced resource. `GlobalNetworkPolicy` applies to workloads {%- if site.include_calicoctl_resource %}[workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint){%- endif %} in all namespaces, and to [host endpoint resources]({{ site.baseurl }}/reference/resources/hostendpoint).
+
 Select a namespace in a `GlobalNetworkPolicy` in the standard selector by using
 `projectcalico.org/namespace` as the label name and a `namespace` name as the
 value to compare against, e.g., `projectcalico.org/namespace == "default"`.
 See [network policy resource]({{ site.baseurl }}/reference/resources/networkpolicy) for namespaced network policy.
 
-`GlobalNetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
-take precedence over [Profile resources]({{ site.baseurl }}/reference/resources/profile) if any are defined.
+`GlobalNetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints. {%- if site.include_calicoctl_resource %}And
+take precedence over [Profile resources]({{ site.baseurl }}/reference/resources/profile) if any are defined.{%- endif %}
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `globalnetworkpolicy`, `globalnetworkpolicies`, `gnp`, `gnps`.
+{%- if site.include_calicoctl_resource %}
+For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following aliases are supported (all case insensitive): `globalnetworkpolicy`, `globalnetworkpolicies`, `gnp`, `gnps`.
+{%- endif %}
 
 ### Sample YAML
 

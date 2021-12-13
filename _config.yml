@@ -63,6 +63,11 @@ breadcrumbs:
 # Set to 'true' to show warning that points users to latest version of each page.
 is_latest: false
 
+# Flag that controls whether 'calicoctl' paragraphs and links are displayed in /Resource definitions. 
+# Allows CC docs to share Resource Definitions content with CE docs. 
+# Set to 'false' for Calico Cloud. Set to 'true' for Calico Enterprise and OS.
+include_calicoctl_resource: false
+
 defaults:
   -
     scope:
