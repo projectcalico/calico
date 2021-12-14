@@ -1,0 +1,65 @@
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-192-168-221-192-26
+  namespace: ""
+spec:
+  node: kube-master
+  cidr: 192.168.221.192/26
+  deleted: ""
+  state: ""
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-192-168-221-0-26
+  namespace: ""
+spec:
+  state: "pending"
+  node: kube-master
+  cidr: 192.168.221.0/26
+  deleted: ""
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-192-168-221-64-26
+  namespace: ""
+spec:
+  state: "confirmed"
+  node: kube-master
+  cidr: 192.168.221.64/26
+  deleted: ""
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-10-0-0-0-30
+  namespace: ""
+spec:
+  node: kube-master
+  cidr: 10.0.0.0/30
+  deleted: ""
+  state: ""
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-10-1-0-0-24
+  namespace: ""
+spec:
+  node: kube-master
+  cidr: 10.1.0.0/24
+  deleted: ""
+  state: ""
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-10-2-0-1-32
+  namespace: ""
+spec:
+  node: kube-master
+  cidr: 10.2.0.1/32
+  deleted: ""
+  state: ""
