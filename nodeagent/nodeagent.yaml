@@ -1,0 +1,35 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: nodeagent
+spec:
+  template:
+    metadata:
+      labels:
+        app: nodeagent
+        version: v1
+    spec:
+      initContainers:
+      - name: flexvol-driver
+        image: quay.io/saurabh/flexvol:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: flexvol-driver-host
+          mountPath: /host/driver
+      containers:
+      - name: nodeagent
+        image: quay.io/saurabh/nodeagent:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: test-workload
+          mountPath: /tmp/nodeagent
+      volumes:
+        - name: test-workload
+          hostPath:
+            # directory location on host for the uds between nodeagent and workload
+            type: DirectoryOrCreate
+            path: /var/run/nodeagent
+        - name: flexvol-driver-host
+          hostPath:
+            type: DirectoryOrCreate
+            path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
