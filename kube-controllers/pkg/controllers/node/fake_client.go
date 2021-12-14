@@ -20,6 +20,7 @@ import (
 
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -273,6 +274,11 @@ func (f *fakeIPAMClient) ReleaseAffinity(ctx context.Context, cidr cnet.IPNet, h
 
 	f.affinitiesReleased[fmt.Sprintf("%s/%s", cidr.String(), host)] = true
 	return nil
+}
+
+// ReleaseBlockAffinity releases the affinity of the exact block provided.
+func (f *fakeIPAMClient) ReleaseBlockAffinity(ctx context.Context, block *model.AllocationBlock, mustBeEmpty bool) error {
+	panic("not implemented") // TODO: Implement
 }
 
 // ReleaseHostAffinities releases affinity for all blocks that are affine
