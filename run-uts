@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -e
+
+if [ -z $SKIP ]
+then
+    SKIP="vendor"
+else
+    SKIP="vendor,$SKIP"
+fi
+
+echo "Removing old coverprofiles..."
+find . -name "*.coverprofile" -type f -delete
+
+if [ -z $WHAT ]
+then
+    echo "Calculating packages to cover..."
+    go_dirs=$(find . -type f -name '*.go' | \
+	          grep -vE '/vendor/|.glide|.git' | \
+	          xargs -n 1 dirname | \
+	          sort | uniq | \
+	          tr '\n' ',' | \
+	          sed 's/,$//' )
+else
+    go_dirs=$WHAT
+fi
+
+echo "Covering: $go_dirs"
+test ! -z "$go_dirs"
+
+# Run tests in random order find tests recursively (-r).
+echo WHAT: $WHAT
+echo SKIP: $SKIP
+ginkgo -cover -coverpkg=${go_dirs} -r --skipPackage $SKIP $WHAT
+gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
+
+echo
+echo '+==============+'
+echo '| All coverage |'
+echo '+==============+'
+echo
+go tool cover -func combined.coverprofile | \
+  sed 's=github.com/projectcalico/libcalico-go/==' | \
+  column -t
+
+echo
+echo '+==================+'
+echo '| Missing coverage |'
+echo '+==================+'
+echo
+go tool cover -func combined.coverprofile | \
+  sed 's=github.com/projectcalico/libcalico-go/==' | grep -v '100.0%' | \
+  column -t
