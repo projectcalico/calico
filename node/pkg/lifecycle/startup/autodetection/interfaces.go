@@ -18,8 +18,9 @@ import (
 	"regexp"
 	"strings"
 
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
+
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // Interface contains details about an interface on the host.

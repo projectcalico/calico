@@ -5,10 +5,9 @@
 package v3
 
 import (
-	rest "k8s.io/client-go/rest"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
+	rest "k8s.io/client-go/rest"
 )
 
 type ProjectcalicoV3Interface interface {

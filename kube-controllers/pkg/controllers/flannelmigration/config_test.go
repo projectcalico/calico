@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	fm "github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 )
 

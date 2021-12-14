@@ -18,6 +18,7 @@ import (
 	"net"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 

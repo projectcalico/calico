@@ -40,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 
 	"github.com/projectcalico/api/pkg/openapi"
+
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
 
