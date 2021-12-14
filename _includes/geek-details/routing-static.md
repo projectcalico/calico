@@ -1,0 +1,1 @@
+Static routes are used to route pod traffic between nodes. The static routes are typically added to the host, and if required, the underlying network, by the installation framework used to create the Kubernetes deployment. Static routes are usually used in conjunction with the Host-local IPAM plugin, which statically assigns a /24 pod IP address range per node.

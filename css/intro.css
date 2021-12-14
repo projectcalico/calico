@@ -1,0 +1,143 @@
+/* ========================================================================
+    Style.css - Project Calico | About Calico
+========================================================================*/
+
+@media (min-width: 992px) {
+    #why-use-calico-1 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-1 img {
+        max-width: 70%;
+    }
+    #why-use-calico-2 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-2 img {
+        max-width: 80%;
+    }
+    #why-use-calico-3 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-3 img {
+        max-width: 80%;
+    }
+    #why-use-calico-4 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-4 img {
+        max-width: 60%;
+    }
+    #why-use-calico-5 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-5 img {
+        max-width: 80%;
+    }
+    #why-use-calico-6 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-6 img {
+        max-width: 80%;
+    }
+    #why-use-calico-7 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-7 img {
+        max-width: 70%;
+    }
+    #why-use-calico-8 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-8 img {
+        max-width: 60%;
+    }
+    #why-use-calico-9 {
+        display: flex;
+        align-items: center;
+        margin: 50px 0;
+    }
+    #why-use-calico-9 img {
+        max-width: 60%;
+    }
+}
+
+@media (max-width: 991px) {
+    #why-use-calico-1 {
+        margin: 50px 0;
+    }
+    #why-use-calico-1 img {
+        max-width: 40%;
+        margin: 0 auto 30px;
+    }
+    #why-use-calico-2 {
+        margin: 50px 0;
+    }
+    #why-use-calico-2 img {
+        max-width: 70%;
+        margin: 30px auto 0;
+    }
+    #why-use-calico-3 {
+        margin: 50px 0;
+    }
+    #why-use-calico-3 img {
+        max-width: 50%;
+        margin: 0 auto 30px;
+    }
+    #why-use-calico-4 {
+        margin: 50px 0;
+    }
+    #why-use-calico-4 img {
+        max-width: 50%;
+    }
+    #why-use-calico-5 {
+        margin: 50px 0;
+    }
+    #why-use-calico-5 img {
+        max-width: 45%;
+        margin: 0 auto 30px;
+    }
+    #why-use-calico-6 {
+        margin: 50px 0;
+    }
+    #why-use-calico-6 img {
+      max-width: 35%;
+      margin: 30px auto 0;
+    }
+    #why-use-calico-7 {
+        margin: 50px 0;
+    }
+    #why-use-calico-7 img {
+        max-width: 60%;
+        margin: 0 auto 30px;
+    }
+    #why-use-calico-8 {
+        margin: 50px 0;
+    }
+    #why-use-calico-8 img {
+        max-width: 50%;
+        margin: 30px auto 0;
+    }
+    #why-use-calico-9 {
+        margin: 50px 0;
+    }
+    #why-use-calico-9 img {
+        max-width: 50%;
+        margin: 0 auto 30px;
+    }
+}

@@ -1,0 +1,7 @@
+---
+layout: null
+---
+{% helm tigera-operator --execute templates/tigera-operator/00-namespace-tigera-operator.yaml %}
+installation:
+  kubernetesProvider: openshift
+{% endhelm %}
