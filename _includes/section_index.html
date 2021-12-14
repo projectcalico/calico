@@ -1,0 +1,26 @@
+{% for item in include.section_index %}
+    {% assign page_path = page.url | remove: '/index.html' %}
+    {% if page_path == item.path %}
+        <div class="section-index">
+                {% for nested_item in item.section %}
+                    {% capture url %}{{ nested_item.path | relative_url }}{% endcapture %}
+                    <div class="section-index__item">
+                        <div class="section-index__title">
+                            <a href="{{ url }}">
+                                {{ nested_item.title }}
+                            </a>
+                        </div>
+                        <p>
+                            {% assign p = site.pages | where: 'url', nested_item.path | first %}
+                            {{ p.description | default p.Description | default nested_item.description | default "no description" }}
+                        </p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% break %}
+    {% endif %}
+
+    {% if item.section %}
+        {% include section_index.html section_index=item.section %}
+    {% endif %}
+{% endfor %}

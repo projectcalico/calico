@@ -1,0 +1,224 @@
+title: "Reference"
+path: /reference/
+order: 5
+section:
+- title: Installation
+  path: /reference/installation/api
+- title: calicoctl
+  path: /reference/calicoctl/
+  section:
+  - title: Overview
+    path: /reference/calicoctl/overview
+  - title: create
+    path: /reference/calicoctl/create
+  - title: replace
+    path: /reference/calicoctl/replace
+  - title: apply
+    path: /reference/calicoctl/apply
+  - title: delete
+    path: /reference/calicoctl/delete
+  - title: get
+    path: /reference/calicoctl/get
+  - title: patch
+    path: /reference/calicoctl/patch
+  - title: label
+    path: /reference/calicoctl/label
+  - title: convert
+    path: /reference/calicoctl/convert
+  - title: ipam
+    path: /reference/calicoctl/ipam/
+    section:
+    - title: Overview
+      path: /reference/calicoctl/ipam/overview
+    - title: check
+      path: /reference/calicoctl/ipam/check
+    - title: release
+      path: /reference/calicoctl/ipam/release
+    - title: show
+      path: /reference/calicoctl/ipam/show
+    - title: configure
+      path: /reference/calicoctl/ipam/configure
+  - title: node
+    path: /reference/calicoctl/node/
+    section:
+    - title: Overview
+      path: /reference/calicoctl/node/overview
+    - title: run
+      path: /reference/calicoctl/node/run
+    - title: status
+      path: /reference/calicoctl/node/status
+    - title: diags
+      path: /reference/calicoctl/node/diags
+    - title: checksystem
+      path: /reference/calicoctl/node/checksystem
+  - title: datastore
+    path: /reference/calicoctl/datastore/
+    section:
+    - title: Overview
+      path: /reference/calicoctl/datastore/overview
+    - title: Migrate
+      path: /reference/calicoctl/datastore/migrate/
+      section:
+      - title: Overview
+        path: /reference/calicoctl/datastore/migrate/overview
+      - title: export
+        path: /reference/calicoctl/datastore/migrate/export
+      - title: import
+        path: /reference/calicoctl/datastore/migrate/import
+      - title: lock
+        path: /reference/calicoctl/datastore/migrate/lock
+      - title: unlock
+        path: /reference/calicoctl/datastore/migrate/unlock
+  - title: version
+    path: /reference/calicoctl/version
+- title: Resource definitions
+  path: /reference/resources/
+  section:
+  - title: Overview
+    path: /reference/resources/overview
+  - title: BGP configuration
+    path: /reference/resources/bgpconfig
+  - title: BGP peer
+    path: /reference/resources/bgppeer
+  - title: Felix configuration
+    path: /reference/resources/felixconfig
+  - title: Global network policy
+    path: /reference/resources/globalnetworkpolicy
+  - title: Global network set
+    path: /reference/resources/globalnetworkset
+  - title: Host endpoint
+    path: /reference/resources/hostendpoint
+  - title: IP pool
+    path: /reference/resources/ippool
+  - title: Kubernetes controllers configuration
+    path: /reference/resources/kubecontrollersconfig
+  - title: Network policy
+    path: /reference/resources/networkpolicy
+  - title: Network set
+    path: /reference/resources/networkset
+  - title: Node
+    path: /reference/resources/node
+  - title: Profile
+    path: /reference/resources/profile
+  - title: Workload endpoint
+    path: /reference/resources/workloadendpoint
+- title: Configuring etcd RBAC
+  path: /reference/etcd-rbac/
+  section:
+  - title: Overview
+    path: /reference/etcd-rbac/overview
+  - title: Generating certificates
+    path: /reference/etcd-rbac/certificate-generation
+  - title: Creating users and roles
+    path: /reference/etcd-rbac/users-and-roles
+  - title: Segmenting etcd on Kubernetes (basic)
+    path: /reference/etcd-rbac/kubernetes
+  - title: Segmenting etcd on Kubernetes (advanced)
+    path: /reference/etcd-rbac/kubernetes-advanced
+  - title: Calico key and path prefixes
+    path: /reference/etcd-rbac/calico-etcdv3-paths
+- title: calico/node
+  path: /reference/node/configuration
+- title: Felix
+  path: /reference/felix/
+  section:
+  - title: Configuration
+    path: /reference/felix/configuration
+  - title: Prometheus statistics
+    path: /reference/felix/prometheus
+- title: Typha
+  path: /reference/typha/
+  section:
+  - title: Overview
+    path: /reference/typha/overview
+  - title: Configuration
+    path: /reference/typha/configuration
+  - title: Prometheus statistics
+    path: /reference/typha/prometheus
+- title: Dikastes
+  path: /reference/dikastes/configuration
+- title: Calico CNI plugins
+  path: /reference/cni-plugin/configuration
+- title: Calico Kubernetes controllers
+  path: /reference/kube-controllers/
+  section:
+  - title: Configuration
+    path: /reference/kube-controllers/configuration
+  - title: Prometheus statistics
+    path: /reference/kube-controllers/prometheus
+- title: Configuration on public clouds
+  path: /reference/public-cloud/
+  section:
+  - title: Amazon Web Services
+    path: /reference/public-cloud/aws
+  - title: Azure
+    path: /reference/public-cloud/azure
+  - title: Google Compute Engine
+    path: /reference/public-cloud/gce
+  - title: IBM Cloud
+    path: /reference/public-cloud/ibm
+- title: Host endpoints
+  path: /reference/host-endpoints/
+  section:
+  - title: Overview
+    path: /reference/host-endpoints/overview
+  - title: Creating policy for basic connectivity
+    path: /reference/host-endpoints/connectivity
+  - title: Creating host endpoint objects
+    path: /reference/host-endpoints/objects
+  - title: Selector-based policies
+    path: /reference/host-endpoints/selector
+  - title: Failsafe rules
+    path: /reference/host-endpoints/failsafe
+  - title: Pre-DNAT policy
+    path: /reference/host-endpoints/pre-dnat
+  - title: Apply on forwarded traffic
+    path: /reference/host-endpoints/forwarded
+  - title: Summary
+    path: /reference/host-endpoints/summary
+  - title: Connection tracking
+    path: /reference/host-endpoints/conntrack
+- title: Architecture
+  path: /reference/architecture/
+  section:
+  - title: Component architecture
+    path: /reference/architecture/overview
+  - title: Data path
+    path: /reference/architecture/data-path
+  - title: Network design
+    path: /reference/architecture/design/
+    section: 
+    - title: Calico over Ethernet fabrics
+      path: /reference/architecture/design/l2-interconnect-fabric
+    - title: Calico over IP fabrics
+      path: /reference/architecture/design/l3-interconnect-fabric
+- title: VPP dataplane
+  path: /reference/vpp/
+  section:
+  - title: Uplink interface configuration
+    path: /reference/vpp/uplink-configuration
+  - title: Integration architecture
+    path: /reference/vpp/technical-details
+  - title: Host network configuration
+    path: /reference/vpp/host-network
+- title: Frequently asked questions
+  path: /reference/faq
+- title: Getting involved
+  path: /reference/involved
+- title: Attributions
+  path: /reference/legal/
+  section:
+  - title: Application layer policy attributions
+    path: /reference/legal/alp
+  - title: calicoctl attributions
+    path: /reference/legal/calicoctl
+  - title: CNI plugin attributions
+    path: /reference/legal/cni
+  - title: confd attributions
+    path: /reference/legal/confd
+  - title: Felix attributions
+    path: /reference/legal/felix
+  - title: calico/node attributions
+    path: /reference/legal/node
+  - title: Typha attributions
+    path: /reference/legal/typha

@@ -1,0 +1,65 @@
+{% capture geek-details-number %}{% increment geek-details-number %}{% endcapture %}
+<div class="geek-details-wrapper">
+    <div class="geek-details">
+        {% assign details = include.details | split: ',' %}
+        {% for detail in details %}
+            {% assign kv = detail | split: ':' %}
+            <div class="geek-detail">
+                {{ kv[0] }}
+                <div class="geek-detail-value" id="geekValue{{geek-details-number}}{{ kv[0] }}">
+                    {{ kv[1] }}
+                </div>
+            </div> 
+            <div class="modal fade" id="geekModal{{geek-details-number}}{{ kv[0] }}"  role="dialog">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <div class="modal-title">{{ kv[1] }} {{ kv[0] }}</div>
+                        </div>
+                        <div class="modal-body">
+                        {% capture geek-details-file %}geek-details/{{kv[0] | downcase}}-{{kv[1] | downcase | replace: " ", "-"}}.md{% endcapture %}
+                        {% capture geek-details-md %}{% include {{geek-details-file}} %}{% endcapture %}
+                        {{ geek-details-md | markdownify }}
+                        </div>
+                        <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>    
+            <script>
+                $(document).ready(function(){
+                $("#geekValue{{geek-details-number}}{{ kv[0] }}").click(function(){
+                    $("#geekModal{{geek-details-number}}{{ kv[0] }}").modal();
+                });
+                });
+            </script>    
+        {% endfor %}
+    </div>
+    <div class="geek-details-info" id="geekDetailsInfo{{geek-details-number}}">?</div>
+    <div class="modal fade" id="geekModalInfo{{geek-details-number}}"  role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <div class="modal-title">Calico Deployment Options</div>
+                </div>
+                <div class="modal-body">
+                {% capture geek-details-md %}{% include geek-details/info.md %}{% endcapture %}
+                {{ geek-details-md | markdownify }}
+                </div>
+                <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>        
+    <script>
+        $(document).ready(function(){
+        $("#geekDetailsInfo{{geek-details-number}}").click(function(){
+            $("#geekModalInfo{{geek-details-number}}").modal();
+        });
+        });
+    </script>    
+</div>

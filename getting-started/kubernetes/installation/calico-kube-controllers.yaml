@@ -1,0 +1,41 @@
+---
+layout: null
+---
+# {{site.prodname}} Version {{site.data.versions.first.title}}
+# {{ "/releases" | absolute_url }}#{{site.data.versions.first.title}}
+# This manifest includes the following component versions:
+#   calico/kube-controllers:{{site.data.versions.first.components["calico/kube-controllers"].version}}
+
+# Create this manifest using kubectl to deploy
+# the {{site.prodname}} Kubernetes controllers.
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+  labels:
+    k8s-app: calico-kube-controllers
+spec:
+  # Only a single instance of the this pod should be
+  # active at a time.  Since this pod is run as a Deployment,
+  # Kubernetes will ensure the pod is recreated in case of failure,
+  # removing the need for passive backups.
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      name: calico-kube-controllers
+      namespace: kube-system
+      labels:
+        k8s-app: calico-kube-controllers
+    spec:
+      hostNetwork: true
+      containers:
+        - name: calico-kube-controllers
+          # Make sure to pin this to your desired version.
+          image: {{page.registry}}{{page.imageNames["calico/kube-controllers"]}}:{{site.data.versions.first.components["calico/kube-controllers"].version}}
+          env:
+            # Configure the location of your etcd cluster.
+            - name: ETCD_ENDPOINTS
+              value: "<ETCD_ENDPOINTS>"
