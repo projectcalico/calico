@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Config
+clusters:
+- name: kubernetes
+  cluster:
+    certificate-authority-data: <ca>
+    <server>
+contexts:
+- name: calico-windows@kubernetes
+  context:
+    cluster: kubernetes
+    namespace: kube-system
+    user: calico-windows
+current-context: calico-windows@kubernetes
+users:
+- name: calico-windows
+  user:
+    token: <token>
+

@@ -1,0 +1,10 @@
+{
+    "name": "my-prom",
+    "type": "prometheus",
+    "url": "http://__PROMETHEUS_IP__:9090",
+    "access": "direct",
+    "isDefault": true,
+    "database": "mydb",
+    "user": "admin",
+    "password": "admin"
+}

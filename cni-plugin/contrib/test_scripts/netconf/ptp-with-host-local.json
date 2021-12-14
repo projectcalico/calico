@@ -1,0 +1,9 @@
+{
+    "cniVersion": "0.3.1", 			  
+    "name": "net1",
+    "type": "ptp",
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.0.0.0/8"
+    }
+}
