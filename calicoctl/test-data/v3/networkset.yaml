@@ -1,0 +1,13 @@
+apiVersion: projectcalico.org/v3
+kind: NetworkSet
+metadata:
+ name: network-set-1
+ namespace: mynamespace
+ labels:
+   role: external-db
+spec:
+  nets:
+  - "10.123.100.0/24"
+  - "feed:beef:c001:d00d::/96"
+  - "10.129.0.1"
+  - "f00d:cafe::1"

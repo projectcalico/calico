@@ -1,0 +1,108 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-1
+spec:
+  cidr: 192.168.1.0/24
+  ipipMode: Never
+  natOutgoing: true
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-2
+spec:
+  cidr: 192.168.2.0/24
+  ipipMode: Never
+  natOutgoing: true
+  disableBGPExport: true
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-3
+spec:
+  cidr: 192.168.3.0/24
+  ipipMode: Never
+  natOutgoing: true
+  disableBGPExport: false
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-v6-1
+spec:
+  cidr: 2002:101::/64
+  ipipMode: Never
+  vxlanMode: Never
+  natOutgoing: true
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-v6-2
+spec:
+  cidr: 2002:102::/64
+  ipipMode: Never
+  vxlanMode: Never
+  natOutgoing: true
+  disableBGPExport: true
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-v6-3
+spec:
+  cidr: 2002:103::/64
+  ipipMode: Never
+  vxlanMode: Never
+  natOutgoing: true
+  disableBGPExport: false

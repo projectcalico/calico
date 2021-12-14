@@ -1,0 +1,14 @@
+apiVersion: v1
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+  name: main-cluster
+contexts:
+- context:
+    cluster: main-cluster
+    user: default
+  name: main
+current-context: ""
+kind: Config
+preferences: {}
+users: null

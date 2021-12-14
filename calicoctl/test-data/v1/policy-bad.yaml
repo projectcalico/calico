@@ -1,0 +1,37 @@
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: policy1
+    testr: 1
+    testq: 2
+    testm: r
+  spec:
+    order: 9999.9999
+    ingress:
+      - action: allow
+        protocol: udp
+        icmp:
+          type: 100
+          code: 100
+        source:
+          tag: web
+          net: 1.2.3.44/10
+          selector:
+          ports: [1,2,3,4]
+        destination:
+          tag: database
+          net: 10.20.30.40/32
+          selector:
+          ports:
+    egress:
+      - action: deny
+        protocol: tcp
+        thing: 2
+        source:
+          notTag: abcd
+          notNet: aa:bb:cc::ff/100
+          notSelector: 
+          notPorts: [100]
+    selector:
+    thing2: 3
+    thing: w
