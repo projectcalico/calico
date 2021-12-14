@@ -25,13 +25,13 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/go-yaml-wrapper"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/backend"
-	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	validator "github.com/projectcalico/libcalico-go/lib/validator/v1"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 )
 
 // Client contains

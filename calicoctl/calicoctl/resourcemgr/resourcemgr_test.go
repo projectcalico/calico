@@ -22,7 +22,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/projectcalico/calicoctl/v3/calicoctl/resourcemgr"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	. "github.com/onsi/ginkgo"

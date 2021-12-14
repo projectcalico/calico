@@ -24,11 +24,11 @@ import (
 	"fmt"
 	"strconv"
 
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/labelindex"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (

@@ -17,7 +17,7 @@ package ipam
 import (
 	"net"
 
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // AssignIPArgs defines the set of arguments for assigning a specific IP address.

@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/projectcalico/app-policy/proto"
-	"github.com/projectcalico/app-policy/uds"
+	"github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/uds"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

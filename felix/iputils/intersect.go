@@ -17,8 +17,8 @@ package iputils
 import (
 	"sort"
 
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 func IntersectCIDRs(aStrs []string, bStrs []string) (out []string) {

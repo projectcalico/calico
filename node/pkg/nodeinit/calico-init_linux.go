@@ -24,7 +24,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/projectcalico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 	"github.com/sirupsen/logrus"
 )
 

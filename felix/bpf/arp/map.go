@@ -21,7 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf"
 )
 
 var MapParams = bpf.MapParameters{

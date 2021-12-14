@@ -27,10 +27,10 @@ import (
 	"go.etcd.io/etcd/pkg/transport"
 	"golang.org/x/net/context"
 
-	v1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	v1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 var (

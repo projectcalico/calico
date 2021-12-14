@@ -25,15 +25,15 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
-	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/logutils"
-	"github.com/projectcalico/felix/netlinkshim"
-	"github.com/projectcalico/felix/routerule"
-	"github.com/projectcalico/felix/routetable"
-	"github.com/projectcalico/felix/timeshim"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/felix/routerule"
+	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/felix/timeshim"
 )
 
 const (

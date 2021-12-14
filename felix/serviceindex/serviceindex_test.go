@@ -19,14 +19,14 @@ import (
 	discovery "k8s.io/api/discovery/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/felix/labelindex"
-	. "github.com/projectcalico/felix/serviceindex"
+	"github.com/projectcalico/calico/felix/labelindex"
+	. "github.com/projectcalico/calico/felix/serviceindex"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 var _ = Describe("ServiceIndex", func() {

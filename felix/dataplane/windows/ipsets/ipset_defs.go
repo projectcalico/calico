@@ -15,7 +15,7 @@
 package ipsets
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // IPSetMetadata contains the metadata for a particular IP set, such as its name and type.

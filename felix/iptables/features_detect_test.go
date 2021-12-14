@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/felix/iptables"
+	. "github.com/projectcalico/calico/felix/iptables"
 )
 
 func TestFeatureDetection(t *testing.T) {

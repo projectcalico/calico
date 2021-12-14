@@ -15,7 +15,7 @@ import (
 	"text/template"
 
 	"github.com/BurntSushi/toml"
-	"github.com/kelseyhightower/confd/pkg/backends"
+	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/kelseyhightower/memkv"
 	log "github.com/sirupsen/logrus"
 )

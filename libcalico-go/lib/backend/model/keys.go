@@ -23,13 +23,13 @@ import (
 	"strings"
 	"time"
 
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string

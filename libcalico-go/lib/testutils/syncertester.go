@@ -24,8 +24,8 @@ import (
 
 	gomegatypes "github.com/onsi/gomega/types"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // Create a new SyncerTester.  This helper class implements the api.SyncerCallbacks

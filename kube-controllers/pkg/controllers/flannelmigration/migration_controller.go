@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"

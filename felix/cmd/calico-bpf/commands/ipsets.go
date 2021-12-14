@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/ipsets"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"

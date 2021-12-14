@@ -23,9 +23,9 @@ import (
 
 	docopt "github.com/docopt/docopt-go"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/buildinfo"
-	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/buildinfo"
+	"github.com/projectcalico/calico/felix/labelindex"
 )
 
 const usage = `felix-xdp, dumping xdp state for Calico.

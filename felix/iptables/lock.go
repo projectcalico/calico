@@ -31,7 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 )
 
 var (

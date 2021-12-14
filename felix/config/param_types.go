@@ -34,9 +34,9 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/felix/idalloc"
-	"github.com/projectcalico/felix/stringutils"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/stringutils"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 const (

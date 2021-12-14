@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/projectcalico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	log "github.com/sirupsen/logrus"
 )
 

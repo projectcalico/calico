@@ -21,12 +21,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/health"
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 const (

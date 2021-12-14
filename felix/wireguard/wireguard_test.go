@@ -15,8 +15,8 @@
 package wireguard_test
 
 import (
-	"github.com/projectcalico/felix/logutils"
-	. "github.com/projectcalico/felix/wireguard"
+	"github.com/projectcalico/calico/felix/logutils"
+	. "github.com/projectcalico/calico/felix/wireguard"
 
 	"errors"
 	"fmt"
@@ -31,10 +31,10 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/ip"
-	mocknetlink "github.com/projectcalico/felix/netlinkshim/mocknetlink"
-	"github.com/projectcalico/felix/timeshim/mocktime"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
+	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
 var (

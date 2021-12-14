@@ -23,15 +23,15 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/felix/logutils"
-	. "github.com/projectcalico/felix/routerule"
+	"github.com/projectcalico/calico/felix/logutils"
+	. "github.com/projectcalico/calico/felix/routerule"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (

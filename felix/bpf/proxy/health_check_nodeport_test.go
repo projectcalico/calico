@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 
-	proxy "github.com/projectcalico/felix/bpf/proxy"
+	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
 )
 
 var _ = Describe("BPF Proxy healthCheckNodeport", func() {

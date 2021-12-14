@@ -28,15 +28,15 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	cprometheus "github.com/projectcalico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
-	"github.com/projectcalico/felix/conntrack"
-	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/logutils"
-	"github.com/projectcalico/felix/netlinkshim"
-	"github.com/projectcalico/felix/timeshim"
+	"github.com/projectcalico/calico/felix/conntrack"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/felix/timeshim"
 )
 
 const (

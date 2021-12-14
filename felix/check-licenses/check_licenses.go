@@ -23,8 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/projectcalico/felix/logutils"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (
@@ -38,86 +38,86 @@ var (
 		// These packages are licensed under the LGPL, which is normally viral and hence
 		// incompatible with our licensing! However, they include the linking exception,
 		// allowing us to distribute a binary based on them as long as we don't modify them.
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/juju/ratelimit",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/juju/ratelimit",
 			license: "GNU Lesser General Public License v3.0 (94%)"},
 
 		// Variants on MIT/BSD; files tend to include updated copyright statement.
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/PuerkitoBio/urlesc",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/PuerkitoBio/urlesc",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/beorn7/perks/quantile",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/beorn7/perks/quantile",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/gobuffalo/gogen/goimports",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/gobuffalo/gogen/goimports",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/gogo/protobuf",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/gogo/protobuf",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (90%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/golang/protobuf",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/golang/protobuf",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/golang/protobuf/proto",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/golang/protobuf/proto",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/gregjones/httpcache/diskcache",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/gregjones/httpcache/diskcache",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/howeyc/gopass",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/howeyc/gopass",
 			license: "ISC License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/karrick/godirwalk",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/karrick/godirwalk",
 			license: "BSD 2-clause \"Simplified\" License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/davecgh/go-spew/spew",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/davecgh/go-spew/spew",
 			license: "ISC License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/dgrijalva/jwt-go",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/dgrijalva/jwt-go",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/imdario/mergo",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/imdario/mergo",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/kardianos/osext",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/kardianos/osext",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/kelseyhightower/envconfig",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/kelseyhightower/envconfig",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/mailru/easyjson",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/mailru/easyjson",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/pborman/uuid",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/pborman/uuid",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/peterbourgon/diskv",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/peterbourgon/diskv",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/pkg/errors",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/pkg/errors",
 			license: "BSD 2-clause \"Simplified\" License"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/rogpeppe/go-internal",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/rogpeppe/go-internal",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/satori/go.uuid",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/satori/go.uuid",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/spf13/pflag",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/spf13/pflag",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/google.golang.org/grpc",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/google.golang.org/grpc",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (97%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/gopkg.in/inf.v0",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/gopkg.in/inf.v0",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (97%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/dustin/go-humanize",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/dustin/go-humanize",
 			license: "MIT License (96%)"},
 
 		// Mixed license, Apache and some files under BSD-like.
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/ghodss/yaml",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/ghodss/yaml",
 			license: "? (BSD 3-clause \"New\" or \"Revised\" License, 83%)"},
 
 		// Apache license with copyright statement in file.
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/Azure/go-autorest/autorest",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/Azure/go-autorest/autorest",
 			license: "Apache License 2.0 (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/gophercloud/gophercloud",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/gophercloud/gophercloud",
 			license: "Apache License 2.0 (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/vishvananda/netlink/nl",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/vishvananda/netlink/nl",
 			license: "Apache License 2.0 (96%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/vishvananda/netns",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/vishvananda/netns",
 			license: "Apache License 2.0 (96%)"},
 
 		// Mozilla Public License.  Note, would prohibit us from ever releasing our code
 		// under a *GPL license (if we wanted to do that).
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/hashicorp/golang-lru/simplelru",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/hashicorp/golang-lru/simplelru",
 			license: "Mozilla Public License 2.0"},
-		{pkgName: "github.com/projectcalico/felix/vendor/github.com/hashicorp/go-version",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/github.com/hashicorp/go-version",
 			license: "Mozilla Public License 2.0"},
 		// Not detected properly - But it's apache license - https://github.com/go-yaml/yaml/blob/v2.2.1/LICENSE
-		{pkgName: "github.com/projectcalico/felix/vendor/gopkg.in/yaml.v2",
+		{pkgName: "github.com/projectcalico/calico/felix/vendor/gopkg.in/yaml.v2",
 			license: "? (The Unlicense, 35%)"},
 	})
 	whitelistedPrefixes = []string{
 		// Standard golang BSD-like license.
-		"github.com/projectcalico/felix/vendor/golang.org/x/",
+		"github.com/projectcalico/calico/felix/vendor/golang.org/x/",
 	}
 )
 
@@ -152,8 +152,8 @@ lineLoop:
 			pkgName: pkgName,
 			license: license,
 		}
-		if strings.HasPrefix(pkgName, "github.com/projectcalico/felix/vendor/github.com/projectcalico/") ||
-			(strings.HasPrefix(pkgName, "github.com/projectcalico/") &&
+		if strings.HasPrefix(pkgName, "github.com/projectcalico/calico/felix/vendor/github.com/projectcalico/") ||
+			(strings.HasPrefix(pkgName, "github.com/projectcalico/calico/") &&
 				!strings.Contains(pkgName, "vendor")) {
 			logCxt.Info("One of our packages")
 			continue

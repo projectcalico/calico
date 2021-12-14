@@ -24,10 +24,10 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc"
-	"github.com/projectcalico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
+	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 type Dataplane interface {

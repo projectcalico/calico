@@ -37,10 +37,10 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog"
 
-	"github.com/projectcalico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 
 	"github.com/projectcalico/api/pkg/openapi"
-	"github.com/projectcalico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
 
 // CalicoServerOptions contains the aggregation of configuration structs for

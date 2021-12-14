@@ -28,7 +28,7 @@ import (
 	"github.com/howeyc/fsnotify"
 	"github.com/kelseyhightower/envconfig"
 	cp "github.com/nmrshll/go-cp"
-	"github.com/projectcalico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/pkg/fileutil"

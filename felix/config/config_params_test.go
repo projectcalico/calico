@@ -17,9 +17,9 @@ package config_test
 import (
 	"regexp"
 
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/testutils"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/testutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 
 	"net"
 	"reflect"

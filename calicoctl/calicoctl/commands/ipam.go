@@ -20,9 +20,9 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/constants"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/ipam"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.

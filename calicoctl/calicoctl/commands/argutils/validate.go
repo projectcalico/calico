@@ -19,7 +19,7 @@ import (
 	"net"
 	"os"
 
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 )
 

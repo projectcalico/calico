@@ -19,9 +19,9 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/dataplane/windows/hns"
-	"github.com/projectcalico/felix/dataplane/windows/policysets"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
+	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 func TestPolicyManager(t *testing.T) {

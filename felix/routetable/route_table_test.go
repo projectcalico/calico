@@ -15,8 +15,8 @@
 package routetable_test
 
 import (
-	"github.com/projectcalico/felix/logutils"
-	. "github.com/projectcalico/felix/routetable"
+	"github.com/projectcalico/calico/felix/logutils"
+	. "github.com/projectcalico/calico/felix/routetable"
 
 	"fmt"
 	"net"
@@ -28,11 +28,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/ip"
-	mocknetlink "github.com/projectcalico/felix/netlinkshim/mocknetlink"
-	"github.com/projectcalico/felix/testutils"
-	"github.com/projectcalico/felix/timeshim/mocktime"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
+	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/calico/felix/testutils"
+	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
 var (

@@ -20,10 +20,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	v1v "github.com/projectcalico/libcalico-go/lib/validator/v1"
-	v3v "github.com/projectcalico/libcalico-go/lib/validator/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	v1v "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
+	v3v "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 func NewValidationFilter(sink api.SyncerCallbacks) *ValidationFilter {

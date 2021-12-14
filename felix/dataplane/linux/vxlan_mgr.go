@@ -24,18 +24,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/projectcalico/felix/ethtool"
-	"github.com/projectcalico/felix/ipsets"
-	"github.com/projectcalico/felix/logutils"
-	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/calico/felix/ethtool"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/rules"
 
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/routetable"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
 )
 
 // added so that we can shim netlink for tests

@@ -15,13 +15,13 @@
 package model_test
 
 import (
-	. "github.com/projectcalico/libcalico-go/lib/backend/model"
+	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = Describe("keys with region component", func() {

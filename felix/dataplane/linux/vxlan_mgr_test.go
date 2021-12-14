@@ -18,17 +18,17 @@ import (
 	"net"
 	"time"
 
-	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules"
 
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/ip"
 
-	"github.com/projectcalico/felix/routetable"
+	"github.com/projectcalico/calico/felix/routetable"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 type mockVXLANDataplane struct {

@@ -23,7 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/projectcalico/felix/netlinkshim"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 )
 
 const (

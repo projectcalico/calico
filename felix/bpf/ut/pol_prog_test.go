@@ -25,13 +25,13 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/asm"
-	"github.com/projectcalico/felix/bpf/ipsets"
-	"github.com/projectcalico/felix/bpf/polprog"
-	"github.com/projectcalico/felix/bpf/state"
-	"github.com/projectcalico/felix/idalloc"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/bpf/state"
+	"github.com/projectcalico/calico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 func TestLoadAllowAllProgram(t *testing.T) {

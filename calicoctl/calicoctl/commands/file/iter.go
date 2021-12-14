@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/argutils"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 )
 
 // Iter extracts the filename from the parsed args and

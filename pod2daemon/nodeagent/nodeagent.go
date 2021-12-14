@@ -23,9 +23,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/pod2daemon/binder"
-	udsver "github.com/projectcalico/pod2daemon/protos/udsver_v1"
-	wlapi "github.com/projectcalico/pod2daemon/workloadapi"
+	"github.com/projectcalico/calico/pod2daemon/binder"
+	udsver "github.com/projectcalico/calico/pod2daemon/protos/udsver_v1"
+	wlapi "github.com/projectcalico/calico/pod2daemon/workloadapi"
 )
 
 const (

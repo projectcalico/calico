@@ -24,7 +24,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane/windows/hns"
+	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 )
 
 const (

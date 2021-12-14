@@ -17,7 +17,7 @@ package node_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 	"github.com/sirupsen/logrus"
 
 	"testing"

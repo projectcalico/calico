@@ -22,7 +22,7 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 )
 
 func TestICMPPortUnreachable(t *testing.T) {

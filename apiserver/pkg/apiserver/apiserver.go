@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	calicorest "github.com/projectcalico/apiserver/pkg/registry/projectcalico/rest"
+	calicorest "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/rest"
 )
 
 var (

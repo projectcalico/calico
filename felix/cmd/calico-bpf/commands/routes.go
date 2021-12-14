@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf"
 
-	"github.com/projectcalico/felix/bpf/routes"
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"

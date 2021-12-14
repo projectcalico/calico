@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/felix/conntrack"
+	. "github.com/projectcalico/calico/felix/conntrack"
 )
 
 var _ = Describe("Conntrack", func() {

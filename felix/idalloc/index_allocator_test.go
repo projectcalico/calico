@@ -15,7 +15,7 @@
 package idalloc_test
 
 import (
-	. "github.com/projectcalico/felix/idalloc"
+	. "github.com/projectcalico/calico/felix/idalloc"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

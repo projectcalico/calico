@@ -15,17 +15,17 @@
 package labelindex_test
 
 import (
-	. "github.com/projectcalico/felix/labelindex"
+	. "github.com/projectcalico/calico/felix/labelindex"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"net"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	calinet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
 var _ = Describe("SelectorAndNamedPortIndex", func() {

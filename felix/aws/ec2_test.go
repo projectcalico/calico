@@ -30,7 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
-	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

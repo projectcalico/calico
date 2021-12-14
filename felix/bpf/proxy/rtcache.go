@@ -20,8 +20,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/projectcalico/felix/bpf/routes"
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 // Routes is an interface to query routes

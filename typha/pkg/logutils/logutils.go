@@ -20,8 +20,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
 var (

@@ -14,7 +14,7 @@
 
 package selector
 
-import "github.com/projectcalico/libcalico-go/lib/selector/parser"
+import "github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 
 // Selector represents a label selector.
 type Selector interface {

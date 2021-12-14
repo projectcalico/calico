@@ -21,11 +21,11 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/common"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/constants"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func Unlock(args []string) error {

@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/idalloc"
 )
 
 const (

@@ -25,9 +25,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/buildinfo"
-	"github.com/projectcalico/felix/calc"
-	"github.com/projectcalico/felix/jitter"
+	"github.com/projectcalico/calico/felix/buildinfo"
+	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/jitter"
 )
 
 const (

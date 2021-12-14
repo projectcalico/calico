@@ -31,8 +31,8 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/projectcalico/apiserver/cmd/apiserver/server"
-	"github.com/projectcalico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
+	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
 
 const defaultEtcdPathPrefix = ""
