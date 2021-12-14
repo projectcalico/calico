@@ -1,0 +1,4 @@
+#!/bin/sh
+LOGDIR=/var/log/calico/calico-bgp-daemon
+mkdir -p $LOGDIR
+exec svlogd $LOGDIR
