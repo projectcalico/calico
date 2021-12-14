@@ -1,0 +1,48 @@
+
+{% for item in include.sidebar %}
+  {% assign prefix = item.path | slice: 0, 4 %}
+
+  {% if prefix == "http" %}
+    {% assign target=" target='_blank' " %}
+  {% else %}
+    {% assign target="" %}
+  {% endif %}
+
+  {% if item.path %}
+    {% capture href %}{{ site.baseurl }}{{ item.path }}{% endcapture %}
+  {% else %}
+    {% capture href %}#{% endcapture %}
+  {% endif %}
+
+  {% capture link %}
+    <a class="item" data-title="{{ item.title }}" href="{{href}}"{{ target }}>
+      {{item.title}}
+    </a>
+  {% endcapture %}
+
+  {% if item.section %}
+    {% capture titleized %}{{include.prefix}}-{{ item.title | downcase | replace: ' ','' | replace: ':','', | replace: '/','' | replace: '(', '-' | replace: ')', '' }}{% endcapture %}
+    <div>
+      <div class="link">
+        <span
+          role="button"
+          data-toggle="collapse"
+          data-target="#{{titleized}}"
+          aria-expanded="false"
+          aria-controls="{{titleized}}"
+          class="glyphicon glyphicon-chevron-right navbar-arrow"
+        ></span>
+        {{ link }}
+      </div>
+      <div class="section">
+        <div class="collapse" id="{{ titleized }}">
+          {% include sidebar.html sidebar=item.section prefix=titleized %}
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="link">
+      {{ link }}
+    </div>
+  {% endif %}
+{% endfor %}
