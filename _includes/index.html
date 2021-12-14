@@ -1,0 +1,8 @@
+{% assign unsorted_navbars = "" | split:"|" %}
+{% for navbars_hashmap in site.data.navbars %}
+  {% assign navbar = navbars_hashmap[1] %}
+  {% assign unsorted_navbars = unsorted_navbars | push: navbar %}
+{% endfor %}
+{% assign navbars = unsorted_navbars | sort:"order" %}
+
+{% include section_index.html section_index=navbars %}

@@ -1,0 +1,3 @@
+Operating without using an overlay provides the highest performance network. The packets that leave your pods are the packets that go on the wire.
+
+For completeness, in contrast, with an overlay network, packets between pods on different nodes are encapsulated using a protocol such as VXLAN or IPIP, wrapping each original packet in an outer packet that uses node IPs, and hiding the pod IPs of the inner packet. This can be done very efficiently by the Linux kernel, but it still represents a small overhead, which you might want to avoid if running particularly network intensive workloads.
