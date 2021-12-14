@@ -104,6 +104,16 @@ NODE_CONTAINER_BIN_DIR=./dist/bin/
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
 
+WINDOWS_GEN_INSTALL_SCRIPT_BIN := hack/bin/gen-install-calico-windows-script
+
+# Base URL of the Calico for Windows installation zip archive.
+# This can be overridden for dev releases.
+WINDOWS_ARCHIVE_BASE_URL ?= https://docs.projectcalico.org
+
+# This is either "Calico" or "Calico Enterprise"
+WINDOWS_INSTALL_SCRIPT_PRODUCT ?= Calico
+WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
+
 # Variables for the Windows packaging.
 # Name of the Windows release ZIP archive.
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
@@ -197,6 +207,8 @@ clean: clean-windows-upgrade
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
+	rm -f $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
+	rm -f $(WINDOWS_INSTALL_SCRIPT)
 	rm -f $(WINDOWS_UPGRADE_INSTALL_FILE)
 	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
 	rm -rf filesystem/included-source
@@ -632,6 +644,8 @@ endif
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	# Generate the install-calico-windows.ps1 script
+	$(MAKE) install-calico-windows-script
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
 	$(MAKE) release-windows-upgrade-archive
@@ -675,6 +689,11 @@ endif
 	ghr -u projectcalico -r node \
 		-n $(VERSION) \
 		$(VERSION) $(WINDOWS_ARCHIVE)
+
+	# Update the release with the install-calico-windows.ps1 file too.
+	ghr -u projectcalico -r node \
+		-n $(VERSION) \
+		$(VERSION) $(WINDOWS_INSTALL_SCRIPT)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -781,24 +800,26 @@ $(WINDOWS_UPGRADE_SCRIPT): $(WINDOWS_UPGRADE_DIST_STAGE)
 $(WINDOWS_UPGRADE_INSTALL_ZIP): build-windows-archive $(WINDOWS_UPGRADE_DIST_STAGE)
 	cp $(WINDOWS_ARCHIVE) $@
 
-# Get the install script into the temporary directory where we build the windows
-# upgrade zip file. The version of the install script depends on whether there
-# is a released version for the branch; otherwise the master version of the
-# script is used.
-$(WINDOWS_UPGRADE_INSTALL_FILE): $(WINDOWS_UPGRADE_DIST_STAGE)
-	# Truncated git version in the vX.Y version string our docs site uses.
-	$(eval ver := $(shell echo $(WINDOWS_ARCHIVE_TAG) | sed -ne 's/\(v[0-9]\+\.[0-9]\+\).*/\1/p' ))
-	# The vX.Y.Z version string.
-	$(eval fullver := $(shell echo $(WINDOWS_ARCHIVE_TAG) | sed -ne 's/\(v[0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' ))
-	@echo vX.Y version is $(ver)
-	@echo vX.Y.Z version is $(fullver)
-	@if git show-ref --tags $(fullver) ; then \
-		echo "Tag $(fullver) exists, using released version of installation script" ; \
-		curl --fail https://docs.projectcalico.org/archive/$(ver)/scripts/install-calico-windows.ps1 -o $(WINDOWS_UPGRADE_INSTALL_FILE) ; \
-	else \
-		echo "Tag $(fullver) doesn't exist yet, using master version of installation script" ; \
-		curl --fail https://docs.projectcalico.org/master/scripts/install-calico-windows.ps1 -o $(WINDOWS_UPGRADE_INSTALL_FILE) ; \
-	fi
+# Build the tool to generate the install-calico-windows.ps1 installation script.
+$(WINDOWS_GEN_INSTALL_SCRIPT_BIN):
+	mkdir -p hack/bin
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
+	$(GIT_CONFIG_SSH) \
+	go build -o $@ ./hack/gen-install-calico-windows-script'
+
+# Generate the install-calico-windows.ps1 installation script.
+# For dev releases, override WINDOWS_ARCHIVE_BASE_URL.
+install-calico-windows-script $(WINDOWS_INSTALL_SCRIPT): $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
+	$(WINDOWS_GEN_INSTALL_SCRIPT_BIN) \
+		-product "$(WINDOWS_INSTALL_SCRIPT_PRODUCT)" \
+		-version $(GIT_VERSION) \
+		-templatePath windows-packaging/install-calico-windows.ps1.tpl \
+		-baseUrl $(WINDOWS_ARCHIVE_BASE_URL) > $(WINDOWS_INSTALL_SCRIPT)
+
+# Copy the install-calico-windows.ps1 script to the temporary directory where we
+# build the windows upgrade zip file.
+$(WINDOWS_UPGRADE_INSTALL_FILE): $(WINDOWS_UPGRADE_DIST_STAGE) $(WINDOWS_INSTALL_SCRIPT)
+	cp $(WINDOWS_INSTALL_SCRIPT) $@
 
 # Produces the Windows upgrade ZIP archive for the release.
 release-windows-upgrade-archive: release-prereqs

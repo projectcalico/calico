@@ -724,3 +724,7 @@ docs/calc.pdf: docs/calc.dot
 .PHONY: update-tools
 update-tools:
 	go get -u github.com/onsi/ginkgo/ginkgo
+
+# Run arbitrary CMD in calico/go-build container.
+calico-build-run:
+	-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CMD)'

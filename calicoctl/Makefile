@@ -48,10 +48,6 @@ Makefile.common.$(MAKE_BRANCH):
 
 include Makefile.common
 
-ifeq ($(ARCH),arm64)
-# Prevents docker from tagging the output image incorrectly as amd64.
-TARGET_PLATFORM=--platform=linux/arm64/v8
-endif
 ###############################################################################
 
 CALICOCTL_DIR=calicoctl
@@ -137,8 +133,8 @@ remote-deps: mod-download
 .PHONY: image $(CALICOCTL_IMAGE)
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
-$(CTL_CONTAINER_CREATED): register Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH)
-	docker build -t $(CALICOCTL_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+$(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) register
+	docker buildx build --pull -t $(CALICOCTL_IMAGE):latest-$(ARCH) --platform=linux/$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) . --load
 ifeq ($(ARCH),amd64)
 	docker tag $(CALICOCTL_IMAGE):latest-$(ARCH) $(CALICOCTL_IMAGE):latest
 endif
@@ -291,19 +287,19 @@ run-kubernetes-master: stop-kubernetes-master
             --root-ca-file=/home/user/certs/ca.pem
 
 	# Create a Node in the API for the tests to use.
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec -i st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
 	# Apply ClusterInformation CRD because the tests require it
-	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	while ! docker exec -i st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		apply -f /code/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
 		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
-	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+	-docker exec -i st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 	

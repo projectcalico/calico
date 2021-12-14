@@ -176,6 +176,7 @@ rules:
   - ipreservations
   - ipamblocks
   - blockaffinities
+  - caliconodestatuses
   verbs:
   - get
   - list
