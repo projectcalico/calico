@@ -19,8 +19,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/idalloc"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 func TestPolicySanityCheck(t *testing.T) {

@@ -22,11 +22,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	yamlsep "github.com/projectcalico/calicoctl/v3/calicoctl/util/yaml"
+	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
 	"github.com/projectcalico/go-yaml-wrapper"
-	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	v1validator "github.com/projectcalico/libcalico-go/lib/validator/v1"
+	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+	v1validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 )
 
 // Store a resourceHelper for each resource unversioned.TypeMetadata.

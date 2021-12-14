@@ -167,8 +167,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // Source code for the Sequence diagram above (http://textart.io/sequence).
@@ -238,12 +238,12 @@ type MsgKVs struct {
 func init() {
 	// We need to use RegisterName here to force the name to be equal, even if this package gets vendored since the
 	// default name would include the vendor directory.
-	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgClientHello", MsgClientHello{})
-	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgServerHello", MsgServerHello{})
-	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgSyncStatus", MsgSyncStatus{})
-	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPing", MsgPing{})
-	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPong", MsgPong{})
-	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
+	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgClientHello", MsgClientHello{})
+	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgServerHello", MsgServerHello{})
+	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgSyncStatus", MsgSyncStatus{})
+	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgPing", MsgPing{})
+	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgPong", MsgPong{})
+	gob.RegisterName("github.com/projectcalico/calico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
 }
 
 func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {

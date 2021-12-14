@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -23,14 +23,14 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/argutils"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/common"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/constants"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/v1resourceloader"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
-	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/v1resourceloader"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 func Convert(args []string) error {

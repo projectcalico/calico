@@ -19,7 +19,7 @@ package fv_test
 import (
 	"testing"
 
-	"github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 
 	"github.com/onsi/gomega/format"
 
@@ -27,8 +27,8 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {

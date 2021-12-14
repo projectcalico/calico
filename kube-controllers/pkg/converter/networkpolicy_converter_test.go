@@ -15,7 +15,7 @@
 package converter_test
 
 import (
-	"github.com/projectcalico/kube-controllers/pkg/converter"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"

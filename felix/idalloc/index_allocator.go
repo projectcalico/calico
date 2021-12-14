@@ -19,7 +19,7 @@ import (
 
 	"github.com/golang-collections/collections/stack"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type IndexRange struct {

@@ -26,7 +26,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex"
 )
 
 var id = 0

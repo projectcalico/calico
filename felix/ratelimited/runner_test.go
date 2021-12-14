@@ -21,7 +21,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/timeshim/mocktime"
+	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
 func TestRunner(t *testing.T) {

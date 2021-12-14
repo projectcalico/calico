@@ -18,9 +18,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/projectcalico/cni-plugin/pkg/install"
-	"github.com/projectcalico/cni-plugin/pkg/ipamplugin"
-	"github.com/projectcalico/cni-plugin/pkg/plugin"
+	"github.com/projectcalico/calico/cni-plugin/pkg/install"
+	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
+	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
 )
 
 // VERSION is filled out during the build process (using git describe output)

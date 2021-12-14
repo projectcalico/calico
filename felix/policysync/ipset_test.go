@@ -20,8 +20,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/policysync"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/policysync"
+	"github.com/projectcalico/calico/felix/proto"
 
 	"strings"
 )

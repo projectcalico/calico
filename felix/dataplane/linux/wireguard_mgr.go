@@ -18,9 +18,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/wireguard"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/wireguard"
 )
 
 // wireguardManager manages the dataplane resources that are used for wireguard encrypted traffic. This includes:

@@ -33,17 +33,17 @@ import (
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/cni-plugin/pkg/types"
-	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/libcalico-go/lib/names"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func ensureNamespace(clientset *kubernetes.Clientset, name string) {

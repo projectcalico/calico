@@ -19,7 +19,7 @@ package conversion
 import (
 	kapiv1 "k8s.io/api/core/v1"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 type WorkloadEndpointConverter interface {

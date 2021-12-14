@@ -28,7 +28,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/klog"
 
-	"github.com/projectcalico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
 
 // PrepareServer prepares the server for execution. After invoking the caller should run RunServer.

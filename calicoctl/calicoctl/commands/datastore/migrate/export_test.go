@@ -15,7 +15,7 @@
 package migrate_test
 
 import (
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/datastore/migrate"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 

@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
 const confFileSingleParamNoNewLine = `[ignored]

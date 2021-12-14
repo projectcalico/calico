@@ -19,13 +19,13 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/projectcalico/felix/iptables"
-	"github.com/projectcalico/felix/logutils"
+	. "github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/logutils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules"
 
 	log "github.com/sirupsen/logrus"
 )

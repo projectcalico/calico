@@ -20,7 +20,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/projectcalico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/idalloc"
 
 	"github.com/sirupsen/logrus"
 )

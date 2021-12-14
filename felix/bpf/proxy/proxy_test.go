@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	proxy "github.com/projectcalico/felix/bpf/proxy"
+	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
 )
 
 func log(format string, a ...interface{}) {

@@ -19,7 +19,7 @@ import (
 	"net"
 	"testing"
 
-	nat2 "github.com/projectcalico/felix/bpf/nat"
+	nat2 "github.com/projectcalico/calico/felix/bpf/nat"
 )
 
 func TestNATDump(t *testing.T) {

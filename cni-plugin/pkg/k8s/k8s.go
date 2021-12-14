@@ -34,17 +34,17 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
-	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils/cri"
-	"github.com/projectcalico/cni-plugin/pkg/dataplane"
-	"github.com/projectcalico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
+	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
+	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod

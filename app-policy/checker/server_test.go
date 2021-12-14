@@ -22,8 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 	"google.golang.org/genproto/googleapis/rpc/status"
 
-	"github.com/projectcalico/app-policy/policystore"
-	"github.com/projectcalico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/app-policy/proto"
 )
 
 func TestCheckNoStore(t *testing.T) {

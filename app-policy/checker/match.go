@@ -18,8 +18,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/projectcalico/app-policy/proto"
-	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 
 	"fmt"
 

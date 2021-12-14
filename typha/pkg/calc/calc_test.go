@@ -18,9 +18,9 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	. "github.com/projectcalico/typha/pkg/calc"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	. "github.com/projectcalico/calico/typha/pkg/calc"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

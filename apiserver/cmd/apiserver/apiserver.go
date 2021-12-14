@@ -25,7 +25,7 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog"
 
-	"github.com/projectcalico/apiserver/cmd/apiserver/server"
+	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 )
 
 func main() {

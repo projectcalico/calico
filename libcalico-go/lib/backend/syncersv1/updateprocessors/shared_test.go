@@ -5,9 +5,9 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	up "github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	up "github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var srcSelector string = "mylabel == selector1"

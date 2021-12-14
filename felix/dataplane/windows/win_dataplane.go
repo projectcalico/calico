@@ -19,19 +19,19 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/projectcalico/felix/dataplane/windows/hcn"
+	"github.com/projectcalico/calico/felix/dataplane/windows/hcn"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane/windows/hns"
+	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 
-	"github.com/projectcalico/felix/dataplane/common"
-	"github.com/projectcalico/felix/dataplane/windows/ipsets"
-	"github.com/projectcalico/felix/dataplane/windows/policysets"
-	"github.com/projectcalico/felix/jitter"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/throttle"
-	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/dataplane/windows/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
+	"github.com/projectcalico/calico/felix/jitter"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/throttle"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 const (

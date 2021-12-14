@@ -19,24 +19,24 @@ import (
 	"errors"
 	"time"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/node/pkg/lifecycle/utils"
-	populator "github.com/projectcalico/node/pkg/status/populators"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
+	populator "github.com/projectcalico/calico/node/pkg/status/populators"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/node/pkg/status"
+	"github.com/projectcalico/calico/node/pkg/status"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/libcalico-go/lib/backend"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 const (

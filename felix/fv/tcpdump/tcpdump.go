@@ -31,7 +31,7 @@ import (
 
 	"github.com/onsi/ginkgo"
 
-	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/utils"
 )
 
 // Attach use if tcpdump is available in the container

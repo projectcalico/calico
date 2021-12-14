@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/felix/bpf/cachingmap"
-	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/cachingmap"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -30,12 +30,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/conntrack"
-	"github.com/projectcalico/felix/bpf/mock"
-	proxy "github.com/projectcalico/felix/bpf/proxy"
-	"github.com/projectcalico/felix/bpf/routes"
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/mock"
+	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 func init() {

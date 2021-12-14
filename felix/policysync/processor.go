@@ -19,7 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // MaxMembersPerMessage sets the limit on how many IP Set members to include in an outgoing gRPC message, which has a

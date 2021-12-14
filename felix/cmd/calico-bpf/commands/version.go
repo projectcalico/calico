@@ -19,7 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/felix/buildinfo"
+	"github.com/projectcalico/calico/felix/buildinfo"
 )
 
 // versionCmd represents the version command

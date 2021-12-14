@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kelseyhightower/confd/pkg/buildinfo"
-	"github.com/kelseyhightower/confd/pkg/config"
-	"github.com/kelseyhightower/confd/pkg/run"
+	"github.com/projectcalico/calico/confd/pkg/buildinfo"
+	"github.com/projectcalico/calico/confd/pkg/config"
+	"github.com/projectcalico/calico/confd/pkg/run"
 	log "github.com/sirupsen/logrus"
 )
 

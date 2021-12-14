@@ -22,12 +22,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/projectcalico/app-policy/checker"
-	"github.com/projectcalico/app-policy/health"
-	"github.com/projectcalico/app-policy/policystore"
-	"github.com/projectcalico/app-policy/proto"
-	"github.com/projectcalico/app-policy/syncher"
-	"github.com/projectcalico/app-policy/uds"
+	"github.com/projectcalico/calico/app-policy/checker"
+	"github.com/projectcalico/calico/app-policy/health"
+	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/syncher"
+	"github.com/projectcalico/calico/app-policy/uds"
 
 	"github.com/docopt/docopt-go"
 	authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"

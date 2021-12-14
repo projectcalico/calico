@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/libcalico-go/lib/logutils"
+	. "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 // A mock log formatter that simply serves to count log invocations.

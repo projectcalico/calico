@@ -19,10 +19,10 @@ import (
 	"net"
 	"testing"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/failsafes"
-	"github.com/projectcalico/felix/bpf/polprog"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/proto"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"

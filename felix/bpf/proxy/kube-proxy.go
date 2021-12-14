@@ -22,12 +22,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/felix/bpf/cachingmap"
+	"github.com/projectcalico/calico/felix/bpf/cachingmap"
 
-	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/routes"
 )
 
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like

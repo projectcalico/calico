@@ -29,7 +29,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	shutil "github.com/termie/go-shutil"
 
-	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
 // diagCmd is a struct to hold a command, cmd info and filename to run diagnostic on

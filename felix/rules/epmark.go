@@ -21,7 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/markbits"
+	"github.com/projectcalico/calico/felix/markbits"
 )
 
 const (

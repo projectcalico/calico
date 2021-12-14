@@ -22,8 +22,8 @@ import (
 
 	"github.com/onsi/ginkgo/reporters"
 
-	"github.com/projectcalico/libcalico-go/lib/testutils"
-	"github.com/projectcalico/typha/pkg/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/calico/typha/pkg/logutils"
 )
 
 func init() {

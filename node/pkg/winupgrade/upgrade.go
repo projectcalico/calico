@@ -26,14 +26,14 @@ import (
 	"time"
 
 	image "github.com/distribution/distribution/reference"
-	"github.com/projectcalico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/projectcalico/node/pkg/lifecycle/utils"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 
 	log "github.com/sirupsen/logrus"
 )

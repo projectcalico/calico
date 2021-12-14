@@ -17,8 +17,8 @@ package resources
 import (
 	log "github.com/sirupsen/logrus"
 
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // FindNodeAddress returns node address of the specified type. Type can be one of

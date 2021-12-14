@@ -15,8 +15,8 @@
 package dataplane
 
 import (
-	"github.com/projectcalico/cni-plugin/pkg/dataplane/windows"
-	"github.com/projectcalico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
+	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/sirupsen/logrus"
 )
 

@@ -15,7 +15,7 @@
 package syncserver_test
 
 import (
-	. "github.com/projectcalico/typha/pkg/syncserver"
+	. "github.com/projectcalico/calico/typha/pkg/syncserver"
 
 	"math"
 	"time"

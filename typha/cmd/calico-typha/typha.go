@@ -19,7 +19,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/typha/pkg/daemon"
+	"github.com/projectcalico/calico/typha/pkg/daemon"
 )
 
 // main is the entry point to the calico-typha binary.

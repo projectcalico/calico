@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/calico/felix/iptables"
 )
 
 type mockTable struct {

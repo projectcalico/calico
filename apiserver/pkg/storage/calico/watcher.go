@@ -11,8 +11,8 @@ import (
 	k8swatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 
-	"github.com/projectcalico/libcalico-go/lib/options"
-	cwatch "github.com/projectcalico/libcalico-go/lib/watch"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	cwatch "github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
 // watchChan implements watch.Interface.
