@@ -1,0 +1,17 @@
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+ name: abc.allow.tcp6379
+ namespace: mynamespace
+spec:
+ selector: has(b)
+ ingress:
+ - action: allow
+   protocol: tcp
+   source:
+     selector: has(a)
+   destination:
+     ports:
+     - 6379
+ egress:
+ - action: allow

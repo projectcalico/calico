@@ -1,0 +1,13 @@
+- apiVersion: v1
+  kind: node
+  metadata:
+    name: node1
+- apiVersion: v1
+  kind: node
+  metadata:
+    name: node2
+  spec:
+    bgp:
+      asNumber: 12345
+      ipv4Address: 1.2.3.4/24
+      ipv6Address: aa::ff
