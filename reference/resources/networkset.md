@@ -25,8 +25,10 @@ the CIDRs from any network sets that match the selector.
 > policy will see the kube-proxy's host's IP as the source instead of the real source.
 {: .alert .alert-danger}
 
+{%- if site.include_calicoctl_resource %}
 For `calicoctl` commands that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `networkset`, `networksets`, `netsets`.
+{%- endif %}
 
 ### Sample YAML
 

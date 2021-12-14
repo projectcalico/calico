@@ -8,16 +8,17 @@ A network policy resource (`NetworkPolicy`) represents an ordered set of rules w
 to a collection of endpoints that match a [label selector](#selectors).
 
 `NetworkPolicy` is a namespaced resource. `NetworkPolicy` in a specific namespace
-only applies to [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint)
-in that namespace. Two resources are in the same namespace if the `namespace`
+only applies to [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint) in that namespace. Two resources are in the same namespace if the `namespace`
 value is set the same on both.
 See [global network policy resource]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) for non-namespaced network policy.
 
 `NetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
 take precedence over [profile resources]({{ site.baseurl }}/reference/resources/profile) if any are defined.
 
+{%- if site.include_calicoctl_resource %}
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `networkpolicy`, `networkpolicies`, `policy`, `np`, `policies`, `pol`, `pols`.
+{%- endif %}
 
 ### Sample YAML
 
@@ -113,7 +114,7 @@ spec:
 
 ### Application layer policy
 
-Application layer policy is an optional feature of {{site.prodname}} and
+Application layer policy is an optional feature of {{site.prodname}} and must be enabled
 [must be enabled]({{site.baseurl}}/security/app-layer-policy)
 in order to use the following match criteria.
 

@@ -4,15 +4,19 @@ description: Calico resources (APIs) that you can manage using calicoctl.
 canonical_url: '/reference/resources/index'
 ---
 
+{%- if site.include_calicoctl_resource %}
 This section describes the set of valid resource types that can be managed
 through `calicoctl`.  
 
 While resources may be supplied in YAML or JSON format, this guide provides examples in YAML.
+{%- endif %}
 
 ## Overview of resource structure
 
+{%- if site.include_calicoctl_resource %}
 The calicoctl commands for resource management (create, apply, delete, replace, get)
-all take resource manifests as input.  
+all take resource manifests as input. 
+{%- endif %} 
 
 Each manifest may contain a single resource
 (e.g. a profile resource), or a list of multiple resources (e.g. a profile and two

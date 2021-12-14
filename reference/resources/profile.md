@@ -11,8 +11,10 @@ flexible [NetworkPolicy]({{ site.baseurl }}/reference/resources/networkpolicy) a
 
 Each {{site.prodname}} endpoint or host endpoint can be assigned to zero or more profiles.
 
+{%- if site.include_calicoctl_resource %}
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `profile`, `profiles`, `pro`, `pros`.
+{%- endif %}
 
 ### Sample YAML
 
