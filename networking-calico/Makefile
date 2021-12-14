@@ -1,9 +1,7 @@
+include ../metadata.mk
 
 # Get version from git - used for releases.
 GIT_VERSION?=$(shell git describe --tags --dirty --always)
-ifeq ($(LOCAL_BUILD),true)
-	GIT_VERSION = $(shell git describe --tags --dirty --always)-dev-build
-endif
 
 ###############################################################################
 # Release
@@ -81,7 +79,4 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
-ifdef LOCAL_BUILD
-	$(error LOCAL_BUILD must not be set for a release)
 endif

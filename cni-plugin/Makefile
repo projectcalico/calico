@@ -1,11 +1,9 @@
-PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.59
+include ../metadata.mk
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
+PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 
-# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
-SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PROJECT_ID)
+# Add in local static-checks
+LOCAL_CHECKS=check-boring-ssl
 
 RELEASE_REGISTRIES    ?= gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 RELEASE_BRANCH_PREFIX ?= release
@@ -23,37 +21,18 @@ endif
 BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 
 ###############################################################################
-# Download and include Makefile.common
+# Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-ifdef LOCAL_BUILD
-PHONY: set-up-local-build
-LOCAL_BUILD_DEP:=set-up-local-build
-
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
-$(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
-endif
-
-# Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
-
-include Makefile.common
+include ../lib.Makefile
 
 ###############################################################################
+BIN=bin/$(ARCH)
+SRC_FILES=$(shell find pkg cmd internal -name '*.go')
+TEST_SRC_FILES=$(shell find tests -name '*.go')
+WINFV_SRCFILES=$(shell find win_tests -name '*.go')
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 # fail if unable to download
 CURL=curl -C - -sSf
@@ -87,15 +66,6 @@ clean:
 	rm -f *.created
 	rm -f crds.yaml
 	rm -rf config/
-	# If the vendor directory exists then the build fails with golang 1.14, and this folder exists in semaphore v1 but it's
-	# empty
-	rm -rf vendor/
-	rm Makefile.common*
-
-###############################################################################
-# Updating pins
-###############################################################################
-update-pins: update-api-pin update-libcalico-pin
 
 ###############################################################################
 # Building the binary
@@ -125,12 +95,12 @@ sub-build-%:
 $(BIN)/install binary: $(SRC_FILES)
 	-mkdir -p .go-pkg-cache
 	-mkdir -p $(BIN)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
 		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -w" $(PACKAGE_NAME)/cmd/calico && \
-		$(CHECK_BORINGSSL)
+		$(CHECK_BORINGSSL)'
 
 ## Build the Calico network plugin and ipam plugins for Windows
-$(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(LOCAL_BUILD_DEP) $(SRC_FILES)
+$(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 	$(DOCKER_RUN) \
 	-e GOOS=windows \
 	-e CGO_ENABLED=1 \
@@ -184,7 +154,7 @@ check-boring-ssl: $(BIN)/install
 $(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
 	cp "$<" "$@"
 
-ut-datastore: $(LOCAL_BUILD_DEP)
+ut-datastore:
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	$(EXTRA_DOCKER_ARGS) \
@@ -198,7 +168,7 @@ ut-datastore: $(LOCAL_BUILD_DEP)
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e KUBECONFIG=/home/user/certs/kubeconfig \
-	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 	-v $(CURDIR)/tests/certs:/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
@@ -230,7 +200,7 @@ test-cni-versions:
 config/crd: mod-download
 	mkdir -p config/crd
 	$(DOCKER_GO_BUILD) sh -c ' \
-		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd/* config/crd; \
+		cp -r ../libcalico-go/config/crd/* config/crd; \
 		chmod +w config/crd/*'
 
 ## Kubernetes apiserver used for tests
@@ -263,7 +233,7 @@ run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
-	  -v $(PWD)/tests/certs:/home/user/certs \
+	  -v $(CURDIR)/tests/certs:/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \
             --master=https://127.0.0.1:6443 \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
@@ -325,7 +295,7 @@ ci: clean mod-download build static-checks test-cni-versions image-all test-inst
 cd: image-all cd-common
 
 ## Build fv binary for Windows
-$(BIN_WIN)/win-fv.exe: $(LOCAL_BUILD_DEP) $(WINFV_SRCFILES)
+$(BIN_WIN)/win-fv.exe: $(WINFV_SRCFILES)
 	$(DOCKER_RUN) -e GOOS=windows $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go test ./win_tests -c -o $(BIN_WIN)/win-fv.exe'
 
 ###############################################################################
@@ -424,9 +394,6 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
-ifdef LOCAL_BUILD
-	$(error LOCAL_BUILD must not be set for a release)
 endif
 ifndef GITHUB_TOKEN
 	$(error GITHUB_TOKEN must be set for a release)

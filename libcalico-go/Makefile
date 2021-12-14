@@ -1,33 +1,15 @@
-PACKAGE_NAME=github.com/projectcalico/libcalico-go
-GO_BUILD_VER=v0.59
+include ../metadata.mk
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_LIBCALICO_GO_PROJECT_ID)
+PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
-# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
-SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_TYPHA_PROJECT_ID) $(SEMAPHORE_KUBE_CONTROLLERS_PROJECT_ID) \
-	$(SEMAPHORE_CALICOCTL_PROJECT_ID) $(SEMAPHORE_CNI_PLUGIN_PROJECT_ID) $(SEMAPHORE_API_SERVER_OSS_PROJECT_ID) \
-	$(SEMAPHORE_APP_POLICY_PROJECT_ID)
-
-GOMOD_VENDOR = false
 LOCAL_CHECKS = goimports check-gen-files
 
 ###############################################################################
-# Download and include Makefile.common
+# Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-include Makefile.common
+include ../lib.Makefile
 
 ###############################################################################
 
@@ -45,7 +27,7 @@ TEST_CERT_PATH := test/etcd-ut-certs/
 
 .PHONY: clean
 clean:
-	rm -rf .go-pkg-cache $(BINDIR) checkouts Makefile.common*
+	rm -rf .go-pkg-cache $(BINDIR) checkouts
 	find . -name '*.coverprofile' -type f -delete
 
 ###############################################################################
@@ -66,7 +48,7 @@ gen-files: gen-crds
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
 	rm -rf config
-	$(DOCKER_GO_BUILD) sh -c 'controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
 	@rm config/crd/_.yaml
 	patch -s -p0 < ./config.patch
 
@@ -75,7 +57,7 @@ gen-crds:
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--input-dirs "$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom" \
-		--bounding-dirs "github.com/projectcalico/libcalico-go" \
+		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
 		--output-file-base zz_generated.deepcopy'
 
 ./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
@@ -83,7 +65,7 @@ gen-crds:
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--input-dirs "$(PACKAGE_NAME)/lib/apis/v3" \
-		--bounding-dirs "github.com/projectcalico/libcalico-go" \
+		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
 		--output-file-base zz_generated.deepcopy'
 
 # Generate OpenAPI spec
@@ -145,7 +127,7 @@ ut:
 fv: fv-setup
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(PWD)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 	$(MAKE) stop-etcd-tls
@@ -159,7 +141,7 @@ fv-setup: run-etcd run-etcd-tls cluster-create run-coredns
 fv-fast:
 	$(DOCKER_RUN) --privileged \
 		-e KUBECONFIG=/kubeconfig.yaml \
-		-v $(PWD)/$(KUBECONFIG):/kubeconfig.yaml \
+		-v $(CURDIR)/$(KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(WHAT)'
 
@@ -260,11 +242,6 @@ st:
 ci: clean static-checks test
 
 ###############################################################################
-# Updating pins
-###############################################################################
-update-pins: update-api-pin
-
-###############################################################################
 # Release
 ###############################################################################
 
@@ -286,7 +263,7 @@ release-tag: release-prereqs release-notes
 release-notes: release-prereqs
 	echo "This release is for build purposes only and this should not be referenced externally." > release-notes-$(VERSION)
 	echo "libcalico is not a stable interface." >> release-notes-$(VERSION)
-	echo "If you need an API you should use [projectcalico/api](https://github.com/projectcalico/api)." >> release-notes-$(VERSION)
+	echo "If you need an API you should use [projectcalico/api](https://github.com/projectcalico/calico/api)." >> release-notes-$(VERSION)
 
 ## Pushes a github tag `make release-tag`.
 release-publish: release-prereqs
@@ -302,7 +279,3 @@ release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
-ifdef LOCAL_BUILD
-	$(error LOCAL_BUILD must not be set for a release)
-endif
-

@@ -1,8 +1,6 @@
-PACKAGE_NAME=github.com/projectcalico/kube-controllers
-GO_BUILD_VER=v0.59
+include ../metadata.mk
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_KUBE_CONTROLLERS_PROJECT_ID)
+PACKAGE_NAME = github.com/projectcalico/calico/kube-controllers
 
 # Makefile configuration options
 KUBE_CONTROLLERS_IMAGE  ?=calico/kube-controllers
@@ -10,39 +8,18 @@ FLANNEL_MIGRATION_IMAGE ?=calico/flannel-migration-controller
 BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 DEV_REGISTRIES          ?=docker.io quay.io
 
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-ifdef LOCAL_BUILD
-PHONY: set-up-local-build
-LOCAL_BUILD_DEP:=set-up-local-build
-
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
-	-v $(CURDIR)/../felix:/go/src/github.com/projectcalico/felix:rw
-
-$(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
-		-replace=github.com/projectcalico/felix=../felix
-endif
-
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
 ###############################################################################
-# Download and include Makefile.common
+# Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 MAKE_BRANCH?=$(GO_BUILD_VER)
 MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
 
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-include Makefile.common
+include ../lib.Makefile
 
 ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 # If building on amd64 omit the arch in the container name.
@@ -73,12 +50,6 @@ clean:
 	rm -f tests/crds.yaml
 	rm -rf tests/crds
 	rm -rf vendor
-	rm Makefile.common*
-
-###############################################################################
-# Updating pins
-###############################################################################
-update-pins: update-api-pin update-libcalico-pin update-felix-pin
 
 ###############################################################################
 # Building the binary
@@ -88,13 +59,13 @@ build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-bin/kube-controllers-linux-$(ARCH): $(LOCAL_BUILD_DEP) $(SRC_FILES)
+bin/kube-controllers-linux-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/
 
-bin/check-status-linux-$(ARCH): $(LOCAL_BUILD_DEP) $(SRC_FILES)
+bin/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
@@ -129,7 +100,7 @@ endif
 remote-deps: mod-download
 	@mkdir -p tests/crds/
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd/* tests/crds/; \
+		cp ../libcalico-go/config/crd/* tests/crds/; \
 		chmod +w tests/crds/*'
 
 ###############################################################################
@@ -148,7 +119,7 @@ check-boring-ssl: bin/kube-controllers-linux-amd64
 # Tests
 ###############################################################################
 ## Run the unit tests in a container.
-ut: $(LOCAL_BUILD_DEP)
+ut:
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'WHAT=$(WHAT) SKIP=$(SKIP) GINKGO_ARGS=$(GINKGO_ARGS) ./run-uts'
 
 .PHONY: fv
@@ -160,12 +131,12 @@ fv: remote-deps tests/fv/fv.test image
 		CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
-		CRDS=${PWD}/tests/crds \
-		CERTS=${PWD}/tests/certs \
+		CRDS=$(CURDIR)/tests/crds \
+		CERTS=$(CURDIR)/tests/certs \
 		GO111MODULE=on \
 		./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
 
-tests/fv/fv.test: $(LOCAL_BUILD_DEP) $(shell find ./tests -type f -name '*.go' -print)
+tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
 	# We pre-build the test binary so that we can run it outside a container and allow it
 	# to interact with docker.
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
@@ -264,7 +235,4 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
-ifdef LOCAL_BUILD
-	$(error LOCAL_BUILD must not be set for a release)
 endif

@@ -1,11 +1,6 @@
-PACKAGE_NAME?=github.com/projectcalico/pod2daemon
-GO_BUILD_VER?=v0.58
+include ../metadata.mk
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_POD2DAEMON_PROJECT_ID)
-
-# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
-SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PRIVATE_PROJECT_ID)
+PACKAGE_NAME = github.com/projectcalico/calico/pod2daemon
 
 RELEASE_REGISTRIES    ?= gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 RELEASE_BRANCH_PREFIX ?= release
@@ -23,19 +18,10 @@ endif
 BUILD_IMAGES ?=$(FLEXVOL_IMAGE)
 
 ###############################################################################
-# Download and include Makefile.common before anything else
+# Download and include ../lib.Makefile before anything else
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
 
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-include Makefile.common
+include ../lib.Makefile
 
 ###############################################################################
 

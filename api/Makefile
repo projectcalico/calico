@@ -1,35 +1,43 @@
+include ../metadata.mk
+
 PACKAGE_NAME    ?= github.com/projectcalico/api
-GO_BUILD_VER    ?= v0.59
-GOMOD_VENDOR    := false
-GIT_USE_SSH      = true
 LOCAL_CHECKS     = lint-cache-dir goimports check-copyright
 
 BINDIR ?= bin
 BUILD_DIR ?= build
 TOP_SRC_DIRS = pkg
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_API_PROJECT_ID)
-
-# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
-SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_LIBCALICO_GO_PROJECT_ID)
-
 ##############################################################################
-# Download and include Makefile.common before anything else
+# Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ##############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+# If ../lib.Makefile exists, we're running this logic from within the calico repository.
+# If it does not, then we're in the api repo and should use the local lib.Makefile.
+ifneq ("$(wildcard ../lib.Makefile)", "")
+include ../lib.Makefile
 
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
+# Override DOCKER_RUN from lib.Makefile. We need to trick this particular directory to think
+# that its package is github.com/projectcalico/api for easier mirroring.
+DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+	docker run --rm \
+		--net=host \
+		--init \
+		$(EXTRA_DOCKER_ARGS) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-e GOCACHE=/go-cache \
+		$(GOARCH_FLAGS) \
+		-e GOPATH=/go \
+		-e OS=$(BUILDOS) \
+		-e GOOS=$(BUILDOS) \
+		-e GOFLAGS=$(GOFLAGS) \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
+		-w /go/src/$(PACKAGE_NAME)
+else
+include ./lib.Makefile
+endif
 
-include Makefile.common
 
 build: gen-files examples
 
@@ -81,7 +89,7 @@ check-copyright:
 
 .PHONY: clean
 clean: clean-bin
-	rm -rf .lint-cache Makefile.common*
+	rm -rf .lint-cache
 
 clean-generated:
 	rm -f .generate_files
@@ -100,7 +108,7 @@ examples: bin/list-gnp
 bin/list-gnp: examples/list-gnp/main.go
 	@echo Building list-gnp example binary...
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	   	go build -v -o $@ -v $(LDFLAGS) "examples/list-gnp/main.go"' 
 
 WHAT?=.
