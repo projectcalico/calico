@@ -1,0 +1,446 @@
+syntax = "proto3";
+package felix;
+option go_package = "proto";
+
+service PolicySync {
+  // On this API, only the following payloads will be sent:
+  //  - InSync
+  //  - IPSetUpdate
+  //  - IPSetDeltaUpdate
+  //  - IPSetRemove
+  //  - ActiveProfileUpdate
+  //  - ActiveProfileRemove
+  //  - ActivePolicyUpdate
+  //  - ActivePolicyRemove
+  //  - WorkloadEndpointUpdate
+  //  - WorkloadEndpointRemove
+  //  - ServiceAccountUpdate
+  //  - ServiceAccountRemove
+  //  - NamespaceUpdate
+  //  - NamespaceRemove
+  rpc Sync(SyncRequest) returns (stream ToDataplane);
+}
+
+message SyncRequest {
+}
+
+// Rationale for having explicit Remove messages rather than sending and update
+// with empty payload (which is the convention we used to use in Felix):
+// protobuf and golang use zero values to indicate missing data and that makes
+// it impossible to tell the difference between an empty list of IP set members
+// and a deletion, for example.
+
+message ToDataplane {
+  // Sequence number incremented with each message.  Useful for correlating
+  // messages in logs.
+  uint64 sequence_number = 15;
+  oneof payload {
+    // InSync is sent once a complete snapshot of the datastore has been
+    // processed.  The dataplane driver should use it as a signal to
+    // resynchronise the dataplane.
+    InSync in_sync = 1;
+
+    // IPSetUpdate is sent when an IP set becomes active.  It contains the
+    // complete membership of the IP set.
+    IPSetUpdate ipset_update = 2;
+    // IPSetDeltaUpdates are sent after the first IPSetUpdate; they contain
+    // a list of IPs that should be added and removed from the IP set.
+    IPSetDeltaUpdate ipset_delta_update = 3;
+    // IPSet remove is sent when an IP set is no longer needed.
+    IPSetRemove ipset_remove = 4;
+
+    // ActiveProfileUpdate is sent when a profile becomes active or is updated.
+    ActiveProfileUpdate active_profile_update = 5;
+    // ActiveProfileRemove is sent when a profile becomes inactive or is
+    // deleted.
+    ActiveProfileRemove active_profile_remove = 6;
+
+    // ActivePolicyUpdate is sent when a policy becomes active or is updated.
+    ActivePolicyUpdate active_policy_update = 7;
+    // ActivePolicyRemove is sent when a policy becomes inactive or is
+    // deleted.
+    ActivePolicyRemove active_policy_remove = 8;
+
+    // HostEndpointUpdate is sent when a local host endpoint is added or
+    // updated.
+    HostEndpointUpdate host_endpoint_update = 9;
+    // HostEndpointRemove is sent when a local host endpoint is removed.
+    HostEndpointRemove host_endpoint_remove = 10;
+
+    // WorkloadEndpointUpdate is sent when a local workload endpoint is added
+    // or updated.
+    WorkloadEndpointUpdate workload_endpoint_update = 11;
+    // WorkloadEndpointRemove is sent when a local workload endpoint is
+    // removed.
+    WorkloadEndpointRemove workload_endpoint_remove = 12;
+
+    // ConfigUpdate is sent at start of day or when the config changes.
+    ConfigUpdate config_update = 13;
+
+    // HostMetadataUpdate is sent when a host IP is added or updated.  I.e. the
+    // IP used for BGP peering/IPIP.
+    HostMetadataUpdate host_metadata_update = 14;
+    // HostIPRemove is sent when a host IP is removed.
+    HostMetadataRemove host_metadata_remove = 18;
+
+    // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
+    IPAMPoolUpdate ipam_pool_update = 16;
+    // IPAMPoolRemove is sent when an IPAM pool is removed.
+    IPAMPoolRemove ipam_pool_remove = 17;
+
+    // ServiceAccountUpdate is sent when a ServiceAccount is added/updated.
+    ServiceAccountUpdate service_account_update = 19;
+    // ServiceAccountRemove is sent when a ServiceAccount is removed.
+    ServiceAccountRemove service_account_remove = 20;
+
+    // NamespaceUpdate is sent when a Namespace is added/updated.
+    NamespaceUpdate namespace_update = 21;
+    // NamespaceRemove is sent when a Namespace is removed.
+    NamespaceRemove namespace_remove = 22;
+  }
+}
+
+message FromDataplane {
+  uint64 sequence_number = 8;
+  oneof payload {
+    // ProcessStatusUpdate is sent as a periodic heartbeat.
+    ProcessStatusUpdate process_status_update = 3;
+
+    // HostEndpointStatusUpdate is sent when the oper status of an endpoint
+    // changes.
+    HostEndpointStatusUpdate host_endpoint_status_update = 4;
+    // HostEndpointStatusRemove is sent when an endpoint is removed to clean
+    // up its oper status entry.
+    HostEndpointStatusRemove host_endpoint_status_remove = 5;
+
+    // WorkloadEndpointStatusUpdate is sent when the oper status of an endpoint
+    // changes.
+    WorkloadEndpointStatusUpdate workload_endpoint_status_update = 6;
+    // WorkloadEndpointStatusRemove is sent when an endpoint is removed to
+    // clean up its oper status entry.
+    WorkloadEndpointStatusRemove workload_endpoint_status_remove = 7;
+  }
+}
+
+message ConfigUpdate {
+  map<string, string> config = 1;
+}
+
+message InSync {
+}
+
+message IPSetUpdate {
+  string id = 1;
+  repeated string members = 2;
+  enum IPSetType {
+    IP = 0;           // Each member is an IP address in dotted-decimal or IPv6 format.
+    IP_AND_PORT = 1;  // Each member is "<IP>,(tcp|udp):port".
+    NET = 2;          // Each member is a CIDR in dotted-decimal or IPv6 format.
+  }
+  IPSetType type = 3;
+}
+
+message IPSetDeltaUpdate {
+  string id = 1;
+  repeated string added_members = 2;
+  repeated string removed_members = 3;
+}
+
+message IPSetRemove {
+  string id = 1;
+}
+
+message ActiveProfileUpdate {
+  ProfileID id = 1;
+  Profile profile = 2;
+}
+
+message ActiveProfileRemove {
+  ProfileID id = 1;
+}
+
+message ProfileID {
+  string name = 1;
+}
+
+message Profile {
+  repeated Rule inbound_rules = 1;
+  repeated Rule outbound_rules = 2;
+}
+
+message ActivePolicyUpdate {
+  PolicyID id = 1;
+  Policy policy = 2;
+}
+
+message ActivePolicyRemove {
+  PolicyID id = 1;
+}
+
+message PolicyID {
+  string tier = 1;
+  string name = 2;
+}
+
+message Policy {
+  // If the Policy represents a NetworkPolicy, this contains the namespace that the policy came
+  // from.  Otherwise, empty.
+  string namespace = 5;
+
+  repeated Rule inbound_rules = 1;
+  repeated Rule outbound_rules = 2;
+  bool untracked = 3;
+  bool pre_dnat = 4;
+}
+
+enum IPVersion {
+  ANY = 0;
+  IPV4 = 4;
+  IPV6 = 6;
+}
+
+message Rule {
+  string action = 1;
+  IPVersion ip_version = 2;
+
+  Protocol protocol = 3;
+
+  repeated string src_net = 4;
+
+  // The list of ports is split into numeric and named ports, where named ports are represented
+  // by (IP, port) IP sets.  A packet matches this rule if it matches any numeric port range *or*
+  // any listed named port IP set.
+  repeated PortRange src_ports = 5;
+  repeated string src_named_port_ip_set_ids = 12;
+
+  repeated string dst_net = 6;
+  repeated PortRange dst_ports = 7;
+  repeated string dst_named_port_ip_set_ids = 13;
+  oneof icmp {
+    // Distinguish between a match on type only and type+code.  We can't use
+    // the fact that fields ar optional because Go can't distinguish 0 from
+    // "not-present".
+    int32 icmp_type = 8;
+    IcmpTypeAndCode icmp_type_code = 9;
+  }
+  repeated string src_ip_set_ids = 10;
+  repeated string dst_ip_set_ids = 11;
+
+  Protocol not_protocol = 102;
+
+  repeated string not_src_net = 103;
+  repeated PortRange not_src_ports = 104;
+  repeated string not_dst_net = 105;
+  repeated PortRange not_dst_ports = 106;
+  oneof not_icmp {
+    int32 not_icmp_type = 107;
+    IcmpTypeAndCode not_icmp_type_code = 108;
+  }
+  repeated string not_src_ip_set_ids = 109;
+  repeated string not_dst_ip_set_ids = 110;
+  repeated string not_src_named_port_ip_set_ids = 112;
+  repeated string not_dst_named_port_ip_set_ids = 113;
+
+  // These fields pass through the original selectors from the v3 datamodel unmodified as required
+  // for the policy sync API.
+  string original_src_selector = 114;
+  string original_dst_selector = 115;
+  string original_src_namespace_selector = 116;
+  string original_dst_namespace_selector = 117;
+  string original_not_src_selector = 118;
+  string original_not_dst_selector = 119;
+
+  // Pass through of the v3 datamodel service account match criteria.
+  ServiceAccountMatch src_service_account_match = 120;
+  ServiceAccountMatch dst_service_account_match = 121;
+
+  // Pass through of the v3 datamodel HTTP match criteria.
+  HTTPMatch http_match = 122;
+
+  // Changed to config option.
+  reserved 200;
+  reserved "log_prefix";
+
+  // An opaque ID/hash for the rule.
+  string rule_id = 201;
+}
+
+message ServiceAccountMatch {
+  string selector = 1;
+  repeated string names = 2;
+}
+
+message HTTPMatch {
+  repeated string methods = 1;
+  message PathMatch {
+    oneof path_match {
+      string exact = 1;
+      string prefix = 2;
+    }
+  }
+  repeated PathMatch paths = 2;
+}
+
+message IcmpTypeAndCode {
+  int32 type = 1;
+  int32 code = 2;
+}
+
+message Protocol {
+  oneof number_or_name {
+    int32 number = 1;
+    string name = 2;
+  }
+}
+
+// Individual ports are sent with first == last.
+message PortRange {
+  int32 first = 1;
+  int32 last = 2;
+}
+
+message WorkloadEndpointID {
+  // hostname not needed since this is implicitly a local endpoint?
+  reserved 1;
+  reserved "hostname";
+
+  string orchestrator_id = 2;
+  string workload_id = 3;
+  string endpoint_id = 4;
+}
+
+message WorkloadEndpointUpdate {
+  WorkloadEndpointID id = 1;
+  WorkloadEndpoint endpoint = 5;
+}
+
+message WorkloadEndpoint {
+  string state = 1;
+  string name = 2;
+  string mac = 3;
+  repeated string profile_ids = 4;
+  repeated string ipv4_nets = 5;
+  repeated string ipv6_nets = 6;
+  repeated TierInfo tiers = 7;
+  repeated NatInfo ipv4_nat = 8;
+  repeated NatInfo ipv6_nat = 9;
+}
+
+message WorkloadEndpointRemove {
+  WorkloadEndpointID id = 1;
+}
+
+message HostEndpointID {
+  // hostname not needed since this is implicitly a local endpoint?
+  reserved 1;
+  reserved "hostname";
+  string endpoint_id = 2;
+}
+
+message HostEndpointUpdate {
+  HostEndpointID id = 1;
+  HostEndpoint endpoint = 3;
+}
+
+message HostEndpoint {
+  string name = 1;
+  repeated string profile_ids = 2;
+  repeated TierInfo tiers = 3;
+  repeated TierInfo untracked_tiers = 6;
+  repeated TierInfo pre_dnat_tiers = 7;
+  repeated TierInfo forward_tiers = 8;
+  repeated string expected_ipv4_addrs = 4;
+  repeated string expected_ipv6_addrs = 5;
+}
+
+message HostEndpointRemove {
+  HostEndpointID id = 1;
+}
+
+message TierInfo {
+  string name = 1;
+  repeated string ingress_policies = 2;
+  repeated string egress_policies = 3;
+}
+
+message NatInfo {
+  string ext_ip = 1;
+  string int_ip = 2;
+}
+
+message ProcessStatusUpdate {
+  string iso_timestamp = 1;
+  double uptime = 2;
+}
+
+message HostEndpointStatusUpdate {
+  HostEndpointID id = 1;
+  EndpointStatus status = 2;
+}
+
+message EndpointStatus {
+  string status = 1;
+}
+
+message HostEndpointStatusRemove {
+  HostEndpointID id = 1;
+}
+
+message WorkloadEndpointStatusUpdate {
+  WorkloadEndpointID id = 1;
+  EndpointStatus status = 2;
+}
+message WorkloadEndpointStatusRemove {
+  WorkloadEndpointID id = 1;
+}
+
+message HostMetadataUpdate {
+  string hostname = 1;
+  string ipv4_addr = 2;
+}
+
+message HostMetadataRemove {
+  string hostname = 1;
+  string ipv4_addr = 2;
+}
+
+message IPAMPoolUpdate {
+  string id = 1;
+  IPAMPool pool = 2;
+}
+
+message IPAMPoolRemove {
+  string id = 1;
+}
+
+message IPAMPool {
+  string cidr = 1;
+  bool masquerade = 2;
+}
+
+message ServiceAccountUpdate {
+  ServiceAccountID id = 1;
+  map<string, string> labels = 2;
+}
+
+message ServiceAccountRemove {
+  ServiceAccountID id = 1;
+}
+
+message ServiceAccountID {
+  string namespace = 1;
+  string name = 2;
+}
+
+message NamespaceUpdate {
+  NamespaceID id = 1;
+  map<string, string> labels = 2;
+}
+
+message NamespaceRemove {
+  NamespaceID id = 1;
+}
+
+message NamespaceID {
+  string name = 1;
+}
