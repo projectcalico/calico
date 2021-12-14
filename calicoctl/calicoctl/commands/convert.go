@@ -36,7 +36,7 @@ import (
 func Convert(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> convert --filename=<FILENAME>
-                [--output=<OUTPUT>] [--ignore-validation]
+                [--output=<OUTPUT>] [--ignore-validation] [--allow-version-mismatch]
 
 Examples:
   # Convert the contents of policy.yaml to v3 policy.
@@ -51,7 +51,8 @@ Options:
                                 "-" loads from stdin.
   -o --output=<OUTPUT FORMAT>   Output format. One of: yaml or json.
                                 [Default: yaml]
-  --ignore-validation           Skip validation on the converted manifest.
+     --ignore-validation        Skip validation on the converted manifest.
+     --allow-version-mismatch   Allow client and cluster versions mismatch.
 
 
 Description:
@@ -70,6 +71,8 @@ Description:
 	if len(parsedArgs) == 0 {
 		return nil
 	}
+
+	// Note: Intentionally not check version mismatch for this command
 
 	var rp common.ResourcePrinter
 	output := parsedArgs["--output"].(string)

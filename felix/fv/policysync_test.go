@@ -482,6 +482,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 								"k8s/fv/fv-pod-0/eth0": {"notdefault"}}))
 							Eventually(mockWlClient[0].ActiveProfiles).Should(Equal(set.From(notDefProfID)))
 
+							Eventually(mockWlClient[2].ActiveProfiles).Should(Equal(set.From(defProfID)))
 							Consistently(mockWlClient[2].ActiveProfiles).Should(Equal(set.From(defProfID)))
 						})
 					})

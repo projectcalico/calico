@@ -40,10 +40,6 @@ for batch in "${batches[@]}"; do
     VM_NAME=$vm_name $my_dir/on-test-vm make --directory=${REPO_NAME} ut-bpf check-wireguard >& "$log_file" &
     pid=$!
     pids+=( $pid )
-  elif [ $batch = "xdp" ]; then
-    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv GINKGO_FOCUS=XDP >& "$log_file" &
-    pid=$!
-    pids+=( $pid )
   else
     VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=${REPO_NAME} fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=8 FV_BATCHES_TO_RUN="$batch" >& "$log_file" &
     pid=$!

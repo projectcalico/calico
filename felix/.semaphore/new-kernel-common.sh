@@ -2,4 +2,4 @@
 # kernel than Semaphore itself provides.
 
 num_fv_batches=${NUM_FV_BATCHES:-8}
-batches=(ut xdp $(seq 1 ${num_fv_batches}))
+batches=(ut $(seq 1 ${num_fv_batches}))

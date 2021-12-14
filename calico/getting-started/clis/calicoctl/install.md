@@ -29,8 +29,8 @@ In order to manage {{site.prodname}} APIs in the `projectcalico.org/v3` API grou
 `calicoctl` provides important validation and defaulting for these resources that is not available in `kubectl`. However, `kubectl`
 should still be used to manage other Kubernetes resources.
 
-> **Note**: If you would like to use `kubectl` to manage `projectcalico.org/v3` API resources, you can try the 
->           [Calico API server tech-preview]({{site.baseurl}}/getting-started/kubernetes/apiserver-preview).
+> **Note**: If you would like to use `kubectl` to manage `projectcalico.org/v3` API resources, you can use the 
+>           [Calico API server]({{site.baseurl}}/maintenance/install-apiserver).
 {: .alert .alert-info}
 
 > **Warning**: Never modify resources in the `crd.projectcalico.org` API group directly. These are internal data representations 
@@ -60,10 +60,10 @@ For step-by-step instructions, refer to the section that corresponds to your des
 > **Note**: Make sure you always install the version of `calicoctl` that matches the version of {{site.prodname}} running on your cluster.
 {: .alert .alert-info}
 
-- Install calicoctl as a binary on a single host (#install-calicoctl-as-a-binary-on-a-single-host)
-- Install calicoctl as a kubectl plugin on a single host (#install-calicoctl-as-a-kubectl-plugin-on-a-single-host)
-- Install calicoctl as a container on a single host (#install-calicoctl-as-a-container-on-a-single-host)
-- Install calicoctl as a Kubernetes pod (#install-calicoctl-as-a-kubernetes-pod)
+- [Install calicoctl as a binary on a single host](#install-calicoctl-as-a-binary-on-a-single-host)
+- [Install calicoctl as a kubectl plugin on a single host](#install-calicoctl-as-a-kubectl-plugin-on-a-single-host)
+- [Install calicoctl as a container on a single host](#install-calicoctl-as-a-container-on-a-single-host)
+- [Install calicoctl as a Kubernetes pod](#install-calicoctl-as-a-kubernetes-pod)
 
 #### Install calicoctl as a binary on a single host
 

@@ -22,7 +22,7 @@ endif
 
 CALICOCTL_IMAGE       ?=calico/ctl
 BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
-DEV_REGISTRIES        ?=quay.io registry.hub.docker.com
+DEV_REGISTRIES        ?=quay.io docker.io
 RELEASE_REGISTRIES    ?= $(DEV_REGISTRIES)
 RELEASE_BRANCH_PREFIX ?= release
 DEV_TAG_SUFFIX        ?= 0.dev
@@ -59,7 +59,8 @@ TEST_CONTAINER_NAME ?= calico/test
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/v3/calicoctl/commands.VERSION=$(GIT_VERSION) \
-	-X $(PACKAGE_NAME)/v3/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
+	-X $(PACKAGE_NAME)/v3/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
+	-X $(PACKAGE_NAME)/v3/calicoctl/commands/common.VERSION=$(GIT_VERSION) -s -w"
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -379,7 +380,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
 
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -410,7 +411,7 @@ release-publish-latest: release-prereqs
 	  echo "Version check passed\n"; \
 	fi
 
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=true CONFIRM=true
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:

@@ -43,6 +43,8 @@ section:
       path: /getting-started/openshift/requirements
     - title: Installation
       path: /getting-started/openshift/installation
+  - title: Rancher Kubernetes Engine
+    path: /getting-started/kubernetes/rancher
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:

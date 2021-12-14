@@ -65,7 +65,7 @@ EOF
 
 Grafana datasources are storage backends for your time series data. Each data source has a specific Query Editor that is customized for the features and capabilities that the particular data source exposes.
 
-> **Note**: Guide with greater detail about Grafana datasources can be found [at this link](https://grafana.com/docs/grafana/latest/features/datasources/){:target="_blank"}.
+> **Note**: Guide with greater detail about Grafana datasources can be found [at this link](https://grafana.com/docs/grafana/latest/datasources/){:target="_blank"}.
    {: .alert .alert-info}
 
 In this section you will use Grafana provisioning capabilities to create a prometheus datasource.

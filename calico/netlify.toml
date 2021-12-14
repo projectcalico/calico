@@ -70,6 +70,12 @@
    status = 200
    headers = {X-From = "Netlify"}
 
+# proxy redirects for website and manifests for v3.21
+[[redirects]]
+  from = "/archive/v3.21/*"
+  to = "https://calico-v3-21.netlify.app/archive/v3.21/:splat"
+  status = 200
+
 # proxy redirects for website and manifests for v3.20
 [[redirects]]
   from = "/archive/v3.20/*"

@@ -99,7 +99,11 @@ rules:
     resources:
     - felixconfigurations
     verbs:
+    - create
     - patch
+    - list
+    - get
+    - watch
   - apiGroups:
     - crd.projectcalico.org
     resources:

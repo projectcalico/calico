@@ -50,11 +50,11 @@ func main() {
     datastore    Calico datastore management.
 
 Options:
-  -h --help                 Show this screen.
-  -l --log-level=<level>    Set the log level (one of panic, fatal, error,
-                            warn, info, debug) [default: panic]
-  --context=<context>       The name of the kubeconfig context to use.
-  --allow-version-mismatch  Allow client and cluster versions mismatch.
+  -h --help                    Show this screen.
+  -l --log-level=<level>       Set the log level (one of panic, fatal, error,
+                               warn, info, debug) [default: panic]
+     --context=<context>       The name of the kubeconfig context to use.
+     --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   The %s is used to manage Calico network and security
@@ -101,18 +101,9 @@ Description:
 		command := arguments["<command>"].(string)
 		args := append([]string{command}, arguments["<args>"].([]string)...)
 
-		// A "datastore migrate import" command should skip version mismatch checking,
-		// since the datastore will not have the cluster version set
-		isImport := args[0] == "datastore" && args[1] == "migrate" && args[2] == "import"
-
-		// Check for client/cluster version mismatch. If a mismatch occurs, check for
-		// --allow-version-mismatch arg to override/fail.
-		allowMismatch, ok := arguments["--allow-version-mismatch"].(bool)
-		if (!ok || !allowMismatch) && !isImport {
-			if err = commands.VersionMismatch(args); err != nil {
-				fmt.Fprintf(os.Stderr, "%s\n Use --allow-version-mismatch to override.", err)
-				os.Exit(1)
-			}
+		// Propagate the '--allow-version-mismatch' arg to override version mismatch checking.
+		if allowMismatch, _ := arguments["--allow-version-mismatch"].(bool); allowMismatch {
+			args = append(args, "--allow-version-mismatch")
 		}
 
 		var err error

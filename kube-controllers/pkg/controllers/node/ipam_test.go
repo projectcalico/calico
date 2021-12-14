@@ -35,11 +35,54 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+const (
+	// Shorten the grace period of the controller to speed up tests. With a grace period
+	// of 1 second, we expect periodically triggered sync's every 500ms, and that IPs will
+	// move from candidate -> confirmed leak after one second.
+	gracePeriod = 1 * time.Second
+
+	// Asserting on GC output should allow for three grace periods to occur.
+	// This ensures we don't hit race conditions with the internal GC loop.
+	assertionTimeout = 3 * gracePeriod
+)
+
+// assertConsistenteState performs checks on the provided IPAM controller's internal
+// caches to ensure that they are consistent with each other. Useful for ensuring that
+// at any arbitrary point in time, we're not in an unknown state.
+func assertConsistentState(c *ipamController) {
+	// Stop the world so we can inspect it.
+	done := c.pause()
+	defer done()
+
+	// Make sure that allBlocks contains all of the blocks.
+	for cidr := range c.emptyBlocks {
+		_, ok := c.allBlocks[cidr]
+		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks", cidr))
+	}
+	for _, blocks := range c.blocksByNode {
+		for cidr := range blocks {
+			_, ok := c.allBlocks[cidr]
+			Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks", cidr))
+		}
+	}
+
+	// Make sure blocksByNode and nodesByBlock are consistent.
+	for n, blocks := range c.blocksByNode {
+		for cidr := range blocks {
+			ExpectWithOffset(1, c.nodesByBlock[cidr]).To(Equal(n), fmt.Sprintf("Block %s on wrong node", cidr))
+		}
+	}
+	for cidr, n := range c.nodesByBlock {
+		ExpectWithOffset(1, c.blocksByNode[n][cidr]).To(BeTrue(), fmt.Sprintf("Block %s not present in blocksByNode", cidr))
+	}
+}
+
 var _ = Describe("IPAM controller UTs", func() {
 
 	var c *ipamController
 	var cli client.Interface
 	var cs kubernetes.Interface
+	var stopChan chan struct{}
 
 	BeforeEach(func() {
 		// Create a fake clientset with nothing in it.
@@ -50,17 +93,28 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Config for the test.
 		cfg := config.NodeControllerConfig{
-			LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second},
+			LeakGracePeriod: &metav1.Duration{Duration: gracePeriod},
 		}
+
+		// stopChan is used in AfterEach to stop the controller in each test.
+		stopChan = make(chan struct{})
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
 		c = NewIPAMController(cfg, cli, cs)
 	})
 
+	AfterEach(func() {
+		// Assert test leaves the controller with a consistent internal state.
+		assertConsistentState(c)
+
+		// Stop the controller.
+		close(stopChan)
+	})
+
 	It("should handle node updates and maintain its node cache", func() {
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		calicoNodeName := "cname"
 		key := model.ResourceKey{Name: calicoNodeName, Kind: libapiv3.KindNode}
@@ -114,7 +168,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should handle adding and deleting blocks", func() {
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		// Add a new block with no allocations.
 		cidr := net.MustParseCIDR("10.0.0.0/30")
@@ -173,6 +227,9 @@ var _ = Describe("IPAM controller UTs", func() {
 			attrs:  b.Attributes[0].AttrSecondary,
 		}
 
+		// Unique ID we expect for this allocation.
+		id := fmt.Sprintf("%s/%s", handle, "10.0.0.0")
+
 		// Expect new entries in the internal maps.
 		Eventually(func() model.KVPair {
 			done := c.pause()
@@ -193,13 +250,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByBlock[blockCIDR][handle]
+			return c.allocationsByBlock[blockCIDR][id]
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(expectedAllocation))
-
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"][handle]
+			return c.allocationsByNode["cnode"][id]
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(expectedAllocation))
 
 		// Release the address from above and expect original state to be restored.
@@ -216,7 +272,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			done := c.pause()
 			defer done()
 			return c.nodesByBlock["10.0.0.0/30"]
-		}, 5*time.Second, time.Second).Should(Equal("cnode"))
+		}, assertionTimeout, time.Second).Should(Equal("cnode"))
 		Eventually(func() map[string]*allocation {
 			done := c.pause()
 			defer done()
@@ -225,13 +281,13 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByBlock[blockCIDR][handle]
+			return c.allocationsByBlock[blockCIDR][id]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"][handle]
+			return c.allocationsByNode["cnode"][id]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 
 		// Delete the block and expect everything to be cleaned up.
@@ -257,7 +313,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 	It("should handle node deletion properly", func() {
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		// Add a new block with one allocation.
 		idx := 0
@@ -308,10 +364,10 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.handlesReleased[handle]
-		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		Eventually(func() bool {
 			return fakeClient.affinityReleased("cnode")
-		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should clean up leaked IP addresses", func() {
@@ -329,7 +385,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		idx := 0
 		handle := "test-handle"
@@ -376,12 +432,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.handlesReleased[handle]
-		}, 15*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 
 		// The block should remain.
 		Consistently(func() bool {
 			return fakeClient.affinityReleased("cnode")
-		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
 	It("should handle blocks losing their affinity", func() {
@@ -400,11 +456,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod := v1.Pod{}
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname"
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		// Add a new block with one allocation, affine to cnode.
 		idx := 0
@@ -543,6 +600,175 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(""))
 	})
 
+	It("should NOT clean up IPs if another valid IP shares the handle", func() {
+		// Create Calico and k8s nodes for the test.
+		n := libapiv3.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		kn := v1.Node{}
+		kn.Name = "kname"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a pod for the allocation - the pod will have a single IP in its status, but there will be
+		// two IPs allocated which belong to the pod's handle - one "leaked" and one valid. This simulates
+		// a scenario where dual-stack is enabled in Calico, but not in Kubernetes, so two IPs will be allocated
+		// per-pod, but only one IP will show up in the k8s API.
+		pod := v1.Pod{}
+		pod.Name = "test-pod"
+		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname"
+		pod.Status.PodIP = "10.0.0.0"
+		pod.Status.PodIPs = []v1.PodIP{{IP: "10.0.0.0"}}
+		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Add a new block with the IPv4 address.
+		idx := 0
+		handle := "test-handle"
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:cnode"
+		key := model.BlockKey{CIDR: cidr}
+		b := model.AllocationBlock{
+			CIDR:        cidr,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					AttrPrimary: &handle,
+					AttrSecondary: map[string]string{
+						ipam.AttributeNode:      "cnode",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvp := model.KVPair{
+			Key:   key,
+			Value: &b,
+		}
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		// Allocate an IPv6 address to the pod as well.
+		cidrv6 := net.MustParseCIDR("fe80::00/126")
+		key2 := model.BlockKey{CIDR: cidrv6}
+		b2 := model.AllocationBlock{
+			CIDR:        cidrv6,
+			Affinity:    &aff,
+			Allocations: []*int{&idx, nil, nil, nil},
+			Unallocated: []int{1, 2, 3},
+			Attributes: []model.AllocationAttribute{
+				{
+					AttrPrimary: &handle,
+					AttrSecondary: map[string]string{
+						ipam.AttributeNode:      "cnode",
+						ipam.AttributePod:       pod.Name,
+						ipam.AttributeNamespace: pod.Namespace,
+					},
+				},
+			},
+		}
+		kvpV6 := model.KVPair{
+			Key:   key2,
+			Value: &b2,
+		}
+		updateV6 := bapi.Update{KVPair: kvpV6, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(updateV6)
+
+		// Start the controller.
+		c.Start(stopChan)
+
+		By("Waiting for internal caches to sync", func() {
+			Eventually(func() bool {
+				// v6 block is present.
+				blockCIDR := kvpV6.Key.(model.BlockKey).CIDR.String()
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() bool {
+				// v4 block is present.
+				blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[blockCIDR]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			Eventually(func() int {
+				// Should have two allocations.
+				done := c.pause()
+				defer done()
+				return len(c.allocationsByNode["cnode"])
+			}, 1*time.Second, 100*time.Millisecond).Should(Equal(2))
+		})
+
+		By("Marking the syncer in-sync", func() {
+			c.onStatusUpdate(bapi.InSync)
+		})
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		By("Verifying initial state", func() {
+			// The IPv4 IP should not be marked as a leak.
+			Consistently(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationsByNode["cnode"]["test-handle/10.0.0.0"]
+				return a.isConfirmedLeak()
+			}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+
+			// The IPv6 IP should be marked as a leak.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationsByNode["cnode"]["test-handle/fe80::"]
+				return a.isConfirmedLeak()
+			}, assertionTimeout, 1*time.Second).Should(BeTrue())
+
+			// The handle used for the allocation should not be considered a leak because the IPv4 address
+			// is still valid.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				return c.handleTracker.isConfirmedLeak(handle)
+			}, assertionTimeout, 1*time.Second).Should(BeFalse())
+
+			// Confirm the IPs were NOT released.
+			Eventually(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 500*time.Millisecond).Should(BeFalse())
+		})
+
+		By("Deleting the pod", func() {
+			// Deleting the pod should invalidate the IPv4 address, and result in both IPs being GC'd.
+			err = cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			c.OnKubernetesPodDeleted(fmt.Sprintf("%s/%s", pod.Namespace, pod.Name))
+		})
+
+		By("Verifying final state", func() {
+			// The handle should now be marked as a leak. This may take some time, as the IPv4 address needs to go
+			// through the grace period.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				return c.handleTracker.isConfirmedLeak(handle)
+			}, assertionTimeout, 1*time.Second).Should(BeTrue())
+
+			// Confirm the IPs were released.
+			Eventually(func() bool {
+				return fakeClient.handlesReleased[handle]
+			}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+		})
+	})
+
 	It("should not clean up leaked addresses if no grace period set", func() {
 		// Set the controller's grace period to 0.
 		c.config.LeakGracePeriod = &metav1.Duration{Duration: 0 * time.Second}
@@ -561,7 +787,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		idx := 0
 		handle := "test-handle"
@@ -608,12 +834,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.handlesReleased[handle]
-		}, 15*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 
 		// The block should remain.
 		Consistently(func() bool {
 			return fakeClient.affinityReleased("cnode")
-		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
 	It("should clean up empty blocks", func() {
@@ -632,11 +858,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod := v1.Pod{}
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname"
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		// Add a new block with one allocation, affine to cnode.
 		idx := 0
@@ -717,7 +944,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Eventually(func() bool {
 			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
-		}, 15*time.Second, 100*time.Millisecond).Should(BeTrue())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should NOT clean up empty blocks if the node is full", func() {
@@ -736,11 +963,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod := v1.Pod{}
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname"
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		// Add a new block that is full.
 		idx := 0
@@ -821,7 +1049,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Consistently(func() bool {
 			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
-		}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 	})
 
 	It("should NOT clean up all blocks assigned to a node", func() {
@@ -840,11 +1068,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod := v1.Pod{}
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
+		pod.Spec.NodeName = "kname"
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the controller.
-		c.Start(make(chan struct{}))
+		c.Start(stopChan)
 
 		// Add 5 empty blocks to the node.
 		for i := 0; i < 5; i++ {
@@ -893,15 +1122,15 @@ var _ = Describe("IPAM controller UTs", func() {
 			defer done()
 			return len(c.blocksByNode["cnode"])
 		}
-		Eventually(numBlocks, 15*time.Second, 100*time.Millisecond).Should(Equal(1))
-		Consistently(numBlocks, 5*time.Second, 100*time.Millisecond).Should(Equal(1))
+		Eventually(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
 		numBlocks = func() int {
 			done := c.pause()
 			defer done()
 			return len(c.emptyBlocks)
 		}
 		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
-		Consistently(numBlocks, 3*time.Second, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
 
 	})
 

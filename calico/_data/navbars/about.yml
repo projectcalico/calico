@@ -8,7 +8,7 @@ section:
 - title: Networking
   path: /about/about-networking
 - title: Kubernetes Networking
-  path: /about/about-kubernetes-networking
+  path: /about/about-k8s-networking
 - title: Network Policy
   path: /about/about-network-policy
 - title: Kubernetes Services

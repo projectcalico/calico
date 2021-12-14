@@ -13,6 +13,7 @@ const GroupName = "projectcalico.org"
 
 // SchemeGroupVersion is group version used to register these objects
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v3"}
+var SchemeGroupVersionInternal = schema.GroupVersion{Group: GroupName, Version: runtime.APIVersionInternal}
 
 var (
 	SchemeBuilder      runtime.SchemeBuilder
@@ -29,7 +30,7 @@ func init() {
 
 // Adds the list of known types to api.Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion,
+	all := []runtime.Object{
 		&NetworkPolicy{},
 		&NetworkPolicyList{},
 		&GlobalNetworkPolicy{},
@@ -54,8 +55,13 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClusterInformationList{},
 		&NetworkSet{},
 		&NetworkSetList{},
-	)
+	}
+	scheme.AddKnownTypes(SchemeGroupVersion, all...)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+
+	// At the moment the v3 API is identical to the internal API. Register the same set of definitions as the
+	// internal set, no conversions are required since they are identical.
+	scheme.AddKnownTypes(SchemeGroupVersionInternal, all...)
 	return nil
 }
 

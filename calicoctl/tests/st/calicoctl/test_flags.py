@@ -54,17 +54,22 @@ class TestCalicoctlCLIFlags(TestBase):
         # Assert that the error is not "version mismatch"
         rc.assert_error("Invalid datastore type")
 
-        rc = calicoctl("version", allowVersionMismatch=False)
+        # CalicoVersion is unset in the cluster, expect no error
+        rc = calicoctl("replace", data=node_name1_rev1, allowVersionMismatch=False)
         rc.assert_no_error()
 
+        # Set the correct CalicoVersion in the cluster
         output = set_cluster_version()
         output.assert_no_error()
 
-        rc = calicoctl("version", allowVersionMismatch=False)
-        rc.assert_no_error()
+        # CalicoVersion is correct in the cluster, expect no error
+        rc = calicoctl("replace", data=node_name1_rev1, allowVersionMismatch=False)
+        output.assert_no_error()
 
+        # Set an incorrect CalicoVersion in the cluster
         output = set_cluster_version("v0.0.0.1.2.3")
         output.assert_no_error()
 
-        rc = calicoctl("version", allowVersionMismatch=False)
+        # CalicoVersion is incorrect in the cluster, expect error
+        rc = calicoctl("replace", data=node_name1_rev1, allowVersionMismatch=False)
         rc.assert_error("Version mismatch.")

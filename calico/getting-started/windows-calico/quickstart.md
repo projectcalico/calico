@@ -267,6 +267,63 @@ The following steps install a Kubernetes cluster on a single Windows node, with 
 
   <label:EKS>
   <%
+1. Enable Direct Server Return (DSR) in the kube-proxy add-on. DSR is required for network policy enforcement for service cluster IPs.
+
+   - Begin editing the kube-proxy configmap:
+
+     ```bash
+     kubectl edit cm -n kube-system kube-proxy-config
+     ```
+
+   - Add the following data under `data.config`:
+
+     ```
+     winkernel:
+       enableDSR: true
+     featureGates:
+       WinDSR: true
+     ```
+
+   - Save your changes to the kube-proxy-config configmap. An example config might look like:
+
+     ```
+     apiVersion: v1
+     kind: ConfigMap
+     data:
+       config: |-
+         apiVersion: kubeproxy.config.k8s.io/v1alpha1
+         winkernel:
+           enableDSR: true
+         featureGates:
+           WinDSR: true
+         bindAddress: 0.0.0.0
+         ...
+     ```
+
+   - Trigger a rolling restart of the kube-proxy daemonset and watch the rollout.
+
+     ```bash
+     kubectl -n kube-system rollout restart ds kube-proxy
+     kubectl -n kube-system rollout status daemonset/kube-proxy
+     ```
+
+     An example of a successful kube-proxy rollout:
+
+     ```
+     $ kubectl rollout restart ds kube-proxy -n kube-system
+     daemonset.apps/kube-proxy restarted
+     $ kubectl rollout status -n kube-system daemonset/kube-proxy
+     Waiting for daemon set "kube-proxy" rollout to finish: 0 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 1 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 2 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 2 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 2 out of 3 new pods have been updated...
+     Waiting for daemon set "kube-proxy" rollout to finish: 2 of 3 updated pods are available...
+     daemon set "kube-proxy" successfully rolled out
+     ```
 
 1. Ensure that a Windows instance role has permissions to get `namespaces` and to get `secrets` in the calico-system namespace (or kube-system namespace if you are using a non operator-managed {{site.prodname}} installation.)
    One way to do this is by running the following comands to install the required permissions temporarily. Before running the commands, replace `<eks_node_name>` with the Kubernetes node name of the EKS Windows node, for example `ip-192-168-42-34.us-west-2.compute.internal`.

@@ -19,6 +19,7 @@ package fv_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -262,15 +263,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 		It("v3 node resource annotations should automatically heal", func() {
 			for _, felix := range felixes {
-				// Get the original public-key.
-				node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				wgPubKeyOrig := node.Status.WireguardPublicKey
+				var wgPubKeyOrig string
+				Eventually(func() error {
+					// Get the original public-key.
+					node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					wgPubKeyOrig = node.Status.WireguardPublicKey
+					if wgPubKeyOrig == "" {
+						return errors.New("node.Status.WireguardPublicKey not set yet")
+					}
 
-				// overwrite public-key by fake but valid Wireguard key.
-				node.Status.WireguardPublicKey = fakeWireguardPubKey
-				_, err = client.Nodes().Update(context.Background(), node, options.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
+					// overwrite public-key by fake but valid Wireguard key.
+					node.Status.WireguardPublicKey = fakeWireguardPubKey
+					_, err = client.Nodes().Update(context.Background(), node, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					return nil
+				}, "5s", "300ms").ShouldNot(HaveOccurred())
 
 				Eventually(func() string {
 					node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})

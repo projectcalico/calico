@@ -34,7 +34,7 @@ There are a few key differences to be aware of, if you are familiar with manifes
 
 #### Operator migration
 
-For new clusters, you can simply follow the steps in the [quickstart guide]({{site.prodname}}/getting-started/kubernetes/quickstart) to get started with the operator.
+For new clusters, you can simply follow the steps in the [quickstart guide]({{site.baseurl}}/getting-started/kubernetes/quickstart) to get started with the operator.
 
 For existing clusters using the `calico.yaml` manifest to install {{site.prodname}}, upon installing the operator, it will detect the existing {{site.prodname}} resources on the cluster
 and calculate how to take ownership of them. The operator will maintain existing customizations, if supported, and warn about any unsupported configurations that it detects.

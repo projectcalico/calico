@@ -133,3 +133,13 @@ func (p Protocol) SupportsPorts() bool {
 		return false
 	}
 }
+
+// OpenAPISchemaType is used by the kube-openapi generator when constructing
+// the OpenAPI spec of this type.
+// See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
+func (_ Protocol) OpenAPISchemaType() []string { return []string{"string"} }
+
+// OpenAPISchemaFormat is used by the kube-openapi generator when constructing
+// the OpenAPI spec of this type.
+// See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
+func (_ Protocol) OpenAPISchemaFormat() string { return "int-or-string" }

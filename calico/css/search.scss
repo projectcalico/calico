@@ -1,9 +1,5 @@
 @import "../css/variables";
 
-.search-container {
-    display: none;
-}
-
 mark {
     padding: 0;
 }
@@ -101,3 +97,88 @@ mark {
     color: #f69432;
     background-color: #f9f2f4;
 }
+
+.search input {
+    height: 25px;
+    }
+    
+    .ais-Pagination-link {
+      color:#0096db !important;
+      background-color: #fff;
+    }
+    
+    .ais-Pagination-link:hover {
+      color:#fff !important;
+      color:#ff9e16 !important;
+    }
+    
+    .ais-Pagination-item--selected .ais-Pagination-link {
+      color:#ff9e16 !important;
+    }
+    
+    .form-control-feedback-left{
+      position: absolute;
+      display: block;
+      width: 25px;
+      line-height: 25px;
+      text-align: center;
+      pointer-events: none;
+      color: #9D9D9D;
+    }
+    
+    .icon-search {
+      display: block;
+      width: 22px;
+      height: 14px;
+      border-radius: 1px;
+      margin: 0 0 1px 0;
+      color: #ddd;
+    }
+    
+    #mainpage-searchbox[readonly] {
+      background-color:#fff;
+    }
+    
+    input[type="search"] {
+      padding-left:25px;
+      margin-bottom:5px;
+      font-size: 2rem;
+      border:none;
+      border-right:1px solid #c4c8d8;
+      border-radius: 0;
+      height:50px;
+    }
+    
+    .ais-SearchBox-submit {
+      top: 25px;
+    }
+    
+    .ais-SearchBox-reset {
+      right: 3rem;
+      top:25px;
+    }
+    
+    .search-input-container {
+      width:90%;
+    }
+    
+    .modal-body {
+      padding-top:0;
+    }
+    
+    .search-modal-close {
+      position:absolute;
+      right:0;
+      top:0;
+      width: 10.2rem;
+      height: 5rem;
+      border:none;
+      border-top-left-radius: 0px;
+      border-bottom-left-radius: 0px;
+    }
+
+    .search {
+        @media (max-width: $screen-xs-max) {
+          display:none;
+        }
+      }

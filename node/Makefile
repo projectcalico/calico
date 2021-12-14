@@ -84,6 +84,16 @@ NODE_CONTAINER_BIN_DIR=./dist/bin/
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
 
+WINDOWS_GEN_INSTALL_SCRIPT_BIN := hack/bin/gen-install-calico-windows-script
+
+# Base URL of the Calico for Windows installation zip archive.
+# This can be overridden for dev releases.
+WINDOWS_ARCHIVE_BASE_URL ?= https://docs.projectcalico.org
+
+# This is either "Calico" or "Calico Enterprise"
+WINDOWS_INSTALL_SCRIPT_PRODUCT ?= Calico
+WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
+
 # Variables for the Windows packaging.
 # Name of the Windows release ZIP archive.
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
@@ -159,6 +169,8 @@ clean:
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
+	rm -f $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
+	rm -f $(WINDOWS_INSTALL_SCRIPT)
 	rm -rf filesystem/included-source
 	rm -rf dist
 	rm -rf filesystem/etc/calico/confd/conf.d filesystem/etc/calico/confd/config filesystem/etc/calico/confd/templates
@@ -520,6 +532,9 @@ endif
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	# Generate the install-calico-windows.ps1 script
+	$(MAKE) install-calico-windows-script
+	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
 
 ## Produces the Windows ZIP archive for the release.
@@ -555,6 +570,11 @@ endif
 	ghr -u projectcalico -r node \
 		-n $(VERSION) \
 		$(VERSION) $(WINDOWS_ARCHIVE)
+
+	# Update the release with the install-calico-windows.ps1 file too.
+	ghr -u projectcalico -r node \
+		-n $(VERSION) \
+		$(VERSION) $(WINDOWS_INSTALL_SCRIPT)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -642,6 +662,21 @@ build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm-$(WINDOWS
 $(WINDOWS_ARCHIVE_BINARY): $(WINDOWS_BINARY)
 	cp $< $@
 
+# Build the tool to generate the install-calico-windows.ps1 installation script.
+$(WINDOWS_GEN_INSTALL_SCRIPT_BIN):
+	mkdir -p hack/bin
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
+	$(GIT_CONFIG_SSH) \
+	go build -o $@ ./hack/gen-install-calico-windows-script'
+
+# Generate the install-calico-windows.ps1 installation script.
+# For dev releases, override WINDOWS_ARCHIVE_BASE_URL.
+install-calico-windows-script $(WINDOWS_INSTALL_SCRIPT): $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
+	$(WINDOWS_GEN_INSTALL_SCRIPT_BIN) \
+		-product "$(WINDOWS_INSTALL_SCRIPT_PRODUCT)" \
+		-version $(GIT_VERSION) \
+		-templatePath windows-packaging/install-calico-windows.ps1.tpl \
+		-baseUrl $(WINDOWS_ARCHIVE_BASE_URL) > $(WINDOWS_INSTALL_SCRIPT)
 
 ###############################################################################
 # Utilities

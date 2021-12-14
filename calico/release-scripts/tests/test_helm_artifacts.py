@@ -22,8 +22,8 @@ chart_version = versions[0]["chart"]["version"]
 print("[INFO] using calico/node version for Helm artifacts: %s" % version)
 print("[INFO] using chart version for Helm artifact: %s" % chart_version)
 chart_url = (
-    "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
-    % (version, version)
+    "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s-%s.tgz"
+    % (version, version, chart_version)
 )
 
 
@@ -34,7 +34,7 @@ def test_calico_release_has_helm_chart():
 
 # Note: this test is only valid for versions >= v3.19.3
 def test_calico_release_in_helm_index():
-    req = requests.get("https://docs.projectcalico.org/charts/index.html")
+    req = requests.get("https://docs.projectcalico.org/charts/index.yaml")
     assert req.status_code == 200, "Could not get helm index"
     index = yaml.safe_load(req.text)
     # Find entry

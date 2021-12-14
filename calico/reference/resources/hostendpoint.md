@@ -28,6 +28,10 @@ aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `
 
 If a host endpoint is created and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
 For a named host endpoint (i.e. a host endpoint representing a specific interface), {{site.prodname}} blocks traffic only to/from the interface specified in the host endpoint. Traffic to/from other interfaces is ignored.
+
+> **Note**: Host endpoints with `interfaceName: *` do not support [untracked policy]({{ site.baseurl }}/security/high-connection-workloads).
+{: .alert .alert-info}
+
 For a wildcard host endpoint (i.e. a host endpoint representing all of a host's interfaces), {{site.prodname}} blocks traffic to/from _all_ interfaces on the host (except for traffic allowed by failsafe rules).
 
 However, profiles can be used in conjunction with host endpoints to modify default behavior of external traffic to/from the host in the absence of network policy.

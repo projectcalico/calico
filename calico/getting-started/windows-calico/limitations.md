@@ -8,9 +8,9 @@ canonical_url: '/getting-started/windows-calico/limitations'
 
 | Feature             |                                                              |
 | ------------------- | ------------------------------------------------------------ |
-| Distributions       | **Supported:**<br />- EKS ([non-production only](#service-clusterips-incompatible-with-selectors-on-pod-ips-in-network-policy))<br />- AKS<br />- AWS<br />- GCE<br />- Azure<br />- Kubernetes on-premises<br />- Kubernetes on DigitalOcean<br />- OpenShift<br />- Rancher RKE<br /><br />**Not supported**:<br />- GKE<br />- IKS<br />- OpenStack<br />- K3 clusters |
+| Distributions       | **Supported:**<br />- EKS<br />- AKS<br />- AWS<br />- GCE<br />- Azure<br />- Kubernetes on-premises<br />- Kubernetes on DigitalOcean<br />- OpenShift<br />- Rancher RKE<br /><br />**Not supported**:<br />- GKE<br />- IKS<br />- OpenStack<br />- K3 clusters |
 | Install and upgrade | **Supported**: Manifest with manual upgrade<br /><br />**Not supported**: <br />- Operator install<br />- Non-cluster hosts<br />- Typha component for scaling (Linux-based feature) |
-| Networking          | **Supported**:<br />- Calico VXLAN, no cross-subnet or VXLAN MTU settings with [limitations](#vxlan-networking-limitations)<br />- Calico non-overlay mode with BGP peering with [limitations](#bgp-networking-limitations)<br />- IPv4<br /><br />**Not supported**: <br />- Overlay mode with BGP peering<br />- IP in IP overlay with BPG routing<br />- Cross-subnet support and MTU setting for VXLAN<br />- IPv6 and dual stack<br />- Service advertisement |
+| Networking          | **Supported**:<br />- Calico VXLAN, no cross-subnet or VXLAN MTU settings with [limitations](#{{site.prodname}}-vxlan-networking-limitations)<br />- Calico non-overlay mode with BGP peering with [limitations](#{{site.prodname}}-bgp-networking-limitations)<br />- IPv4<br /><br />**Not supported**: <br />- Overlay mode with BGP peering<br />- IP in IP overlay with BPG routing<br />- Cross-subnet support and MTU setting for VXLAN<br />- IPv6 and dual stack<br />- Service advertisement |
 | Security            | **Not supported**: <br />- Application Layer Policy (ALP) for Istio<br />- Policy for hosts (host endpoints, including automatic host endpoints)<br />- Encryption with WireGuard |
 | Metrics             | **Not supported**: Prometheus monitoring                     |
 | eBPF                | **Not supported**: (Linux-based feature)                     |
@@ -120,11 +120,6 @@ Felix must reprogram the HNS ACL policy attached to the pod. This reprogramming 
 **Windows 1809 prior to build 17763.1432**
 
 On Windows nodes, kube-proxy unconditionally applies source NAT to traffic from local pods to service ClusterIPs. This means that, at the destination pod, where policy is applied, the traffic appears to come from the source host rather than the source pod. In turn, this means that a network policy with a source selector matching the source pod will not match the expected traffic.
-
-**Managed EKS**
-
-Currently, managed EKS Windows nodes ship with kube-proxy WinDSR disabled. However, WinDSR is required for network policy to be enforced for service ClusterIPs.
-This means that managed EKS is not currently recommended for production usage.
 
 ### Network policy and using selectors
 

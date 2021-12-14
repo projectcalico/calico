@@ -18,7 +18,7 @@ OPERATOR_EXCLUDED_IMAGES = EXCLUDED_IMAGES + [
 ]
 
 GCR_IMAGES = ["calico/node", "calico/cni", "calico/typha"]
-EXPECTED_ARCHS = ["amd64", "arm64", "ppc64le"]
+EXPECTED_ARCHS = ["amd64", "arm64", "arm", "ppc64le"]
 
 VERSIONS_WITHOUT_IMAGE_LIST = [
     "v1.13",
@@ -127,7 +127,7 @@ def test_gcr_release_tag_present():
                 for platform in metadata["manifests"]:
                     found_archs.append(platform["platform"]["architecture"])
 
-                assert EXPECTED_ARCHS == found_archs
+                assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
 
 def test_docker_release_tag_present():

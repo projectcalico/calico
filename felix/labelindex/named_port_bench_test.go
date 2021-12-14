@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,8 +68,20 @@ func benchmarkWorkloadUpdates(b *testing.B, numSels int) {
 		idx.UpdateIPSet(fmt.Sprintf("ipset-%d", i), sel, ProtocolNone, "")
 	}
 
-	updates := make([]api.Update, b.N)
+	updates := makeEndpointUpdates(b.N)
+
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
+		idx.OnUpdate(updates[n])
+	}
+
+	runtime.KeepAlive(lastID)
+	runtime.KeepAlive(lastMember)
+}
+
+func makeEndpointUpdates(num int) []api.Update {
+	updates := make([]api.Update, num)
+	for n := 0; n < num; n++ {
 		key := model.WorkloadEndpointKey{
 			Hostname:       "host",
 			OrchestratorID: "k8s",
@@ -86,10 +98,80 @@ func benchmarkWorkloadUpdates(b *testing.B, numSels int) {
 				Value: &model.WorkloadEndpoint{
 					Labels:     map[string]string{"alpha": "beta"},
 					IPv4Nets:   []calinet.IPNet{ipNet},
-					ProfileIDs: []string{"default"},
+					ProfileIDs: []string{fmt.Sprintf("namespace-%d", n)},
 				},
 			},
 		}
+	}
+	return updates
+}
+
+func BenchmarkParentUpdates100(b *testing.B) {
+	benchmarkParentUpdates(b, 100, 100)
+}
+
+func BenchmarkParentUpdates1000(b *testing.B) {
+	benchmarkParentUpdates(b, 100, 1000)
+}
+
+func BenchmarkParentUpdates10000(b *testing.B) {
+	benchmarkParentUpdates(b, 100, 10000)
+}
+
+func BenchmarkParentUpdates100000(b *testing.B) {
+	benchmarkParentUpdates(b, 100, 100000)
+}
+
+func benchmarkParentUpdates(b *testing.B, numSels, numEndpoints int) {
+	var lastID string
+	var lastMember IPSetMember
+
+	logLevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.InfoLevel)
+	defer logrus.SetLevel(logLevel)
+
+	idx := NewSelectorAndNamedPortIndex()
+	idx.OnMemberAdded = func(ipSetID string, member IPSetMember) {
+		lastID = ipSetID
+		lastMember = member
+	}
+	idx.OnMemberRemoved = func(ipSetID string, member IPSetMember) {
+		lastID = ipSetID
+		lastMember = member
+	}
+
+	// Create the endpoints first.
+	updates := makeEndpointUpdates(numEndpoints)
+	for _, upd := range updates {
+		idx.OnUpdate(upd)
+	}
+
+	for i := 0; i < numSels; i++ {
+		sel, err := selector.Parse(fmt.Sprintf(`projectcalico.org/name == "namespace-%d"`, i))
+		if err != nil {
+			b.Fatal(err)
+		}
+		idx.UpdateIPSet(fmt.Sprintf("ipset-%d", i), sel, ProtocolNone, "")
+	}
+
+	updates = nil
+	for n := 0; n < b.N; n++ {
+		name := fmt.Sprintf("namespace-%d", n%b.N)
+		key := model.ProfileLabelsKey{
+			ProfileKey: model.ProfileKey{
+				Name: name,
+			},
+		}
+		updates = append(updates, api.Update{
+			KVPair: model.KVPair{
+				Key: key,
+				Value: map[string]string{
+					"projectcalico.org/name": name,
+					"update-idx":             fmt.Sprint(n),
+					"something-shared":       "foo",
+				},
+			},
+		})
 	}
 
 	b.ResetTimer()

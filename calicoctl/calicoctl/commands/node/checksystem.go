@@ -64,7 +64,7 @@ var overrideBootFile = ""
 // Checksystem checks host system for compatible versions
 func Checksystem(args []string) error {
 	doc := `Usage:
-  <BINARY_NAME> node checksystem [--kernel-config=<kernel-config>]
+  <BINARY_NAME> node checksystem [--kernel-config=<kernel-config>] [--allow-version-mismatch]
 
 Options:
   -h --help                             Show this screen.
@@ -76,6 +76,7 @@ Options:
                                           "/usr/src/linux-kernelVersion/.config",
                                           "/usr/src/linux-headers-kernelVersion/.config",
                                           "/lib/modules/kernelVersion/build/.config"
+     --allow-version-mismatch           Allow client and cluster versions mismatch.
 
 Description:
   Check the compatibility of this compute host to run a Calico node instance.
@@ -91,6 +92,9 @@ Description:
 	if len(parsedArgs) == 0 {
 		return nil
 	}
+
+	// Note: Intentionally not check version mismatch for this command
+
 	if parsedArgs["--kernel-config"] != nil {
 		overrideBootFile = parsedArgs["--kernel-config"].(string)
 	}
@@ -204,8 +208,8 @@ func checkKernelModules() error {
 					printResult(v, "OK")
 				} else if modulesBootPath != "" && checkModule(modulesBootPath, i, kernelVersionStr, "^%s=.") == nil {
 					printResult(v, "OK")
-				// Since `xt_icmp` and `xt_icmp6` are not available in most distros anymore as a last resort
-				// this `if` condition will check currently loaded modules in iptables using `ip_tables_matches` file.
+					// Since `xt_icmp` and `xt_icmp6` are not available in most distros anymore as a last resort
+					// this `if` condition will check currently loaded modules in iptables using `ip_tables_matches` file.
 				} else if checkModule(modulesLoadedIPtables, i, kernelVersionStr, "^%s$") == nil {
 					printResult(v, "OK")
 				} else {
