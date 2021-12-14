@@ -1,0 +1,1768 @@
+<p>Packages:</p>
+<ul>
+<li>
+<a href="#operator.tigera.io%2fv1">operator.tigera.io/v1</a>
+</li>
+</ul>
+<h2 id="operator.tigera.io/v1">operator.tigera.io/v1</h2>
+<p>API Schema definitions for configuring the installation of Calico and Calico Enterprise</p>
+Resource Types:
+<ul><li>
+<a href="#operator.tigera.io/v1.ImageSet">ImageSet</a>
+</li><li>
+<a href="#operator.tigera.io/v1.Installation">Installation</a>
+</li><li>
+<a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>
+</li></ul>
+<h3 id="operator.tigera.io/v1.ImageSet">ImageSet
+</h3>
+<p>ImageSet is used to specify image digests for the images that the operator deploys.
+The name of the ImageSet is expected to be in the format <code>&lt;variang&gt;-&lt;release&gt;</code>.
+The <code>variant</code> used is <code>enterprise</code> if the InstallationSpec Variant is
+<code>TigeraSecureEnterprise</code> otherwise it is <code>calico</code>.
+The <code>release</code> must match the version of the variant that the operator is built to deploy,
+this version can be obtained by passing the <code>--version</code> flag to the operator binary.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code><br>
+string</td>
+<td>
+<code>
+operator.tigera.io/v1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code><br>
+string
+</td>
+<td><code>ImageSet</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ImageSetSpec">
+ImageSetSpec
+</a>
+</em>
+</td>
+<td>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>images</code><br>
+<em>
+<a href="#operator.tigera.io/v1.Image">
+[]Image
+</a>
+</em>
+</td>
+<td>
+<p>Images is the list of images to use digests. All images that the operator will deploy
+must be specified.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.Installation">Installation
+</h3>
+<p>Installation configures an installation of Calico or Calico Enterprise. At most one instance
+of this resource is supported. It must be named &ldquo;default&rdquo;. The Installation API installs core networking
+and network policy components, and provides general install-time configuration.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code><br>
+string</td>
+<td>
+<code>
+operator.tigera.io/v1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code><br>
+string
+</td>
+<td><code>Installation</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code><br>
+<em>
+<a href="#operator.tigera.io/v1.InstallationSpec">
+InstallationSpec
+</a>
+</em>
+</td>
+<td>
+<p>Specification of the desired state for the Calico or Calico Enterprise installation.</p>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>variant</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ProductVariant">
+ProductVariant
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
+Default: Calico</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>registry</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Registry is the default Docker registry used for component Docker images. If specified,
+all images will be pulled from this registry. If not specified then the default registries
+will be used. A special case value, UseDefault, is supported to explicitly specify
+the default registries will be used.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePath allows for the path part of an image to be specified. If specified
+then the specified value will be used as the image path for each image. If not specified
+or empty, the default for each image will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image path will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePrefix</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePrefix allows for the prefix part of an image to be specified. If specified
+then the given value will be used as a prefix on each image. If not specified
+or empty, no prefix will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image prefix will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePullSecrets</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
+[]Kubernetes core/v1.LocalObjectReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePullSecrets is an array of references to container registry pull secrets to use. These are
+applied to all images to be pulled.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>kubernetesProvider</code><br>
+<em>
+<a href="#operator.tigera.io/v1.Provider">
+Provider
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KubernetesProvider specifies a particular provider of the Kubernetes platform and enables provider-specific configuration.
+If the specified value is empty, the Operator will attempt to automatically determine the current provider.
+If the specified value is not empty, the Operator will still attempt auto-detection, but
+will additionally compare the auto-detected value to the specified value to confirm they match.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cni</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CNISpec">
+CNISpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CNI specifies the CNI that will be used by this installation.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>calicoNetwork</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">
+CalicoNetworkSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CalicoNetwork specifies networking configuration options for Calico.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>typhaAffinity</code><br>
+<em>
+<a href="#operator.tigera.io/v1.TyphaAffinity">
+TyphaAffinity
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaAffinity allows configuration of node affinity characteristics for Typha pods.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>controlPlaneNodeSelector</code><br>
+<em>
+map[string]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ControlPlaneNodeSelector is used to select control plane nodes on which to run Calico
+components. This is globally applied to all resources created by the operator excluding daemonsets.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>controlPlaneTolerations</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
+[]Kubernetes core/v1.Toleration
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ControlPlaneTolerations specify tolerations which are then globally applied to all resources
+created by the operator.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeMetricsPort</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeMetricsPort specifies which port calico/node serves prometheus metrics on. By default, metrics are not enabled.
+If specified, this overrides any FelixConfiguration resources which may exist. If omitted, then
+prometheus metrics may still be configured through FelixConfiguration.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>typhaMetricsPort</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaMetricsPort specifies which port calico/typha serves prometheus metrics on. By default, metrics are not enabled.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flexVolumePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
+enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. The default is based on the
+kubernetesProvider.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeUpdateStrategy</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#daemonsetupdatestrategy-v1-apps">
+Kubernetes apps/v1.DaemonSetUpdateStrategy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeUpdateStrategy can be used to customize the desired update strategy, such as the MaxUnavailable
+field.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>componentResources</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ComponentResource">
+[]ComponentResource
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ComponentResources can be used to customize the resource requirements for each component.
+Node, Typha, and KubeControllers are supported for installations.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>certificateManagement</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CertificateManagement">
+CertificateManagement
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code><br>
+<em>
+<a href="#operator.tigera.io/v1.InstallationStatus">
+InstallationStatus
+</a>
+</em>
+</td>
+<td>
+<p>Most recently observed state for the Calico or Calico Enterprise installation.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.TigeraStatus">TigeraStatus
+</h3>
+<p>TigeraStatus represents the most recently observed status for Calico or a Calico Enterprise functional area.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code><br>
+string</td>
+<td>
+<code>
+operator.tigera.io/v1
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code><br>
+string
+</td>
+<td><code>TigeraStatus</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code><br>
+<em>
+<a href="#operator.tigera.io/v1.TigeraStatusSpec">
+TigeraStatusSpec
+</a>
+</em>
+</td>
+<td>
+<br/>
+<br/>
+<table>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code><br>
+<em>
+<a href="#operator.tigera.io/v1.TigeraStatusStatus">
+TigeraStatusStatus
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.BGPOption">BGPOption
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>BGPOption describes the mode of BGP to use.</p>
+<p>One of: Enabled, Disabled</p>
+<h3 id="operator.tigera.io/v1.CNIPluginType">CNIPluginType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CNISpec">CNISpec</a>)
+</p>
+<p>CNIPluginType describes the type of CNI plugin used.</p>
+<p>One of: Calico, GKE, AmazonVPC, AzureVNET</p>
+<h3 id="operator.tigera.io/v1.CNISpec">CNISpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>CNISpec contains configuration for the CNI plugin.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CNIPluginType">
+CNIPluginType
+</a>
+</em>
+</td>
+<td>
+<p>Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
+* For KubernetesProvider GKE, this field defaults to GKE.
+* For KubernetesProvider AKS, this field defaults to AzureVNET.
+* For KubernetesProvider EKS, this field defaults to AmazonVPC.
+* If aws-node daemonset exists in kube-system when the Installation resource is created, this field defaults to AmazonVPC.
+* For all other cases this field defaults to Calico.</p>
+<p>For the value Calico, the CNI plugin binaries and CNI config will be installed as part of deployment,
+for all other values the CNI plugin binaries and CNI config is a dependency that is expected
+to be installed separately.</p>
+<p>Default: Calico</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ipam</code><br>
+<em>
+<a href="#operator.tigera.io/v1.IPAMSpec">
+IPAMSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>IPAM specifies the pod IP address management that will be used in the Calico or
+Calico Enterprise installation.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>CalicoNetworkSpec specifies configuration options for Calico provided pod networking.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>linuxDataplane</code><br>
+<em>
+<a href="#operator.tigera.io/v1.LinuxDataplaneOption">
+LinuxDataplaneOption
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>LinuxDataplane is used to select the dataplane used for Linux nodes. In particular, it
+causes the operator to add required mounts and environment variables for the particular dataplane.
+If not specified, iptables mode is used.
+Default: Iptables</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>bgp</code><br>
+<em>
+<a href="#operator.tigera.io/v1.BGPOption">
+BGPOption
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>BGP configures whether or not to enable Calico&rsquo;s BGP capabilities.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ipPools</code><br>
+<em>
+<a href="#operator.tigera.io/v1.IPPool">
+[]IPPool
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>IPPools contains a list of IP pools to create if none exist. At most one IP pool of each
+address family may be specified. If omitted, a single pool will be configured if needed.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>mtu</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>MTU specifies the maximum transmission unit to use on the pod network.
+If not specified, Calico will perform MTU auto-detection based on the cluster network.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeAddressAutodetectionV4</code><br>
+<em>
+<a href="#operator.tigera.io/v1.NodeAddressAutodetection">
+NodeAddressAutodetection
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeAddressAutodetectionV4 specifies an approach to automatically detect node IPv4 addresses. If not specified,
+will use default auto-detection settings to acquire an IPv4 address for each node.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeAddressAutodetectionV6</code><br>
+<em>
+<a href="#operator.tigera.io/v1.NodeAddressAutodetection">
+NodeAddressAutodetection
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
+IPv6 addresses will not be auto-detected.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>hostPorts</code><br>
+<em>
+<a href="#operator.tigera.io/v1.HostPortsType">
+HostPortsType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>HostPorts configures whether or not Calico will support Kubernetes HostPorts. Valid only when using the Calico CNI plugin.
+Default: Enabled</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>multiInterfaceMode</code><br>
+<em>
+<a href="#operator.tigera.io/v1.MultiInterfaceMode">
+MultiInterfaceMode
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>MultiInterfaceMode configures what will configure multiple interface per pod. Only valid for Calico Enterprise installations
+using the Calico CNI plugin.
+Default: None</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerIPForwarding</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ContainerIPForwardingType">
+ContainerIPForwardingType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ContainerIPForwarding configures whether ip forwarding will be enabled for containers in the CNI configuration.
+Default: Disabled</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.CertificateManagement">CertificateManagement
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>caCert</code><br>
+<em>
+[]byte
+</em>
+</td>
+<td>
+<p>Certificate of the authority that signs the CertificateSigningRequests in PEM format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>signerName</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>When a CSR is issued to the certificates.k8s.io API, the signerName is added to the request in order to accommodate for clusters
+with multiple signers.
+Must be formatted as: <code>&lt;my-domain&gt;/&lt;my-signername&gt;</code>.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>keyAlgorithm</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Specify the algorithm used by pods to generate a key pair that is associated with the X.509 certificate request.
+Default: RSAWithSize2048</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>signatureAlgorithm</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Specify the algorithm used for the signature of the X.509 certificate request.
+Default: SHA256WithRSA</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ComponentName">ComponentName
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ComponentResource">ComponentResource</a>)
+</p>
+<p>ComponentName represents a single component.</p>
+<p>One of: Node, Typha, KubeControllers</p>
+<h3 id="operator.tigera.io/v1.ComponentResource">ComponentResource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>The ComponentResource struct associates a ResourceRequirements with a component by name</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>componentName</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ComponentName">
+ComponentName
+</a>
+</em>
+</td>
+<td>
+<p>ComponentName is an enum which identifies the component</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>resourceRequirements</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements
+</a>
+</em>
+</td>
+<td>
+<p>ResourceRequirements allows customization of limits and requests for compute resources such as cpu and memory.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ConditionStatus">ConditionStatus
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
+</p>
+<p>ConditionStatus represents the status of a particular condition. A condition may be one of: True, False, Unknown.</p>
+<h3 id="operator.tigera.io/v1.ContainerIPForwardingType">ContainerIPForwardingType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>ContainerIPForwardingType specifies whether the CNI config for container ip forwarding is enabled.</p>
+<h3 id="operator.tigera.io/v1.EncapsulationType">EncapsulationType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.IPPool">IPPool</a>)
+</p>
+<p>EncapsulationType is the type of encapsulation to use on an IP pool.</p>
+<p>One of: IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None</p>
+<h3 id="operator.tigera.io/v1.HostPortsType">HostPortsType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>HostPortsType specifies host port support.</p>
+<p>One of: Enabled, Disabled</p>
+<h3 id="operator.tigera.io/v1.IPAMPluginType">IPAMPluginType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.IPAMSpec">IPAMSpec</a>)
+</p>
+<h3 id="operator.tigera.io/v1.IPAMSpec">IPAMSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CNISpec">CNISpec</a>)
+</p>
+<p>IPAMSpec contains configuration for pod IP address management.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code><br>
+<em>
+<a href="#operator.tigera.io/v1.IPAMPluginType">
+IPAMPluginType
+</a>
+</em>
+</td>
+<td>
+<p>Specifies the IPAM plugin that will be used in the Calico or Calico Enterprise installation.
+* For CNI Plugin Calico, this field defaults to Calico.
+* For CNI Plugin GKE, this field defaults to HostLocal.
+* For CNI Plugin AzureVNET, this field defaults to AzureVNET.
+* For CNI Plugin AmazonVPC, this field defaults to AmazonVPC.</p>
+<p>The IPAM plugin is installed and configured only if the CNI plugin is set to Calico,
+for all other values of the CNI plugin the plugin binaries and CNI config is a dependency
+that is expected to be installed separately.</p>
+<p>Default: Calico</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.IPPool">IPPool
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>cidr</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>CIDR contains the address range for the IP Pool in classless inter-domain routing format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>encapsulation</code><br>
+<em>
+<a href="#operator.tigera.io/v1.EncapsulationType">
+EncapsulationType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Encapsulation specifies the encapsulation type that will be used with
+the IP Pool.
+Default: IPIP</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>natOutgoing</code><br>
+<em>
+<a href="#operator.tigera.io/v1.NATOutgoingType">
+NATOutgoingType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NATOutgoing specifies if NAT will be enabled or disabled for outgoing traffic.
+Default: Enabled</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeSelector</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeSelector specifies the node selector that will be set for the IP Pool.
+Default: &lsquo;all()&rsquo;</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>blockSize</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>BlockSize specifies the CIDR prefex length to use when allocating per-node IP blocks from
+the main IP pool CIDR.
+Default: 26 (IPv4), 122 (IPv6)</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.Image">Image
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ImageSetSpec">ImageSetSpec</a>)
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>image</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Image is an image that the operator deploys and instead of using the built in tag
+the operator will use the Digest for the image identifier.
+The value should be the image name without registry or tag or digest.
+For the image <code>docker.io/calico/node:v3.17.1</code> it should be represented as <code>calico/node</code></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>digest</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Digest is the image identifier that will be used for the Image.
+The field should not include a leading <code>@</code> and must be prefixed with <code>sha256:</code>.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.ImageSetSpec">ImageSetSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.ImageSet">ImageSet</a>)
+</p>
+<p>ImageSetSpec defines the desired state of ImageSet.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>images</code><br>
+<em>
+<a href="#operator.tigera.io/v1.Image">
+[]Image
+</a>
+</em>
+</td>
+<td>
+<p>Images is the list of images to use digests. All images that the operator will deploy
+must be specified.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.InstallationSpec">InstallationSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.Installation">Installation</a>, 
+<a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
+</p>
+<p>InstallationSpec defines configuration for a Calico or Calico Enterprise installation.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>variant</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ProductVariant">
+ProductVariant
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
+Default: Calico</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>registry</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Registry is the default Docker registry used for component Docker images. If specified,
+all images will be pulled from this registry. If not specified then the default registries
+will be used. A special case value, UseDefault, is supported to explicitly specify
+the default registries will be used.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePath allows for the path part of an image to be specified. If specified
+then the specified value will be used as the image path for each image. If not specified
+or empty, the default for each image will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image path will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePrefix</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePrefix allows for the prefix part of an image to be specified. If specified
+then the given value will be used as a prefix on each image. If not specified
+or empty, no prefix will be used.
+A special case value, UseDefault, is supported to explicitly specify the default
+image prefix will be used for each image.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imagePrefix&gt;&lt;imageName&gt;:&lt;image-tag&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePrefix&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePullSecrets</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
+[]Kubernetes core/v1.LocalObjectReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePullSecrets is an array of references to container registry pull secrets to use. These are
+applied to all images to be pulled.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>kubernetesProvider</code><br>
+<em>
+<a href="#operator.tigera.io/v1.Provider">
+Provider
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>KubernetesProvider specifies a particular provider of the Kubernetes platform and enables provider-specific configuration.
+If the specified value is empty, the Operator will attempt to automatically determine the current provider.
+If the specified value is not empty, the Operator will still attempt auto-detection, but
+will additionally compare the auto-detected value to the specified value to confirm they match.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cni</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CNISpec">
+CNISpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CNI specifies the CNI that will be used by this installation.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>calicoNetwork</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">
+CalicoNetworkSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CalicoNetwork specifies networking configuration options for Calico.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>typhaAffinity</code><br>
+<em>
+<a href="#operator.tigera.io/v1.TyphaAffinity">
+TyphaAffinity
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaAffinity allows configuration of node affinity characteristics for Typha pods.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>controlPlaneNodeSelector</code><br>
+<em>
+map[string]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ControlPlaneNodeSelector is used to select control plane nodes on which to run Calico
+components. This is globally applied to all resources created by the operator excluding daemonsets.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>controlPlaneTolerations</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#toleration-v1-core">
+[]Kubernetes core/v1.Toleration
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ControlPlaneTolerations specify tolerations which are then globally applied to all resources
+created by the operator.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeMetricsPort</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeMetricsPort specifies which port calico/node serves prometheus metrics on. By default, metrics are not enabled.
+If specified, this overrides any FelixConfiguration resources which may exist. If omitted, then
+prometheus metrics may still be configured through FelixConfiguration.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>typhaMetricsPort</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>TyphaMetricsPort specifies which port calico/typha serves prometheus metrics on. By default, metrics are not enabled.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flexVolumePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
+enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. The default is based on the
+kubernetesProvider.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeUpdateStrategy</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#daemonsetupdatestrategy-v1-apps">
+Kubernetes apps/v1.DaemonSetUpdateStrategy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeUpdateStrategy can be used to customize the desired update strategy, such as the MaxUnavailable
+field.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>componentResources</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ComponentResource">
+[]ComponentResource
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ComponentResources can be used to customize the resource requirements for each component.
+Node, Typha, and KubeControllers are supported for installations.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>certificateManagement</code><br>
+<em>
+<a href="#operator.tigera.io/v1.CertificateManagement">
+CertificateManagement
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertificateManagement configures pods to submit a CertificateSigningRequest to the certificates.k8s.io/v1beta1 API in order
+to obtain TLS certificates. This feature requires that you bring your own CSR signing and approval process, otherwise
+pods will be stuck during initialization.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.InstallationStatus">InstallationStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.Installation">Installation</a>)
+</p>
+<p>InstallationStatus defines the observed state of the Calico or Calico Enterprise installation.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>variant</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ProductVariant">
+ProductVariant
+</a>
+</em>
+</td>
+<td>
+<p>Variant is the most recently observed installed variant - one of Calico or TigeraSecureEnterprise</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>mtu</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>MTU is the most recently observed value for pod network MTU. This may be an explicitly
+configured value, or based on Calico&rsquo;s native auto-detetion.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imageSet</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImageSet is the name of the ImageSet being used, if there is an ImageSet
+that is being used. If an ImageSet is not being used then this will not be set.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>computed</code><br>
+<em>
+<a href="#operator.tigera.io/v1.InstallationSpec">
+InstallationSpec
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Computed is the final installation including overlaid resources.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.LinuxDataplaneOption">LinuxDataplaneOption
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>LinuxDataplaneOption controls which dataplane is to be used on Linux nodes.</p>
+<p>One of: Iptables, BPF</p>
+<h3 id="operator.tigera.io/v1.MultiInterfaceMode">MultiInterfaceMode
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>MultiInterfaceMode describes the method of providing multiple pod interfaces.</p>
+<p>One of: None, Multus</p>
+<h3 id="operator.tigera.io/v1.NATOutgoingType">NATOutgoingType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.IPPool">IPPool</a>)
+</p>
+<p>NATOutgoingType describe the type of outgoing NAT to use.</p>
+<p>One of: Enabled, Disabled</p>
+<h3 id="operator.tigera.io/v1.NodeAddressAutodetection">NodeAddressAutodetection
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>NodeAddressAutodetection provides configuration options for auto-detecting node addresses. At most one option
+can be used. If no detection option is specified, then IP auto detection will be disabled for this address family and IPs
+must be specified directly on the Node resource.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>firstFound</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FirstFound uses default interface matching parameters to select an interface, performing best-effort
+filtering based on well-known interface names.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>interface</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Interface enables IP auto-detection based on interfaces that match the given regex.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>skipInterface</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>SkipInterface enables IP auto-detection based on interfaces that do not match
+the given regex.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>canReach</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CanReach enables IP auto-detection based on which source address on the node is used to reach the
+specified IP or domain.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>cidrs</code><br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>CIDRS enables IP auto-detection based on which addresses on the nodes are within
+one of the provided CIDRs.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.NodeAffinity">NodeAffinity
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.TyphaAffinity">TyphaAffinity</a>)
+</p>
+<p>NodeAffinity is similar to *v1.NodeAffinity, but allows us to limit available schedulers.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>preferredDuringSchedulingIgnoredDuringExecution</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#preferredschedulingterm-v1-core">
+[]Kubernetes core/v1.PreferredSchedulingTerm
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The scheduler will prefer to schedule pods to nodes that satisfy
+the affinity expressions specified by this field, but it may choose
+a node that violates one or more of the expressions.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>requiredDuringSchedulingIgnoredDuringExecution</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#nodeselector-v1-core">
+Kubernetes core/v1.NodeSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>WARNING: Please note that if the affinity requirements specified by this field are not met at
+scheduling time, the pod will NOT be scheduled onto the node.
+There is no fallback to another affinity rules with this setting.
+This may cause networking disruption or even catastrophic failure!
+PreferredDuringSchedulingIgnoredDuringExecution should be used for affinity
+unless there is a specific well understood reason to use RequiredDuringSchedulingIgnoredDuringExecution and
+you can guarantee that the RequiredDuringSchedulingIgnoredDuringExecution will always have sufficient nodes to satisfy the requirement.
+NOTE: RequiredDuringSchedulingIgnoredDuringExecution is set by default for AKS nodes,
+to avoid scheduling Typhas on virtual-nodes.
+If the affinity requirements specified by this field cease to be met
+at some point during pod execution (e.g. due to an update), the system
+may or may not try to eventually evict the pod from its node.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.OIDCType">OIDCType
+(<code>string</code> alias)</h3>
+<p>OIDCType defines how OIDC is configured for Tigera Enterprise. Dex should be the best option for most use-cases.
+The Tigera option can help in specific use-cases, for instance, when you are unable to configure a client secret.
+One of: Dex, Tigera</p>
+<h3 id="operator.tigera.io/v1.ProductVariant">ProductVariant
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>, 
+<a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
+</p>
+<p>ProductVariant represents the variant of the product.</p>
+<p>One of: Calico, TigeraSecureEnterprise</p>
+<h3 id="operator.tigera.io/v1.PromptType">PromptType
+(<code>string</code> alias)</h3>
+<p>PromptType is a value that specifies whether the identity provider prompts the end user for re-authentication and
+consent.
+One of: None, Login, Consent, SelectAccount.</p>
+<h3 id="operator.tigera.io/v1.Provider">Provider
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>Provider represents a particular provider or flavor of Kubernetes. Valid options
+are: EKS, GKE, AKS, OpenShift, DockerEnterprise.</p>
+<h3 id="operator.tigera.io/v1.StatusConditionType">StatusConditionType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition</a>)
+</p>
+<p>StatusConditionType is a type of condition that may apply to a particular component.</p>
+<h3 id="operator.tigera.io/v1.TigeraStatusCondition">TigeraStatusCondition
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.TigeraStatusStatus">TigeraStatusStatus</a>)
+</p>
+<p>TigeraStatusCondition represents a condition attached to a particular component.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code><br>
+<em>
+<a href="#operator.tigera.io/v1.StatusConditionType">
+StatusConditionType
+</a>
+</em>
+</td>
+<td>
+<p>The type of condition. May be Available, Progressing, or Degraded.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ConditionStatus">
+ConditionStatus
+</a>
+</em>
+</td>
+<td>
+<p>The status of the condition. May be True, False, or Unknown.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>lastTransitionTime</code><br>
+<em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+<p>The timestamp representing the start time for the current status.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>reason</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>A brief reason explaining the condition.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>message</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Optionally, a detailed message providing additional context.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.TigeraStatusSpec">TigeraStatusSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>)
+</p>
+<p>TigeraStatusSpec defines the desired state of TigeraStatus</p>
+<h3 id="operator.tigera.io/v1.TigeraStatusStatus">TigeraStatusStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.TigeraStatus">TigeraStatus</a>)
+</p>
+<p>TigeraStatusStatus defines the observed state of TigeraStatus</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>conditions</code><br>
+<em>
+<a href="#operator.tigera.io/v1.TigeraStatusCondition">
+[]TigeraStatusCondition
+</a>
+</em>
+</td>
+<td>
+<p>Conditions represents the latest observed set of conditions for this component. A component may be one or more of
+Available, Progressing, or Degraded.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="operator.tigera.io/v1.TyphaAffinity">TyphaAffinity
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>TyphaAffinity allows configuration of node affinitiy characteristics for Typha pods.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>nodeAffinity</code><br>
+<em>
+<a href="#operator.tigera.io/v1.NodeAffinity">
+NodeAffinity
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeAffinity describes node affinity scheduling rules for typha.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<hr/>

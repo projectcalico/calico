@@ -1,0 +1,5 @@
+#!/bin/sh
+LOGDIR=/var/log/calico/bird6
+mkdir -p $LOGDIR
+# Prefix each line with a timestamp
+exec svlogd -tt $LOGDIR

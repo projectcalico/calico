@@ -1,0 +1,16 @@
+*~
+bin
+*.coverprofile
+vendor
+.idea
+.go-pkg-cache
+junit.xml
+*.swp
+.generate_exes
+.generate_files
+checkouts
+/report/*.xml
+/release
+Makefile.common*
+*.test
+kubeconfig.yaml

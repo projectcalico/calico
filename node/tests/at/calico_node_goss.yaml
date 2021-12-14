@@ -1,0 +1,33 @@
+file:
+  /etc/calico:
+    exists: true
+    mode: "0755"
+    owner: root
+    group: root
+    filetype: directory
+    contains: []
+  /etc/rc.local:
+    exists: true
+    mode: "0755"
+    owner: root
+    group: root
+    filetype: file
+    contains: []
+  /sbin/start_runit:
+    exists: true
+    mode: "0755"
+    owner: root
+    group: root
+    filetype: file
+    contains: []
+package:
+  conntrack-tools:
+    installed: true
+  ip6tables:
+    installed: true
+  iproute2:
+    installed: true
+  ipset:
+    installed: true
+  iputils:
+    installed: true

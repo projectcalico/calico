@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tigera-operator
+  annotations:
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
+    openshift.io/node-selector: ""
+{{- end }}
+  labels:
+    name: tigera-operator
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
+    openshift.io/run-level: "0"
+{{- end }}
