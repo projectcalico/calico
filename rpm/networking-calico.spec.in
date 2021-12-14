@@ -1,0 +1,157 @@
+%{!?python3_sitelib: %define python3_sitelib %(%{__python3} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
+
+Name:           networking-calico
+Summary:        Project Calico networking for OpenStack/Neutron
+Epoch:          1
+Version:
+Release:
+License:        Apache-2
+URL:            http://docs.openstack.org/developer/networking-calico/
+Source0:        networking-calico-%{version}.tar.gz
+Source45:	calico-dhcp-agent.service
+BuildArch:	noarch
+Group:          Applications/Engineering
+
+
+%description
+Project Calico is an open source solution for virtual networking in
+cloud data centers. It uses IP routing to provide connectivity
+between the workloads in a data center that provide or use IP-based
+services - whether VMs, containers or bare metal appliances; and
+iptables, to impose any desired fine-grained security policy between
+those workloads.
+
+
+%package -n calico-compute
+Group:          Applications/Engineering
+Summary:        Project Calico networking for OpenStack/Neutron
+%if 0%{?el6}
+Requires:       calico-felix, networking-calico, openstack-neutron, iptables, python3-argparse
+%else
+Requires:       calico-felix, networking-calico, openstack-neutron, iptables
+%endif
+
+
+%description -n calico-compute
+This package provides the pieces needed on a compute node.
+
+%files -n calico-compute
+
+%post -n calico-compute
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+
+    # Don't reject INPUT and FORWARD packets by default on the compute host.
+    iptables -D INPUT -j REJECT --reject-with icmp-host-prohibited >/dev/null 2>&1 || true
+    iptables -D FORWARD -j REJECT --reject-with icmp-host-prohibited >/dev/null 2>&1 || true
+
+    # Save current iptables for subsequent reboots.
+    iptables-save > /etc/sysconfig/iptables
+
+    # Enable IP forwarding.
+    cat > /etc/sysctl.d/99-networking-calico.conf <<EOF
+net.ipv4.ip_forward=1
+net.ipv6.conf.all.forwarding=1
+EOF
+    sysctl --system
+fi
+
+%preun -n calico-compute
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+    :
+fi
+
+%postun -n calico-compute
+if [ $1 -ge 1 ] ; then
+    # Package upgrade, not uninstall
+    :
+fi
+
+
+%package -n calico-dhcp-agent
+Group:          Applications/Engineering
+Summary:        Project Calico networking for OpenStack/Neutron
+Requires:       networking-calico
+
+%description -n calico-dhcp-agent
+This package provides the Calico DHCP agent.
+
+%files -n calico-dhcp-agent
+%defattr(-,root,root,-)
+/usr/bin/calico-dhcp-agent
+%{_unitdir}/calico-dhcp-agent.service
+
+%post -n calico-dhcp-agent
+%if 0%{?el7}
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    /usr/bin/systemctl daemon-reload
+    /usr/bin/systemctl enable calico-dhcp-agent
+    /usr/bin/systemctl start calico-dhcp-agent
+fi
+%endif
+
+%preun -n calico-dhcp-agent
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+%if 0%{?el7}
+    /usr/bin/systemctl disable calico-dhcp-agent
+    /usr/bin/systemctl stop calico-dhcp-agent
+%endif
+fi
+
+%postun -n calico-dhcp-agent
+if [ $1 -ge 1 ] ; then
+    # Package upgrade, not uninstall
+%if 0%{?el7}
+    /usr/bin/systemctl condrestart calico-dhcp-agent >/dev/null 2>&1 || :
+%endif
+fi
+
+
+%package -n calico-control
+Group:          Applications/Engineering
+Summary:        Project Calico networking for OpenStack/Neutron
+Requires:       networking-calico
+
+%description -n calico-control
+This package provides the pieces needed on a controller node.
+
+%files -n calico-control
+
+
+%description
+This package installs the networking-calico Calico/Neutron
+integration code.
+
+%files
+%defattr(-,root,root,-)
+%{python3_sitelib}/networking_calico*
+%doc
+
+
+%prep
+%setup -q
+
+
+%build
+%{__python3} setup.py build
+
+
+%install
+rm -rf $RPM_BUILD_ROOT
+%{__python3} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
+
+# For EL7, install systemd service files
+%if 0%{?el7}
+    install -d -m 755 %{buildroot}%{_unitdir}
+    install -p -D -m 644 %{SOURCE45} %{buildroot}%{_unitdir}/calico-dhcp-agent.service
+%endif
+
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+
+%changelog
