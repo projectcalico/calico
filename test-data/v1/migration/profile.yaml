@@ -1,0 +1,58 @@
+## This won't work with KDD
+apiVersion: v1
+kind: profile
+metadata:
+  name: profile1
+  labels:
+    profile: profile1 
+  tags:
+  - atag
+  - btag
+spec:
+  ingress:
+  - action: deny
+    protocol: udp
+    source:
+      tag: ctag
+      notTag: dtag
+      net: 172.20.0.0/16
+      notNet: 172.20.5.0/24
+    destination:
+      tag: atag
+      notPorts:
+      - 22
+      - 443
+      - 21
+      - 8080
+  - action: deny
+    protocol: tcp
+    source:
+      nets:
+      - 10.0.20.0/24
+      notNets:
+      - 10.0.20.64/25
+    destination:
+      tag: atag
+      notPorts:
+      - 22
+      - 443
+      - 21
+      - 8080
+  - action: allow
+    protocol: tcp
+    source:
+      selector: profile != 'profile1' && has(role)
+      ports:
+      - 1234
+      - 4567
+      - 8:9
+  egress:
+  - action: allow
+    destination:
+      notSelector: profile == 'system'
+  - action: allow
+    source:
+      selector: something in {'a', 'b'}
+  - action: allow
+    destination:
+      selector: something not in {'a', 'b'}
