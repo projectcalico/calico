@@ -1,0 +1,6 @@
+/calico/ipam/v2/host/kube-master/ipv4/block/192.168.221.192-26 {}
+/calico/ipam/v2/host/kube-master/ipv4/block/192.168.221.0-26 {"state":"pending"}
+/calico/ipam/v2/host/kube-master/ipv4/block/192.168.221.64-26 {"state":"confirmed"}
+/calico/ipam/v2/host/kube-master/ipv4/block/10.0.0.0-30 {}
+/calico/ipam/v2/host/kube-master/ipv4/block/10.1.0.0-24 {}
+/calico/ipam/v2/host/kube-master/ipv4/block/10.2.0.1-32 {}
