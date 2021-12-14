@@ -16,7 +16,7 @@ Run Linux and Windows workloads on a RKE cluster with {{site.prodname}}.
 
 **Supported**
 
-- RKE Kubernetes 1.20, 1.19, or 1.18
+- RKE Kubernetes 1.18 onwards
 
 **Supported networking**
 
