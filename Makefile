@@ -68,7 +68,13 @@ include Makefile.common
 
 ##############################################################################
 
+# The Calico for Windows installation script. This is generated from the node
+# repo.
+INSTALL_CALICO_WINDOWS_SCRIPT=./scripts/install-calico-windows.ps1
 
+# This variable controls the branch or tag of node checked out to build the
+# install-calico-windows.ps1 script for a release.
+NODE_VERSION_FOR_SCRIPT?=$(RELEASE_STREAM)
 
 CONTAINERIZED_VALUES?=docker run --rm \
 	  -v $$PWD:/calico \
@@ -439,6 +445,14 @@ release-prereqs: charts
 	elif [ -z $(GIT_UPSTREAM) ]; then \
 		echo "At least one git remote must reference the projectcalico repo"; \
 		exit 1; fi
+	# Ensure that install-calico-windows.ps1 is the same version as the release
+	# version in node.
+	$(MAKE) update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=$(NODE_VER)
+	@if ! git diff --quiet $(INSTALL_CALICO_WINDOWS_SCRIPT); then \
+		echo "Expected scripts/install-calico-windows.ps1 to equal the version at node@$(NODE_VER)"; \
+		echo "Check output of 'git diff $(INSTALL_CALICO_WINDOWS_SCRIPT)'"; \
+		echo "Run 'make update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=$(NODE_VER)' to update the script"; \
+		exit 1; fi
 ifeq (, $(shell which ghr))
 	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
 endif
@@ -638,3 +652,20 @@ build-operator-reference:
 	           go mod download && go build && \
 	           ./gen-crd-api-reference-docs -config /go/src/$(PACKAGE_NAME)/reference/installation/config.json \
 	                   -api-dir github.com/tigera/operator/api -out-file /go/src/$(PACKAGE_NAME)/reference/installation/_api.html'
+
+.PHONY: update-install-calico-windows-script
+## Update install-calico-windows.ps1 from the node repo. By default, it builds the script using branch name of this current branch.
+#
+#  To update the script for release:
+#
+#    make update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=vX.Y.Z
+#
+#  To update the script for a release branch:
+#
+#    make update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=release-vX.Y
+update-install-calico-windows-script:
+	rm -rf ./bin/install-calico-windows
+	mkdir -p ./bin/install-calico-windows
+	git clone --depth=1 -b $(NODE_VERSION_FOR_SCRIPT) https://github.com/projectcalico/node ./bin/install-calico-windows/node
+	make -C ./bin/install-calico-windows/node install-calico-windows-script
+	cp ./bin/install-calico-windows/node/dist/install-calico-windows.ps1 $(INSTALL_CALICO_WINDOWS_SCRIPT)
