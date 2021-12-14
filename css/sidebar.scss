@@ -1,0 +1,67 @@
+#sidebar {
+  a {
+    color: #004078;
+    text-decoration: none;
+  }
+
+  // Don't indent the first, big, section title link
+  // Otherwise we're adding unnecessary padding
+  >div.link {
+    padding-left:0px !important
+
+  }
+
+  // Move hyperlinks left 12px to leave space for glyphicon
+  div.link a {
+    position: relative;
+    left: 15px;
+  }
+
+  // Blow up the first toplevel link a bit (since it always is the splash page
+  // for this nav.)
+  > div:first-child > a {
+    font-weight: 700;
+    font-size: 1.2em;
+    padding-left: 0px;
+  }
+
+  .glyphicon-chevron-right,.glyphicon-chevron-down {
+    font-size: 10px;
+    color: #f69432;
+    position: absolute;
+    top: 9px;
+  }
+
+
+  // Highlight the one <a> element that represents the currently viewed page
+  div.current-page {
+    a {
+        color: #f69432;
+    }
+
+    .item {
+      color: #f69432;
+    }
+  }
+
+  // Give all links left padding to create the collapsed indentation.
+  div.link {
+    // padding-left: 15px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-right: 5px;
+    position: relative;
+  }
+
+  .section {
+    padding-left: 15px;
+  }
+
+  .navbar-title {
+    &--clickable {
+      display: block;
+      margin: -10px -15px;
+      padding: 10px 15px;
+    }
+  }
+}

@@ -1,0 +1,7 @@
+---
+layout: null
+---
+{% helm tigera-operator --execute templates/crds/operator.tigera.io_installations_crd.yaml %}
+installation:
+  kubernetesProvider: openshift
+{% endhelm %}

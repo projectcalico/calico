@@ -1,0 +1,45 @@
+//
+// Variables
+// --------------------------------------------------
+$bootstrap-sass-asset-helper: false !default;
+
+//== Colors
+//
+//## Gray and brand colors for use across Bootstrap.
+
+$brand-primary:         darken(#428bca, 6.5%) !default; // #337ab7
+
+$text-color:               #333333 !default;
+//** Global text color on `<body>`.
+
+$navbar-default-bg:  #fff;
+$navbar-default-border: #666;
+$navbar-default-link-color: #666;
+$navbar-default-link-hover-color: #ff6f22;
+$navbar-default-link-active-bg: $navbar-default-bg;
+
+$navbar-inverse-bg: #004078;
+$navbar-inverse-link-color: #fff;
+$navbar-inverse-link-hover-color: #ff6f22;
+$navbar-inverse-link-active-color: #fff;
+
+
+li.active a span {
+  border-bottom: 1px solid #ff6f22;
+}
+
+.navbar-brand {
+  padding: 0 !important;
+  height: initial !important;
+}
+
+.navbar {
+  font-family: lato,sans-serif;
+  font-size: 16px;
+}
+
+.navbar-header { 
+  height: 72px; 
+  margin: 0; 
+  padding: 8px 0 8px 15px; 
+}

@@ -1,0 +1,7 @@
+---
+layout: null
+---
+{% helm %}
+datastore: etcd
+network: flannel
+{% endhelm %}

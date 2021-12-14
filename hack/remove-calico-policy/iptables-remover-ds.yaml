@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: calico-remove-iptables
+  namespace: kube-system
+  labels:
+    k8s-app: calico-remove-iptables
+spec:
+  selector:
+    matchLabels:
+      k8s-app: calico-remove-iptables
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-remove-iptables
+    spec:
+      hostNetwork: true
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: projectcalico.org/ds-ready
+                  operator: NotIn
+                  values:
+                  - "true"
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+      containers:
+        - name: calico-remove-iptables
+          image: calico/iptables-remover
+          command:
+            - "/bin/sh"
+            - "-c"
+            - "cp /etc/config/calico/remove-policy/remove-calico-policy.sh .; chmod +x ./remove-calico-policy.sh; ./remove-calico-policy.sh"
+          env:
+            - name: CLUSTER_CIDR
+              value: ""
+          securityContext:
+            privileged: true
+          volumeMounts:
+            # /etc/config is where we will store the remove-calico-policy.sh script from the ConfigMap.
+            - mountPath: /etc/config
+              name: config-volume
+      volumes:
+        - name: config-volume
+          configMap:
+            name: remove-calico-policy-config
+            items:
+              - key: remove-calico-policy.sh
+                path: calico/remove-policy/remove-calico-policy.sh

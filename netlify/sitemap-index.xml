@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://docs.projectcalico.org/release-legacy-sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/latest-sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/master/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.21/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.20/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.19/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.18/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.17/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.16/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.15/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.14/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.13/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://docs.projectcalico.org/archive/v3.12/sitemap.xml</loc></sitemap>
+</sitemapindex>

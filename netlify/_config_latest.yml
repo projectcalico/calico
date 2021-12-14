@@ -1,0 +1,3 @@
+# pass this config file to mark a build as latest
+is_latest: true
+archive: true

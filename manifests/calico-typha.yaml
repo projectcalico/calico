@@ -1,0 +1,9 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kubernetes
+network: calico
+typha:
+  enabled: true
+{% endhelm %}

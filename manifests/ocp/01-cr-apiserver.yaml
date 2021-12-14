@@ -1,0 +1,8 @@
+# This section configures the Calico API server.
+# For more information see {{site.url}}/{{page.version}}/reference/installation/api#operator.tigera.io/v1.APIServer
+# and {{site.url}}/{{page.version}}/getting-started/kubernetes/apiserver-preview
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
