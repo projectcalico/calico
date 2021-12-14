@@ -75,9 +75,11 @@ func (r Rule) renderInner(fragments []string, prefixFragment string, features *F
 	if matchFragment != "" {
 		fragments = append(fragments, matchFragment)
 	}
-	actionFragment := r.Action.ToFragment(features)
-	if actionFragment != "" {
-		fragments = append(fragments, actionFragment)
+	if r.Action != nil {
+		actionFragment := r.Action.ToFragment(features)
+		if actionFragment != "" {
+			fragments = append(fragments, actionFragment)
+		}
 	}
 	return strings.Join(fragments, " ")
 }

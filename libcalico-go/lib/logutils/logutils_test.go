@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -155,8 +157,13 @@ var _ = Describe("BackgroundHook log flushing tests", func() {
 	var counterIdx int
 	var c chan QueuedLog
 	var logger *log.Logger
+	var hookOpts []BackgroundHookOpt
 
 	BeforeEach(func() {
+		hookOpts = nil
+	})
+
+	JustBeforeEach(func() {
 		// Set up a background hook that will queue its logs to our channel.
 		counter = prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: "logutilstests",
@@ -168,13 +175,44 @@ var _ = Describe("BackgroundHook log flushing tests", func() {
 			Level:   log.DebugLevel,
 			Channel: c,
 		}
-		bh = NewBackgroundHook(log.AllLevels, log.DebugLevel, []*Destination{testDest}, counter)
+		bh = NewBackgroundHook(log.AllLevels, log.DebugLevel, []*Destination{testDest}, counter, hookOpts...)
 
 		logger = log.New()
+		logger.AddHook(ContextHook{})
 		logger.AddHook(bh)
+		logger.SetLevel(log.DebugLevel)
 
 		// Suppress the output of this logger.
 		logger.Out = &NullWriter{}
+	})
+
+	It("should let debug logs through by default", func() {
+		logger.Debug("Hello")
+		var ql QueuedLog
+		Eventually(c).Should(Receive(&ql))
+		Expect(string(ql.Message)).To(ContainSubstring("level=debug msg=Hello"))
+	})
+
+	Describe("with a regex set", func() {
+		BeforeEach(func() {
+			hookOpts = append(hookOpts, WithDebugFileRegexp(regexp.MustCompile("another_file_for_test")))
+		})
+
+		It("should filter debug logs", func() {
+			logger.Debug("Hello")
+			Consistently(c).ShouldNot(Receive())
+			debugFromAnotherFile(logger, "What?")
+			var ql QueuedLog
+			Eventually(c).Should(Receive(&ql))
+			Expect(string(ql.Message)).To(ContainSubstring(`level=debug msg="What?"`))
+		})
+
+		It("should not filter info logs", func() {
+			logger.Info("Hello")
+			var ql QueuedLog
+			Eventually(c).Should(Receive(&ql))
+			Expect(string(ql.Message)).To(ContainSubstring(`level=info msg=Hello`))
+		})
 	})
 
 	It("when calling Panic, should block waiting for the background thread", func() {
@@ -500,4 +538,37 @@ func (s *mockSyslogWriter) Err(m string) error {
 func (s *mockSyslogWriter) Crit(m string) error {
 	_, err := fmt.Fprintf((*io.PipeWriter)(s), "CRITICAL %s", m)
 	return err
+}
+
+// Benchmark "result" variables, reading/writing global variable prevents the loop from being optimised away.
+var BenchOut bool
+var BenchIn bool
+
+func BenchmarkRegexpEmpty(b *testing.B) {
+	re := regexp.MustCompile("")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
+	}
+}
+
+func BenchmarkRegexpNilcheck(b *testing.B) {
+	re := regexp.MustCompile("")
+	if b.N > 0 || BenchIn {
+		re = nil
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if re != nil {
+			BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
+		}
+	}
+}
+
+func BenchmarkRegexpStar(b *testing.B) {
+	re := regexp.MustCompile(".*")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
+	}
 }

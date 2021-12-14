@@ -17,6 +17,7 @@ package ipam
 import (
 	"context"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -77,6 +78,9 @@ type Interface interface {
 	// ReleasePoolAffinities releases affinity for all blocks within
 	// the specified pool across all hosts.
 	ReleasePoolAffinities(ctx context.Context, pool cnet.IPNet) error
+
+	// ReleaseBlockAffinity releases the affinity of the exact block provided.
+	ReleaseBlockAffinity(ctx context.Context, block *model.AllocationBlock, mustBeEmpty bool) error
 
 	// GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 	// has been set, returns a default configuration with StrictAffinity disabled

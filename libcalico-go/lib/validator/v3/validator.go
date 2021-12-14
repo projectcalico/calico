@@ -959,7 +959,7 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 			continue
 		default:
 			structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
-			"IPpool.AllowedUses", "", reason("unknown use: " + string(a)), "")
+				"IPpool.AllowedUses", "", reason("unknown use: "+string(a)), "")
 		}
 	}
 }

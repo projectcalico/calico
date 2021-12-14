@@ -25,7 +25,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -178,11 +177,19 @@ func (p *RegexpParam) Parse(raw string) (result interface{}, err error) {
 // string values that are (themselves) regular expressions.
 type RegexpPatternParam struct {
 	Metadata
+	Flags []string
 }
 
 // Parse validates whether the given raw string contains a valid regexp pattern.
 func (p *RegexpPatternParam) Parse(raw string) (interface{}, error) {
 	var result *regexp.Regexp
+	if raw == "" {
+		for _, f := range p.Flags {
+			if f == "nil-on-empty" {
+				return nil, nil
+			}
+		}
+	}
 	result, compileErr := regexp.Compile(raw)
 	if compileErr != nil {
 		return nil, p.parseFailed(raw, "invalid regexp")

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019,2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -370,13 +371,14 @@ func writeToSyslog(writer syslogWriter, ql QueuedLog) error {
 }
 
 // BackgroundHook is a logrus Hook that (synchronously) formats each log and sends it to one or more
-// Destinations for writing ona background thread.  It supports filtering destinations on
+// Destinations for writing on a background thread.  It supports filtering destinations on
 // individual log levels.  We write logs from background threads so that blocking of the output
 // stream doesn't block the mainline code.  Up to a point, we queue logs for writing, then we start
 // dropping logs.
 type BackgroundHook struct {
-	levels      []log.Level
-	syslogLevel log.Level
+	levels          []log.Level
+	syslogLevel     log.Level
+	debugFileNameRE *regexp.Regexp
 
 	destinations []*Destination
 
@@ -389,18 +391,33 @@ type BackgroundHook struct {
 	counter prometheus.Counter
 }
 
+type BackgroundHookOpt func(hook *BackgroundHook)
+
+func WithDebugFileRegexp(re *regexp.Regexp) BackgroundHookOpt {
+	return func(hook *BackgroundHook) {
+		hook.debugFileNameRE = re
+	}
+}
+
+var _ = WithDebugFileRegexp
+
 func NewBackgroundHook(
 	levels []log.Level,
 	syslogLevel log.Level,
 	destinations []*Destination,
 	counter prometheus.Counter,
+	opts ...BackgroundHookOpt,
 ) *BackgroundHook {
-	return &BackgroundHook{
+	bh := &BackgroundHook{
 		destinations: destinations,
 		levels:       levels,
 		syslogLevel:  syslogLevel,
 		counter:      counter,
 	}
+	for _, opt := range opts {
+		opt(bh)
+	}
+	return bh
 }
 
 func (h *BackgroundHook) Levels() []log.Level {
@@ -408,6 +425,17 @@ func (h *BackgroundHook) Levels() []log.Level {
 }
 
 func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
+	if entry.Buffer != nil {
+		defer entry.Buffer.Truncate(0)
+	}
+
+	if entry.Level >= log.DebugLevel && h.debugFileNameRE != nil {
+		// This is a debug log, check if debug logging is enabled for this file.
+		if fileName, ok := entry.Data[fieldFileName]; !ok || !h.debugFileNameRE.MatchString(fileName.(string)) {
+			return nil
+		}
+	}
+
 	var serialized []byte
 	if serialized, err = entry.Logger.Formatter.Format(entry); err != nil {
 		return
@@ -417,9 +445,6 @@ func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
 	// a channel so we need to take a copy.
 	bufCopy := make([]byte, len(serialized))
 	copy(bufCopy, serialized)
-	if entry.Buffer != nil {
-		entry.Buffer.Truncate(0)
-	}
 
 	ql := QueuedLog{
 		Level:   entry.Level,
@@ -474,8 +499,7 @@ func (h *BackgroundHook) Start() {
 	}
 }
 
-// safeParseLogLevel parses a string version of a logrus log level, defaulting
-// to logrus.PanicLevel on failure.
+// SafeParseLogLevel parses a string version of a logrus log level, defaulting to logrus.PanicLevel on failure.
 func SafeParseLogLevel(logLevel string) log.Level {
 	defaultedLevel := log.PanicLevel
 	if logLevel != "" {

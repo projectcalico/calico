@@ -1,5 +1,6 @@
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 GIT_HASH=$(shell git rev-parse --short=9 HEAD)
+GIT_UPSTREAM=$(shell git remote -v | grep projectcalico.*\(push\) | awk '{print $$1}')
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 IMAGES_FILE=
 JEKYLL_VERSION=pages
@@ -19,7 +20,8 @@ ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-GO_BUILD_VER?=v0.40
+GO_BUILD_VER?=v0.62
+GOMOD_VENDOR=true
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calico
@@ -47,9 +49,32 @@ FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.typha.version')
 CHART_RELEASE := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].chart.version')
 
+###############################################################################
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH):
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
+
+include Makefile.common
+
 ##############################################################################
 
+# The Calico for Windows installation script. This is generated from the node
+# repo.
+INSTALL_CALICO_WINDOWS_SCRIPT=./scripts/install-calico-windows.ps1
 
+# This variable controls the branch or tag of node checked out to build the
+# install-calico-windows.ps1 script for a release.
+NODE_VERSION_FOR_SCRIPT?=$(RELEASE_STREAM)
 
 CONTAINERIZED_VALUES?=docker run --rm \
 	  -v $$PWD:/calico \
@@ -65,6 +90,8 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
 ifdef RELEASE_CHART
 # the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
+# Helm charts will be built with the chart version matching the corresponding Calico version.
+# Any functional changes to the helm chart will require a patch release of Calico.
 chartVersion:=$(CALICO_VER)
 appVersion:=$(CALICO_VER)
 else
@@ -86,6 +113,9 @@ chart/%: _includes/charts/%/values.yaml bin/helm3
 	--destination ./bin/ \
 	--version $(chartVersion) \
 	--app-version $(appVersion)
+	# The actual chart bundle will include a chart release version appended as a semver
+	# prerelease version in order to differentiate MINOR semantic issues caused by releasing.
+	mv ./bin/$(@F)-$(chartVersion).tgz ./bin/$(@F)-$(chartVersion)-$(CHART_RELEASE).tgz
 
 serve: bin/helm
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
@@ -114,7 +144,7 @@ _site build: bin/helm
 
 ## Clean enough that a new release build will be clean
 clean:
-	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
+	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml Makefile.common*
 
 ########################################################################################################################
 # Builds locally checked out code using local versions of libcalico, felix, and confd.
@@ -146,13 +176,13 @@ dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
 # Dynamically declare new make targets for all calico subprojects...
 $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
 	echo "TARGET:"
-	echo $< 
+	echo $<
 	@cd $< && export TAG=$$($(TAG_COMMAND)); make image retag-build-images-with-registries \
 		ARCHES=amd64 \
 		BUILD_IMAGE=$(REGISTRY)/$* \
 		PUSH_IMAGES=$(REGISTRY)/$* \
 		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG 
+		IMAGETAG=$$TAG
 
 ## Push locally built images.
 dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
@@ -354,17 +384,17 @@ Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_S
 
 Attached to this release are the following artifacts:
 
-- `release-v$(CALICO_VER).tgz`: docker images and kubernetes manifests.
-- `calico-windows-v$(CALICO_VER).zip`: Calico for Windows.
-- `tigera-operator-v$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
+- `release-$(CALICO_VER).tgz`: docker images and kubernetes manifests.
+- `calico-windows-$(CALICO_VER).zip`: Calico for Windows.
+- `tigera-operator-$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
 
 endef
 export RELEASE_BODY
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs $(UPLOAD_DIR) helm-index
+release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
-	git push origin $(CALICO_VER)
+	git push $(GIT_UPSTREAM) $(CALICO_VER)
 
 	cp $(RELEASE_HELM_CHART) $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
 
@@ -376,20 +406,19 @@ release-publish: release-prereqs $(UPLOAD_DIR) helm-index
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(UPLOAD_DIR)
 
+	$(MAKE) helm-index
 	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
 
-## Updates helm-index with the new release chart
-helm-index: release-prereqs
-	rm -rf  charts
-	mkdir -p charts/$(CALICO_VER)/
-	cp $(RELEASE_HELM_CHART) charts/$(CALICO_VER)/
-	wget https://calico-public.s3.amazonaws.com/charts/index.yaml -O charts/index.yaml.bak
-	cd charts/ && helm repo index . --merge index.yaml.bak --url https://github.com/projectcalico/calico/releases/download/
-	aws --profile helm s3 cp index.yaml s3://calico-public/charts/ --acl public-read
-	rm -rf charts
+## Kicks semaphore job which syncs github released helm charts with helm index file.
+## The helm index will point to the latest helm chart release for that Calico release
+## (in case there are multiple charts).
+.PHONY: helm-index
+helm-index:
+	@echo "Triggering semaphore workflow to update helm index."
+	SEMAPHORE_PROJECT_ID=30f84ab3-1ea9-4fb0-8459-e877491f3dea SEMAPHORE_WORKFLOW_BRANCH=master SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml $(MAKE) semaphore-run-workflow
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
@@ -412,6 +441,17 @@ endif
 release-prereqs: charts
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
+		exit 1; \
+	elif [ -z $(GIT_UPSTREAM) ]; then \
+		echo "At least one git remote must reference the projectcalico repo"; \
+		exit 1; fi
+	# Ensure that install-calico-windows.ps1 is the same version as the release
+	# version in node.
+	$(MAKE) update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=$(NODE_VER)
+	@if ! git diff --quiet $(INSTALL_CALICO_WINDOWS_SCRIPT); then \
+		echo "Expected scripts/install-calico-windows.ps1 to equal the version at node@$(NODE_VER)"; \
+		echo "Check output of 'git diff $(INSTALL_CALICO_WINDOWS_SCRIPT)'"; \
+		echo "Run 'make update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=$(NODE_VER)' to update the script"; \
 		exit 1; fi
 ifeq (, $(shell which ghr))
 	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
@@ -553,16 +593,12 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
 
 ## Create the vendor directory
-vendor: glide.yaml
-	# Ensure that the glide cache directory exists.
-	mkdir -p $(HOME)/.glide
-
+vendor:
 	docker run --rm -i \
 	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	  -v $(HOME)/.glide:/home/user/.glide:rw \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) glide install -strip-vendor
+	  $(CALICO_BUILD) go mod vendor
 
 .PHONY: help
 ## Display this help text
@@ -616,3 +652,20 @@ build-operator-reference:
 	           go mod download && go build && \
 	           ./gen-crd-api-reference-docs -config /go/src/$(PACKAGE_NAME)/reference/installation/config.json \
 	                   -api-dir github.com/tigera/operator/api -out-file /go/src/$(PACKAGE_NAME)/reference/installation/_api.html'
+
+.PHONY: update-install-calico-windows-script
+## Update install-calico-windows.ps1 from the node repo. By default, it builds the script using branch name of this current branch.
+#
+#  To update the script for release:
+#
+#    make update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=vX.Y.Z
+#
+#  To update the script for a release branch:
+#
+#    make update-install-calico-windows-script NODE_VERSION_FOR_SCRIPT=release-vX.Y
+update-install-calico-windows-script:
+	rm -rf ./bin/install-calico-windows
+	mkdir -p ./bin/install-calico-windows
+	git clone --depth=1 -b $(NODE_VERSION_FOR_SCRIPT) https://github.com/projectcalico/node ./bin/install-calico-windows/node
+	make -C ./bin/install-calico-windows/node install-calico-windows-script
+	cp ./bin/install-calico-windows/node/dist/install-calico-windows.ps1 $(INSTALL_CALICO_WINDOWS_SCRIPT)

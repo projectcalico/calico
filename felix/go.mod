@@ -15,7 +15,7 @@ require (
 	github.com/go-ini/ini v1.44.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
-	github.com/golang/protobuf v1.4.3
+	github.com/golang/protobuf v1.5.2
 	github.com/google/gopacket v1.1.17
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
 	github.com/google/uuid v1.2.0
@@ -26,13 +26,13 @@ require (
 	github.com/libp2p/go-reuseport v0.0.1
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/onsi/ginkgo v1.14.1
-	github.com/onsi/gomega v1.10.1
+	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/gomega v1.15.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/api v0.0.0-20211027233830-6b11a0f525e1
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211102121704-35877b364e75
-	github.com/projectcalico/pod2daemon v0.0.0-20211020230039-cbd1482bd13b
-	github.com/projectcalico/typha v0.7.3-0.20211102135304-b14ad31156fa
+	github.com/projectcalico/api v0.0.0-20211207142834-757e73ac95b9
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211207150613-1da58452872f
+	github.com/projectcalico/pod2daemon v0.0.0-20211124090526-dc251bd941c7
+	github.com/projectcalico/typha v0.7.3-0.20211207152247-7e2056230a65
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.10.0
 	github.com/sirupsen/logrus v1.7.0
@@ -47,6 +47,7 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
 	k8s.io/api v0.22.0
 	k8s.io/apimachinery v0.22.0
+	k8s.io/apiserver v0.21.0
 	k8s.io/client-go v0.22.0
 	k8s.io/kubernetes v1.21.0
 	modernc.org/memory v1.0.4

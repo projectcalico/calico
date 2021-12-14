@@ -1926,6 +1926,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"logDebugFilenameRegex": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs. Only logs from files with names that match the given regular expression are included.  The filter only applies to Debug level logs.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"ipipEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"boolean"},
@@ -3130,7 +3137,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"disableBGPExport": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Disable exporting routes from this IP Pool’s CIDR over BGP. [Default: false]",
+							Description: "Disable exporting routes from this IP Pool's CIDR over BGP. [Default: false]",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},

@@ -221,6 +221,105 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 })
 
+var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd datastore, 3 workloads", func() {
+
+	var (
+		etcd   *containers.Container
+		felix  *infrastructure.Felix
+		client client.Interface
+		infra  infrastructure.DatastoreInfra
+		w      [3]*workload.Workload
+		cc     *connectivity.Checker
+	)
+
+	BeforeEach(func() {
+		opts := infrastructure.DefaultTopologyOptions()
+		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(opts)
+		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
+
+		// Create three workloads, using that profile.
+		for ii := range w {
+			iiStr := strconv.Itoa(ii)
+			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
+			w[ii].Configure(client)
+		}
+
+		cc = &connectivity.Checker{}
+	})
+
+	AfterEach(func() {
+
+		if CurrentGinkgoTestDescription().Failed {
+			felix.Exec("iptables-save", "-c")
+			felix.Exec("ip", "r")
+		}
+
+		for ii := range w {
+			w[ii].Stop()
+		}
+		felix.Stop()
+
+		if CurrentGinkgoTestDescription().Failed {
+			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+		}
+		etcd.Stop()
+		infra.Stop()
+	})
+
+	Context("with an ingress policy with no rules", func() {
+		BeforeEach(func() {
+			policy := api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
+			policy.Spec.Ingress = []api.Rule{}
+			policy.Spec.Selector = w[0].NameSelector()
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("no-one can connect to w0, but egress from w0 is unrestricted", func() {
+			cc.ExpectNone(w[2], w[0])
+			cc.ExpectNone(w[1], w[0])
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[0], w[2])
+			cc.CheckConnectivity()
+		})
+
+		It("should have the expected comment in iptables", func() {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("iptables-save")
+				return out
+			}).Should(ContainSubstring("Policy fv/default.policy-1 ingress"))
+		})
+	})
+
+	Context("with egress-only restriction for workload 0", func() {
+
+		BeforeEach(func() {
+			policy := api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
+			allowToW1 := api.Rule{
+				Action: api.Allow,
+				Destination: api.EntityRule{
+					Selector: w[1].NameSelector(),
+				},
+			}
+			policy.Spec.Egress = []api.Rule{allowToW1}
+			policy.Spec.Selector = w[0].NameSelector()
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should have the expected comment in iptables", func() {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("iptables-save")
+				return out
+			}).Should(ContainSubstring("Policy fv/default.policy-1 egress"))
+		})
+	})
+})
+
 var _ = Context("with Typha and Felix-Typha TLS", func() {
 
 	var (
