@@ -1,0 +1,69 @@
+version: v1.0
+name: API
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+auto_cancel:
+  running:
+    when: "branch != 'master'"
+  queued:
+    when: "branch != 'master'"
+
+global_job_config:
+  secrets:
+    - name: docker-hub
+  prologue:
+    commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+    - checkout 
+    #- git fetch --unshallow
+
+blocks:
+  - name: Build
+    execution_time_limit:
+      minutes: 15
+    dependencies: []
+    task:
+      jobs:
+        - name: "make build"
+          commands:
+            - make build
+
+  - name: Unit Tests
+    execution_time_limit:
+      minutes: 30
+    dependencies: []
+    task:
+      jobs:
+        - name: "make ci"
+          commands:
+            - make ci
+
+  - name: Static Checks
+    dependencies: []
+    execution_time_limit:
+      minutes: 15
+    task:
+      jobs:
+        - name: Static Checks
+          commands:
+            - make static-checks
+  - name: Trigger pin updates
+    execution_time_limit:
+      minutes: 5
+    dependencies: [ ]
+    skip:
+      when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
+    task:
+      secrets:
+        - name: semaphore-api
+      jobs:
+        - name: Trigger pin updates
+          commands:
+            - checkout
+            - make semaphore-run-auto-pin-update-workflows
