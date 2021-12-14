@@ -68,7 +68,7 @@ versions of Calico.  It is not possible to specify a pool with no allowed uses.
 The `allowedUses` field is only consulted for new allocations, changing the field has no effect on previously allocated
 addresses.
 
-{{site.prodname}} supports Kubernetes annotations that force the user of specific IP addresses {%- if site.include_calicoctl_resource %}[annotations that force the use of specific IP addresses](../cni-plugin/configuration#requesting-a-specific-ip-address){%- endif %}. These annotations take precedence over the `allowedUses` field.
+{{site.prodname}} supports Kubernetes [annotations that force the use of specific IP addresses](../cni-plugin/configuration#requesting-a-specific-ip-address). These annotations take precedence over the `allowedUses` field.
 
 #### IPIP
 
@@ -78,8 +78,7 @@ is in an IP Pool that has IPIP enabled.  In addition, if the `ipipMode` is set t
 subnet. The subnet of each node is configured on the node resource (which may be automatically
 determined when running the `{{site.nodecontainer}}` service).
 
-For details on configuring IP-in-IP on your deployment, please refer to Configuring IP-in-IP
-{%- if site.include_calicoctl_resource %}[Configuring IP-in-IP]({{ site.baseurl }}/networking/vxlan-ipip).{%- endif %}
+For details on configuring IP-in-IP on your deployment, please refer to [Configuring IP-in-IP]({{ site.baseurl }}/networking/vxlan-ipip).
 
 
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `ipip` enabled.
@@ -112,8 +111,7 @@ Reducing the block size from the default (e.g., using `28` for IPv4 to give 16 a
 
 #### Node Selector
 
-For details on configuring IP pool node selectors, please read the Assign IP addresses based on topology guide
-{%- if site.include_calicoctl_resource %}[Assign IP addresses based on topology guide.]({{ site.baseurl }}/networking/assign-ip-addresses-topology){%- endif %}.
+For details on configuring IP pool node selectors, please read the [Assign IP addresses based on topology guide.]({{ site.baseurl }}/networking/assign-ip-addresses-topology).
 
 > **Tip**: To prevent an IP pool from being used automatically by {{site.prodname}} IPAM, while still allowing
 > it to be used manually for static assignments, set the `IPPool`'s `nodeSelector` to `!all()`. Since the selector 

@@ -8,7 +8,7 @@ A network policy resource (`NetworkPolicy`) represents an ordered set of rules w
 to a collection of endpoints that match a [label selector](#selectors).
 
 `NetworkPolicy` is a namespaced resource. `NetworkPolicy` in a specific namespace
-only applies to workloads {%- if site.include_calicoctl_resource %}[workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint){%- endif %} in that namespace. Two resources are in the same namespace if the `namespace`
+only applies to [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint) in that namespace. Two resources are in the same namespace if the `namespace`
 value is set the same on both.
 See [global network policy resource]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) for non-namespaced network policy.
 
@@ -115,7 +115,7 @@ spec:
 ### Application layer policy
 
 Application layer policy is an optional feature of {{site.prodname}} and must be enabled
-{%- if site.include_calicoctl_resource %}[must be enabled]({{site.baseurl}}/security/app-layer-policy){%- endif %}
+[must be enabled]({{site.baseurl}}/security/app-layer-policy)
 in order to use the following match criteria.
 
 > **NOTE**: Application layer policy match criteria are supported with the following restrictions.

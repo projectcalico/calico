@@ -54,7 +54,7 @@ resources), each with one address inside.
 If an `IPReservation` is created after an IP from its range is already in use then the IP is not automatically 
 released back to the pool.  The reservation check is only done at auto allocation time.
 
-{{site.prodname}} supports Kubernetes annotations that force the use of specific IP addresses {%- if site.include_calicoctl_resource %}[annotations that force the use of specific IP addresses](../cni-plugin/configuration#requesting-a-specific-ip-address){%- endif %}. These annotations override any `IPReservation`s that 
+{{site.prodname}} supports Kubernetes [annotations that force the use of specific IP addresses](../cni-plugin/configuration#requesting-a-specific-ip-address). These annotations override any `IPReservation`s that 
 are in place.
 
 When Windows nodes claim blocks of IPs they automatically assign the first three IPs
