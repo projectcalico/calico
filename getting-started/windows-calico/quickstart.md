@@ -21,7 +21,7 @@ Review the requirements below and setup a {{site.prodname}} cluster on Linux nod
 Whether you use etcd or Kubernetes datastore (kdd), the datastore for the Windows node/Kubernetes cluster must be the same as the datastore for the Linux control node. (You cannot mix datastores in a {{site.prodnameWindows}} implementation.)
 
 **Kubernetes cluster requirements**
-- Kubernetes clusters with versions 1.20, 1.19, or 1.18
+- Kubernetes clusters with version 1.18 onwards
 
 **Windows node requirements**
 - Versions:
