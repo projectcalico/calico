@@ -1,0 +1,17 @@
+syntax = "proto3";
+package dikastes;
+option go_package = "proto";
+
+// Healthz reports readiness and liveness.
+service Healthz {
+  rpc CheckReadiness(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc CheckLiveness(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message HealthCheckRequest {
+}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+}
+

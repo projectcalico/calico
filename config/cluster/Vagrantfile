@@ -1,0 +1,74 @@
+# Size of the cluster created by Vagrant
+num_instances=3
+
+# Change basename of the VM
+instance_name_prefix="k8s-node"
+
+# Official CoreOS channel from which updates should be downloaded
+update_channel='stable'
+
+Vagrant.configure("2") do |config|
+  # always use Vagrants insecure key
+  config.ssh.insert_key = false
+
+  config.vm.box = "coreos-%s" % update_channel
+  config.vm.box_version = ">= 1122.0.0"
+  config.vm.box_url = "http://%s.release.core-os.net/amd64-usr/current/coreos_production_vagrant.json" % update_channel
+
+  config.vm.provider :virtualbox do |v|
+    # On VirtualBox, we don't have guest additions or a functional vboxsf
+    # in CoreOS, so tell Vagrant that so it can be smarter.
+    v.check_guest_additions = false
+    v.memory = 1024 
+    v.cpus = 1
+    v.functional_vboxsf     = false
+  end
+
+  # Set up each box
+  (1..num_instances).each do |i|
+    if i == 1
+      vm_name = "k8s-master"
+    else
+      vm_name = "%s-%02d" % [instance_name_prefix, i-1]
+    end
+
+    config.vm.define vm_name do |host|
+      host.vm.hostname = vm_name
+
+      ip = "172.18.18.#{i+100}"
+      host.vm.network :private_network, ip: ip
+      # Workaround VirtualBox issue where eth1 has 2 IP Addresses at startup
+      host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr flush dev eth1"
+      host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr add #{ip}/24 dev eth1"
+
+      if i == 1
+        # Configure the master.
+        host.vm.provision :file, :source => "master-config.yaml", :destination => "/tmp/vagrantfile-user-data"
+        host.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+
+        host.vm.provision :shell, :inline => "echo '127.0.0.1\tlocalhost' > /etc/hosts", :privileged => true
+        host.vm.provision :shell, :inline => "mkdir -p /etc/kubernetes/manifests/", :privileged => true
+
+        host.vm.provision :file, :source => "k8s-passwd.csv", :destination => "/tmp/k8s-passwd.csv"
+        host.vm.provision :shell, :inline => "mv /tmp/k8s-passwd.csv /etc/kubernetes/", :privileged => true
+
+        host.vm.provision :file, :source => "apiserver.key", :destination => "/tmp/apiserver.key"
+        host.vm.provision :file, :source => "apiserver.crt", :destination => "/tmp/apiserver.crt"
+        host.vm.provision :shell, :inline => "mv /tmp/apiserver.* /etc/kubernetes/", :privileged => true        
+      else
+        # Configure a node.
+        host.vm.provision :file, :source => "node-config.yaml", :destination => "/tmp/vagrantfile-user-data"
+        host.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+
+        host.vm.provision :file, :source => "apiserver.crt", :destination => "/tmp/apiserver.crt"
+        host.vm.provision :shell, :inline => "mkdir -p /etc/docker/certs.d/cluster.local:5000/", :privileged => true
+        host.vm.provision :shell, :inline => "mv /tmp/apiserver.crt /etc/docker/certs.d/cluster.local:5000/ca.crt", :privileged => true        
+      end
+
+      # Provision static host entries
+      host.vm.provision :shell, :inline => "echo '172.18.18.101\tk8s-master cluster.local' >> /etc/hosts", :privileged => true      
+      host.vm.provision :shell, :inline => "echo '172.18.18.102\tk8s-node-01' >> /etc/hosts", :privileged => true      
+      host.vm.provision :shell, :inline => "echo '172.18.18.103\tk8s-node-02' >> /etc/hosts", :privileged => true
+    end
+  end
+end
