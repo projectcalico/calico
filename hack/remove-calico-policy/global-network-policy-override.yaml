@@ -1,0 +1,12 @@
+# Create a custom resource instance of the GlobalNetworkPolicy
+# which allows all ingress and egress traffic.
+apiVersion: "crd.projectcalico.org/v1"
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-all-calico-policy
+spec:
+  order: 0.0
+  ingress:
+  - action: allow
+  egress:
+  - action: allow

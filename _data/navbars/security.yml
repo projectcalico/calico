@@ -1,0 +1,112 @@
+title: "Security"
+path: /security/
+order: 3
+section:
+- title: Adopt a zero trust network model for security
+  path: /security/adopt-zero-trust
+- title: Run Calico node as non-privileged and non-root
+  path: /security/non-privileged
+- title: Get started with policy
+  path: /security/get-started
+  section:
+  - title: Calico policy
+    path: /security/calico-policy
+    section:
+    - title: Get started with Calico network policy
+      path: /security/calico-network-policy
+    - title: Get started with Calico network policy for OpenStack
+      path: /security/network-policy-openstack
+    - title: Calico policy tutorial
+      path: /security/tutorials/calico-policy
+  - title: Kubernetes policy
+    path: /security/kubernetes-policy
+    section:
+    - title: Get started with Kubernetes network policy
+      path: /security/kubernetes-network-policy
+    - title: Kubernetes policy, demo
+      path: /security/tutorials/kubernetes-policy-demo/kubernetes-demo
+    - title: Kubernetes policy, basic tutorial
+      path: /security/tutorials/kubernetes-policy-basic
+    - title: Kubernetes policy, advanced tutorial
+      path: /security/tutorials/kubernetes-policy-advanced
+  - title: Enable default deny
+    path: /security/kubernetes-default-deny
+- title: Policy rules
+  path: /security/policy-rules
+  section:
+  - title: Basic rules
+    path: /security/policy-rules-overview
+  - title: Namespace rules
+    path: /security/namespace-policy
+  - title: Service rules
+    path: /security/service-policy
+  - title: Service accounts rules
+    path: /security/service-accounts
+  - title: External IPs or networks rules
+    path: /security/external-ips-policy
+  - title: ICMP/ping rules
+    path: /security/icmp-ping
+- title: Policy for hosts
+  path: /security/hosts
+  section:
+  - title: Protect hosts
+    path: /security/protect-hosts
+  - title: Protect Kubernetes nodes
+    path: /security/kubernetes-nodes
+  - title: Protect host tutorial
+    path: /security/tutorials/protect-hosts
+  - title: Apply policy to host forwarded traffic
+    path: /security/host-forwarded-traffic
+- title: Policy for services
+  path: /security/services
+  section:
+  - title: Apply policy to Kubernetes node ports
+    path: /security/kubernetes-node-ports
+  - title: Apply policy to services exposed externally as cluster IPs
+    path: /security/services-cluster-ips
+- title: Policy for Istio
+  path: /security/istio
+  section:
+  - title: Enforce network policy for Istio
+    path: /security/app-layer-policy
+  - title: Use HTTP methods and paths in policy rules
+    path: /security/http-methods
+  - title: Enforce network policy using Istio tutorial
+    path: /security/tutorials/app-layer-policy/enforce-policy-istio
+- title: Policy for extreme traffic
+  path: /security/extreme-traffic
+  section:
+  - title: Enable extreme high-connection workloads
+    path: /security/high-connection-workloads
+  - title: Defend against DoS attacks
+    path: /security/defend-dos-attack
+- title: Encrypt in-cluster pod traffic
+  path: /security/encrypt-cluster-pod-traffic
+- title: Secure Calico component communications
+  path: /security/comms/
+  section:
+  - title: Configure encryption and authentication
+    path: /security/comms/crypto-auth
+  - title: Schedule Typha to well-known-nodes
+    path: /security/comms/reduce-nodes
+  - title: Secure Calico Prometheus endpoints
+    path: /security/comms/secure-metrics
+  - title: Secure BGP sessions
+    path: /security/comms/secure-bgp
+- title: Calico Enterprise
+  path: /security/calico-enterprise/
+  section:
+  - title: Network visibility
+    path: /security/calico-enterprise/network-visibility
+  - title: Advanced egress access controls
+    path: /security/calico-enterprise/egress-access-controls
+  - title: Advanced compliance controls
+    path: /security/calico-enterprise/compliance
+  - title: Federation
+    path: /security/calico-enterprise/federation
+  - title: Threat defense
+    path: /security/calico-enterprise/threat-defense
+  - title: User console
+    path: /security/calico-enterprise/user-console
+  - title: Policy workflow
+    path: /security/calico-enterprise/policy-workflow

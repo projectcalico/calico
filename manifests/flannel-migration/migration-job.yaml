@@ -1,0 +1,4 @@
+---
+layout: null
+---
+{% include non-helm-manifests/flannel-migration/migration-job.yaml %}
