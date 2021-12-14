@@ -1,0 +1,74 @@
+#                                                                      -*-sh-*-
+# Devstack settings that are wanted when using Calico
+# ===================================================
+
+if [ "$SERVICE_HOST" = "$HOST_IP" -o "$SERVICE_HOST" = "$HOSTNAME" -o "$SERVICE_HOST" = "127.0.0.1" ]; then
+    # SERVICE_HOST is _this_ host, so we will prepare a combined
+    # controller and compute node.
+    CALICO_COMPUTE_ONLY=false
+else
+    # SERVICE_HOST is set to something that is not this host, so we
+    # will prepare a compute-only node.
+    CALICO_COMPUTE_ONLY=true
+    MYSQL_HOST=${MYSQL_HOST:-$SERVICE_HOST}
+    RABBIT_HOST=${RABBIT_HOST:-$SERVICE_HOST}
+fi
+
+if $CALICO_COMPUTE_ONLY; then
+    # Explicitly enable the services that we need for compute only.
+    ENABLED_SERVICES=n-cpu,neutron,calico-dhcp,n-api-meta,calico-bird
+else
+    # Use Devstack to install etcd3.  This plugin had its own code for
+    # installing etcd, but that code only worked for etcd2, so it is
+    # now removed.
+    enable_service etcd3
+
+    # Disable services that Devstack starts by default, but that we
+    # don't need for Calico networking demonstration: 'dstat' is a
+    # rolling display of memory and CPU usage by the various OpenStack
+    # services and agents; 'tempest' is OpenStack's high level testing
+    # framework; and 'n-net' is Nova networking.
+    disable_service dstat
+    disable_service n-net
+
+    # Enable services that Devstack doesn't enable by default, but
+    # that we _do_ want for Calico demonstration: 'q-svc' is the
+    # Neutron server; 'calico-dhcp' means the Calico DHCP agent; and
+    # 'n-api-meta' is the Nova metadata API service.
+    enable_service q-svc
+    enable_service calico-dhcp
+    enable_service n-api-meta
+
+    # Disable Neutron services that we don't want.
+    disable_service q-agt
+    disable_service q-dhcp
+    disable_service q-l3
+    disable_service q-meta
+    disable_service q-metering
+
+    # 'calico-bird' is an additional service that automatically
+    # generates and maintains correct full mesh BIRD config, in a
+    # multi-node Calico/DevStack cluster.
+    enable_service calico-bird
+fi
+
+# When Neutron is enabled, Devstack does agent-related installations,
+# configurations and service startups as directed by the value of
+# Q_AGENT.  Devstack doesn't actually include any code for the
+# 'calico-felix' value, but the point here is that we want to avoid
+# running code for any of the agents that Devstack _does_ have code for,
+# such as openvswitch and linuxbridge.  So all we're doing here is
+# setting a value that Devstack will not recognize.
+Q_AGENT=calico-felix
+
+# Calico does not use namespaces.
+Q_USE_NAMESPACE=False
+
+# Tell configure_neutron_after_post_config not to set service_plugins.
+# The Calico plugin provides the 'router' extension itself and does
+# not want a service plugin to try to handle that extension also.
+Q_SERVICE_PLUGIN_CLASSES=
+ML2_L3_PLUGIN=
+
+# Don't use systemd.
+USE_SYSTEMD=False

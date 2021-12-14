@@ -1,0 +1,34 @@
+version: v1.0
+name: Felix
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+execution_time_limit:
+  minutes: 10
+
+global_job_config:
+  secrets:
+  - name: docker-hub
+  prologue:
+    commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+blocks:
+- name: Clean up GCE resources
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}
+      - echo VM_PREFIX=${VM_PREFIX}
+    jobs:
+    - name: Clean up GCE instances
+      commands:
+      - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+    - name: google-service-account-for-gce

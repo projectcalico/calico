@@ -1,0 +1,113 @@
+#!/bin/bash
+
+# Project Calico BPF dataplane build scripts.
+# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+
+filename=$1 # Example: from_wep_host_drop_fib_info.o
+args=()
+
+if [[ "${filename}" =~ .*debug.* ]]; then
+  args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG")
+elif [[ "${filename}" =~ .*info.* ]]; then
+  args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_INFO")
+elif [[ "${filename}" =~ .*no_log.* ]]; then
+  args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_OFF")
+else
+  echo "No log level in filename"
+  exit 1
+fi
+
+if [[ "${filename}" =~ .*host_drop.* ]]; then
+  args+=("-DCALI_DROP_WORKLOAD_TO_HOST=true")
+else
+  args+=("-DCALI_DROP_WORKLOAD_TO_HOST=false")
+fi
+
+if [[ "${filename}" =~ .*fib.* ]]; then
+  args+=("-DCALI_FIB_LOOKUP_ENABLED=true")
+else
+  args+=("-DCALI_FIB_LOOKUP_ENABLED=false")
+fi
+
+if [[ "${filename}" =~ .*skb([0-9a-fA-Fx]+).* ]]; then
+  args+=("-DCALI_SET_SKB_MARK=${BASH_REMATCH[1]}")
+  args+=("-DUNITTEST")
+fi
+
+if [[ "${filename}" =~ test_.* ]]; then
+  args+=("-D__BPFTOOL_LOADER__")
+fi
+
+if [[ "${filename}" =~ test_xdp_.* ]]; then
+  args+=("-DUNITTEST")
+fi
+
+flags=0
+
+# WARNING: these constants must be kept in sync with bpf.h.
+((CALI_TC_HOST_EP = 1 << 0))
+((CALI_TC_INGRESS = 1 << 1))
+((CALI_TC_TUNNEL = 1 << 2))
+((CALI_CGROUP = 1 << 3))
+((CALI_TC_DSR = 1 << 4))
+((CALI_TC_WIREGUARD = 1 << 5))
+((CALI_XDP_PROG = 1 << 6))
+
+if [[ "${filename}" =~ .*hep.* ]]; then
+  # Host endpoint.
+  ((flags |= CALI_TC_HOST_EP))
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO")
+  ep_type="host"
+elif [[ "${filename}" =~ .*tnl.* ]]; then
+  # Tunnel.
+  ((flags |= CALI_TC_TUNNEL | CALI_TC_HOST_EP))
+  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
+  ep_type="tunnel"
+elif [[ "${filename}" =~ .*wg.* ]]; then
+  # Wireguard.
+  ((flags |= CALI_TC_WIREGUARD | CALI_TC_HOST_EP))
+  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALICOLO")
+  ep_type="wireguard"
+elif [[ "${filename}" =~ .*connect.* ]]; then
+  # Connect-time load balancer (CGROUP attached).
+  ((flags |= CALI_CGROUP))
+  args+=("-DCALI_DEBUG_ALLOW_ALL" "-DCALI_LOG_PFX=CALI")
+elif [[ "${filename}" =~ .*wep.* ]]; then
+  # Workload endpoint; recognised by CALI_TC_HOST_EP bit being 0.
+  ep_type="workload"
+  args+=("-DCALI_LOG_PFX=CALICOLO")
+elif [[ "${filename}" =~ .*xdp.* ]]; then
+  # XDP, so host endpoint.
+  ((flags |= CALI_TC_HOST_EP))
+  ((flags |= CALI_XDP_PROG))
+  args+=("-DCALI_NO_DEFAULT_POLICY_PROG" "-DCALI_LOG_PFX=CALICOLO" "-D__IPTOOL_LOADER__")
+  ep_type="host"
+else
+  echo "Can't recognise endpoint type"
+  exit 2
+fi
+
+if [[ "${filename}" =~ to.* ]]; then
+  if ! ((flags & CALI_TC_HOST_EP)); then
+    # Workload endpoint.  Host's "to endpoint" is the endpoints ingress hook.
+    ((flags |= CALI_TC_INGRESS))
+  fi
+  from_or_to="to"
+elif [[ "${filename}" =~ (from|xdp).* ]]; then
+  if ((flags & CALI_TC_HOST_EP)); then
+    # Host endpoint.
+    ((flags |= CALI_TC_INGRESS))
+  fi
+  from_or_to="from"
+fi
+
+if [[ "${filename}" =~ _dsr.* ]]; then
+  ((flags |= CALI_TC_DSR))
+fi
+
+args+=("-DCALI_COMPILE_FLAGS=${flags}")
+args+=("-DCALI_ENTRYPOINT_NAME=calico_${from_or_to}_${ep_type}_ep")
+
+echo "Flags: ${args[*]}" 1>&2
+echo "${args[*]}"

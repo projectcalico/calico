@@ -1,0 +1,2 @@
+#!/bin/bash
+echo "Running fake binary: "$0 $*

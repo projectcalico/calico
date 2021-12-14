@@ -1,0 +1,41 @@
+Source: felix
+Section: net
+Priority: optional
+Maintainer: Project Calico Maintainers <maintainers@projectcalico.org>
+Build-Depends: debhelper (>= 8.0.0), dh-systemd, libelf-dev
+Standards-Version: 3.9.4
+
+Package: calico-common
+Architecture: all
+Depends:
+ ${misc:Depends}
+Description: Project Calico virtual networking for cloud data centers.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. Its IP-centric architecture offers numerous
+ advantages over other cloud networking approaches such as VLANs and
+ overlays, including scalability, efficiency, and simplicity. It is
+ designed for a wide range of environments including OpenStack,
+ lightweight Linux containers (LXCs), bare metal, and Network Functions
+ Virtualization (NFV).
+ .
+ This package provides common files.
+
+Package: calico-felix
+Architecture: amd64 ppc64el
+Depends:
+ calico-common (= ${binary:Version}),
+ conntrack,
+ ipset,
+ iproute2,
+ net-tools,
+ ${misc:Depends}
+Description: Project Calico virtual networking for cloud data centers.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. Its IP-centric architecture offers numerous
+ advantages over other cloud networking approaches such as VLANs and
+ overlays, including scalability, efficiency, and simplicity. It is
+ designed for a wide range of environments including OpenStack,
+ lightweight Linux containers (LXCs), bare metal, and Network Functions
+ Virtualization (NFV).
+ .
+ This package provides the Felix component.

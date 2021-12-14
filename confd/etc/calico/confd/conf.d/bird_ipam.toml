@@ -1,0 +1,11 @@
+[template]
+src = "bird_ipam.cfg.template"
+dest = "/etc/calico/confd/config/bird_ipam.cfg"
+prefix = "/calico"
+keys = [
+    "/v1/ipam/v4/pool",
+    "/bgp/v1/host//NODENAME",
+    "/staticroutes",
+    "/rejectcidrs",
+]
+reload_cmd = "sv hup bird || true"
