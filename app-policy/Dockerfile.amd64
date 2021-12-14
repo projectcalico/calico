@@ -1,0 +1,53 @@
+# Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG GIT_VERSION=unknown
+
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as build
+RUN mkdir -p /tmp/dikastes
+RUN chmod 0777 /tmp/dikastes
+
+# Add in top-level license file
+RUN mkdir /licenses
+COPY LICENSE /licenses
+
+FROM scratch
+ARG GIT_VERSION
+LABEL name="Calico Dikastes" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico Dikastes enables Application Layer Policy" \
+      description="Calico Dikastes enables Application Layer Policy" \
+      maintainer="Laurence Man<laurence@tigera.io>"
+
+COPY --from=build /licenses /licenses
+ADD bin/dikastes-amd64 /dikastes
+ADD bin/healthz-amd64 /healthz
+
+# Include libraries from UBI for dynamic linking.
+COPY --from=build /lib64 /lib64
+COPY --from=build /lib /lib
+
+# Typical Linux systems start numbering human users at 1000, reserving 1-999
+# for services, so we pick 999 to be least likely to overlap.  It's not a big
+# deal if we happen to overlap, as it would take a container escape for
+# an attacker to use any privileges that happen to be assigned to this user.
+#
+# Precreate the /var/run/dikastes directory so that we don't need any elevated
+# permission to create the directory at runtime.
+COPY --chown=999 --from=build /tmp/dikastes /var/run/dikastes
+USER 999
+ENTRYPOINT ["/dikastes"]
+CMD ["server"]

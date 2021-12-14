@@ -1,0 +1,10 @@
+# Have git auto-detect text-ness and line endings by default.
+* text=auto
+
+# For Windows-specific files, force Windows line endings.
+*.ps1 text eol=crlf
+*.ps1.template text eol=crlf
+*.psm1 text eol=crlf
+windows-packaging/TigeraCalico/*.txt text eol=crlf 
+windows-packaging/TigeraCalico/confd/conf.d/*.toml eol=crlf
+

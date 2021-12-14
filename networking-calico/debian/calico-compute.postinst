@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "configure" ]
+then
+    # Enable IP forwarding.
+    cat > /etc/sysctl.d/99-networking-calico.conf <<EOF
+net.ipv4.ip_forward=1
+net.ipv6.conf.all.forwarding=1
+EOF
+    sysctl --system
+fi
+
+#DEBHELPER#

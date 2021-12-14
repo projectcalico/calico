@@ -1,0 +1,88 @@
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: policy1
+  spec:
+    order: 6543215.321
+    ingress:
+      - action: allow
+        protocol: udp
+        icmp:
+          type: 10
+          code: 100
+        source:
+          tag: web
+          net: 1.2.3.4/10
+          selector: has(THING_THING8)
+          ports: [1,2,3,4]
+        destination:
+          tag: database
+          net: 10.20.30.40/32
+          selector:
+          ports:
+    egress:
+      - action: deny
+        protocol: tcp
+        source:
+          notTag: abcd
+          notNet: aa:bb:cc::ff/100
+          notSelector: 
+          notPorts: [100,"3:4",65535,"10:20","20:40"]
+    selector:
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: policy2
+  spec:
+    order: 0
+- apiVersion: v1
+  kind: hostEndpoint
+  metadata:
+    name: endpoint1
+    node: host1
+    labels:
+      type: database
+  spec:
+    interfaceName: eth0
+    profiles: [prof1, prof2]
+    expectedIPs: [1.2.3.4, "00:bb::aa"]
+- apiVersion: v1
+  kind: profile
+  metadata:
+    name: profile1
+    labels:
+      type: database
+      THING4: VALUE10/2-F
+    tags: [a, b, c, a1, update]
+  spec:
+    ingress:
+      - action: deny
+    egress:
+      - action: deny
+- apiVersion: v1
+  kind: profile
+  metadata:
+    name: empty
+  spec:
+    ingress:
+      - action: deny
+- apiVersion: v1
+  kind: bgpPeer
+  metadata:
+    scope: global
+    peerIP: 1.2.3.4
+  spec:
+    asNumber: 1234
+- apiVersion: v1
+  kind: bgpPeer
+  metadata:
+    scope: node
+    node: fred
+    peerIP: 1.3.5.6
+  spec:
+    asNumber: "1.10"
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 10.10.0.0/16
+

@@ -1,0 +1,225 @@
+version: v1.0
+name: CNIPlugin
+
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+auto_cancel:
+  running:
+    when: "branch != 'master'"
+  queued:
+    when: "branch != 'master'"
+
+promotions:
+  - name: Cleanup
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+  # Run the pin update process in case there were a backlog of pin update requests
+  - name: Update Pins
+    pipeline_file: update_pins.yml
+    auto_promote:
+      # If the block has passed and the branch is for master or a release branch then run the pin updates. Note that
+      # this doesn't try to restrict which release branches, as the presence of this auto promotion code means that
+      # it can handle updating the pins in this fashion.
+      when: "(result = 'passed') and ((branch = 'master') or (branch =~ '^release-v\d*\.\d*'))"
+
+global_job_config:
+  secrets:
+    - name: docker-hub
+    # Key for pulling from private github repos.
+    - name: private-repo
+    # Key for pulling images from GCR.
+    - name: tigera-dev-ci-pull-credentials
+
+  prologue:
+    commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+    # Load the github access secrets.  First fix the permissions.
+    - chmod 0600 ~/.keys/*
+    - ssh-add ~/.keys/*
+    - docker login --username casey@tigera.io -u _json_key -p "$(cat /home/semaphore/tigera-dev-ci.json)" https://gcr.io
+
+blocks:
+  - name: Unit Tests
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - checkout
+          # Semaphore is doing shallow clone on a commit without tags.
+          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
+          - git fetch --unshallow
+      jobs:
+        - name: Test Version
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - make test-cni-versions
+        - name: Test Install
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - make test-install-cni
+
+  - name: Static Checks
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - checkout
+          # Semaphore is doing shallow clone on a commit without tags.
+          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
+          - git fetch --unshallow
+      jobs:
+        - name: Static Checks
+          execution_time_limit:
+            minutes: 15
+          commands:
+            - make static-checks
+
+  - name: Windows FV - docker
+    dependencies: []
+    task:
+      secrets:
+        - name: banzai-secrets
+      prologue:
+        commands:
+          # Prepare aws configuration.
+          - pip install --upgrade --user awscli
+          - export REPORT_DIR=~/report
+          - export LOGS_DIR=~/fv.log
+          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+          - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}-docker
+          - export KEYPAIR_NAME=${CLUSTER_NAME}
+          - echo CLUSTER_NAME=${CLUSTER_NAME}
+          - sudo apt-get install putty-tools
+          - git clone git@github.com:tigera/process.git
+          - checkout
+          - make build && make bin/windows/win-fv.exe
+      epilogue:
+        always:
+          commands:
+            - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+            - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+      env_vars:
+        - name: SEMAPHORE_ARTIFACT_EXPIRY
+          value: 2w
+        - name: AWS_DEFAULT_REGION
+          value: us-west-2
+        - name: MASTER_CONNECT_KEY_PUB
+          value: master_ssh_key.pub
+        - name: MASTER_CONNECT_KEY
+          value: master_ssh_key
+        - name: WIN_PPK_KEY
+          value: win_ppk_key
+        - name: K8S_VERSION
+          value: 1.17.2
+      jobs:
+        - name: FV Test matrix
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - ./.semaphore/run-win-fv.sh
+
+  - name: Windows FV - containerd
+    dependencies: []
+    task:
+      secrets:
+        - name: banzai-secrets
+      prologue:
+        commands:
+          # Prepare aws configuration.
+          - pip install --upgrade --user awscli
+          - export REPORT_DIR=~/report
+          - export LOGS_DIR=~/fv.log
+          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+          - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}-containerd
+          - export KEYPAIR_NAME=${CLUSTER_NAME}
+          - echo CLUSTER_NAME=${CLUSTER_NAME}
+          - sudo apt-get install putty-tools
+          - git clone git@github.com:tigera/process.git
+          - checkout
+          - make build && make bin/windows/win-fv.exe
+      epilogue:
+        always:
+          commands:
+            - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+            - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+      env_vars:
+        - name: SEMAPHORE_ARTIFACT_EXPIRY
+          value: 2w
+        - name: AWS_DEFAULT_REGION
+          value: us-west-2
+        - name: MASTER_CONNECT_KEY_PUB
+          value: master_ssh_key.pub
+        - name: MASTER_CONNECT_KEY
+          value: master_ssh_key
+        - name: WIN_PPK_KEY
+          value: win_ppk_key
+        - name: K8S_VERSION
+          value: 1.17.2
+        - name: CONTAINER_RUNTIME
+          value: containerd
+        - name: CONTAINERD_VERSION
+          value: 1.4.4
+      jobs:
+        - name: FV Test matrix
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - ./.semaphore/run-win-fv.sh
+
+  - name: 'Push Images (non-PR builds only)'
+    dependencies: ["Unit Tests", "Static Checks", "Windows FV - docker", "Windows FV - containerd"]
+    skip:
+      # Only run on branches, not PRs.
+      when: "branch !~ '.+'"
+    task:
+      secrets:
+        - name: quay-robot-calico+semaphoreci
+        - name: docker
+      prologue:
+        commands:
+          - checkout
+          # Semaphore is doing shallow clone on a commit without tags.
+          # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
+          - git fetch --unshallow
+          # Correct permissions since they are too open by default:
+          - chmod 0600 ~/.keys/*
+          # Add the key to the ssh agent:
+          - ssh-add ~/.keys/*
+          # Login to docker in order to pull images.
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      jobs:
+        - name: Run CD
+          execution_time_limit:
+            minutes: 15
+          commands:
+            - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make cd CONFIRM=true; fi
+
+  - name: Trigger pin updates
+    dependencies: []
+    skip:
+      when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
+    task:
+      secrets:
+        - name: semaphore-api
+      jobs:
+        - name: Trigger pin updates
+          execution_time_limit:
+            minutes: 5
+          commands:
+            - checkout
+            - make semaphore-run-auto-pin-update-workflows

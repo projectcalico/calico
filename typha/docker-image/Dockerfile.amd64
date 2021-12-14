@@ -1,0 +1,60 @@
+# Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG GIT_VERSION=unknown
+
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+
+# Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
+RUN chmod +x /sbin/tini
+
+# Add in top-level license file
+RUN mkdir /licenses
+ADD licenses /licenses
+COPY LICENSE /licenses
+
+FROM scratch
+ARG GIT_VERSION
+LABEL name="Calico Typha" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico Typha is a fan-out datastore proxy" \
+      description="Calico Typha is a fan-out datastore proxy" \
+      maintainer="Shaun Crampton <shaun@tigera.io>"
+
+COPY --from=base /sbin/tini /sbin/tini
+COPY --from=base /licenses /licenses
+
+COPY --from=base /usr/include /usr/include
+COPY --from=base /lib64 /lib64
+COPY --from=base /lib /lib
+
+# Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
+# to more easily extract the build artefacts from the container.
+ADD bin/calico-typha-amd64 /code/calico-typha
+ADD typha.cfg /etc/calico/typha.cfg
+
+# Add nsswitch.conf so that we correctly resolve localhost based on /etc/hosts.
+ADD nsswitch.conf /etc/nsswitch.conf
+
+WORKDIR /code
+ENV PATH="$PATH:/code"
+
+USER 999
+# Run Typha by default
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["calico-typha"]

@@ -1,0 +1,70 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: false
+
+---
+
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  peerIP: 10.192.0.3
+  asNumber: 64512
+  node: kube-master
+
+---
+
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-2
+spec:
+  peerIP: 10.192.0.4
+  asNumber: 64566
+  node: kube-master
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-1
+spec:
+  cidr: 192.168.0.0/16
+  ipipMode: Always
+  natOutgoing: true
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+
+---
+
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+

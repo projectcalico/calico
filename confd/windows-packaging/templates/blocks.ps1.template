@@ -1,0 +1,18 @@
+
+$blocks =
+{{- $node_block_key := printf "/host/%s/ipv4/block" (getenv "NODENAME")}}
+{{- range ls $node_block_key}}
+    {{- $parts := split . "-"}}
+    {{- $cidr := join $parts "/"}}
+    {{- $affinity := json (getv (printf "%s/%s" $node_block_key .))}}
+    {{- if $affinity.state}}
+    # Block {{$cidr}} is {{$affinity.state}}
+        {{- if eq $affinity.state "confirmed"}}
+    "{{$cidr}}",
+        {{- end}}
+    {{- else }}
+    # Block {{$cidr}} is implicitly confirmed.
+    "{{$cidr}}",
+    {{- end }}
+{{end}}
+    ""
