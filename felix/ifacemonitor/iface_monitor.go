@@ -25,7 +25,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type netlinkStub interface {

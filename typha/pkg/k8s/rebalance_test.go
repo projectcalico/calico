@@ -15,7 +15,7 @@
 package k8s_test
 
 import (
-	. "github.com/projectcalico/typha/pkg/k8s"
+	. "github.com/projectcalico/calico/typha/pkg/k8s"
 
 	"context"
 	"errors"
@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
 var _ = DescribeTable("CalculateMaxConnLimit tests",

@@ -19,12 +19,12 @@ import (
 	"fmt"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/names"
-	"github.com/projectcalico/libcalico-go/lib/options"
-	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
-	"github.com/projectcalico/libcalico-go/lib/watch"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
 // WorkloadEndpointInterface has methods to work with WorkloadEndpoint resources.

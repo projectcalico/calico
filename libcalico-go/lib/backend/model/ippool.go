@@ -22,9 +22,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/encap"
-	"github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var (

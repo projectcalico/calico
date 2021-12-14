@@ -26,13 +26,13 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/backend"
-	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
-	"github.com/projectcalico/libcalico-go/lib/watch"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
 // These tests are not run on KDD since the WEP resource is not a creatable resource.

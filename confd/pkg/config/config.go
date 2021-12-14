@@ -6,11 +6,11 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	logutils "github.com/kelseyhightower/confd/pkg/log"
-	"github.com/kelseyhightower/confd/pkg/resource/template"
+	logutils "github.com/projectcalico/calico/confd/pkg/log"
+	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/typha/pkg/syncclientutils"
+	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
 
 var (

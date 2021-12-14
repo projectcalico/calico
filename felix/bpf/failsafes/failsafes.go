@@ -22,12 +22,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/logutils"
 )
 
 type Manager struct {

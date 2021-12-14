@@ -21,11 +21,11 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var asn, _ = numorstring.ASNumberFromString("1")

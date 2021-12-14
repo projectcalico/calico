@@ -18,7 +18,7 @@ import (
 	"net"
 	"os/exec"
 
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 type conntrackIface interface {

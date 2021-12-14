@@ -32,18 +32,18 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/backend"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/names"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/node/pkg/lifecycle/startup/autodetection"
-	"github.com/projectcalico/node/pkg/lifecycle/utils"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )
 
 var exitCode int

@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	log "github.com/sirupsen/logrus"
 )
 

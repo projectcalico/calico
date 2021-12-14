@@ -22,8 +22,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
-	"github.com/projectcalico/typha/pkg/calc"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/typha/pkg/calc"
 )
 
 func NewK8sAPI(nc *calc.NodeCounter) *RealK8sAPI {

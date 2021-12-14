@@ -25,7 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 
 	"golang.org/x/sys/unix"
 )

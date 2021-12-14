@@ -20,7 +20,7 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/projectcalico/kube-controllers/pkg/status"
+	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 )
 
 // VERSION is filled out during the build process (using git describe output)

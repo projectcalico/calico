@@ -20,11 +20,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/ipsets"
-	"github.com/projectcalico/felix/iptables"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/rules"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var _ = Describe("Policy manager", func() {

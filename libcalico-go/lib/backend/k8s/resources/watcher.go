@@ -23,8 +23,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kwatch "k8s.io/apimachinery/pkg/watch"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (

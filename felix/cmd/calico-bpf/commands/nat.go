@@ -19,14 +19,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf"
 
 	"github.com/docopt/docopt-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 )
 
 func init() {

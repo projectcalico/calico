@@ -18,7 +18,7 @@ import (
 	"fmt"
 	gnet "net"
 
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
 )
 

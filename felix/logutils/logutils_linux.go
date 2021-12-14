@@ -23,8 +23,8 @@ import (
 	"github.com/mipearson/rfw"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDest *logutils.Destination, fileDirErr error, fileOpenErr error) {

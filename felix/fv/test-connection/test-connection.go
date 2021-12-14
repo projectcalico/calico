@@ -37,9 +37,9 @@ import (
 	reuse "github.com/libp2p/go-reuseport"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/fv/cgroup"
-	"github.com/projectcalico/felix/fv/connectivity"
-	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/cgroup"
+	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/utils"
 )
 
 const usage = `test-connection: test connection to some target, for Felix FV testing.

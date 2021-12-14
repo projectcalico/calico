@@ -19,7 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/selector/parser"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
 // parseSelectorAttachPrefix takes a v3 selector and returns the appropriate v1 representation

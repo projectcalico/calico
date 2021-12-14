@@ -21,9 +21,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/testutils"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/testutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"

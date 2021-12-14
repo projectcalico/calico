@@ -40,8 +40,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/felix/labelindex"
-	"github.com/projectcalico/felix/versionparse"
+	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/versionparse"
 )
 
 type XDPMode int

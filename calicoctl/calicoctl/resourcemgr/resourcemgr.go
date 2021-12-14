@@ -33,11 +33,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/argutils"
-	yamlsep "github.com/projectcalico/calicoctl/v3/calicoctl/util/yaml"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
+	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 // ResourceManager provides a useful function for each resource type.  This includes:

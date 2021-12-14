@@ -22,9 +22,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/options"
-	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
-	"github.com/projectcalico/libcalico-go/lib/watch"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
 // KubeControllersConfigurationInterface has methods to work with KubeControllersConfiguration resources.

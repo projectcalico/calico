@@ -18,11 +18,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/projectcalico/felix/dataplane/common"
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/routetable"
-	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/felix/rules"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

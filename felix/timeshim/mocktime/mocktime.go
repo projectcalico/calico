@@ -21,7 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/timeshim"
+	"github.com/projectcalico/calico/felix/timeshim"
 )
 
 var StartTime, _ = time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")

@@ -23,8 +23,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 //

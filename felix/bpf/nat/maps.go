@@ -24,8 +24,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 // struct calico_nat_v4_key {

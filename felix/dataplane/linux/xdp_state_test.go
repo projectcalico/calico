@@ -23,10 +23,10 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/ipsets"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type mockIPSetValue struct {

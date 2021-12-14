@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/projectcalico/typha/pkg/daemon"
+	. "github.com/projectcalico/calico/typha/pkg/daemon"
 
 	"context"
 	"fmt"
@@ -30,14 +30,14 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/ipam"
-	fvtests "github.com/projectcalico/typha/fv-tests"
-	"github.com/projectcalico/typha/pkg/config"
-	"github.com/projectcalico/typha/pkg/syncclient"
-	"github.com/projectcalico/typha/pkg/syncserver"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	fvtests "github.com/projectcalico/calico/typha/fv-tests"
+	"github.com/projectcalico/calico/typha/pkg/config"
+	"github.com/projectcalico/calico/typha/pkg/syncclient"
+	"github.com/projectcalico/calico/typha/pkg/syncserver"
 )
 
 var configContents = []byte(`[default]

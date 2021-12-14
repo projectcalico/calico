@@ -33,7 +33,7 @@ import (
 	"go.etcd.io/etcd/pkg/fileutil"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 type config struct {

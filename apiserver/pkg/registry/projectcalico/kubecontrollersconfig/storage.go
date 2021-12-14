@@ -26,7 +26,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/apiserver/pkg/registry/projectcalico/server"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 )
 
 // rest implements a RESTStorage for API services against etcd

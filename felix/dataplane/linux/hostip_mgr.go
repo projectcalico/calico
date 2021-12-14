@@ -20,9 +20,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane/common"
-	"github.com/projectcalico/felix/ipsets"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // hostIPManager monitors updates from ifacemonitor for host ip update events. It then flushes host ips into an ipset.

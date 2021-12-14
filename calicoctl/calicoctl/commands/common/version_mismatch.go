@@ -22,9 +22,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/clientmgr"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var VERSION string

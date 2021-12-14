@@ -24,9 +24,9 @@ import (
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/backend/encap"
-	v3 "github.com/projectcalico/libcalico-go/lib/validator/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 func init() {

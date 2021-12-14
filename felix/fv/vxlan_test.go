@@ -22,21 +22,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/fv/connectivity"
-	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/workload"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {

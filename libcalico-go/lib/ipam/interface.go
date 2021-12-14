@@ -17,8 +17,8 @@ package ipam
 import (
 	"context"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // ipam.Interface has methods to perform IP address management.

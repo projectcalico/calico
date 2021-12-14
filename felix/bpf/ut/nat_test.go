@@ -19,18 +19,18 @@ import (
 	"net"
 	"testing"
 
-	"github.com/projectcalico/felix/bpf"
-	tcdefs "github.com/projectcalico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/bpf"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/bpf/arp"
-	"github.com/projectcalico/felix/bpf/conntrack"
-	"github.com/projectcalico/felix/bpf/nat"
-	"github.com/projectcalico/felix/bpf/routes"
-	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/calico/felix/bpf/arp"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 func TestNATPodPodXNode(t *testing.T) {

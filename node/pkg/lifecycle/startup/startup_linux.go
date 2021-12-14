@@ -19,8 +19,8 @@ import (
 	"os"
 	"strings"
 
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/node/pkg/lifecycle/utils"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 
 	log "github.com/sirupsen/logrus"
 )

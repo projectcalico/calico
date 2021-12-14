@@ -27,13 +27,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/common"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/constants"
-	"github.com/projectcalico/calicoctl/v3/calicoctl/util"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 )
 
 // All of the resources we can retrieve via the v3 API.

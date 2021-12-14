@@ -22,8 +22,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/apiserver/pkg/storage/calico"
-	"github.com/projectcalico/apiserver/pkg/storage/etcd"
+	"github.com/projectcalico/calico/apiserver/pkg/storage/calico"
+	"github.com/projectcalico/calico/apiserver/pkg/storage/etcd"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authorization/authorizer"

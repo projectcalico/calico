@@ -19,8 +19,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 
 	log "github.com/sirupsen/logrus"
 

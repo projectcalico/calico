@@ -20,11 +20,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	. "github.com/projectcalico/libcalico-go/lib/backend/model"
+	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
-	"github.com/projectcalico/felix/dataplane/mock"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/dataplane/mock"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // Pre-defined datastore states.  Each State object wraps up the complete state

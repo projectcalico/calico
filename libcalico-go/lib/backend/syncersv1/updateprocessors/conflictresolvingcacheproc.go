@@ -20,8 +20,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 )
 
 // ConflictResolvingNameCacheProcessor implements a cached update processor that may be used

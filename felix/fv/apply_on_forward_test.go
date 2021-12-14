@@ -27,14 +27,14 @@ import (
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/felix/fv/connectivity"
-	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/felix/fv/workload"
-	"github.com/projectcalico/felix/rules"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {

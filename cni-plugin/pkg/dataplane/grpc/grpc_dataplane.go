@@ -26,10 +26,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc/proto"
-	"github.com/projectcalico/cni-plugin/pkg/types"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
+	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 const (

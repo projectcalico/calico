@@ -22,11 +22,11 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 
 	. "github.com/onsi/ginkgo"
 
-	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {

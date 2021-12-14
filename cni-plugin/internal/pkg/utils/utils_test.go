@@ -5,7 +5,7 @@ import (
 	"github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 )
 
 var _ = Describe("utils", func() {

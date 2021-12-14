@@ -22,11 +22,11 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/bpf/nat"
-	"github.com/projectcalico/felix/bpf/polprog"
-	"github.com/projectcalico/felix/bpf/routes"
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 var rulesAllowUDP = &polprog.Rules{

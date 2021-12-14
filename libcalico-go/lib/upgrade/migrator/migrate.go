@@ -29,15 +29,15 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	libapiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
-	validatorv3 "github.com/projectcalico/libcalico-go/lib/validator/v3"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
+	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
+	validatorv3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 const (

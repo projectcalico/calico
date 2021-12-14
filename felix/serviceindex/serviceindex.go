@@ -24,11 +24,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 
-	"github.com/projectcalico/felix/dispatcher"
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/labelindex"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/felix/dispatcher"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 type ServiceMatchCallback func(ipSetID string, member labelindex.IPSetMember)

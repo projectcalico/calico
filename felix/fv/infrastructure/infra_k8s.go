@@ -38,16 +38,16 @@ import (
 	"k8s.io/client-go/rest"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/names"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
-	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/felix/fv/utils"
 )
 
 type K8sDatastoreInfra struct {

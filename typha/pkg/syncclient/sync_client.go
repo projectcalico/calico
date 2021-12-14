@@ -28,9 +28,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/typha/pkg/syncproto"
-	"github.com/projectcalico/typha/pkg/tlsutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/typha/pkg/syncproto"
+	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
 
 var nextID uint64

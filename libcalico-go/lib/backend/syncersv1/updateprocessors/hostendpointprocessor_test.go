@@ -20,9 +20,9 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = Describe("Test the HostEndpoint update processor", func() {

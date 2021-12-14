@@ -22,14 +22,14 @@ import (
 	"fmt"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/labelindex"
-	"github.com/projectcalico/felix/multidict"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/multidict"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type EventHandler func(message interface{})

@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage"

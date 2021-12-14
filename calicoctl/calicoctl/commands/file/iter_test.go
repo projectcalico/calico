@@ -15,7 +15,7 @@
 package file_test
 
 import (
-	"github.com/projectcalico/calicoctl/v3/calicoctl/commands/file"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/file"
 
 	"errors"
 	"io/ioutil"

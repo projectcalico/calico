@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 )
 
 const (

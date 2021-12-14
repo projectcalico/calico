@@ -17,8 +17,8 @@ package asm_test
 import (
 	"fmt"
 
-	"github.com/projectcalico/felix/bpf"
-	. "github.com/projectcalico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf"
+	. "github.com/projectcalico/calico/felix/bpf/asm"
 )
 
 func ExampleBlock() {

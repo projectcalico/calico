@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/dataplane/windows/hns"
+	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 )
 
 var staticRules string = `

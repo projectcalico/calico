@@ -17,7 +17,7 @@ package bpf
 import (
 	"os"
 
-	bpfcmds "github.com/projectcalico/felix/cmd/calico-bpf/commands"
+	bpfcmds "github.com/projectcalico/calico/felix/cmd/calico-bpf/commands"
 )
 
 func RunBPFCmd() {

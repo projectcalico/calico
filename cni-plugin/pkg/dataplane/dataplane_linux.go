@@ -17,8 +17,8 @@ package dataplane
 import (
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/cni-plugin/pkg/dataplane/linux"
-	"github.com/projectcalico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/linux"
+	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 )
 
 func getDefaultSystemDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {

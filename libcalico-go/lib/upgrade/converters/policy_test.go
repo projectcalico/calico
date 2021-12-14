@@ -20,9 +20,9 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 var order1 = 1000.00

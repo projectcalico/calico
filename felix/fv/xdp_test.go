@@ -20,20 +20,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/felix/fv/workload"
-	"github.com/projectcalico/felix/versionparse"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/versionparse"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 const (

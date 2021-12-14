@@ -38,20 +38,20 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logutils"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/polprog"
-	"github.com/projectcalico/felix/bpf/tc"
-	"github.com/projectcalico/felix/bpf/xdp"
-	"github.com/projectcalico/felix/idalloc"
-	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/iptables"
-	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/ratelimited"
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/bpf/tc"
+	"github.com/projectcalico/calico/felix/bpf/xdp"
+	"github.com/projectcalico/calico/felix/idalloc"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/ratelimited"
 )
 
 const jumpMapCleanupInterval = 10 * time.Second

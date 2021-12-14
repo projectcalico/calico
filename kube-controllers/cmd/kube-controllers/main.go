@@ -37,19 +37,19 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 
-	"github.com/projectcalico/kube-controllers/pkg/config"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/flannelmigration"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/serviceaccount"
-	"github.com/projectcalico/kube-controllers/pkg/status"
+	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/namespace"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
+	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 )
 
 // VERSION is filled out during the build process (using git describe output)

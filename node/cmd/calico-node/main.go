@@ -19,25 +19,25 @@ import (
 	"os"
 	"time"
 
-	confdConfig "github.com/kelseyhightower/confd/pkg/config"
-	confd "github.com/kelseyhightower/confd/pkg/run"
-	"github.com/projectcalico/node/pkg/nodeinit"
+	confdConfig "github.com/projectcalico/calico/confd/pkg/config"
+	confd "github.com/projectcalico/calico/confd/pkg/run"
+	"github.com/projectcalico/calico/node/pkg/nodeinit"
 
 	"github.com/sirupsen/logrus"
 
-	felix "github.com/projectcalico/felix/daemon"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
+	felix "github.com/projectcalico/calico/felix/daemon"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 
-	"github.com/projectcalico/node/buildinfo"
-	"github.com/projectcalico/node/cmd/calico-node/bpf"
-	"github.com/projectcalico/node/pkg/allocateip"
-	"github.com/projectcalico/node/pkg/cni"
-	"github.com/projectcalico/node/pkg/health"
-	"github.com/projectcalico/node/pkg/hostpathinit"
-	"github.com/projectcalico/node/pkg/lifecycle/shutdown"
-	"github.com/projectcalico/node/pkg/lifecycle/startup"
-	"github.com/projectcalico/node/pkg/status"
-	"github.com/projectcalico/node/pkg/winupgrade"
+	"github.com/projectcalico/calico/node/buildinfo"
+	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
+	"github.com/projectcalico/calico/node/pkg/allocateip"
+	"github.com/projectcalico/calico/node/pkg/cni"
+	"github.com/projectcalico/calico/node/pkg/health"
+	"github.com/projectcalico/calico/node/pkg/hostpathinit"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/shutdown"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/calico/node/pkg/status"
+	"github.com/projectcalico/calico/node/pkg/winupgrade"
 )
 
 // Create a new flag set.

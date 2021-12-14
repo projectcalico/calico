@@ -29,16 +29,16 @@ import (
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/kube-controllers/tests/testutils"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	backend "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	backend "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var _ = Describe("kube-controllers FV tests (KDD mode)", func() {

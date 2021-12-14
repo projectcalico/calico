@@ -33,7 +33,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 )
 
 type podSpec struct {

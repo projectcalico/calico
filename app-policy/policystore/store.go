@@ -17,7 +17,7 @@ package policystore
 import (
 	"sync"
 
-	"github.com/projectcalico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/proto"
 	log "github.com/sirupsen/logrus"
 )
 

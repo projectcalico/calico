@@ -26,8 +26,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/projectcalico/libcalico-go/lib/namespace"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string

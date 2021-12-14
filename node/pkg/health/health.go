@@ -27,7 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/projectcalico/node/pkg/health/bird"
+	"github.com/projectcalico/calico/node/pkg/health/bird"
 )
 
 var felixReadinessEp string

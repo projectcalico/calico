@@ -25,9 +25,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
-	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logutils"
 )
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.

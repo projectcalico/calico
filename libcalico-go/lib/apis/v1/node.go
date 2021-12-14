@@ -18,8 +18,8 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // Node contains the details of a node resource which contains the configuration

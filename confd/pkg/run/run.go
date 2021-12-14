@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/kelseyhightower/confd/pkg/backends/calico"
-	"github.com/kelseyhightower/confd/pkg/config"
-	"github.com/kelseyhightower/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/confd/pkg/backends/calico"
+	"github.com/projectcalico/calico/confd/pkg/config"
+	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	log "github.com/sirupsen/logrus"
 )
 

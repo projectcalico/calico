@@ -17,9 +17,9 @@ package rules
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/hashutils"
-	. "github.com/projectcalico/felix/iptables"
-	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/calico/felix/hashutils"
+	. "github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 const (

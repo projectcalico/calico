@@ -15,7 +15,7 @@
 package iptables_test
 
 import (
-	. "github.com/projectcalico/felix/iptables"
+	. "github.com/projectcalico/calico/felix/iptables"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"

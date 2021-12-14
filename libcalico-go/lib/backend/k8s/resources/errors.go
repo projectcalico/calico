@@ -20,7 +20,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 // K8sErrorToCalico returns the equivalent libcalico error for the given
