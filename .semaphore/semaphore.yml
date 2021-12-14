@@ -1,0 +1,235 @@
+version: v1.0
+name: Felix
+
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+auto_cancel:
+  running:
+    when: "true"
+  queued:
+    when: "true"
+
+promotions:
+- name: Cleanup
+  pipeline_file: cleanup.yml
+  auto_promote:
+    when: "result = 'stopped'"
+# Run the pin update process in case there were a backlog of pin update requests
+- name: Update Pins
+  pipeline_file: update_pins.yml
+  auto_promote:
+    # If the block has passed and the branch is for master or a release branch then run the pin updates. Note that
+    # this doesn't try to restrict which release branches, as the presence of this auto promotion code means that
+    # it can handle updating the pins in this fashion.
+    when: "(result = 'passed') and ((branch = 'master') or (branch =~ '^release-v\d*\.\d*'))"
+
+global_job_config:
+  secrets:
+  - name: docker-hub
+  prologue:
+    commands:
+      # make some room on the disk
+      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+blocks:
+- name: Build
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    jobs:
+    - name: Build and run UT, k8sfv
+      execution_time_limit:
+        minutes: 30
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - >-
+        make image-all fv/fv.test bin/test-workload bin/test-connection
+        bin/calico-felix
+      - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+      - cache store go-pkg-cache .go-pkg-cache
+      - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
+      - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
+      - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
+      - make ut
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+    epilogue:
+      always:
+        commands:
+          - test-results publish report
+
+- name: "Build Windows binaries"
+  dependencies: []
+  task:
+    jobs:
+    - name: "build Windows binaries"
+      commands:
+      - checkout
+      - make bin/calico-felix.exe fv/win-fv.exe
+- name: Windows FV
+  dependencies: ["Build Windows binaries"]
+  task:
+    secrets:
+      - name: banzai-secrets
+      - name: private-repo
+    prologue:
+      commands:
+        # Load the github access secrets.  First fix the permissions.
+        - chmod 0600 ~/.keys/*
+        - ssh-add ~/.keys/*
+        # Prepare aws configuration.
+        - pip install --upgrade --user awscli
+        - export REPORT_DIR=~/report
+        - export LOGS_DIR=~/fv.log
+        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+        - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${BACKEND}-${SHORT_WORKFLOW_ID}
+        - export KEYPAIR_NAME=${CLUSTER_NAME}
+        - echo CLUSTER_NAME=${CLUSTER_NAME}
+        - sudo apt-get install putty-tools
+        - git clone git@github.com:tigera/process.git
+        - checkout
+        - make bin/calico-felix.exe fv/win-fv.exe
+    epilogue:
+      always:
+        commands:
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+          - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" /bin/bash -x ./setup-fv.sh -q -u
+    env_vars:
+      - name: SEMAPHORE_ARTIFACT_EXPIRY
+        value: 2w
+      - name: MASTER_CONNECT_KEY_PUB
+        value: master_ssh_key.pub
+      - name: MASTER_CONNECT_KEY
+        value: master_ssh_key
+      - name: WIN_PPK_KEY
+        value: win_ppk_key
+      - name: K8S_VERSION
+        value: 1.22.1
+      - name: WINDOWS_VERSION
+        value: "2004"
+    jobs:
+      - name: VXLAN - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
+        env_vars:
+          - name: BACKEND
+            value: vxlan
+      - name: BGP - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
+        env_vars:
+          - name: BACKEND
+            value: bgp
+- name: FV Tests
+  dependencies: ["Build"]
+  task:
+    prologue:
+      commands:
+      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+      # how much we churn docker containers during the build.  Disable it.
+      - sudo systemctl stop docker
+      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+      - sudo systemctl start docker
+      # Free up space on the build machine.
+      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - docker load -i /tmp/calico-felix.tar
+      - rm /tmp/calico-felix.tar
+      - touch bin/*
+      # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
+      # routing in that first felix container chooses different source IPs than the tests are expecting.
+      - sudo modprobe ipip
+    jobs:
+    - name: FV Test matrix
+      execution_time_limit:
+        minutes: 120
+      commands:
+      - make check-wireguard
+      - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      parallelism: 3
+    epilogue:
+      always:
+        commands:
+        - ./.semaphore/collect-artifacts
+        - ./.semaphore/publish-artifacts
+- name: BPF UT/FV tests on new kernel
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export ZONE=europe-west3-c
+      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
+      - echo VM_PREFIX=${VM_PREFIX}
+      - export REPO_NAME=$(basename $(pwd))
+      - export NUM_FV_BATCHES=8
+      - mkdir artifacts
+      - ./.semaphore/create-test-vms ${VM_PREFIX}
+    jobs:
+    - name: UT/FV tests on new kernel
+      execution_time_limit:
+        minutes: 120
+      commands:
+      - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+        - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
+        - ./.semaphore/publish-artifacts
+        - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+    - name: google-service-account-for-gce
+- name: Static checks on e1-standard-8
+  dependencies: []
+  task:
+    agent:
+      machine:
+        # Linters use a lot of RAM so use a bigger machine type.
+        type: e1-standard-8
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: Static checks
+      execution_time_limit:
+        minutes: 15
+      commands:
+      - make static-checks
+- name: Trigger pin updates
+  dependencies: []
+  skip:
+    when: "(branch != 'master') and (branch !~ '^release-v\d*\.\d*')"
+  task:
+    secrets:
+      - name: semaphore-api
+    jobs:
+      - name: Trigger pin updates
+        execution_time_limit:
+          minutes: 5
+        commands:
+          - checkout
+          - make semaphore-run-auto-pin-update-workflows
