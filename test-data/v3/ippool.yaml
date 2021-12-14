@@ -1,0 +1,10 @@
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+ name: random.name5
+spec:
+ cidr: 1.1.10.10/16
+ ipipMode: CrossSubnet
+ vxlanMode: Never
+ nat-outgoing: true
+ disabled: false
