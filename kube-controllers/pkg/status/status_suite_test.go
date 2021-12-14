@@ -21,8 +21,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/onsi/ginkgo/reporters"
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {

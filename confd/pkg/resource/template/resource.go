@@ -15,9 +15,10 @@ import (
 	"text/template"
 
 	"github.com/BurntSushi/toml"
-	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/kelseyhightower/memkv"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/confd/pkg/backends"
 )
 
 type Config struct {

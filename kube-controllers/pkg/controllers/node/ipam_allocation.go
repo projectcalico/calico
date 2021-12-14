@@ -17,8 +17,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
 // handleTracker is used to aggregate information about all known IP addresses with the given

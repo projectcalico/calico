@@ -19,6 +19,7 @@ import (
 	"net"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+
 	. "github.com/projectcalico/calico/felix/rules"
 
 	. "github.com/onsi/ginkgo"

@@ -23,6 +23,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	calicobgpconfiguration "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/bgpconfiguration"
 	calicobgppeer "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/bgppeer"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/caliconodestatus"

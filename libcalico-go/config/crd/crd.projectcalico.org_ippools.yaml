@@ -46,7 +46,7 @@ spec:
                 description: The pool CIDR.
                 type: string
               disableBGPExport:
-                description: 'Disable exporting routes from this IP Pool’s CIDR over
+                description: 'Disable exporting routes from this IP Pool''s CIDR over
                   BGP. [Default: false]'
                 type: boolean
               disabled:

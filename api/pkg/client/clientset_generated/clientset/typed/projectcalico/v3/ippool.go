@@ -8,13 +8,12 @@ import (
 	"context"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 )
 
 // IPPoolsGetter has a method to return a IPPoolInterface.

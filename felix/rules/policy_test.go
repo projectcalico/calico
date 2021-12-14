@@ -1076,23 +1076,23 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect(chains).To(ConsistOf(
 			&iptables.Chain{
-				Name:  "cali-pi-_ffOMcf6pikpiZ6hgKcW",
+				Name: "cali-pi-_ffOMcf6pikpiZ6hgKcW",
 				Rules: []iptables.Rule{
 					{
-						Match: nil,
+						Match:  nil,
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
 							"Policy long-policy-name-that-gets-hashed ingress",
 						},
 					},
 					{
-						Match: iptables.Match().MarkSingleBitSet(0x80),
+						Match:  iptables.Match().MarkSingleBitSet(0x80),
 						Action: iptables.ReturnAction{},
 					},
 				},
 			},
 			&iptables.Chain{
-				Name:  "cali-po-_ffOMcf6pikpiZ6hgKcW",
+				Name: "cali-po-_ffOMcf6pikpiZ6hgKcW",
 				Rules: []iptables.Rule{
 					{
 						Comment: []string{
@@ -1116,23 +1116,23 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect([]*iptables.Chain{inbound, outbound}).To(ConsistOf(
 			&iptables.Chain{
-				Name:  "cali-pri-_ffOMcf6pikpiZ6hgKc",
+				Name: "cali-pri-_ffOMcf6pikpiZ6hgKc",
 				Rules: []iptables.Rule{
 					{
-						Match: nil,
+						Match:  nil,
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed ingress",
 						},
 					},
 					{
-						Match: iptables.Match().MarkSingleBitSet(0x80),
+						Match:  iptables.Match().MarkSingleBitSet(0x80),
 						Action: iptables.ReturnAction{},
 					},
 				},
 			},
 			&iptables.Chain{
-				Name:  "cali-pro-_ffOMcf6pikpiZ6hgKc",
+				Name: "cali-pro-_ffOMcf6pikpiZ6hgKc",
 				Rules: []iptables.Rule{
 					{
 						Comment: []string{

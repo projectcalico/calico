@@ -19,6 +19,8 @@ import (
 	"os"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -30,7 +32,6 @@ import (
 	populator "github.com/projectcalico/calico/node/pkg/status/populators"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
-	log "github.com/sirupsen/logrus"
 )
 
 // This file contains the main processing and common logic for node status reporter.

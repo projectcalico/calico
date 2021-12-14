@@ -63,16 +63,21 @@
 */
 package proto
 
-import proto1 "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
 
-import context "golang.org/x/net/context"
-import grpc "google.golang.org/grpc"
+	proto1 "github.com/gogo/protobuf/proto"
 
-import binary "encoding/binary"
+	math "math"
 
-import io "io"
+	context "golang.org/x/net/context"
+
+	grpc "google.golang.org/grpc"
+
+	binary "encoding/binary"
+
+	io "io"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto1.Marshal
@@ -1840,10 +1845,12 @@ type ServiceAccountMatch struct {
 	Names    []string `protobuf:"bytes,2,rep,name=names" json:"names,omitempty"`
 }
 
-func (m *ServiceAccountMatch) Reset()                    { *m = ServiceAccountMatch{} }
-func (m *ServiceAccountMatch) String() string            { return proto1.CompactTextString(m) }
-func (*ServiceAccountMatch) ProtoMessage()               {}
-func (*ServiceAccountMatch) Descriptor() ([]byte, []int) { return fileDescriptorFelixbackend, []int{17} }
+func (m *ServiceAccountMatch) Reset()         { *m = ServiceAccountMatch{} }
+func (m *ServiceAccountMatch) String() string { return proto1.CompactTextString(m) }
+func (*ServiceAccountMatch) ProtoMessage()    {}
+func (*ServiceAccountMatch) Descriptor() ([]byte, []int) {
+	return fileDescriptorFelixbackend, []int{17}
+}
 
 func (m *ServiceAccountMatch) GetSelector() string {
 	if m != nil {
@@ -2508,10 +2515,12 @@ type ProcessStatusUpdate struct {
 	Uptime       float64 `protobuf:"fixed64,2,opt,name=uptime,proto3" json:"uptime,omitempty"`
 }
 
-func (m *ProcessStatusUpdate) Reset()                    { *m = ProcessStatusUpdate{} }
-func (m *ProcessStatusUpdate) String() string            { return proto1.CompactTextString(m) }
-func (*ProcessStatusUpdate) ProtoMessage()               {}
-func (*ProcessStatusUpdate) Descriptor() ([]byte, []int) { return fileDescriptorFelixbackend, []int{32} }
+func (m *ProcessStatusUpdate) Reset()         { *m = ProcessStatusUpdate{} }
+func (m *ProcessStatusUpdate) String() string { return proto1.CompactTextString(m) }
+func (*ProcessStatusUpdate) ProtoMessage()    {}
+func (*ProcessStatusUpdate) Descriptor() ([]byte, []int) {
+	return fileDescriptorFelixbackend, []int{32}
+}
 
 func (m *ProcessStatusUpdate) GetIsoTimestamp() string {
 	if m != nil {

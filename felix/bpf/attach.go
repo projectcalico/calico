@@ -27,8 +27,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // AttachedProgInfo describes what we store about an attached program.

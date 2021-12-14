@@ -7,10 +7,9 @@ package externalversions
 import (
 	"fmt"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // GenericInformer is type of SharedIndexInformer which will locate and delegate to other
