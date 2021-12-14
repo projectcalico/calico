@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2019 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+source .semaphore/new-kernel-common.sh
+
+vm_name_prefix=$1
+project=unique-caldron-775
+zone=${ZONE:-europe-west3-c}
+my_dir="$(dirname $0)"
+repo_dir="."
+artifacts_dir="$repo_dir/artifacts"
+
+pids=()
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  log_file="$artifacts_dir/create-vm-$batch.log"
+  echo "Creating test VM $vm_name in background. Redirecting log to $log_file."
+  "${my_dir}/create-test-vm" "$vm_name" >& "$log_file" &
+  pids+=( $! )
+  sleep 1
+done
+
+for pid in "${pids[@]}"; do
+  echo "Waiting for create-test-vm process PID=$pid to finish"
+  if ! wait "$pid"; then
+    echo "Creating one of the test VMs failed, exiting. Logs should be attached as artifacts."
+    exit 1
+  fi
+done
+
+echo "All test VMs started."
