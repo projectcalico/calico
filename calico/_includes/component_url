@@ -1,0 +1,42 @@
+{%- if release.title != "master" -%}
+{%- case include.component -%}
+
+{%- when 'calico/node' -%}
+https://github.com/projectcalico/node/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'calicoctl' -%}
+https://github.com/projectcalico/calicoctl/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'calico/cni' -%}
+https://github.com/projectcalico/cni-plugin/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'calico/kube-controllers' -%}
+https://github.com/projectcalico/k8s-policy/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'networking-calico' -%}
+https://github.com/projectcalico/networking-calico/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'typha' -%}
+https://github.com/projectcalico/typha/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'flannel' -%}
+https://github.com/coreos/flannel/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'calico/dikastes' -%}
+https://github.com/projectcalico/app-policy/releases/tag/{{ release.components[include.component].version }}
+
+{%- when 'flexvol' -%}
+https://github.com/projectcalico/pod2daemon/releases/tag/{{ release.components[include.component].version }}
+
+{%- endcase -%}
+
+{%- else -%}
+{% comment %}
+For the master docs, there are no releases to link to. So this page will just return an empty string.
+Except for 'calicoctl', as we do host direct downloads to a binary of calicoctl.
+{% endcomment %}
+{%- if include.component == "calicoctl" -%}
+https://www.projectcalico.org/builds/calicoctl
+{%- endif -%}
+
+{%- endif -%}

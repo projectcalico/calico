@@ -1,0 +1,42 @@
+
+router id @MY_IPV4_ADDRESS@;
+
+# We are only going to export routes from Calico interfaces.
+# Currently, 'tap*' is used by the OpenStack implimentation
+# and 'cali*' is used by the docker implimentation.
+# dummy1 is the interface that bare metal "service" addresses
+# should be bound to if they should be exported.
+# This will need to be updated as we add new interface names.
+#
+# Also filter out default, just in case.
+#
+# We should automate the build of this out of variables when
+# we have time.
+
+filter export_bgp {
+  if ( (ifname ~ "tap*") || (ifname ~ "cali*") || (ifname ~ "dummy1") ) then {
+    if  net != ::/0 then accept;
+  }
+  reject;
+}
+
+# Configure synchronization between BIRD's routing tables and the
+# kernel.
+protocol kernel {
+  learn;          # Learn all alien routes from the kernel
+  persist;        # Don't remove routes on bird shutdown
+  scan time 2;    # Scan kernel routing table every 2 seconds
+  import all;
+  graceful restart;
+  export all;     # Default is export none
+}
+
+# Watch interface up/down events.
+protocol device {
+  scan time 2;    # Scan interfaces every 2 seconds
+}
+
+protocol direct {
+   debug all;
+   interface "-dummy0", "dummy1", "eth*", "em*", "en*";
+}

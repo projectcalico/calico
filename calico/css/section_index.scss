@@ -1,0 +1,37 @@
+@import "../_sass/bootstrap/bootstrap/_variables";
+
+@mixin section-index-item($size) {
+    $percentageValue: percentage($size / $grid-columns);
+    flex-basis: $percentageValue;
+    max-width: $percentageValue;
+}
+
+.section-index {
+    display: flex;
+    flex-wrap: wrap;
+
+    &__title {
+        margin-top: 30px;
+        margin-bottom: 11px;
+
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+
+    &__item {
+        padding-left: ceil(($grid-gutter-width / 2));
+        padding-right: floor(($grid-gutter-width / 2));
+
+        // xs
+        @include section-index-item(12);
+
+        @media (min-width: $screen-sm-min) {
+            @include section-index-item(6);
+        }
+    
+        @media (min-width: $screen-md-min) {
+            @include section-index-item(4);
+        }
+    }
+}

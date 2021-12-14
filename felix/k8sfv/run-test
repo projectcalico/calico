@@ -1,0 +1,298 @@
+#!/bin/bash -ex
+
+# Run the 'k8sfv' test suite, a functional and scale test of Felix
+# running with the Kubernetes datastore driver, driven by CRUD
+# operations through the k8s API server.
+
+# Config check.
+if ! test -n "${FV_FELIXIMAGE}"; then
+    echo FV_FELIXIMAGE must be set to indicate the felix image to use.
+    exit -1
+fi
+
+if ! test -n "${FV_ETCDIMAGE}"; then
+    echo FV_ETCDIMAGE must be set to indicate the etcd image to use.
+    exit -1
+fi
+
+if ! test -n "${FV_K8SIMAGE}"; then
+    echo FV_K8SIMAGE must be set to indicate the hyperkube image to use.
+    exit -1
+fi
+
+if ! test -f "${PRIVATE_KEY}"; then
+    echo PRIVATE_KEY must be set and file must exist.
+    exit -1
+fi
+
+#
+# A string to insert into the container names that we use; a calling
+# script can set this to something to make the container names unique,
+# and hence to allow multiple copies of this script to run in
+# parallel.
+: ${UNIQUE:=}
+#
+# URL of a Prometheus push gateway that k8sfv should push metrics to.
+: ${PROMPG_URL:=}
+#
+# Code level to report for the metrics that this test run generates.
+# A CI job that regularly tests a particular (checked in) code branch
+# should set this to the name of that branch, e.g. 'master'.
+: ${CODE_LEVEL:=dev}
+#
+# Whether to clean up the etcd, API server and Felix containers that
+# this test creates.  The default 'false' is intended to be what
+# development work typically needs: containers are not cleaned up,
+# because (1) that allows the developer to look at them when a test
+# has completed, and (2) the containers from a previous run will
+# always be cleaned up when this script is run again - so we are never
+# going to leak an increasing number of containers.  CI should set
+# CLEANUP to 'true', so that the containers are cleaned up regardless
+# of test outcome.
+: ${CLEANUP:=false}
+#
+# Felix logging level.
+: ${FELIX_LOG_LEVEL:=info}
+#
+# Ginkgo focus term (regexp); this can be set to focus on particular
+# tests.
+: ${GINKGO_FOCUS:=}
+#
+# k8sfv logging level.
+: ${K8SFV_LOG_LEVEL:=info}
+#
+# Only run the tests that complete in a minute or less.
+: ${JUST_A_MINUTE:=true}
+#
+# Whether to tell Felix to go via Typha.
+: ${USE_TYPHA:=true}
+#
+if  ${USE_TYPHA} && test -z "${FV_TYPHAIMAGE}" ; then
+	echo FV_TYPHAIMAGE must be set to indicate the Typha image to use.
+	exit 1
+fi
+#
+# Typha logging level.
+: ${TYPHA_LOG_LEVEL:=info}
+#
+# CRD Manifest to use
+: ${CRD_PATH:=./fv/infrastructure/crds}
+
+# Generate a unique prefix for the names of the containers that we
+# will create.
+prefix=k8sfv${UNIQUE}
+
+# If CLEANUP says so, arrange to always clean up the containers that
+# we create.
+function cleanup {
+    # Clean up the containers that this script generates.
+    echo "run-test cleanup running..."
+    docker rm -f ${prefix}-felix || true
+    docker rm -f ${prefix}-typha || true
+    docker rm -f ${prefix}-controller-manager || true
+    docker rm -f ${prefix}-apiserver || true
+    docker rm -f ${prefix}-etcd || true
+    # List all remaining containers.
+    docker ps -a
+    echo "run-test cleanup done."
+}
+if ${CLEANUP}; then
+    trap cleanup EXIT SIGINT SIGQUIT
+fi
+
+# Utilities - get a container's IP address and hostname.
+function get_container_ip {
+    docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $1
+}
+function get_container_hostname {
+    docker inspect --format='{{.Config.Hostname}}' $1
+}
+
+# Just in case containers already exist with the same names, clean
+# them up.
+cleanup
+
+# Ensure that ip6_tables module is loaded.  The ip6tables-save command
+# needs this.
+sudo modprobe ip6_tables
+
+# Run etcd.
+docker run --detach --name ${prefix}-etcd \
+       $FV_ETCDIMAGE \
+       etcd \
+       --advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
+       --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+etcd_ip=$(get_container_ip ${prefix}-etcd)
+
+# Run k8s API server.  The clients in this test - Felix, Typha, the
+# k8sfv test code, and individual commands in this script - all
+# connect anonymously to the API server, because (a) they aren't
+# running in pods in a proper Kubernetes cluster, and (b) they don't
+# provide client TLS certificates, and (c) they don't use any of the
+# other non-anonymous mechanisms that Kubernetes supports.  But, as of
+# 1.6, the API server doesn't allow anonymous users with the default
+# "AlwaysAllow" authorization mode.  So we specify the "RBAC"
+# authorization mode instead, and create a ClusterRoleBinding that
+# gives the "system:anonymous" user unlimited power (aka the
+# "cluster-admin" role).
+# Enable insecure connection from controller manager to API server port 8080.
+docker run --detach --name ${prefix}-apiserver \
+       -v ${PWD}/fv/certs:/home/user/certs \
+       $FV_K8SIMAGE \
+       kube-apiserver \
+       --etcd-servers=http://${etcd_ip}:2379 \
+       --service-cluster-ip-range=10.101.0.0/16 -v=10 \
+       --authorization-mode=RBAC \
+       --service-account-key-file=/home/user/certs/service-account.pem \
+       --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+       --service-account-issuer=https://localhost:443 \
+       --api-audiences=kubernetes.default \
+       --client-ca-file=/home/user/certs/ca.pem \
+       --tls-cert-file=/home/user/certs/kubernetes.pem \
+       --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+       --enable-priority-and-fairness=false \
+       --max-mutating-requests-inflight=0 \
+       --max-requests-inflight=0
+
+k8s_ip=$(get_container_ip ${prefix}-apiserver)
+k8s_api_endpoint=https://${k8s_ip}:6443
+
+while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/kubeconfig create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
+    sleep 2
+done
+
+docker run --detach --name ${prefix}-controller-manager \
+          -v ${PWD}/fv/certs:/home/user/certs \
+          $FV_K8SIMAGE \
+	  kube-controller-manager \
+            --master=https://${k8s_ip}:6443 \
+	    --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+	    --min-resync-period=3m \
+	    --allocate-node-cidrs=true \
+	    --cluster-cidr=192.168.0.0/16 \
+	    --v=5 \
+	    --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+	    --root-ca-file=/home/user/certs/ca.pem
+
+while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/kubeconfig get serviceaccounts default; do
+    sleep 2
+done
+
+if [ ! -e ${CRD_PATH} ]; then
+    echo CRD manifest does not exist: ${CRD_PATH}
+    echo CWD=`pwd`
+    exit 1
+fi
+
+# Copy CRD manifest into running k8sfs-apiserver
+while ! docker cp ${CRD_PATH} ${prefix}-apiserver:/crds; do
+    sleep 2
+done
+
+# Apply CRD manifest to pre-create resource definitions
+while ! docker exec ${prefix}-apiserver kubectl --kubeconfig=/home/user/certs/kubeconfig apply -f /crds/; do
+    sleep 2
+done
+
+# Get the API server's TLS certificate.  (This is needed
+# for the clients to authenticate the _API_server_ - which is entirely
+# independent of the _client_ authorization discussed above.)
+mkdir -p k8sfv/output
+while ! docker cp ${prefix}-apiserver:/home/user/certs/kubernetes.pem k8sfv/output/; do
+    sleep 2
+done
+
+if ${USE_TYPHA}; then
+    # Run Typha.
+    docker run --detach --privileged --name ${prefix}-typha \
+       -e CALICO_DATASTORE_TYPE=kubernetes \
+       -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
+       -e TYPHA_DATASTORETYPE=kubernetes \
+       -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
+       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
+       -v ${PWD}:/testcode \
+       -w /testcode/k8sfv/output \
+       --restart=on-failure:2 \
+       $FV_TYPHAIMAGE
+    typha_ip=$(get_container_ip ${prefix}-typha)
+    typha_hostname=$(get_container_hostname ${prefix}-typha)
+    typha_felix_args="-e FELIX_TYPHAADDR=${typha_ip}:5473"
+else
+    typha_felix_args=
+fi
+
+# Run Felix.
+#
+# Specifying CALICO_DATASTORE_TYPE as well as FELIX_DATASTORETYPE is
+# only needed for Felix 2.1 and earlier.  For 2.2, FELIX_DATASTORETYPE
+# is sufficient.
+docker run --detach --privileged --name ${prefix}-felix \
+       ${typha_felix_args} \
+       -e CALICO_DATASTORE_TYPE=kubernetes \
+       -e FELIX_HEALTHENABLED=true \
+       -e FELIX_LOGSEVERITYSCREEN=${FELIX_LOG_LEVEL} \
+       -e FELIX_DATASTORETYPE=kubernetes \
+       -e FELIX_PROMETHEUSMETRICSENABLED=true \
+       -e FELIX_USAGEREPORTINGENABLED=false \
+       -e FELIX_DEBUGMEMORYPROFILEPATH="heap-<timestamp>" \
+       -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
+       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
+       -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
+       -v ${PWD}:/testcode \
+       -w /testcode/k8sfv/output \
+       $FV_FELIXIMAGE
+felix_ip=$(get_container_ip ${prefix}-felix)
+felix_hostname=$(get_container_hostname ${prefix}-felix)
+
+# Run the test suite.
+run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v -k8s-api-endpoint ${k8s_api_endpoint} -felix-ip ${felix_ip} -felix-hostname ${felix_hostname} -prometheus-push-url \"${PROMPG_URL}\" -code-level \"${CODE_LEVEL}\""
+if test -n "${GINKGO_FOCUS}"; then
+    docker exec ${prefix}-felix /bin/sh -c \
+        "${run} -ginkgo.focus \"${GINKGO_FOCUS}\""
+elif ${JUST_A_MINUTE}; then
+    tmp=$(mktemp)
+    # Run all the tests that are _not_ marked as "[slow]", and fail
+    # the test if any of those takes longer than 2 minutes.  A k8sfv
+    # test should be marked as "[slow]" if it normally takes longer
+    # than 1 minute - so this allows a buffer of 1 extra minute to
+    # allow for executor slowness.
+    docker exec ${prefix}-felix /bin/sh -c \
+       "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120" | tee $tmp
+    # Fail if the docker command returned failure
+    cmdStatus=${PIPESTATUS[0]}
+    if [ $cmdStatus -ne 0 ]; then
+        echo "docker or k7sfv.test command failed with RC $cmdStatus"
+        echo "Status 137 can be caused by the felix container (in which we run the test binary) dying."
+        rm -f $tmp
+        exit 1
+    fi
+    # Grab the lines that have SLOW TEST until a line with ---------
+    slow="$(awk '/SLOW TEST/,/--------/' $tmp)"
+    rm -f $tmp
+    # If there were any slow tests then fail the test but print out
+    # the slow test lines.
+    if [ -n "$slow" ]; then
+        echo "====Slow tests detected===="
+        echo $slow
+        echo "====End of slow test summary===="
+        exit 1
+    fi
+else
+    docker exec ${prefix}-felix /bin/sh -c \
+        "${run}"
+fi
+
+# Save the status of the test run.
+STATUS=$?
+
+# Check that the Felix container is still running.  It's important to
+# do this check, because the test run just above can exit with a
+# successful status (0) if Felix dies prematurely.
+if docker ps | grep ${prefix}-felix; then
+    # Good, still running.
+    exit ${STATUS}
+else
+    # No, it has died.  Dump logs and exit with a failure status.
+    docker logs ${prefix}-felix
+    exit 1
+fi

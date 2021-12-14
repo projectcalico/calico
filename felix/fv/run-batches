@@ -1,0 +1,71 @@
+#!/bin/bash -x
+
+# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+: ${FV_NUM_BATCHES:=4}
+: ${FV_BATCHES_TO_RUN:=1 2 3 4}
+: ${FV_SLOW_SPEC_THRESH:=90}
+: ${PRIVATE_KEY:=`pwd`/private.key}
+: ${GINKGO_ARGS:=}
+: ${GINKGO_FOCUS:=.*}
+
+for batch in ${FV_BATCHES_TO_RUN}; do
+  (
+     echo "Running FV batch ${batch}"
+     # List the tests that will be run.
+     ./fv.test -ginkgo.parallel.node ${batch} \
+               -ginkgo.parallel.total ${FV_NUM_BATCHES} \
+               -ginkgo.seed 1 \
+               -ginkgo.randomizeAllSpecs=true \
+               -ginkgo.noisySkippings=false \
+               -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
+               -ginkgo.focus="${GINKGO_FOCUS}" \
+               ${GINKGO_ARGS} \
+               -ginkgo.v \
+               -ginkgo.noColor \
+               -ginkgo.dryRun 2>&1 | awk -f test-list-filter.awk
+     # Now really run them.
+     ./fv.test -ginkgo.parallel.node ${batch} \
+               -ginkgo.parallel.total ${FV_NUM_BATCHES} \
+               -ginkgo.seed 1 \
+               -ginkgo.randomizeAllSpecs=true \
+               -ginkgo.noisySkippings=false \
+               -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
+               -ginkgo.focus="${GINKGO_FOCUS}" \
+               ${GINKGO_ARGS}
+     status=$?
+     echo "Test batch $batch completed with status $status"
+     exit $status
+  ) &
+  pids[${batch}]=$!
+done
+
+result=0
+for batch in ${FV_BATCHES_TO_RUN}; do
+  echo "Waiting on batch $batch; PID=${pids[$batch]}"
+  wait ${pids[$batch]}
+  st=$?
+  echo "Result: $st"
+  if [ $st -ne 0 ]; then
+    result=1
+  fi
+done
+
+if [ $result -eq 0 ]; then
+  echo "All tests passed"
+else
+  echo "Tests failed"
+  exit 1
+fi

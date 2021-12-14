@@ -1,0 +1,1 @@
+{{site.prodname}} routing distributes and programs routes for pod traffic between nodes using its data store without the need for BGP. {{site.prodname}} routing supports unencapsulated traffic within a single subnet, as well as selective VXLAN encapsulation for clusters that span multiple subnets.
