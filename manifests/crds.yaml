@@ -1,0 +1,9 @@
+---
+layout: null
+---
+{% helm --execute templates/kdd-crds.yaml %}
+datastore: kubernetes
+network: calico
+typha:
+  enabled: true
+{% endhelm %}

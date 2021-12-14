@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tigera-operator
+description: Installs the Tigera operator for Calico
+
+# version will be overridden at chart compilation time via args, but still must exist in chart.yaml
+version: v0.0

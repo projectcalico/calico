@@ -1,0 +1,4 @@
+---
+layout: null
+---
+{% include non-helm-manifests/calicoctl-etcd.yaml %}
