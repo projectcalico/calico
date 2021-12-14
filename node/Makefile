@@ -14,7 +14,7 @@ NODE_IMAGE     ?=node
 DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
 else
 NODE_IMAGE     ?=calico/node
-DEV_REGISTRIES ?=quay.io registry.hub.docker.com
+DEV_REGISTRIES ?=quay.io docker.io
 endif
 
 BUILD_IMAGES ?=$(NODE_IMAGE)
@@ -547,7 +547,7 @@ endif
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
 
 	# Push Windows artifacts to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -569,7 +569,7 @@ endif
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-verify
-	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=true CONFIRM=true
 
 .PHONY: node-test-at
 # Run docker-image acceptance tests

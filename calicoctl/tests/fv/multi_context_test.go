@@ -40,8 +40,17 @@ func TestMultiCluster(t *testing.T) {
 		"/go/src/github.com/projectcalico/calicoctl/test-data/kubectl-config-second.yaml",
 	}, ":"))
 
+	// Set Calico version in ClusterInformation for both contexts
+	out, err := SetCalicoVersion(true, "--context", "main")
+	Expect(err).ToNot(HaveOccurred())
+	Expect(out).To(ContainSubstring("Calico version set to"))
+
+	out, err = SetCalicoVersion(true, "--context", "second")
+	Expect(err).ToNot(HaveOccurred())
+	Expect(out).To(ContainSubstring("Calico version set to"))
+
 	// This check will Fail, kubectl-config.yaml file that we are using for this only contains "main" context.
-	out, err := CalicoctlMayFail(true, "get", "node", "--context", "fake")
+	out, err = CalicoctlMayFail(true, "--allow-version-mismatch", "get", "node", "--context", "fake")
 	Expect(err).To(HaveOccurred())
 	Expect(out).To(ContainSubstring("Failed"))
 
