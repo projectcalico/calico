@@ -32,7 +32,7 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
-	. "github.com/onsi/gomega/types"
+	"github.com/onsi/gomega/types"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -654,7 +654,7 @@ var _ = withExtraMap
 
 // layersMatchFields matches all Exported fields and ignore the ones explicitly
 // listed. It always ignores BaseLayer as that is not set by the tests.
-func layersMatchFields(l gopacket.Layer, ignore ...string) GomegaMatcher {
+func layersMatchFields(l gopacket.Layer, ignore ...string) types.GomegaMatcher {
 	toIgnore := make(map[string]bool)
 	for _, x := range ignore {
 		toIgnore[x] = true
