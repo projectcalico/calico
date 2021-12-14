@@ -28,7 +28,7 @@ function create-vm() {
   gcloud --quiet compute instances create "${vm_name}" \
            --zone=${zone} \
            --machine-type=n1-standard-4 \
-           --image=ubuntu-2004-focal-v20210623 \
+           --image=ubuntu-2004-focal-v20211102 \
            --image-project=ubuntu-os-cloud \
            --boot-disk-size=20GB \
            --boot-disk-type=pd-standard && \
@@ -37,14 +37,17 @@ function create-vm() {
     gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- echo "Success" && break
     sleep 1
   done  && \
-  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get update -y && \
-  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get install -y --no-install-recommends git make iproute2 docker.io wireguard && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt install apt-transport-https ca-certificates curl software-properties-common && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu focal stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt update -y && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt install -y --no-install-recommends git docker-ce docker-ce-cli containerd.io make iproute2 wireguard && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo usermod -a -G docker ubuntu && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo modprobe ipip && \
   set +x && \
   echo "$DOCKERHUB_PASSWORD" | gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin && \
   set -x && \
-  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$(pwd)" "ubuntu@${vm_name}:"
+  gcloud --quiet compute scp --zone=${zone} --recurse --compress "$(dirname $(pwd))" "ubuntu@${vm_name}:/home/ubuntu/calico"
 }
 
 function delete-vm() {

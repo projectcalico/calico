@@ -1,8 +1,6 @@
-PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.54
+include ../metadata.mk
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_NODE_PROJECT_ID)
+PACKAGE_NAME = github.com/projectcalico/calico/node
 
 RELEASE_REGISTRIES    ?=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 RELEASE_BRANCH_PREFIX ?=release
@@ -10,54 +8,42 @@ DEV_TAG_SUFFIX        ?=0.dev
 
 # If this is a release, also tag and push additional images.
 ifeq ($(RELEASE),true)
-NODE_IMAGE     ?=node
-DEV_REGISTRIES ?=quay.io/calico calico $(RELEASE_REGISTRIES)
+NODE_IMAGE            ?=node
+WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
+DEV_REGISTRIES        ?=quay.io/calico calico $(RELEASE_REGISTRIES)
 else
-NODE_IMAGE     ?=calico/node
-DEV_REGISTRIES ?=quay.io docker.io
+NODE_IMAGE            ?=calico/node
+WINDOWS_UPGRADE_IMAGE ?=calico/windows-upgrade
+DEV_REGISTRIES        ?=quay.io docker.io
 endif
 
+WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
 BUILD_IMAGES ?=$(NODE_IMAGE)
+LIBBPF_DOCKER_PATH=/go/src/github.com/projectcalico/calico/node/bin/third-party/libbpf/src
+BPF_GPL_DOCKER_PATH=/go/src/github.com/projectcalico/calico/node/bin/bpf/bpf-gpl
+LIBBPF_PATH=./bin/third-party/libbpf/src
 
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-ifdef LOCAL_BUILD
-PHONY: set-up-local-build
-LOCAL_BUILD_DEP:=set-up-local-build
-
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
-	-v $(CURDIR)/../felix:/go/src/github.com/projectcalico/felix:rw \
-	-v $(CURDIR)/../typha:/go/src/github.com/projectcalico/typha:rw \
-	-v $(CURDIR)/../confd:/go/src/github.com/projectcalico/confd:rw
-
-$(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
-		-replace=github.com/projectcalico/felix=../felix \
-		-replace=github.com/projectcalico/typha=../typha \
-		-replace=github.com/kelseyhightower/confd=../confd
-endif
+# Add in local static-checks
+LOCAL_CHECKS=check-boring-ssl
 
 ###############################################################################
-# Download and include Makefile.common
+# Include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+include ../lib.Makefile
 
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-include Makefile.common
+# Required for eBPF support in ARM64
+ifeq ($(ARCH),arm64)
+# Forces ARM64 build image to be used in a crosscompilation run.
+CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
+# Prevents docker from tagging the output image incorrectly as amd64.
+TARGET_PLATFORM=--platform=linux/arm64/v8
+endif
 
 ###############################################################################
 
 # Versions and location of dependencies used in the build.
-BIRD_VERSION=v0.3.3-182-g4b493986
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
@@ -75,7 +61,8 @@ ifneq ($(BUILDARCH),amd64)
 	ETCD_IMAGE=$(ETCD_IMAGE)-$(ARCH)
 endif
 
-HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
+# TODO: Update this to use newer version of Kubernetes.
+HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.17.0
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
@@ -83,16 +70,6 @@ NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
 NODE_CONTAINER_BIN_DIR=./dist/bin/
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
-
-WINDOWS_GEN_INSTALL_SCRIPT_BIN := hack/bin/gen-install-calico-windows-script
-
-# Base URL of the Calico for Windows installation zip archive.
-# This can be overridden for dev releases.
-WINDOWS_ARCHIVE_BASE_URL ?= https://docs.projectcalico.org
-
-# This is either "Calico" or "Calico Enterprise"
-WINDOWS_INSTALL_SCRIPT_PRODUCT ?= Calico
-WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
 # Variables for the Windows packaging.
 # Name of the Windows release ZIP archive.
@@ -137,6 +114,22 @@ WINDOWS_ARCHIVE_FILES := \
 MICROSOFT_SDN_VERSION := 0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44
 MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/$(MICROSOFT_SDN_VERSION)
 
+WINDOWS_UPGRADE_ROOT         ?= windows-upgrade
+WINDOWS_UPGRADE_DIST          = dist/windows-upgrade
+
+# The directory that holds temporary files used to build the windows upgrade zip
+# archive.
+WINDOWS_UPGRADE_DIST_STAGE    = $(WINDOWS_UPGRADE_DIST)/stage
+WINDOWS_UPGRADE_INSTALL_FILE ?= $(WINDOWS_UPGRADE_DIST_STAGE)/install-calico-windows.ps1
+WINDOWS_UPGRADE_INSTALL_ZIP  ?= $(WINDOWS_UPGRADE_DIST_STAGE)/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
+WINDOWS_UPGRADE_SCRIPT       ?= $(WINDOWS_UPGRADE_DIST_STAGE)/calico-upgrade.ps1
+
+# The directory used for the upgrade image docker build context.
+WINDOWS_UPGRADE_BUILD        ?= $(WINDOWS_UPGRADE_ROOT)/build
+
+# The final zip archive used in the upgrade image.
+WINDOWS_UPGRADE_ARCHIVE      ?= $(WINDOWS_UPGRADE_BUILD)/calico-windows-upgrade.zip
+
 # Variables used by the tests
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 ST_TO_RUN?=tests/st/
@@ -159,8 +152,10 @@ LDFLAGS=-ldflags "\
 
 SRC_FILES=$(shell find ./pkg -name '*.go')
 
+BINDIR?=bin
+
 ## Clean enough that a new release build will be clean
-clean:
+clean: clean-windows-upgrade
 	find . -name '*.created' -exec rm -f {} +
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf .go-pkg-cache
@@ -169,83 +164,98 @@ clean:
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
-	rm -f $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
-	rm -f $(WINDOWS_INSTALL_SCRIPT)
+	rm -f $(WINDOWS_UPGRADE_INSTALL_FILE)
+	rm -f $(WINDOWS_UPGRADE_BUILD)/*.zip
 	rm -rf filesystem/included-source
 	rm -rf dist
 	rm -rf filesystem/etc/calico/confd/conf.d filesystem/etc/calico/confd/config filesystem/etc/calico/confd/templates
 	rm -rf config/
 	rm -rf vendor
-	rm Makefile.common*
+	rm -rf bin
 	# Delete images that we built in this repo
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
+	docker rmi $(addprefix $(WINDOWS_UPGRADE_IMAGE):latest-,$(WINDOWS_VERSIONS)) || true
 
-###############################################################################
-# Updating pins
-###############################################################################
-update-pins: update-api-pin update-libcalico-pin update-felix-pin update-confd-pin update-cni-plugin-pin
+clean-windows-upgrade:
+	-rm -f "$(WINDOWS_UPGRADE_DIST_STAGE)"
+	-rm -rf "$(WINDOWS_UPGRADE_BUILD)"
 
 ###############################################################################
 # Building the binary
 ###############################################################################
-build:  $(NODE_CONTAINER_BINARY)
+build: $(NODE_CONTAINER_BINARY)
 
-remote-deps: mod-download
+remote-deps-copy-bpf: mod-download
+	rm -rf bin/bpf
+	mkdir -p bin/bpf
+	cp -r ../felix/bpf-gpl bin/bpf
+	cp -r ../felix/bpf-apache bin/bpf
+
+remote-deps: remote-deps-copy-bpf
 	# Recreate the directory so that we are sure to clean up any old files.
 	rm -rf filesystem/etc/calico/confd
 	mkdir -p filesystem/etc/calico/confd
 	rm -rf config
-	rm -rf bin/bpf
-	mkdir -p bin/bpf
+	rm -rf bin/third-party
 	rm -rf filesystem/usr/lib/calico/bpf/
 	mkdir -p filesystem/usr/lib/calico/bpf/
+
+	cp -r ../confd/etc/calico/confd/conf.d filesystem/etc/calico/confd/conf.d
+	cp -r ../confd/etc/calico/confd/config filesystem/etc/calico/confd/config
+	cp -r ../confd/etc/calico/confd/templates filesystem/etc/calico/confd/templates
+	cp -r ../libcalico-go/config config
+
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
 		$(GIT_CONFIG_SSH) \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/conf.d filesystem/etc/calico/confd/conf.d; \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/config filesystem/etc/calico/confd/config; \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/templates filesystem/etc/calico/confd/templates; \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config config; \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl bin/bpf; \
-		cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-apache bin/bpf; \
-		chmod -R +w bin/bpf; \
-		chmod +x bin/bpf/bpf-gpl/list-* bin/bpf/bpf-gpl/calculate-*; \
 		make -j 16 -C ./bin/bpf/bpf-apache/ all; \
 		make -j 16 -C ./bin/bpf/bpf-gpl/ all; \
 		cp bin/bpf/bpf-gpl/bin/* filesystem/usr/lib/calico/bpf/; \
 		cp bin/bpf/bpf-apache/bin/* filesystem/usr/lib/calico/bpf/; \
 		chmod -R +w filesystem/etc/calico/confd/ config/ filesystem/usr/lib/calico/bpf/'
 
+$(LIBBPF_PATH)/libbpf.a: ../go.mod
+	$(MAKE) mod-download
+	mkdir -p bin/third-party
+	cp -r ../felix/bpf-gpl/include/libbpf bin/third-party
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+		$(GIT_CONFIG_SSH) \
+		chmod -R +w bin/third-party; \
+		make -j 16 -C $(LIBBPF_PATH) BUILD_STATIC_ONLY=1'
+
 # We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), amd64)
+# Currently CGO can be enbaled in ARM64 and AMD64 builds.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=1
+CGO_LDFLAGS="-L$(LIBBPF_DOCKER_PATH) -lbpf -lelf -lz"
+CGO_CFLAGS="-I$(LIBBPF_DOCKER_PATH) -I$(BPF_GPL_DOCKER_PATH)"
 else
 CGO_ENABLED=0
+CGO_LDFLAGS=""
+CGO_CFLAGS=""
 endif
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
-$(NODE_CONTAINER_BINARY): $(LOCAL_BUILD_DEP) $(SRC_FILES) go.mod
+$(NODE_CONTAINER_BINARY): remote-deps-copy-bpf $(LIBBPF_PATH)/libbpf.a $(SRC_FILES) ../go.mod
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_BINARY):
 	$(DOCKER_RUN) \
 		-e GOOS=windows \
-		$(LOCAL_BUILD_MOUNTS) \
 		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -o $@ $(LDFLAGS) ./cmd/calico-node/main.go'
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
 	$(DOCKER_RUN) \
 		-e GOOS=windows \
-		$(LOCAL_BUILD_MOUNTS) \
 		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -o $@ $(LDFLAGS) ./cmd/calico'
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 	$(DOCKER_RUN) \
 		-e GOOS=windows \
-		$(LOCAL_BUILD_MOUNTS) \
 		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -o $@ $(LDFLAGS) ./cmd/calico-ipam'
 
@@ -258,47 +268,93 @@ image: remote-deps $(NODE_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
+ifeq ($(TEST_IMAGE_BUILD),true)
+	# If testing image builds, clean sub-image afterwards to free disk space (for Semaphore CI)
+	$(MAKE) clean-sub-image-$*
+endif
+
+## Remove images for all supported ARCHes
+clean-image-all: $(addprefix clean-sub-image-,$(VALIDARCHES))
+## Remove sub-image from docker and delete $(NODE_CONTAINER_CREATED) file
+clean-sub-image-%:
+	rm -f .calico_node.created-$*
+	docker rmi $(NODE_IMAGE):latest-$* || true
 
 $(NODE_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) remote-deps
-ifeq ($(LOCAL_BUILD),true)
-	# If doing a local build, copy in local confd templates in case there are changes.
-	rm -rf filesystem/etc/calico/confd/templates
-	cp -r ../confd/etc/calico/confd/templates filesystem/etc/calico/confd/templates
-endif
 	# Check versions of the binaries that we're going to use to build the image.
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
 	docker run --rm -v $(CURDIR)/dist/bin:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calico-node-$(ARCH) -v;	 /go/bin/calico-node-$(ARCH) -v; \
 	"
-	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
+## TARGET_PLATFORM fixes an issue where `FROM SCRATCH` in the Dockerfile share the same architecture as the host.
+	docker build --pull -t $(NODE_IMAGE):latest-$(ARCH) $(TARGET_PLATFORM) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	touch $@
 
 # download BIRD source to include in image.
-$(BIRD_SOURCE): go.mod
+$(BIRD_SOURCE): ../go.mod
 	mkdir -p filesystem/included-source/
 	wget -O $@ https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
 
 # download any GPL felix code to include in the image.
-$(FELIX_GPL_SOURCE): go.mod
+$(FELIX_GPL_SOURCE): ../go.mod
 	mkdir -p filesystem/included-source/
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-		tar cf $@ `go list -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl;'
+		tar cf $@ ../felix/bpf-gpl;'
 
 ###############################################################################
 # FV Tests
 ###############################################################################
+K8ST_IMAGE_TARS=calico-node.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
+
 ## Run the ginkgo FVs
 fv: run-k8s-apiserver
 	docker run --rm \
-	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e GO111MODULE=on \
 	--net=host \
 	-w /go/src/$(PACKAGE_NAME) \
 	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/lifecycle/startup pkg/allocateip $(GINKGO_ARGS)
+
+## Create a local kind dual stack cluster.
+KUBECONFIG?=kubeconfig.yaml
+cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
+	# First make sure any previous cluster is deleted
+	make cluster-destroy
+	
+	# Create a kind cluster.
+	$(BINDIR)/kind create cluster \
+	        --config ./tests/kind-config.yaml \
+	        --kubeconfig $(KUBECONFIG) \
+	        --image kindest/node:$(K8S_VERSION)
+	
+	# Deploy resources needed in test env.
+	$(MAKE) deploy-test-resources
+	
+	# Wait for controller manager to be running and healthy.
+	while ! KUBECONFIG=$(KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
+
+## Deploy resources on the kind cluster that are needed for tests
+deploy-test-resources: $(BINDIR)/kubectl $(K8ST_IMAGE_TARS)
+	KUBECONFIG=$(KUBECONFIG) ./tests/k8st/deploy_resources_on_kind_cluster.sh
+
+## Destroy local kind cluster
+cluster-destroy: $(BINDIR)/kubectl $(BINDIR)/kind
+	-$(BINDIR)/kubectl --kubeconfig=$(KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
+	-$(BINDIR)/kind delete cluster
+	rm -f ./tests/k8st/infra/calico.yaml.tmp
+	rm -f $(KUBECONFIG)
+
+$(BINDIR)/kind:
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
+
+$(BINDIR)/kubectl:
+	mkdir -p $(BINDIR)
+	curl -L https://storage.googleapis.com/kubernetes-release/release/v1.22.0/bin/linux/$(ARCH)/kubectl -o $@
+	chmod +x $(BINDIR)/kubectl
 
 # etcd is used by the STs
 .PHONY: run-etcd
@@ -316,7 +372,7 @@ run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 	docker run \
 		--net=host --name st-apiserver \
 		-v $(CURDIR):/manifests \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 		--detach \
 		${HYPERKUBE_IMAGE} kube-apiserver \
 			--bind-address=0.0.0.0 \
@@ -355,30 +411,17 @@ ut:
 
 ###############################################################################
 # System tests
-# - Support for running etcd (both securely and insecurely)
 ###############################################################################
-# Pull calicoctl and CNI plugin binaries with versions as per XXX_VER
-# variables.  These are used for the STs.
 dist/calicoctl:
-	-docker rm -f calicoctl
-	docker pull $(CTL_CONTAINER_NAME)
-	docker create --name calicoctl $(CTL_CONTAINER_NAME)
-	docker cp calicoctl:calicoctl dist/calicoctl && \
-	  test -e dist/calicoctl && \
-	  touch dist/calicoctl
-	-docker rm -f calicoctl
+	mkdir -p dist
+	make -C ../calicoctl build
+	cp ../calicoctl/bin/calicoctl-linux-$(ARCH) $@
 
 dist/calico dist/calico-ipam:
-	-docker rm -f calico-cni
-	docker pull calico/cni:$(CNI_VER)
-	docker create --name calico-cni calico/cni:$(CNI_VER)
-	docker cp calico-cni:/opt/cni/bin/install dist/calico && \
-	  test -e dist/calico && \
-	  touch dist/calico
-	docker cp calico-cni:/opt/cni/bin/install dist/calico-ipam && \
-	  test -e dist/calico-ipam && \
-	  touch dist/calico-ipam
-	-docker rm -f calico-cni
+	mkdir -p dist
+	make -C ../cni-plugin build
+	cp ../cni-plugin/bin/$(ARCH)/calico dist/calico
+	cp ../cni-plugin/bin/$(ARCH)/calico-ipam dist/calico-ipam
 
 # Create images for containers used in the tests
 busybox.tar:
@@ -401,13 +444,23 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 	touch calico_test.created
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
-	# Check versions of the Calico binaries that will be in calico-node.tar.
-	# Since the binaries are built for Linux, run them in a container to allow the
-	# make target to be run on different platforms (e.g. MacOS).
-	docker run --rm $(NODE_IMAGE):latest-$(ARCH) /bin/sh -c "\
-	  echo bird --version;	 /bin/bird --version; \
-	"
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
+
+calico-cni.tar:
+	make -C ../cni-plugin image
+	docker save --output $@ calico/cni:latest-$(ARCH)
+
+pod2daemon.tar:
+	make -C ../pod2daemon image
+	docker save --output $@ calico/pod2daemon-flexvol:latest-$(ARCH)
+
+calicoctl.tar:
+	make -C ../calicoctl image
+	docker save --output $@ calico/ctl:latest-$(ARCH)
+
+kube-controllers.tar:
+	make -C ../kube-controllers image
+	docker save --output $@ calico/kube-controllers:latest-$(ARCH)
 
 .PHONY: st-checks
 st-checks:
@@ -426,18 +479,15 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: calico-node.tar
-	curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.17.0/bin/linux/amd64/kubectl
-	chmod +x ./kubectl
-	tests/k8st/create_kind_cluster.sh
+kind-k8st-setup: $(K8ST_IMAGE_TARS) cluster-create
 
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: calico_test.created
+kind-k8st-run-test: calico_test.created $(KUBECONFIG)
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
-	    -v ${HOME}/.kube/kind-config-kind:/root/.kube/config \
-	    -v $(CURDIR)/kubectl:/bin/kubectl \
+	    -v $(CURDIR)/$(KUBECONFIG):/root/.kube/config \
+	    -v $(CURDIR)/$(BINDIR)/kubectl:/bin/kubectl \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
@@ -446,9 +496,7 @@ kind-k8st-run-test: calico_test.created
 	     cd /code/tests/k8st && nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
 
 .PHONY: kind-k8st-cleanup
-kind-k8st-cleanup:
-	tests/k8st/delete_kind_cluster.sh
-	rm -f ./kubectl
+kind-k8st-cleanup: cluster-destroy
 
 # Needed for Semaphore CI (where disk space is a real issue during k8s-test)
 .PHONY: remove-go-build-image
@@ -458,7 +506,7 @@ remove-go-build-image:
 
 .PHONY: st
 ## Run the system tests
-st: image-all remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
+st: image remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico dist/calico-ipam
 	# Check versions of Calico binaries that ST execution will use.
 	docker run --rm -v $(CURDIR)/dist:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calicoctl version;	  /go/bin/calicoctl version; \
@@ -494,7 +542,13 @@ st: image-all remote-deps dist/calicoctl busybox.tar calico-node.tar workload.ta
 ci: mod-download static-checks fv image-all build-windows-archive st
 
 ## Deploys images to registry
-cd: cd-common
+cd: cd-common cd-windows-upgrade
+
+
+check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		go tool nm $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64 > $(NODE_CONTAINER_BIN_DIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(NODE_CONTAINER_BIN_DIR)/tags.txt 1> /dev/null
+	-rm -f $(NODE_CONTAINER_BIN_DIR)/tags.txt
 
 ###############################################################################
 # Release
@@ -530,14 +584,16 @@ ifneq ($(VERSION), $(GIT_VERSION))
 endif
 	$(MAKE) image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
-	# Generate the `latest` images.
+	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	# Generate the install-calico-windows.ps1 script
-	$(MAKE) install-calico-windows-script
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
+	$(MAKE) release-windows-upgrade-archive
+	# Generate the Windows upgrade image tarballs (this must come after the
+	# upgrade archive)
+	$(MAKE) image-tar-windows-all
 
-## Produces the Windows ZIP archive for the release.
+## Produces the Windows installation ZIP archive for the release.
 release-windows-archive $(WINDOWS_ARCHIVE): release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
@@ -561,8 +617,11 @@ endif
 	# Push the git tag.
 	git push origin $(VERSION)
 
-	# Push images.
+	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=true CONFIRM=true
+
+	# Push Windows upgrade images.
+	$(MAKE) cd-windows-upgrade RELEASE=true CONFIRM=true
 
 	# Push Windows artifacts to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
@@ -570,11 +629,6 @@ endif
 	ghr -u projectcalico -r node \
 		-n $(VERSION) \
 		$(VERSION) $(WINDOWS_ARCHIVE)
-
-	# Update the release with the install-calico-windows.ps1 file too.
-	ghr -u projectcalico -r node \
-		-n $(VERSION) \
-		$(VERSION) $(WINDOWS_INSTALL_SCRIPT)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -594,7 +648,7 @@ release-publish-latest: release-verify
 .PHONY: node-test-at
 # Run docker-image acceptance tests
 node-test-at: release-prereqs
-	docker run -v $(PWD)/tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
+	docker run -v $(CURDIR)/tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
 	  $(NODE_IMAGE):$(VERSION) /bin/sh -c ' \
 	   apk --no-cache add wget ca-certificates && \
 	   wget -q -O /tmp/goss https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
@@ -606,9 +660,6 @@ release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
-ifdef LOCAL_BUILD
-	$(error LOCAL_BUILD must not be set for a release)
-endif
 
 ###############################################################################
 # Windows packaging
@@ -619,19 +670,19 @@ $(WINDOWS_MOD_CACHED_FILES): mod-download
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
-        cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/$< $@'; \
+        cp -r ../confd/$< $@'; \
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/%: windows-packaging/conf.d/%
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
-        cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/$< $@'; \
+        cp -r ../confd/$< $@'; \
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
-        cp -r `go list -mod=mod -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/$< $@'; \
+        cp -r ../confd/$< $@'; \
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
@@ -662,21 +713,134 @@ build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm-$(WINDOWS
 $(WINDOWS_ARCHIVE_BINARY): $(WINDOWS_BINARY)
 	cp $< $@
 
-# Build the tool to generate the install-calico-windows.ps1 installation script.
-$(WINDOWS_GEN_INSTALL_SCRIPT_BIN):
-	mkdir -p hack/bin
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-	$(GIT_CONFIG_SSH) \
-	go build -o $@ ./hack/gen-install-calico-windows-script'
+# Ensure the upgrade image docker build folder exists.
+$(WINDOWS_UPGRADE_BUILD):
+	-mkdir -p $(WINDOWS_UPGRADE_BUILD)
 
-# Generate the install-calico-windows.ps1 installation script.
-# For dev releases, override WINDOWS_ARCHIVE_BASE_URL.
-install-calico-windows-script $(WINDOWS_INSTALL_SCRIPT): $(WINDOWS_GEN_INSTALL_SCRIPT_BIN)
-	$(WINDOWS_GEN_INSTALL_SCRIPT_BIN) \
-		-product "$(WINDOWS_INSTALL_SCRIPT_PRODUCT)" \
-		-version $(GIT_VERSION) \
-		-templatePath windows-packaging/install-calico-windows.ps1.tpl \
-		-baseUrl $(WINDOWS_ARCHIVE_BASE_URL) > $(WINDOWS_INSTALL_SCRIPT)
+# Ensure the directory for temporary files used to build the windows upgrade zip
+# archive exists.
+$(WINDOWS_UPGRADE_DIST_STAGE):
+	-mkdir -p $(WINDOWS_UPGRADE_DIST_STAGE)
+
+# Copy the upgrade script to the temporary directory where we build the windows
+# upgrade zip file.
+$(WINDOWS_UPGRADE_SCRIPT): $(WINDOWS_UPGRADE_DIST_STAGE)
+	cp $(WINDOWS_UPGRADE_ROOT)/calico-upgrade.ps1 $@
+
+# Copy the install zip archive to the temporary directory where we build the windows
+# upgrade zip file.
+$(WINDOWS_UPGRADE_INSTALL_ZIP): build-windows-archive $(WINDOWS_UPGRADE_DIST_STAGE)
+	cp $(WINDOWS_ARCHIVE) $@
+
+# Get the install script into the temporary directory where we build the windows
+# upgrade zip file. The version of the install script depends on whether there
+# is a released version for the branch; otherwise the master version of the
+# script is used.
+$(WINDOWS_UPGRADE_INSTALL_FILE): $(WINDOWS_UPGRADE_DIST_STAGE)
+	# Truncated git version in the vX.Y version string our docs site uses.
+	$(eval ver := $(shell echo $(WINDOWS_ARCHIVE_TAG) | sed -ne 's/\(v[0-9]\+\.[0-9]\+\).*/\1/p' ))
+	# The vX.Y.Z version string.
+	$(eval fullver := $(shell echo $(WINDOWS_ARCHIVE_TAG) | sed -ne 's/\(v[0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' ))
+	@echo vX.Y version is $(ver)
+	@echo vX.Y.Z version is $(fullver)
+	@if git show-ref --tags $(fullver) ; then \
+		echo "Tag $(fullver) exists, using released version of installation script" ; \
+		curl --fail https://docs.projectcalico.org/archive/$(ver)/scripts/install-calico-windows.ps1 -o $(WINDOWS_UPGRADE_INSTALL_FILE) ; \
+	else \
+		echo "Tag $(fullver) doesn't exist yet, using master version of installation script" ; \
+		curl --fail https://docs.projectcalico.org/master/scripts/install-calico-windows.ps1 -o $(WINDOWS_UPGRADE_INSTALL_FILE) ; \
+	fi
+
+# Produces the Windows upgrade ZIP archive for the release.
+release-windows-upgrade-archive: release-prereqs
+	$(MAKE) build-windows-upgrade-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
+
+# Build the Windows upgrade zip archive.
+build-windows-upgrade-archive: clean-windows-upgrade $(WINDOWS_UPGRADE_INSTALL_ZIP) $(WINDOWS_UPGRADE_INSTALL_FILE) $(WINDOWS_UPGRADE_SCRIPT) $(WINDOWS_UPGRADE_BUILD)
+	rm $(WINDOWS_UPGRADE_ARCHIVE) || true
+	cd $(WINDOWS_UPGRADE_DIST_STAGE) && zip -r "$(CURDIR)/$(WINDOWS_UPGRADE_ARCHIVE)" *.zip *.ps1
+
+# Sets up the docker builder used to create Windows image tarballs.
+setup-windows-builder:
+	-docker buildx rm calico-windows-upgrade-builder
+	docker buildx create --name=calico-windows-upgrade-builder --use --platform windows/amd64
+
+# Builds all the Windows image tarballs for each version in WINDOWS_VERSIONS
+image-tar-windows-all: setup-windows-builder $(addprefix sub-image-tar-windows-,$(WINDOWS_VERSIONS))
+
+CRANE_BINDMOUNT_CMD := \
+	docker run --rm \
+		--net=host \
+		--init \
+		--entrypoint /bin/sh \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(DOCKER_CONFIG):/root/.docker/config.json \
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) -c $(double_quote)crane
+
+DOCKER_MANIFEST_CMD := docker manifest
+
+ifdef CONFIRM
+CRANE_BINDMOUNT = $(CRANE_BINDMOUNT_CMD)
+DOCKER_MANIFEST = $(DOCKER_MANIFEST_CMD)
+else
+CRANE_BINDMOUNT = echo [DRY RUN] $(CRANE_BINDMOUNT_CMD)
+DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
+endif
+
+# Uses the docker builder to create a Windows image tarball for a single Windows
+# version.
+sub-image-tar-windows-%:
+	-mkdir -p $(WINDOWS_UPGRADE_DIST)
+	cd $(WINDOWS_UPGRADE_ROOT) && \
+		docker buildx build \
+			--platform windows/amd64 \
+			--output=type=docker,dest=$(CURDIR)/$(WINDOWS_UPGRADE_DIST)/image-$(GIT_VERSION)-$*.tar \
+			--pull \
+			--no-cache \
+			--build-arg=WINDOWS_VERSION=$* .
+
+# The calico-windows-upgrade cd is different because we do not build docker images directly.
+# Since the build machine is linux, we output the images to a tarball. (We can
+# produce images but there will be no output because docker images
+# built for Windows cannot be loaded on linux.)
+#
+# The resulting image tarball is then pushed to registries during cd/release.
+# The image tarballs are located in dist/windows-upgrade and have files names
+# with the format 'image-v3.21.0-2-abcdef-20H2.tar'.
+#
+# In addition to pushing the individual images, we also create the manifest
+# directly using 'docker manifest'. This is possible because Semaphore is using
+# a recent enough docker CLI version (20.10.0)
+#
+# - Create the manifest with 'docker manifest create' using the list of all images.
+# - For each windows version, 'docker manifest annotate' its image with "os.image: <windows_version>".
+#   <windows_version> is the version string that looks like, e.g. 10.0.19041.1288.
+#   Setting os.image in the manifest is required for Windows hosts to load the
+#   correct image in manifest.
+# - Finally we push the manifest, "purging" the local manifest.
+cd-windows-upgrade:
+	for registry in $(DEV_REGISTRIES); do \
+		echo Pushing Windows images to $${registry}; \
+		all_images=""; \
+		manifest_image="$${registry}/$(WINDOWS_UPGRADE_IMAGE):$(GIT_VERSION)"; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			image_tar="$(WINDOWS_UPGRADE_DIST)/image-$(GIT_VERSION)-$${win_ver}.tar"; \
+			image="$${registry}/$(WINDOWS_UPGRADE_IMAGE):$(GIT_VERSION)-windows-$${win_ver}"; \
+			echo Pushing image $${image} ...; \
+			$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote) & \
+			all_images="$${all_images} $${image}"; \
+		done; \
+		wait; \
+		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
+			image="$${registry}/$(WINDOWS_UPGRADE_IMAGE):$(GIT_VERSION)-windows-$${win_ver}"; \
+			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
+		done; \
+		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+	done ;
 
 ###############################################################################
 # Utilities

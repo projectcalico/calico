@@ -17,17 +17,22 @@ metadata:
   name: calicoctl
   namespace: kube-system
 spec:
+  tolerations:
+  # Important: Tolerate the control plane node, where we will run calicoctl.
+  - operator: "Exists"
+    effect: "NoSchedule"
   nodeSelector:
-    kubernetes.io/os: linux
+    # Important: This makes sure that calicoctl is installed on the control plane node,
+    # where it will not be subjected to potentially disruptive actions taken by our test code.
+    kubernetes.io/hostname: kind-control-plane
   hostNetwork: true
   serviceAccountName: calicoctl
   containers:
   - name: calicoctl
-    image: calico/ctl:master
+    image: docker.io/calico/ctl:latest-amd64
     command:
       - /calicoctl
     args:
-      - --allow-version-mismatch
       - version
       - --poll=1m
     env:
@@ -37,7 +42,7 @@ spec:
 ---
 
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calicoctl
 rules:
@@ -96,7 +101,7 @@ rules:
 
 ---
 
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: calicoctl

@@ -1,24 +1,10 @@
-PACKAGE_NAME=github.com/projectcalico/calicoctl
-GO_BUILD_VER=v0.53
+include ../metadata.mk
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CALICOCTL_PROJECT_ID)
+PACKAGE_NAME = github.com/projectcalico/calico/calicoctl
 
-KUBE_APISERVER_PORT?=8080
+KUBE_APISERVER_PORT?=6443
 KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
 KUBE_CLUSTERINFO_CRD_MANIFEST?=crd.projectcalico.org_clusterinformations.yaml
-
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-ifdef LOCAL_BUILD
-PHONY: set-up-local-build
-LOCAL_BUILD_DEP:=set-up-local-build
-
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
-$(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
-endif
-
 
 CALICOCTL_IMAGE       ?=calico/ctl
 BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
@@ -32,21 +18,11 @@ DEV_TAG_SUFFIX        ?= 0.dev
 EXCLUDEARCH?=
 
 ###############################################################################
-# Download and include Makefile.common
+# Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-include Makefile.common
+include ../lib.Makefile
 
 ###############################################################################
 
@@ -58,26 +34,21 @@ TEST_CONTAINER_NAME ?= calico/test
 
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/v3/calicoctl/commands.VERSION=$(GIT_VERSION) \
-	-X $(PACKAGE_NAME)/v3/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	-X $(PACKAGE_NAME)/v3/calicoctl/commands/common.VERSION=$(GIT_VERSION) -s -w"
+LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
+	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
+	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION) -s -w"
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} \;
-	rm -rf .go-pkg-cache bin build certs *.tar vendor Makefile.common* calicoctl/commands/report $(CALICO_VERSION_HELPER_DIR)/bin
+	rm -rf .go-pkg-cache bin build certs *.tar calicoctl/commands/report $(CALICO_VERSION_HELPER_DIR)/bin
 	docker rmi $(CALICOCTL_IMAGE):latest-$(ARCH) || true
 	docker rmi $(CALICOCTL_IMAGE):$(VERSION)-$(ARCH) || true
 ifeq ($(ARCH),amd64)
 	docker rmi $(CALICOCTL_IMAGE):latest || true
 	docker rmi $(CALICOCTL_IMAGE):$(VERSION) || true
 endif
-
-###############################################################################
-# Updating pins
-###############################################################################
-update-pins: update-api-pin update-libcalico-pin
 
 ###############################################################################
 # Building the binary
@@ -100,15 +71,13 @@ bin/calicoctl-linux-%: BUILDOS=linux
 # We reinvoke make here to re-evaluate BUILDOS and ARCH so the correct values
 # for multi-platform builds are used. When make is initially invoked, BUILDOS
 # and ARCH are defined with default values (Linux and amd64).
-bin/calicoctl-%: $(LOCAL_BUILD_DEP) $(SRC_FILES)
+bin/calicoctl-%: $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
 	mkdir -p bin
-	$(DOCKER_RUN) \
-	  -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
+
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
 	cp $< $@
@@ -124,7 +93,7 @@ gen-crds: remote-deps
 remote-deps: mod-download	
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
 		$(GIT_CONFIG_SSH) \
-		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config .; \
+		cp -r ../libcalico-go/config .; \
 		chmod -R +w config/'
 
 ###############################################################################
@@ -133,8 +102,8 @@ remote-deps: mod-download
 .PHONY: image $(CALICOCTL_IMAGE)
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
-$(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH)
-	docker build -t $(CALICOCTL_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
+$(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) register
+	docker buildx build --pull -t $(CALICOCTL_IMAGE):latest-$(ARCH) --platform=linux/$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) . --load
 ifeq ($(ARCH),amd64)
 	docker tag $(CALICOCTL_IMAGE):latest-$(ARCH) $(CALICOCTL_IMAGE):latest
 endif
@@ -161,7 +130,7 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 ###############################################################################
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev.
-ut: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64
+ut: bin/calicoctl-linux-amd64
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r calicoctl/*'
 
 ###############################################################################
@@ -169,17 +138,22 @@ ut: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64
 ###############################################################################
 .PHONY: fv
 ## Run the tests in a container. Useful for CI, Mac dev.
-fv: $(LOCAL_BUILD_DEP) bin/calicoctl-linux-amd64 version-helper
+fv: bin/calicoctl-linux-amd64 version-helper
 	$(MAKE) run-etcd-host
+
 	# We start two API servers in order to test multiple kubeconfig support
-	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=8080 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
-	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=8082 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
+	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
+	$(MAKE) run-kubernetes-master KUBE_APISERVER_PORT=6444 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
+
+	# Ensure anonymous is permitted to be admin.
+	while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
+
 	# Run the tests
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test ./tests/fv'
 	# Cleanup
 	$(MAKE) stop-etcd
-	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=8080
-	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=8082
+	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=6443
+	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=6444
 
 ###############################################################################
 # STs
@@ -204,6 +178,7 @@ st: bin/calicoctl-linux-amd64 version-helper
 	docker run --net=host --privileged \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
 		   --rm -t \
+		   -v $(CURDIR)/tests/certs:/home/user/certs \
 		   -v $(CURDIR):/code \
 		   -v /var/run/docker.sock:/var/run/docker.sock \
 		   $(TEST_CONTAINER_NAME) \
@@ -237,63 +212,64 @@ run-etcd-host:
 stop-etcd:
 	@-docker rm -f calico-etcd
 
-## Run a local kubernetes master with API via hyperkube
+## Run a local kubernetes master with API
 run-kubernetes-master: stop-kubernetes-master
 	# Run a Kubernetes apiserver using Docker.
-	docker run \
-		--net=host --name st-apiserver-${KUBE_APISERVER_PORT} \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-apiserver \
-			--bind-address=0.0.0.0 \
-			--secure-port=1${KUBE_APISERVER_PORT} \
-			--insecure-bind-address=0.0.0.0 \
-			--port=${KUBE_APISERVER_PORT} \
-	        	--etcd-servers=http://127.0.0.1:2379 \
+	docker run --net=host --detach \
+		--name st-apiserver-${KUBE_APISERVER_PORT} \
+		-v $(CURDIR):/code \
+		-v `pwd`/tests/certs:/home/user/certs \
+		-e KUBECONFIG=/home/user/certs/kubeconfig \
+		${CALICO_BUILD} kube-apiserver \
+			--secure-port=${KUBE_APISERVER_PORT} \
 			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
-			--service-cluster-ip-range=10.101.0.0/16 \
-			--v=10 \
-			--logtostderr=true
+			--etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+                        --service-cluster-ip-range=10.101.0.0/16 \
+                        --authorization-mode=RBAC \
+                        --service-account-key-file=/home/user/certs/service-account.pem \
+                        --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+                        --service-account-issuer=https://localhost:443 \
+                        --api-audiences=kubernetes.default \
+                        --client-ca-file=/home/user/certs/ca.pem \
+                        --tls-cert-file=/home/user/certs/kubernetes.pem \
+                        --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+                        --enable-priority-and-fairness=false \
+                        --max-mutating-requests-inflight=0 \
+                        --max-requests-inflight=0
+
 
 	# Wait until the apiserver is accepting requests.
-	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl --server=https://127.0.0.1:${KUBE_APISERVER_PORT} get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 
 	# And run the controller manager.
-	docker run \
-		--net=host --name st-controller-manager-${KUBE_APISERVER_PORT} \
-		--detach \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kube-controller-manager \
-                        --master=127.0.0.1:${KUBE_APISERVER_PORT} \
-                        --min-resync-period=3m \
-                        --allocate-node-cidrs=true \
-                        --cluster-cidr=10.10.0.0/16 \
-                        --v=5
+	docker run --detach --net=host \
+	  --name st-controller-manager-${KUBE_APISERVER_PORT} \
+	  -v $(CURDIR)/tests/certs:/home/user/certs \
+	  $(CALICO_BUILD) kube-controller-manager \
+	    --master=https://127.0.0.1:${KUBE_APISERVER_PORT} \
+            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+            --min-resync-period=3m \
+            --allocate-node-cidrs=true \
+            --cluster-cidr=10.10.0.0/16 \
+            --v=5 \
+            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+            --root-ca-file=/home/user/certs/ca.pem
 
 	# Create a Node in the API for the tests to use.
-	while ! docker run \
-	    --net=host \
-	    --rm \
-		-v $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /manifests/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
+	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
+		apply -f /code/tests/st/manifests/${KUBE_MOCK_NODE_MANIFEST}; \
 		do echo "Waiting for node to apply successfully..."; sleep 2; done
 
-	# Apply ClusterInformation CRD because the tests now require it
-	while ! docker run \
-	    --net=host \
-	    --rm \
-		-v $(CURDIR):/manifests \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /manifests/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
+	# Apply ClusterInformation CRD because the tests require it
+	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
+		apply -f /code/tests/st/manifests/${KUBE_CLUSTERINFO_CRD_MANIFEST}; \
 		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
-	-docker run \
-	    --net=host \
-	    --rm \
-		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} kubectl \
-		--server=http://127.0.0.1:${KUBE_APISERVER_PORT} \
+	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
+		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
 		create namespace test
 	
 ## Stop the local kubernetes master
@@ -417,9 +393,6 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
-ifdef LOCAL_BUILD
-	$(error LOCAL_BUILD must not be set for a release)
 endif
 ifndef GITHUB_TOKEN
 	$(error GITHUB_TOKEN must be set for a release)

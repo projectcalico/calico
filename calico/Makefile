@@ -1,17 +1,14 @@
+include ../metadata.mk
+
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 GIT_HASH=$(shell git rev-parse --short=9 HEAD)
-GIT_UPSTREAM=$(shell git remote -v | grep projectcalico.*\(push\) | awk '{print $$1}')
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
-IMAGES_FILE=
 JEKYLL_VERSION=pages
 HP_VERSION=v0.2
 DEV?=false
 CONFIG=--config _config.yml
 ifeq ($(DEV),true)
 	CONFIG:=$(CONFIG),_config_dev.yml
-endif
-ifneq ($(IMAGES_FILE),)
-	CONFIG:=$(CONFIG),/config_images.yml
 endif
 
 # Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown.
@@ -20,11 +17,10 @@ ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-GO_BUILD_VER?=v0.62
-GOMOD_VENDOR=true
+include ../metadata.mk
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
-PACKAGE_NAME?=github.com/projectcalico/calico
+PACKAGE_NAME = github.com/projectcalico/calico/calico
 
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yq.v2"
@@ -50,30 +46,15 @@ TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.t
 CHART_RELEASE := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].chart.version')
 
 ###############################################################################
-# Download and include Makefile.common
+# Include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-include Makefile.common
+include ../lib.Makefile
 
 ##############################################################################
 
-
-
-CONTAINERIZED_VALUES?=docker run --rm \
-	  -v $$PWD:/calico \
-	  -w /calico \
-	  ruby:2.5
+CONTAINERIZED_VALUES?=docker run --rm -v $(CURDIR):/calico -w /calico ruby:2.5
 
 # Build values.yaml for all charts
 .PHONY: values.yaml
@@ -84,8 +65,6 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 # Note that helm requires strict semantic versioning, so we use v0.0 to represent 'master'.
 ifdef RELEASE_CHART
 # the presence of RELEASE_CHART indicates we're trying to cut an official chart release.
-# Helm charts will be built with the chart version matching the corresponding Calico version.
-# Any functional changes to the helm chart will require a patch release of Calico.
 chartVersion:=$(CALICO_VER)
 appVersion:=$(CALICO_VER)
 else
@@ -107,9 +86,6 @@ chart/%: _includes/charts/%/values.yaml bin/helm3
 	--destination ./bin/ \
 	--version $(chartVersion) \
 	--app-version $(appVersion)
-	# The actual chart bundle will include a chart release version appended as a semver
-	# prerelease version in order to differentiate MINOR semantic issues caused by releasing.
-	mv ./bin/$(@F)-$(chartVersion).tgz ./bin/$(@F)-$(chartVersion)-$(CHART_RELEASE).tgz
 
 serve: bin/helm
 	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
@@ -118,8 +94,8 @@ serve: bin/helm
 	# like to use a docker image that comes preloaded with all the github-pages plugins,
 	# its ok to override this variable.
 	docker run --rm -it \
-	  -v $$PWD/bin/helm:/usr/local/bin/helm:ro \
-	  -v $$PWD:/srv/jekyll \
+	  -v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
+	  -v $(CURDIR):/srv/jekyll \
 	  -e JEKYLL_DOCKER_TAG="" \
 	  -e JEKYLL_UID=`id -u` \
 	  -p 4000:4000 \
@@ -130,138 +106,14 @@ _site build: bin/helm
 	docker run --rm \
 	-e JEKYLL_DOCKER_TAG="" \
 	-e JEKYLL_UID=`id -u` \
-	-v $$PWD/bin/helm:/usr/local/bin/helm:ro \
-	-v $$PWD:/srv/jekyll \
+	-v $(CURDIR)/bin/helm:/usr/local/bin/helm:ro \
+	-v $(CURDIR):/srv/jekyll \
 	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
-	-v $(IMAGES_FILE):/config_images.yml \
 	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
 
 ## Clean enough that a new release build will be clean
 clean:
-	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml Makefile.common*
-
-########################################################################################################################
-# Builds locally checked out code using local versions of libcalico, felix, and confd.
-#
-# Example commands:
-#
-#       # Make a build of your locally checked out code with custom registry.
-#	make dev-clean dev-image REGISTRY=caseydavenport
-#
-#	# Build a set of manifests using the produced images.
-#	make dev-manifests REGISTRY=caseydavenport
-#
-#	# Push the built images.
-#	make dev-push REGISTRY=caseydavenport
-#
-#	# Make a build using a specific tag, e.g. calico/node:mytag-amd64.
-#	make dev-clean dev-image TAG_COMMAND='echo mytag'
-#
-########################################################################################################################
-RELEASE_REPOS=felix typha kube-controllers calicoctl cni-plugin app-policy pod2daemon node
-RELEASE_BRANCH_REPOS=$(sort $(RELEASE_REPOS) libcalico-go confd)
-TAG_COMMAND=git describe --tags --dirty --always --long
-REGISTRY?=calico
-LOCAL_BUILD=true
-.PHONY: dev-image dev-test dev-clean
-## Build a local version of Calico based on the checked out codebase.
-dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
-
-# Dynamically declare new make targets for all calico subprojects...
-$(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
-	echo "TARGET:"
-	echo $< 
-	@cd $< && export TAG=$$($(TAG_COMMAND)); make image retag-build-images-with-registries \
-		ARCHES=amd64 \
-		BUILD_IMAGE=$(REGISTRY)/$* \
-		PUSH_IMAGES=$(REGISTRY)/$* \
-		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG 
-
-## Push locally built images.
-dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
-$(addsuffix -dev-push,$(RELEASE_REPOS)): %-dev-push: ../%
-	@cd $< && export TAG=$$($(TAG_COMMAND)); make push \
-		BUILD_IMAGE=$(REGISTRY)/$* \
-		PUSH_IMAGES=$(REGISTRY)/$* \
-		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG
-
-## Run all tests against currently checked out code. WARNING: This takes a LONG time.
-dev-test:  $(addsuffix -dev-test, $(filter-out calico, $(RELEASE_REPOS)))
-$(addsuffix -dev-test,$(RELEASE_REPOS)): %-dev-test: ../%
-	@cd $< && make test LOCAL_BUILD=$(LOCAL_BUILD)
-
-## Run `make clean` across all repos.
-dev-clean: $(addsuffix -dev-clean, $(filter-out calico felix, $(RELEASE_REPOS)))
-$(addsuffix -dev-clean,$(RELEASE_REPOS)): %-dev-clean: ../%
-	@cd $< && export TAG=$$($(TAG_COMMAND)); make clean \
-		BUILD_IMAGE=$(REGISTRY)/$* \
-		PUSH_IMAGES=$(REGISTRY)/$* \
-		LOCAL_BUILD=$(LOCAL_BUILD) \
-		IMAGETAG=$$TAG
-
-dev-manifests: dev-versions-yaml dev-images-file
-	@make bin/helm
-	@make clean _site \
-		VERSIONS_FILE="$$PWD/pinned_versions.yml" \
-		IMAGES_FILE="$$PWD/pinned_images.yml" \
-		DEV=true
-	@mkdir -p _output
-	@cp -r _site/manifests _output/dev-manifests
-
-# Builds an images file for help in building the docs manifests. We need this in order
-# to override the default images file with the desired registry and image names as
-# produced by the `dev-image` target.
-dev-images-file:
-	@echo "imageNames:" > pinned_images.yml
-	@echo "  node: $(REGISTRY)/node" >> pinned_images.yml
-	@echo "  calicoctl: $(REGISTRY)/calicoctl" >> pinned_images.yml
-	@echo "  typha: $(REGISTRY)/typha" >> pinned_images.yml
-	@echo "  cni: $(REGISTRY)/cni-plugin" >> pinned_images.yml
-	@echo "  kubeControllers: $(REGISTRY)/kube-controllers" >> pinned_images.yml
-	@echo "  calico-upgrade: $(REGISTRY)/upgrade" >> pinned_images.yml
-	@echo "  flannel: quay.io/coreos/flannel" >> pinned_images.yml
-	@echo "  dikastes: $(REGISTRY)/app-policy" >> pinned_images.yml
-	@echo "  pilot-webhook: $(REGISTRY)/pilot-webhook" >> pinned_images.yml
-	@echo "  flexvol: $(REGISTRY)/pod2daemon" >> pinned_images.yml
-
-
-# Builds a versions.yaml file that corresponds to the versions produced by the `dev-image` target.
-dev-versions-yaml:
-	@export TYPHA_VER=`cd ../typha && $(TAG_COMMAND)`-amd64; \
-	export CTL_VER=`cd ../calicoctl && $(TAG_COMMAND)`-amd64; \
-	export NODE_VER=`cd ../node && $(TAG_COMMAND)`-amd64; \
-	export CNI_VER=`cd ../cni-plugin && $(TAG_COMMAND)`-amd64; \
-	export KUBE_CONTROLLERS_VER=`cd ../kube-controllers && $(TAG_COMMAND)`-amd64; \
-	export APP_POLICY_VER=`cd ../app-policy && $(TAG_COMMAND)`-amd64; \
-	export POD2DAEMON_VER=`cd ../pod2daemon && $(TAG_COMMAND)`-amd64; \
-	/bin/echo -e \
-"- title: \"dev-build\"\\n"\
-"  note: \"Developer build\"\\n"\
-"  tigera-operator:\\n"\
-"   image: tigera/operator\\n"\
-"   registry: quay.io\\n"\
-"   version: master\\n"\
-"  components:\\n"\
-"     typha:\\n"\
-"      version: $$TYPHA_VER\\n"\
-"     calicoctl:\\n"\
-"      version:  $$CTL_VER\\n"\
-"     calico/node:\\n"\
-"      version:  $$NODE_VER\\n"\
-"     calico/cni:\\n"\
-"      version:  $$CNI_VER\\n"\
-"     calico/kube-controllers:\\n"\
-"      version: $$KUBE_CONTROLLERS_VER\\n"\
-"     networking-calico:\\n"\
-"      version: master\\n"\
-"     flannel:\\n"\
-"      version: v0.11.1\\n"\
-"     calico/dikastes:\\n"\
-"      version: $$APP_POLICY_VER\\n"\
-"     flexvol:\\n"\
-"      version: $$POD2DAEMON_VER\\n" > pinned_versions.yml;
+	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
 
 ###############################################################################
 # CI / test targets
@@ -270,11 +122,11 @@ dev-versions-yaml:
 ci: htmlproofer kubeval helm-tests
 
 htmlproofer: _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --assume-extension --check-html --empty-alt-ignore --file-ignore $(HP_IGNORE_LOCAL_DIRS) --internal_domains "docs.projectcalico.org" --disable_external --allow-hash-href
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(CURDIR)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --assume-extension --check-html --empty-alt-ignore --file-ignore $(HP_IGNORE_LOCAL_DIRS) --internal_domains "docs.projectcalico.org" --disable_external --allow-hash-href
 
 kubeval: _site
 	# Run kubeval to check master manifests are valid Kubernetes resources.
-	-docker run -v $$PWD:/calico --entrypoint /bin/sh garethr/kubeval:0.7.3 -c 'ok=true; for f in `find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\|30-policy\|istio-app-layer-policy\|istio-inject-configmap.*\|-cf\).yaml"`; do echo Running kubeval on $$f; /kubeval $$f || ok=false; done; $$ok' 1>stderr.out 2>&1
+	-docker run -v $(CURDIR):/calico --entrypoint /bin/sh garethr/kubeval:0.7.3 -c 'ok=true; for f in `find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\|30-policy\|istio-app-layer-policy\|istio-inject-configmap.*\|-cf\).yaml"`; do echo Running kubeval on $$f; /kubeval $$f || ok=false; done; $$ok' 1>stderr.out 2>&1
 
 	# Filter out error loading schema for non-standard resources.
 	# Filter out error reading empty secrets (which we use for e.g. etcd secrets and seem to work).
@@ -285,7 +137,7 @@ kubeval: _site
 	! grep -C3 -P "invalid|\t\*" filtered.out
 	rm filtered.out
 
-helm-tests: vendor bin/helm values.yaml
+helm-tests: bin/helm values.yaml
 	mkdir -p .go-pkg-cache && \
 		docker run --rm \
 		--net=host \
@@ -294,7 +146,7 @@ helm-tests: vendor bin/helm values.yaml
 		-v $$(pwd)/bin/helm3:/usr/local/bin/helm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)
+		$(CALICO_BUILD) ginkgo -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)
 
 ###############################################################################
 # Docs automation
@@ -304,7 +156,7 @@ helm-tests: vendor bin/helm values.yaml
 HP_IGNORE_URLS="/docs.openshift.org/,/localhost/"
 
 check_external_links: _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --external_only --file-ignore $(HP_IGNORE_LOCAL_DIRS) --assume-extension --url-ignore $(HP_IGNORE_URLS) --internal_domains "docs.projectcalico.org"
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(CURDIR)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --external_only --file-ignore $(HP_IGNORE_LOCAL_DIRS) --assume-extension --url-ignore $(HP_IGNORE_URLS) --internal_domains "docs.projectcalico.org"
 
 strip_redirects:
 	find \( -name '*.md' -o -name '*.html' \) -exec sed -i'' '/redirect_from:/d' '{}' \;
@@ -378,9 +230,9 @@ Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_S
 
 Attached to this release are the following artifacts:
 
-- `release-$(CALICO_VER).tgz`: docker images and kubernetes manifests.
-- `calico-windows-$(CALICO_VER).zip`: Calico for Windows.
-- `tigera-operator-$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
+- `release-v$(CALICO_VER).tgz`: docker images and kubernetes manifests.
+- `calico-windows-v$(CALICO_VER).zip`: Calico for Windows.
+- `tigera-operator-v$(CALICO_VER)-$(CHART_RELEASE).tgz`: Calico helm v3 chart.
 
 endef
 export RELEASE_BODY
@@ -388,7 +240,7 @@ export RELEASE_BODY
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs $(UPLOAD_DIR)
 	# Push the git tag.
-	git push $(GIT_UPSTREAM) $(CALICO_VER)
+	git push origin $(CALICO_VER)
 
 	cp $(RELEASE_HELM_CHART) $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP) $(UPLOAD_DIR)
 
@@ -403,12 +255,10 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	$(MAKE) helm-index
 	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
-	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
+	@echo "  https://github.com/projectcalico/calico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
 
-## Kicks semaphore job which syncs github released helm charts with helm index file.
-## The helm index will point to the latest helm chart release for that Calico release
-## (in case there are multiple charts).
+## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index
 helm-index:
 	@echo "Triggering semaphore workflow to update helm index."
@@ -428,16 +278,13 @@ endif
 	@echo "This file is auto-generated based on contribution records reported" >> AUTHORS.md
 	@echo "by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically." >> AUTHORS.md
 	@echo "" >> AUTHORS.md
-	@docker run -ti --rm -v $(PWD):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
+	@docker run -ti --rm -v $(CURDIR):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
 		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs: charts
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
-		exit 1; \
-	elif [ -z $(GIT_UPSTREAM) ]; then \
-		echo "At least one git remote must reference the projectcalico repo"; \
 		exit 1; fi
 ifeq (, $(shell which ghr))
 	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
@@ -463,7 +310,7 @@ endif
 MANIFEST_SRC?=$(DEFAULT_MANIFEST_SRC)
 
 $(RELEASE_WINDOWS_ZIP):
-	wget https://github.com/projectcalico/node/releases/download/$(NODE_VER)/calico-windows-$(NODE_VER).zip -P $(OUTPUT_DIR)
+	wget https://github.com/projectcalico/calico/node/releases/download/$(NODE_VER)/calico-windows-$(NODE_VER).zip -P $(OUTPUT_DIR)
 
 ## Create an archive that contains a complete "Calico" release. This includes the release tarball (which bundles manifests, images, and binaries) and the Calico for Windows installation archive.
 release-archive: release-prereqs $(RELEASE_DIR).tgz $(RELEASE_WINDOWS_ZIP)
@@ -548,7 +395,7 @@ $(RELEASE_DIR_IMAGES)/calico-flannel-migration-controller.tar:
 
 $(RELEASE_DIR_BIN)/%:
 	mkdir -p $(RELEASE_DIR_BIN)
-	wget https://github.com/projectcalico/calicoctl/releases/download/$(CTL_VER)/$(@F) -O $@
+	wget https://github.com/projectcalico/calico/calicoctl/releases/download/$(CTL_VER)/$(@F) -O $@
 	chmod +x $@
 
 ###############################################################################
@@ -574,21 +421,9 @@ bin/helm3:
 values.yaml: _includes/charts/calico/values.yaml _includes/charts/tigera-operator/values.yaml
 _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versions.yml
 	docker run --rm \
-	  -v $$PWD:/calico \
+	  -v $(CURDIR):/calico \
 	  -w /calico \
 	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
-
-## Create the vendor directory
-vendor:
-	# Ensure that the glide cache directory exists.
-	mkdir -p $(HOME)/.glide
-
-	docker run --rm -i \
-	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	  -v $(HOME)/.glide:/home/user/.glide:rw \
-	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) go mod vendor
 
 .PHONY: help
 ## Display this help text
@@ -616,7 +451,7 @@ release-test-image:
 release-test: release-test-image
 	docker run --rm \
 	-v /var/run/docker.sock:/var/run/docker.sock \
-	-v $(PWD):/docs \
+	-v $(CURDIR):/docs \
 	-e RELEASE_STREAM=$(RELEASE_STREAM) \
 	$(DOCS_TEST_CONTAINER) sh -c \
 	"nosetests . -e "$(EXCLUDE_REGEX)" \
