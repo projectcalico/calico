@@ -1,0 +1,19 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node.kube-master
+spec:
+  logSeverityScreen: Info
+  communities:
+    - name: bgp-comm-large
+      value: 50:50:5364
+  prefixAdvertisements: 
+    - cidr: 192.168.0.0/16
+      communities:
+      - 5663:12  
+      - bgp-comm-large
+      - 5663:12
+    - cidr: fd00:96::/112
+      communities:
+      - bgp-comm-large
+  listenPort: 180

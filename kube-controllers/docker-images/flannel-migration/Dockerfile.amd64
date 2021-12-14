@@ -1,0 +1,45 @@
+# Copyright 2019 Tigera, Inc
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG GIT_VERSION=unknown
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+
+# Add in top-level license file
+RUN mkdir /licenses
+COPY LICENSE /licenses
+
+# Make sure the status file is owned by our user.
+RUN mkdir /status
+RUN touch /status/status.json && chown 999 /status/status.json
+
+FROM scratch
+LABEL name="Calico Flannel migration controller" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico Flannel migration controller updates a flannel cluster to Calico" \
+      description="Calico Flannel migration controller updates a flannel cluster to Calico" \
+      maintainer="Song Jiang <song@tigera.io>"
+
+COPY --from=base /licenses /licenses
+COPY --from=base /status /status
+COPY --from=base /usr/include /usr/include
+COPY --from=base /lib64 /lib64
+COPY --from=base /lib /lib
+
+ADD bin/kubectl-amd64 /usr/bin/kubectl
+ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
+ADD bin/check-status-linux-amd64 /usr/bin/check-status
+USER 999
+ENTRYPOINT ["/usr/bin/kube-controllers"]
