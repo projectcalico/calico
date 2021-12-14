@@ -1,0 +1,11 @@
+{
+    "cniVersion": "0.3.1", 			  
+    "name": "net1",
+    "type": "calico-python",
+    "log_level": "NONE",
+    "log_level_stderr": "debug",
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.0.0.0/8"
+    }
+}
