@@ -1,0 +1,16 @@
+/bin
+.idea/
+**.*.swp
+cscope.*
+.go-pkg-cache/
+.lint-cache/
+hack/lib/*
+Makefile.common*
+docker-image/bin/
+.generate_execs
+.generate_files
+gen-execs
+config/
+test/integration/apiserver.local.config/certificates/apiserver.crt
+test/integration/apiserver.local.config/certificates/apiserver.key
+.apiserver.created*
