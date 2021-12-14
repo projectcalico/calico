@@ -1,0 +1,39 @@
+- apiVersion: v1
+  kind: bgpPeer
+  metadata:
+    node: Node1
+    peerIP: aa:bb::ff
+    scope: node
+  spec:
+    asNumber: 64514
+- apiVersion: v1
+  kind: bgpPeer
+  metadata:
+    node: Node2
+    peerIP: 1.2.3.4
+    scope: node
+  spec:
+    asNumber: 6455
+---
+apiVersion: v1
+kind: bgpPeer
+metadata:
+  scope: global
+  peerIP: 192.20.30.40
+spec:
+  asNumber: 64567
+
+---
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 192.168.0.0/16
+  spec:
+    ipip:
+      enabled: true
+
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 2001::00/120
+  spec:

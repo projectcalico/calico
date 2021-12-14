@@ -1,0 +1,21 @@
+apiVersion: projectcalico.org/v3
+kind: WorkloadEndpoint
+metadata:
+ name: rack1--host1-k8s-pod--name-eth0
+ namespace: namey-mcnamespace
+ labels:
+   app: frontend
+   calico/k8s_ns: default
+spec:
+ node: rack1-host1
+ orchestrator: k8s
+ workload: default.frontend-m33p
+ pod: pod.name
+ endpoint: eth0
+ containerID: mycontainer-01234
+ interfaceName: cali0ef24ba
+ mac: ca:fe:1b:ad:be:ef
+ ipNetworks:
+ - 192.168.0.0/16
+ profiles:
+ - profile5
