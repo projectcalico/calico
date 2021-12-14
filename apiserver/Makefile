@@ -1,17 +1,10 @@
-PACKAGE_NAME    ?= github.com/projectcalico/apiserver
-GO_BUILD_VER    ?= v0.59
-GOMOD_VENDOR    := false
-GIT_USE_SSH      = true
+include ../metadata.mk
+
+PACKAGE_NAME = github.com/projectcalico/calico/apiserver
 LOCAL_CHECKS     = lint-cache-dir goimports check-copyright check-boring-ssl
-# Used by Makefile.common
-LIBCALICO_REPO   = github.com/projectcalico/libcalico-go
-# Used only when doing local build
-LOCAL_LIBCALICO  = /go/src/github.com/projectcalico/libcalico-go
+
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
-
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_API_SERVER_OSS_PROJECT_ID)
 
 API_SERVER_IMAGE      ?=calico/apiserver
 BUILD_IMAGES          ?=$(API_SERVER_IMAGE)
@@ -20,17 +13,10 @@ RELEASE_REGISTRIES    ?=$(DEV_REGISTRIES)
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?=0.dev
 
-# Allow libcalico-go to be mapped into the build container.
-# Please note, this will change go.mod.
-ifdef LIBCALICOGO_PATH
-EXTRA_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):$(LOCAL_LIBCALICO):ro
-endif
-
 EXTRA_DOCKER_ARGS += -e GOLANGCI_LINT_CACHE=/lint-cache -v $(CURDIR)/.lint-cache:/lint-cache:rw \
 				 -v $(CURDIR)/hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
 
 ###############################################################################
-K8S_VERSION = v1.16.3
 BINDIR ?= bin
 BUILD_DIR ?= build
 
@@ -68,21 +54,12 @@ RELEASE_LDFLAGS = -ldflags "$(VERSION_FLAGS) -w"
 KUBECONFIG_DIR? = /etc/kubernetes/admin.conf
 
 ##############################################################################
-# Download and include Makefile.common before anything else
+# Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ##############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
 
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-include Makefile.common
+include ../lib.Makefile
 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
@@ -90,29 +67,6 @@ CGO_ENABLED=1
 else
 CGO_ENABLED=0
 endif
-
-###############################################################################
-# Managing the upstream library pins
-#
-# If you're updating the pins with a non-release branch checked out,
-# set PIN_BRANCH to the parent branch, e.g.:
-#
-#     PIN_BRANCH=release-v2.5 make update-pins
-#        - or -
-#     PIN_BRANCH=master make update-pins
-#
-###############################################################################
-
-## Guard so we don't run this on osx because of ssh-agent to docker forwarding bug
-guard-ssh-forwarding-bug:
-	@if [ "$(shell uname)" = "Darwin" ]; then \
-		echo "ERROR: This target requires ssh-agent to docker key forwarding and is not compatible with OSX/Mac OS"; \
-		echo "$(MAKECMDGOALS)"; \
-		exit 1; \
-	fi;
-
-## Update dependency pins
-update-pins: guard-ssh-forwarding-bug update-api-pin update-libcalico-pin
 
 ###############################################################################
 # Static checks
@@ -211,7 +165,7 @@ check-copyright:
 config/crd: mod-download
 	mkdir -p config/crd
 	$(DOCKER_GO_BUILD) sh -c ' \
-		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd/* config/crd; \
+		cp -r ../libcalico-go/config/crd/* config/crd; \
 		chmod +w config/crd/*'
 
 ## Run etcd as a container (calico-etcd)
@@ -266,7 +220,7 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 	# And run the controller manager.
 	docker run --detach --net=host \
 	  --name st-controller-manager \
-	  -v $(PWD)/test/certs:/home/user/certs \
+	  -v $(CURDIR)/test/certs:/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \
             --master=https://127.0.0.1:6443 \
             --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
@@ -283,8 +237,8 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
-		-v $(PWD)/test/certs:/home/user/certs \
-		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
+		-v $(CURDIR)/test/certs:/home/user/certs \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/config/crd/
 
@@ -293,8 +247,8 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
-		-v $(PWD)/test/certs:/home/user/certs \
-		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
+		-v $(CURDIR)/test/certs:/home/user/certs \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/mock-node.yaml
 
@@ -304,8 +258,8 @@ run-kubernetes-server: config/crd run-etcd stop-kubernetes-server
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
-		-v $(PWD)/test/certs:/home/user/certs \
-		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
+		-v $(CURDIR)/test/certs:/home/user/certs \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/namespaces.yaml
 
@@ -328,7 +282,7 @@ fv: fv-kdd
 .PHONY: fv-etcd
 fv-etcd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
-		-v $(PWD)/test/certs:/home/user/certs \
+		-v $(CURDIR)/test/certs:/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'ETCD_ENDPOINTS="http://127.0.0.1:2379" DATASTORE_TYPE="etcdv3" test/integration.sh'
@@ -336,14 +290,14 @@ fv-etcd: run-kubernetes-server hack-lib
 .PHONY: fv-kdd
 fv-kdd: run-kubernetes-server hack-lib
 	$(DOCKER_RUN) \
-		-v $(PWD)/test/certs:/home/user/certs \
+		-v $(CURDIR)/test/certs:/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		$(CALICO_BUILD) \
 		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
 
 .PHONY: clean
 clean: clean-bin clean-build-image clean-hack-lib
-	rm -rf .lint-cache Makefile.common*
+	rm -rf .lint-cache
 
 clean-build-image:
 	docker rmi -f calico/apiserver > /dev/null 2>&1 || true
@@ -436,9 +390,6 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
-ifdef LOCAL_BUILD
-	$(error LOCAL_BUILD must not be set for a release)
 endif
 
 ###############################################################################

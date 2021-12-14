@@ -1,41 +1,13 @@
-PACKAGE_NAME=github.com/kelseyhightower/confd
-GO_BUILD_VER=v0.59
+include ../metadata.mk
 
-ORGANIZATION=projectcalico
-SEMAPHORE_PROJECT_ID=$(SEMAPHORE_CONFD_PROJECT_ID)
-
-# Used so semaphore can trigger the update pin pipelines in projects that have this project as a dependency.
-SEMAPHORE_AUTO_PIN_UPDATE_PROJECT_IDS=$(SEMAPHORE_NODE_PROJECT_ID)
+PACKAGE_NAME=github.com/projectcalico/calico/confd
 
 ###############################################################################
-# Download and include Makefile.common
+# Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
-MAKE_BRANCH?=$(GO_BUILD_VER)
-MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-
-Makefile.common: Makefile.common.$(MAKE_BRANCH)
-	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH):
-	# Clean up any files downloaded from other branches so they don't accumulate.
-	rm -f Makefile.common.*
-	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
-
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-ifdef LOCAL_BUILD
-PHONY: set-up-local-build
-LOCAL_BUILD_DEP:=set-up-local-build
-
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
-	-v $(CURDIR)/../typha:/go/src/github.com/projectcalico/typha:rw
-$(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
-		-replace=github.com/projectcalico/typha=../typha
-endif
-
-include Makefile.common
+include ../lib.Makefile
 
 # Override K8S_VERSION
 K8S_VERSION=v1.17.0
@@ -44,10 +16,6 @@ K8S_VERSION=v1.17.0
 
 test: ut test-kdd test-etcd
 
-CALICOCTL_VER?=master
-CALICOCTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
-TYPHA_VER?=master
-TYPHA_CONTAINER_NAME?=calico/typha:$(TYPHA_VER)-$(ARCH)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)"
@@ -60,17 +28,11 @@ clean:
 	rm -rf vendor
 	rm -rf bin/*
 	rm -rf tests/logs
-	rm Makefile.common*
-
-###############################################################################
-# Updating pins
-###############################################################################
-update-pins: update-api-pin update-libcalico-pin update-typha-pin
 
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(LOCAL_BUILD_DEP) bin/confd
+build: bin/confd
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -102,7 +64,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
@@ -145,7 +107,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 
 .PHONY: ut
 ## Run the fast set of unit tests in a container.
-ut: $(LOCAL_BUILD_DEP)
+ut:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r .'
 
 ## Etcd is used by the kubernetes
@@ -190,13 +152,20 @@ bin/kubectl:
 	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
-bin/bird:
-	curl -sSf -L --retry 5 https://github.com/projectcalico/bird/releases/download/$(BIRD_VERSION)/bird -o $@
-	chmod +x $@
-
-bin/bird6:
-	curl -sSf -L --retry 5 https://github.com/projectcalico/bird/releases/download/$(BIRD_VERSION)/bird6 -o $@
-	chmod +x $@
+bin/bird bin/bird6:
+	-docker rm -f calico-bird
+	# Latest BIRD binaries are stored in automated builds of calico/bird.
+	# To get them, we create (but don't start) a container from that image.
+	docker pull calico/bird:$(BIRD_VERSION)-$(ARCH)
+	docker create --name calico-bird calico/bird:$(BIRD_VERSION)-$(ARCH) /bin/sh
+	# Then we copy the files out of the container.  Since docker preserves
+	# mtimes on its copy, check the file really did appear, then touch it
+	# to make sure that downstream targets get rebuilt.
+	docker cp calico-bird:/bird bin/ && \
+	docker cp calico-bird:/bird6 bin/ && \
+	  test -e $@ && \
+	  touch $@
+	-docker rm -f calico-bird
 
 bin/calico-node:
 	cp fakebinary $@
@@ -206,30 +175,12 @@ bin/etcdctl:
 	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VERSION)/etcd-$(ETCD_VERSION)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VERSION)-linux-$(ARCH)/etcdctl
 
 bin/calicoctl:
-	-docker rm -f calico-ctl
-	# Latest calicoctl binaries are stored in automated builds of calico/ctl.
-	# To get them, we create (but don't start) a container from that image.
-	docker pull $(CALICOCTL_CONTAINER_NAME)
-	docker create --name calico-ctl $(CALICOCTL_CONTAINER_NAME)
-	# Then we copy the files out of the container.  Since docker preserves
-	# mtimes on its copy, check the file really did appear, then touch it
-	# to make sure that downstream targets get rebuilt.
-	docker cp calico-ctl:/calicoctl $@ && \
-	  test -e $@ && \
-	  touch $@
-	-docker rm -f calico-ctl
+	make -C ../calicoctl build
+	cp ../calicoctl/bin/calicoctl-linux-$(ARCH) $@
 
 bin/typha:
-	-docker rm -f confd-typha
-	docker pull $(TYPHA_CONTAINER_NAME)
-	docker create --name confd-typha $(TYPHA_CONTAINER_NAME)
-	# Then we copy the files out of the container.  Since docker preserves
-	# mtimes on its copy, check the file really did appear, then touch it
-	# to make sure that downstream targets get rebuilt.
-	docker cp confd-typha:/code/calico-typha $@ && \
-	  test -e $@ && \
-	  touch $@
-	-docker rm -f confd-typha
+	make -C ../typha build
+	cp ../typha/bin/calico-typha-$(ARCH) $@
 
 fv st:
 	@echo "No FVs or STs available."
@@ -272,7 +223,7 @@ release-publish: release-prereqs
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
-	@echo "  https://github.com/projectcalico/confd/releases/tag/$(VERSION)"
+	@echo "  https://github.com/projectcalico/calico/confd/releases/tag/$(VERSION)"
 	@echo ""
 
 # release-prereqs checks that the environment is configured properly to create a release.

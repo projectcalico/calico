@@ -1,0 +1,338 @@
+version: v1.0
+name: Calico
+
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+auto_cancel:
+  running:
+    when: "branch != 'master'"
+  queued:
+    when: "branch != 'master'"
+
+promotions:
+- name: Cleanup
+  pipeline_file: cleanup.yml
+  auto_promote:
+    when: "result = 'stopped'"
+
+global_job_config:
+  secrets:
+  - name: docker-hub
+  prologue:
+    commands:
+    # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+    # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+    # how much we churn docker containers during the build.  Disable it.
+    - sudo systemctl stop docker
+    - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+    - sudo systemctl start docker
+    # Free up space on the build machine.
+    - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+blocks:
+
+- name: "API"
+  execution_time_limit:
+    minutes: 30
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cd api
+    jobs:
+    - name: "make build"
+      commands:
+      - make build
+    - name: "make ci"
+      commands:
+      - make ci
+    - name: "make static-checks"
+      commands:
+      - make static-checks
+
+- name: "libcalico-go"
+  run:
+    when: "change_in('/api/') or change_in('/libcalico-go/')"
+  dependencies: []
+  task:
+    jobs:
+    - name: "libcalico-go: tests"
+      commands:
+      - checkout
+      - cd libcalico-go
+      - make ci
+
+- name: "Typha"
+  run:
+    when: "change_in('/api/') or change_in('/libcalico-go/') or change_in('/typha/')"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-8
+        os_image: ubuntu1804
+    jobs:
+    - name: "Typha: UT and FV tests"
+      commands:
+      - checkout
+      - cd typha
+      - make ci EXCEPT=k8sfv-test
+    - name: "Typha: felix k8s-st tests with updated typha image"
+      commands:
+      - checkout
+      - cd typha
+      - make calico/typha
+      - cd ../felix
+      - JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=calico/typha:latest TYPHA_VERSION=latest make k8sfv-test
+
+- name: "Felix: Build"
+  run:
+    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    jobs:
+    - name: Build and run UT, k8sfv
+      execution_time_limit:
+        minutes: 60
+      commands:
+      - checkout
+      - cd felix
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - >-
+        make image-all fv/fv.test bin/test-workload bin/test-connection
+        bin/calico-felix
+      - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+      - cache store go-pkg-cache .go-pkg-cache
+      - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
+      - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
+      - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
+      - make ut
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+
+- name: "Felix: Build Windows binaries"
+  dependencies: []
+  task:
+    jobs:
+    - name: "build Windows binaries"
+      commands:
+      - checkout
+      - cd felix
+      - make bin/calico-felix.exe fv/win-fv.exe
+
+- name: "Felix: Windows FV"
+  dependencies: ["Felix: Build Windows binaries"]
+  task:
+    secrets:
+    - name: banzai-secrets
+    - name: private-repo
+    prologue:
+      commands:
+      # Load the github access secrets.  First fix the permissions.
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/.keys/*
+      # Prepare aws configuration.
+      - pip install --upgrade --user awscli
+      - export REPORT_DIR=~/report
+      - export LOGS_DIR=~/fv.log
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${BACKEND}-${SHORT_WORKFLOW_ID}
+      - export KEYPAIR_NAME=${CLUSTER_NAME}
+      - echo CLUSTER_NAME=${CLUSTER_NAME}
+      - sudo apt-get install putty-tools
+      - git clone git@github.com:tigera/process.git
+      - checkout
+      - cd felix
+      - make bin/calico-felix.exe fv/win-fv.exe
+    epilogue:
+      always:
+        commands:
+        - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+        - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+        - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+    env_vars:
+    - name: SEMAPHORE_ARTIFACT_EXPIRY
+      value: 2w
+    - name: MASTER_CONNECT_KEY_PUB
+      value: master_ssh_key.pub
+    - name: MASTER_CONNECT_KEY
+      value: master_ssh_key
+    - name: WIN_PPK_KEY
+      value: win_ppk_key
+    - name: K8S_VERSION
+      value: 1.22.1
+    - name: WINDOWS_VERSION
+      value: "2004"
+    jobs:
+    - name: VXLAN - Windows FV
+      commands:
+      - ./.semaphore/run-win-fv
+      env_vars:
+      - name: BACKEND
+        value: vxlan
+    - name: BGP - Windows FV
+      commands:
+      - ./.semaphore/run-win-fv
+      env_vars:
+      - name: BACKEND
+        value: bgp
+
+- name: "Felix: FV Tests"
+  run:
+    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+  dependencies: ["Felix: Build"]
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cd felix
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - docker load -i /tmp/calico-felix.tar
+      - rm /tmp/calico-felix.tar
+      - touch bin/*
+      # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
+      # routing in that first felix container chooses different source IPs than the tests are expecting.
+      - sudo modprobe ipip
+    jobs:
+    - name: FV Test matrix
+      execution_time_limit:
+        minutes: 120
+      commands:
+      - make check-wireguard
+      - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      parallelism: 3
+    epilogue:
+      always:
+        commands:
+        - ./.semaphore/collect-artifacts
+        - ./.semaphore/publish-artifacts
+
+- name: "Felix: BPF UT/FV tests on new kernel"
+  run:
+    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cd felix
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export ZONE=europe-west3-c
+      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
+      - echo VM_PREFIX=${VM_PREFIX}
+      - export REPO_NAME=$(basename $(pwd))
+      - export NUM_FV_BATCHES=8
+      - mkdir artifacts
+      - ./.semaphore/create-test-vms ${VM_PREFIX}
+    jobs:
+    - name: UT/FV tests on new kernel
+      execution_time_limit:
+        minutes: 120
+      commands:
+      - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+        - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
+        - ./.semaphore/publish-artifacts
+        - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+    - name: google-service-account-for-gce
+
+- name: "Felix: Static checks on e1-standard-8"
+  run:
+    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        # Linters use a lot of RAM so use a bigger machine type.
+        type: e1-standard-8
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - checkout
+      - cd felix
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: Static checks
+      execution_time_limit:
+        minutes: 15
+      commands:
+      - make static-checks
+
+- name: "confd: tests"
+  run:
+    when: "change_in('/confd/') or change_in('/libcalico-go') or change_in('/api/')"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cd confd
+    jobs:
+    - name: "confd: CI"
+      execution_time_limit:
+        minutes: 60
+      commands:
+        - make ci
+
+- name: "Node: Tests"
+  run:
+    when: "change_in('/node/') or change_in('/felix/') or change_in('/api/') or change_in('/libcalico-go/') or change_in('/confd/') or change_in('/bird/') or change_in('/pod2daemon/')"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-8
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - checkout
+      # Semaphore is doing shallow clone on a commit without tags.
+      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
+      - git fetch --unshallow
+      - cd node
+    jobs:
+    - name: "Node: CI"
+      commands:
+      - make ci
+    - name: "Node: k8s-test"
+      commands:
+      - make k8s-test
+
+- name: "kube-controllers: Tests"
+  run:
+    when: "change_in('/kube-controllers/') or change_in('/api/') or change_in('/libcalico-go/')"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      # Semaphore is doing shallow clone on a commit without tags.
+      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
+      - git fetch --unshallow
+      - cd kube-controllers
+    jobs:
+    - name: "kube-controllers: tests"
+      commands:
+      - make ci

@@ -26,7 +26,7 @@ export DATASTORE_TYPE=kubernetes
 export KUBECONFIG=/tests/confd_kubeconfig
 
 # CRDs are pulled in from libcalico.
-CRDS=`go mod download &> /dev/null; go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/config/crd
+CRDS=../libcalico-go/config/crd
 
 # Prepopulate k8s with data that cannot be populated through calicoctl.
 # All tests use the same set of nodes - for k8s these cannot be created through
