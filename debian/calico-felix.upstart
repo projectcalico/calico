@@ -1,0 +1,20 @@
+# vim:set ft=upstart ts=2 et:
+description "Felix (Calico agent)"
+author "Project Calico Maintainers <maintainers@projectcalico.org>"
+
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [!2345]
+
+limit nofile 32000 32000
+
+respawn
+respawn limit 5 10
+
+chdir /var/run
+
+pre-start script
+  mkdir -p /var/run/calico
+  chown root:root /var/run/calico
+end script
+
+exec /usr/bin/calico-felix

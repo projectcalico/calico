@@ -1,0 +1,6 @@
+usr/bin/calico-diags usr/bin
+usr/bin/calico-gen-bird-conf.sh usr/bin
+usr/bin/calico-gen-bird6-conf.sh usr/bin
+usr/bin/calico-gen-bird-mesh-conf.sh usr/bin
+usr/bin/calico-gen-bird6-mesh-conf.sh usr/bin
+usr/share/calico/* usr/share/calico
