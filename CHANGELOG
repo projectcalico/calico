@@ -1,0 +1,100 @@
+### v0.12.1
+
+17e1d2a Revert "json-backend: initial pass of json backend"
+c91406c Revert "json-backend: tests and support for nested objects"
+0df8af7 Revert "json-backend: cleanup"
+
+### v0.12.0
+
+7ac1091 Upgrade Dockerfile to use latest stable Alpine which has Go 1.6
+20b3d37 add env backend integration tests
+c6622ed updated template docs
+9d57489 Specify default Vault backend node
+b34d223 Add simple redis example since one was missing from quickstart
+32d46e5 Fix typo in template-resources.md
+7c89004 Fix up Rancher metadata service description and links
+2a54c58 Fix missing braces and extra parenthesis on formatted datatime example
+6e198db Fix DynamoDB credentials handling
+705f2ee Fix dynamodb nil pointers
+e48e48f Use SVG for the build image
+1265714 Kelseyhightower master
+6bb3c21 Add file exists function to template functions
+57b649d zookeeper watch support
+59da585 extended getenv & map template functions
+d423123 updated README for vault
+e60c2e2 Add support for redis password authentication
+f3a02e7 Adding example goreman Procfile for etcd
+aae4190 updated Dockerfile.build.alpine
+cf62311 update some docs
+54f715c Add lookupSRV function.
+7afb8d6 fixed broken etcd watch support
+5a5af59 switched to new etcd client
+5d2955a Remove gb install
+1577855 Fix typos in docs/tomcat-sample.md
+d133c25 Added support for Vault backend
+071e6ab IP dns resolving function for templates
+ccf2486 redis: try to recover from closed connections
+66a31bf Add support for etcd BasicAuth
+d9ea46c Added documentation for stackengine as a backend
+a1dee21 add -sync-only flag
+c615c18 update checklist
+233ac99 Add more debugging output for onetime and env.
+d7f835d Create tomcat-sample.md
+
+### v0.11.0
+
+46d3c69 load template resources every interval
+6b01b27 Add Rancher Metadata backend
+bec0b60 link to the right command-line-flags doc
+be20ca7 Fix typo in templates.md
+745cf2b add default node for zookeeper backend
+0dd4c53 Add StackEngine backend support
+f446ce4 Load AWS credentials through a provider chain
+f206b47 Add strings.Replace support
+
+### v0.10.0
+
+70cf76a move contrib to root dir
+34a0ff7 Updating README.md to include new backends
+fee8361 Fix broken links to documentation
+d9d4cb1 Use the gb tool for dep management and building.
+1ef34cb template: don't crash on template error
+7531530 Log command output on error
+fed32fe Draft: Support for DynamoDB
+7f59d50 Use correct application name for ZooKeeper example
+03a7c7e feat: add strings.Contains support
+6307c26 change opdemand emails to engine yard
+5350113 client cert config from environment variables
+b6f414e Adding better support for Consul, enabling SSL/TLS client config
+e94151b update release checklist
+ce4eb5c bump to v1.0.0-dev
+503d745 remove --quiet, --debug and --verbose
+c9cefaf random doc fixes
+
+### v0.9.0
+
+8888b7a Add maintainers file
+431e31b add release checklist document
+f782957 bump etcd to v2.0.9 for integration tests
+1b2d669 *feature) add recursive get toml files.
+94fc0a6 allow override of BIN_DIR
+7cce514 log that we're skipping config file to debug
+6e0cbfc Enable watch from the config file
+0410cbd bump version to 0.8.0
+c7f53e1 add go 1.4 to travis.ci version matrix
+7a2e2f4 Add toUpper, toLower support
+4a8e079 Fix "The event in requested index is outdated and cleared" error
+211a5cb add --log-level flag
+0a0858c fix godeps
+821cd61 properly format error messages
+2ad79d6 general integration test nitpicks
+913eb2e hook up etcd integration tests
+2ad2fd4 Improved docs for how to use go templates to traverse json
+7b4f06a hook up consul integration tests to travis
+ae640bf hook up redis integration tests
+828d568 remove unused service templates
+7d374e6 remove unused log_test
+68eb9ad Add simple redis support
+b4c103c Revert "Added jsonGet support to template_funcs"
+1e08562 Added jsonGet support to template_funcs
+f84b57d add scripts for building, installing and testing confd
