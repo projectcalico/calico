@@ -16,13 +16,39 @@ auto_cancel:
     when: "branch != 'master'"
 
 promotions:
+# Cleanup after ourselves if we are stopped-short.
 - name: Cleanup
   pipeline_file: cleanup.yml
   auto_promote:
     when: "result = 'stopped'"
-
-- name: Push images
-  pipeline_file: cd.yml
+# Have separate promotions for publishing images so we can re-run
+# them individually if they fail, and so we can run them in parallel.
+- name: Push apiserver images
+  pipeline_file: push-images/apiserver.yml
+  auto_promote:
+    when: "branch !~ '.+'"
+- name: Push cni-plugin images
+  pipeline_file: push-images/cni-plugin.yml
+  auto_promote:
+    when: "branch !~ '.+'"
+- name: Push kube-controllers images
+  pipeline_file: push-images/kube-controllers.yml
+  auto_promote:
+    when: "branch !~ '.+'"
+- name: Push calicoctl images
+  pipeline_file: push-images/calicoctl.yml
+  auto_promote:
+    when: "branch !~ '.+'"
+- name: Push typha images
+  pipeline_file: push-images/typha.yml
+  auto_promote:
+    when: "branch !~ '.+'"
+- name: Push ALP images
+  pipeline_file: push-images/alp.yml
+  auto_promote:
+    when: "branch !~ '.+'"
+- name: Push calico/node images
+  pipeline_file: push-images/node.yml
   auto_promote:
     when: "branch !~ '.+'"
 
