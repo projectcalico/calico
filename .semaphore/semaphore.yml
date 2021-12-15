@@ -21,6 +21,11 @@ promotions:
   auto_promote:
     when: "result = 'stopped'"
 
+- name: Push images
+  pipeline_file: cd.yml
+  auto_promote:
+    when: "branch !~ '.+'"
+
 global_job_config:
   secrets:
   - name: docker-hub

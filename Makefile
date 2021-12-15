@@ -26,8 +26,8 @@ generate:
 	make -C api gen-files 
 	make -C libcalico-go gen-files
 
-# Build all Calico images.
-all:
+# Build all Calico images for the current architecture.
+image:
 	$(MAKE) -C pod2daemon image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C calicoctl image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C cni-plugin image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
