@@ -39,6 +39,8 @@ global_job_config:
 blocks:
 
 - name: "API"
+  run:
+    when: "change_in('/api/')"
   execution_time_limit:
     minutes: 30
   dependencies: []
@@ -124,6 +126,8 @@ blocks:
       - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 
 - name: "Felix: Build Windows binaries"
+  run:
+    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
   dependencies: []
   task:
     jobs:
@@ -134,6 +138,8 @@ blocks:
       - make bin/calico-felix.exe fv/win-fv.exe
 
 - name: "Felix: Windows FV"
+  run:
+    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
