@@ -1,0 +1,14 @@
+/var/log/calico/felix.log {
+    daily
+    missingok
+    compress
+    delaycompress
+    minsize 1M
+}
+/var/log/calico/felix-etcd.log {
+    daily
+    missingok
+    compress
+    delaycompress
+    minsize 1M
+}

@@ -1,0 +1,76 @@
+Source: networking-calico
+Section: net
+Priority: optional
+Maintainer: Neil Jerram <neil@projectcalico.org>
+Build-Depends: debhelper (>= 8.0.0), dh-systemd, dh-python, python3-all, python3-setuptools
+Standards-Version: 3.9.4
+
+Package: calico-compute
+Architecture: all
+Depends:
+ calico-felix (>= 1.4),
+ networking-calico (= ${binary:Version}),
+ neutron-dhcp-agent,
+ ${misc:Depends},
+ ${python3:Depends},
+ ${shlibs:Depends}
+Suggests: bird
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package provides the pieces needed on a compute node.
+
+Package: calico-dhcp-agent
+Architecture: all
+Depends:
+ networking-calico (= ${binary:Version}),
+ ${misc:Depends},
+ ${python3:Depends}
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package provides the Calico DHCP agent.
+
+Package: calico-control
+Architecture: all
+Depends:
+ networking-calico (= ${binary:Version}),
+ ${misc:Depends},
+ ${python3:Depends}
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package provides the pieces needed on a controller node.
+
+Package: networking-calico
+Architecture: all
+Depends:
+ ${misc:Depends},
+ python3-babel,
+ python3-eventlet,
+ python3-six
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package installs the networking-calico Calico/Neutron
+ integration code.

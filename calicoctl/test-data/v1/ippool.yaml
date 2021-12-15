@@ -1,0 +1,13 @@
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 192.168.0.0/16
+  spec:
+    ipip:
+      enabled: true
+
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: fe80::00/120
+  spec:

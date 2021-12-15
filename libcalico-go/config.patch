@@ -1,0 +1,193 @@
+diff -Naur config.orig/crd/crd.projectcalico.org_ipamblocks.yaml config/crd/crd.projectcalico.org_ipamblocks.yaml
+--- config.orig/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:30:08.454690094 -0700
++++ config/crd/crd.projectcalico.org_ipamblocks.yaml	2020-07-12 17:28:42.742835462 -0700
+@@ -41,6 +41,9 @@
+               allocations:
+                 items:
+                   type: integer
++                  # TODO: This nullable is manually added in. We should update controller-gen
++                  # to handle []*int properly itself.
++                  nullable: true
+                 type: array
+               attributes:
+                 items:
+--- config.orig/crd/crd.projectcalico.org_bgpconfigurations.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_bgpconfigurations.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: bgpconfigurations.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_bgppeers.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_bgppeers.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: bgppeers.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_blockaffinities.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_blockaffinities.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: blockaffinities.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_clusterinformations.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_clusterinformations.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: clusterinformations.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_felixconfigurations.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_felixconfigurations.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: felixconfigurations.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_globalnetworkpolicies.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: globalnetworkpolicies.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_globalnetworksets.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_globalnetworksets.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: globalnetworksets.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_hostendpoints.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_hostendpoints.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: hostendpoints.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_ipamblocks.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_ipamblocks.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: ipamblocks.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_ipamconfigs.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_ipamconfigs.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: ipamconfigs.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_ipamhandles.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_ipamhandles.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: ipamhandles.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_ippools.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_ippools.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: ippools.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: kubecontrollersconfigurations.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_networkpolicies.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_networkpolicies.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: networkpolicies.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org
+--- config.orig/crd/crd.projectcalico.org_networksets.yaml	2020-09-15 17:41:44.686361905 +0000
++++ config/crd/crd.projectcalico.org_networksets.yaml	2020-09-15 17:43:02.428632997 +0000
+@@ -3,9 +3,6 @@
+ apiVersion: apiextensions.k8s.io/v1
+ kind: CustomResourceDefinition
+ metadata:
+-  annotations:
+-    controller-gen.kubebuilder.io/version: (devel)
+-  creationTimestamp: null
+   name: networksets.crd.projectcalico.org
+ spec:
+   group: crd.projectcalico.org

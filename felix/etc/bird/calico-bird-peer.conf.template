@@ -1,0 +1,14 @@
+
+# Peer with route reflector.
+protocol bgp '@ID@' {
+  description "@DESCRIPTION@";
+  local as @AS_NUMBER@;
+  neighbor @PEER_IP_ADDRESS@ as @AS_NUMBER@;
+  multihop;
+  import all;
+  graceful restart;
+  export filter export_bgp;
+  next hop self;    # Disable next hop processing and always advertise our
+                    # local address as nexthop
+  source address @MY_IP_ADDRESS@;  # The local address we use for the TCP connection
+}
