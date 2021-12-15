@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -201,4 +202,51 @@ type ErrorParsingDatastoreEntry struct {
 
 func (e ErrorParsingDatastoreEntry) Error() string {
 	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %v", e.RawKey, e.RawValue, e.Err)
+}
+
+type ErrorPolicyConversion struct {
+	ErrorPolicyConversionRules []ErrorPolicyConversionRule
+}
+
+type ErrorPolicyConversionRule struct {
+	EgressRule  *networkingv1.NetworkPolicyEgressRule
+	IngressRule *networkingv1.NetworkPolicyIngressRule
+	Reason      string
+}
+
+func (e ErrorPolicyConversionRule) String() string {
+	var fieldString string
+
+	switch {
+	case e.EgressRule != nil:
+		fieldString = fmt.Sprintf("%v", e.EgressRule)
+	case e.IngressRule != nil:
+		fieldString = fmt.Sprintf("%v", e.IngressRule)
+	default:
+		fieldString = "unknown rule"
+	}
+
+	if e.Reason != "" {
+		fieldString = fmt.Sprintf("%s (%s)", fieldString, e.Reason)
+	}
+
+	return fieldString
+}
+
+func (e ErrorPolicyConversion) Error() string {
+	switch {
+	case len(e.ErrorPolicyConversionRules) == 0:
+		return "unknown policy conversion error"
+	case len(e.ErrorPolicyConversionRules) == 1:
+		f := e.ErrorPolicyConversionRules[0]
+
+		return fmt.Sprintf("error with rule %s", f)
+	default:
+		s := "error with the following rules:\n"
+		for _, f := range e.ErrorPolicyConversionRules {
+			s += fmt.Sprintf("-  %s\n", f)
+		}
+
+		return s
+	}
 }
