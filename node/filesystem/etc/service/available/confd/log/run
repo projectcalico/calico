@@ -1,0 +1,8 @@
+#!/bin/bash
+LOGDIR=/var/log/calico/confd
+mkdir -p $LOGDIR
+touch $LOGDIR/config
+echo "s10000000" >> $LOGDIR/config
+echo "n5" >> $LOGDIR/config
+# Prefix each line with a timestamp
+tee >(svlogd -ttt $LOGDIR)
