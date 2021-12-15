@@ -130,6 +130,7 @@ func runServer(arguments map[string]interface{}) {
 
 	// Block until a signal is received.
 	log.Infof("Got signal: %v", <-c)
+	gs.GracefulStop()
 }
 
 func runClient(arguments map[string]interface{}) {
