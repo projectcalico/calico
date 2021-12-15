@@ -27,7 +27,5 @@ blocks:
       - name: docker
       jobs:
       - name: "cni-plugin"
-        execution_time_limit:
-          minutes: 20
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin image-all cd CONFIRM=true; fi
