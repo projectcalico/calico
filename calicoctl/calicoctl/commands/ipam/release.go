@@ -20,9 +20,10 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/json"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"k8s.io/apimachinery/pkg/util/json"
 
 	docopt "github.com/docopt/docopt-go"
 

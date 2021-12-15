@@ -17,11 +17,12 @@ package converter_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 )
 
 var _ = Describe("PodConverter", func() {

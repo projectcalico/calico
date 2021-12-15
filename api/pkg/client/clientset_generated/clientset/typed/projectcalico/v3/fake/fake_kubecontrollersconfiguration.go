@@ -7,14 +7,13 @@ package fake
 import (
 	"context"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // FakeKubeControllersConfigurations implements KubeControllersConfigurationInterface

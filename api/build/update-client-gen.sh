@@ -24,21 +24,21 @@ REPO_ROOT=$(realpath $(dirname "${BASH_SOURCE}")/..)
 BINDIR=${REPO_ROOT}/bin
 
 # Generate the versioned clientset (pkg/client/clientset_generated/clientset)
-${BINDIR}/client-gen "$@" \
-	      --go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
-        --input-base "github.com/projectcalico/api/pkg/apis/" \
-	      --input "projectcalico/v3" \
-	      --clientset-path "github.com/projectcalico/api/pkg/client/clientset_generated/" \
-	      --clientset-name "clientset"
+client-gen "$@" \
+		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+		--input-base "github.com/projectcalico/api/pkg/apis/" \
+		--input "projectcalico/v3" \
+		--clientset-path "github.com/projectcalico/api/pkg/client/clientset_generated/" \
+		--clientset-name "clientset"
 # generate lister
-${BINDIR}/lister-gen "$@" \
-	      --go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
-	      --input-dirs="github.com/projectcalico/api/pkg/apis/projectcalico/v3" \
-	      --output-package "github.com/projectcalico/api/pkg/client/listers_generated"
+lister-gen "$@" \
+		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+		--input-dirs="github.com/projectcalico/api/pkg/apis/projectcalico/v3" \
+		--output-package "github.com/projectcalico/api/pkg/client/listers_generated"
 # generate informer
-${BINDIR}/informer-gen "$@" \
-	      --go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
-	      --input-dirs "github.com/projectcalico/api/pkg/apis/projectcalico/v3" \
-	      --versioned-clientset-package "github.com/projectcalico/api/pkg/client/clientset_generated/clientset" \
-	      --listers-package "github.com/projectcalico/api/pkg/client/listers_generated" \
-	      --output-package "github.com/projectcalico/api/pkg/client/informers_generated"
+informer-gen "$@" \
+		--go-header-file "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+		--input-dirs "github.com/projectcalico/api/pkg/apis/projectcalico/v3" \
+		--versioned-clientset-package "github.com/projectcalico/api/pkg/client/clientset_generated/clientset" \
+		--listers-package "github.com/projectcalico/api/pkg/client/listers_generated" \
+		--output-package "github.com/projectcalico/api/pkg/client/informers_generated"

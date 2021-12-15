@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
