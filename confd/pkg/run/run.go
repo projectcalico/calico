@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/confd/pkg/backends/calico"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
-	log "github.com/sirupsen/logrus"
 )
 
 func Run(config *config.Config) {

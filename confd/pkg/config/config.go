@@ -6,9 +6,10 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
+	log "github.com/sirupsen/logrus"
+
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
