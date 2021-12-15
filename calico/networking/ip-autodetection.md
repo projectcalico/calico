@@ -50,6 +50,7 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Address used by the node to reach a particular IP or domain (**can-reach**)
 - Regex to include matching interfaces (**interface**)
 - Regex to exclude matching interfaces (**skip-interface**)
+- Address assigned to kubernetes node (**kubernetes-internal-ip**)
 
 For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
 
@@ -70,7 +71,7 @@ Because you can configure IP address and subnet using either environment variabl
 | **If this environment variable...** | **Is...**                                             | **Then...**                                                  |
 | ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
 | IP/IP6                              | Explicitly set                                        | The specified values are used, and the Node resource is updated. |
-|                                     | Set to autodetect                                     | The requested method is used (first-found, can-reach, interface, skip-interface), and the Node resource is updated. |
+|                                     | Set to autodetect                                     | The requested method is used (first-found, can-reach, interface, skip-interface, kubernetes-internal-ip), and the Node resource is updated. |
 |                                     | Not set, but Node resource has IP/IP6 values          | Node resource value is used.                                 |
 | IP                                  | Not set, and there is no IP value in Node resource    | Autodetects an IPv4 address and subnet, and updates Node resource. |
 | IP6                                 | Not set, and there is a no IP6 value in Node resource | No IP6 routing is performed on the node.                     |
@@ -120,6 +121,14 @@ Where autodetection methods are based on:
 
   ```
   kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=eth.*
+  ```
+  
+- **Kubernetes Node IP**
+
+  An IP address assigned to kubernetes node (INTERNAL-IP)
+
+  ```
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=kubernetes-internal-ip
   ```
 
 #### Manually configure IP address and subnet for a node
