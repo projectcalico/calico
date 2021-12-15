@@ -26,7 +26,7 @@
 
 ## Your Environment
 <!--- Include as many relevant details about the environment you experienced the bug in -->
-* libcalico-go version:
+* Calico version
+* Orchestrator version (e.g. kubernetes, mesos, rkt):
 * Operating System and version:
 * Link to your project (optional):
-
