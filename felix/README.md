@@ -1,7 +1,7 @@
 ![Build Status](https://tigera.semaphoreci.com/badges/felix.svg?style=shields&key=48267e65-4acc-4f27-a88f-c3df0e8e2c3b)
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/felix)](https://goreportcard.com/report/github.com/projectcalico/felix)
-# Project Calico
+# Calico
 
 <blockquote>
 Note that the documentation in this repo is targeted at Calico contributors.
