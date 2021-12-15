@@ -396,7 +396,8 @@ var _ = Describe("CalicoCni", func() {
 					},
 					"dataplane_options": {
 			  			"type": "grpc",
-			  			"socket": "unix://%s"
+			  			"socket": "unix://%s",
+						"extra": "option"
 					}
 				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), socket)
 
@@ -411,6 +412,9 @@ var _ = Describe("CalicoCni", func() {
 			addRequest, ok := message.(*proto.AddRequest)
 			Expect(ok).Should(BeTrue())
 			Expect(addRequest.Netns).Should(Equal(contNs.Path()))
+			option, ok := addRequest.DataplaneOptions["extra"]
+			Expect(ok).Should(BeTrue())
+			Expect(option).Should(Equal("option"))
 			Expect(len(addRequest.ContainerIps)).Should(BeNumerically(">=", 1))
 
 			By("erroring if the backend fails to cleanup an interface")
@@ -431,6 +435,9 @@ var _ = Describe("CalicoCni", func() {
 			delRequest, ok := message.(*proto.DelRequest)
 			Expect(ok).Should(BeTrue())
 			Expect(delRequest.Netns).Should(Equal(contNs.Path()))
+			option, ok = delRequest.DataplaneOptions["extra"]
+			Expect(ok).Should(BeTrue())
+			Expect(option).Should(Equal("option"))
 
 			By("erroring if the backend fails to configure an interface")
 			grpcBackend.SetResult(false)
