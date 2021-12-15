@@ -176,7 +176,7 @@ type RouteTable struct {
 
 	deviceRouteSourceAddress net.IP
 
-	deviceRouteProtocol  int
+	deviceRouteProtocol  netlink.RouteProtocol
 	removeExternalRoutes bool
 
 	// The route table index. A value of 0 defaults to the main table.
@@ -294,7 +294,7 @@ func NewWithShims(
 		time:                           timeShim,
 		vxlan:                          vxlan,
 		deviceRouteSourceAddress:       deviceRouteSourceAddress,
-		deviceRouteProtocol:            deviceRouteProtocol,
+		deviceRouteProtocol:            netlink.RouteProtocol(deviceRouteProtocol),
 		removeExternalRoutes:           removeExternalRoutes,
 		tableIndex:                     tableIndex,
 		opReporter:                     opReporter,
