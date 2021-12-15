@@ -18,6 +18,10 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -49,5 +53,115 @@ var _ = DescribeTable(
 			Reason:     "cannot mix foobar with baz",
 		},
 		"operation apply is not supported on foo.bar.baz: cannot mix foobar with baz",
+	),
+	Entry(
+		"Policy conversion with no rules",
+		errors.ErrorPolicyConversion{
+			PolicyName: "test-policy1",
+			Rules:      []errors.ErrorPolicyConversionRule{},
+		},
+		"policy: test-policy1: unknown policy conversion error",
+	),
+	Entry(
+		"Policy conversion with one rule and no reason",
+		errors.ErrorPolicyConversion{
+			PolicyName: "test-policy2",
+			Rules: []errors.ErrorPolicyConversionRule{
+				{
+					EgressRule: &networkingv1.NetworkPolicyEgressRule{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 0, IntVal: 80, StrVal: ""},
+								EndPort:  nil,
+							},
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 1, IntVal: 0, StrVal: "-22:-3"},
+								EndPort:  nil,
+							},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								NamespaceSelector: nil,
+								IPBlock:           nil,
+							},
+						},
+					},
+					IngressRule: nil,
+				},
+			},
+		},
+		"policy: test-policy2: error with rule &NetworkPolicyEgressRule{Ports:[]NetworkPolicyPort{NetworkPolicyPort{Protocol:nil,Port:80,EndPort:nil,},NetworkPolicyPort{Protocol:nil,Port:-22:-3,EndPort:nil,},},To:[]NetworkPolicyPeer{NetworkPolicyPeer{PodSelector:&v1.LabelSelector{MatchLabels:map[string]string{k: v,k2: v2,},MatchExpressions:[]LabelSelectorRequirement{},},NamespaceSelector:nil,IPBlock:nil,},},}",
+	),
+	Entry(
+		"Policy conversion with multiple rules and reasons",
+		errors.ErrorPolicyConversion{
+			PolicyName: "test-policy3",
+			Rules: []errors.ErrorPolicyConversionRule{
+				{
+					EgressRule: &networkingv1.NetworkPolicyEgressRule{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 0, IntVal: 80, StrVal: ""},
+								EndPort:  nil,
+							},
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 1, IntVal: 0, StrVal: "-22:-3"},
+								EndPort:  nil,
+							},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								NamespaceSelector: nil,
+								IPBlock:           nil,
+							},
+						},
+					},
+					Reason: "reason1",
+				},
+				{
+					IngressRule: &networkingv1.NetworkPolicyIngressRule{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 0, IntVal: 80, StrVal: ""},
+								EndPort:  nil,
+							},
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 1, IntVal: 0, StrVal: "-50:-1"},
+								EndPort:  nil,
+							},
+						},
+						From: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								NamespaceSelector: nil,
+								IPBlock:           nil,
+							},
+						},
+					},
+					Reason: "reason2",
+				},
+				{
+					Reason: "reason3",
+				},
+			},
+		},
+		"policy: test-policy3: error with the following rules:\n-  &NetworkPolicyEgressRule{Ports:[]NetworkPolicyPort{NetworkPolicyPort{Protocol:nil,Port:80,EndPort:nil,},NetworkPolicyPort{Protocol:nil,Port:-22:-3,EndPort:nil,},},To:[]NetworkPolicyPeer{NetworkPolicyPeer{PodSelector:&v1.LabelSelector{MatchLabels:map[string]string{k: v,k2: v2,},MatchExpressions:[]LabelSelectorRequirement{},},NamespaceSelector:nil,IPBlock:nil,},},} (reason1)\n-  &NetworkPolicyIngressRule{Ports:[]NetworkPolicyPort{NetworkPolicyPort{Protocol:nil,Port:80,EndPort:nil,},NetworkPolicyPort{Protocol:nil,Port:-50:-1,EndPort:nil,},},From:[]NetworkPolicyPeer{NetworkPolicyPeer{PodSelector:&v1.LabelSelector{MatchLabels:map[string]string{k: v,k2: v2,},MatchExpressions:[]LabelSelectorRequirement{},},NamespaceSelector:nil,IPBlock:nil,},},} (reason2)\n-  unknown rule (reason3)\n",
 	),
 )
