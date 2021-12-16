@@ -141,15 +141,10 @@ kubeval: _site
 	rm filtered.out
 
 helm-tests: bin/helm values.yaml
-	mkdir -p .go-pkg-cache && \
-		docker run --rm \
-		--net=host \
-		-v $$(pwd):/go/src/$(PACKAGE_NAME):rw \
-		-v $$(pwd)/.go-pkg-cache:/go/pkg:rw \
-		-v $$(pwd)/bin/helm3:/usr/local/bin/helm \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) ginkgo -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)
+	$(DOCKER_RUN) \
+		-v $(CURDIR)/bin/helm3:/usr/local/bin/helm \
+		$(CALICO_BUILD) \
+		sh -c "$(GIT_CONFIG_SSH) ginkgo -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)"
 
 ###############################################################################
 # Docs automation
@@ -428,23 +423,6 @@ _includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb _data/versio
 	  -w /calico \
 	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
 
-.PHONY: help
-## Display this help text
-help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
-	$(info Available targets)
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
-		nb = sub( /^## /, "", helpMsg );                                \
-		if(nb == 0) {                                                   \
-			helpMsg = $$0;                                              \
-			nb = sub( /^[^:]*:.* ## /, "", helpMsg );                   \
-		}                                                               \
-		if (nb)                                                         \
-			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
-	}                                                                   \
-	{ helpMsg = $$0 }'                                                  \
-	width=20                                                            \
-	$(MAKEFILE_LIST)
-
 DOCS_TEST_CONTAINER=projectcalico/release-test
 .PHONY: release-test-image
 release-test-image:
@@ -470,8 +448,8 @@ build-operator-reference:
 	mkdir -p .go-pkg-cache && \
 	   docker run --rm \
 	   --net=host \
-	   -v $$(pwd):/go/src/$(PACKAGE_NAME):rw \
-	   -v $$(pwd)/.go-pkg-cache:/go/pkg:rw \
+	   -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	   -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
 	   -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	   -w /go/src/$(PACKAGE_NAME) \
 	   $(CALICO_BUILD) /bin/bash -c 'export GO111MODULE=on && rm -rf builder && mkdir builder && cd builder && \
