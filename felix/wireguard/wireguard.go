@@ -270,6 +270,15 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 	w.routetable.OnIfaceStateChanged(ifaceName, state)
 }
 
+// ReportZeroKey uses the configured statusCallback to report an empty WG key.
+// This is done to bootstrap connectivity to wireguard-enabled peers such as Typha
+// who would otherwise attempt to send us wireguard traffic before we are able to receive it
+func (w *Wireguard) ReportZeroKey() error {
+	w.statusCallback(zeroKey)
+	return nil
+}
+
+
 func (w *Wireguard) EndpointUpdate(name string, ipv4Addr ip.Addr) {
 	logCxt := log.WithFields(log.Fields{"name": name, "ipv4Addr": ipv4Addr})
 	logCxt.Debug("EndpointUpdate")
