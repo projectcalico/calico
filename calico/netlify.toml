@@ -7,7 +7,7 @@
   make bin/helm
   export PATH=$PATH:$(pwd)/bin
 
-  # LATEST_RELEASE is set in Netlify UI for environment-variables ONLY for docs.projectcalico.org site.
+  # LATEST_RELEASE is set in Netlify UI for environment-variables ONLY for docs.projectcalico.org and projectcalico.docs.tigera.io sites.
   # Any branch deployed there will have the production ready build that gets deployed at root /
 
   if [ -z "$LATEST_RELEASE" ]; then
