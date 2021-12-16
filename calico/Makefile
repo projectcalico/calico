@@ -142,7 +142,7 @@ kubeval: _site
 
 helm-tests: bin/helm values.yaml
 	$(DOCKER_RUN) \
-		-v $$(pwd)/bin/helm3:/usr/local/bin/helm \
+		-v $(CURDIR)/bin/helm3:/usr/local/bin/helm \
 		$(CALICO_BUILD) \
 		sh -c "$(GIT_CONFIG_SSH) ginkgo -cover -r ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)"
 
@@ -448,8 +448,8 @@ build-operator-reference:
 	mkdir -p .go-pkg-cache && \
 	   docker run --rm \
 	   --net=host \
-	   -v $$(pwd):/go/src/$(PACKAGE_NAME):rw \
-	   -v $$(pwd)/.go-pkg-cache:/go/pkg:rw \
+	   -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	   -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
 	   -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	   -w /go/src/$(PACKAGE_NAME) \
 	   $(CALICO_BUILD) /bin/bash -c 'export GO111MODULE=on && rm -rf builder && mkdir builder && cd builder && \
