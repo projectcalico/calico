@@ -40,7 +40,7 @@ const CredentialsExtension = ".json"
 const PollSleepTime = 100 * time.Millisecond
 
 type workloadEvent struct {
-	// What happended to the workload mount?
+	// What happened to the workload mount?
 	op  Operation
 	uid string
 }
