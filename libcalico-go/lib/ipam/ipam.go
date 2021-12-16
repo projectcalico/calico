@@ -2082,7 +2082,7 @@ func getMaxPrefixLen(version int, attrs *HostReservedAttr) (int, error) {
 		}
 	}
 
-	// Caclulate how may addresses we should reserve in the block.
+	// Calculate how may addresses we should reserve in the block.
 	numOfReserved := (uint)(attrs.StartOfBlock + attrs.EndOfBlock)
 
 	// For example, with windows OS, IPs x.0, x.1, x.2 and x.<bcast> are

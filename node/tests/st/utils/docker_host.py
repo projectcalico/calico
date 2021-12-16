@@ -297,7 +297,7 @@ class DockerHost(object):
                     "export ETCD_KEY_FILE=%s; %s" % \
                     (ETCD_SCHEME, etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY,
                      calicoctl)
-        # If the hostname is being overriden, then export the HOSTNAME
+        # If the hostname is being overridden, then export the HOSTNAME
         # environment.
         if self.override_hostname:
             calicoctl = "export HOSTNAME=%s; %s" % (

@@ -260,7 +260,7 @@ func (c *autoHostEndpointController) deleteHostendpointWithRetries(ctx context.C
 		if err := c.deleteHostendpoint(ctx, hepName); err != nil {
 			switch err.(type) {
 			case errors.ErrorResourceDoesNotExist:
-				log.Infof("did not delete hostendpoint %q beacuse it doesn't exist", hepName)
+				log.Infof("did not delete hostendpoint %q because it doesn't exist", hepName)
 				return nil
 			default:
 				log.WithError(err).Infof("failed to delete host endpoint %q, retrying", hepName)

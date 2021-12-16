@@ -90,7 +90,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 
 		// We don't handle the cases where data is missing in the cache
 		// or in the datastore, so disable those events in the reconciler. They
-		// just cause unecessary work for us.
+		// just cause unnecessary work for us.
 		ReconcilerConfig: rcache.ReconcilerConfig{
 			DisableMissingInCache:     true,
 			DisableMissingInDatastore: true,
