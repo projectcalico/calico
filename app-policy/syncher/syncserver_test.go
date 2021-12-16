@@ -343,7 +343,7 @@ func TestActiveProfileUpdateDispatch(t *testing.T) {
 	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
-// ActiveProfileRemove with an unkown id is handled without panic.
+// ActiveProfileRemove with an unknown id is handled without panic.
 func TestActiveProfileRemoveNonExist(t *testing.T) {
 	RegisterTestingT(t)
 

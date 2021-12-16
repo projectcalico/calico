@@ -66,7 +66,7 @@ Select the method below based on your installation method.
    kubectl get tigerastatus apiserver
    ```
 
-   You should see the folowing output:
+   You should see the following output:
 
    ```
    NAME        AVAILABLE   PROGRESSING   DEGRADED   SINCE

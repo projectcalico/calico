@@ -151,7 +151,7 @@ ipv4-VRF:0, fib_index:0, flow hash:[src dst sport dport symmetric ] epoch:0 flag
   [...]
 
 # This one is behind `tun3`
-# If you want more info about this interace (name in Linux, queues, descriptors, ...)
+# If you want more info about this interface (name in Linux, queues, descriptors, ...)
 vpp# show tun tun3
 Interface: tun3 (ifindex 5)
   name "eth0"

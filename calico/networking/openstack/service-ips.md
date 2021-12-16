@@ -31,7 +31,7 @@ The use of floating IPs is already well known, so we won't labour how to use
 those here.  For some additional information on how {{site.prodname}} supports floating
 IPs, see [Floating IPs](floating-ips).
 
-The use and maintainance of additional fixed IPs, however, is not so well
+The use and maintenance of additional fixed IPs, however, is not so well
 known, so in the following transcripts we demonstrate this approach for
 assigning a service IP to a {{site.prodname}}-networked VM.
 

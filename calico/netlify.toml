@@ -53,7 +53,7 @@
   mv netlify/_redirects _site/_redirects
   '''
 
-# Deploys master branch as a seperate individual site, master build is diffrent from branch deploys
+# Deploys master branch as a separate individual site, master build is different from branch deploys
 # it doesn't have a manifests only build and served without /archive prefix
 [context.master]
   command = '''

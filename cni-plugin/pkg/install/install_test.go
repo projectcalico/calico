@@ -161,7 +161,7 @@ PuB/TL+u2y+iQUyXxLy3
 			err := runCniContainer(tempDir)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Get a list of files in the defualt CNI bin location.
+			// Get a list of files in the default CNI bin location.
 			files, err := ioutil.ReadDir(tempDir + "/bin")
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Could not list the files in %s/bin", tempDir))
 			names := []string{}
