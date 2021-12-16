@@ -15,6 +15,7 @@ message AddRequest {
     repeated IPConfig container_ips = 5;
     repeated string container_routes = 6;
     WorkloadIDs workload = 7;
+    map<string, string> dataplane_options = 8;
 }
 
 message ContainerSettings {
@@ -57,6 +58,7 @@ message AddReply {
 message DelRequest {
     string interface_name = 1;
     string netns = 2;
+    map<string, string> dataplane_options = 3;
 }
 
 message DelReply {

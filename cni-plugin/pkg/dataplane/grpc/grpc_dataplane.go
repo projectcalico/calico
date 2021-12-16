@@ -41,6 +41,7 @@ type grpcDataplane struct {
 	allowIPForwarding bool
 	mtu               int
 	logger            *logrus.Entry
+	options           map[string]string
 }
 
 func NewGrpcDataplane(conf types.NetConf, logger *logrus.Entry) (*grpcDataplane, error) {
@@ -48,11 +49,21 @@ func NewGrpcDataplane(conf types.NetConf, logger *logrus.Entry) (*grpcDataplane,
 	if !ok {
 		return nil, fmt.Errorf("GRPC dataplane socket not configured")
 	}
+
+	userOpts := make(map[string]string)
+	for k, v := range conf.DataplaneOptions {
+		str, ok := v.(string)
+		if ok {
+			userOpts[k] = str
+		}
+	}
+
 	return &grpcDataplane{
 		socket:            socket,
 		allowIPForwarding: conf.ContainerSettings.AllowIPForwarding,
 		mtu:               conf.MTU,
 		logger:            logger,
+		options:           userOpts,
 	}, nil
 }
 
@@ -94,6 +105,7 @@ func (d *grpcDataplane) DoNetworking(
 			Orchestrator: endpoint.Spec.Orchestrator,
 			Pod:          endpoint.Spec.Pod,
 		},
+		DataplaneOptions: d.options,
 	}
 	for _, ipConf := range result.IPs {
 		request.ContainerIps = append(request.ContainerIps, &proto.IPConfig{
@@ -136,8 +148,9 @@ func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	c := proto.NewCniDataplaneClient(conn)
 
 	request := &proto.DelRequest{
-		InterfaceName: args.IfName,
-		Netns:         args.Netns,
+		InterfaceName:    args.IfName,
+		Netns:            args.Netns,
+		DataplaneOptions: d.options,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
