@@ -105,18 +105,24 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		}
 
 		// Defer to ReplaceHostLocalIPAMPodCIDRs to swap the "usePodCidr" value out.
-		var cachedPodCidr string
-		getRealPodCIDR := func() (string, error) {
-			if cachedPodCidr == "" {
+		var cachedPodCidrs []string
+		var cachedIpv4Cidr, cachedIpv6Cidr string
+		getRealPodCIDRs := func() (string, string, error) {
+			if len(cachedPodCidrs) == 0 {
 				var err error
-				cachedPodCidr, err = getPodCidr(client, conf, epIDs.Node)
+				var emptyResult string
+				cachedPodCidrs, err = getPodCidrs(client, conf, epIDs.Node)
 				if err != nil {
-					return "", err
+					return emptyResult, emptyResult, err
+				}
+				cachedIpv4Cidr, cachedIpv6Cidr, err = getIPsByFamily(cachedPodCidrs)
+				if err != nil {
+					return emptyResult, emptyResult, err
 				}
 			}
-			return cachedPodCidr, nil
+			return cachedIpv4Cidr, cachedIpv6Cidr, nil
 		}
-		err = utils.ReplaceHostLocalIPAMPodCIDRs(logger, stdinData, getRealPodCIDR)
+		err = utils.ReplaceHostLocalIPAMPodCIDRs(logger, stdinData, getRealPodCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -891,7 +897,9 @@ func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (
 	return labels, pod.Annotations, ports, profiles, generateName, serviceAccount, nil
 }
 
-func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename string) (string, error) {
+// getPodCidrs returns the podCidrs included in the node manifest
+func getPodCidrs(client *kubernetes.Clientset, conf types.NetConf, nodename string) ([]string, error) {
+	var emptyString []string
 	// Pull the node name out of the config if it's set. Defaults to nodename
 	if conf.Kubernetes.NodeName != "" {
 		nodename = conf.Kubernetes.NodeName
@@ -899,11 +907,34 @@ func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename strin
 
 	node, err := client.CoreV1().Nodes().Get(context.Background(), nodename, metav1.GetOptions{})
 	if err != nil {
-		return "", err
+		return emptyString, err
+	}
+	if len(node.Spec.PodCIDRs) == 0 {
+		return emptyString, fmt.Errorf("no podCidr for node %s", nodename)
+	}
+	return node.Spec.PodCIDRs, nil
+}
+
+// getIPsByFamily returns the IPv4 and IPv6 CIDRs
+func getIPsByFamily(cidrs []string) (string, string, error) {
+	var ipv4Cidr, ipv6Cidr string
+	for _, cidr := range cidrs {
+		_, ipNet, err := cnet.ParseCIDR(cidr)
+		if err != nil {
+			return "", "", err
+		}
+		if ipNet.Version() == 4 {
+			ipv4Cidr = cidr
+		}
+
+		if ipNet.Version() == 6 {
+			ipv6Cidr = cidr
+		}
 	}
 
-	if node.Spec.PodCIDR == "" {
-		return "", fmt.Errorf("no podCidr for node %s", nodename)
+	if (len(cidrs) > 1) && (ipv4Cidr == "" || ipv6Cidr == "") {
+		return "", "", errors.New("ClusterCIDR contains two ranges of the same type")
 	}
-	return node.Spec.PodCIDR, nil
+
+	return ipv4Cidr, ipv6Cidr, nil
 }
