@@ -3,6 +3,7 @@ report/
 bin/
 *.created*
 .idea
+.vscode
 
 /* Produced as part of release */
 hack/release/release
