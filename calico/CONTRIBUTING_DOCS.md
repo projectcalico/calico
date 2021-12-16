@@ -164,7 +164,7 @@ Examples:
 
 - [Add the new page to the side navigation bar](#linking-content).
 
-- Within the copies of the page in the `master` and previous release directories, add a `canonical_url` line below the `title` line in the metadata of the page. This should contain the absolute path to the page in the current latest directory. Example: `canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/'`. For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
+- Within the copies of the page in the `master` and previous release directories, add a `canonical_url` line below the `title` line in the metadata of the page. This should contain the absolute path to the page in the current latest directory. Example: `canonical_url: 'https://projectcalico.docs.tigera.io/v3.0/getting-started/kubernetes/'`. For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
 
 ### Deleting or renaming pages
 
@@ -264,7 +264,7 @@ Do not include any uppercase letters in your links.
 
 ### Anchor links
 
-An anchor link for each heading is automatically created. It consists of the title of the heading with each word separated by hyphens. Delete any slashes in the title. For example, to reference a heading titled "Working with the calico/kube-controllers container" on a page located at `https://docs.projectcalico.org/v3.0/reference/kube-controllers/configuration`, you would use the following:
+An anchor link for each heading is automatically created. It consists of the title of the heading with each word separated by hyphens. Delete any slashes in the title. For example, to reference a heading titled "Working with the calico/kube-controllers container" on a page located at `https://projectcalico.docs.tigera.io/v3.0/reference/kube-controllers/configuration`, you would use the following:
 
 ```
 /{{page.version}}/reference/kube-controllers/configuration#working-with-the-calicokube-controllers-container

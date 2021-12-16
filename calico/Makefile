@@ -229,7 +229,7 @@ $(UPLOAD_DIR):
 # We need to export it as an env var to properly format it.
 # See here: https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile/5887751
 define RELEASE_BODY
-Release notes can be found at https://docs.projectcalico.org/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/
+Release notes can be found at https://projectcalico.docs.tigera.io/archive/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/
 
 Attached to this release are the following artifacts:
 
@@ -328,7 +328,7 @@ $(RELEASE_DIR_BIN): $(RELEASE_DIR_BIN)/calicoctl $(RELEASE_DIR_BIN)/calicoctl-wi
 
 $(RELEASE_DIR)/README:
 	@echo "This directory contains a complete release of Calico $(CALICO_VER)" >> $@
-	@echo "Documentation for this release can be found at http://docs.projectcalico.org/$(RELEASE_STREAM)" >> $@
+	@echo "Documentation for this release can be found at http://projectcalico.docs.tigera.io/$(RELEASE_STREAM)" >> $@
 	@echo "" >> $@
 	@echo "Docker images (under 'images'). Load them with 'docker load'" >> $@
 	@echo "* The calico/node docker image  (version $(NODE_VERS))" >> $@
