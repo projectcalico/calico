@@ -1,0 +1,147 @@
+# A Service and corresponding endpoints object.
+# Endpoint on the local node, expect this route.
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-1
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  clusterIP: 10.101.0.101
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+status:
+ # TODO: kubectl doesn't support writing status, so these IPs
+ # never make it to the apiserver. Need changes to our test rig
+ # to support this.
+ loadBalancer:
+   ingress:
+   # Within the range in BGP config.
+   - ip: 80.15.0.1/32
+   # Not within the range in BGP config.
+   - ip: 90.15.0.1/32
+
+---
+
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: service-1
+subsets:
+- addresses:
+  - ip: 192.168.2.1
+    nodeName: kube-master
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+  ports:
+  - port: 80
+    protocol: TCP
+
+---
+
+# A Service and corresponding endpoints object.
+# Endpoint NOT on the local node, don't expect this route.
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-2
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  clusterIP: 10.101.0.102
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+
+---
+
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: service-2
+subsets:
+- addresses:
+  - ip: 192.168.2.2
+    nodeName: kube-node-1
+    targetRef:
+      kind: Pod
+      name: nginx-2
+      namespace: default
+  ports:
+  - port: 80
+    protocol: TCP
+
+---
+
+# An IPv6 service with a corresponding but IPv4 endpoint on the local
+# node, so do not expect this route.
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-v6-1
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  clusterIP: fd00:96::25
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+
+---
+
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: service-v6-1
+subsets:
+- addresses:
+  - ip: 192.168.2.1
+    nodeName: kube-master
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+  ports:
+  - port: 80
+    protocol: TCP
+
+---
+
+# An IPv6 service with a corresponding IPv6 endpoint on the local
+# node: expect this route.
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-v6-2
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  clusterIP: fd00:96::28
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+
+---
+
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: service-v6-2
+subsets:
+- addresses:
+  - ip: fd5f:807a:4532::43
+    nodeName: kube-master
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+  ports:
+  - port: 80
+    protocol: TCP
