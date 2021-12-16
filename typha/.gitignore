@@ -1,0 +1,58 @@
+# gitignore cheatsheet:
+#
+# Matches with no '/'s automatically match files in sub-dirs.
+# Matches starting with a '/' only match in the top-level directory.
+# Matches ending with a '/' only match directories.
+# ** can be used to match multiple levels of directory.
+
+# Global glob patterns.
+*.log
+*.coverprofile
+*.pb.go
+/.noseids
+/nosetests.xml
+/release-notes-*
+
+# Build directories.
+/bin/
+/docker-image/bin/
+/build/
+/dist/
+.go-pkg-cache/
+/.glide/
+/vendor/
+pkg/report
+
+# IDE files.
+/.idea/
+
+# Patterns to match files from older releases (prevents lots of
+# untracked files from showing up when switching from a maintenance branch.
+
+# Python builds/UT data.
+.hypothesis/
+.coverage
+*_pb2.py
+/env/
+*.egg-info/
+tmp/
+htmlcov/
+.tox/
+/.eggs/
+/coverage.xml
+/site-packages
+/python/
+/version.txt
+/.dir-locals.el
+# Old go sub-dir, used to be where we kept go source.
+/go/
+
+/k8sfv/prometheus/data
+/k8sfv/prometheus/prometheus.yml
+/k8sfv/output/
+/report/*.xml
+
+# Copied in as part of the build.
+docker-image/LICENSE
+
+Makefile.common*

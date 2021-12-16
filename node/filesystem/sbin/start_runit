@@ -1,0 +1,17 @@
+#!/bin/sh
+# From https://github.com/faisyl/alpine-runit
+env > /etc/envvars
+
+/etc/rc.local
+retval=$?
+if [ $retval -ne 0 ];
+then
+    echo >&2 "Calico node failed to start"
+    exit $retval
+fi
+
+# Export the nodename set by the startup procedure. 
+export NODENAME=$(cat /var/lib/calico/nodename)
+
+RUNSVDIR=$(/usr/bin/which runsvdir)
+exec ${RUNSVDIR} -P /etc/service/enabled

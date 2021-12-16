@@ -1,0 +1,77 @@
+## This won't work with KDD
+apiVersion: v1
+kind: policy
+metadata:
+  name: allow-tcp-6379
+  annotations:
+    aname: avalue
+spec:
+  order: 1234
+  selector: role == 'database' && !has(demo)
+  types:
+  - ingress
+  - egress
+  ingress:
+  - action: allow
+    protocol: tcp
+    notProtocol: udplite
+    source:
+      selector: role == 'frontend' && thing not in {'three', 'four'}
+      notSelector: role != 'something' && thing in {'one', 'two'}
+    destination:
+      ports:
+      - 6379
+  - action: allow
+    protocol: tcp
+    source:
+      notSelector: role != 'something' && thing in {'one', 'two'}
+  - action: deny
+    protocol: tcp
+    destination:
+      ports:
+      - 22
+      - 443
+      notPorts:
+      - 80
+  - action: allow
+    source:
+      nets:
+      - "172.18.18.200/32"
+      - "172.18.19.0/24"
+  - action: allow
+    source:
+      net: "172.18.18.100/32"
+  - action: deny
+    source:
+      notNet: "172.19.19.100/32"
+  - action: deny
+    source:
+      notNets:
+      - "172.18.0.0/16"
+  egress:
+  - action: allow
+    protocol: icmp
+    icmp:
+      type: 25
+      code: 25
+
+---
+apiVersion: v1
+kind: policy
+metadata:
+  name: allow-tcp-555-donottrack
+spec:
+  order: 1230
+  selector: role == 'database'
+  types:
+  - ingress
+  ingress:
+  - action: allow
+    protocol: tcp
+    source:
+      selector: role == 'cache'
+    destination:
+      ports:
+      - 555
+  doNotTrack: true
+  preDNAT: false

@@ -1,0 +1,45 @@
+version: v1.0
+name: CNIPlugin
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+execution_time_limit:
+  minutes: 10
+
+global_job_config:
+  secrets:
+  - name: docker-hub
+  - name: banzai-secrets
+  prologue:
+    commands:
+    - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+blocks:
+- name: Clean up winfv aws resources
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      # Prepare aws configuration.
+      - pip install --upgrade --user awscli
+      # Load the github access secrets.  First fix the permissions.
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/.keys/*
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${SHORT_WORKFLOW_ID}
+      - export KEYPAIR_NAME=${CLUSTER_NAME}
+      - echo CLUSTER_NAME=${CLUSTER_NAME}
+    jobs:
+    - name: Clean up winfv aws resources
+      commands:
+      - git clone git@github.com:tigera/process.git
+      - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+      - cd process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}-containerd" ./setup-fv.sh -q -u || true
+      - NAME_PREFIX="${CLUSTER_NAME}-docker" ./setup-fv.sh -q -u | true
+      env_vars:
+      - name: AWS_DEFAULT_REGION
+        value: us-west-2
+    secrets:
+    - name: private-repo
