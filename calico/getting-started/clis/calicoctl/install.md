@@ -117,7 +117,7 @@ you want to install the binary.
    ```
 
    > **Note**: If you are faced with `cannot be opened because the developer cannot be verified` error when using `caicoctl` for the first time.
-   > go to `Applicaitons > System Prefences > Security & Privacy` in the `General` tab at the bottom of the window click `Allow anyway`.
+   > go to `Applications > System Prefences > Security & Privacy` in the `General` tab at the bottom of the window click `Allow anyway`.
    >
    > **Note**: If the location of `calicoctl` is not already in your `PATH`, move the file
    > to one that is or add its location to your `PATH`. This will allow you to invoke it
@@ -129,7 +129,7 @@ you want to install the binary.
 
 1. Use the following PowerShell command to download the `calicoctl` binary.
 
-   > **Tip**: Consider runing PowerShell as administrator and navigating
+   > **Tip**: Consider running PowerShell as administrator and navigating
    > to a location that's in your `PATH`. For example, `C:\Windows`.
    {: .alert .alert-success}
 
@@ -244,7 +244,7 @@ you want to install the binary.
    ```
 
    > **Note**: If you are faced with `cannot be opened because the developer cannot be verified` error when using `caicoctl` for the first time.
-   > go to `Applicaitons > System Prefences > Security & Privacy` in the `General` tab at the bottom of the window click `Allow anyway`.
+   > go to `Applications > System Prefences > Security & Privacy` in the `General` tab at the bottom of the window click `Allow anyway`.
    >
    > **Note**: If the location of `kubectl-calico` is not already in your `PATH`, move the file
    > to one that is or add its location to your `PATH`. This is required in order for
@@ -257,7 +257,7 @@ you want to install the binary.
 
 1. Use the following PowerShell command to download the `calicoctl` binary.
 
-   > **Tip**: Consider runing PowerShell as administrator and navigating
+   > **Tip**: Consider running PowerShell as administrator and navigating
    > to a location that's in your `PATH`. For example, `C:\Windows`.
    {: .alert .alert-success}
 

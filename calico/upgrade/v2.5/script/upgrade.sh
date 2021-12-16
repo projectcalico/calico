@@ -14,7 +14,7 @@ echo "Creating Calico CRDs..."; echo
 echo "Migrating IPPools..."
 /sbin/calicoctl-v1.4 get ippool -o yaml | tee ippool.yaml
 if [ $? != 0 ]; then
-    echo "Failed to get IPPools throught calicoctl"
+    echo "Failed to get IPPools through calicoctl"
     exit 1
 else if [ `cat ippool.yaml | wc -l` == 1 ]; then
     echo "No IPPools found to migrate."

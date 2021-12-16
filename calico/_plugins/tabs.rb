@@ -22,7 +22,7 @@ use end block when you are finished with your tab
 {% endtabs %}
 EXAMPLE
 ###
-# Gloabl scope variable in order to eliminate chance of accidental tab id
+# Global scope variable in order to eliminate chance of accidental tab id
 if !defined?($idInc)
     $idInc = 1
 end

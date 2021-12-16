@@ -120,7 +120,7 @@ spec:
 
 `genericXDPEnabled` and `xdpRefreshInterval` are only relevant when `bpfEnabled` is `false` and
 `xdpEnabled` is `true`; in other words when XDP is being used to accelerate denial-of-service
-preventation policies in the iptables dataplane.
+prevention policies in the iptables dataplane.
 
 When `bpfEnabled` is `true` the "xdp" settings all have no effect; in BPF mode the implementation of
 policy is always accelerated, using the best available BPF technology.

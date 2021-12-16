@@ -39,7 +39,7 @@ In this tutorial we assume you have
 
 This tutorial will go through the necessary steps to create {{site.prodname}} metrics dashboards with Grafana.
 
-#### Preparing Promethues
+#### Preparing Prometheus
 
 Here you will create a service to make your prometheus visible to Grafana.
 

@@ -476,7 +476,7 @@ func TestNetworkPolicyGuaranteedUpdateWithTTL(t *testing.T) {
 			return input, &ttl, nil
 		}, nil)
 	if err != nil {
-		t.Fatalf("Guranteed Update failed: %v", err)
+		t.Fatalf("Guaranteed Update failed: %v", err)
 	}
 
 	opts := storage.ListOptions{ResourceVersion: out.ResourceVersion, Predicate: storage.Everything}
@@ -655,7 +655,7 @@ func testCleanup(t *testing.T, ctx context.Context, store, gnpStore *resourceSto
 	}
 }
 
-// testPropogateStore helps propogates store with objects, automates key generation, and returns
+// testPropogateStore helps propagates store with objects, automates key generation, and returns
 // keys and stored objects.
 func testPropogateStore(ctx context.Context, t *testing.T, store *resourceStore, obj *calico.NetworkPolicy) (string, *calico.NetworkPolicy) {
 	// Setup store with a key and grab the output for returning.
