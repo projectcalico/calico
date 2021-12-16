@@ -861,7 +861,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			By("verfiying that the block was not deleted", func() {
+			By("verifying that the block was not deleted", func() {
 				b, err := bc.Get(ctx, blockKVP.Key, "")
 				Expect(err).To(BeNil())
 				Expect(b).NotTo(BeNil())

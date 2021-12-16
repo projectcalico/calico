@@ -96,7 +96,7 @@ func (c *nodeDeleter) deleteStaleNodes() error {
 			// No matching Kubernetes node with that name.
 			time.Sleep(c.rl.When(RateLimitCalicoDelete))
 
-			// Re-confirm that the node is actaully missing. This minimizes the potential that the node was
+			// Re-confirm that the node is actually missing. This minimizes the potential that the node was
 			// deleted and then re-created between the initial List() call above, and the decision to delete the
 			// node here.
 			_, err := c.clientset.CoreV1().Nodes().Get(context.TODO(), k8sNodeName, metav1.GetOptions{})

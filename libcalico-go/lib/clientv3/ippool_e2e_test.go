@@ -952,7 +952,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
 			Expect(err.Error()).To(ContainSubstring("IPPool(ippool2) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
 
-			By("Attempting to create a pool half overlappping CIDR and a different block size")
+			By("Attempting to create a pool half overlapping CIDR and a different block size")
 			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool3"},
 				Spec: apiv3.IPPoolSpec{

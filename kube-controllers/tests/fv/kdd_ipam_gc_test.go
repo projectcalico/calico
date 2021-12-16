@@ -82,7 +82,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 			return err
 		}, 30*time.Second, 1*time.Second).Should(BeNil())
 
-		// Apply the necessary CRDs. There can somtimes be a delay between starting
+		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
 		apply := func() error {
 			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
