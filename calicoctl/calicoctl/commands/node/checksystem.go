@@ -34,7 +34,7 @@ import (
 // namespaces and veth pairs.
 const minKernelVersion = "2.6.24"
 
-// Required kernel modules to run Calico are saved in a two dimentional map variable.
+// Required kernel modules to run Calico are saved in a two dimensional map variable.
 // Keys are used to search in `lsmod` results or `modules.dep` and `modules.builtin` files.
 // Values are used to search the the `kernel config` or `ip_tables_matches` file.
 var requiredModules = map[string]string{

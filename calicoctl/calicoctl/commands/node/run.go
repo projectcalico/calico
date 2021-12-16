@@ -227,7 +227,7 @@ Description:
 		}
 	}
 
-	// Load the etcd configuraiton.
+	// Load the etcd configuration.
 	cfg, err := clientmgr.LoadClientConfig(config)
 	if err != nil {
 		return fmt.Errorf("Error executing command: invalid config file")

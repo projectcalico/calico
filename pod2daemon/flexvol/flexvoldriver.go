@@ -307,7 +307,7 @@ func unmount(dir string) error {
 	if len(comps) < 6 {
 		sErr := fmt.Sprintf("Failure to notify nodeagent dir %v", dir)
 		logError("unmount", dir, sErr, syslogOnlyFalse)
-		return fmt.Errorf("invalid path to unount")
+		return fmt.Errorf("invalid path to unmount")
 	}
 
 	uid := comps[5]
