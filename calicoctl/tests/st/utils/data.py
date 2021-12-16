@@ -22,7 +22,7 @@
 # The rev (a-z) indicates that it should be possible to switch between different
 # revisions of the same data.
 #
-# The key attributes provide some useful additonal data, for example (a v4 specific
+# The key attributes provide some useful additional data, for example (a v4 specific
 # resource).
 import netaddr
 

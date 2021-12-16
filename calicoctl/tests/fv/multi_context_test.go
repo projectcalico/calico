@@ -83,7 +83,7 @@ func TestMultiCluster(t *testing.T) {
 	out = Calicoctl(true, "label", "nodes", "node4", "cluster", "--remove", "--context", "main")
 	Expect(out).To(ContainSubstring("Successfully"))
 
-	// Calico spesific commands only support context at the begining.
+	// Calico spesific commands only support context at the beginning.
 	out = Calicoctl(true, "--context", "main", "ipam", "show")
 	Expect(out).To(ContainSubstring("CIDR"))
 
