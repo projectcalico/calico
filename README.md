@@ -9,7 +9,7 @@ Calico provides two major services for Cloud Native applications:
 
 Calico’s flexible architecture supports a wide range of deployment options, using modular components and technologies, including:
 
-- Choice of data plane technology, whether it be [eBPF](https://projectcalico.docs.tigera.io/maintenance/ebpf/use-cases-ebpf), standard Linux, or [VPP](https://github.com/projectcalico/vpp-dataplane)
+- Choice of data plane technology, whether it be [eBPF](https://projectcalico.docs.tigera.io/maintenance/ebpf/use-cases-ebpf), standard Linux, [Windows HNS](https://docs.microsoft.com/en-us/virtualization/windowscontainers/container-networking/architecture) or [VPP](https://github.com/projectcalico/vpp-dataplane)
 - Enforcement of the full set of Kubernetes network policy features, plus for those needing a richer set of policy features, Calico network policies.
 - An optimized Kubernetes Service implementation using eBPF.
 - Kubernetes [apiserver integration](./apiserver), for managing Calico configuration and Calico network policies.
