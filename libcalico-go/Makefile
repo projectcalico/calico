@@ -208,7 +208,7 @@ cluster-destroy: $(BINDIR)/kind
 	rm -f $(KUBECONFIG)
 
 $(BINDIR)/kind:
-	$(DOCKER_GO_BUILD) sh -c "curl -Lo $@ https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64"
+	$(DOCKER_GO_BUILD) sh -c "curl -Lo $@ https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64" && chmod +x $@
 
 $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
