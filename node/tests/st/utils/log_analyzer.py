@@ -297,7 +297,7 @@ class LogAnalyzer(object):
         _log.debug("Analyzing logs from %s on %s",
                    self.filename, self.host.name)
 
-        # Store each error with a set of preceeding context logs.
+        # Store each error with a set of preceding context logs.
         errors = []
         logs = deque(maxlen=NUM_CONTEXT_LOGS)
 

@@ -193,7 +193,7 @@ COPY dist/bin/calico-node-arm64 /bin/calico-node
 # or any of its dependencies.
 ADD clean-up-filesystem.sh /
 
-# Allowing qemu binaries to presist.
+# Allowing qemu binaries to persist.
 RUN sed -i 's#zmore#zmore\n\tqemu\n#m' clean-up-filesystem.sh
 RUN /clean-up-filesystem.sh
 

@@ -124,7 +124,7 @@ func NewResourceCache(args ResourceCacheArgs) ResourceCache {
 
 func (c *calicoCache) Set(key string, newObj interface{}) {
 	if reflect.TypeOf(newObj) != c.ObjectType {
-		c.log.Fatalf("Wrong object type recieved to store in cache. Expected: %s, Found: %s", c.ObjectType, reflect.TypeOf(newObj))
+		c.log.Fatalf("Wrong object type received to store in cache. Expected: %s, Found: %s", c.ObjectType, reflect.TypeOf(newObj))
 	}
 
 	// Check if the object exists in the cache already.  If it does and hasn't changed,
