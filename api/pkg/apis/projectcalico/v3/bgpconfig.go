@@ -91,6 +91,10 @@ type BGPConfigurationSpec struct {
 	// This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled
 	// +optional
 	NodeMeshMaxRestartTime *metav1.Duration `json:"nodeMeshMaxRestartTime,omitempty" confignamev1:"node_mesh_restart_time"`
+
+	// BindMode indicates whether to listen for BGP connections on all addresses (None)
+	// or only on the node's canonical IP address Node.Spec.BGP.IPvXAddress (NodeIP).
+	BindMode string `json:"bindMode,omitempty" validate:"omitempty,oneof=None NodeIP"`
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
