@@ -208,7 +208,7 @@ cluster-destroy: $(BINDIR)/kind
 	rm -f $(KUBECONFIG)
 
 $(BINDIR)/kind:
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
+	$(DOCKER_GO_BUILD) sh -c "curl -Lo $@ https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64"
 
 $(BINDIR)/kubectl:
 	mkdir -p $(BINDIR)
