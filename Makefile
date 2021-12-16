@@ -26,6 +26,10 @@ generate:
 	make -C api gen-files 
 	make -C libcalico-go gen-files
 
+# Run misspell locally
+misspell:
+	hack/check/misspell.sh
+
 # Build all Calico images for the current architecture.
 image:
 	$(MAKE) -C pod2daemon image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)

@@ -1,0 +1,7 @@
+go.mod
+go.sum
+# Ignoring felix/bpf-gpl for now
+felix/bpf-gpl
+# Ignoring legal for now
+calico/reference/legal
+
