@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: bgpPeer
+metadata:
+  scope: node
+  node: rack1-host1
+  peerIP: 192.168.1.1
+spec:
+  asNumber: 63400

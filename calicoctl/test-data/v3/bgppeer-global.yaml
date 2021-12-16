@@ -1,0 +1,7 @@
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+ name: globalpeer.name5
+spec:
+ peerIP: 1.1.1.1
+ asNumber: 63444
