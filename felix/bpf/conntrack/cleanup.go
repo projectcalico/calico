@@ -203,7 +203,7 @@ type StaleNATScanner struct {
 }
 
 // NewStaleNATScanner returns an EntryScanner that checks if entries have
-// exisitng NAT entries using the provided NATChecker and if not, it deletes
+// existing NAT entries using the provided NATChecker and if not, it deletes
 // them.
 func NewStaleNATScanner(frontendHasBackend NATChecker) *StaleNATScanner {
 	return &StaleNATScanner{

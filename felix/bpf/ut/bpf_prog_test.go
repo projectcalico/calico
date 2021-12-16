@@ -1034,7 +1034,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 
 		cnt++
 		// Delete the last of the first batch. Must not make the iteration to
-		// restart from the begining.
+		// restart from the beginning.
 		if cnt == bpf.MapIteratorNumKeys {
 			return bpf.IterDelete
 		}

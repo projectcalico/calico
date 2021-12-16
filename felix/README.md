@@ -88,7 +88,7 @@ $ make build-all # OR
 $ make image-all
 ```
 
-Note that the `image` and `image-all` targets have the `build` targets as a depedency.
+Note that the `image` and `image-all` targets have the `build` targets as a dependency.
 
 ## How can I run Felix's unit tests?
 
