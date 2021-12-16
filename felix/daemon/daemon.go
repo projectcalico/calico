@@ -410,6 +410,8 @@ configRetry:
 		v3Client,
 		dpDriver,
 		failureReportChan)
+	// Start communicating with the dataplane driver.
+	dpConnector.Start()
 
 	// If enabled, create a server for the policy sync API.  This allows clients to connect to
 	// Felix over a socket and receive policy updates.
@@ -604,9 +606,6 @@ configRetry:
 		)
 		dpConnector.statusReporter.Start()
 	}
-
-	// Start communicating with the dataplane driver.
-	dpConnector.Start()
 
 	if policySyncProcessor != nil {
 		log.WithField("policySyncPathPrefix", configParams.PolicySyncPathPrefix).Info(

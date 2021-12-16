@@ -1023,10 +1023,21 @@ func (d *InternalDataplane) Start() {
 	d.doStaticDataplaneConfig()
 
 	// Then, start the worker threads.
+	go d.bootstrapTyphaConn()
 	go d.loopUpdatingDataplane()
 	go d.loopReportingStatus()
 	go d.ifaceMonitor.MonitorInterfaces()
 	go d.monitorHostMTU()
+}
+
+// bootstrapTyphaConn clears the datastores public key for this node when wireguard hasnt peered with other nodes.
+// this ensures other nodes wont attempt to send us wireguard traffic which would be dropped
+func (d *InternalDataplane) bootstrapTyphaConn() {
+	log.Warn("bootstrapping connectivity to wireguard-enabled peers")
+	err := d.wireguardManager.wireguardRouteTable.ReportZeroKey()
+	if err != nil {
+		log.WithError(err).Warn("error bootstrapping wireguard connectivity")
+	}
 }
 
 // onIfaceStateChange is our interface monitor callback.  It gets called from the monitor's thread.
