@@ -3,7 +3,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/calico/node.svg)](https://hub.docker.com/r/calico/node/)
 
 # Calico
-<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
+<img src="http://projectcalico.docs.tigera.io/images/felix.png" width="100" height="100">
 
 Calico is an open source networking and network security solution for containers, virtual machines, and bare-metal workloads.
 Calico uses standard Linux networking tools to provide two major services for Cloud Native applications:
@@ -18,9 +18,9 @@ Calico’s flexible architecture supports a wide range of deployment options, us
 - A [Neutron ML2](https://github.com/projectcalico/networking-calico) plugin to provide VM networking for OpenStack.
 - A policy engine, [Felix](https://github.com/projectcalico/felix), to provide enforcement of the full set of Kubernetes
   network policy features, plus for those needing a richer set of policy features, Calico network policies.
-- Both non-overlay and [overlay (via IPIP or VXLAN)](https://docs.projectcalico.org/networking/vxlan-ipip) networking options
+- Both non-overlay and [overlay (via IPIP or VXLAN)](https://projectcalico.docs.tigera.io/networking/vxlan-ipip) networking options
   in either public cloud or on-prem deployments.
-- A [BGP routing stack](https://docs.projectcalico.org/networking/bgp) that can advertise routes for workload and service IP
+- A [BGP routing stack](https://projectcalico.docs.tigera.io/networking/bgp) that can advertise routes for workload and service IP
   addresses to physical network infrastructure such as Top of Rack routers (ToRs).
 - A simple command line interface, [calicoctl](https://github.com/projectcalico/calicoctl), for managing Calico configuration
 and Calico network policies.
@@ -30,11 +30,11 @@ and Calico network policies.
 There are many avenues to get started with Calico depending on your situation.
 
 - Trying out Kubernetes on a single host or on your own hardware? The
-  [Quick Start Guide](https://docs.projectcalico.org/getting-started/kubernetes/quickstart) will have you up and running in
+  [Quick Start Guide](https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart) will have you up and running in
   about fifteen minutes.
 - Running a managed public cloud? Use our
-  [guides for enabling Calico Network Policies](https://docs.projectcalico.org/getting-started/kubernetes/managed-public-cloud/).
-- Want to go deeper? Visit [https://docs.projectcalico.org](https://docs.projectcalico.org) for full documentation.
+  [guides for enabling Calico Network Policies](https://projectcalico.docs.tigera.io/getting-started/kubernetes/managed-public-cloud/).
+- Want to go deeper? Visit [https://projectcalico.docs.tigera.io](https://projectcalico.docs.tigera.io) for full documentation.
 
 ## Getting Started Developing Calico
 
@@ -45,7 +45,7 @@ feedback.
 - [The Developer Guide](DEVELOPER_GUIDE.md) will walk you through how to set up a development environment, build the code,
   and run tests.
 - [The Calico Documentation Guide](CONTRIBUTING_DOCS.md) will get you started on making changes to
-  [https://docs.projectcalico.org](https://docs.projectcalico.org).
+  [https://projectcalico.docs.tigera.io](https://projectcalico.docs.tigera.io).
 
 ## Join the Calico Community!
 
@@ -59,5 +59,5 @@ Calico is open source, with most code and documentation available under the Apac
 
 ## Calico Enterprise
 
-Calico Enterprise is a commercial product that builds on top of and around the Calico open source project to provide additional capabilities beyond the core Calico feature set. You can learn more [here](https://docs.projectcalico.org/calico-enterprise/). Calico Enterprise is available under commercial license from Tigera.
+Calico Enterprise is a commercial product that builds on top of and around the Calico open source project to provide additional capabilities beyond the core Calico feature set. You can learn more [here](https://projectcalico.docs.tigera.io/calico-enterprise/). Calico Enterprise is available under commercial license from Tigera.
 

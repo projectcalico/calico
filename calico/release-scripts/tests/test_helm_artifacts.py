@@ -34,7 +34,7 @@ def test_calico_release_has_helm_chart():
 
 # Note: this test is only valid for versions >= v3.19.3
 def test_calico_release_in_helm_index():
-    req = requests.get("https://docs.projectcalico.org/charts/index.yaml")
+    req = requests.get("https://projectcalico.docs.tigera.io/charts/index.yaml")
     assert req.status_code == 200, "Could not get helm index"
     index = yaml.safe_load(req.text)
     # Find entry

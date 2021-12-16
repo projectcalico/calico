@@ -7,12 +7,12 @@ RELEASE_STREAM = os.environ.get("RELEASE_STREAM")
 
 
 def test_http_redirects_correctly():
-    req = requests.get("http://docs.projectcalico.org/latest")
+    req = requests.get("http://projectcalico.docs.tigera.io/latest")
     assert req.status_code == 200
 
 
 def test_latest_releases_redirects_correctly():
-    req = requests.get("https://docs.projectcalico.org/latest/release-notes")
+    req = requests.get("https://projectcalico.docs.tigera.io/latest/release-notes")
     assert req.status_code == 200
 
     version = BeautifulSoup(req.content, features="html.parser").find("strong")
