@@ -1,0 +1,44 @@
+version: v1.0
+name: Trigger Pin Updates
+
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+global_job_config:
+  secrets:
+    - name: docker-hub
+    # Mount the github SSH secret for repositories.
+    - name: private-repo
+    # Mount a secret for pulling images from GCR.
+    - name: tigera-dev-ci-pull-credentials
+  prologue:
+    commands:
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      # Correct permissions since they are too open by default:
+      - chmod 0600 ~/.keys/*
+      # Add the key to the ssh agent:
+      - ssh-add ~/.keys/*
+      # Login to docker in order to pull images.
+      - docker login --username casey@tigera.io -u _json_key -p "$(cat /home/semaphore/tigera-dev-ci.json)" https://gcr.io
+      - checkout
+
+blocks:
+  - name: 'Auto pin update'
+    task:
+      secrets:
+        - name: marvin-github-token
+      jobs:
+        - name: 'Auto pin update'
+          execution_time_limit:
+            minutes: 10
+          priority:
+            - value: 40
+              when: true
+          commands:
+            - CONFIRM=true make git-config
+            - CONFIRM=true GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN} make trigger-auto-pin-update-process
