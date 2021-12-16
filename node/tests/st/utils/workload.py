@@ -14,6 +14,7 @@
 import logging
 import json
 from functools import partial
+from time import time
 
 from netaddr import IPAddress
 
@@ -208,6 +209,18 @@ class Workload(object):
         except CommandExecError:
             return False
 
+        return True
+
+    @debug_failures
+    def check_can_ping_continuously(self, ip, retries=0, timeout=180.0):
+        """
+        Execute ping continuously until it fails (after n retries) or until
+        it times out. This should usually be run in a separate thread.
+        """
+        start_time = time()
+        while time() < start_time + timeout:
+            if not self.check_can_ping(ip, retries=retries):
+                return False
         return True
 
     @debug_failures
