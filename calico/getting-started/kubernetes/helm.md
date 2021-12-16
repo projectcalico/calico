@@ -17,7 +17,7 @@ Helm charts are a way to package up an application for Kubernetes (similar to `a
 
 - Install Helm 3
 - Kubernetes cluster meets these requirements:
-  - Kubernetes is installed *without* a CNI plugin **OR** cluster is running a compatible CNI for {{site.prodname}} to run in policy-only mode 
+  - Kubernetes is installed *without* a CNI plugin **OR** cluster is running a compatible CNI for {{site.prodname}} to run in policy-only mode
   - x86-64, arm64, ppc64le, or s390x processors
   - RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
 - `kubeconfig` is configured to work with your cluster (check by running `kubectl get nodes`)
@@ -45,12 +45,12 @@ If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubern
 
 1. If you are installing on a cluster installed by EKS, GKE, AKS or Mirantis Kubernetes Engine (MKE), set the `kubernetesProvider` as described in the [Installation reference](../../reference/installation/api#operator.tigera.io/v1.Provider).  For example:
 ```
-echo '{installation.kubernetesProvider: EKS}' > values.yaml
+echo '{ installation: {kubernetesProvider: EKS }}' > values.yaml
 ```
-1. Add any other customizations you require to `values.yaml`.  You might like to refer to the [helm docs](https://helm.sh/docs/) or run 
+1. Add any other customizations you require to `values.yaml`.  You might like to refer to the [helm docs](https://helm.sh/docs/) or run
    ```
    helm show values projectcalico/tigera-operator --version {{site.data.versions[0].title}}
-   ``` 
+   ```
    to see the values that can be customized in the chart.
 
 #### Install {{site.prodname}}
