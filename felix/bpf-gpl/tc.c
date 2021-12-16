@@ -263,6 +263,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			ctx.state->flags |= CALI_ST_SKIP_FIB;
 		}
 		CALI_DEBUG("CT Hit\n");
+
+		if (ctx.state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx.state->ct_result.rc)) {
+			CALI_DEBUG("Forcing policy on SYN\n");
+			goto syn_force_policy;
+		}
 		goto skip_policy;
 	}
 
@@ -388,6 +393,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			ctx.state->pre_nat_dport = ctx_port_to_host(revnat->port);
 		}
 	}
+
+syn_force_policy:
 
 	if (rt_addr_is_local_host(ctx.state->post_nat_ip_dst)) {
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
@@ -974,7 +981,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_BYPASS:
-		seen_mark = CALI_SKB_MARK_BYPASS;
+		if (!ct_result_is_syn(state->ct_result.rc)) {
+			seen_mark = CALI_SKB_MARK_BYPASS;
+		}
 		// fall through
 	case CALI_CT_ESTABLISHED:
 		goto allow;
