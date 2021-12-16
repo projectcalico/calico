@@ -25,7 +25,7 @@ Calico uses IP pools to configure how addresses are allocated to pods, and how n
 sets of addresses. You can see the full schema for IP pools here.
 
 `{{site.nodecontainer}}` can be configured to create a default IP pool for you, but only if none already
-exist in the cluster. The following options control the paramaters on the created pool.
+exist in the cluster. The following options control the parameters on the created pool.
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |

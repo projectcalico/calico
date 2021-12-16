@@ -12,7 +12,7 @@ Implementing a process around creating and enforcing policies will reduce unexpe
 
 Calico Enterprise can auto-generate a policy based on ingress and egress traffic between existing services. This can help you implement policy when you are not certain all of the interdependent connections between services.
 
-Policies are called ‘Recommended’ because they are based on existing traffic flows that are observable, and you can also modify the policy if there are other connections you anticipate that are not occuring during the observation period.
+Policies are called ‘Recommended’ because they are based on existing traffic flows that are observable, and you can also modify the policy if there are other connections you anticipate that are not occurring during the observation period.
 
 Policy recommendation is the fastest way to implement Network Policies in an existing cluster if you are unsure what policy is needed.
 

@@ -251,7 +251,7 @@ func RunCNIPluginWithId(
 
 	// Parse the result as the target CNI version.
 	if version.Compare(nc.CNIVersion, "0.3.0", "<") {
-		// Special case for older CNI verisons.
+		// Special case for older CNI versions.
 		var out []byte
 		out, err = json.Marshal(r)
 		log.Infof("CNI output: %s", out)

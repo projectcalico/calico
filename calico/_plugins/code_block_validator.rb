@@ -5,7 +5,7 @@
 Jekyll::Hooks.register :pages, :pre_render do |post|
     # do nothing if url indicates legal folder
     if !post.path.match(/\/legal\//)
-        occurences = []
+        occurrences = []
         # Check post content and extract code blocks
         post.content.scan(/(?:[`]{3}|(?<!`)[`](?!`))(.*?)(?:[`]{3}|(?<!`)[`](?!`))/m){ |match|
             # Check all matched cases
@@ -15,14 +15,14 @@ Jekyll::Hooks.register :pages, :pre_render do |post|
                 block.codepoints.each_with_index do |b_chr, idx|
                     # \n (9) and \t (10) are exceptions for this block
                     if ( b_chr < 32 && ![9,10].include?(b_chr) ) || b_chr > 126
-                        occurences.append({'code' => block, 'idx' => idx})
+                        occurrences.append({'code' => block, 'idx' => idx})
                     end 
                 end
             end
         }
         # were there any special characters?
-        if occurences.length > 0
-            occurences.each do |sentence|
+        if occurrences.length > 0
+            occurrences.each do |sentence|
                 # printing line to user
                 print(sentence['code'][sentence['idx']-10..sentence['idx']+10].strip)
                 # printing position of the character

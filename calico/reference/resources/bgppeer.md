@@ -50,7 +50,7 @@ spec:
 | maxRestartTime  | Restart time that is announced by BIRD in the BGP graceful restart capability and that specifies how long the neighbor would wait for the BGP session to re-establish after a restart before deleting stale routes. Note: extra care should be taken when changing this configuration, as it may break networking in your cluster. When not specified, BIRD uses the default value of 120 seconds. | `10s`, `120s`, `2m` etc.  | [Duration string][parse-duration] | `nil` (empty config, BIRD will use the default value of `120s`) |
 
 > **Tip**: the cluster-wide default local AS number used when speaking with a peer is controlled by the
-> [BGPConfiguration resource](./bgpconfig).  That value can be overriden per-node by using the `bgp` field of
+> [BGPConfiguration resource](./bgpconfig).  That value can be overridden per-node by using the `bgp` field of
 > the [node resource](./node).
 {: .alert .alert-success}
 

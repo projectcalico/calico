@@ -61,7 +61,7 @@ WARNING: Unable to detect the ipip module. Load with `modprobe ipip`
 ```
 {: .no-select-button}
 
-It is possible to override the `kernel-config` file using `--kernel-config` argument. In this case `calicoctl` will try to resolve the modules againts the provided file and skip the default locations.
+It is possible to override the `kernel-config` file using `--kernel-config` argument. In this case `calicoctl` will try to resolve the modules against the provided file and skip the default locations.
 
 ```bash
 calicoctl node checksystem --kernel-config /root/MYKERNELFILE

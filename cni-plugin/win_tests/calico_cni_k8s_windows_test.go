@@ -1419,7 +1419,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			nwsName = []string{}
 			lastNWName = ""
 		})
-		It("with windows single network flag not set,should successfully network 4 pods and sucessfully create new network for 5th", func() {
+		It("with windows single network flag not set,should successfully network 4 pods and successfully create new network for 5th", func() {
 			// Now create a K8s pod.
 			name := ""
 			var containerid []string

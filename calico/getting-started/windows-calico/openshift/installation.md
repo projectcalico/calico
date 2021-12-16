@@ -159,7 +159,7 @@ $ ./wni aws create \
 2020/10/05 12:57:30 Internal IP: 10.0.90.193
 ```
 
-#### Get the adminstrator password
+#### Get the administrator password
 
 The `wni` binary writes the instance details to the file `windows-node-installer.json`. An example of the file:
 
