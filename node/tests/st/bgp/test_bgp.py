@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import re
 from subprocess import CalledProcessError
 
 from tests.st.test_base import TestBase
@@ -261,16 +262,30 @@ class TestDisableBGPExport(TestBase):
             # host2's name in host1's bird cfg is Mesh_xxx_xxx_xxx_xxx (based on its IP address)
             nameHost2 = 'Mesh_' + host2.ip.replace('.', '_')
 
+            def _get_re_from_pool(pool):
+                """
+                Get a regex for blocks in 'birdcl show route' output from an
+                IP pool CIDR
+                """
+                no_mask = pool.rsplit('/', 1)[0]
+                no_last_octet = no_mask.rsplit('.', 1)[0]
+                regex = re.escape(no_last_octet) + r'\.\d{1,3}/\d{1,2}\s+blackhole'
+                return regex
+
             # Verify that pool2 and pool3 are exported and pool1 is not
             output = host1.execute("docker exec calico-node birdcl show route export %s" % nameHost2)
-            for block in ['192.168.2.0/26', '192.168.3.0/26']:
-                self.assertIn(block, output, "block '%s' should be present in 'birdcl show route export'")
-            for block in ['192.168.1.0/26']:
-                self.assertNotIn(block, output, "block '%s' should not be present in 'birdcl show route export'")
+            for pool in [ '192.168.2.0/24', '192.168.3.0/24' ]:
+                self.assertRegexpMatches(output, _get_re_from_pool(pool),
+                                         "pool '%s' should be present in 'birdcl show route export' output" % pool)
+            for pool in [ '192.168.1.0/24' ]:
+                self.assertNotRegexpMatches(output, _get_re_from_pool(pool),
+                                            "pool '%s' should not be present in 'birdcl show route export' output" % pool)
 
             # Verify that pool1 is filtered from being exported and pool2 and pool3 are not
             output = host1.execute("docker exec calico-node birdcl show route noexport %s" % nameHost2)
-            for block in ['192.168.1.0/26']:
-                self.assertIn(block, output, "block '%s' should be present in 'birdcl show route noexport'")
-            for block in ['192.168.2.0/26', '192.168.3.0/26']:
-                self.assertNotIn(block, output, "block '%s' should not be present in 'birdcl show route noexport'")
+            for pool in [ '192.168.1.0/24' ]:
+                self.assertRegexpMatches(output, _get_re_from_pool(pool),
+                                         "pool '%s' should be present in 'birdcl show route noexport' output" % pool)
+            for pool in [ '192.168.2.0/24', '192.168.3.0/24' ]:
+                self.assertNotRegexpMatches(output, _get_re_from_pool(pool),
+                                            "pool '%s' should not be present in 'birdcl show route noexport' output" % pool)
