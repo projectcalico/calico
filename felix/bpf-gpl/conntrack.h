@@ -788,7 +788,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.ifindex_fwd = dst_to_src->ifindex;
 	}
 
-	CALI_CT_DEBUG("result: %d\n", result.rc);
+	if (syn) {
+		CALI_CT_DEBUG("packet is SYN\n");
+		ct_result_set_flag(result.rc, CALI_CT_SYN);
+	}
+
+
+	CALI_CT_DEBUG("result: 0x%x\n", result.rc);
 
 	if (related) {
 		ct_result_set_flag(result.rc, CALI_CT_RELATED);
