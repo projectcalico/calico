@@ -373,3 +373,19 @@ blocks:
     - name: "kube-controllers: tests"
       commands:
       - make ci
+
+- name: "Documentation"
+  run:
+    when: "change_in('/calico/')"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cd calico
+    jobs:
+    - name: "htmlproofer, kubeval, and helm tests"
+      commands:
+      - make htmlproofer 
+      - make kubeval
+      - make helm-tests
