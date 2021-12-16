@@ -59,7 +59,7 @@ section:
 - title: Troubleshoot
   path: /maintenance/troubleshoot/
   section:
-  - title: Troubleshooting and diagnostic
+  - title: Troubleshooting and diagnostics
     path: /maintenance/troubleshoot/troubleshooting
   - title: Troubleshooting commands
     path: /maintenance/troubleshoot/commands  
