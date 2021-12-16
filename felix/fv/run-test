@@ -1,0 +1,5 @@
+#!/bin/bash -ex
+
+export FV_FELIXIMAGE="calico/felix-amd64:latest"
+export PRIVATE_KEY="`pwd`/private.key"
+exec ginkgo "$@" --tags fvtests .
