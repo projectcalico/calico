@@ -55,6 +55,28 @@ type Checker struct {
 
 	// OnFail, if set, will be called instead of ginkgo.Fail().  (Useful for testing the checker itself.)
 	OnFail func(msg string)
+
+	description string
+	beforeRetry func()
+}
+
+// CheckerOpt is an option to CheckConnectivity()
+type CheckerOpt func(*Checker)
+
+// CheckWithDescription sets a description of a failure.
+func CheckWithDescription(desc string) CheckerOpt {
+	return func(c *Checker) {
+		c.description = desc
+	}
+}
+
+// CheckWithBeforeRetry sets a function executed after an attempt failed and
+// before we retry.
+func CheckWithBeforeRetry(f func()) CheckerOpt {
+	return func(c *Checker) {
+		log.Debug("CheckWithBeforeRetry set")
+		c.beforeRetry = f
+	}
 }
 
 // Expected defines what connectivity expectations we can have
@@ -132,6 +154,9 @@ func (c *Checker) ResetExpectations() {
 	c.expectations = nil
 	c.CheckSNAT = false
 	c.RetriesDisabled = false
+
+	c.description = ""
+	c.beforeRetry = nil
 }
 
 // ActualConnectivity calculates the current connectivity for all the expected paths.  It returns a
@@ -224,30 +249,36 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 
 var defaultConnectivityTimeout = 10 * time.Second
 
-func (c *Checker) CheckConnectivityOffset(offset int, optionalDescription ...interface{}) {
-	c.CheckConnectivityWithTimeoutOffset(offset+2, defaultConnectivityTimeout, optionalDescription...)
+func (c *Checker) CheckConnectivityOffset(offset int, opts ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(offset+2, defaultConnectivityTimeout, opts...)
 }
 
-func (c *Checker) CheckConnectivity(optionalDescription ...interface{}) {
-	c.CheckConnectivityWithTimeoutOffset(2, defaultConnectivityTimeout, optionalDescription...)
+func (c *Checker) CheckConnectivity(opts ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(2, defaultConnectivityTimeout, opts...)
 }
 
-func (c *Checker) CheckConnectivityPacketLoss(optionalDescription ...interface{}) {
+func (c *Checker) CheckConnectivityPacketLoss(opts ...interface{}) {
 	// Timeout is not used for packet loss test because there is no retry.
-	c.CheckConnectivityWithTimeoutOffset(2, 0*time.Second, optionalDescription...)
+	c.CheckConnectivityWithTimeoutOffset(2, 0*time.Second, opts...)
 }
 
-func (c *Checker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
+func (c *Checker) CheckConnectivityWithTimeout(timeout time.Duration, opts ...interface{}) {
 	Expect(timeout).To(BeNumerically(">", 100*time.Millisecond),
 		"Very low timeout, did you mean to multiply by time.<Unit>?")
-	if len(optionalDescription) > 0 {
-		Expect(optionalDescription[0]).NotTo(BeAssignableToTypeOf(time.Second),
-			"Unexpected time.Duration passed for description")
-	}
-	c.CheckConnectivityWithTimeoutOffset(2, timeout, optionalDescription...)
+	c.CheckConnectivityWithTimeoutOffset(2, timeout, opts...)
 }
 
-func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, optionalDescription ...interface{}) {
+func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, opts ...interface{}) {
+
+	for _, o := range opts {
+		switch v := o.(type) {
+		case string:
+			c.description = v
+		case CheckerOpt:
+			v(c)
+		}
+	}
+
 	var expConnectivity []string
 	start := time.Now()
 
@@ -275,6 +306,10 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 			return
 		}
 		completedAttempts++
+		if c.beforeRetry != nil {
+			log.Debug("calling beforeRetry")
+			c.beforeRetry()
+		}
 	}
 
 	message := fmt.Sprintf(
@@ -282,6 +317,9 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 		strings.Join(actualConnPretty, "\n    "),
 		strings.Join(expConnectivity, "\n    "),
 	)
+	if c.description != "" {
+		message += "\nDescription:\n" + c.description
+	}
 	if c.OnFail != nil {
 		c.OnFail(message)
 	} else {
