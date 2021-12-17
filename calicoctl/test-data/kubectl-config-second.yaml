@@ -1,0 +1,14 @@
+apiVersion: v1
+clusters:
+- cluster:
+    server: https://127.0.0.1:6444
+  name: secondary-cluster
+contexts:
+- context:
+    cluster: secondary-cluster
+    user: default
+  name: second
+current-context: ""
+kind: Config
+preferences: {}
+users: null
