@@ -9,7 +9,10 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
+	"k8s.io/kubernetes/pkg/printers"
+	printerstorage "k8s.io/kubernetes/pkg/printers/storage"
 
+	calicoprinter "github.com/projectcalico/calico/apiserver/pkg/printers/projectcalico"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 )
 
@@ -85,6 +88,8 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 
 		Storage:     storageInterface,
 		DestroyFunc: dFunc,
+
+		TableConvertor: printerstorage.TableConvertor{TableGenerator: printers.NewTableGenerator().With(calicoprinter.CalicoNodeStatusAddHandlers)},
 	}
 
 	return &REST{store, opts.ShortNames}, nil
