@@ -51,7 +51,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) defaulter-gen \
 		--v 1 --logtostderr \
-		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
+		--go-header-file "/go/src/$(PACKAGE_NAME)/../hack/boilerplate/boilerplate.go.txt" \
 		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
 		--extra-peer-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
 		--output-file-base "zz_generated.defaults"'
@@ -59,7 +59,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) deepcopy-gen \
 		--v 1 --logtostderr \
-		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
+		--go-header-file "/go/src/$(PACKAGE_NAME)/../hack/boilerplate/boilerplate.go.txt" \
 		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
 		--bounding-dirs $(PACKAGE_NAME) \
 		--output-file-base zz_generated.deepcopy'
@@ -72,7 +72,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) openapi-gen \
 		--v 1 --logtostderr \
-		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
+		--go-header-file "/go/src/$(PACKAGE_NAME)/../hack/boilerplate/boilerplate.go.txt" \
 		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3,k8s.io/api/core/v1,k8s.io/api/networking/v1,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/version,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr,$(PACKAGE_NAME)/pkg/lib/numorstring" \
 		--output-package "$(PACKAGE_NAME)/pkg/openapi"'
 
@@ -85,7 +85,7 @@ lint-cache-dir:
 
 .PHONY: check-copyright
 check-copyright:
-	@hack/check-copyright.sh
+	@../hack/check-copyright.sh
 
 .PHONY: clean
 clean: clean-bin
