@@ -29,12 +29,7 @@ endif
 
 SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
 CGO_ENABLED=0
-endif
 
 ###############################################################################
 

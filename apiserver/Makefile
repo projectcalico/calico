@@ -61,12 +61,7 @@ KUBECONFIG_DIR? = /etc/kubernetes/admin.conf
 
 include ../lib.Makefile
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
 CGO_ENABLED=0
-endif
 
 ###############################################################################
 # Static checks

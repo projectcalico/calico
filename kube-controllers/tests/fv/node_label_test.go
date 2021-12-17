@@ -63,7 +63,7 @@ var _ = Describe("Node labeling tests", func() {
 		kconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
-		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
+		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
 
@@ -84,7 +84,7 @@ var _ = Describe("Node labeling tests", func() {
 
 		// Run controller manager.  Empirically it can take around 10s until the
 		// controller manager is ready to create default service accounts, even
-		// when the hyperkube image has already been downloaded to run the API
+		// when the k8s image has already been downloaded to run the API
 		// server.  We use Eventually to allow for possible delay when doing
 		// initial pod creation below.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
@@ -131,11 +131,9 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Kubernetes node labels.
-		kn, err = k8sClient.CoreV1().Nodes().Get(context.Background(), kn.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		kn.Labels["label1"] = "value2"
-		_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(testutils.UpdateK8sNode(k8sClient, kn.Name, func(kn *v1.Node) {
+			kn.Labels["label1"] = "value2"
+		})).NotTo(HaveOccurred())
 
 		// Expect the node label to sync.
 		expected = map[string]string{"label1": "value2", "calico-label": "calico-value"}
@@ -143,11 +141,9 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Delete the label, add a different one.
-		kn, err = k8sClient.CoreV1().Nodes().Get(context.Background(), kn.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		kn.Labels = map[string]string{"label2": "value1"}
-		_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), kn, metav1.UpdateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(testutils.UpdateK8sNode(k8sClient, kn.Name, func(kn *v1.Node) {
+			kn.Labels = map[string]string{"label2": "value1"}
+		})).NotTo(HaveOccurred())
 
 		// Expect the node labels to sync.
 		expected = map[string]string{"label2": "value1", "calico-label": "calico-value"}

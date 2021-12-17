@@ -146,7 +146,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					syncTester.ExpectData(model.KVPair{
 						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
 						Value: map[string]string{
-							"pcns.projectcalico.org/name": ns.Name,
+							"pcns.projectcalico.org/name":      ns.Name,
+							"pcns.kubernetes.io/metadata.name": "default",
 						},
 					})
 					expectedCacheSize += 1
