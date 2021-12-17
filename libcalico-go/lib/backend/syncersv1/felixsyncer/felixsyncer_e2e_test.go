@@ -147,7 +147,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: name}},
 						Value: map[string]string{
 							"pcns.projectcalico.org/name":      ns.Name,
-							"pcns.kubernetes.io/metadata.name": "default",
+							"pcns.kubernetes.io/metadata.name": ns.Name,
 						},
 					})
 					expectedCacheSize += 1
@@ -158,7 +158,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
 						Spec: v3.ProfileSpec{
 							LabelsToApply: map[string]string{
-								"pcns.projectcalico.org/name": ns.Name,
+								"pcns.projectcalico.org/name":      ns.Name,
+								"pcns.kubernetes.io/metadata.name": ns.Name,
 							},
 							Ingress: []v3.Rule{{Action: v3.Allow}},
 							Egress:  []v3.Rule{{Action: v3.Allow}},
