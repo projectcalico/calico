@@ -368,7 +368,7 @@ blocks:
       commands:
       - cd pod2daemon
     jobs:
-    - name: "tests"
+    - name: "pod2daemon tests"
       commands:
       - make ci
 
@@ -381,7 +381,7 @@ blocks:
       commands:
       - cd app-policy
     jobs:
-    - name: "tests"
+    - name: "app-policy tests"
       commands:
       - make ci
 
@@ -394,7 +394,7 @@ blocks:
       commands:
       - cd calicoctl
     jobs:
-    - name: "tests"
+    - name: "calicoctl tests"
       commands:
       - make ci
 
@@ -407,7 +407,7 @@ blocks:
       commands:
       - cd cni-plugin
     jobs:
-    - name: "tests"
+    - name: "cni-plugin tests"
       commands:
       - make ci
 
