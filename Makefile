@@ -25,6 +25,9 @@ MAKE_DIRS=$(shell ls -d */)
 generate:
 	make -C api gen-files 
 	make -C libcalico-go gen-files
+	make -C felix protobuf
+	rm app-policy/proto/*.pb.go
+	make -C app-policy proto
 
 # Build all Calico images for the current architecture.
 image:
