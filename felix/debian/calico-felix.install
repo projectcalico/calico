@@ -1,0 +1,3 @@
+usr/bin/calico-felix usr/bin
+usr/lib/calico/bpf/* usr/lib/calico/bpf
+usr/etc/calico/felix.cfg.example etc/calico

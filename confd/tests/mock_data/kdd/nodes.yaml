@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Node
+metadata:
+  annotations:
+    node.alpha.kubernetes.io/ttl: "0"
+    volumes.kubernetes.io/controller-managed-attach-detach: "true"
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/hostname: kube-master
+    node-role.kubernetes.io/master: ""
+  name: kube-master
+  namespace: ""
+spec:
+  externalID: kube-master
+  podCIDR: 192.168.221.192/26
+
+---
+
+apiVersion: v1
+kind: Node
+metadata:
+  annotations:
+    node.alpha.kubernetes.io/ttl: "0"
+    volumes.kubernetes.io/controller-managed-attach-detach: "true"
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/hostname: kube-node-1
+  name: kube-node-1
+  namespace: ""
+spec:
+  externalID: kube-node-1
+  podCIDR: 192.168.1.0/24
+
+---
+
+apiVersion: v1
+kind: Node
+metadata:
+  annotations:
+    node.alpha.kubernetes.io/ttl: "0"
+    volumes.kubernetes.io/controller-managed-attach-detach: "true"
+  labels:
+    beta.kubernetes.io/arch: amd64
+    beta.kubernetes.io/os: linux
+    kubernetes.io/hostname: kube-node-2
+  name: kube-node-2
+  namespace: ""
+spec:
+  externalID: kube-node-2
+  podCIDR: 192.168.2.0/24
