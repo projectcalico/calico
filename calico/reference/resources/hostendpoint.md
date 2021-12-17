@@ -16,20 +16,18 @@ interfaces.
    for example `interfaceName: eth0`, or by leaving `interfaceName`
    empty and including one of the interface's IPs in `expectedIPs`.
 
-Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
-will use to apply
-[policy]({{ site.baseurl }}/reference/resources/networkpolicy)
-to the interface.
+Each host endpoint may include a set of labels {%- if site.include_calicoctl_resource %}and list of profiles{%- endif %} that {{site.prodname}} will use to apply [policy]({{ site.baseurl }}/reference/resources/networkpolicy) to the interface.
 
-For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
-aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
+{%- if site.include_calicoctl_resource %}
+For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
+{%- endif %}
 
 **Default behavior of external traffic to/from host**
 
 If a host endpoint is created and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules).
 For a named host endpoint (i.e. a host endpoint representing a specific interface), {{site.prodname}} blocks traffic only to/from the interface specified in the host endpoint. Traffic to/from other interfaces is ignored.
 
-> **Note**: Host endpoints with `interfaceName: *` do not support [untracked policy]({{ site.baseurl }}/security/high-connection-workloads).
+> **Note**: Host endpoints with `interfaceName: *` do not support untracked policy. [untracked policy]({{ site.baseurl }}/security/high-connection-workloads).
 {: .alert .alert-info}
 
 For a wildcard host endpoint (i.e. a host endpoint representing all of a host's interfaces), {{site.prodname}} blocks traffic to/from _all_ interfaces on the host (except for traffic allowed by failsafe rules).

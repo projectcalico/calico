@@ -6,8 +6,10 @@ canonical_url: '/reference/resources/felixconfig'
 
 A [Felix]({{ site.baseurl }}/reference/architecture/overview#felix) configuration resource (`FelixConfiguration`) represents Felix configuration options for the cluster.
 
+{%- if site.include_calicoctl_resource %}
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `felixconfiguration`, `felixconfig`, `felixconfigurations`, `felixconfigs`.
+{%- endif %}
 
 See [Configuring Felix]({{ site.baseurl }}/reference/felix/configuration) for more details.
 
@@ -32,7 +34,7 @@ spec:
 |-------------|-----------------------------|-------------------|--------|
 | name     | Unique name to describe this resource instance. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
-- {{site.prodname}} automatically creates a resource named `default` containing the global default configuration settings for Felix. You can use [calicoctl]({{ site.baseurl }}/reference/calicoctl/overview) to view and edit these settings
+- {{site.prodname}} automatically creates a resource named `default` containing the global default configuration settings for Felix. {%- if site.include_calicoctl_resource %}You can use [calicoctl]({{ site.baseurl }}/reference/calicoctl/overview) to view and edit these settings.{%- endif %}
 - The resources with the name `node.<nodename>` contain the node-specific overrides, and will be applied to the node `<nodename>`. When deleting a node the FelixConfiguration resource associated with the node will also be deleted.
 
 #### Spec
@@ -51,7 +53,7 @@ spec:
 | interfaceExclude                   | A comma-separated list of interface names that should be excluded when Felix is resolving host endpoints.  The default value ensures that Felix ignores Kubernetes' internal `kube-ipvs0` device. If you want to exclude multiple interface names using a single value, the list supports regular expressions. For regular expressions you must wrap the value with `/`. For example having values `/^kube/,veth1` will exclude all interfaces that begin with `kube` and also the interface `veth1`. | string | string | `kube-ipvs0` |
 | interfacePrefix                    | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces.  Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the 'cali' value, and our OpenStack integration sets the 'tap' value. | string | string | `cali` |
 | ipipEnabled                        | Whether Felix should configure an IPinIP interface on the host. Set automatically to `true` by `{{site.nodecontainer}}` or `calicoctl` when you create an IPIP-enabled pool. | boolean | `false` |
-| ipipMTU                            | The MTU to set on the tunnel device. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) | int | int | `0` |
+| ipipMTU                            | The MTU to set on the tunnel device. Zero value means auto-detect. See Configuring MTU [Configuring MTU]({{ site.baseurl }}/networking/mtu) | int | int | `0` |
 | ipsetsRefreshInterval              | Period at which Felix re-checks the IP sets in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable IP sets refresh.  Note: the default for this value is lower than the other refresh intervals as a workaround for a [Linux kernel bug](https://github.com/projectcalico/felix/issues/1347){:target="_blank"} that was fixed in kernel version 4.11. If you are using v4.11 or greater you may want to set this to a higher value to reduce Felix CPU usage. | `5s`, `10s`, `1m` etc. | duration | `10s` |
 | iptablesFilterAllowAction          | This parameter controls what happens to traffic that is accepted by a Felix policy chain in the iptables filter table (i.e. a normal policy chain). The default will immediately `Accept` the traffic. Use `Return` to send the traffic back up to the system chains for further processing.| Accept, Return |  string | `Accept` |
 | iptablesBackend                    | This parameter controls which variant of iptables binary Felix uses.  If using Felix on a system that uses the netfilter-backed iptables binaries, set this to `NFT`. | Legacy, NFT | string | automatic detection |
@@ -105,7 +107,7 @@ spec:
 | wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
 | xdpRefreshInterval                 | Period at which Felix re-checks the XDP state in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable XDP refresh. | `5s`, `10s`, `1m` etc. | duration | `90s` |
 | xdpEnabled                         | When `bpfEnabled` is `false`: enable XDP acceleration for host endpoint policies.  When `bpfEnabled` is `true`, XDP is automatically used for Calico policy where that makes sense, regardless of this setting.  [Default: `true`] | true,false | boolean | `true` |
-| bpfEnabled                         | Enable eBPF dataplane mode.  eBPF mode has some limitations, see the [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for more details. | true, false | boolean | false |
+| bpfEnabled                         | Enable eBPF dataplane mode.  eBPF mode has some limitations, see the guide to enable eBPF [HOWTO guide]({{ site.baseurl }}/maintenance/ebpf/enabling-bpf) for more details. | true, false | boolean | false |
 | bpfDisableUnprivileged             | If true, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with the ones that {{site.prodname}} installs. | true, false | boolean | true |
 | bpfLogLevel                        | In eBPF dataplane mode, the log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`. | Off,Info,Debug | string | Off |
 | bpfDataIfacePattern                | In eBPF dataplane mode, controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).. | regular expression | string | `^(en.*|eth.*|tunl0$)` |
