@@ -57,6 +57,10 @@ global_job_config:
   - name: docker-hub
   prologue:
     commands:
+    - checkout
+    # Semaphore is doing shallow clone on a commit without tags.
+    # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
+    - git fetch --unshallow
     # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
     # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
     # how much we churn docker containers during the build.  Disable it.
@@ -78,7 +82,6 @@ blocks:
   task:
     prologue:
       commands:
-      - checkout
       - cd api
     jobs:
     - name: "make build"
@@ -99,7 +102,6 @@ blocks:
     jobs:
     - name: "libcalico-go: tests"
       commands:
-      - checkout
       - cd libcalico-go
       - make ci
 
@@ -115,12 +117,10 @@ blocks:
     jobs:
     - name: "Typha: UT and FV tests"
       commands:
-      - checkout
       - cd typha
       - make ci EXCEPT=k8sfv-test
     - name: "Typha: felix k8s-st tests with updated typha image"
       commands:
-      - checkout
       - cd typha
       - make calico/typha
       - cd ../felix
@@ -140,7 +140,6 @@ blocks:
       execution_time_limit:
         minutes: 60
       commands:
-      - checkout
       - cd felix
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
@@ -164,7 +163,6 @@ blocks:
     jobs:
     - name: "build Windows binaries"
       commands:
-      - checkout
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
 
@@ -191,7 +189,6 @@ blocks:
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install putty-tools
       - git clone git@github.com:tigera/process.git
-      - checkout
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
     epilogue:
@@ -235,7 +232,6 @@ blocks:
   task:
     prologue:
       commands:
-      - checkout
       - cd felix
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
@@ -268,7 +264,6 @@ blocks:
   task:
     prologue:
       commands:
-      - checkout
       - cd felix
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
@@ -306,7 +301,6 @@ blocks:
         os_image: ubuntu1804
     prologue:
       commands:
-      - checkout
       - cd felix
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
@@ -324,7 +318,6 @@ blocks:
   task:
     prologue:
       commands:
-      - checkout
       - cd confd
     jobs:
     - name: "confd: CI"
@@ -344,10 +337,6 @@ blocks:
         os_image: ubuntu1804
     prologue:
       commands:
-      - checkout
-      # Semaphore is doing shallow clone on a commit without tags.
-      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - git fetch --unshallow
       - cd node
     jobs:
     - name: "Node: CI"
@@ -364,13 +353,61 @@ blocks:
   task:
     prologue:
       commands:
-      - checkout
-      # Semaphore is doing shallow clone on a commit without tags.
-      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - git fetch --unshallow
       - cd kube-controllers
     jobs:
     - name: "kube-controllers: tests"
+      commands:
+      - make ci
+
+- name: "pod2daemon"
+  run:
+    when: "change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - cd pod2daemon
+    jobs:
+    - name: "tests"
+      commands:
+      - make ci
+
+- name: "app-policy"
+  run:
+    when: "change_in(['/*', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - cd app-policy
+    jobs:
+    - name: "tests"
+      commands:
+      - make ci
+
+- name: "calicoctl"
+  run:
+    when: "change_in(['/*', '/calicoctl/', '/libcalico-go/', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - cd calicoctl
+    jobs:
+    - name: "tests"
+      commands:
+      - make ci
+
+- name: "cni-plugin"
+  run:
+    when: "change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - cd cni-plugin
+    jobs:
+    - name: "tests"
       commands:
       - make ci
 
@@ -381,7 +418,6 @@ blocks:
   task:
     prologue:
       commands:
-      - checkout
       - cd calico
     jobs:
     - name: "htmlproofer, kubeval, and helm tests"
