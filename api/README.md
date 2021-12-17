@@ -16,3 +16,5 @@ One way is to import the clientset directly and use it. See [examples/list-gnp/m
    ```
    make build
    ```
+
+Test
