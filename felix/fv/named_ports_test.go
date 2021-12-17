@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -215,6 +216,17 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		applyAtOthers
 	)
 
+	bpfEnabled := false
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		bpfEnabled = true
+	}
+
+	cleanConntrack := func() {
+		if bpfEnabled {
+			felix.Exec("calico-bpf", "conntrack", "clean")
+		}
+	}
+
 	// Baseline test with no named ports policy.
 	Context("with no named port policy", func() {
 		It("should give full connectivity to and from workload 0", func() {
@@ -236,7 +248,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[1], w[0].Port(4000))
 			cc.ExpectSome(w[2], w[0].Port(4000))
 
-			cc.CheckConnectivity()
+			cc.CheckConnectivity(connectivity.CheckWithBeforeRetry(cleanConntrack))
 		})
 	})
 
@@ -378,7 +390,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[0], w[1].Port(w1Port))
 			cc.ExpectSome(w[0], w[2].Port(w2Port))
 
-			cc.CheckConnectivity(dumpResource(pol))
+			cc.CheckConnectivity(dumpResource(pol), connectivity.CheckWithBeforeRetry(cleanConntrack))
 		},
 
 		// Non-negated named port match.  The rule will allow traffic to the named port.
@@ -477,7 +489,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[3], w[0].Port(4000))       // Numeric port in list.
 			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
 
-			cc.CheckConnectivity(dumpResource(policy))
+			cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 		}
 		It("should have expected connectivity", expectBaselineConnectivity)
 
@@ -502,7 +514,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				cc.CheckConnectivity(dumpResource(policy))
+				cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 			})
 		})
 
@@ -530,7 +542,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				cc.CheckConnectivity(dumpResource(policy))
+				cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 			})
 		})
 
@@ -547,7 +559,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectNone(w[2], w[0].Port(4000))
 			cc.ExpectNone(w[2], w[0].Port(3000))
 
-			cc.CheckConnectivity(dumpResource(policy))
+			cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 		}
 
 		Describe("with "+oppositeDir+" selectors, removing w[2] and w[3]", func() {
@@ -670,7 +682,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 					cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-					cc.CheckConnectivity(dumpResource(policy))
+					cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 				})
 			})
 		})
@@ -701,7 +713,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectNone(w[3], w[0].Port(4000))       // Numeric port in NotPorts list.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change
 
-				cc.CheckConnectivity(dumpResource(policy))
+				cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 			})
 		})
 	})
