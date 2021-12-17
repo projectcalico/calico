@@ -128,7 +128,7 @@ Before attempting to create a Calico release you must do the following.
 ## Preparing to cut a Calico release
 
 1. Check out the `master` branch of this repository and make sure it is up-to-date
-   and [passing Semaphore CI](https://semaphoreci.com/calico/calico/branches/master).
+   and [passing Semaphore CI](https://tigera.semaphoreci.com/projects/calico).
 
    ```
    git checkout master && git pull origin master
