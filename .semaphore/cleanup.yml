@@ -1,5 +1,5 @@
 version: v1.0
-name: Felix
+name: Cleanup external VMs
 agent:
   machine:
     type: e1-standard-2

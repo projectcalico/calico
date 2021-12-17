@@ -2,3 +2,5 @@
 report/
 bin/
 *.created*
+.idea
+*.log
