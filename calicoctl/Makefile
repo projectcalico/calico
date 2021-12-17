@@ -218,7 +218,7 @@ run-kubernetes-master: stop-kubernetes-master
 	docker run --net=host --detach \
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
 		-v $(CURDIR):/code \
-		-v `pwd`/tests/certs:/home/user/certs \
+		-v $(CURDIR)/tests/certs:/home/user/certs \
 		-e KUBECONFIG=/home/user/certs/kubeconfig \
 		${CALICO_BUILD} kube-apiserver \
 			--secure-port=${KUBE_APISERVER_PORT} \

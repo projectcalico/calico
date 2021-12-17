@@ -271,12 +271,7 @@ stop-etcd:
 # We pre-build the test binary so that we can run it outside a container and allow it
 # to interact with docker.
 pkg/install/install.test: pkg/install/*.go
-	-mkdir -p .go-pkg-cache
-	docker run --rm \
-	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd /go/src/$(PACKAGE_NAME) && \
 			go test ./pkg/install -c --tags install_test -o ./pkg/install/install.test'
 
