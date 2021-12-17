@@ -376,13 +376,13 @@ blocks:
 
 - name: "Documentation"
   run:
-    when: "change_in('/calico/')"
+    when: "change_in('/docs/')"
   dependencies: []
   task:
     prologue:
       commands:
       - checkout
-      - cd calico
+      - cd docs
     jobs:
     - name: "htmlproofer, kubeval, and helm tests"
       commands:
