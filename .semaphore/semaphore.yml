@@ -125,6 +125,22 @@ blocks:
       - make calico/typha
       - cd ../felix
       - JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=calico/typha:latest TYPHA_VERSION=latest make k8sfv-test
+    epilogue:
+      always:
+        commands:
+        - |
+          for f in /home/semaphore/calico/typha/report/*; do
+            NAME=$(basename $f)
+            test-results compile --name typha-$NAME $f $NAME.json || true
+          done
+          for f in /home/semaphore/calico/typha/pkg/report/*; do
+            NAME=$(basename $f)
+            test-results compile --name typha-$NAME $f $NAME.json || true
+          done
+          test-results combine *.xml.json report.json || true
+          artifact push job report.json -d test-results/junit.json || true
+          artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
+        - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
 
 - name: "Felix: Build"
   run:
@@ -256,6 +272,7 @@ blocks:
         commands:
         - ./.semaphore/collect-artifacts
         - ./.semaphore/publish-artifacts
+        - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
@@ -345,6 +362,11 @@ blocks:
     - name: "Node: k8s-test"
       commands:
       - make k8s-test
+    epilogue:
+      always:
+        commands:
+        - test-results publish ./report/nosetests.xml --name "node-ci" || true
+        - test-results publish ./report/k8s-tests.xml --name "node-k8s-test" || true
 
 - name: "kube-controllers: Tests"
   run:
@@ -422,6 +444,13 @@ blocks:
     jobs:
     - name: "htmlproofer, kubeval, and helm tests"
       commands:
-      - make htmlproofer 
+      - make htmlproofer
       - make kubeval
       - make helm-tests
+
+after_pipeline:
+  task:
+    jobs:
+    - name: Reports
+      commands:
+        - test-results gen-pipeline-report --force
