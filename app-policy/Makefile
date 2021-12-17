@@ -115,6 +115,7 @@ PROTOC_IMPORTS =  -I proto\
 		  -I ./
 
 proto: proto/felixbackend.pb.go proto/healthz.pb.go
+	$(MAKE) fix
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN) -v $(CURDIR):/src:rw \
