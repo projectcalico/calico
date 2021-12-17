@@ -1,0 +1,18 @@
+#!/bin/sh
+exec 2>&1
+# Felix doesn't understand NODENAME, but the container exports it as a common
+# interface. This ensures Felix gets the right name for the node.
+if [ ! -z $NODENAME ]; then
+    export FELIX_FELIXHOSTNAME=$NODENAME
+fi
+export FELIX_ETCDADDR=$ETCD_AUTHORITY
+export FELIX_ETCDENDPOINTS=$ETCD_ENDPOINTS
+export FELIX_ETCDSCHEME=$ETCD_SCHEME
+export FELIX_ETCDCAFILE=$ETCD_CA_CERT_FILE
+export FELIX_ETCDKEYFILE=$ETCD_KEY_FILE
+export FELIX_ETCDCERTFILE=$ETCD_CERT_FILE
+# Felix hangs if DATASTORETYPE is empty: see projectcalico/felix issue #1156.
+if [ ! -z $DATASTORE_TYPE ]; then
+    export FELIX_DATASTORETYPE=$DATASTORE_TYPE
+fi
+exec calico-node -felix 

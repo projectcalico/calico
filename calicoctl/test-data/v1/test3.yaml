@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: policy
+metadata:
+  name: policy1
+spec:
+  order: 100
+  ingress:
+  - action: deny
+    source: 
+      selector: type=='application'
+  selector: type=='database'
