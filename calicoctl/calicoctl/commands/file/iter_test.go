@@ -15,6 +15,8 @@
 package file_test
 
 import (
+	"strings"
+
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/file"
 
 	"errors"
@@ -98,6 +100,16 @@ var _ = Describe("File and directory iteration", func() {
 		// Reset the callback invocations and test error
 		invocations = nil
 		testError = nil
+
+		// Remove leading . in path to allow for simpler comparison.
+		fname = strings.TrimPrefix(fname, "./")
+		dname = strings.TrimPrefix(dname, "./")
+		dfname1 = strings.TrimPrefix(dfname1, "./")
+		dfname2 = strings.TrimPrefix(dfname2, "./")
+		dfname3 = strings.TrimPrefix(dfname3, "./")
+		df2name1 = strings.TrimPrefix(df2name1, "./")
+		df2name2 = strings.TrimPrefix(df2name2, "./")
+		df2name3 = strings.TrimPrefix(df2name3, "./")
 	})
 
 	AfterEach(func() {
@@ -129,7 +141,11 @@ var _ = Describe("File and directory iteration", func() {
 				count = 2
 			} else {
 				Expect(invocations[i]).To(HaveKey("--filename"))
-				Expect(invocations[i]["--filename"]).To(BeElementOf(expected))
+
+				// Trim leading ./ (if any) for easier comparison.
+				fn := invocations[i]["--filename"].(string)
+				fn = strings.TrimPrefix(fn, "./")
+				Expect(fn).To(BeElementOf(expected))
 				count = 3
 			}
 			if recursive {
