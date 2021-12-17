@@ -1,5 +1,4 @@
 // Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
-// Copyright 2017 The Kubernetes Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,18 +18,15 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/kubernetes/pkg/printers"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
-// AddHandlers adds print handlers for projectcalico types.
-func AddHandlers(h printers.PrintHandler) {
+func CalicoNodeStatusAddHandlers(h printers.PrintHandler) {
 	calicoNodeStatusColumnDefinitions := []metav1.TableColumnDefinition{
 		{Name: "Name", Type: "string", Format: "name", Description: metav1.ObjectMeta{}.SwaggerDoc()["name"]},
 		{Name: "Node", Type: "string", Priority: 0, Description: "The node name identifies the Calico node instance for node status."},
@@ -39,8 +35,10 @@ func AddHandlers(h printers.PrintHandler) {
 		{Name: "Age", Type: "string", Description: metav1.ObjectMeta{}.SwaggerDoc()["creationTimestamp"]},
 		{Name: "last Updated", Type: "string", Description: "Last time the status has been updated"},
 		{Name: "Agent State", Type: "string", Priority: 1, Description: "The state of the BGP Daemon."},
-		{Name: "BGP Peers", Type: "string", Priority: 1, Description: "Number of BGP Peers in the format of total/established/non-established."},
-		{Name: "BGP Routes", Type: "string", Priority: 1, Description: "Number of routes learned from BGP peers."},
+		{Name: "ESTABLISHED-V4", Type: "string", Priority: 1, Description: "Number of V4 BGP Peers in the format of established/total."},
+		{Name: "ESTABLISHED-V6", Type: "string", Priority: 1, Description: "Number of V6 BGP Peers in the format of established/total."},
+		{Name: "NUM-V4-ROUTES", Type: "string", Priority: 1, Description: "Number of V4 routes learned from BGP peers."},
+		{Name: "NUM-V6-ROUTES", Type: "string", Priority: 1, Description: "Number of V6 routes learned from BGP peers."},
 	}
 	h.TableHandler(calicoNodeStatusColumnDefinitions, printCalicoNodeStatusList)
 	h.TableHandler(calicoNodeStatusColumnDefinitions, printCalicoNodeStatus)
@@ -77,7 +75,7 @@ func printCalicoNodeStatus(status *calico.CalicoNodeStatus, options printers.Gen
 	for _, class := range status.Spec.Classes {
 		classes += fmt.Sprintf("%s,", class)
 	}
-	classesStr := fmt.Sprintf("[%s]", strings.TrimSuffix(classes, ","))
+	classesStr := fmt.Sprintf("%s", strings.TrimSuffix(classes, ","))
 
 	var lastUpdatedStr string
 	lastUpdatedDate := status.Status.LastUpdated
@@ -105,16 +103,14 @@ func printCalicoNodeStatus(status *calico.CalicoNodeStatus, options printers.Gen
 			}
 		}
 
-		var peersStr string
+		var V4PeersStr, V6PeersStr string
 		if hasClass(calico.NodeStatusClassTypeBGP) {
 			bgp := status.Status.BGP
 			if !reflect.ValueOf(bgp.PeersV4).IsZero() {
-				peersStr = fmt.Sprintf("v4(%d/%d/%d) ",
-					len(bgp.PeersV4), bgp.NumberEstablishedV4, bgp.NumberNotEstablishedV4)
+				V4PeersStr = fmt.Sprintf("%d/%d", bgp.NumberEstablishedV4, len(bgp.PeersV4))
 			}
 			if !reflect.ValueOf(bgp.PeersV6).IsZero() {
-				peersStr += fmt.Sprintf("v6(%d/%d/%d) ",
-					len(bgp.PeersV6), bgp.NumberEstablishedV6, bgp.NumberNotEstablishedV6)
+				V6PeersStr = fmt.Sprintf("%d/%d", bgp.NumberEstablishedV6, len(bgp.PeersV6))
 			}
 		}
 
@@ -129,41 +125,19 @@ func printCalicoNodeStatus(status *calico.CalicoNodeStatus, options printers.Gen
 			return n
 		}
 
-		var routesStr string
+		var V4RoutesStr, V6RoutesStr string
 		if hasClass(calico.NodeStatusClassTypeRoutes) {
 			routes := status.Status.Routes
 			if !reflect.ValueOf(routes.RoutesV4).IsZero() {
-				routesStr = fmt.Sprintf("v4(%d) ", getNumberOfBGPRoutes(routes.RoutesV4))
+				V4RoutesStr = fmt.Sprintf("%d", getNumberOfBGPRoutes(routes.RoutesV4))
 			}
 			if !reflect.ValueOf(routes.RoutesV6).IsZero() {
-				routesStr += fmt.Sprintf("v6(%d)", getNumberOfBGPRoutes(routes.RoutesV6))
+				V6RoutesStr = fmt.Sprintf("%d", getNumberOfBGPRoutes(routes.RoutesV6))
 			}
 		}
 
-		row.Cells = append(row.Cells, agentStateStr, peersStr, routesStr)
+		row.Cells = append(row.Cells, agentStateStr, V4PeersStr, V6PeersStr, V4RoutesStr, V6RoutesStr)
 	}
 
 	return []metav1.TableRow{row}, nil
-}
-
-// The followings are helper functions copied from k8s.io/kubernetes
-
-// translateTimestampSince returns the elapsed time since timestamp in
-// human-readable approximation.
-func translateTimestampSince(timestamp metav1.Time) string {
-	if timestamp.IsZero() {
-		return "<unknown>"
-	}
-
-	return duration.HumanDuration(time.Since(timestamp.Time))
-}
-
-// translateTimestampUntil returns the elapsed time until timestamp in
-// human-readable approximation.
-func translateTimestampUntil(timestamp metav1.Time) string {
-	if timestamp.IsZero() {
-		return "<unknown>"
-	}
-
-	return duration.HumanDuration(time.Until(timestamp.Time))
 }

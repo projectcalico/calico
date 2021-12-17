@@ -89,7 +89,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		Storage:     storageInterface,
 		DestroyFunc: dFunc,
 
-		TableConvertor: printerstorage.TableConvertor{TableGenerator: printers.NewTableGenerator().With(calicoprinter.AddHandlers)},
+		TableConvertor: printerstorage.TableConvertor{TableGenerator: printers.NewTableGenerator().With(calicoprinter.CalicoNodeStatusAddHandlers)},
 	}
 
 	return &REST{store, opts.ShortNames}, nil
