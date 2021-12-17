@@ -26,6 +26,8 @@ blocks:
       - name: quay-robot-calico+semaphoreci
       - name: docker
       jobs:
-      - name: "node"
+      # The node build takes a long time due to some architectures, so we split it up.
+      # TODO: Add support for other architectures
+      - name: "amd64"
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image-all cd CONFIRM=true; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make VALIDARCHES=amd64 -C node image-all cd CONFIRM=true; fi
