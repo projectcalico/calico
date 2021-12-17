@@ -42,6 +42,7 @@ for batch in "${batches[@]}"; do
     pids+=( $pid )
   else
     (
+      sleep $(( RANDOM * 60 / 32767 ))
       echo "===== Test batch $batch; non-BPF tests =====" &&
       echo &&
       VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=calico/${REPO_NAME} fv FV_NUM_BATCHES=${num_fv_batches} FV_BATCHES_TO_RUN="$batch" &&

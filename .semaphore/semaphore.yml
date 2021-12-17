@@ -243,7 +243,7 @@ blocks:
       - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
       - echo VM_PREFIX=${VM_PREFIX}
       - export REPO_NAME=$(basename $(pwd))
-      - export NUM_FV_BATCHES=16
+      - export NUM_FV_BATCHES=12
       - mkdir artifacts
       - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
