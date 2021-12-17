@@ -228,39 +228,6 @@ blocks:
       - name: BACKEND
         value: bgp
 
-- name: "Felix: FV Tests"
-  run:
-    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
-  dependencies: ["Felix: Build"]
-  task:
-    prologue:
-      commands:
-      - checkout
-      - cd felix
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
-      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
-      - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
-      - docker load -i /tmp/calico-felix.tar
-      - rm /tmp/calico-felix.tar
-      - touch bin/*
-      # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
-      # routing in that first felix container chooses different source IPs than the tests are expecting.
-      - sudo modprobe ipip
-    jobs:
-    - name: FV Test matrix
-      execution_time_limit:
-        minutes: 120
-      commands:
-      - make check-wireguard
-      - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
-      parallelism: 3
-    epilogue:
-      always:
-        commands:
-        - ./.semaphore/collect-artifacts
-        - ./.semaphore/publish-artifacts
-
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
     when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
