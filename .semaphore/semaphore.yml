@@ -75,7 +75,7 @@ blocks:
 
 - name: "API"
   run:
-    when: "change_in('/api/')"
+    when: "change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
   dependencies: []
@@ -96,7 +96,7 @@ blocks:
 
 - name: "libcalico-go"
   run:
-    when: "change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     jobs:
@@ -107,7 +107,7 @@ blocks:
 
 - name: "Typha"
   run:
-    when: "change_in('/api/') or change_in('/libcalico-go/') or change_in('/typha/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     agent:
@@ -128,7 +128,7 @@ blocks:
 
 - name: "Felix: Build"
   run:
-    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     agent:
@@ -157,7 +157,7 @@ blocks:
 
 - name: "Felix: Build Windows binaries"
   run:
-    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     jobs:
@@ -168,7 +168,7 @@ blocks:
 
 - name: "Felix: Windows FV"
   run:
-    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -227,7 +227,7 @@ blocks:
 
 - name: "Felix: FV Tests"
   run:
-    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build"]
   task:
     prologue:
@@ -259,7 +259,7 @@ blocks:
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
-    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     prologue:
@@ -291,7 +291,7 @@ blocks:
 
 - name: "Felix: Static checks on e1-standard-8"
   run:
-    when: "change_in('/felix/') or change_in('/typha/') or change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     agent:
@@ -313,7 +313,7 @@ blocks:
 
 - name: "confd: tests"
   run:
-    when: "change_in('/confd/') or change_in('/libcalico-go') or change_in('/api/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/confd/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     prologue:
@@ -328,7 +328,7 @@ blocks:
 
 - name: "Node: Tests"
   run:
-    when: "change_in('/node/') or change_in('/felix/') or change_in('/api/') or change_in('/libcalico-go/') or change_in('/confd/') or change_in('/bird/') or change_in('/pod2daemon/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     agent:
@@ -348,7 +348,7 @@ blocks:
 
 - name: "kube-controllers: Tests"
   run:
-    when: "change_in('/kube-controllers/') or change_in('/api/') or change_in('/libcalico-go/')"
+    when: "change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     prologue:
@@ -413,7 +413,7 @@ blocks:
 
 - name: "Documentation"
   run:
-    when: "change_in('/calico/')"
+    when: "change_in(['/*', '/calico/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: []
   task:
     prologue:
