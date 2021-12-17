@@ -2624,7 +2624,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										felixes[0].Exec("ip", "link", "add", "dummy1", "type", "dummy")
 										felixes[0].Exec("ip", "link", "set", "dummy1", "up")
 										// set up route to the .20 net through the dummy iface. This
-										// makes the .20 a universaly reachable external world from the
+										// makes the .20 a universally reachable external world from the
 										// internal/private eth0 network
 										felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "dummy1")
 										// This multi-NIC scenario works only if the kernel's RPF check

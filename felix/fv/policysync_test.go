@@ -286,7 +286,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 						doChurn := func(wlIndexes ...int) {
 							for i := 0; i < 100; i++ {
 								wlIdx := wlIndexes[i%len(wlIndexes)]
-								By(fmt.Sprintf("Churn %d; targetting workload %d", i, wlIdx))
+								By(fmt.Sprintf("Churn %d; targeting workload %d", i, wlIdx))
 
 								policy := api.NewGlobalNetworkPolicy()
 								policy.SetName("policy-0")

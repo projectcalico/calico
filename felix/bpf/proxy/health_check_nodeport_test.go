@@ -102,7 +102,7 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("checking that the healthCheckNodePort is accessable", func() {
+		By("checking that the healthCheckNodePort is accessible", func() {
 			Eventually(func() error {
 				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
 				if err != nil {

@@ -1116,7 +1116,7 @@ func (w *Wireguard) constructWireguardDeltaFromNodeUpdates(conflictingKeys set.S
 					wgpeer.AllowedIPs = peer.allowedCidrsForWireguard()
 					updatePeer = true
 				} else if update.cidrsAdded.Len() > 0 {
-					logCxt.Debug("Peer programmmed, no CIDRs deleted and CIDRs added")
+					logCxt.Debug("Peer programmed, no CIDRs deleted and CIDRs added")
 					wgpeer.AllowedIPs = make([]net.IPNet, 0, update.cidrsAdded.Len())
 					update.cidrsAdded.Iter(func(item interface{}) error {
 						wgpeer.AllowedIPs = append(wgpeer.AllowedIPs, item.(ip.CIDR).ToIPNet())
