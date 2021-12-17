@@ -2,8 +2,8 @@
 router id @MY_IPV4_ADDRESS@;
 
 # We are only going to export routes from Calico interfaces.
-# Currently, 'tap*' is used by the OpenStack implimentation
-# and 'cali*' is used by the docker implimentation.
+# Currently, 'tap*' is used by the OpenStack implementation
+# and 'cali*' is used by the docker implementation.
 # dummy1 is the interface that bare metal "service" addresses
 # should be bound to if they should be exported.
 # This will need to be updated as we add new interface names.

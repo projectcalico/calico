@@ -31,7 +31,7 @@ import (
 // -  Wireguard peer configuration
 //
 // The wireguard component implements the routetable interface and so dataplane programming is triggered through calls
-// to the Apply method, with periodic resyncs occuring after calls to QueueResync. Calls from the main OnUpdate method
+// to the Apply method, with periodic resyncs occurring after calls to QueueResync. Calls from the main OnUpdate method
 // call through to the various update methods on the wireguard module which simply record state without actually
 // programming.
 type wireguardManager struct {
