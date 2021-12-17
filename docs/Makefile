@@ -1,6 +1,6 @@
 include ../metadata.mk
 
-CALICO_DIR=$(shell git rev-parse --show-toplevel)/calico
+CALICO_DIR=$(shell git rev-parse --show-toplevel)/docs
 GIT_HASH=$(shell git rev-parse --short=9 HEAD)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 JEKYLL_VERSION=pages
@@ -20,7 +20,7 @@ endif
 include ../metadata.mk
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
-PACKAGE_NAME = github.com/projectcalico/calico/calico
+PACKAGE_NAME = github.com/projectcalico/calico/docs
 
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yq.v2"
@@ -253,7 +253,7 @@ release-publish: release-prereqs $(UPLOAD_DIR)
 	$(MAKE) helm-index
 	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
-	@echo "  https://github.com/projectcalico/calico/calico/releases/tag/$(CALICO_VER)"
+	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
