@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // Copyright (c) 2020 Tigera, Inc. All rights reserved.
