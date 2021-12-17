@@ -1,0 +1,10 @@
+[template]
+src = "bird6.cfg.template"
+dest = "/etc/calico/confd/config/bird6.cfg"
+prefix = "/calico/bgp/v1"
+keys = [
+    "/host",
+    "/global",
+]
+check_cmd = "bird6 -p -c {{.src}}"
+reload_cmd = "sv hup bird6 || true"

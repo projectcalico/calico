@@ -1,0 +1,12 @@
+{
+  "cniVersion": "0.3.1", 			  
+  "name": "net1",
+  "type": "calico",
+  "log_level": "INFO",
+  "etcd_authority": "1.2.3.4:2379",
+  "etcd_endpoints": "http://127.0.0.1:2379",
+  "ipam": {
+    "type": "host-local",
+    "subnet": "10.0.0.0/8"
+  }
+}
