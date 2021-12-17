@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build nobuild
+//go:build nobuild
 
 // This file is just here to make sure that `go mod tidy` know that we really do depend on kind.
 
