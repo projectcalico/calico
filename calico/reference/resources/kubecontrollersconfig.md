@@ -6,8 +6,10 @@ canonical_url: '/reference/resources/kubecontrollersconfig'
 
 A {{site.prodname}} [Kubernetes controllers]({{ site.baseurl }}/reference/kube-controllers/configuration) configuration resource (`KubeControllersConfiguration`) represents configuration options for the {{site.prodname}} Kubernetes controllers.
 
+{%- if site.include_calicoctl_resource %}
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `kubecontrollersconfiguration`, `kubecontrollersconfig`.
+{%- endif %}
 
 ### Sample YAML
 
@@ -46,7 +48,7 @@ spec:
 |-------|-----------------------------------------------------------|-------------------|--------|
 | name  | Unique name to describe this resource instance. Required. | Must be `default` | string |
 
-- {{site.prodname}} automatically creates a resource named `default` containing the configuration settings, only the name `default` is used and only one object of this type is allowed. You can use [calicoctl]({{ site.baseurl }}/reference/calicoctl/overview) to view and edit these settings
+- {{site.prodname}} automatically creates a resource named `default` containing the configuration settings, only the name `default` is used and only one object of this type is allowed. {%- if site.include_calicoctl_resource %}You can use [calicoctl]({{ site.baseurl }}/reference/calicoctl/overview) to view and edit these settings.{%- endif %}
 
 
 #### Spec

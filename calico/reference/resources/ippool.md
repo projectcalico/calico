@@ -7,8 +7,10 @@ canonical_url: '/reference/resources/ippool'
 An IP pool resource (`IPPool`) represents a collection of IP addresses from which {{site.prodname}} expects
 endpoint IPs to be assigned.
 
+{%- if site.include_calicoctl_resource %}
 For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/overview) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `ippool`, `ippools`, `ipp`, `ipps`, `pool`, `pools`.
+{%- endif %}
 
 ### Sample YAML
 
@@ -76,8 +78,7 @@ is in an IP Pool that has IPIP enabled.  In addition, if the `ipipMode` is set t
 subnet. The subnet of each node is configured on the node resource (which may be automatically
 determined when running the `{{site.nodecontainer}}` service).
 
-For details on configuring IP-in-IP on your deployment, please refer to
-[Configuring IP-in-IP]({{ site.baseurl }}/networking/vxlan-ipip).
+For details on configuring IP-in-IP on your deployment, please refer to [Configuring IP-in-IP]({{ site.baseurl }}/networking/vxlan-ipip).
 
 
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `ipip` enabled.
@@ -97,7 +98,7 @@ determined when running the `{{site.nodecontainer}}` service).
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `vxlan` enabled.
 When `vxlan` is enabled without `natOutgoing` routing between Workloads and
 Hosts running {{site.prodname}} is asymmetric and may cause traffic to be filtered due to
-[RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding){:target="_blank"} checks failing.
+[RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding) checks failing.
 {: .alert .alert-info}
 
 #### Block sizes
@@ -110,8 +111,7 @@ Reducing the block size from the default (e.g., using `28` for IPv4 to give 16 a
 
 #### Node Selector
 
-For details on configuring IP pool node selectors, please read the
-[Assign IP addresses based on topology guide.]({{ site.baseurl }}/networking/assign-ip-addresses-topology).
+For details on configuring IP pool node selectors, please read the [Assign IP addresses based on topology guide.]({{ site.baseurl }}/networking/assign-ip-addresses-topology).
 
 > **Tip**: To prevent an IP pool from being used automatically by {{site.prodname}} IPAM, while still allowing
 > it to be used manually for static assignments, set the `IPPool`'s `nodeSelector` to `!all()`. Since the selector 
