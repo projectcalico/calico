@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	FelixRouteProtocol = syscall.RTPROT_BOOT
+	FelixRouteProtocol = netlink.RouteProtocol(syscall.RTPROT_BOOT)
 
 	mac1 = testutils.MustParseMAC("00:11:22:33:44:51")
 	mac2 = testutils.MustParseMAC("00:11:22:33:44:52")
@@ -67,7 +67,7 @@ var _ = Describe("RouteTable v6", func() {
 			dataplane,
 			t,
 			nil,
-			FelixRouteProtocol,
+			int(FelixRouteProtocol),
 			true,
 			0,
 			logutils.NewSummarizer("test"),
@@ -121,7 +121,7 @@ var _ = Describe("RouteTable", func() {
 			dataplane,
 			t,
 			nil,
-			FelixRouteProtocol,
+			int(FelixRouteProtocol),
 			true,
 			0,
 			logutils.NewSummarizer("test"),
@@ -263,7 +263,7 @@ var _ = Describe("RouteTable", func() {
 					dataplane,
 					t,
 					deviceRouteSourceAddress,
-					FelixRouteProtocol,
+					int(FelixRouteProtocol),
 					true,
 					0,
 					logutils.NewSummarizer("test"),
@@ -368,7 +368,7 @@ var _ = Describe("RouteTable", func() {
 		})
 
 		Describe("With a device route protocol set", func() {
-			deviceRouteProtocol := 10
+			deviceRouteProtocol := netlink.RouteProtocol(10)
 			// Modify the route table to have the device route source address set
 			BeforeEach(func() {
 				rt = NewWithShims(
@@ -381,7 +381,7 @@ var _ = Describe("RouteTable", func() {
 					dataplane,
 					t,
 					nil,
-					deviceRouteProtocol,
+					int(deviceRouteProtocol),
 					true,
 					0,
 					logutils.NewSummarizer("test"),
@@ -995,7 +995,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			dataplane,
 			t,
 			nil,
-			FelixRouteProtocol,
+			int(FelixRouteProtocol),
 			true,
 			0,
 			logutils.NewSummarizer("test"),
@@ -1094,7 +1094,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			dataplane,
 			t,
 			nil,
-			FelixRouteProtocol,
+			int(FelixRouteProtocol),
 			true,
 			100,
 			logutils.NewSummarizer("test"),
@@ -1301,7 +1301,7 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 				dataplane,
 				t,
 				nil,
-				FelixRouteProtocol,
+				int(FelixRouteProtocol),
 				true,
 				100,
 				logutils.NewSummarizer("test"),

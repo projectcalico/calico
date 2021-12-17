@@ -20,7 +20,7 @@ BUILD_IMAGES   ?=$(TYPHA_IMAGE)
 CGO_ENABLED=0
 
 # Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
+LOCAL_CHECKS=
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -117,11 +117,6 @@ endif
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage
-
-check-boring-ssl: bin/calico-typha-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm bin/calico-typha-amd64 > bin/tags.txt && grep '_Cfunc__goboringcrypto_' bin/tags.txt 1> /dev/null
-	-rm -f bin/tags.txt
 
 ###############################################################################
 # CI/CD

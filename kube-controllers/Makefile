@@ -9,7 +9,7 @@ BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 DEV_REGISTRIES          ?=docker.io quay.io
 
 # Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
+LOCAL_CHECKS=
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -104,11 +104,6 @@ remote-deps: mod-download
 # Make sure that a copyright statement exists on all go files.
 check-copyright:
 	./check-copyrights.sh
-
-check-boring-ssl: bin/kube-controllers-linux-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm bin/kube-controllers-linux-amd64 > bin/tags.txt && grep '_Cfunc__goboringcrypto_' bin/tags.txt 1> /dev/null
-	-rm -f bin/tags.txt
 
 ###############################################################################
 # Tests
