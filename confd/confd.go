@@ -1,3 +1,4 @@
+// copyright
 package main
 
 import (
