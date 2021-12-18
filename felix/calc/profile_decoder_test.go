@@ -197,6 +197,14 @@ func labelsKV(name string, labels map[string]string) model.KVPair {
 	}
 }
 
+func (p *passthruCallbackRecorder) OnServiceUpdate(_ *proto.ServiceUpdate) {
+	Fail("OnServiceUpdate received")
+}
+
+func (p *passthruCallbackRecorder) OnServiceRemove(_ *proto.ServiceRemove) {
+	Fail("OnServiceRemove received")
+}
+
 func addUpdate(name string, labels map[string]string) api.Update {
 	return api.Update{
 		KVPair:     labelsKV(name, labels),
