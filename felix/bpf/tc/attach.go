@@ -181,21 +181,24 @@ func (ap AttachPoint) AttachProgram() (string, error) {
 	logCxt.Debugf("Continue with attaching BPF program %s", ap.FileName())
 
 	if err := obj.Load(); err != nil {
+		logCxt.Warn("Failed to load program")
 		return "", fmt.Errorf("error loading program: %w", err)
 	}
 
 	isHost := false
-	if ap.Type == "host" {
+	if ap.Type == "host" || ap.Type == "nat" {
 		isHost = true
 	}
 
 	err = updateJumpMap(obj, isHost, ap.IPv6Enabled)
 	if err != nil {
+		logCxt.Warn("Failed to update jump map")
 		return "", fmt.Errorf("error updating jump map %v", err)
 	}
 
 	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, string(ap.Hook))
 	if err != nil {
+		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
 		return "", err
 	}
 	logCxt.Info("Program attached to TC.")

@@ -212,7 +212,7 @@ skip_fib:
 		 * XXX those devices where we expect them before we even decap.
 		 */
 		if (CALI_F_FROM_HEP && state->tun_ip != 0 && ctx->fwd.mark != CALI_SKB_MARK_BYPASS_FWD) {
-			ctx->fwd.mark = CALI_SKB_MARK_SKIP_RPF;
+			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_RPF;
 		}
 		/* Packet is towards host namespace, mark it so that downstream
 		 * programs know that they're not the first to see the packet.
@@ -222,13 +222,33 @@ skip_fib:
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL\n");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
 		}
-		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", ctx->fwd.mark);
+
+		if (CALI_F_NAT_IF) {
+			/* Only we route stuff via this iface and it is from local host to a
+			 * service.
+			 *
+			 * XXX we may check to make sure ourselves that it is from local host
+			 */
+			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_RPF;
+			/* We mark the packet so that next iface knows, it went through
+			 * bpfnatout - if it gets (S)NATed, a new connection is created
+			 * and we know that returning packets must go via bpfnatout again.
+			 */
+			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
+		}
+
+		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.\n", ctx->fwd.mark);
+
 		/* FIXME: this ignores the mask that we should be using.
 		 * However, if we mask off the bits, then clang spots that it
 		 * can do a 16-bit store instead of a 32-bit load/modify/store,
 		 * which trips up the validator.
 		 */
 		ctx->skb->mark = ctx->fwd.mark; /* make sure that each pkt has SEEN mark */
+	} else if (CALI_F_NAT_IF) {
+		__u32 mark = CALI_SKB_MARK_SEEN | CALI_SKB_MARK_SKIP_RPF;
+		CALI_DEBUG("Setting mark to 0x%x\n", mark);
+		ctx->skb->mark = mark;
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
