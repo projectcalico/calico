@@ -219,9 +219,9 @@ func (e ErrorPolicyConversionRule) String() string {
 
 	switch {
 	case e.EgressRule != nil:
-		fieldString = fmt.Sprintf("%v", e.EgressRule)
+		fieldString = fmt.Sprintf("%+v", e.EgressRule)
 	case e.IngressRule != nil:
-		fieldString = fmt.Sprintf("%v", e.IngressRule)
+		fieldString = fmt.Sprintf("%+v", e.IngressRule)
 	default:
 		fieldString = "unknown rule"
 	}
