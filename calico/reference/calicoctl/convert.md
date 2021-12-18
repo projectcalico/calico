@@ -28,7 +28,7 @@ Usage:
                 [--output=<OUTPUT>] [--ignore-validation]
 
 Examples:
-  # Convert the contents of policy.yaml to v3 policy.
+  # Convert the contents of policy.yaml to a Calico v3 policy.
   calicoctl convert -f ./policy.yaml -o yaml
 
   # Convert a policy based on the JSON passed into stdin.
@@ -44,15 +44,18 @@ Options:
 
 
 Description:
-  Convert config files from Calico v1 to v3 API versions. Both YAML and JSON formats are accepted.
+  Convert config files from Calico v1 or Kubernetes to Calico v3 API versions. Both YAML and JSON formats are accepted.
 
   The default output will be printed to stdout in YAML format.
 ```
 {: .no-select-button}
 
+> **Note:** Currently the only Kubernetes API resource supported for conversion is NetworkPolicy.
+{: .alert .alert-info}
+
 ### Examples
 
-1. Convert a set of resources (of mixed type) from Calico v1 to v3 APIs using the data in resources.yaml.
+1. Convert a set of resources (of mixed type) from Calico v1 or Kubernetes to Calico v3 APIs using the data in resources.yaml.
 
    ```bash
    calicoctl convert -f multi-resource-v1.yaml -o yaml > multi-resource-v3.yaml
