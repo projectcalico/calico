@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,15 +20,20 @@ import (
 
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
+	networkingv1 "k8s.io/api/networking/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/v1resourceloader"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/resourceloader"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+
+	k8sconvert "github.com/projectcalico/calico/libcalico-go/lib/apis/k8sconvert"
+	cconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
@@ -88,18 +93,19 @@ Description:
 
 	filename := argutils.ArgStringOrBlank(parsedArgs, "--filename")
 
-	// Load the V1 resource from file and convert to a slice
+	// Load the resource from file and convert to a slice
 	// of resources for easier handling.
-	resV1, err := v1resourceloader.CreateResourcesFromFile(filename)
+	convRes, err := resourceloader.CreateResourcesFromFile(filename)
 	if err != nil {
 		return fmt.Errorf("Failed to execute command: %v", err)
 	}
 
 	var results []runtime.Object
-	for _, v1Resource := range resV1 {
-		v3Resource, err := convertResource(v1Resource)
+
+	for _, convResource := range convRes {
+		v3Resource, err := convertResource(convResource)
 		if err != nil {
-			return fmt.Errorf("Failed to execute command: %v", err)
+			return fmt.Errorf("Failed to execute command: %w", err)
 		}
 
 		// Remove any extra metadata the object might have.
@@ -134,23 +140,78 @@ Description:
 }
 
 // convertResource converts v1 resource into a v3 resource.
-func convertResource(v1resource unversioned.Resource) (converters.Resource, error) {
-	// Get the type converter for the v1 resource.
-	convRes, err := getTypeConverter(v1resource.GetTypeMetadata().Kind)
-	if err != nil {
-		return nil, err
+func convertResource(convResource unversioned.Resource) (converters.Resource, error) {
+	var res converters.Resource
+
+	if strings.ToLower(convResource.GetTypeMetadata().APIVersion) == strings.ToLower(k8sconvert.VersionK8sNetworkingV1) {
+		// Convert K8s resource to v3 (currently only NetworkPolicy is supported)
+		var err error
+
+		res, err = convertK8sResource(convResource)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Get the type converter for the v1 resource.
+		convRes, err := getTypeConverter(convResource.GetTypeMetadata().Kind)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert v1 API resource to v1 backend KVPair.
+		kvp, err := convRes.APIV1ToBackendV1(convResource)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert v1 backend KVPair to v3 API resource.
+		res, err = convRes.BackendV1ToAPIV3(kvp)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Convert v1 API resource to v1 backend KVPair.
-	kvp, err := convRes.APIV1ToBackendV1(v1resource)
-	if err != nil {
-		return nil, err
-	}
+	return res, nil
+}
 
-	// Convert v1 backend KVPair to v3 API resource.
-	res, err := convRes.BackendV1ToAPIV3(kvp)
-	if err != nil {
-		return nil, err
+// Convert K8s resource to v3 (currently only NetworkPolicy is supported)
+func convertK8sResource(convResource unversioned.Resource) (converters.Resource, error) {
+	var res converters.Resource
+
+	k8sResKind := convResource.GetTypeMetadata().Kind
+
+	switch strings.ToLower(k8sResKind) {
+	case "networkpolicy":
+		k8sNetworkPolicy, ok := convResource.(*k8sconvert.K8sNetworkPolicy)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert resource to K8sNetworkPolicy")
+		}
+
+		np := networkingv1.NetworkPolicy{
+			TypeMeta:   k8sNetworkPolicy.Metadata.TypeMeta,
+			ObjectMeta: k8sNetworkPolicy.Metadata.ObjectMeta,
+			Spec:       k8sNetworkPolicy.Spec,
+		}
+		c := cconversion.NewConverter()
+
+		kvp, err := c.K8sNetworkPolicyToCalico(&np)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert k8s resource: %w", err)
+		}
+
+		k8snp, ok := kvp.Value.(*apiv3.NetworkPolicy)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert kvp to apiv3.NetworkPolicy")
+		}
+
+		// Trim K8sNetworkPolicyNamePrefix from the policy name (the K8sNetworkPolicyToCalico
+		// function adds it for when it is used for coexisting calico/k8s policies).
+		k8snp.Name = strings.TrimPrefix(k8snp.Name, cconversion.K8sNetworkPolicyNamePrefix)
+
+		res = k8snp
+
+	default:
+		return nil, fmt.Errorf("conversion for the k8s resource type '%s' is not supported", k8sResKind)
 	}
 
 	return res, nil
