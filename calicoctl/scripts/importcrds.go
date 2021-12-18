@@ -31,7 +31,9 @@ const (
 // Reads all CRD files that are downloaded from libcalico-go
 // and encodes them as strings literals in calicoctl/commands/crds/crds.go
 func main() {
-	fs, _ := ioutil.ReadDir("../../../config/crd")
+	crdPath := "../../../../libcalico-go/config/crd/"
+
+	fs, _ := ioutil.ReadDir(crdPath)
 	out, _ := os.Create("../../commands/crds/crds.go")
 	_, _ = out.Write([]byte(fmt.Sprintf(`// Copyright (c) %s Tigera, Inc. All rights reserved.
 
@@ -54,7 +56,7 @@ func main() {
 			fname := strings.TrimPrefix(f.Name(), crdPrefix)
 			name := strings.TrimSuffix(fname, fileSuffix)
 			_, _ = out.Write([]byte("\t" + name + " = "))
-			b, _ := ioutil.ReadFile("../../../config/crd/" + f.Name())
+			b, _ := ioutil.ReadFile(crdPath + f.Name())
 			fstr := strconv.Quote(string(b))
 			_, _ = out.Write([]byte(fstr))
 			_, _ = out.Write([]byte("\n"))
