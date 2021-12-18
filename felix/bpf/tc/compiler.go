@@ -46,6 +46,7 @@ const (
 	EpTypeHost     EndpointType = "host"
 	EpTypeTunnel   EndpointType = "tunnel"
 	EpTypeL3Device EndpointType = "l3dev"
+	EpTypeNAT      EndpointType = "nat"
 )
 
 type ProgName string
@@ -108,6 +109,8 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		}
 	case EpTypeL3Device:
 		epTypeShort = "l3"
+	case EpTypeNAT:
+		epTypeShort = "nat"
 	}
 	corePart := ""
 	if btf {

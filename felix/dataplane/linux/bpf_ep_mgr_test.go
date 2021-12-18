@@ -17,6 +17,7 @@
 package intdataplane
 
 import (
+	"fmt"
 	"regexp"
 	"sync"
 
@@ -40,10 +41,12 @@ import (
 )
 
 type mockDataplane struct {
-	mutex  sync.Mutex
-	lastFD uint32
-	fds    map[string]uint32
-	state  map[uint32]polprog.Rules
+	mutex     sync.Mutex
+	lastFD    uint32
+	fds       map[string]uint32
+	state     map[uint32]polprog.Rules
+	routes    map[string]struct{}
+	shouldErr bool
 }
 
 func newMockDataplane() *mockDataplane {
@@ -51,6 +54,7 @@ func newMockDataplane() *mockDataplane {
 		lastFD: 5,
 		fds:    map[string]uint32{},
 		state:  map[uint32]polprog.Rules{},
+		routes: map[string]struct{}{},
 	}
 }
 
@@ -102,6 +106,10 @@ func (m *mockDataplane) setAcceptLocal(iface string, val bool) error {
 	return nil
 }
 
+func (m *mockDataplane) setRPFilter(iface string, val int) error {
+	return nil
+}
+
 func (m *mockDataplane) getRules(key string) *polprog.Rules {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -120,6 +128,41 @@ func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *p
 		*vari = m.getRules(key)
 		return *vari
 	}
+}
+
+func (m *mockDataplane) setRoute(ip string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	defer func() { m.shouldErr = false }()
+
+	if m.shouldErr {
+		return fmt.Errorf("setRoute error")
+	}
+
+	m.routes[ip] = struct{}{}
+
+	return nil
+}
+
+func (m *mockDataplane) delRoute(ip string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	defer func() { m.shouldErr = false }()
+
+	if m.shouldErr {
+		return fmt.Errorf("delRoute error")
+	}
+
+	delete(m.routes, ip)
+
+	return nil
+}
+
+func (m *mockDataplane) setErr() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.shouldErr = true
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
@@ -480,6 +523,95 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
+		})
+	})
+
+	Describe("bpfnatip", func() {
+		It("should program the routes reflecting service state", func() {
+			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
+				Name:      "service",
+				Namespace: "test",
+				ClusterIp: "1.2.3.4",
+			})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(1))
+			Expect(dp.routes).To(HaveKey("1.2.3.4"))
+
+			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
+				Name:           "service",
+				Namespace:      "test",
+				ClusterIp:      "1.2.3.4",
+				LoadbalancerIp: "5.6.7.8",
+			})
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(2))
+			Expect(dp.routes).To(HaveKey("1.2.3.4"))
+			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+
+			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
+				Name:           "service",
+				Namespace:      "test",
+				ClusterIp:      "1.2.3.4",
+				LoadbalancerIp: "5.6.7.8",
+				ExternalIps:    []string{"1.0.0.1", "1.0.0.2"},
+			})
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(4))
+			Expect(dp.routes).To(HaveKey("1.2.3.4"))
+			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+			Expect(dp.routes).To(HaveKey("1.0.0.1"))
+			Expect(dp.routes).To(HaveKey("1.0.0.2"))
+
+			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
+				Name:      "service",
+				Namespace: "test",
+				ClusterIp: "1.2.3.4",
+			})
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(1))
+			Expect(dp.routes).To(HaveKey("1.2.3.4"))
+
+			bpfEpMgr.OnUpdate(&proto.ServiceRemove{
+				Name:      "service",
+				Namespace: "test",
+			})
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(0))
+
+			dp.setErr()
+			bpfEpMgr.OnUpdate(&proto.ServiceUpdate{
+				Name:           "service",
+				Namespace:      "test",
+				ClusterIp:      "1.2.3.4",
+				LoadbalancerIp: "5.6.7.8",
+			})
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(1))
+			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(2))
+			Expect(dp.routes).To(HaveKey("1.2.3.4"))
+			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+
+			dp.setErr()
+			bpfEpMgr.OnUpdate(&proto.ServiceRemove{
+				Name:      "service",
+				Namespace: "test",
+			})
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(1))
+			Expect(dp.routes).To(HaveKey("5.6.7.8"))
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dp.routes).To(HaveLen(0))
 		})
 	})
 })
