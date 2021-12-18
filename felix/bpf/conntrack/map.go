@@ -159,6 +159,7 @@ const (
 	FlagReserved4 uint8 = (1 << 4)
 	FlagReserved5 uint8 = (1 << 5)
 	FlagExtLocal  uint8 = (1 << 6)
+	FlagViaNATIf  uint8 = (1 << 7)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -374,6 +375,10 @@ func (e Value) String() string {
 
 		if flags&FlagExtLocal != 0 {
 			flagsStr += " ext-local"
+		}
+
+		if flags&FlagViaNATIf != 0 {
+			flagsStr += " via-nat-iface"
 		}
 	}
 

@@ -19,9 +19,9 @@
 #define CALI_VXLAN_VNI 0xca11c0
 #endif
 
-#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
-#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
-#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD)
+#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD && !CALI_F_NAT_IF)
+#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD && !CALI_F_NAT_IF)
+#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL && !CALI_F_WIREGUARD && !CALI_F_NAT_IF)
 
 /* Number of bytes we add to a packet when we do encap. */
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
