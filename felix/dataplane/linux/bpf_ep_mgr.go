@@ -616,7 +616,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 					"Will retry if it shows up.")
 			return set.RemoveItem
 		}
-		log.WithError(err).Warn("Failed to apply policy to interface, will retry")
+		log.WithField("iface", iface).WithError(err).Warn("Failed to apply policy to interface, will retry")
 		return nil
 	})
 }
