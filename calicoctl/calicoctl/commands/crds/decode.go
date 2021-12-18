@@ -37,7 +37,7 @@ func CalicoCRDs() ([]*v1.CustomResourceDefinition, error) {
 	if err != nil {
 		return crds, err
 	}
-	crds = append(crds, &bgpconfig)
+	crds = append(crds, &cns)
 
 	bgpPeer := v1.CustomResourceDefinition{}
 	err = yaml.Unmarshal([]byte(bgppeers), &bgpPeer)
