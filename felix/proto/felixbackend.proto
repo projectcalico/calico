@@ -568,3 +568,17 @@ message GlobalBGPConfigUpdate {
   repeated string service_external_cidrs = 2;
   repeated string service_loadbalancer_cidrs = 3;
 }
+
+message ServiceUpdate {
+	string name = 1;
+	string namespace = 2;
+	string type = 3;
+	string cluster_ip = 4;
+	string loadbalancer_ip = 5;
+	repeated string external_ips = 6;
+}
+
+message ServiceRemove {
+	string name = 1;
+	string namespace = 2;
+}
