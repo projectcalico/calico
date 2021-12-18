@@ -34,4 +34,4 @@ blocks:
 
       - name: "windows-upgrade"
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make build-windows-upgrade-archive image-tar-windows-all cd-windows-upgrade CONFIRM=true; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node build-windows-upgrade-archive image-tar-windows-all cd-windows-upgrade CONFIRM=true; fi
