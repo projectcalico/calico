@@ -30,11 +30,13 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
@@ -48,12 +50,17 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/ratelimited"
+	"github.com/projectcalico/calico/felix/routerule"
+	"github.com/projectcalico/calico/felix/routetable"
 )
 
 const jumpMapCleanupInterval = 10 * time.Second
@@ -96,6 +103,9 @@ type bpfDataplane interface {
 	updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules) error
 	removePolicyProgram(jumpMapFD bpf.MapFD) error
 	setAcceptLocal(iface string, val bool) error
+	setRPFilter(iface string, val int) error
+	setRoute(ip string) error
+	delRoute(ip string) error
 }
 
 type bpfInterface struct {
@@ -174,6 +184,21 @@ type bpfEndpointManager struct {
 
 	// IPv6 Support
 	ipv6Enabled bool
+
+	// Service routes
+	routeTable    *routetable.RouteTable
+	services      map[serviceKey][]string
+	dirtyServices map[serviceKey][]string
+
+	// Service return routing
+	routeTableSNAT    *routetable.RouteTable
+	routeTableSNATIdx int
+	routeRuleSNAT     *routerule.RouteRules
+}
+
+type serviceKey struct {
+	name      string
+	namespace string
 }
 
 type bpfAllowChainRenderer interface {
@@ -190,6 +215,7 @@ func newBPFEndpointManager(
 	iptablesFilterTable iptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
+	natRtTableIdx int,
 ) *bpfEndpointManager {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -223,15 +249,31 @@ func newBPFEndpointManager(
 			log.Debug("Jump map cleanup triggered.")
 			tc.CleanUpJumpMaps()
 		}),
-		onStillAlive:     livenessCallback,
-		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
-		ifaceToIpMap:     map[string]net.IP{},
-		opReporter:       opReporter,
+		onStillAlive:      livenessCallback,
+		hostIfaceToEpMap:  map[string]proto.HostEndpoint{},
+		ifaceToIpMap:      map[string]net.IP{},
+		opReporter:        opReporter,
+		routeTableSNATIdx: natRtTableIdx,
+
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
 		ipv6Enabled: config.BPFIpv6Enabled,
 	}
+
+	m.routeTable = routetable.New(
+		[]string{"bpfnatin"},
+		4,
+		false, // vxlan
+		config.NetlinkTimeout,
+		nil, // deviceRouteSourceAddress
+		config.DeviceRouteProtocol,
+		true, // removeExternalRoutes
+		254,
+		opReporter,
+	)
+	m.services = make(map[serviceKey][]string)
+	m.dirtyServices = make(map[serviceKey][]string)
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
@@ -328,6 +370,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
 			}
 		}
+	case *proto.ServiceUpdate:
+		m.onServiceUpdate(msg)
+	case *proto.ServiceRemove:
+		m.onServiceRemove(msg)
 	}
 }
 
@@ -520,6 +566,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	m.applyProgramsToDirtyDataInterfaces()
 	m.updateWEPsInDataplane()
+	m.reconcileServices()
 
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
@@ -968,6 +1015,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tc.EpTypeTunnel
 	} else if ifaceName == "wireguard.cali" {
 		endpointType = tc.EpTypeWireguard
+	} else if ifaceName == "bpfnatin" || ifaceName == "bpfnatout" {
+		endpointType = tc.EpTypeNAT
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tc.EpTypeHost
 	} else {
@@ -1111,7 +1160,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
-	return m.dataIfaceRegex.MatchString(iface)
+	return m.dataIfaceRegex.MatchString(iface) || iface == "bpfnatout"
 }
 
 func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
@@ -1321,11 +1370,169 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 	return nil
 }
 
+func (m *bpfEndpointManager) setRPFilter(iface string, val int) error {
+
+	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", iface)
+	numval := strconv.Itoa(val)
+	err := writeProcSys(path, numval)
+	if err != nil {
+		log.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
+		return err
+	}
+
+	log.Infof("%s set to %s", path, numval)
+	return nil
+}
+
 func (m *bpfEndpointManager) ensureStarted() {
 	m.startupOnce.Do(func() {
 		log.Info("Starting map cleanup runner.")
 		m.mapCleanupRunner.Start(context.Background())
+
+		m.ensureCtlbDevice()
 	})
+}
+
+func (m *bpfEndpointManager) ensureCtlbDevice() {
+	nl, err := netlinkshim.NewRealNetlink()
+	if err != nil {
+		log.Fatal("Failed to create nelink.")
+	}
+
+	_, err = nl.LinkByName("bpfnatin")
+	if err != nil {
+		nat := &netlink.Veth{
+			LinkAttrs: netlink.LinkAttrs{
+				Name: "bpfnatin",
+			},
+			PeerName: "bpfnatout",
+		}
+		if err := nl.LinkAdd(nat); err != nil {
+			log.Fatal("Failed to add bpfnatin.")
+		}
+		link, err := nl.LinkByName("bpfnatin")
+		if err != nil {
+			log.WithError(err).Fatal("Miss bpfnatin after add.")
+		}
+		if err := nl.LinkSetUp(link); err != nil {
+			log.WithError(err).Fatal("Failed to set bpfnatin up.")
+		}
+		link, err = nl.LinkByName("bpfnatout")
+		if err != nil {
+			log.WithError(err).Fatal("Miss bpfnatout after add.")
+		}
+		if err := nl.LinkSetUp(link); err != nil {
+			log.WithError(err).Fatal("Failed to set bpfnatout up.")
+		}
+	}
+
+	if err := configureInterface("bpfnatin", 4, writeProcSys); err != nil {
+		log.WithError(err).Fatal("Failed to configure bpfnatin parameters.")
+	}
+	if err := configureInterface("bpfnatout", 4, writeProcSys); err != nil {
+		log.WithError(err).Fatal("Failed to configure bpfnatout parameters.")
+	}
+
+	err = m.ensureQdisc("bpfnatin")
+	if err != nil {
+		log.WithError(err).Fatalf("Failed to set qdisc on bpfnatin.")
+	}
+
+	if err := m.dp.setRPFilter("bpfnatin", 0); err != nil {
+		log.WithError(err).Fatalf("Failed to disable RPF on bpfnatin.")
+	}
+	if err := m.dp.setRPFilter("bpfnatout", 0); err != nil {
+		log.WithError(err).Fatalf("Failed to disable RPF on bpfnatout.")
+	}
+
+	log.Info("Created bpfnatin pair.")
+
+	m.rulesMakeSpaceForNATIface(nl)
+
+	m.routeTableSNAT = routetable.New(
+		nil,
+		4,
+		false, // vxlan
+		10*time.Second,
+		nil, // deviceRouteSourceAddress
+		1,
+		true, // removeExternalRoutes
+		m.routeTableSNATIdx,
+		m.opReporter,
+	)
+
+	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
+	m.routeTableSNAT.RouteUpdate("bpfnatout", routetable.Target{
+		Type: routetable.TargetTypeUnicast,
+		CIDR: anyV4,
+	})
+
+	m.routeRuleSNAT, err = routerule.New(
+		4,
+		0, // routing priority
+		set.From(m.routeTableSNATIdx),
+		routerule.RulesMatchSrcFWMarkTable,
+		routerule.RulesMatchSrcFWMarkTable,
+		10*time.Second,
+		func() (routerule.HandleIface, error) {
+			return netlinkshim.NewRealNetlink()
+		},
+		m.opReporter,
+	)
+	if err != nil {
+		log.WithError(err).Panic("Unexpected error creating rule manager")
+	}
+	m.routeRuleSNAT.SetRule(routerule.NewRule(4, 0).
+		GoToTable(m.routeTableSNATIdx).
+		MatchFWMarkWithMask(tcdefs.MarkSeenToNatIfaceOut, tcdefs.MarkSeenToNatIfaceOut),
+	)
+}
+
+func (m *bpfEndpointManager) rulesMakeSpaceForNATIface(nl netlinkshim.Interface) {
+	rules, err := nl.RuleList(unix.AF_INET)
+	if err != nil {
+		log.WithError(err).Fatalf("Failed to list routing rules.")
+	}
+	log.WithField("rules", rules).Debugf("Existing routing rules")
+
+	sort.SliceStable(rules, func(i, j int) bool { return rules[i].Priority < rules[j].Priority })
+
+	if len(rules) == 0 || rules[0].Priority > 1 {
+		return
+	}
+
+	i := 0
+
+	// Skip over the (one?) default rules
+	for ; rules[i].Priority < 0; i++ {
+	}
+
+	// Is there already a gap?
+	for ; rules[i].Priority < 1; i++ {
+	}
+
+	// If there are rules at the start, find a gap of 2 (as the -1 needs to become 1 so that we can enter 0)
+	if i > 0 {
+		for ; i < len(rules); i++ {
+			if rules[i].Priority-rules[i-1].Priority > 2 {
+				break
+			}
+		}
+	}
+
+	// Shift the rules
+	for i--; i >= 0; i-- {
+		rule := rules[i]
+		log.WithField("rule", rule).Debugf("Moving rule from prio %d to %d", rule.Priority, rule.Priority+2)
+		rule1 := rule
+		rule1.Priority += 2
+		if err := nl.RuleAdd(&rule1); err != nil {
+			log.WithError(err).Fatalf("Failed to move rule %+v to priority 1", rule)
+		}
+		if err := nl.RuleDel(&rule); err != nil {
+			log.WithError(err).Fatalf("Failed to remove rule %+v at priority 1", rule)
+		}
+	}
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) error {
@@ -1538,4 +1745,120 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 		return &ipAddrs[0], nil
 	}
 	return nil, errors.New("interface ip address not found")
+}
+
+func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
+	log.WithFields(log.Fields{
+		"Name":      update.Name,
+		"Namespace": update.Namespace,
+	}).Info("Service Update")
+
+	ips := make([]string, 0, 2+len(update.ExternalIps))
+	if update.ClusterIp != "" {
+		ips = append(ips, update.ClusterIp)
+	}
+	if update.LoadbalancerIp != "" {
+		ips = append(ips, update.LoadbalancerIp)
+	}
+	ips = append(ips, update.ExternalIps...)
+
+	key := serviceKey{name: update.Name, namespace: update.Namespace}
+	m.dirtyServices[key] = ips
+}
+
+func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
+	log.WithFields(log.Fields{
+		"Name":      update.Name,
+		"Namespace": update.Namespace,
+	}).Info("Service Remove")
+
+	key := serviceKey{name: update.Name, namespace: update.Namespace}
+	m.dirtyServices[key] = nil
+}
+
+func (m *bpfEndpointManager) reconcileServices() {
+	for svc, ips := range m.dirtyServices {
+		errored := false
+		for _, ip := range ips {
+			if err := m.setRoute(ip); err != nil {
+				log.WithError(err).Errorf("Failed to set route to %s via bpfnatin.", ip)
+				errored = true
+			}
+		}
+
+		known := m.services[svc]
+
+		for _, old := range known {
+			exist := false
+			for _, ip := range ips {
+				if ip == old {
+					exist = true
+					break
+				}
+			}
+
+			if !exist {
+				if err := m.delRoute(old); err != nil {
+					log.WithError(err).Errorf("Failed to delete route to %s via bpfnatin.", old)
+					errored = true
+				}
+			}
+		}
+
+		if !errored {
+			if len(ips) > 0 {
+				m.services[svc] = ips
+			} else {
+				delete(m.services, svc)
+			}
+			delete(m.dirtyServices, svc)
+		}
+	}
+}
+
+func (m *bpfEndpointManager) setRoute(dst string) error {
+	cidr, err := ip.CIDRFromString(dst + "/32")
+	if err != nil {
+		return err
+	}
+
+	m.routeTable.RouteUpdate("bpfnatin", routetable.Target{
+		Type: routetable.TargetTypeUnicast,
+		CIDR: cidr,
+	})
+	log.WithFields(log.Fields{
+		"cidr": dst + "/32",
+	}).Debug("setRoute")
+	return nil
+}
+
+func (m *bpfEndpointManager) delRoute(dst string) error {
+	cidr, err := ip.CIDRFromString(dst + "/32")
+	if err != nil {
+		return err
+	}
+
+	m.routeTable.RouteRemove("bpfnatin", cidr)
+	log.WithFields(log.Fields{
+		"cidr": dst + "/32",
+	}).Debug("delRoute")
+	return nil
+}
+
+func (m *bpfEndpointManager) GetRouteTableSyncers() []routeTableSyncer {
+	tables := []routeTableSyncer{m.routeTable}
+
+	if m.routeTableSNAT != nil {
+		tables = append(tables, m.routeTableSNAT)
+	}
+
+	return tables
+}
+
+func (m *bpfEndpointManager) GetRouteRules() []routeRules {
+	if m.routeRuleSNAT != nil {
+		return []routeRules{m.routeRuleSNAT}
+	}
+
+	return nil
 }
