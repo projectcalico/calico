@@ -62,6 +62,7 @@ struct bpf_map_def_extended {
 #define CALI_TC_L3_DEV 	(1<<5)
 // CALI_XDP_PROG is set for programs attached to the XDP hook
 #define CALI_XDP_PROG 	(1<<6)
+#define CALI_TC_NAT_IF	(1<<7)
 
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
 #define CALI_DROP_WORKLOAD_TO_HOST false
@@ -74,10 +75,11 @@ struct bpf_map_def_extended {
 #define CALI_F_INGRESS ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)
 #define CALI_F_EGRESS  (!CALI_F_INGRESS)
 
-#define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP)
+#define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & (CALI_TC_HOST_EP | CALI_TC_NAT_IF))
 #define CALI_F_WEP     	 (!CALI_F_HEP)
 #define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
-#define CALI_F_L3_DEV ((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV)
+#define CALI_F_L3_DEV    ((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV)
+#define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
 
 #define CALI_F_XDP ((CALI_COMPILE_FLAGS) & CALI_XDP_PROG)
 
@@ -87,7 +89,7 @@ struct bpf_map_def_extended {
 #define CALI_F_FROM_WEP (CALI_F_WEP && CALI_F_EGRESS)
 #define CALI_F_TO_WEP   (CALI_F_WEP && CALI_F_INGRESS)
 
-#define CALI_F_TO_HOST       (CALI_F_FROM_HEP || CALI_F_FROM_WEP)
+#define CALI_F_TO_HOST       ((CALI_F_FROM_HEP || CALI_F_FROM_WEP) != 0)
 #define CALI_F_FROM_HOST     (!CALI_F_TO_HOST)
 #define CALI_F_L3            ((CALI_F_TO_HEP && CALI_F_TUNNEL) || CALI_F_L3_DEV)
 #define CALI_F_IPIP_ENCAPPED ((CALI_F_INGRESS && CALI_F_TUNNEL))
@@ -108,7 +110,7 @@ struct bpf_map_def_extended {
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
-#define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+#define CALI_FIB_ENABLED (!CALI_F_NAT_IF && !CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
@@ -151,6 +153,12 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 
      . . . 1  . . . .  . . . .       EGRESS => packet should be routed via an egress gateway
 
+     . . 1 .  . . . .  . . . .       conflicts with WG mark
+
+     . 1 . .  . . . .  . . . .       packet should go back to bpfnatout
+
+     1 . . .  . . . .  . . . .       packet passed through bpfnatout
+
  */
 
 enum calico_skb_mark {
@@ -191,6 +199,16 @@ enum calico_skb_mark {
 	 * flows at start of day. */
 	CALI_SKB_MARK_CT_ESTABLISHED         = 0x08000000,
 	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = 0x08000000,
+
+       /* CALI_SKB_MARK_TO_NAT_IFACE_OUT signals to routing that this packet should to
+        * to the bpfnatout interface.
+        */
+       CALI_SKB_MARK_TO_NAT_IFACE_OUT        = 0x41000000,
+       /* CALI_SKB_MARK_FROM_NAT_IFACE_OUT signals to the next hop that the packet passed
+	* through bpfnatout so that it can set its conntrack correctly.
+	*/
+       CALI_SKB_MARK_FROM_NAT_IFACE_OUT      = 0x81000000,
+
 };
 
 /* bpf_exit inserts a BPF exit instruction with the given return value. In a fully-inlined
