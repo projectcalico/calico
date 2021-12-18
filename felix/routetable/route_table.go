@@ -76,6 +76,7 @@ const (
 type TargetType string
 
 const (
+	TargetTypeUnicast TargetType = "unicast"
 	TargetTypeVXLAN   TargetType = "vxlan"
 	TargetTypeNoEncap TargetType = "noencap"
 
@@ -119,6 +120,8 @@ func (t Target) RouteType() int {
 		return syscall.RTN_BLACKHOLE
 	case TargetTypeProhibit:
 		return syscall.RTN_PROHIBIT
+	case TargetTypeUnicast:
+		return syscall.RTN_UNICAST
 	default:
 		return syscall.RTN_UNICAST
 	}
@@ -132,6 +135,8 @@ func (t Target) RouteScope() netlink.Scope {
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeProhibit:
 		return netlink.SCOPE_UNIVERSE
+	case TargetTypeUnicast:
+		return netlink.SCOPE_LINK
 	default:
 		return netlink.SCOPE_LINK
 	}
