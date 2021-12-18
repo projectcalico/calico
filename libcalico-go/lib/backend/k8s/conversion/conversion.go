@@ -263,7 +263,6 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	// This order might change in future.
 	order := float64(1000.0)
 
-	var convErr cerrors.ErrorPolicyConversion
 	var convErrRules []cerrors.ErrorPolicyConversionRule
 
 	// Generate the ingress rules list.
@@ -275,7 +274,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 			// Add rule to conversion error slice
 			convErrRules = append(convErrRules, cerrors.ErrorPolicyConversionRule{
 				IngressRule: &r,
-				Reason:      "k8s rule couldn't be converted",
+				Reason:      fmt.Sprintf("k8s rule couldn't be converted: %s", err),
 			})
 		} else {
 			ingressRules = append(ingressRules, rules...)
@@ -291,7 +290,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 			// Add rule to conversion error slice
 			convErrRules = append(convErrRules, cerrors.ErrorPolicyConversionRule{
 				EgressRule: &r,
-				Reason:     "k8s rule couldn't be converted",
+				Reason:     fmt.Sprintf("k8s rule couldn't be converted: %s", err),
 			})
 		} else {
 			egressRules = append(egressRules, rules...)
@@ -347,7 +346,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	}
 
 	// Build the KVPair.
-	kvPair := &model.KVPair{
+	kvp := &model.KVPair{
 		Key: model.ResourceKey{
 			Name:      policyName,
 			Namespace: np.Namespace,
@@ -359,13 +358,10 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 
 	// Return the KVPair with conversion errors if applicable
 	if len(convErrRules) > 0 {
-		convErr = cerrors.ErrorPolicyConversion{
-			ErrorPolicyConversionRules: convErrRules,
-		}
-		return kvPair, convErr
+		return kvp, cerrors.ErrorPolicyConversion{ErrorPolicyConversionRules: convErrRules}
 	}
 
-	return kvPair, nil
+	return kvp, nil
 }
 
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
