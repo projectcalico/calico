@@ -663,6 +663,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		snat = CALI_F_FROM_HOST;
 		/* if returning packet into a tunnel */
 		snat |= (dnat_return_should_encap() && v->tun_ip);
+		snat |= result.flags & CALI_CT_FLAG_VIA_NAT_IF;
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
