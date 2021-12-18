@@ -24,8 +24,16 @@ import (
 
 func CalicoCRDs() ([]*v1.CustomResourceDefinition, error) {
 	var crds []*v1.CustomResourceDefinition
+
 	bgpconfig := v1.CustomResourceDefinition{}
 	err := yaml.Unmarshal([]byte(bgpconfigurations), &bgpconfig)
+	if err != nil {
+		return crds, err
+	}
+	crds = append(crds, &bgpconfig)
+
+	cns := v1.CustomResourceDefinition{}
+	err = yaml.Unmarshal([]byte(caliconodestatuses), &cns)
 	if err != nil {
 		return crds, err
 	}
