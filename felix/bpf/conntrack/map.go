@@ -399,6 +399,10 @@ func (e Value) String() string {
 		if flags&FlagExtLocal != 0 {
 			flagsStr += " ext-local"
 		}
+
+		if flags&FlagViaNATIf != 0 {
+			flagsStr += " via-nat-iface"
+		}
 	}
 
 	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, Flags:%s ",
