@@ -46,6 +46,7 @@ const (
 	EpTypeHost      EndpointType = "host"
 	EpTypeTunnel    EndpointType = "tunnel"
 	EpTypeWireguard EndpointType = "wireguard"
+	EpTypeNAT       EndpointType = "nat"
 )
 
 type ProgName string
@@ -104,6 +105,8 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		epTypeShort = "tnl"
 	case EpTypeWireguard:
 		epTypeShort = "wg"
+	case EpTypeNAT:
+		epTypeShort = "nat"
 	}
 	corePart := ""
 	if btf {
