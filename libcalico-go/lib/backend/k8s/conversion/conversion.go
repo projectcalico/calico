@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -262,12 +263,19 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	// This order might change in future.
 	order := float64(1000.0)
 
+	var convErrRules []cerrors.ErrorPolicyConversionRule
+
 	// Generate the ingress rules list.
 	var ingressRules []apiv3.Rule
 	for _, r := range np.Spec.Ingress {
 		rules, err := c.k8sRuleToCalico(r.From, r.Ports, np.Namespace, true)
 		if err != nil {
 			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
+			// Add rule to conversion error slice
+			convErrRules = append(convErrRules, cerrors.ErrorPolicyConversionRule{
+				IngressRule: &r,
+				Reason:      fmt.Sprintf("k8s rule couldn't be converted: %s", err),
+			})
 		} else {
 			ingressRules = append(ingressRules, rules...)
 		}
@@ -279,6 +287,11 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		rules, err := c.k8sRuleToCalico(r.To, r.Ports, np.Namespace, false)
 		if err != nil {
 			log.WithError(err).Warn("dropping k8s rule that couldn't be converted")
+			// Add rule to conversion error slice
+			convErrRules = append(convErrRules, cerrors.ErrorPolicyConversionRule{
+				EgressRule: &r,
+				Reason:     fmt.Sprintf("k8s rule couldn't be converted: %s", err),
+			})
 		} else {
 			egressRules = append(egressRules, rules...)
 		}
@@ -332,8 +345,8 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		Types:    types,
 	}
 
-	// Build and return the KVPair.
-	return &model.KVPair{
+	// Build the KVPair.
+	kvp := &model.KVPair{
 		Key: model.ResourceKey{
 			Name:      policyName,
 			Namespace: np.Namespace,
@@ -341,7 +354,14 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		},
 		Value:    policy,
 		Revision: np.ResourceVersion,
-	}, nil
+	}
+
+	// Return the KVPair with conversion errors if applicable
+	if len(convErrRules) > 0 {
+		return kvp, cerrors.ErrorPolicyConversion{ErrorPolicyConversionRules: convErrRules}
+	}
+
+	return kvp, nil
 }
 
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico

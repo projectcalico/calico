@@ -27,6 +27,7 @@ import (
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 
 	kapiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -1346,10 +1347,42 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
+		expectedErr := cerrors.ErrorPolicyConversion{
+			ErrorPolicyConversionRules: []cerrors.ErrorPolicyConversionRule{
+				{
+					EgressRule: nil,
+					IngressRule: &networkingv1.NetworkPolicyIngressRule{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 0, IntVal: 80, StrVal: ""},
+								EndPort:  nil,
+							},
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 1, IntVal: 0, StrVal: "-50:-1"},
+								EndPort:  nil,
+							},
+						},
+						From: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								NamespaceSelector: nil,
+								IPBlock:           nil,
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted",
+				},
+			},
+		}
 
 		// Parse the policy.
 		pol, err := c.K8sNetworkPolicyToCalico(&np)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).To(Equal(expectedErr))
 
 		protoTCP := numorstring.ProtocolFromString("TCP")
 

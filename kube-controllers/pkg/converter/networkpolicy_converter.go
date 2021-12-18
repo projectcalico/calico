@@ -15,12 +15,14 @@
 package converter
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +54,9 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 
 	c := conversion.NewConverter()
 	kvp, err := c.K8sNetworkPolicyToCalico(np)
-	if err != nil {
+	// Silently ignore rule conversion errors
+	var e *cerrors.ErrorPolicyConversion
+	if err != nil && !errors.As(err, &e) {
 		return nil, err
 	}
 	cnp := kvp.Value.(*api.NetworkPolicy)
