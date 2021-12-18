@@ -286,10 +286,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				for i, felix := range felixes {
 					felix.Exec("iptables-save", "-c")
-					felix.Exec("ip", "r")
 					felix.Exec("ip", "link")
 					felix.Exec("ip", "addr")
-					felix.Exec("ip", "route", "show", "cached")
+					felix.Exec("ip", "rule")
+					felix.Exec("ip", "route")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
@@ -2394,26 +2394,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity()
 						})
 
-						if testOpts.connTimeEnabled {
-							Describe("with policy enabling ingress to w[0][0] from host endpoints", func() {
-								BeforeEach(func() {
-									pol = api.NewGlobalNetworkPolicy()
-									pol.Namespace = "fv"
-									pol.Name = "policy-host-eps"
-									pol.Spec.Ingress = []api.Rule{
-										{
-											Action: "Allow",
-											Source: api.EntityRule{
-												Selector: "ep-type=='host'",
-											},
+						Describe("with policy enabling ingress to w[0][0] from host endpoints", func() {
+							BeforeEach(func() {
+								pol = api.NewGlobalNetworkPolicy()
+								pol.Namespace = "fv"
+								pol.Name = "policy-host-eps"
+								pol.Spec.Ingress = []api.Rule{
+									{
+										Action: "Allow",
+										Source: api.EntityRule{
+											Selector: "ep-type=='host'",
 										},
-									}
-									w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
-									pol.Spec.Selector = w00Slector
+									},
+								}
+								w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+								pol.Spec.Selector = w00Slector
 
-									pol = createPolicy(pol)
-								})
+								pol = createPolicy(pol)
+							})
 
+							if testOpts.connTimeEnabled {
 								It("should have connectivity from all host-networked workloads to workload 0", func() {
 									node0IP := felixes[0].IP
 									node1IP := felixes[1].IP
@@ -2433,16 +2433,41 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 									// Also try host networked pods, both on a local and remote node.
 									// N.B. it cannot work without the connect time balancer
-									cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
-									cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
+									// cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
+									// cc.Expect(Some, hostW[1], TargetIP(node0IP), ports, hostW1SrcIP)
 									cc.Expect(Some, hostW[0], TargetIP(node1IP), ports, hostW0SrcIP)
 									cc.Expect(Some, hostW[1], TargetIP(node1IP), ports, hostW1SrcIP)
 
 									cc.CheckConnectivity()
 								})
-							})
-						}
+							}
 
+							It("should have connectivity from all host-networked workloads to workload 0 via clusterIP", func() {
+								node0IP := felixes[0].IP
+								node1IP := felixes[1].IP
+
+								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+								switch testOpts.tunnel {
+								case "ipip":
+									hostW0SrcIP = ExpectWithSrcIPs(felixes[0].ExpectedIPIPTunnelAddr)
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedIPIPTunnelAddr)
+								case "wireguard":
+									hostW1SrcIP = ExpectWithSrcIPs(felixes[1].ExpectedWireguardTunnelAddr)
+								}
+
+								clusterIP := testSvc.Spec.ClusterIP
+								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
+
+								// Also try host networked pods, both on a local and remote node.
+								// N.B. it cannot work without the connect time balancer
+								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+
+								cc.CheckConnectivity()
+							})
+						})
 					}
 
 					if !intLocal {

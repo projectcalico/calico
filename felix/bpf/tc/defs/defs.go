@@ -34,5 +34,8 @@ const (
 	MarkLinuxConntrackEstablished     = 0x08000000
 	MarkLinuxConntrackEstablishedMask = 0x08000000
 
+	MarkSeenToNatIfaceOut   = 0x41000000
+	MarkSeenFromNatIfaceOut = 0x81000000
+
 	MarksMask uint32 = 0x1ff00000
 )
