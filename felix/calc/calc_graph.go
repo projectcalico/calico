@@ -83,6 +83,8 @@ type passthruCallbacks interface {
 	OnWireguardUpdate(string, *model.Wireguard)
 	OnWireguardRemove(string)
 	OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
+	OnServiceUpdate(*proto.ServiceUpdate)
+	OnServiceRemove(*proto.ServiceRemove)
 }
 
 type routeCallbacks interface {
