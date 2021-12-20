@@ -63,6 +63,7 @@ func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int,
 	ep, err := epClient.Get(context.Background(), serviceName, metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Failed to get Typha endpoint from Kubernetes")
+		return 0, err
 	}
 
 	ips := set.New()
