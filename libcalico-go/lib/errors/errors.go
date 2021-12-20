@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -201,4 +202,85 @@ type ErrorParsingDatastoreEntry struct {
 
 func (e ErrorParsingDatastoreEntry) Error() string {
 	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %v", e.RawKey, e.RawValue, e.Err)
+}
+
+type ErrorPolicyConversionRule struct {
+	EgressRule  *networkingv1.NetworkPolicyEgressRule
+	IngressRule *networkingv1.NetworkPolicyIngressRule
+	Reason      string
+}
+
+func (e ErrorPolicyConversionRule) String() string {
+	var fieldString string
+
+	switch {
+	case e.EgressRule != nil:
+		fieldString = fmt.Sprintf("%+v", e.EgressRule)
+	case e.IngressRule != nil:
+		fieldString = fmt.Sprintf("%+v", e.IngressRule)
+	default:
+		fieldString = "unknown rule"
+	}
+
+	if e.Reason != "" {
+		fieldString = fmt.Sprintf("%s (%s)", fieldString, e.Reason)
+	}
+
+	return fieldString
+}
+
+type ErrorPolicyConversion struct {
+	PolicyName string
+	Rules      []ErrorPolicyConversionRule
+}
+
+func (e *ErrorPolicyConversion) BadEgressRule(rule *networkingv1.NetworkPolicyEgressRule, reason string) {
+	// Copy rule
+	badRule := *rule
+
+	e.Rules = append(e.Rules, ErrorPolicyConversionRule{
+		EgressRule:  &badRule,
+		IngressRule: nil,
+		Reason:      reason,
+	})
+}
+
+func (e *ErrorPolicyConversion) BadIngressRule(
+	rule *networkingv1.NetworkPolicyIngressRule, reason string) {
+	// Copy rule
+	badRule := *rule
+
+	e.Rules = append(e.Rules, ErrorPolicyConversionRule{
+		EgressRule:  nil,
+		IngressRule: &badRule,
+		Reason:      reason,
+	})
+}
+
+func (e ErrorPolicyConversion) Error() string {
+	s := fmt.Sprintf("policy: %s", e.PolicyName)
+
+	switch {
+	case len(e.Rules) == 0:
+		s += ": unknown policy conversion error"
+	case len(e.Rules) == 1:
+		f := e.Rules[0]
+
+		s += fmt.Sprintf(": error with rule %s", f)
+	default:
+		s += ": error with the following rules:\n"
+		for _, f := range e.Rules {
+			s += fmt.Sprintf("-  %s\n", f)
+		}
+	}
+
+	return s
+}
+
+func (e ErrorPolicyConversion) GetError() error {
+	if len(e.Rules) == 0 {
+		return nil
+	}
+
+	return e
 }
