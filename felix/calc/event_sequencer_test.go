@@ -17,6 +17,7 @@ package calc_test
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -62,7 +63,9 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 				IntIp: "10.28.0.13",
 			},
 		},
-		Ipv6Nat: []*proto.NatInfo{},
+		Ipv6Nat:           []*proto.NatInfo{},
+		CreationTimestamp: proto.ConvertTime(time.Time{}),
+		DeletionTimestamp: proto.ConvertTime(time.Time{}),
 	}),
 )
 

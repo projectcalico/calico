@@ -1,6 +1,7 @@
 syntax = "proto3";
 package felix;
 option go_package = "proto";
+import "google/protobuf/timestamp.proto";
 
 service PolicySync {
   // On this API, only the following payloads will be sent:
@@ -367,6 +368,8 @@ message WorkloadEndpoint {
   repeated TierInfo tiers = 7;
   repeated NatInfo ipv4_nat = 8;
   repeated NatInfo ipv6_nat = 9;
+  google.protobuf.Timestamp creation_timestamp = 10;
+  google.protobuf.Timestamp deletion_timestamp = 11;
 }
 
 message WorkloadEndpointRemove {

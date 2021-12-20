@@ -358,15 +358,17 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 		mac = ep.Mac.String()
 	}
 	return &proto.WorkloadEndpoint{
-		State:      ep.State,
-		Name:       ep.Name,
-		Mac:        mac,
-		ProfileIds: ep.ProfileIDs,
-		Ipv4Nets:   netsToStrings(ep.IPv4Nets),
-		Ipv6Nets:   netsToStrings(ep.IPv6Nets),
-		Tiers:      tiers,
-		Ipv4Nat:    natsToProtoNatInfo(ep.IPv4NAT),
-		Ipv6Nat:    natsToProtoNatInfo(ep.IPv6NAT),
+		State:             ep.State,
+		Name:              ep.Name,
+		Mac:               mac,
+		ProfileIds:        ep.ProfileIDs,
+		Ipv4Nets:          netsToStrings(ep.IPv4Nets),
+		Ipv6Nets:          netsToStrings(ep.IPv6Nets),
+		Tiers:             tiers,
+		Ipv4Nat:           natsToProtoNatInfo(ep.IPv4NAT),
+		Ipv6Nat:           natsToProtoNatInfo(ep.IPv6NAT),
+		CreationTimestamp: proto.ConvertTime(ep.CreationTimestamp),
+		DeletionTimestamp: proto.ConvertTime(ep.DeletionTimestamp),
 	}
 }
 
@@ -409,13 +411,19 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
+			pwep := ModelWorkloadEndpointToProto(wlep, tiers)
+			log.WithFields(log.Fields{
+				"modelDeletionTimestamp":       wlep.DeletionTimestamp,
+				"modelDeletionTimestampIsZero": wlep.DeletionTimestamp.IsZero(),
+				"protoDeletionTimestamp":       pwep.DeletionTimestamp,
+			}).Info("DeletionTimestamp")
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(wlep, tiers),
+				Endpoint: pwep,
 			})
 		case model.HostEndpointKey:
 			hep := endpoint.(*model.HostEndpoint)
