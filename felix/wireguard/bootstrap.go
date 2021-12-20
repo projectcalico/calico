@@ -53,17 +53,18 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClien
 }
 
 // getPublicKey attempts to fetch a wireguard key from the kernel statelessly
+// this is intended for use during startup; an error may simply mean wireguard is not configured
 func getPublicKey(wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error)) wgtypes.Key {
 	wg, err := getWireguardHandle()
 	if err != nil {
-		log.WithError(err).Info("couldn't acquire WireGuard handle")
+		log.WithError(err).Debug("couldn't acquire WireGuard handle, reporting 'zerokey' public key")
 		return zeroKey
 	}
 	defer wg.Close()
 
 	dev, err := wg.DeviceByName(wgIfaceName)
 	if err != nil {
-		log.WithError(err).Infof("couldn't find WireGuard device '%s'", wgIfaceName)
+		log.WithError(err).Debugf("couldn't find WireGuard device '%s', reporting 'zerokey' public key", wgIfaceName)
 		return zeroKey
 	}
 
