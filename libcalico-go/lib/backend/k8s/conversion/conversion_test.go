@@ -1297,8 +1297,9 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should drop rules with invalid ports in a k8s NetworkPolicy", func() {
 		port80 := intstr.FromInt(80)
 		portFoo := intstr.FromString("foo")
-		portBad := intstr.FromString("-50:-1")
-		np := networkingv1.NetworkPolicy{
+		portBad1 := intstr.FromString("-50:-1")
+		portBad2 := intstr.FromString("-22:-3")
+		np1 := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
@@ -1330,7 +1331,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					{
 						Ports: []networkingv1.NetworkPolicyPort{
 							{Port: &port80},
-							{Port: &portBad},
+							{Port: &portBad1},
 						},
 						From: []networkingv1.NetworkPolicyPeer{
 							{
@@ -1347,8 +1348,9 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
-		expectedErr := cerrors.ErrorPolicyConversion{
-			ErrorPolicyConversionRules: []cerrors.ErrorPolicyConversionRule{
+		expectedErr1 := cerrors.ErrorPolicyConversion{
+			PolicyName: "test.policy",
+			Rules: []cerrors.ErrorPolicyConversionRule{
 				{
 					EgressRule: nil,
 					IngressRule: &networkingv1.NetworkPolicyIngressRule{
@@ -1375,21 +1377,21 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted",
+					Reason: "k8s rule couldn't be converted: failed to parse k8s port: invalid port -50:-1: invalid name for named port (-50:-1)",
 				},
 			},
 		}
 
 		// Parse the policy.
-		pol, err := c.K8sNetworkPolicyToCalico(&np)
-		Expect(err).To(Equal(expectedErr))
+		pol1, err := c.K8sNetworkPolicyToCalico(&np1)
+		Expect(err).To(Equal(expectedErr1))
 
 		protoTCP := numorstring.ProtocolFromString("TCP")
 
 		// Only the two valid ports should exist. The third should have been dropped.
-		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(1))
+		Expect(len(pol1.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(1))
 
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(
+		Expect(pol1.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
 				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
@@ -1398,6 +1400,151 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				},
 				Destination: apiv3.EntityRule{
 					Ports: []numorstring.Port{numorstring.SinglePort(80), numorstring.NamedPort("foo")},
+				},
+			},
+		))
+		np2 := networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test.policy",
+				Namespace: "default",
+			},
+			Spec: networkingv1.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"label":  "value",
+						"label2": "value2",
+					},
+				},
+				Egress: []networkingv1.NetworkPolicyEgressRule{
+					{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{Port: &port80},
+							{Port: &portFoo},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+					{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{Port: &port80},
+							{Port: &portBad1},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+					{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{Port: &port80},
+							{Port: &portBad2},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			},
+		}
+		expectedErr2 := cerrors.ErrorPolicyConversion{
+			PolicyName: "test.policy",
+			Rules: []cerrors.ErrorPolicyConversionRule{
+				{
+					IngressRule: nil,
+					EgressRule: &networkingv1.NetworkPolicyEgressRule{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 0, IntVal: 80, StrVal: ""},
+								EndPort:  nil,
+							},
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 1, IntVal: 0, StrVal: "-50:-1"},
+								EndPort:  nil,
+							},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								NamespaceSelector: nil,
+								IPBlock:           nil,
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: failed to parse k8s port: invalid port -50:-1: invalid name for named port (-50:-1)",
+				},
+				{
+					IngressRule: nil,
+					EgressRule: &networkingv1.NetworkPolicyEgressRule{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 0, IntVal: 80, StrVal: ""},
+								EndPort:  nil,
+							},
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 1, IntVal: 0, StrVal: "-22:-3"},
+								EndPort:  nil,
+							},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								NamespaceSelector: nil,
+								IPBlock:           nil,
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: failed to parse k8s port: invalid port -22:-3: invalid name for named port (-22:-3)",
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol2, err := c.K8sNetworkPolicyToCalico(&np2)
+		Expect(err).To(Equal(expectedErr2))
+
+		// Only the two valid ports should exist. The invalid ones should have been dropped.
+		Expect(len(pol2.Value.(*apiv3.NetworkPolicy).Spec.Egress)).To(Equal(1))
+
+		Expect(pol2.Value.(*apiv3.NetworkPolicy).Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Action:   "Allow",
+				Protocol: &protoTCP, // Defaulted to TCP.
+				Source:   apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{
+					Ports:    []numorstring.Port{numorstring.SinglePort(80), numorstring.NamedPort("foo")},
+					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
 			},
 		))
