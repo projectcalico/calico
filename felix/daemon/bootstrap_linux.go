@@ -12,6 +12,6 @@ func bootstrapWireguard(ifaceName string, felixHostName string, v3Client clientv
 		ifaceName, felixHostName, v3Client)
 
 	if err != nil {
-		log.WithError(err).Info("couldn't bootstrap wireguard host connectivity")
+		log.WithError(err).Info("couldn't bootstrap WireGuard host connectivity")
 	}
 }
