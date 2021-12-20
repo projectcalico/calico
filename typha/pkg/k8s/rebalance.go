@@ -28,7 +28,7 @@ type MaxConnsAPI interface {
 }
 
 type K8sAPI interface {
-	GetNumTyphas(namespace, serviceName, portName string) (int, error)
+	GetNumTyphas(ctx context.Context, namespace, serviceName, portName string) (int, error)
 	GetNumNodes() (int, error)
 }
 
@@ -46,11 +46,9 @@ func PollK8sForConnectionLimit(
 		select {
 		case <-tickerC:
 			// Get the number of Typhas in the service.
-			numTyphas, tErr := k8sAPI.GetNumTyphas(
-				configParams.K8sNamespace,
-				configParams.K8sServiceName,
-				configParams.K8sPortName,
-			)
+			reqCtx, cancel := context.WithTimeout(cxt, 30*time.Second)
+			numTyphas, tErr := k8sAPI.GetNumTyphas(reqCtx, configParams.K8sNamespace, configParams.K8sServiceName, configParams.K8sPortName)
+			cancel()
 			if tErr != nil || numTyphas <= 0 {
 				logCxt.WithError(tErr).WithField("numTyphas", numTyphas).Warn(
 					"Failed to get number of Typhas")

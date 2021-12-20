@@ -135,7 +135,7 @@ type dummyK8sAPI struct {
 	numNodesErr  error
 }
 
-func (d *dummyK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int, error) {
+func (d *dummyK8sAPI) GetNumTyphas(ctx context.Context, namespace, serviceName, portName string) (int, error) {
 	Expect(namespace).To(Equal("ns"))
 	Expect(serviceName).To(Equal("svc"))
 	Expect(portName).To(Equal("port"))
