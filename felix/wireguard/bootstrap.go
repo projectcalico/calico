@@ -21,7 +21,7 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClien
 	thisNode, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 	cancel()
 	if err != nil {
-		log.WithError(err).Warn("could not fetch node config from datastore")
+		log.WithError(err).Info("could not fetch node config from datastore")
 		return err
 	}
 
@@ -43,9 +43,10 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClien
 					log.Debug("conflict while clearing wireguard config, retrying update")
 					continue
 				}
-				log.WithError(err).Warn("failed to clear wireguard config")
+				log.WithError(err).Info("failed to clear wireguard config")
 				return err
 			}
+			log.Debugf("cleared WireGuard public key from datastore")
 		}
 	}
 	return nil
