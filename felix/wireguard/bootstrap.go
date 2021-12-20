@@ -62,7 +62,7 @@ func getPublicKey(wgIfaceName string, getWireguardHandle func() (netlinkshim.Wir
 
 	dev, err := wg.DeviceByName(wgIfaceName)
 	if err != nil {
-		log.WithError(err).Info("couldn't find wireguard device '%s'", wgIfaceName)
+		log.WithError(err).Infof("couldn't find wireguard device '%s'", wgIfaceName)
 		return zeroKey
 	}
 
