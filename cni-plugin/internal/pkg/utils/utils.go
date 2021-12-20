@@ -202,16 +202,18 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 		// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
 		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
 		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
-		const dummyPodCidr = "0.0.0.0/0"
+		dummyPodCidrv4 := "0.0.0.0/0"
+		dummyPodCidrv6 := "::/0"
 		var stdinData map[string]interface{}
 		err := json.Unmarshal(args.StdinData, &stdinData)
 		if err != nil {
 			return err
 		}
 
-		logger.WithField("podCidr", dummyPodCidr).Info("Using a dummy podCidr to release the IP")
-		getDummyPodCIDR := func() (string, error) {
-			return dummyPodCidr, nil
+		logger.WithFields(logrus.Fields{"podCidrv4": dummyPodCidrv4,
+			"podCidrv6": dummyPodCidrv6}).Info("Using dummy podCidrs to release the IPs")
+		getDummyPodCIDR := func() (string, string, error) {
+			return dummyPodCidrv4, dummyPodCidrv6, nil
 		}
 		err = ReplaceHostLocalIPAMPodCIDRs(logger, stdinData, getDummyPodCIDR)
 		if err != nil {
@@ -286,13 +288,13 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 //      }
 //      ...
 //    }
-func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]interface{}, getPodCIDR func() (string, error)) error {
+func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]interface{}, getPodCIDRs func() (string, string, error)) error {
 	ipamData, ok := stdinData["ipam"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", stdinData["ipam"])
 	}
 	// Older versions of host-local IPAM store a single subnet in the top-level IPAM dict.
-	err := replaceHostLocalIPAMPodCIDR(logger, ipamData, getPodCIDR)
+	err := replaceHostLocalIPAMPodCIDR(logger, ipamData, getPodCIDRs)
 	if err != nil {
 		return err
 	}
@@ -310,7 +312,7 @@ func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]int
 				return fmt.Errorf("failed to parse host-local IPAM range set; was expecting a list, not: %v", rs)
 			}
 			for _, r := range rs {
-				err := replaceHostLocalIPAMPodCIDR(logger, r, getPodCIDR)
+				err := replaceHostLocalIPAMPodCIDR(logger, r, getPodCIDRs)
 				if err != nil {
 					return err
 				}
@@ -320,29 +322,41 @@ func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]int
 	return nil
 }
 
-func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, getPodCidr func() (string, error)) error {
+func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, getPodCidrs func() (string, string, error)) error {
 	logrus.WithField("ipamData", rawIpamData).Debug("Examining IPAM data for usePodCidr")
 	ipamData, ok := rawIpamData.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", rawIpamData)
 	}
 	subnet, _ := ipamData["subnet"].(string)
-	if strings.EqualFold(subnet, "usePodCidr") {
-		logger.Info("Calico CNI fetching podCidr from Kubernetes")
-		podCidr, err := getPodCidr()
-		if err != nil {
-			logger.Info("Failed to getPodCidr")
-			return err
-		}
-		logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
-		ipamData["subnet"] = podCidr
-		subnet = podCidr
-		logger.Infof("Calico CNI passing podCidr to host-local IPAM: %s", podCidr)
+	ipv4Cidr, ipv6Cidr, err := getPodCidrs()
+	if err != nil {
+		logger.Errorf("Failed to getPodCidrs")
+		return err
 	}
 
-	err := updateHostLocalIPAMDataForOS(subnet, ipamData)
-	if err != nil {
-		return err
+	if strings.EqualFold(subnet, "usePodCidr") {
+		if ipv4Cidr == "" {
+			return errors.New("usePodCidr found but there is no IPv4 CIDR configured")
+		}
+		ipamData["subnet"] = ipv4Cidr
+		subnet = ipv4Cidr
+		logger.Infof("Calico CNI passing podCidr to host-local IPAM: %s", ipv4Cidr)
+
+		// updateHostLocalIPAMDataForOS is only required for Windows and only ipv4 is supported
+		err = updateHostLocalIPAMDataForOS(subnet, ipamData)
+		if err != nil {
+			return err
+		}
+	}
+
+	if strings.EqualFold(subnet, "usePodCidrIPv6") {
+		if ipv6Cidr == "" {
+			return errors.New("usePodCidrIPv6 found but there is no IPv6 CIDR configured")
+		}
+		ipamData["subnet"] = ipv6Cidr
+		subnet = ipv6Cidr
+		logger.Infof("Calico CNI passing podCidrv6 to host-local IPAM: %s", ipv6Cidr)
 	}
 
 	return nil
@@ -360,6 +374,7 @@ func UpdateHostLocalIPAMDataForWindows(subnet string, ipamData map[string]interf
 		return err
 	}
 	//process only if we have ipv4 subnet
+	//VXLAN networks on Windows do not support dual-stack https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#ipv6-networking
 	if ip.To4() != nil {
 		//get Expected start and end range for given CIDR
 		expStartRange, expEndRange := getIPRanges(ip, ipnet)
