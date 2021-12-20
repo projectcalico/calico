@@ -53,14 +53,14 @@ func (r *RealK8sAPI) clientSet() (*kubernetes.Clientset, error) {
 	return r.cachedClientSet, nil
 }
 
-func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int, error) {
+func (r *RealK8sAPI) GetNumTyphas(ctx context.Context, namespace, serviceName, portName string) (int, error) {
 	clientSet, err := r.clientSet()
 	if err != nil {
 		return 0, err
 	}
 
 	epClient := clientSet.CoreV1().Endpoints(namespace)
-	ep, err := epClient.Get(context.Background(), serviceName, metav1.GetOptions{})
+	ep, err := epClient.Get(ctx, serviceName, metav1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Failed to get Typha endpoint from Kubernetes")
 		return 0, err
