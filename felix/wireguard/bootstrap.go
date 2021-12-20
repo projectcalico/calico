@@ -40,10 +40,10 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClien
 			if err != nil {
 				switch err.(type) {
 				case cerrors.ErrorResourceUpdateConflict:
-					log.Debug("conflict while clearing wireguard config, retrying update")
+					log.Debug("conflict while clearing WireGuard config, retrying update")
 					continue
 				}
-				log.WithError(err).Info("failed to clear wireguard config")
+				log.WithError(err).Info("failed to clear WireGuard config")
 				return err
 			}
 			log.Debugf("cleared WireGuard public key from datastore")
@@ -63,7 +63,7 @@ func getPublicKey(wgIfaceName string, getWireguardHandle func() (netlinkshim.Wir
 
 	dev, err := wg.DeviceByName(wgIfaceName)
 	if err != nil {
-		log.WithError(err).Infof("couldn't find wireguard device '%s'", wgIfaceName)
+		log.WithError(err).Infof("couldn't find WireGuard device '%s'", wgIfaceName)
 		return zeroKey
 	}
 
