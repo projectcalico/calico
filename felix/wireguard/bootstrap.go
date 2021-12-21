@@ -16,6 +16,7 @@ package wireguard
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -62,9 +63,10 @@ func BootstrapHostConnectivity(wgDeviceName string, nodeName string, calicoClien
 			}
 			log.Debugf("Cleared WireGuard public key from datastore")
 		}
-		break
+		return nil
 	}
-	return nil
+
+	return fmt.Errorf("couldn't bootstrap host connecivity after %d retries", maxRetries)
 }
 
 // getPublicKey attempts to fetch a wireguard key from the kernel statelessly
