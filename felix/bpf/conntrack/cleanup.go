@@ -261,32 +261,64 @@ func (sns *StaleNATScanner) Check(k Key, v Value, _ EntryGet) ScanVerdict {
 			svcPort, epPort uint16
 		)
 
+		snatPort := v.NATSPort()
+
 		// Because client IP/Port are both in fwd key and rev key, we can
 		// can tell which one it is and thus determine exactly meaning of
 		// the other values.
-		if kA.Equal(revA) && kAport == revAport {
-			epIP = revB
-			epPort = revBport
-			svcIP = kB
-			svcPort = kBport
-		} else if kB.Equal(revA) && kBport == revAport {
-			epIP = revB
-			epPort = revBport
-			svcIP = kA
-			svcPort = kAport
-		} else if kA.Equal(revB) && kAport == revBport {
-			epIP = revA
-			epPort = revAport
-			svcIP = kB
-			svcPort = kBport
-		} else if kB.Equal(revB) && kBport == revBport {
-			epIP = revA
-			epPort = revAport
-			svcIP = kA
-			svcPort = kAport
+		if snatPort == 0 {
+			if kA.Equal(revA) && kAport == revAport {
+				epIP = revB
+				epPort = revBport
+				svcIP = kB
+				svcPort = kBport
+			} else if kB.Equal(revA) && kBport == revAport {
+				epIP = revB
+				epPort = revBport
+				svcIP = kA
+				svcPort = kAport
+			} else if kA.Equal(revB) && kAport == revBport {
+				epIP = revA
+				epPort = revAport
+				svcIP = kB
+				svcPort = kBport
+			} else if kB.Equal(revB) && kBport == revBport {
+				epIP = revA
+				epPort = revAport
+				svcIP = kA
+				svcPort = kAport
+			} else {
+				log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
+				return ScanVerdictOK // don't touch, will get deleted when expired
+			}
 		} else {
-			log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
-			return ScanVerdictOK // don't touch, will get deleted when expired
+			// snatPort is the new client port. It does not match the client
+			// port in the key. So we only check that the IPs match and the that
+			// port is the snatPort.
+			if kA.Equal(revA) && snatPort == revAport {
+				epIP = revB
+				epPort = revBport
+				svcIP = kB
+				svcPort = kBport
+			} else if kB.Equal(revA) && snatPort == revAport {
+				epIP = revB
+				epPort = revBport
+				svcIP = kA
+				svcPort = kAport
+			} else if kA.Equal(revB) && snatPort == revBport {
+				epIP = revA
+				epPort = revAport
+				svcIP = kB
+				svcPort = kBport
+			} else if kB.Equal(revB) && snatPort == revBport {
+				epIP = revA
+				epPort = revAport
+				svcIP = kA
+				svcPort = kAport
+			} else {
+				log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
+				return ScanVerdictOK // don't touch, will get deleted when expired
+			}
 		}
 
 		if !sns.natChecker.ConntrackFrontendHasBackend(svcIP, svcPort, epIP, epPort, proto) {
