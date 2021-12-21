@@ -24,6 +24,9 @@ import (
 	"strings"
 	"time"
 
+	_ "net/http/pprof"
+
+	"github.com/pkg/profile"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	log "github.com/sirupsen/logrus"
@@ -189,6 +192,15 @@ func main() {
 			if err != nil {
 				log.WithError(err).Fatal("Failed to serve prometheus metrics")
 			}
+		}()
+	}
+
+	if runCfg.DebugProfilePort != 0 {
+		// Run a webserver to expose memory profiling.
+		setPathOption := profile.ProfilePath("/profiles")
+		defer profile.Start(profile.CPUProfile, profile.MemProfile, setPathOption).Stop()
+		go func() {
+			http.ListenAndServe(fmt.Sprintf(":%d", runCfg.DebugProfilePort), nil)
 		}()
 	}
 
