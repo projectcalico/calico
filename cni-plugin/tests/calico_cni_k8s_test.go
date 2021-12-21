@@ -722,6 +722,52 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				numIPv6IPs:      1,
 			},
 			{
+				// This scenario tests IPv4+IPv6 without specifying any routes.
+				description: "new-style with IPv4 and IPv6 both using usePodCidr, no routes",
+				cniVersion:  "0.3.0",
+				config: `
+					{
+					  "cniVersion": "%s",
+					  "name": "net6",
+					  "nodename_file_optional": true,
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "datastore_type": "%s",
+					  "ipam": {
+					    "type": "host-local",
+					    "ranges": [
+					       [
+					         {
+					           "subnet": "usePodCidr"
+					         }
+					       ],
+					       [
+					         {
+					           "subnet": "usePodCidrIPv6"
+					         }
+					       ]
+					    ]
+					  },
+					  "kubernetes": {
+                                           "kubeconfig": "/home/user/certs/kubeconfig"
+					  },
+					  "policy": {"type": "k8s"},
+					  "log_level":"info"
+					}`,
+				expectedV4Routes: []string{
+					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
+				},
+				expectedV6Routes: []string{
+					"dead:beef::[0-9a-f]* dev eth0 proto kernel metric 256 pref medium",
+					"fe80::/64 dev eth0 proto kernel metric 256 pref medium",
+					"default via fe80::ecee:eeff:feee:eeee dev eth0 metric 1024",
+				},
+				unexpectedRoute: regexp.QuoteMeta("10."),
+				numIPv4IPs:      1,
+				numIPv6IPs:      1,
+			},
+			{
 				// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
 				// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
 				// - we add custom routes, which override our default 0/0 and ::/0 routes.
