@@ -200,7 +200,10 @@ func main() {
 		setPathOption := profile.ProfilePath("/profiles")
 		defer profile.Start(profile.CPUProfile, profile.MemProfile, setPathOption).Stop()
 		go func() {
-			http.ListenAndServe(fmt.Sprintf(":%d", runCfg.DebugProfilePort), nil)
+			err := http.ListenAndServe(fmt.Sprintf(":%d", runCfg.DebugProfilePort), nil)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to start debug profiling")
+			}
 		}()
 	}
 
