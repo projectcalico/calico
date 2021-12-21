@@ -3446,9 +3446,9 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ControllersConfig"),
 						},
 					},
-					"debugMemoryProfilePort": {
+					"debugProfilePort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DebugMemoryProfilePort configures the port to serve memory profiles on. If not specified, memory profiling is disabled.",
+							Description: "DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling is disabled.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

@@ -101,9 +101,9 @@ spec:
                         type: string
                     type: object
                 type: object
-              debugMemoryProfilePort:
-                description: DebugMemoryProfilePort configures the port to serve memory
-                  profiles on. If not specified, memory profiling is disabled.
+              debugProfilePort:
+                description: DebugProfilePort configures the port to serve memory
+                  and cpu profiles on. If not specified, profiling is disabled.
                 format: int32
                 type: integer
               etcdV3CompactionPeriod:
@@ -216,9 +216,9 @@ spec:
                             type: string
                         type: object
                     type: object
-                  debugMemoryProfilePort:
-                    description: DebugMemoryProfilePort configures the port to serve
-                      memory profiles on. If not specified, memory profiling is disabled.
+                  debugProfilePort:
+                    description: DebugProfilePort configures the port to serve memory
+                      and cpu profiles on. If not specified, profiling is disabled.
                     format: int32
                     type: integer
                   etcdV3CompactionPeriod:

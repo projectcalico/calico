@@ -23,6 +23,7 @@ COPY LICENSE /licenses
 RUN mkdir /status /profiles
 RUN touch /status/status.json && chown 999 /status/status.json
 RUN touch /profiles/mem.pprof && chown 999 /profiles/mem.pprof
+RUN touch /profiles/cpu.pprof && chown 999 /profiles/cpu.pprof
 
 FROM scratch
 ARG GIT_VERSION

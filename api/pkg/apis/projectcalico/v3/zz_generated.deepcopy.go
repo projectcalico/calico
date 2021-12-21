@@ -1717,8 +1717,8 @@ func (in *KubeControllersConfigurationSpec) DeepCopyInto(out *KubeControllersCon
 		**out = **in
 	}
 	in.Controllers.DeepCopyInto(&out.Controllers)
-	if in.DebugMemoryProfilePort != nil {
-		in, out := &in.DebugMemoryProfilePort, &out.DebugMemoryProfilePort
+	if in.DebugProfilePort != nil {
+		in, out := &in.DebugProfilePort, &out.DebugProfilePort
 		*out = new(int32)
 		**out = **in
 	}
